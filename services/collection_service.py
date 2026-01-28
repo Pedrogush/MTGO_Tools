@@ -9,19 +9,28 @@ This module contains all the business logic for managing card collections:
 """
 
 import json
-import threading
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 from loguru import logger
 
 from repositories.card_repository import CardRepository, get_card_repository
+from services.collection_bridge_refresh import refresh_from_bridge_async as refresh_from_bridge
+from services.collection_cache import find_latest_cached_file, get_file_age_hours
+from services.collection_deck_analysis import (
+    analyze_deck_ownership as analyze_deck_ownership_helper,
+)
+from services.collection_deck_analysis import (
+    get_missing_cards_list as get_missing_cards_list_helper,
+)
+from services.collection_exporter import export_collection_to_file
+from services.collection_ownership import format_owned_status
+from services.collection_parsing import build_inventory
+from services.collection_stats import get_collection_statistics as get_collection_statistics_helper
 from utils.constants import (
     COLLECTION_CACHE_MAX_AGE_SECONDS,
-    ONE_HOUR_SECONDS,
 )
 
 
@@ -81,12 +90,7 @@ class CollectionService:
             cards = self.card_repo.load_collection_from_file(filepath)
 
             # Convert to dictionary for quick lookup
-            self._collection = {}
-            for card in cards:
-                name = card.get("name", "")
-                quantity = card.get("quantity", 0)
-                if name:
-                    self._collection[name] = self._collection.get(name, 0) + quantity
+            self._collection = build_inventory(cards, normalize_names=False)
 
             self._collection_path = filepath
             self._collection_loaded = True
@@ -110,15 +114,10 @@ class CollectionService:
         Returns:
             Tuple containing the status label and RGB color tuple (R, G, B)
         """
-        collection_inventory = self.get_inventory()
-        if not collection_inventory:
+        if not self.get_inventory():
             return ("Owned —", (185, 191, 202))  # Subdued text color
-        have = collection_inventory.get(name.lower(), 0)
-        if have >= required:
-            return (f"Owned {have}/{required}", (120, 200, 120))  # Green
-        if have > 0:
-            return (f"Owned {have}/{required}", (230, 200, 90))  # Yellow/Orange
-        return ("Owned 0", (230, 120, 120))  # Red
+        have = self.get_owned_count(name)
+        return format_owned_status(have, required)
 
     def find_latest_cached_file(
         self, directory: Path, pattern: str = "collection_full_trade_*.json"
@@ -133,8 +132,7 @@ class CollectionService:
         Returns:
             Path to latest file, or None if none found
         """
-        files = sorted(directory.glob(pattern))
-        return files[-1] if files else None
+        return find_latest_cached_file(directory, pattern)
 
     def load_from_cached_file(
         self, directory: Path, pattern: str = "collection_full_trade_*.json"
@@ -161,18 +159,13 @@ class CollectionService:
 
         try:
             data = json.loads(latest.read_text(encoding="utf-8"))
-            mapping = {
-                entry.get("name", "").lower(): int(entry.get("quantity", 0))
-                for entry in data
-                if isinstance(entry, dict)
-            }
+            mapping = build_inventory(data)
 
             self.set_inventory(mapping)
             self.set_collection_path(latest)
 
             # Calculate file age
-            file_age_seconds = datetime.now().timestamp() - latest.stat().st_mtime
-            age_hours = int(file_age_seconds / ONE_HOUR_SECONDS)
+            age_hours = get_file_age_hours(latest)
 
             logger.info(
                 f"Loaded collection from cache: {len(mapping)} unique cards from {latest.name}"
@@ -234,11 +227,7 @@ class CollectionService:
             ValueError: If card list is invalid or cannot be parsed
         """
         try:
-            mapping = {
-                entry.get("name", "").lower(): int(entry.get("quantity", 0))
-                for entry in cards
-                if isinstance(entry, dict)
-            }
+            mapping = build_inventory(cards)
 
             self.set_inventory(mapping)
             if filepath:
@@ -275,23 +264,7 @@ class CollectionService:
             OSError: If file cannot be written
             ValueError: If cards list is invalid
         """
-        try:
-            directory.mkdir(parents=True, exist_ok=True)
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"{filename_prefix}_{timestamp}.json"
-            filepath = directory / filename
-
-            with filepath.open("w", encoding="utf-8") as f:
-                json.dump(cards, f, indent=2)
-
-            logger.info(f"Exported collection to {filepath} ({len(cards)} cards)")
-            return filepath
-        except OSError as exc:
-            logger.error(f"Failed to export collection: {exc}")
-            raise
-        except (TypeError, ValueError) as exc:
-            logger.error(f"Invalid card data for export: {exc}")
-            raise ValueError("Invalid card data for export") from exc
+        return export_collection_to_file(cards, directory, filename_prefix)
 
     # ============= Async Collection Refresh =============
 
@@ -319,63 +292,16 @@ class CollectionService:
         Returns:
             True if fetch was started, False if recent cache was used
         """
-        from utils import mtgo_bridge
-
-        # Check if we have a recent cached collection (unless forced)
-        if not force:
-            latest = self.find_latest_cached_file(directory)
-            if latest:
-                try:
-                    file_age_seconds = datetime.now().timestamp() - latest.stat().st_mtime
-                    if file_age_seconds < cache_max_age_seconds:
-                        logger.info(
-                            f"Using cached collection ({file_age_seconds:.0f}s old, max {cache_max_age_seconds}s)"
-                        )
-                        # Load from cache and call success callback
-                        info = self.load_from_cached_file(directory)
-                        if on_success:
-                            on_success(info["filepath"], [])  # Empty cards list for cache hits
-                        return False  # Didn't start new fetch
-                except Exception as exc:
-                    logger.warning(f"Failed to check collection file age: {exc}")
-
-        # Fetch fresh collection from MTGO Bridge in background
-        def worker():
-            try:
-                # Call the bridge to get collection
-                collection_data = mtgo_bridge.get_collection_snapshot(timeout=60.0)
-
-                if not collection_data:
-                    if on_error:
-                        on_error("Bridge returned empty collection")
-                    return
-
-                # Get cards from bridge response
-                cards = collection_data.get("cards", [])
-                if not cards:
-                    if on_error:
-                        on_error("No cards in collection data")
-                    return
-
-                # Export to file using service
-                filepath = self.export_to_file(cards, directory)
-
-                # Call success callback
-                if on_success:
-                    on_success(filepath, cards)
-
-            except FileNotFoundError as exc:
-                logger.error(f"Bridge not found: {exc}")
-                if on_error:
-                    on_error("MTGO Bridge not found. Build the bridge executable.")
-
-            except Exception as exc:
-                logger.exception("Failed to fetch collection from bridge")
-                if on_error:
-                    on_error(str(exc))
-
-        threading.Thread(target=worker, daemon=True).start()
-        return True  # Started new fetch
+        return refresh_from_bridge(
+            directory=directory,
+            force=force,
+            on_success=on_success,
+            on_error=on_error,
+            cache_max_age_seconds=cache_max_age_seconds,
+            load_from_cached_file=self.load_from_cached_file,
+            export_to_file=self.export_to_file,
+            find_latest_cached_file=self.find_latest_cached_file,
+        )
 
     def is_loaded(self) -> bool:
         """Check if collection has been loaded."""
@@ -402,7 +328,7 @@ class CollectionService:
         Returns:
             True if owns enough copies, False otherwise
         """
-        owned = self._collection.get(card_name, 0)
+        owned = self.get_owned_count(card_name)
         return owned >= required_count
 
     def get_owned_count(self, card_name: str) -> int:
@@ -415,7 +341,9 @@ class CollectionService:
         Returns:
             Number of copies owned
         """
-        return self._collection.get(card_name, 0)
+        if card_name in self._collection:
+            return self._collection[card_name]
+        return self._collection.get(card_name.lower(), 0)
 
     def get_ownership_status(
         self, card_name: str, required: int
@@ -433,16 +361,7 @@ class CollectionService:
             color_rgb: RGB tuple for display color
         """
         owned = self.get_owned_count(card_name)
-
-        if owned >= required:
-            # Green - fully owned
-            return f"{owned}/{required}", (0, 180, 0)
-        elif owned > 0:
-            # Orange - partially owned
-            return f"{owned}/{required}", (255, 140, 0)
-        else:
-            # Red - not owned
-            return f"0/{required}", (200, 0, 0)
+        return format_owned_status(owned, required)
 
     # ============= Deck Analysis =============
 
@@ -462,60 +381,7 @@ class CollectionService:
                 - missing_cards: list of (card_name, owned, needed) tuples
                 - ownership_percentage: float - percentage fully owned
         """
-        card_requirements: dict[str, int] = {}
-
-        # Parse deck to get requirements
-        for line in deck_text.split("\n"):
-            line = line.strip()
-            if not line:
-                continue
-
-            try:
-                parts = line.split(" ", 1)
-                if len(parts) < 2:
-                    continue
-
-                count = int(float(parts[0]))
-                card_name = parts[1].strip()
-
-                # Remove "Sideboard " prefix if present
-                if card_name.startswith("Sideboard "):
-                    card_name = card_name[10:]
-
-                card_requirements[card_name] = card_requirements.get(card_name, 0) + count
-
-            except (ValueError, IndexError):
-                continue
-
-        # Analyze ownership
-        fully_owned = 0
-        partially_owned = 0
-        not_owned = 0
-        missing_cards = []
-
-        for card_name, needed in card_requirements.items():
-            owned = self.get_owned_count(card_name)
-
-            if owned >= needed:
-                fully_owned += 1
-            elif owned > 0:
-                partially_owned += 1
-                missing_cards.append((card_name, owned, needed))
-            else:
-                not_owned += 1
-                missing_cards.append((card_name, 0, needed))
-
-        total_unique = len(card_requirements)
-        ownership_percentage = (fully_owned / total_unique * 100) if total_unique > 0 else 0.0
-
-        return {
-            "total_unique": total_unique,
-            "fully_owned": fully_owned,
-            "partially_owned": partially_owned,
-            "not_owned": not_owned,
-            "missing_cards": missing_cards,
-            "ownership_percentage": ownership_percentage,
-        }
+        return analyze_deck_ownership_helper(deck_text, self.get_owned_count)
 
     def get_missing_cards_list(self, deck_text: str) -> list[tuple[str, int]]:
         """
@@ -527,15 +393,7 @@ class CollectionService:
         Returns:
             List of (card_name, missing_count) tuples
         """
-        analysis = self.analyze_deck_ownership(deck_text)
-        missing = []
-
-        for card_name, owned, needed in analysis["missing_cards"]:
-            missing_count = needed - owned
-            if missing_count > 0:
-                missing.append((card_name, missing_count))
-
-        return missing
+        return get_missing_cards_list_helper(deck_text, self.get_owned_count)
 
     # ============= Collection Statistics =============
 
@@ -546,32 +404,11 @@ class CollectionService:
         Returns:
             Dictionary with collection statistics
         """
-        if not self._collection_loaded:
-            return {
-                "loaded": False,
-                "message": "Collection not loaded",
-            }
-
-        total_cards = self.get_total_cards()
-        unique_cards = self.get_collection_size()
-
-        # Calculate rarity distribution if card data is available
-        rarity_counts: dict[str, int] = {}
-
-        for card_name, count in self._collection.items():
-            # Try to get card metadata
-            metadata = self.card_repo.get_card_metadata(card_name)
-            if metadata:
-                rarity = metadata.get("rarity", "unknown")
-                rarity_counts[rarity] = rarity_counts.get(rarity, 0) + count
-
-        return {
-            "loaded": True,
-            "unique_cards": unique_cards,
-            "total_cards": total_cards,
-            "average_copies": total_cards / unique_cards if unique_cards > 0 else 0,
-            "rarity_distribution": rarity_counts,
-        }
+        return get_collection_statistics_helper(
+            inventory=self._collection,
+            card_repo=self.card_repo,
+            is_loaded=self._collection_loaded,
+        )
 
     # ============= Collection Updates =============
 
