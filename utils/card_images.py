@@ -202,103 +202,10 @@ class CardImageCache:
 from utils.card_image_downloader import BulkImageDownloader  # noqa: E402, F401
 
 
-def _collect_face_aliases(card: dict[str, Any], display_name: str) -> set[str]:
-    """Return alternate face names for MDFCs, split, and adventure cards."""
-    aliases: set[str] = set()
-    for raw_face in card.get("card_faces") or []:
-        face_name = (raw_face.get("name") or "").strip()
-        if face_name:
-            aliases.add(face_name)
-
-    if "//" in display_name:
-        for piece in display_name.split("//"):
-            face_name = piece.strip()
-            if face_name:
-                aliases.add(face_name)
-
-    display_key = display_name.strip().lower()
-    return {alias for alias in aliases if alias.lower() != display_key}
-
-
-def _load_printing_index_payload() -> dict[str, Any] | None:
-    """Load the cached card printings index if available."""
-    if not PRINTING_INDEX_CACHE.exists():
-        return None
-    try:
-        with PRINTING_INDEX_CACHE.open("r", encoding="utf-8") as fh:
-            payload = json.load(fh)
-    except Exception as exc:
-        logger.warning(f"Failed to read printings index cache: {exc}")
-        return None
-    if payload.get("version") != PRINTING_INDEX_VERSION:
-        logger.info("Discarding printings index cache due to version mismatch")
-        return None
-    return payload
-
-
-def ensure_printing_index_cache(force: bool = False) -> dict[str, Any]:
-    """Ensure a compact card printings index exists for fast wx lookups."""
-    IMAGE_CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    existing = None if force else _load_printing_index_payload()
-    bulk_mtime = BULK_DATA_CACHE.stat().st_mtime if BULK_DATA_CACHE.exists() else None
-
-    if existing and (bulk_mtime is None or existing.get("bulk_mtime", 0) >= bulk_mtime):
-        return existing
-
-    if bulk_mtime is None:
-        raise FileNotFoundError("Bulk data cache not found; cannot build printings index")
-
-    logger.info("Building card printings index from bulk data…")
-    with BULK_DATA_CACHE.open("r", encoding="utf-8") as fh:
-        cards = json.load(fh)
-
-    by_name: dict[str, list[dict[str, Any]]] = {}
-    total_printings = 0
-    for card in cards:
-        name = (card.get("name") or "").strip()
-        uuid = card.get("id")
-        if not name or not uuid:
-            continue
-        key = name.lower()
-        entry = {
-            "id": uuid,
-            "set": (card.get("set") or "").upper(),
-            "set_name": card.get("set_name") or "",
-            "collector_number": card.get("collector_number") or "",
-            "released_at": card.get("released_at") or "",
-        }
-        by_name.setdefault(key, []).append(entry)
-        for alias in _collect_face_aliases(card, name):
-            alias_key = alias.lower()
-            if alias_key == key:
-                continue
-            by_name.setdefault(alias_key, []).append(entry)
-        total_printings += 1
-
-    for entries in by_name.values():
-        entries.sort(key=lambda c: c.get("released_at") or "", reverse=True)
-
-    payload = {
-        "version": PRINTING_INDEX_VERSION,
-        "generated_at": datetime.now(UTC).isoformat(),
-        "bulk_mtime": bulk_mtime,
-        "unique_names": len(by_name),
-        "total_printings": total_printings,
-        "data": by_name,
-    }
-
-    try:
-        with PRINTING_INDEX_CACHE.open("w", encoding="utf-8") as fh:
-            json.dump(payload, fh, separators=(",", ":"))
-        logger.info(
-            "Cached card printings index ({unique_names} names, {total_printings} printings)",
-            unique_names=payload["unique_names"],
-            total_printings=payload["total_printings"],
-        )
-    except Exception as exc:
-        logger.warning(f"Failed to write printings index cache: {exc}")
-
-    return payload
+# Re-export printing index functions from their dedicated module for
+# backward compatibility.  All index logic now lives in card_printing_index.
+from utils.card_printing_index import collect_face_aliases as _collect_face_aliases  # noqa: E402, F401
+from utils.card_printing_index import ensure_printing_index_cache  # noqa: E402, F401
 
 
 # Singleton instance
