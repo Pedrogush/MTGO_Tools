@@ -121,7 +121,14 @@ class ImageService:
         def worker():
             if force_cached:
                 return False, "Cached-only mode enabled"
-            return self.check_bulk_data_freshness(max_age_days=max_age_days)
+            if self.image_downloader is None:
+                self.image_downloader = BulkImageDownloader(self.image_cache)
+            max_staleness = max_age_days * 86400 if max_age_days else None
+            is_outdated, _metadata = self.image_downloader.is_bulk_data_outdated(
+                max_staleness_seconds=max_staleness
+            )
+            reason = "Bulk data is outdated" if is_outdated else "Bulk data is current"
+            return is_outdated, reason
 
         def on_success(result: tuple[bool, str]) -> None:
             self._bulk_check_worker_active = False

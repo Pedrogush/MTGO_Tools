@@ -136,13 +136,13 @@ class CardRepository:
 
         Args:
             card_name: Name of the card
-            set_code: Specific set code (optional)
+            set_code: Specific set code (unused -- image lookup is name-based)
 
         Returns:
             Path to the image file or None if not found
         """
         try:
-            image_path = get_card_image(card_name, set_code=set_code)
+            image_path = get_card_image(card_name)
             return image_path
         except Exception as exc:
             logger.warning(f"Failed to get image for {card_name}: {exc}")
