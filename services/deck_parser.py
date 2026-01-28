@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Any, Iterable
+from typing import Any
 
 
 @dataclass(frozen=True)
@@ -58,7 +59,9 @@ class DeckParser:
         mainboard_order: list[str] = []
         sideboard_order: list[str] = []
 
-        for entry in self._iter_entries(deck_content, strip_input=True, ignore_trailing_empty=False):
+        for entry in self._iter_entries(
+            deck_content, strip_input=True, ignore_trailing_empty=False
+        ):
             if entry.is_sideboard:
                 target_totals = sideboard_totals
                 target_order = sideboard_order
