@@ -10,7 +10,12 @@ from typing import Any
 from curl_cffi import requests
 from loguru import logger
 
-from utils.constants import ATOMIC_DATA_URL, CARD_DATA_DIR
+from utils.constants import (
+    ATOMIC_DATA_DOWNLOAD_TIMEOUT_SECONDS,
+    ATOMIC_DATA_HEAD_TIMEOUT_SECONDS,
+    ATOMIC_DATA_URL,
+    CARD_DATA_DIR,
+)
 
 
 def load_card_manager(data_dir: Path | str = CARD_DATA_DIR, force: bool = False) -> CardDataManager:
@@ -138,7 +143,11 @@ class CardDataManager:
 
     def _fetch_dataset_headers(self) -> dict[str, Any] | None:
         try:
-            resp = requests.head(ATOMIC_DATA_URL, impersonate="chrome", timeout=60)
+            resp = requests.head(
+                ATOMIC_DATA_URL,
+                impersonate="chrome",
+                timeout=ATOMIC_DATA_HEAD_TIMEOUT_SECONDS,
+            )
             resp.raise_for_status()
         except Exception as exc:
             logger.warning(f"Failed to fetch MTGJSON dataset headers: {exc}")
@@ -154,7 +163,11 @@ class CardDataManager:
         return meta or None
 
     def _download_and_rebuild(self, remote_meta: dict[str, Any] | None) -> None:
-        resp = requests.get(ATOMIC_DATA_URL, impersonate="chrome", timeout=300)
+        resp = requests.get(
+            ATOMIC_DATA_URL,
+            impersonate="chrome",
+            timeout=ATOMIC_DATA_DOWNLOAD_TIMEOUT_SECONDS,
+        )
         resp.raise_for_status()
         content = resp.content
         digest = hashlib.sha512(content).hexdigest()

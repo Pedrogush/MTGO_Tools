@@ -1,14 +1,35 @@
-import re
 import sys
 from pathlib import Path
 
 import wx
-from loguru import logger
 
 from utils.constants import DARK_ALT, SUBDUED_TEXT
+from utils.mana_resources import ManaIconResources
+
+
+def _split_mana_cost_tokens(cost: str, *, uppercase: bool) -> list[str]:
+    tokens: list[str] = []
+    if not cost:
+        return tokens
+    for part in cost.replace("}", "").split("{"):
+        token = part.strip()
+        if not token:
+            continue
+        tokens.append(token.upper() if uppercase else token)
+    return tokens
 
 
 class ManaIconFactory:
+    _HYBRID_GLYPH_OFFSETS = ((-0.3, -0.3), (0.3, 0.3))
+    _HYBRID_GLYPH_SCALE = 0.52
+    _SHADOW_ALPHA = 80
+    _OUTLINE_ALPHA = 140
+    _OUTLINE_ALPHA_STRONG = 200
+    _OUTLINE_ALPHA_COMPONENT = 160
+    _OUTLINE_WIDTH = 2
+    _PADDING = 2
+    _RENDER_SCALE = 3
+
     FALLBACK_COLORS = {
         "w": (253, 251, 206),
         "u": (188, 218, 247),
@@ -18,14 +39,16 @@ class ManaIconFactory:
         "c": (208, 198, 187),
         "multicolor": (246, 223, 138),
     }
-    _FONT_LOADED = False
-    _FONT_NAME = "Mana"
 
     def __init__(self, icon_size: int = 26) -> None:
         self._cache: dict[str, wx.Bitmap] = {}
         self._cost_cache: dict[str, wx.Bitmap] = {}
-        self._glyph_map, self._color_map = self._load_css_resources()
-        self._ensure_font_loaded()
+        assets_root = self._assets_root()
+        self._glyph_map, self._color_map = ManaIconResources.load_css_resources(
+            assets_root,
+            self.FALLBACK_COLORS,
+        )
+        ManaIconResources.ensure_font_loaded(assets_root)
         self._icon_size = max(8, icon_size)
 
     def render(self, parent: wx.Window, mana_cost: str) -> wx.Window:
@@ -94,16 +117,7 @@ class ManaIconFactory:
         return composed
 
     def _tokenize(self, cost: str) -> list[str]:
-        tokens: list[str] = []
-        if not cost:
-            return tokens
-        parts = cost.replace("}", "").split("{")
-        for part in parts:
-            token = part.strip()
-            if not token:
-                continue
-            tokens.append(token)
-        return tokens
+        return _split_mana_cost_tokens(cost, uppercase=False)
 
     def _get_bitmap(self, symbol: str) -> wx.Bitmap:
         if symbol in self._cache:
@@ -112,7 +126,7 @@ class ManaIconFactory:
         components = self._hybrid_components(key)
         second_color: tuple[int, int, int] | None = None
         glyph = self._glyph_map.get(key or "") if not components else ""
-        scale = 3
+        scale = self._RENDER_SCALE
         size = self._icon_size * scale
         bmp = wx.Bitmap(size, size)
         dc = wx.MemoryDC(bmp)
@@ -122,10 +136,15 @@ class ManaIconFactory:
         cx = cy = size // 2
         radius = (size // 2) - scale
         gctx = wx.GraphicsContext.Create(dc)
-        shadow_colour = wx.Colour(0, 0, 0, 80)
+        shadow_colour = wx.Colour(0, 0, 0, self._SHADOW_ALPHA)
         gctx.SetPen(wx.Pen(wx.Colour(0, 0, 0, 0)))
         gctx.SetBrush(wx.Brush(shadow_colour))
-        gctx.DrawEllipse(cx - radius + scale, cy - radius + scale, radius * 2, radius * 2)
+        gctx.DrawEllipse(
+            cx - radius + scale,
+            cy - radius + scale,
+            radius * 2,
+            radius * 2,
+        )
 
         text_font = self._build_render_font(13 * scale)
         text_color = wx.Colour(20, 20, 20)
@@ -133,7 +152,7 @@ class ManaIconFactory:
             second_color = self._draw_hybrid_circle(gctx, cx, cy, radius, components)
         else:
             fill_color = self._color_for_key(key or "")
-            gctx.SetPen(wx.Pen(wx.Colour(25, 25, 25, 140), 2))
+            gctx.SetPen(wx.Pen(wx.Colour(25, 25, 25, self._OUTLINE_ALPHA), self._OUTLINE_WIDTH))
             gctx.SetBrush(wx.Brush(wx.Colour(*fill_color)))
             gctx.DrawEllipse(cx - radius, cy - radius, radius * 2, radius * 2)
             glyph_to_draw = glyph or self._glyph_fallback(key)
@@ -145,11 +164,16 @@ class ManaIconFactory:
         dc.SelectObject(wx.NullBitmap)
 
         if components and second_color:
-            bmp = self._apply_hybrid_overlay(bmp, cx, cy, radius, second_color)
-            dc = wx.MemoryDC(bmp)
-            gctx = wx.GraphicsContext.Create(dc)
-            self._draw_hybrid_glyph(gctx, cx, cy, radius, components, text_font, text_color)
-            dc.SelectObject(wx.NullBitmap)
+            bmp = self._render_hybrid_overlay(
+                bmp,
+                cx,
+                cy,
+                radius,
+                second_color,
+                components,
+                text_font,
+                text_color,
+            )
         img = bmp.ConvertToImage()
         img = img.Blur(1)
         img = img.Scale(self._icon_size, self._icon_size, wx.IMAGE_QUALITY_HIGH)
@@ -158,14 +182,14 @@ class ManaIconFactory:
         return final
 
     def _build_render_font(self, font_size: int) -> wx.Font:
-        if self._FONT_LOADED:
+        if ManaIconResources.font_loaded():
             return wx.Font(
                 font_size,
                 wx.FONTFAMILY_DEFAULT,
                 wx.FONTSTYLE_NORMAL,
                 wx.FONTWEIGHT_NORMAL,
                 False,
-                self._FONT_NAME,
+                ManaIconResources.FONT_NAME,
             )
         font = wx.Font(wx.FontInfo(font_size).Family(wx.FONTFAMILY_SWISS))
         font.MakeBold()
@@ -183,8 +207,12 @@ class ManaIconFactory:
         outline: bool = True,
     ) -> None:
         color = self._color_for_key(key or "")
-        pen_color = wx.Colour(25, 25, 25, 160) if outline else wx.Colour(0, 0, 0, 0)
-        width = 2 if outline else 0
+        pen_color = (
+            wx.Colour(25, 25, 25, self._OUTLINE_ALPHA_COMPONENT)
+            if outline
+            else wx.Colour(0, 0, 0, 0)
+        )
+        width = self._OUTLINE_WIDTH if outline else 0
         gctx.SetPen(wx.Pen(pen_color, width))
         gctx.SetBrush(wx.Brush(wx.Colour(*color)))
         gctx.DrawEllipse(cx - radius, cy - radius, radius * 2, radius * 2)
@@ -205,7 +233,7 @@ class ManaIconFactory:
         rect = (cx - radius, cy - radius, radius * 2, radius * 2)
         base = self._color_for_key(components[0])
         second = self._color_for_key(components[1])
-        gctx.SetPen(wx.Pen(wx.Colour(25, 25, 25, 200), 2))
+        gctx.SetPen(wx.Pen(wx.Colour(25, 25, 25, self._OUTLINE_ALPHA_STRONG), self._OUTLINE_WIDTH))
         gctx.SetBrush(wx.Brush(wx.Colour(*base)))
         gctx.DrawEllipse(*rect)
         gctx.StrokeLine(cx - radius, cy + radius, cx + radius, cy - radius)
@@ -221,8 +249,11 @@ class ManaIconFactory:
         font: wx.Font,
         text_color: wx.Colour,
     ) -> None:
-        offsets = [(-radius * 0.3, -radius * 0.3), (radius * 0.3, radius * 0.3)]
-        glyph_font = self._scaled_font(font, 0.52)
+        offsets = [
+            (radius * self._HYBRID_GLYPH_OFFSETS[0][0], radius * self._HYBRID_GLYPH_OFFSETS[0][1]),
+            (radius * self._HYBRID_GLYPH_OFFSETS[1][0], radius * self._HYBRID_GLYPH_OFFSETS[1][1]),
+        ]
+        glyph_font = self._scaled_font(font, self._HYBRID_GLYPH_SCALE)
         for idx, component in enumerate(components):
             glyph = self._glyph_fallback(component)
             if not glyph:
@@ -256,6 +287,24 @@ class ManaIconFactory:
                 if dx + dy >= 0:
                     img.SetRGB(x, y, cr, cg, cb)
         return wx.Bitmap(img)
+
+    def _render_hybrid_overlay(
+        self,
+        bmp: wx.Bitmap,
+        cx: int,
+        cy: int,
+        radius: int,
+        color: tuple[int, int, int],
+        components: list[str],
+        font: wx.Font,
+        text_color: wx.Colour,
+    ) -> wx.Bitmap:
+        bmp = self._apply_hybrid_overlay(bmp, cx, cy, radius, color)
+        dc = wx.MemoryDC(bmp)
+        gctx = wx.GraphicsContext.Create(dc)
+        self._draw_hybrid_glyph(gctx, cx, cy, radius, components, font, text_color)
+        dc.SelectObject(wx.NullBitmap)
+        return bmp
 
     def _scaled_font(self, font: wx.Font, factor: float) -> wx.Font:
         size = max(6, int(font.GetPointSize() * factor))
@@ -336,53 +385,6 @@ class ManaIconFactory:
             return ["c", second]
         return None
 
-    def _ensure_font_loaded(self) -> None:
-        if ManaIconFactory._FONT_LOADED:
-            return
-        font_path = self._assets_root() / "assets" / "mana" / "fonts" / "mana.ttf"
-        if not font_path.exists():
-            logger.debug("Mana font not found at %s; using fallback glyphs", font_path)
-            return
-        try:
-            wx.Font.AddPrivateFont(str(font_path))
-            ManaIconFactory._FONT_LOADED = True
-        except Exception as exc:  # pragma: no cover
-            logger.debug(f"Unable to load mana font: {exc}")
-
-    def _load_css_resources(self) -> tuple[dict[str, str], dict[str, tuple[int, int, int]]]:
-        glyphs: dict[str, str] = {}
-        colors: dict[str, tuple[int, int, int]] = {}
-        css_path = self._assets_root() / "assets" / "mana" / "css" / "mana.min.css"
-        if not css_path.exists():
-            return glyphs, {k: tuple(v) for k, v in self.FALLBACK_COLORS.items()}
-        css_text = css_path.read_text(encoding="utf-8")
-        color_re = re.compile(r"--ms-mana-([a-z0-9-]+):\s*#([0-9a-fA-F]{6})")
-        for match in color_re.finditer(css_text):
-            key = match.group(1).lower()
-            hex_value = match.group(2)
-            colors[key] = tuple(int(hex_value[i : i + 2], 16) for i in (0, 2, 4))
-        for block in css_text.split("}"):
-            if "content" not in block or "::" not in block:
-                continue
-            parts = block.split("{", 1)
-            if len(parts) != 2:
-                continue
-            selectors, body = parts
-            content_match = re.search(r'content:\s*"([^"]+)"', body)
-            if not content_match:
-                continue
-            glyph_char = content_match.group(1)
-            for raw_selector in selectors.split(","):
-                raw_selector = raw_selector.strip()
-                if not raw_selector.startswith(".ms-"):
-                    continue
-                cls = raw_selector.split("::", 1)[0].replace(".ms-", "").lower()
-                if cls:
-                    glyphs[cls] = glyph_char
-        for base, rgb in self.FALLBACK_COLORS.items():
-            colors.setdefault(base, rgb)
-        return glyphs, colors
-
     def _assets_root(self) -> Path:
         """Locate bundled assets in both source and PyInstaller builds."""
         frozen_root = getattr(sys, "_MEIPASS", None)
@@ -443,14 +445,7 @@ def normalize_mana_query(raw: str) -> str:
 
 
 def tokenize_mana_symbols(cost: str) -> list[str]:
-    tokens: list[str] = []
-    if not cost:
-        return tokens
-    for part in cost.replace("}", "").split("{"):
-        token = part.strip().upper()
-        if token:
-            tokens.append(token)
-    return tokens
+    return _split_mana_cost_tokens(cost, uppercase=True)
 
 
 def type_global_mana_symbol(token: str) -> None:

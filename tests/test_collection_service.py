@@ -217,8 +217,8 @@ def test_get_ownership_status_fully_owned(collection_service):
 
     status, color = collection_service.get_ownership_status("Lightning Bolt", 3)
 
-    assert status == "4/3"
-    assert color == (0, 180, 0)  # Green
+    assert status == "Owned 4/3"
+    assert color == (120, 200, 120)  # Green
 
 
 def test_get_ownership_status_partially_owned(collection_service):
@@ -227,8 +227,8 @@ def test_get_ownership_status_partially_owned(collection_service):
 
     status, color = collection_service.get_ownership_status("Lightning Bolt", 4)
 
-    assert status == "2/4"
-    assert color == (255, 140, 0)  # Orange
+    assert status == "Owned 2/4"
+    assert color == (230, 200, 90)  # Orange
 
 
 def test_get_ownership_status_not_owned(collection_service):
@@ -237,8 +237,8 @@ def test_get_ownership_status_not_owned(collection_service):
 
     status, color = collection_service.get_ownership_status("Lightning Bolt", 4)
 
-    assert status == "0/4"
-    assert color == (200, 0, 0)  # Red
+    assert status == "Owned 0/4"
+    assert color == (230, 120, 120)  # Red
 
 
 # ============= Deck Analysis Tests =============

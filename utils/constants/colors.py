@@ -1,0 +1,8 @@
+"""Shared UI colors."""
+
+SUBDUED_TEXT = (185, 191, 202)
+DARK_BG = (20, 22, 27)
+DARK_PANEL = (34, 39, 46)
+DARK_ALT = (40, 46, 54)
+DARK_ACCENT = (59, 130, 246)
+LIGHT_TEXT = (236, 236, 236)

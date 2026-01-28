@@ -16,6 +16,13 @@ from loguru import logger
 
 from repositories.metagame_repository import MetagameRepository, get_metagame_repository
 from services.deck_service import DeckService, get_deck_service
+from utils.constants import (
+    RADAR_AVG_COPIES_ROUND_DIGITS,
+    RADAR_EXPECTED_COPIES_ROUND_DIGITS,
+    RADAR_INCLUSION_RATE_ROUND_DIGITS,
+    RADAR_MIN_COPY_COUNT,
+    RADAR_MIN_EXPECTED_COPIES_DEFAULT,
+)
 
 
 @dataclass
@@ -223,9 +230,9 @@ class RadarService:
                     appearances=appearances,
                     total_copies=total_copies,
                     max_copies=max_copies,
-                    avg_copies=round(avg_copies, 2),
-                    inclusion_rate=round(inclusion_rate, 1),
-                    expected_copies=round(expected_copies, 2),
+                    avg_copies=round(avg_copies, RADAR_AVG_COPIES_ROUND_DIGITS),
+                    inclusion_rate=round(inclusion_rate, RADAR_INCLUSION_RATE_ROUND_DIGITS),
+                    expected_copies=round(expected_copies, RADAR_EXPECTED_COPIES_ROUND_DIGITS),
                     copy_distribution=dict(sorted(copy_distribution.items(), reverse=True)),
                 )
             )
@@ -235,7 +242,7 @@ class RadarService:
     def export_radar_as_decklist(
         self,
         radar: RadarData,
-        min_expected_copies: float = 0.0,
+        min_expected_copies: float = RADAR_MIN_EXPECTED_COPIES_DEFAULT,
         max_cards: int | None = None,
     ) -> str:
         """
@@ -263,7 +270,7 @@ class RadarService:
 
         for card in mainboard:
             # Use average copies rounded to nearest integer
-            count = max(1, round(card.avg_copies))
+            count = max(RADAR_MIN_COPY_COUNT, round(card.avg_copies))
             lines.append(f"{count} {card.card_name}")
 
         # Add sideboard section
@@ -277,7 +284,7 @@ class RadarService:
             lines.append("")
             lines.append("Sideboard")
             for card in sideboard:
-                count = max(1, round(card.avg_copies))
+                count = max(RADAR_MIN_COPY_COUNT, round(card.avg_copies))
                 lines.append(f"{count} {card.card_name}")
 
         return "\n".join(lines)

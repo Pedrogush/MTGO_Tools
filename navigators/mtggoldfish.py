@@ -15,6 +15,8 @@ from utils.constants import (
     CURR_DECK_FILE,
     DECK_TEXT_CACHE_FILE,
     METAGAME_CACHE_TTL_SECONDS,
+    MTGGOLDFISH_REQUEST_TIMEOUT_SECONDS,
+    MTGGOLDFISH_STALE_CACHE_SECONDS,
     ONE_DAY_SECONDS,
 )
 from utils.deck_text_cache import get_deck_cache
@@ -66,13 +68,13 @@ def get_archetypes(
         page = requests.get(
             f"https://www.mtggoldfish.com/metagame/{mtg_format}/full",
             impersonate="chrome",
-            timeout=30,
+            timeout=MTGGOLDFISH_REQUEST_TIMEOUT_SECONDS,
         )
         page.raise_for_status()
     except Exception as exc:
         logger.error(f"Failed to fetch archetype page: {exc}")
         if allow_stale:
-            stale = _load_cached_archetypes(mtg_format, max_age=ONE_DAY_SECONDS * 7)
+            stale = _load_cached_archetypes(mtg_format, max_age=MTGGOLDFISH_STALE_CACHE_SECONDS)
             if stale is not None:
                 logger.warning(f"Using stale archetype cache for {mtg_format}")
                 return stale
@@ -154,7 +156,7 @@ def get_archetype_decks(archetype: str):
         page = requests.get(
             f"https://www.mtggoldfish.com/archetype/{archetype}/decks",
             impersonate="chrome",
-            timeout=30,
+            timeout=MTGGOLDFISH_REQUEST_TIMEOUT_SECONDS,
         )
         page.raise_for_status()
     except Exception as exc:
@@ -228,7 +230,7 @@ def get_daily_decks(mtg_format: str):
         page = requests.get(
             f"https://www.mtggoldfish.com/metagame/{mtg_format}",
             impersonate="chrome",
-            timeout=30,
+            timeout=MTGGOLDFISH_REQUEST_TIMEOUT_SECONDS,
         )
         page.raise_for_status()
     except Exception as exc:

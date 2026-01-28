@@ -13,10 +13,15 @@ from loguru import logger
 
 from navigators.mtgo_decklists import fetch_deck_event, fetch_decklist_index
 from utils.archetype_classifier import ArchetypeClassifier
-from utils.constants import CACHE_DIR, MTGO_DECKLISTS_ENABLED
+from utils.constants import (
+    MTGO_BACKGROUND_FETCH_DAYS,
+    MTGO_BACKGROUND_FETCH_DELAY_SECONDS,
+    MTGO_DECKLISTS_ENABLED,
+    MTGO_METADATA_CACHE_FILE,
+)
 from utils.deck_text_cache import get_deck_cache
 
-MTGO_METADATA_CACHE = CACHE_DIR / "mtgo_deck_metadata.json"
+MTGO_METADATA_CACHE = MTGO_METADATA_CACHE_FILE
 
 
 def _mtgo_feature_disabled(message: str) -> bool:
@@ -251,7 +256,11 @@ def fetch_mtgo_events_for_period(
     return events
 
 
-def process_mtgo_event(event_url: str, mtg_format: str = "modern", delay: float = 2.0):
+def process_mtgo_event(
+    event_url: str,
+    mtg_format: str = "modern",
+    delay: float = MTGO_BACKGROUND_FETCH_DELAY_SECONDS,
+):
     """
     Fetch and process a single MTGO event.
 
@@ -333,7 +342,11 @@ def process_mtgo_event(event_url: str, mtg_format: str = "modern", delay: float 
         return 0
 
 
-def fetch_mtgo_data_background(days: int = 7, mtg_format: str = "modern", delay: float = 2.0):
+def fetch_mtgo_data_background(
+    days: int = MTGO_BACKGROUND_FETCH_DAYS,
+    mtg_format: str = "modern",
+    delay: float = MTGO_BACKGROUND_FETCH_DELAY_SECONDS,
+):
     """
     Background task to fetch MTGO data for the past N days.
 

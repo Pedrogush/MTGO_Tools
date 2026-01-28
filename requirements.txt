@@ -1,0 +1,15 @@
+requests==2.32.5
+loguru==0.7.3
+wxPython==4.2.4; platform_system == "Windows"
+beautifulsoup4==4.14.3
+curl-cffi==0.14.0
+pymongo==4.16.0
+pygetwindow==0.0.9
+defusedxml==0.7.1
+pyautogui==0.9.54
+pillow==12.1.0
+pytesseract==0.3.13
+pynput==1.8.1
+pythonnet==3.0.5
+matplotlib==3.10.8
+lxml==6.0.2

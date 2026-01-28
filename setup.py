@@ -1,4 +1,17 @@
+from pathlib import Path
+
 import setuptools
+
+
+def load_requirements(filename: str) -> list[str]:
+    requirements = []
+    for line in Path(__file__).with_name(filename).read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        requirements.append(stripped)
+    return requirements
+
 
 setuptools.setup(
     name="mtg_metagame_tools",
@@ -9,16 +22,5 @@ setuptools.setup(
     packages=["widgets", "navigators", "utils"],
     classifiers=["Programming Language :: Python :: 3", "Operating System :: Windows"],
     python_requires=">=3.11",
-    install_requires=[
-        "pyautogui",  # Used for read-only window management and screenshots
-        "loguru",
-        "pillow",
-        "pytesseract",
-        "pynput",  # Used for opponent tracking configuration tool
-        "curl_cffi",
-        "beautifulsoup4",  # Web scraping MTGGoldfish
-        "pymongo",  # Database for caching scraped data
-        "pythonnet",  # MTGOSDK bridge integration
-        "defusedxml",  # Safe XML parsing for vendor scripts
-    ],
+    install_requires=load_requirements("requirements.txt"),
 )

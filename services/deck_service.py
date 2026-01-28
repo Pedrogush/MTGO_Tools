@@ -9,7 +9,6 @@ This module contains all the business logic for working with decks including:
 - Zone management
 """
 
-import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
@@ -18,6 +17,15 @@ from loguru import logger
 
 from repositories.deck_repository import DeckRepository, get_deck_repository
 from repositories.metagame_repository import MetagameRepository, get_metagame_repository
+from services.deck_averager import DeckAverager
+from services.deck_parser import DeckParser
+from services.deck_text_builder import DeckTextBuilder
+from utils.constants import (
+    DEFAULT_MAX_DECKS,
+    MAINBOARD_MIN_CARDS,
+    MAINBOARD_TARGET_CARDS,
+    SIDEBOARD_MAX_CARDS,
+)
 
 
 @dataclass(frozen=True)
@@ -35,6 +43,9 @@ class DeckService:
         self,
         deck_repository: DeckRepository | None = None,
         metagame_repository: MetagameRepository | None = None,
+        deck_parser: DeckParser | None = None,
+        deck_averager: DeckAverager | None = None,
+        deck_text_builder: DeckTextBuilder | None = None,
     ):
         """
         Initialize the deck service.
@@ -45,6 +56,9 @@ class DeckService:
         """
         self.deck_repo = deck_repository or get_deck_repository()
         self.metagame_repo = metagame_repository or get_metagame_repository()
+        self.deck_parser = deck_parser or DeckParser()
+        self.deck_averager = deck_averager or DeckAverager(self.deck_parser)
+        self.deck_text_builder = deck_text_builder or DeckTextBuilder()
 
     # ============= Deck Parsing and Analysis =============
 
@@ -59,50 +73,7 @@ class DeckService:
             Dictionary mapping card names to quantities (floats to preserve averages)
             Sideboard cards are prefixed with "Sideboard "
         """
-        deck_lines = deck_text.split("\n")
-        deck_dict = {}
-        is_sideboard = False
-
-        for index, line in enumerate(deck_lines):
-            line = line.strip()
-
-            # Skip empty last line
-            if not line and index == len(deck_lines) - 1:
-                continue
-
-            # Empty line marks sideboard section
-            if not line:
-                is_sideboard = True
-                continue
-
-            # Skip "Sideboard" header
-            if line.lower() == "sideboard":
-                is_sideboard = True
-                continue
-
-            # Parse card line
-            try:
-                parts = line.split(" ", 1)
-                if len(parts) < 2:
-                    continue
-
-                # Handle fractional amounts from averages
-                card_amount = float(parts[0])
-                card_name = parts[1].strip()
-
-                # Add to appropriate section
-                if is_sideboard:
-                    key = f"Sideboard {card_name}"
-                else:
-                    key = card_name
-
-                deck_dict[key] = deck_dict.get(key, 0.0) + card_amount
-
-            except (ValueError, IndexError):
-                # Skip invalid lines
-                continue
-
-        return deck_dict
+        return self.deck_parser.deck_to_dictionary(deck_text)
 
     def analyze_deck(self, deck_content: str) -> dict[str, Any]:
         """
@@ -122,85 +93,7 @@ class DeckService:
                 - sideboard_cards: list of (card_name, count) tuples
                 - estimated_lands: int
         """
-        lines = deck_content.strip().split("\n")
-
-        mainboard_totals: dict[str, float] = {}
-        sideboard_totals: dict[str, float] = {}
-        mainboard_order: list[str] = []
-        sideboard_order: list[str] = []
-        is_sideboard = False
-
-        for line in lines:
-            line = line.strip()
-
-            # Empty line marks sideboard
-            if not line:
-                is_sideboard = True
-                continue
-
-            # Skip "Sideboard" header
-            if line.lower() == "sideboard":
-                is_sideboard = True
-                continue
-
-            # Parse card line
-            try:
-                parts = line.split(" ", 1)
-                if len(parts) < 2:
-                    continue
-
-                # Preserve float quantities from average decks
-                count_float = float(parts[0])
-                card_name = parts[1].strip()
-
-                if is_sideboard:
-                    target_totals = sideboard_totals
-                    target_order = sideboard_order
-                else:
-                    target_totals = mainboard_totals
-                    target_order = mainboard_order
-
-                if card_name not in target_totals:
-                    target_order.append(card_name)
-                target_totals[card_name] = target_totals.get(card_name, 0.0) + count_float
-
-            except (ValueError, IndexError):
-                continue
-
-        def _build_card_list(
-            order: list[str], totals: dict[str, float]
-        ) -> list[tuple[str, int | float]]:
-            cards: list[tuple[str, int | float]] = []
-            for card in order:
-                total = totals[card]
-                cards.append((card, int(total) if float(total).is_integer() else total))
-            return cards
-
-        mainboard = _build_card_list(mainboard_order, mainboard_totals)
-        sideboard = _build_card_list(sideboard_order, sideboard_totals)
-
-        # Calculate statistics
-        mainboard_count = sum(count for _, count in mainboard)
-        sideboard_count = sum(count for _, count in sideboard)
-
-        # Estimate land count by name matching (sum counts, not just unique cards)
-        land_keywords = ["mountain", "island", "swamp", "forest", "plains", "land", "wastes"]
-        estimated_lands = sum(
-            count
-            for card, count in mainboard
-            if any(keyword in card.lower() for keyword in land_keywords)
-        )
-
-        return {
-            "mainboard_count": mainboard_count,
-            "sideboard_count": sideboard_count,
-            "total_cards": mainboard_count + sideboard_count,
-            "unique_mainboard": len(mainboard),
-            "unique_sideboard": len(sideboard),
-            "mainboard_cards": mainboard,
-            "sideboard_cards": sideboard,
-            "estimated_lands": estimated_lands,
-        }
+        return self.deck_parser.analyze_deck(deck_content)
 
     # ============= Deck Averaging and Aggregation =============
 
@@ -215,12 +108,7 @@ class DeckService:
         Returns:
             Updated buffer
         """
-        deck_dict = self.deck_to_dictionary(deck_text)
-
-        for card_name, count in deck_dict.items():
-            buffer[card_name] = buffer.get(card_name, 0.0) + float(count)
-
-        return buffer
+        return self.deck_averager.add_deck_to_buffer(buffer, deck_text)
 
     def render_average_deck(self, buffer: dict[str, float], deck_count: int) -> str:
         """
@@ -233,44 +121,13 @@ class DeckService:
         Returns:
             Deck list as text with average card counts
         """
-        if not buffer or deck_count <= 0:
-            return ""
-
-        mainboard_lines = []
-        sideboard_lines = []
-
-        # Sort cards: mainboard first, then sideboard, alphabetically within each
-        sorted_cards = sorted(buffer.items(), key=lambda kv: (kv[0].startswith("Sideboard"), kv[0]))
-
-        for card, total in sorted_cards:
-            # Calculate average
-            average = float(total) / deck_count
-
-            # Format: show decimals if needed, otherwise integer
-            if average.is_integer():
-                value = str(int(average))
-            else:
-                value = f"{average:.2f}"
-
-            # Remove "Sideboard " prefix for display
-            display_name = card.replace("Sideboard ", "")
-            output = f"{value} {display_name}"
-
-            if card.startswith("Sideboard"):
-                sideboard_lines.append(output)
-            else:
-                mainboard_lines.append(output)
-
-        # Combine with blank line separator
-        lines = mainboard_lines
-        if sideboard_lines:
-            lines.append("")
-            lines.extend(sideboard_lines)
-
-        return "\n".join(lines)
+        return self.deck_averager.render_average_deck(buffer, deck_count)
 
     def build_daily_average(
-        self, archetype: dict[str, Any], max_decks: int = 10, source_filter: str | None = None
+        self,
+        archetype: dict[str, Any],
+        max_decks: int = DEFAULT_MAX_DECKS,
+        source_filter: str | None = None,
     ) -> tuple[str, int]:
         """
         Build an average deck from recent tournament results.
@@ -284,39 +141,12 @@ class DeckService:
             Tuple of (averaged_deck_text, decks_processed)
         """
         try:
-            # Fetch recent decks for archetype
-            decks = self.metagame_repo.get_decks_for_archetype(
-                archetype, force_refresh=True, source_filter=source_filter
+            return self.deck_averager.build_daily_average(
+                archetype,
+                metagame_repo=self.metagame_repo,
+                max_decks=max_decks,
+                source_filter=source_filter,
             )
-
-            if not decks:
-                logger.warning(f"No decks found for archetype: {archetype.get('name')}")
-                return "", 0
-
-            # Limit to max_decks
-            decks_to_process = decks[:max_decks]
-
-            # Build average
-            buffer: dict[str, float] = {}
-            processed = 0
-
-            for deck in decks_to_process:
-                try:
-                    deck_content = self.metagame_repo.download_deck_content(
-                        deck, source_filter=source_filter
-                    )
-                    buffer = self.add_deck_to_buffer(buffer, deck_content)
-                    processed += 1
-                except Exception as exc:
-                    logger.warning(f"Failed to download deck {deck.get('name')}: {exc}")
-                    continue
-
-            if processed == 0:
-                return "", 0
-
-            # Render the average
-            averaged_deck = self.render_average_deck(buffer, processed)
-            return averaged_deck, processed
 
         except Exception as exc:
             logger.error(f"Failed to build daily average: {exc}")
@@ -344,15 +174,17 @@ class DeckService:
 
         # Check mainboard size
         mainboard_count = analysis["mainboard_count"]
-        if mainboard_count < 60:
-            errors.append(f"Mainboard has {mainboard_count} cards (minimum 60)")
-        elif mainboard_count > 60:
-            warnings.append(f"Mainboard has {mainboard_count} cards (more than minimum 60)")
+        if mainboard_count < MAINBOARD_MIN_CARDS:
+            errors.append(f"Mainboard has {mainboard_count} cards (minimum {MAINBOARD_MIN_CARDS})")
+        elif mainboard_count > MAINBOARD_TARGET_CARDS:
+            warnings.append(
+                f"Mainboard has {mainboard_count} cards (more than minimum {MAINBOARD_TARGET_CARDS})"
+            )
 
         # Check sideboard size
         sideboard_count = analysis["sideboard_count"]
-        if sideboard_count > 15:
-            errors.append(f"Sideboard has {sideboard_count} cards (maximum 15)")
+        if sideboard_count > SIDEBOARD_MAX_CARDS:
+            errors.append(f"Sideboard has {sideboard_count} cards (maximum {SIDEBOARD_MAX_CARDS})")
 
         # Format-specific validations could be added here
         # For example, checking banned cards, card limits, etc.
@@ -375,7 +207,10 @@ class DeckService:
             True if valid size, False otherwise
         """
         analysis = self.analyze_deck(deck_content)
-        return analysis["mainboard_count"] >= 60 and analysis["sideboard_count"] <= 15
+        return (
+            analysis["mainboard_count"] >= MAINBOARD_MIN_CARDS
+            and analysis["sideboard_count"] <= SIDEBOARD_MAX_CARDS
+        )
 
     # ============= Deck Building Helpers =============
 
@@ -390,17 +225,7 @@ class DeckService:
         Returns:
             Formatted deck list text
         """
-        if not zone_cards.get("main") and not zone_cards.get("side"):
-            return ""
-        lines: list[str] = []
-        for entry in zone_cards.get("main", []):
-            lines.append(f"{entry['qty']} {entry['name']}")
-        if zone_cards.get("side"):
-            lines.append("")
-            lines.append("Sideboard")
-            for entry in zone_cards["side"]:
-                lines.append(f"{entry['qty']} {entry['name']}")
-        return "\n".join(lines).strip()
+        return self.deck_text_builder.build_deck_text_from_zones(zone_cards)
 
     def build_deck_text(self, zones: dict[str, list[dict[str, Any]]]) -> str:
         """
@@ -413,33 +238,7 @@ class DeckService:
         Returns:
             Formatted deck list text
         """
-        lines = []
-
-        # Add mainboard cards
-        for zone in ["Maindeck", "Deck", "Main"]:
-            if zone in zones:
-                for card in zones[zone]:
-                    count = card.get("count", 1)
-                    name = card.get("name", "")
-                    if name:
-                        lines.append(f"{count} {name}")
-                break  # Only process first matching zone
-
-        # Add sideboard section
-        sideboard_found = False
-        for zone in ["Sideboard", "Side"]:
-            if zone in zones and zones[zone]:
-                if not sideboard_found:
-                    lines.append("")  # Blank line before sideboard
-                    sideboard_found = True
-                for card in zones[zone]:
-                    count = card.get("count", 1)
-                    name = card.get("name", "")
-                    if name:
-                        lines.append(f"{count} {name}")
-                break  # Only process first matching zone
-
-        return "\n".join(lines)
+        return self.deck_text_builder.build_deck_text(zones)
 
     # ============= Zone Management =============
 
@@ -473,8 +272,7 @@ class DeckService:
         Returns:
             Filtered list of decks from today
         """
-        today = today or time.strftime("%Y-%m-%d").lower()
-        return [deck for deck in decks if today in str(deck.get("date", "")).lower()]
+        return self.deck_averager.filter_today_decks(decks, today=today)
 
     def build_average_text(
         self,
@@ -494,13 +292,12 @@ class DeckService:
         Returns:
             Averaged deck text
         """
-        buffer = self.deck_repo.build_daily_average_deck(
+        return self.deck_averager.build_average_text(
             todays_decks,
             download_deck,
             read_deck_file,
-            self.add_deck_to_buffer,
+            self.deck_repo,
         )
-        return self.render_average_deck(buffer, len(todays_decks))
 
 
 # Global instance for backward compatibility

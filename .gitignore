@@ -34,6 +34,7 @@ command*.txt
 *.sln
 requirements*.txt
 !requirements-dev.txt
+!requirements.txt
 collection.json
 .codex/
 .coverage

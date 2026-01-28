@@ -1,0 +1,5 @@
+"""Search limits and defaults."""
+
+DEFAULT_SEARCH_LIMIT = 50
+DEFAULT_SUGGESTION_LIMIT = 10
+MIN_PARTIAL_NAME_LENGTH = 2
