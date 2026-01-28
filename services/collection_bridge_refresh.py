@@ -9,6 +9,8 @@ from pathlib import Path
 
 from loguru import logger
 
+from utils.constants import COLLECTION_BRIDGE_TIMEOUT_SECONDS
+
 
 def refresh_from_bridge_async(
     directory: Path,
@@ -46,7 +48,7 @@ def refresh_from_bridge_async(
 
     def worker() -> None:
         try:
-            collection_data = fetch_collection(timeout=60.0)
+            collection_data = fetch_collection(timeout=COLLECTION_BRIDGE_TIMEOUT_SECONDS)
 
             if not collection_data:
                 if on_error:

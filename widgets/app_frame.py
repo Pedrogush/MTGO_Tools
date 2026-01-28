@@ -10,11 +10,17 @@ if TYPE_CHECKING:
     from controllers.app_controller import AppController
 
 from utils.constants import (
+    APP_FRAME_MIN_SIZE,
+    APP_FRAME_SIZE,
+    APP_FRAME_SUMMARY_MIN_HEIGHT,
     DARK_ACCENT,
     DARK_BG,
     DARK_PANEL,
     FORMAT_OPTIONS,
     LIGHT_TEXT,
+    PADDING_LG,
+    PADDING_MD,
+    PADDING_SM,
     SUBDUED_TEXT,
 )
 from utils.mana_icon_factory import ManaIconFactory
@@ -48,7 +54,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
         controller: "AppController",
         parent: wx.Window | None = None,
     ):
-        super().__init__(parent, title="MTGO Deck Research & Builder", size=(1380, 860))
+        super().__init__(parent, title="MTGO Deck Research & Builder", size=APP_FRAME_SIZE)
 
         # Store controller reference - ALL state and business logic goes through this
         self.controller: AppController = controller
@@ -76,7 +82,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
 
         self._build_ui()
         self._apply_window_preferences()
-        self.SetMinSize((1260, 760))
+        self.SetMinSize(APP_FRAME_MIN_SIZE)
         self.Centre(wx.BOTH)
 
         self.Bind(wx.EVT_CLOSE, self.on_close)
@@ -97,10 +103,10 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
 
         # Build left and right panels
         left_panel = self._build_left_panel(root_panel)
-        root_sizer.Add(left_panel, 0, wx.EXPAND | wx.ALL, 10)
+        root_sizer.Add(left_panel, 0, wx.EXPAND | wx.ALL, PADDING_LG)
 
         right_panel = self._build_right_panel(root_panel)
-        root_sizer.Add(right_panel, 1, wx.EXPAND | wx.ALL, 10)
+        root_sizer.Add(right_panel, 1, wx.EXPAND | wx.ALL, PADDING_LG)
 
     def _setup_status_bar(self) -> None:
         self.status_bar = self.CreateStatusBar()
@@ -153,16 +159,16 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
 
         # Toolbar
         self.toolbar = self._build_toolbar(right_panel)
-        right_sizer.Add(self.toolbar, 0, wx.EXPAND | wx.BOTTOM, 6)
+        right_sizer.Add(self.toolbar, 0, wx.EXPAND | wx.BOTTOM, PADDING_MD)
 
         card_data_controls = self._build_card_data_controls(right_panel)
-        right_sizer.Add(card_data_controls, 0, wx.EXPAND | wx.BOTTOM, 10)
+        right_sizer.Add(card_data_controls, 0, wx.EXPAND | wx.BOTTOM, PADDING_LG)
 
         content_split = wx.BoxSizer(wx.HORIZONTAL)
-        right_sizer.Add(content_split, 1, wx.EXPAND | wx.BOTTOM, 10)
+        right_sizer.Add(content_split, 1, wx.EXPAND | wx.BOTTOM, PADDING_LG)
 
         middle_column = wx.BoxSizer(wx.VERTICAL)
-        content_split.Add(middle_column, 2, wx.EXPAND | wx.RIGHT, 10)
+        content_split.Add(middle_column, 2, wx.EXPAND | wx.RIGHT, PADDING_LG)
 
         deck_workspace = self._build_deck_workspace(right_panel)
         middle_column.Add(deck_workspace, 1, wx.EXPAND)
@@ -171,7 +177,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
         content_split.Add(inspector_column, 1, wx.EXPAND)
 
         inspector_box = self._build_card_inspector(right_panel)
-        inspector_column.Add(inspector_box, 1, wx.EXPAND | wx.BOTTOM, 10)
+        inspector_column.Add(inspector_box, 1, wx.EXPAND | wx.BOTTOM, PADDING_LG)
 
         deck_results = self._build_deck_results(right_panel)
         inspector_column.Add(deck_results, 1, wx.EXPAND)
@@ -218,7 +224,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
 
         source_label = wx.StaticText(panel, label="Deck data source:")
         source_label.SetForegroundColour(LIGHT_TEXT)
-        sizer.Add(source_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 4)
+        sizer.Add(source_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, PADDING_SM)
 
         self.deck_source_choice = wx.Choice(panel, choices=["Both", "MTGGoldfish", "MTGO.com"])
         current_source = self.controller.get_deck_data_source()
@@ -241,13 +247,13 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
             style=wx.TE_MULTILINE | wx.TE_READONLY | wx.TE_WORDWRAP | wx.NO_BORDER,
         )
         stylize_textctrl(self.summary_text, multiline=True)
-        self.summary_text.SetMinSize((-1, 90))
-        deck_sizer.Add(self.summary_text, 0, wx.EXPAND | wx.ALL, 6)
+        self.summary_text.SetMinSize((-1, APP_FRAME_SUMMARY_MIN_HEIGHT))
+        deck_sizer.Add(self.summary_text, 0, wx.EXPAND | wx.ALL, PADDING_MD)
 
         self.deck_list = wx.ListBox(deck_box, style=wx.LB_SINGLE)
         stylize_listbox(self.deck_list)
         self.deck_list.Bind(wx.EVT_LISTBOX, self.on_deck_selected)
-        deck_sizer.Add(self.deck_list, 1, wx.EXPAND | wx.ALL, 6)
+        deck_sizer.Add(self.deck_list, 1, wx.EXPAND | wx.ALL, PADDING_MD)
 
         # Deck action buttons
         self.deck_action_buttons = DeckActionButtons(
@@ -256,7 +262,12 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
             on_save=lambda: self.on_save_clicked(None),
             on_daily_average=lambda: self.on_daily_average_clicked(None),
         )
-        deck_sizer.Add(self.deck_action_buttons, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 6)
+        deck_sizer.Add(
+            self.deck_action_buttons,
+            0,
+            wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM,
+            PADDING_MD,
+        )
 
         # Keep references for backward compatibility
         self.daily_average_button = self.deck_action_buttons.daily_average_button
@@ -291,7 +302,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
         detail_sizer = wx.StaticBoxSizer(detail_box, wx.VERTICAL)
 
         self.deck_tabs = self._create_notebook(detail_box)
-        detail_sizer.Add(self.deck_tabs, 1, wx.EXPAND | wx.ALL, 6)
+        detail_sizer.Add(self.deck_tabs, 1, wx.EXPAND | wx.ALL, PADDING_MD)
 
         # Deck tables tab
         self._build_deck_tables_tab()
@@ -335,7 +346,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
         self.deck_tables_page.SetSizer(tables_sizer)
 
         self.zone_notebook = self._create_notebook(self.deck_tables_page)
-        tables_sizer.Add(self.zone_notebook, 1, wx.EXPAND | wx.BOTTOM, 6)
+        tables_sizer.Add(self.zone_notebook, 1, wx.EXPAND | wx.BOTTOM, PADDING_MD)
 
         # Create zone tables
         self.main_table = self._create_zone_table("main", "Mainboard")
@@ -347,7 +358,9 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
             self.deck_tables_page, label="Collection inventory not loaded."
         )
         self.collection_status_label.SetForegroundColour(SUBDUED_TEXT)
-        tables_sizer.Add(self.collection_status_label, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 4)
+        tables_sizer.Add(
+            self.collection_status_label, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_SM
+        )
 
     def _create_zone_table(
         self, zone: str, tab_name: str, owned_status_func=None

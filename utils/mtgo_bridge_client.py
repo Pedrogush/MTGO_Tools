@@ -25,6 +25,8 @@ from typing import Any
 
 from loguru import logger
 
+from utils.constants import BRIDGE_PROCESS_TERMINATE_TIMEOUT_SECONDS
+
 # Default .NET publish locations we will probe for MTGOBridge.exe
 _DEFAULT_BRIDGE_CANDIDATES = [
     Path("dotnet/MTGOBridge/bin/Release/net9.0-windows7.0/win-x64/publish/MTGOBridge.exe"),
@@ -298,7 +300,7 @@ def _watch_worker(
         if process.poll() is None:
             process.terminate()
             try:
-                process.wait(timeout=2)
+                process.wait(timeout=BRIDGE_PROCESS_TERMINATE_TIMEOUT_SECONDS)
             except subprocess.TimeoutExpired:
                 process.kill()
         if process.stdout:

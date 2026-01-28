@@ -10,6 +10,33 @@ import wx
 from loguru import logger
 
 from utils import mtgo_bridge
+from utils.constants import (
+    DARK_ACCENT,
+    DARK_ALT,
+    DARK_BG,
+    DARK_PANEL,
+    LIGHT_TEXT,
+    PADDING_BASE,
+    PADDING_MD,
+    PADDING_SM,
+    PADDING_XL,
+    SUBDUED_TEXT,
+    TIMER_ALERT_CHALLENGE_WRAP_WIDTH,
+    TIMER_ALERT_DEFAULT_THRESHOLD_VALUE,
+    TIMER_ALERT_FRAME_SIZE,
+    TIMER_ALERT_POLL_INTERVAL_MAX_MS,
+    TIMER_ALERT_POLL_INTERVAL_MIN_MS,
+    TIMER_ALERT_POLL_INTERVAL_MS,
+    TIMER_ALERT_REMOVE_BUTTON_SIZE,
+    TIMER_ALERT_REPEAT_INTERVAL_DEFAULT_MS,
+    TIMER_ALERT_REPEAT_INTERVAL_DEFAULT_SECONDS,
+    TIMER_ALERT_REPEAT_INTERVAL_MAX_SECONDS,
+    TIMER_ALERT_REPEAT_INTERVAL_MIN_SECONDS,
+    TIMER_ALERT_SCROLL_RATE_Y,
+    TIMER_ALERT_STATUS_MIN_HEIGHT,
+    TIMER_ALERT_THRESHOLD_INPUT_SIZE,
+    TIMER_ALERT_WATCH_INTERVAL_MS,
+)
 from utils.mtgo_bridge_client import BridgeWatcher
 
 try:
@@ -19,13 +46,6 @@ try:
 except Exception:  # pragma: no cover - fallback for non-Windows environments
     SOUND_AVAILABLE = False
     logger.warning("winsound not available, alarm sounds will not play")
-
-DARK_BG = wx.Colour(20, 22, 27)
-DARK_PANEL = wx.Colour(34, 39, 46)
-DARK_ALT = wx.Colour(40, 46, 54)
-DARK_ACCENT = wx.Colour(59, 130, 246)
-LIGHT_TEXT = wx.Colour(236, 236, 236)
-SUBDUED_TEXT = wx.Colour(185, 191, 202)
 
 # Built-in Windows sounds (always available)
 SOUND_OPTIONS = {
@@ -49,12 +69,14 @@ class ThresholdPanel(wx.Panel):
         self.SetSizer(sizer)
 
         # MM:SS input
-        self.time_input = wx.TextCtrl(self, size=(80, -1), value="05:00")
+        self.time_input = wx.TextCtrl(
+            self, size=TIMER_ALERT_THRESHOLD_INPUT_SIZE, value=TIMER_ALERT_DEFAULT_THRESHOLD_VALUE
+        )
         self._stylize_entry(self.time_input)
-        sizer.Add(self.time_input, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 8)
+        sizer.Add(self.time_input, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, PADDING_BASE)
 
         # Remove button
-        self.remove_btn = wx.Button(self, label="✕", size=(30, -1))
+        self.remove_btn = wx.Button(self, label="✕", size=TIMER_ALERT_REMOVE_BUTTON_SIZE)
         self._stylize_remove_button(self.remove_btn)
         self.remove_btn.Bind(wx.EVT_BUTTON, self._on_remove)
         sizer.Add(self.remove_btn, 0, wx.ALIGN_CENTER_VERTICAL)
@@ -92,12 +114,12 @@ class ThresholdPanel(wx.Panel):
 class TimerAlertFrame(wx.Frame):
     """Polls MTGO challenge timers via the bridge and plays audible alerts."""
 
-    WATCH_INTERVAL_MS = 750
-    POLL_INTERVAL_MS = 1000
+    WATCH_INTERVAL_MS = TIMER_ALERT_WATCH_INTERVAL_MS
+    POLL_INTERVAL_MS = TIMER_ALERT_POLL_INTERVAL_MS
 
     def __init__(self, parent: wx.Window | None = None) -> None:
         style = wx.CAPTION | wx.CLOSE_BOX | wx.MINIMIZE_BOX | wx.STAY_ON_TOP | wx.RESIZE_BORDER
-        super().__init__(parent, title="MTGO Timer Alert", size=(420, 400), style=style)
+        super().__init__(parent, title="MTGO Timer Alert", size=TIMER_ALERT_FRAME_SIZE, style=style)
 
         self._watcher: BridgeWatcher | None = None
         self._watch_timer = wx.Timer(self)
@@ -112,8 +134,8 @@ class TimerAlertFrame(wx.Frame):
         self.triggered_thresholds: set[int] = set()
         self.start_alert_sent = False
         self._current_thresholds: list[int] = []
-        self._monitor_interval_ms = 1000
-        self._repeat_interval_ms = 30000  # 30 seconds default
+        self._monitor_interval_ms = TIMER_ALERT_POLL_INTERVAL_MS
+        self._repeat_interval_ms = TIMER_ALERT_REPEAT_INTERVAL_DEFAULT_MS
 
         self._build_ui()
 
@@ -144,15 +166,15 @@ class TimerAlertFrame(wx.Frame):
             box_parent, label="Enter time in MM:SS format (e.g., 05:00 for 5 minutes)"
         )
         instructions.SetForegroundColour(SUBDUED_TEXT)
-        threshold_sizer.Add(instructions, 0, wx.ALL, 4)
+        threshold_sizer.Add(instructions, 0, wx.ALL, PADDING_SM)
 
         # Scrollable threshold container
         self.threshold_container = wx.ScrolledWindow(box_parent, style=wx.VSCROLL)
         self.threshold_container.SetBackgroundColour(DARK_BG)
-        self.threshold_container.SetScrollRate(0, 20)
+        self.threshold_container.SetScrollRate(0, TIMER_ALERT_SCROLL_RATE_Y)
         self.threshold_container_sizer = wx.BoxSizer(wx.VERTICAL)
         self.threshold_container.SetSizer(self.threshold_container_sizer)
-        threshold_sizer.Add(self.threshold_container, 1, wx.EXPAND | wx.ALL, 4)
+        threshold_sizer.Add(self.threshold_container, 1, wx.EXPAND | wx.ALL, PADDING_SM)
 
         # Add initial threshold
         self._add_threshold_panel()
@@ -161,12 +183,12 @@ class TimerAlertFrame(wx.Frame):
         add_btn = wx.Button(box_parent, label="+ Add Another Threshold")
         self._stylize_secondary_button(add_btn)
         add_btn.Bind(wx.EVT_BUTTON, lambda _evt: self._add_threshold_panel())
-        threshold_sizer.Add(add_btn, 0, wx.ALL, 4)
+        threshold_sizer.Add(add_btn, 0, wx.ALL, PADDING_SM)
 
-        sizer.Add(threshold_sizer, 1, wx.ALL | wx.EXPAND, 12)
+        sizer.Add(threshold_sizer, 1, wx.ALL | wx.EXPAND, PADDING_XL)
 
         # Options section
-        options_grid = wx.FlexGridSizer(cols=2, hgap=8, vgap=8)
+        options_grid = wx.FlexGridSizer(cols=2, hgap=PADDING_BASE, vgap=PADDING_BASE)
         options_grid.AddGrowableCol(1, 1)
 
         # Sound selection
@@ -180,7 +202,12 @@ class TimerAlertFrame(wx.Frame):
         options_grid.Add(
             self._static_text(panel, "Check interval (ms):"), 0, wx.ALIGN_CENTER_VERTICAL
         )
-        self.poll_interval_ctrl = wx.SpinCtrl(panel, min=250, max=5000, initial=1000)
+        self.poll_interval_ctrl = wx.SpinCtrl(
+            panel,
+            min=TIMER_ALERT_POLL_INTERVAL_MIN_MS,
+            max=TIMER_ALERT_POLL_INTERVAL_MAX_MS,
+            initial=TIMER_ALERT_POLL_INTERVAL_MS,
+        )
         self._stylize_spin(self.poll_interval_ctrl)
         options_grid.Add(self.poll_interval_ctrl, 0, wx.EXPAND)
 
@@ -188,11 +215,16 @@ class TimerAlertFrame(wx.Frame):
         options_grid.Add(
             self._static_text(panel, "Repeat interval (seconds):"), 0, wx.ALIGN_CENTER_VERTICAL
         )
-        self.repeat_interval_ctrl = wx.SpinCtrl(panel, min=5, max=300, initial=30)
+        self.repeat_interval_ctrl = wx.SpinCtrl(
+            panel,
+            min=TIMER_ALERT_REPEAT_INTERVAL_MIN_SECONDS,
+            max=TIMER_ALERT_REPEAT_INTERVAL_MAX_SECONDS,
+            initial=TIMER_ALERT_REPEAT_INTERVAL_DEFAULT_SECONDS,
+        )
         self._stylize_spin(self.repeat_interval_ctrl)
         options_grid.Add(self.repeat_interval_ctrl, 0, wx.EXPAND)
 
-        sizer.Add(options_grid, 0, wx.LEFT | wx.RIGHT | wx.EXPAND, 12)
+        sizer.Add(options_grid, 0, wx.LEFT | wx.RIGHT | wx.EXPAND, PADDING_XL)
 
         # Checkboxes
         self.start_alert_checkbox = wx.CheckBox(
@@ -201,27 +233,27 @@ class TimerAlertFrame(wx.Frame):
         self.start_alert_checkbox.SetValue(True)
         self.start_alert_checkbox.SetForegroundColour(LIGHT_TEXT)
         self.start_alert_checkbox.SetBackgroundColour(DARK_BG)
-        sizer.Add(self.start_alert_checkbox, 0, wx.LEFT | wx.RIGHT | wx.TOP, 12)
+        sizer.Add(self.start_alert_checkbox, 0, wx.LEFT | wx.RIGHT | wx.TOP, PADDING_XL)
 
         self.repeat_alarm_checkbox = wx.CheckBox(panel, label="Repeat alarm at interval")
         self.repeat_alarm_checkbox.SetValue(False)
         self.repeat_alarm_checkbox.SetForegroundColour(LIGHT_TEXT)
         self.repeat_alarm_checkbox.SetBackgroundColour(DARK_BG)
-        sizer.Add(self.repeat_alarm_checkbox, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 12)
+        sizer.Add(self.repeat_alarm_checkbox, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_XL)
 
         # Control buttons
         button_row = wx.BoxSizer(wx.HORIZONTAL)
-        sizer.Add(button_row, 0, wx.ALL | wx.EXPAND, 12)
+        sizer.Add(button_row, 0, wx.ALL | wx.EXPAND, PADDING_XL)
 
         start_btn = wx.Button(panel, label="Start Monitoring")
         self._stylize_primary_button(start_btn)
         start_btn.Bind(wx.EVT_BUTTON, lambda _evt: self.start_monitoring())
-        button_row.Add(start_btn, 0, wx.RIGHT, 6)
+        button_row.Add(start_btn, 0, wx.RIGHT, PADDING_MD)
 
         stop_btn = wx.Button(panel, label="Stop")
         self._stylize_secondary_button(stop_btn)
         stop_btn.Bind(wx.EVT_BUTTON, lambda _evt: self.stop_monitoring())
-        button_row.Add(stop_btn, 0, wx.RIGHT, 6)
+        button_row.Add(stop_btn, 0, wx.RIGHT, PADDING_MD)
 
         test_btn = wx.Button(panel, label="Test Alert")
         self._stylize_secondary_button(test_btn)
@@ -233,10 +265,10 @@ class TimerAlertFrame(wx.Frame):
             panel,
             style=wx.TE_MULTILINE | wx.TE_READONLY | wx.TE_WORDWRAP | wx.BORDER_NONE,
         )
-        self.status_text.SetMinSize((-1, 80))
+        self.status_text.SetMinSize((-1, TIMER_ALERT_STATUS_MIN_HEIGHT))
         self.status_text.SetBackgroundColour(DARK_ALT)
         self.status_text.SetForegroundColour(LIGHT_TEXT)
-        sizer.Add(self.status_text, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, 12)
+        sizer.Add(self.status_text, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, PADDING_XL)
 
         # Challenge timer display
         challenge_box = wx.StaticBox(panel, label="Active Challenge Timer")
@@ -248,9 +280,9 @@ class TimerAlertFrame(wx.Frame):
         )
         self.challenge_text.SetForegroundColour(LIGHT_TEXT)
         self.challenge_text.SetBackgroundColour(DARK_PANEL)
-        self.challenge_text.Wrap(340)
-        challenge_sizer.Add(self.challenge_text, 0, wx.ALL | wx.EXPAND, 8)
-        sizer.Add(challenge_sizer, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, 12)
+        self.challenge_text.Wrap(TIMER_ALERT_CHALLENGE_WRAP_WIDTH)
+        challenge_sizer.Add(self.challenge_text, 0, wx.ALL | wx.EXPAND, PADDING_BASE)
+        sizer.Add(challenge_sizer, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, PADDING_XL)
 
         self._set_status("Configure thresholds and click Start to begin monitoring.")
         self.Bind(wx.EVT_SIZE, self._on_resize)
@@ -259,7 +291,7 @@ class TimerAlertFrame(wx.Frame):
         """Add a new threshold input panel."""
         panel = ThresholdPanel(self.threshold_container, on_remove=self._remove_threshold_panel)
         self.threshold_panels.append(panel)
-        self.threshold_container_sizer.Add(panel, 0, wx.EXPAND | wx.BOTTOM, 4)
+        self.threshold_container_sizer.Add(panel, 0, wx.EXPAND | wx.BOTTOM, PADDING_SM)
         self.threshold_container.Layout()
         self.threshold_container.FitInside()
 

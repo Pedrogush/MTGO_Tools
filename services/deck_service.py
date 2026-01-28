@@ -20,6 +20,12 @@ from repositories.metagame_repository import MetagameRepository, get_metagame_re
 from services.deck_averager import DeckAverager
 from services.deck_parser import DeckParser
 from services.deck_text_builder import DeckTextBuilder
+from utils.constants import (
+    DEFAULT_MAX_DECKS,
+    MAINBOARD_MIN_CARDS,
+    MAINBOARD_TARGET_CARDS,
+    SIDEBOARD_MAX_CARDS,
+)
 
 
 @dataclass(frozen=True)
@@ -118,7 +124,10 @@ class DeckService:
         return self.deck_averager.render_average_deck(buffer, deck_count)
 
     def build_daily_average(
-        self, archetype: dict[str, Any], max_decks: int = 10, source_filter: str | None = None
+        self,
+        archetype: dict[str, Any],
+        max_decks: int = DEFAULT_MAX_DECKS,
+        source_filter: str | None = None,
     ) -> tuple[str, int]:
         """
         Build an average deck from recent tournament results.
@@ -165,15 +174,17 @@ class DeckService:
 
         # Check mainboard size
         mainboard_count = analysis["mainboard_count"]
-        if mainboard_count < 60:
-            errors.append(f"Mainboard has {mainboard_count} cards (minimum 60)")
-        elif mainboard_count > 60:
-            warnings.append(f"Mainboard has {mainboard_count} cards (more than minimum 60)")
+        if mainboard_count < MAINBOARD_MIN_CARDS:
+            errors.append(f"Mainboard has {mainboard_count} cards (minimum {MAINBOARD_MIN_CARDS})")
+        elif mainboard_count > MAINBOARD_TARGET_CARDS:
+            warnings.append(
+                f"Mainboard has {mainboard_count} cards (more than minimum {MAINBOARD_TARGET_CARDS})"
+            )
 
         # Check sideboard size
         sideboard_count = analysis["sideboard_count"]
-        if sideboard_count > 15:
-            errors.append(f"Sideboard has {sideboard_count} cards (maximum 15)")
+        if sideboard_count > SIDEBOARD_MAX_CARDS:
+            errors.append(f"Sideboard has {sideboard_count} cards (maximum {SIDEBOARD_MAX_CARDS})")
 
         # Format-specific validations could be added here
         # For example, checking banned cards, card limits, etc.
@@ -196,7 +207,10 @@ class DeckService:
             True if valid size, False otherwise
         """
         analysis = self.analyze_deck(deck_content)
-        return analysis["mainboard_count"] >= 60 and analysis["sideboard_count"] <= 15
+        return (
+            analysis["mainboard_count"] >= MAINBOARD_MIN_CARDS
+            and analysis["sideboard_count"] <= SIDEBOARD_MAX_CARDS
+        )
 
     # ============= Deck Building Helpers =============
 

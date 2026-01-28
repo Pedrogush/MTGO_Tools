@@ -15,6 +15,7 @@ from loguru import logger
 
 from repositories.card_repository import CardRepository, get_card_repository
 from utils.card_data import CardDataManager
+from utils.constants import DEFAULT_SEARCH_LIMIT, DEFAULT_SUGGESTION_LIMIT, MIN_PARTIAL_NAME_LENGTH
 from utils.mana_icon_factory import normalize_mana_query
 from utils.search_filters import matches_color_filter, matches_mana_cost, matches_mana_value
 
@@ -33,7 +34,9 @@ class SearchService:
 
     # ============= Basic Search =============
 
-    def search_cards_by_name(self, query: str, limit: int = 50) -> list[dict[str, Any]]:
+    def search_cards_by_name(
+        self, query: str, limit: int = DEFAULT_SEARCH_LIMIT
+    ) -> list[dict[str, Any]]:
         """
         Search for cards by name.
 
@@ -293,7 +296,9 @@ class SearchService:
 
     # ============= Search Suggestions =============
 
-    def get_card_suggestions(self, partial_name: str, limit: int = 10) -> list[str]:
+    def get_card_suggestions(
+        self, partial_name: str, limit: int = DEFAULT_SUGGESTION_LIMIT
+    ) -> list[str]:
         """
         Get card name suggestions based on partial input.
 
@@ -304,7 +309,7 @@ class SearchService:
         Returns:
             List of suggested card names
         """
-        if len(partial_name) < 2:
+        if len(partial_name) < MIN_PARTIAL_NAME_LENGTH:
             return []
 
         try:
