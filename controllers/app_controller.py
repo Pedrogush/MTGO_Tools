@@ -35,15 +35,22 @@ from utils import mtgo_bridge_client
 from utils.background_worker import BackgroundWorker
 from utils.card_data import CardDataManager
 from utils.constants import (
-    CACHE_DIR,
     COLLECTION_CACHE_MAX_AGE_SECONDS,
+    GUIDE_STORE,
+    MTGO_BACKGROUND_FETCH_DAYS,
+    MTGO_BACKGROUND_FETCH_DELAY_SECONDS,
+    MTGO_BACKGROUND_FETCH_SLEEP_STEP_SECONDS,
+    MTGO_BACKGROUND_FETCH_SLEEP_STEPS,
+    MTGO_BACKGROUND_FORMATS,
+    MTGO_BRIDGE_SHUTDOWN_TIMEOUT_SECONDS,
+    MTGO_BRIDGE_USERNAME_TIMEOUT_SECONDS,
     MTGO_DECKLISTS_ENABLED,
+    MTGO_STATUS_MAX_FAILURES,
+    MTGO_STATUS_POLL_SECONDS,
+    NOTES_STORE,
+    OUTBOARD_STORE,
     ensure_base_dirs,
 )
-
-NOTES_STORE = CACHE_DIR / "deck_notes.json"
-OUTBOARD_STORE = CACHE_DIR / "deck_outboard.json"
-GUIDE_STORE = CACHE_DIR / "deck_sbguides.json"
 
 
 class AppController:
@@ -339,7 +346,9 @@ class AppController:
 
         mtgo_ready = False
         try:
-            payload = mtgo_bridge_client.run_bridge_command("username", timeout=2.0)
+            payload = mtgo_bridge_client.run_bridge_command(
+                "username", timeout=MTGO_BRIDGE_USERNAME_TIMEOUT_SECONDS
+            )
             if isinstance(payload, dict):
                 username = payload.get("username")
                 error = payload.get("error")
@@ -669,7 +678,7 @@ class AppController:
         def mtgo_status_check_task():
             """Background task to check MTGO bridge status every 30 seconds."""
             while not self._worker.is_stopped():
-                time.sleep(30)
+                time.sleep(MTGO_STATUS_POLL_SECONDS)
                 if self._worker.is_stopped():
                     break
                 try:
@@ -677,7 +686,7 @@ class AppController:
                     self._mtgo_bridge_consecutive_failures = 0
                 except mtgo_bridge_client.BridgeCommandError as exc:
                     self._mtgo_bridge_consecutive_failures += 1
-                    if self._mtgo_bridge_consecutive_failures >= 10:
+                    if self._mtgo_bridge_consecutive_failures >= MTGO_STATUS_MAX_FAILURES:
                         logger.warning(
                             f"MTGO bridge failed {self._mtgo_bridge_consecutive_failures} times in a row. "
                             "Stopping status checks (likely on unsupported platform)."
@@ -699,7 +708,7 @@ class AppController:
 
         def mtgo_fetch_task():
             """Background task to fetch MTGO data continuously."""
-            formats = ["modern", "standard", "pioneer", "legacy"]
+            formats = MTGO_BACKGROUND_FORMATS
 
             while not self._worker.is_stopped():
                 for mtg_format in formats:
@@ -707,7 +716,11 @@ class AppController:
                         break
                     try:
                         logger.info(f"Starting MTGO background fetch for {mtg_format}...")
-                        stats = fetch_mtgo_data_background(days=7, mtg_format=mtg_format, delay=2.0)
+                        stats = fetch_mtgo_data_background(
+                            days=MTGO_BACKGROUND_FETCH_DAYS,
+                            mtg_format=mtg_format,
+                            delay=MTGO_BACKGROUND_FETCH_DELAY_SECONDS,
+                        )
                         logger.info(
                             f"MTGO fetch complete for {mtg_format}: "
                             f"{stats['total_decks_cached']} decks cached from "
@@ -724,14 +737,14 @@ class AppController:
                 logger.info(
                     "MTGO background fetch cycle complete. Waiting 1 hour before next cycle..."
                 )
-                for _ in range(360):
+                for _ in range(MTGO_BACKGROUND_FETCH_SLEEP_STEPS):
                     if self._worker.is_stopped():
                         break
-                    time.sleep(10)
+                    time.sleep(MTGO_BACKGROUND_FETCH_SLEEP_STEP_SECONDS)
 
         self._worker.submit(mtgo_fetch_task)
 
-    def shutdown(self, timeout: float = 10.0) -> None:
+    def shutdown(self, timeout: float = MTGO_BRIDGE_SHUTDOWN_TIMEOUT_SECONDS) -> None:
         """Shutdown all background workers gracefully."""
         logger.info("Shutting down AppController background workers...")
         self._worker.shutdown(timeout=timeout)

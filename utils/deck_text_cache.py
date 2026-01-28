@@ -13,10 +13,14 @@ from pathlib import Path
 
 from loguru import logger
 
-from utils.constants import CACHE_DIR
+from utils.constants import (
+    DECK_CACHE_DB_FILE,
+    SQLITE_BUSY_TIMEOUT_MS,
+    SQLITE_CONNECTION_TIMEOUT_SECONDS,
+)
 
 # SQLite database location
-DECK_CACHE_DB = CACHE_DIR / "deck_cache.db"
+DECK_CACHE_DB = DECK_CACHE_DB_FILE
 
 
 class DeckTextCache:
@@ -36,12 +40,12 @@ class DeckTextCache:
         """Create the cache table and indexes if they don't exist."""
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
 
-        with sqlite3.connect(self.db_path, timeout=30.0) as conn:
+        with sqlite3.connect(self.db_path, timeout=SQLITE_CONNECTION_TIMEOUT_SECONDS) as conn:
             cursor = conn.cursor()
 
             # Enable WAL mode for better concurrent access
             cursor.execute("PRAGMA journal_mode=WAL")
-            cursor.execute("PRAGMA busy_timeout=30000")  # 30 second timeout
+            cursor.execute(f"PRAGMA busy_timeout={SQLITE_BUSY_TIMEOUT_MS}")
 
             # Create main cache table
             cursor.execute("""
@@ -93,7 +97,7 @@ class DeckTextCache:
             Deck text if found, None otherwise
         """
         try:
-            with sqlite3.connect(self.db_path, timeout=30.0) as conn:
+            with sqlite3.connect(self.db_path, timeout=SQLITE_CONNECTION_TIMEOUT_SECONDS) as conn:
                 cursor = conn.cursor()
 
                 # Get deck text and update access statistics
@@ -158,7 +162,7 @@ class DeckTextCache:
 
         for attempt in range(max_retries):
             try:
-                with sqlite3.connect(self.db_path, timeout=30.0) as conn:
+                with sqlite3.connect(self.db_path, timeout=SQLITE_CONNECTION_TIMEOUT_SECONDS) as conn:
                     cursor = conn.cursor()
 
                     now = time.time()
@@ -201,7 +205,7 @@ class DeckTextCache:
             Dictionary with cache stats (total_decks, db_size_mb, oldest_entry, newest_entry)
         """
         try:
-            with sqlite3.connect(self.db_path, timeout=30.0) as conn:
+            with sqlite3.connect(self.db_path, timeout=SQLITE_CONNECTION_TIMEOUT_SECONDS) as conn:
                 cursor = conn.cursor()
 
                 # Get total count
@@ -250,7 +254,7 @@ class DeckTextCache:
         cutoff_time = time.time() - (max_age_days * 24 * 60 * 60)
 
         try:
-            with sqlite3.connect(self.db_path, timeout=30.0) as conn:
+            with sqlite3.connect(self.db_path, timeout=SQLITE_CONNECTION_TIMEOUT_SECONDS) as conn:
                 cursor = conn.cursor()
 
                 cursor.execute(
@@ -281,7 +285,7 @@ class DeckTextCache:
             Number of entries deleted
         """
         try:
-            with sqlite3.connect(self.db_path, timeout=30.0) as conn:
+            with sqlite3.connect(self.db_path, timeout=SQLITE_CONNECTION_TIMEOUT_SECONDS) as conn:
                 cursor = conn.cursor()
 
                 # Count current entries
@@ -340,7 +344,7 @@ class DeckTextCache:
                 return 0
 
             migrated = 0
-            with sqlite3.connect(self.db_path, timeout=30.0) as conn:
+            with sqlite3.connect(self.db_path, timeout=SQLITE_CONNECTION_TIMEOUT_SECONDS) as conn:
                 cursor = conn.cursor()
                 now = time.time()
 
@@ -372,7 +376,7 @@ class DeckTextCache:
     def vacuum(self) -> None:
         """Optimize database and reclaim space after deletions."""
         try:
-            with sqlite3.connect(self.db_path, timeout=30.0) as conn:
+            with sqlite3.connect(self.db_path, timeout=SQLITE_CONNECTION_TIMEOUT_SECONDS) as conn:
                 conn.execute("VACUUM")
                 logger.info("Database vacuumed successfully")
         except sqlite3.Error as exc:
@@ -386,7 +390,7 @@ class DeckTextCache:
             True if successful
         """
         try:
-            with sqlite3.connect(self.db_path, timeout=30.0) as conn:
+            with sqlite3.connect(self.db_path, timeout=SQLITE_CONNECTION_TIMEOUT_SECONDS) as conn:
                 conn.execute("DELETE FROM deck_cache")
                 conn.commit()
             logger.info("Deck cache cleared")

@@ -28,3 +28,6 @@ CHALLENGE_LOOKUP_OPTIONS = (
 )
 
 GOLDFISH = "https://www.mtggoldfish.com/player/"
+
+
+MTGO_BACKGROUND_FORMATS = ("modern", "standard", "pioneer", "legacy")

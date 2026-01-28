@@ -13,12 +13,14 @@ from bs4 import BeautifulSoup
 from curl_cffi import requests
 from loguru import logger
 
-from utils.constants import MTGO_DECK_CACHE_FILE, MTGO_DECKLISTS_ENABLED
+from utils.constants import (
+    MTGO_DECKLISTS_ENABLED,
+    MTGO_DECKLISTS_REQUEST_TIMEOUT_SECONDS,
+    MTGO_DECK_CACHE_FILE,
+)
 
 BASE_URL = "https://www.mtgo.com"
 DECKLIST_INDEX_URL = "https://www.mtgo.com/decklists/{year}/{month:02d}"
-DEFAULT_TIMEOUT = 30
-
 
 def _load_cache() -> dict[str, Any]:
     if not MTGO_DECK_CACHE_FILE.exists():
@@ -39,7 +41,7 @@ def _save_cache(cache: dict[str, Any]) -> None:
 
 def _fetch_html(url: str) -> str:
     logger.debug(f"Fetching {url}")
-    response = requests.get(url, impersonate="chrome", timeout=DEFAULT_TIMEOUT)
+    response = requests.get(url, impersonate="chrome", timeout=MTGO_DECKLISTS_REQUEST_TIMEOUT_SECONDS)
     response.raise_for_status()
     return response.text
 

@@ -16,21 +16,13 @@ from utils.constants import (
     CONFIG_DIR,
     DECK_MONITOR_CACHE_FILE,
     DECK_MONITOR_CONFIG_FILE,
+    FORMAT_OPTIONS,
     GOLDFISH,
+    MTGGOLDFISH_REQUEST_TIMEOUT_SECONDS,
+    OPPONENT_TRACKER_CACHE_TTL_SECONDS,
+    OPPONENT_TRACKER_POLL_INTERVAL_MS,
 )
 from utils.find_opponent_names import find_opponent_names
-
-FORMAT_OPTIONS = [
-    "Modern",
-    "Standard",
-    "Pioneer",
-    "Legacy",
-    "Vintage",
-    "Pauper",
-    "Commander",
-    "Brawl",
-    "Historic",
-]
 
 LEGACY_DECK_MONITOR_CONFIG = Path("deck_monitor_config.json")
 LEGACY_DECK_MONITOR_CACHE = Path("deck_monitor_cache.json")
@@ -55,7 +47,11 @@ def get_latest_deck(player: str, option: str):
     logger.debug(player)
     player = player.strip()
     try:
-        res = requests.get(GOLDFISH + player, impersonate="chrome", timeout=30)
+        res = requests.get(
+            GOLDFISH + player,
+            impersonate="chrome",
+            timeout=MTGGOLDFISH_REQUEST_TIMEOUT_SECONDS,
+        )
         res.raise_for_status()
     except Exception as exc:
         logger.error(f"Failed to fetch player page for {player}: {exc}")
@@ -67,7 +63,11 @@ def get_latest_deck(player: str, option: str):
         player = "O" + player[1:]
         logger.debug(player)
         try:
-            res = requests.get(GOLDFISH + player, impersonate="chrome", timeout=30)
+            res = requests.get(
+                GOLDFISH + player,
+                impersonate="chrome",
+                timeout=MTGGOLDFISH_REQUEST_TIMEOUT_SECONDS,
+            )
             res.raise_for_status()
         except Exception as exc:
             logger.error(f"Failed retry fetch for player {player}: {exc}")
@@ -95,8 +95,8 @@ def get_latest_deck(player: str, option: str):
 class MTGOpponentDeckSpy(wx.Frame):
     """Always-on-top overlay that detects opponents from MTGO window titles."""
 
-    CACHE_TTL = 60 * 30  # 30 minutes
-    POLL_INTERVAL_MS = 2000  # Check for opponent every 2 seconds
+    CACHE_TTL = OPPONENT_TRACKER_CACHE_TTL_SECONDS
+    POLL_INTERVAL_MS = OPPONENT_TRACKER_POLL_INTERVAL_MS
 
     def __init__(self, parent: wx.Window | None = None) -> None:
         style = (
