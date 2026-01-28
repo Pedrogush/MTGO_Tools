@@ -11,7 +11,18 @@ from loguru import logger
 
 from utils.card_data import CardDataManager
 from utils.card_images import BULK_DATA_CACHE, get_cache, get_card_image
-from utils.constants import DARK_PANEL, LIGHT_TEXT, SUBDUED_TEXT, ZONE_TITLES
+from utils.constants import (
+    CARD_IMAGE_COST_MIN_HEIGHT,
+    CARD_IMAGE_DISPLAY_HEIGHT,
+    CARD_IMAGE_DISPLAY_WIDTH,
+    CARD_IMAGE_NAV_BUTTON_SIZE,
+    CARD_IMAGE_PRINTING_LABEL_MIN_WIDTH,
+    CARD_IMAGE_TEXT_MIN_HEIGHT,
+    DARK_PANEL,
+    LIGHT_TEXT,
+    SUBDUED_TEXT,
+    ZONE_TITLES,
+)
 from utils.mana_icon_factory import ManaIconFactory
 from utils.stylize import stylize_button, stylize_textctrl
 from widgets.card_image_display import CardImageDisplay
@@ -69,7 +80,11 @@ class CardInspectorPanel(wx.Panel):
         content.Add(self.image_column_panel, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 12)
 
         # Card image display
-        self.card_image_display = CardImageDisplay(self.image_column_panel, width=260, height=360)
+        self.card_image_display = CardImageDisplay(
+            self.image_column_panel,
+            width=CARD_IMAGE_DISPLAY_WIDTH,
+            height=CARD_IMAGE_DISPLAY_HEIGHT,
+        )
         image_column.Add(self.card_image_display, 0, wx.ALIGN_CENTER_HORIZONTAL | wx.ALL, 4)
 
         # Printing navigation panel
@@ -79,12 +94,12 @@ class CardInspectorPanel(wx.Panel):
         self.nav_panel.SetSizer(nav_sizer)
 
         try:
-            nav_btn_size = self.FromDIP(wx.Size(38, 30))
+            nav_btn_size = self.FromDIP(wx.Size(*CARD_IMAGE_NAV_BUTTON_SIZE))
         except AttributeError:
-            nav_btn_size = wx.Size(38, 30)
+            nav_btn_size = wx.Size(*CARD_IMAGE_NAV_BUTTON_SIZE)
 
         # Keep the navigation rail aligned with the card image width so buttons don't jump
-        image_width = getattr(self.card_image_display, "image_width", 260)
+        image_width = getattr(self.card_image_display, "image_width", CARD_IMAGE_DISPLAY_WIDTH)
         self.nav_panel.SetMinSize((image_width, nav_btn_size.GetHeight() + 4))
         self.nav_panel.SetMaxSize((image_width, -1))
 
@@ -94,7 +109,7 @@ class CardInspectorPanel(wx.Panel):
         nav_sizer.Add(self.prev_btn, 0, wx.RIGHT, 4)
 
         self.printing_label_width = max(
-            80,
+            CARD_IMAGE_PRINTING_LABEL_MIN_WIDTH,
             image_width - (nav_btn_size.GetWidth() * 2) - 16,
         )
         self.printing_label = wx.StaticText(self.nav_panel, label="")
@@ -130,7 +145,7 @@ class CardInspectorPanel(wx.Panel):
         # Mana cost container
         self.cost_container = wx.Panel(self.details_panel)
         self.cost_container.SetBackgroundColour(DARK_PANEL)
-        self.cost_container.SetMinSize((-1, 36))
+        self.cost_container.SetMinSize((-1, CARD_IMAGE_COST_MIN_HEIGHT))
         self.cost_sizer = wx.BoxSizer(wx.HORIZONTAL)
         self.cost_container.SetSizer(self.cost_sizer)
         details.Add(self.cost_container, 0, wx.EXPAND | wx.BOTTOM, 4)
@@ -151,7 +166,7 @@ class CardInspectorPanel(wx.Panel):
             style=wx.TE_MULTILINE | wx.TE_READONLY | wx.TE_WORDWRAP | wx.NO_BORDER,
         )
         stylize_textctrl(self.text_ctrl, multiline=True)
-        self.text_ctrl.SetMinSize((-1, 120))
+        self.text_ctrl.SetMinSize((-1, CARD_IMAGE_TEXT_MIN_HEIGHT))
         details.Add(self.text_ctrl, 1, wx.EXPAND | wx.TOP, 4)
 
     # ============= Public API =============

@@ -14,26 +14,29 @@ from loguru import logger
 
 from utils.constants import (
     CONFIG_DIR,
+    DARK_ACCENT,
+    DARK_ALT,
+    DARK_BG,
+    DARK_PANEL,
     DECK_MONITOR_CACHE_FILE,
     DECK_MONITOR_CONFIG_FILE,
     FORMAT_OPTIONS,
     GOLDFISH,
+    LIGHT_TEXT,
     MTGGOLDFISH_REQUEST_TIMEOUT_SECONDS,
     OPPONENT_TRACKER_CACHE_TTL_SECONDS,
+    OPPONENT_TRACKER_FRAME_SIZE,
+    OPPONENT_TRACKER_LABEL_WRAP_WIDTH,
     OPPONENT_TRACKER_POLL_INTERVAL_MS,
+    OPPONENT_TRACKER_SECTION_PADDING,
+    OPPONENT_TRACKER_SPACER_HEIGHT,
+    SUBDUED_TEXT,
 )
 from utils.find_opponent_names import find_opponent_names
 
 LEGACY_DECK_MONITOR_CONFIG = Path("deck_monitor_config.json")
 LEGACY_DECK_MONITOR_CACHE = Path("deck_monitor_cache.json")
 LEGACY_DECK_MONITOR_CACHE_CONFIG = CONFIG_DIR / "deck_monitor_cache.json"
-
-DARK_BG = wx.Colour(20, 22, 27)
-DARK_PANEL = wx.Colour(34, 39, 46)
-DARK_ALT = wx.Colour(40, 46, 54)
-DARK_ACCENT = wx.Colour(59, 130, 246)
-LIGHT_TEXT = wx.Colour(236, 236, 236)
-SUBDUED_TEXT = wx.Colour(185, 191, 202)
 
 
 def get_latest_deck(player: str, option: str):
@@ -102,7 +105,7 @@ class MTGOpponentDeckSpy(wx.Frame):
         style = (
             wx.CAPTION | wx.CLOSE_BOX | wx.STAY_ON_TOP | wx.FRAME_FLOAT_ON_PARENT | wx.MINIMIZE_BOX
         )
-        super().__init__(parent, title="MTGO Opponent Tracker", size=(360, 180), style=style)
+        super().__init__(parent, title="MTGO Opponent Tracker", size=OPPONENT_TRACKER_FRAME_SIZE, style=style)
 
         self._poll_timer = wx.Timer(self)
 
@@ -134,33 +137,33 @@ class MTGOpponentDeckSpy(wx.Frame):
 
         self.deck_label = wx.StaticText(panel, label="Opponent not detected")
         self._stylize_label(self.deck_label)
-        self.deck_label.Wrap(320)
-        sizer.Add(self.deck_label, 0, wx.ALL | wx.EXPAND, 6)
+        self.deck_label.Wrap(OPPONENT_TRACKER_LABEL_WRAP_WIDTH)
+        sizer.Add(self.deck_label, 0, wx.ALL | wx.EXPAND, OPPONENT_TRACKER_SECTION_PADDING)
 
         self.status_label = wx.StaticText(panel, label="Watching for MTGO match windows…")
         self._stylize_label(self.status_label, subtle=True)
         self.status_label.Wrap(320)
-        sizer.Add(self.status_label, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, 6)
+        sizer.Add(self.status_label, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, OPPONENT_TRACKER_SECTION_PADDING)
 
         divider = wx.StaticLine(panel)
-        sizer.Add(divider, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, 6)
+        sizer.Add(divider, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, OPPONENT_TRACKER_SECTION_PADDING)
 
         controls = wx.BoxSizer(wx.HORIZONTAL)
-        sizer.Add(controls, 0, wx.ALL | wx.EXPAND, 6)
+        sizer.Add(controls, 0, wx.ALL | wx.EXPAND, OPPONENT_TRACKER_SECTION_PADDING)
 
         controls.AddStretchSpacer(1)
 
         refresh_button = wx.Button(panel, label="Refresh")
         self._stylize_secondary_button(refresh_button)
         refresh_button.Bind(wx.EVT_BUTTON, lambda _evt: self._manual_refresh(force=True))
-        controls.Add(refresh_button, 0, wx.RIGHT, 6)
+        controls.Add(refresh_button, 0, wx.RIGHT, OPPONENT_TRACKER_SECTION_PADDING)
 
         close_button = wx.Button(panel, label="Close")
         self._stylize_secondary_button(close_button)
         close_button.Bind(wx.EVT_BUTTON, lambda _evt: self.Close())
         controls.Add(close_button, 0)
 
-        sizer.AddSpacer(4)
+        sizer.AddSpacer(OPPONENT_TRACKER_SPACER_HEIGHT)
 
     def _stylize_label(
         self, label: wx.StaticText, *, bold: bool = False, subtle: bool = False
@@ -269,7 +272,7 @@ class MTGOpponentDeckSpy(wx.Frame):
             text = "\n".join(lines)
 
         self.deck_label.SetLabel(text)
-        self.deck_label.Wrap(320)
+        self.deck_label.Wrap(OPPONENT_TRACKER_LABEL_WRAP_WIDTH)
 
     # ------------------------------------------------------------------ Persistence -----------------------------------------------------------
     def _persist_config_async(self) -> None:

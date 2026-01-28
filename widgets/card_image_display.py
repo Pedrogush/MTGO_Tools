@@ -13,11 +13,28 @@ from pathlib import Path
 import wx
 from loguru import logger
 
+from utils.constants import (
+    CARD_IMAGE_ANIMATION_ALPHA_STEP,
+    CARD_IMAGE_ANIMATION_INTERVAL_MS,
+    CARD_IMAGE_CORNER_RADIUS,
+    CARD_IMAGE_DISPLAY_HEIGHT,
+    CARD_IMAGE_DISPLAY_WIDTH,
+    CARD_IMAGE_FLIP_ICON_MARGIN,
+    CARD_IMAGE_FLIP_ICON_SIZE,
+    CARD_IMAGE_FLIP_ICON_TEXT_SCALE,
+    CARD_IMAGE_PLACEHOLDER_INSET,
+)
+
 
 class CardImageDisplay(wx.Panel):
     """A panel that displays MTG card images with navigation and animations."""
 
-    def __init__(self, parent: wx.Window, width: int = 260, height: int = 360):
+    def __init__(
+        self,
+        parent: wx.Window,
+        width: int = CARD_IMAGE_DISPLAY_WIDTH,
+        height: int = CARD_IMAGE_DISPLAY_HEIGHT,
+    ):
         """Initialize the card image display.
 
         Args:
@@ -29,12 +46,12 @@ class CardImageDisplay(wx.Panel):
 
         self.image_width = width
         self.image_height = height
-        self.corner_radius = 12
+        self.corner_radius = CARD_IMAGE_CORNER_RADIUS
 
         # Flip icon state
         self.show_flip_icon_overlay = False
-        self.flip_icon_size = 32
-        self.flip_icon_margin = 10  # Small margin to align with card border
+        self.flip_icon_size = CARD_IMAGE_FLIP_ICON_SIZE
+        self.flip_icon_margin = CARD_IMAGE_FLIP_ICON_MARGIN  # Small margin to align with card border
 
         # Image navigation state
         self.image_paths: list[Path] = []
@@ -198,12 +215,12 @@ class CardImageDisplay(wx.Panel):
         # Create and start timer (60 FPS)
         self.animation_timer = wx.Timer(self)
         self.Bind(wx.EVT_TIMER, self._on_animation_tick, self.animation_timer)
-        self.animation_timer.Start(16)  # ~60 FPS
+        self.animation_timer.Start(CARD_IMAGE_ANIMATION_INTERVAL_MS)  # ~60 FPS
 
     def _on_animation_tick(self, event: wx.TimerEvent) -> None:
         """Handle animation timer tick."""
         # Increment alpha (fade speed)
-        self.animation_alpha += 0.15
+        self.animation_alpha += CARD_IMAGE_ANIMATION_ALPHA_STEP
 
         if self.animation_alpha >= 1.0:
             # Animation complete
@@ -412,7 +429,7 @@ class CardImageDisplay(wx.Panel):
         gc.DrawEllipse(icon_x, icon_y, self.flip_icon_size, self.flip_icon_size)
 
         # Draw the flip icon text (yellow)
-        font_size = int(self.flip_icon_size * 0.65)
+        font_size = int(self.flip_icon_size * CARD_IMAGE_FLIP_ICON_TEXT_SCALE)
         font = wx.Font(wx.FontInfo(font_size).Bold())
         gc.SetFont(font, wx.Colour(255, 220, 0, 255))  # Yellow text, opaque
 
@@ -515,7 +532,11 @@ class CardImageDisplay(wx.Panel):
         dc.SetPen(wx.Pen(wx.Colour(80, 80, 80), 2))
         dc.SetBrush(wx.Brush(wx.Colour(50, 50, 50)))
         dc.DrawRoundedRectangle(
-            5, 5, self.image_width - 10, self.image_height - 10, self.corner_radius
+            CARD_IMAGE_PLACEHOLDER_INSET,
+            CARD_IMAGE_PLACEHOLDER_INSET,
+            self.image_width - (CARD_IMAGE_PLACEHOLDER_INSET * 2),
+            self.image_height - (CARD_IMAGE_PLACEHOLDER_INSET * 2),
+            self.corner_radius,
         )
 
         # Draw text
