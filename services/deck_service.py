@@ -18,6 +18,7 @@ from loguru import logger
 
 from repositories.deck_repository import DeckRepository, get_deck_repository
 from repositories.metagame_repository import MetagameRepository, get_metagame_repository
+from services.deck_parser import DeckParser
 
 
 @dataclass(frozen=True)
@@ -35,6 +36,7 @@ class DeckService:
         self,
         deck_repository: DeckRepository | None = None,
         metagame_repository: MetagameRepository | None = None,
+        deck_parser: DeckParser | None = None,
     ):
         """
         Initialize the deck service.
@@ -45,6 +47,7 @@ class DeckService:
         """
         self.deck_repo = deck_repository or get_deck_repository()
         self.metagame_repo = metagame_repository or get_metagame_repository()
+        self.deck_parser = deck_parser or DeckParser()
 
     # ============= Deck Parsing and Analysis =============
 
@@ -59,50 +62,7 @@ class DeckService:
             Dictionary mapping card names to quantities (floats to preserve averages)
             Sideboard cards are prefixed with "Sideboard "
         """
-        deck_lines = deck_text.split("\n")
-        deck_dict = {}
-        is_sideboard = False
-
-        for index, line in enumerate(deck_lines):
-            line = line.strip()
-
-            # Skip empty last line
-            if not line and index == len(deck_lines) - 1:
-                continue
-
-            # Empty line marks sideboard section
-            if not line:
-                is_sideboard = True
-                continue
-
-            # Skip "Sideboard" header
-            if line.lower() == "sideboard":
-                is_sideboard = True
-                continue
-
-            # Parse card line
-            try:
-                parts = line.split(" ", 1)
-                if len(parts) < 2:
-                    continue
-
-                # Handle fractional amounts from averages
-                card_amount = float(parts[0])
-                card_name = parts[1].strip()
-
-                # Add to appropriate section
-                if is_sideboard:
-                    key = f"Sideboard {card_name}"
-                else:
-                    key = card_name
-
-                deck_dict[key] = deck_dict.get(key, 0.0) + card_amount
-
-            except (ValueError, IndexError):
-                # Skip invalid lines
-                continue
-
-        return deck_dict
+        return self.deck_parser.deck_to_dictionary(deck_text)
 
     def analyze_deck(self, deck_content: str) -> dict[str, Any]:
         """
@@ -122,85 +82,7 @@ class DeckService:
                 - sideboard_cards: list of (card_name, count) tuples
                 - estimated_lands: int
         """
-        lines = deck_content.strip().split("\n")
-
-        mainboard_totals: dict[str, float] = {}
-        sideboard_totals: dict[str, float] = {}
-        mainboard_order: list[str] = []
-        sideboard_order: list[str] = []
-        is_sideboard = False
-
-        for line in lines:
-            line = line.strip()
-
-            # Empty line marks sideboard
-            if not line:
-                is_sideboard = True
-                continue
-
-            # Skip "Sideboard" header
-            if line.lower() == "sideboard":
-                is_sideboard = True
-                continue
-
-            # Parse card line
-            try:
-                parts = line.split(" ", 1)
-                if len(parts) < 2:
-                    continue
-
-                # Preserve float quantities from average decks
-                count_float = float(parts[0])
-                card_name = parts[1].strip()
-
-                if is_sideboard:
-                    target_totals = sideboard_totals
-                    target_order = sideboard_order
-                else:
-                    target_totals = mainboard_totals
-                    target_order = mainboard_order
-
-                if card_name not in target_totals:
-                    target_order.append(card_name)
-                target_totals[card_name] = target_totals.get(card_name, 0.0) + count_float
-
-            except (ValueError, IndexError):
-                continue
-
-        def _build_card_list(
-            order: list[str], totals: dict[str, float]
-        ) -> list[tuple[str, int | float]]:
-            cards: list[tuple[str, int | float]] = []
-            for card in order:
-                total = totals[card]
-                cards.append((card, int(total) if float(total).is_integer() else total))
-            return cards
-
-        mainboard = _build_card_list(mainboard_order, mainboard_totals)
-        sideboard = _build_card_list(sideboard_order, sideboard_totals)
-
-        # Calculate statistics
-        mainboard_count = sum(count for _, count in mainboard)
-        sideboard_count = sum(count for _, count in sideboard)
-
-        # Estimate land count by name matching (sum counts, not just unique cards)
-        land_keywords = ["mountain", "island", "swamp", "forest", "plains", "land", "wastes"]
-        estimated_lands = sum(
-            count
-            for card, count in mainboard
-            if any(keyword in card.lower() for keyword in land_keywords)
-        )
-
-        return {
-            "mainboard_count": mainboard_count,
-            "sideboard_count": sideboard_count,
-            "total_cards": mainboard_count + sideboard_count,
-            "unique_mainboard": len(mainboard),
-            "unique_sideboard": len(sideboard),
-            "mainboard_cards": mainboard,
-            "sideboard_cards": sideboard,
-            "estimated_lands": estimated_lands,
-        }
+        return self.deck_parser.analyze_deck(deck_content)
 
     # ============= Deck Averaging and Aggregation =============
 
