@@ -8,8 +8,6 @@ from typing import TYPE_CHECKING, Any
 from loguru import logger
 
 if TYPE_CHECKING:
-    import wx
-
     from controllers.app_controller import AppController
     from widgets.app_frame import AppFrame
 

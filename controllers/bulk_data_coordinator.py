@@ -8,9 +8,8 @@ from typing import TYPE_CHECKING, Any
 from loguru import logger
 
 if TYPE_CHECKING:
-    from widgets.app_frame import AppFrame
-
     from utils.background_worker import BackgroundWorker
+    from widgets.app_frame import AppFrame
 
 
 class BulkDataCoordinator:
@@ -78,7 +77,9 @@ class BulkDataCoordinator:
 
         self._worker.submit(worker, on_success=success_handler, on_error=error_handler)
 
-    def load_bulk_data_into_memory(self, on_status: Callable[[str], None], force: bool = False) -> None:
+    def load_bulk_data_into_memory(
+        self, on_status: Callable[[str], None], force: bool = False
+    ) -> None:
         on_status("Preparing card printings cache…")
 
         def success_callback(data, stats):
