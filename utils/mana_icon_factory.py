@@ -1,11 +1,10 @@
-import re
 import sys
 from pathlib import Path
 
 import wx
-from loguru import logger
 
 from utils.constants import DARK_ALT, SUBDUED_TEXT
+from utils.mana_resources import ManaIconResources
 
 
 def _split_mana_cost_tokens(cost: str, *, uppercase: bool) -> list[str]:
@@ -30,14 +29,16 @@ class ManaIconFactory:
         "c": (208, 198, 187),
         "multicolor": (246, 223, 138),
     }
-    _FONT_LOADED = False
-    _FONT_NAME = "Mana"
 
     def __init__(self, icon_size: int = 26) -> None:
         self._cache: dict[str, wx.Bitmap] = {}
         self._cost_cache: dict[str, wx.Bitmap] = {}
-        self._glyph_map, self._color_map = self._load_css_resources()
-        self._ensure_font_loaded()
+        assets_root = self._assets_root()
+        self._glyph_map, self._color_map = ManaIconResources.load_css_resources(
+            assets_root,
+            self.FALLBACK_COLORS,
+        )
+        ManaIconResources.ensure_font_loaded(assets_root)
         self._icon_size = max(8, icon_size)
 
     def render(self, parent: wx.Window, mana_cost: str) -> wx.Window:
@@ -161,14 +162,14 @@ class ManaIconFactory:
         return final
 
     def _build_render_font(self, font_size: int) -> wx.Font:
-        if self._FONT_LOADED:
+        if ManaIconResources.font_loaded():
             return wx.Font(
                 font_size,
                 wx.FONTFAMILY_DEFAULT,
                 wx.FONTSTYLE_NORMAL,
                 wx.FONTWEIGHT_NORMAL,
                 False,
-                self._FONT_NAME,
+                ManaIconResources.FONT_NAME,
             )
         font = wx.Font(wx.FontInfo(font_size).Family(wx.FONTFAMILY_SWISS))
         font.MakeBold()
@@ -338,53 +339,6 @@ class ManaIconFactory:
         if first == "2" and second in base:
             return ["c", second]
         return None
-
-    def _ensure_font_loaded(self) -> None:
-        if ManaIconFactory._FONT_LOADED:
-            return
-        font_path = self._assets_root() / "assets" / "mana" / "fonts" / "mana.ttf"
-        if not font_path.exists():
-            logger.debug("Mana font not found at %s; using fallback glyphs", font_path)
-            return
-        try:
-            wx.Font.AddPrivateFont(str(font_path))
-            ManaIconFactory._FONT_LOADED = True
-        except Exception as exc:  # pragma: no cover
-            logger.debug(f"Unable to load mana font: {exc}")
-
-    def _load_css_resources(self) -> tuple[dict[str, str], dict[str, tuple[int, int, int]]]:
-        glyphs: dict[str, str] = {}
-        colors: dict[str, tuple[int, int, int]] = {}
-        css_path = self._assets_root() / "assets" / "mana" / "css" / "mana.min.css"
-        if not css_path.exists():
-            return glyphs, {k: tuple(v) for k, v in self.FALLBACK_COLORS.items()}
-        css_text = css_path.read_text(encoding="utf-8")
-        color_re = re.compile(r"--ms-mana-([a-z0-9-]+):\s*#([0-9a-fA-F]{6})")
-        for match in color_re.finditer(css_text):
-            key = match.group(1).lower()
-            hex_value = match.group(2)
-            colors[key] = tuple(int(hex_value[i : i + 2], 16) for i in (0, 2, 4))
-        for block in css_text.split("}"):
-            if "content" not in block or "::" not in block:
-                continue
-            parts = block.split("{", 1)
-            if len(parts) != 2:
-                continue
-            selectors, body = parts
-            content_match = re.search(r'content:\s*"([^"]+)"', body)
-            if not content_match:
-                continue
-            glyph_char = content_match.group(1)
-            for raw_selector in selectors.split(","):
-                raw_selector = raw_selector.strip()
-                if not raw_selector.startswith(".ms-"):
-                    continue
-                cls = raw_selector.split("::", 1)[0].replace(".ms-", "").lower()
-                if cls:
-                    glyphs[cls] = glyph_char
-        for base, rgb in self.FALLBACK_COLORS.items():
-            colors.setdefault(base, rgb)
-        return glyphs, colors
 
     def _assets_root(self) -> Path:
         """Locate bundled assets in both source and PyInstaller builds."""
