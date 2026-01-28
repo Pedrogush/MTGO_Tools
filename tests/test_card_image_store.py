@@ -24,9 +24,7 @@ def test_schema_creation_produces_expected_tables(tmp_path):
     with sqlite3.connect(store.db_path) as conn:
         tables = {
             row[0]
-            for row in conn.execute(
-                "SELECT name FROM sqlite_master WHERE type='table'"
-            ).fetchall()
+            for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
         }
     assert "card_images" in tables
     assert "bulk_data_meta" in tables
@@ -36,9 +34,7 @@ def test_schema_has_face_index_column(tmp_path):
     """The card_images table must include a face_index column."""
     store = _make_store(tmp_path)
     with sqlite3.connect(store.db_path) as conn:
-        columns = {
-            row[1] for row in conn.execute("PRAGMA table_info(card_images)").fetchall()
-        }
+        columns = {row[1] for row in conn.execute("PRAGMA table_info(card_images)").fetchall()}
     assert "face_index" in columns
 
 
@@ -48,8 +44,7 @@ def test_migration_adds_face_index_to_legacy_table(tmp_path):
 
     # Seed a legacy schema (no face_index column)
     with sqlite3.connect(db_path) as conn:
-        conn.execute(
-            """
+        conn.execute("""
             CREATE TABLE card_images (
                 uuid TEXT NOT NULL,
                 name TEXT NOT NULL,
@@ -61,29 +56,22 @@ def test_migration_adds_face_index_to_legacy_table(tmp_path):
                 scryfall_uri TEXT,
                 artist TEXT
             )
-            """
-        )
-        conn.execute(
-            """
+            """)
+        conn.execute("""
             INSERT INTO card_images
             (uuid, name, set_code, collector_number, image_size, file_path, downloaded_at)
             VALUES ('uuid-legacy', 'Legacy Card', 'SET', '001', 'normal', '/tmp/legacy.jpg', '2024-01-01')
-            """
-        )
+            """)
         conn.commit()
 
     # Opening the store should migrate the table
     store = CardImageStore(db_path)
 
     with sqlite3.connect(store.db_path) as conn:
-        columns = {
-            row[1] for row in conn.execute("PRAGMA table_info(card_images)").fetchall()
-        }
+        columns = {row[1] for row in conn.execute("PRAGMA table_info(card_images)").fetchall()}
         assert "face_index" in columns
 
-        row = conn.execute(
-            "SELECT uuid, face_index, name FROM card_images"
-        ).fetchone()
+        row = conn.execute("SELECT uuid, face_index, name FROM card_images").fetchone()
 
     assert row == ("uuid-legacy", 0, "Legacy Card")
 

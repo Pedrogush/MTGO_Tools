@@ -203,13 +203,11 @@ class CardImageCache:
 # ---------------------------------------------------------------------------
 # Re-exports from dedicated modules (backward compatibility)
 # ---------------------------------------------------------------------------
-
-# BulkImageDownloader -- download orchestration
-from utils.card_image_downloader import BulkImageDownloader  # noqa: E402, F401
-
-# Printing index -- face alias collection and index cache builder
-from utils.card_printing_index import collect_face_aliases as _collect_face_aliases  # noqa: E402, F401
-from utils.card_printing_index import ensure_printing_index_cache  # noqa: E402, F401
+# Re-exports placed after CardImageCache to avoid circular imports.
+# ruff: noqa: I001, E402, F401
+from utils.card_image_downloader import BulkImageDownloader
+from utils.card_printing_index import collect_face_aliases as _collect_face_aliases
+from utils.card_printing_index import ensure_printing_index_cache
 
 # ---------------------------------------------------------------------------
 # Module-level singleton and convenience helpers

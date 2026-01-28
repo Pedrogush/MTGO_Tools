@@ -61,7 +61,7 @@ def test_resolve_strips_whitespace(tmp_path):
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_bytes(b"img")
 
-    result = resolver.resolve_path(f"  small/trimmed.jpg  ")
+    result = resolver.resolve_path("  small/trimmed.jpg  ")
     assert result == target
 
 

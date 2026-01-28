@@ -16,7 +16,6 @@ from utils.card_printing_index import (
     ensure_printing_index_cache,
 )
 
-
 # ---------------------------------------------------------------------------
 # collect_face_aliases
 # ---------------------------------------------------------------------------
@@ -144,7 +143,19 @@ def test_ensure_printing_index_cache_returns_existing_when_current(tmp_path):
     bulk = tmp_path / "bulk.json"
     index = tmp_path / "index.json"
 
-    _write_bulk(bulk, [{"name": "Card A", "id": "uuid-a", "set": "tst", "set_name": "Test", "collector_number": "1", "released_at": "2024-01-01"}])
+    _write_bulk(
+        bulk,
+        [
+            {
+                "name": "Card A",
+                "id": "uuid-a",
+                "set": "tst",
+                "set_name": "Test",
+                "collector_number": "1",
+                "released_at": "2024-01-01",
+            }
+        ],
+    )
 
     # Build initial index
     first = ensure_printing_index_cache(
@@ -170,7 +181,19 @@ def test_ensure_printing_index_cache_rebuilds_on_version_mismatch(tmp_path):
     bulk = tmp_path / "bulk.json"
     index = tmp_path / "index.json"
 
-    _write_bulk(bulk, [{"name": "Card B", "id": "uuid-b", "set": "tst", "set_name": "Test", "collector_number": "2", "released_at": "2024-02-01"}])
+    _write_bulk(
+        bulk,
+        [
+            {
+                "name": "Card B",
+                "id": "uuid-b",
+                "set": "tst",
+                "set_name": "Test",
+                "collector_number": "2",
+                "released_at": "2024-02-01",
+            }
+        ],
+    )
 
     # Write a stale index with wrong version
     stale = {"version": PRINTING_INDEX_VERSION - 1, "data": {}, "bulk_mtime": 0}
