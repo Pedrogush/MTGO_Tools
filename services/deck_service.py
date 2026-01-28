@@ -9,7 +9,6 @@ This module contains all the business logic for working with decks including:
 - Zone management
 """
 
-import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
@@ -18,6 +17,7 @@ from loguru import logger
 
 from repositories.deck_repository import DeckRepository, get_deck_repository
 from repositories.metagame_repository import MetagameRepository, get_metagame_repository
+from services.deck_averager import DeckAverager
 from services.deck_parser import DeckParser
 
 
@@ -37,6 +37,7 @@ class DeckService:
         deck_repository: DeckRepository | None = None,
         metagame_repository: MetagameRepository | None = None,
         deck_parser: DeckParser | None = None,
+        deck_averager: DeckAverager | None = None,
     ):
         """
         Initialize the deck service.
@@ -48,6 +49,7 @@ class DeckService:
         self.deck_repo = deck_repository or get_deck_repository()
         self.metagame_repo = metagame_repository or get_metagame_repository()
         self.deck_parser = deck_parser or DeckParser()
+        self.deck_averager = deck_averager or DeckAverager(self.deck_parser)
 
     # ============= Deck Parsing and Analysis =============
 
@@ -97,12 +99,7 @@ class DeckService:
         Returns:
             Updated buffer
         """
-        deck_dict = self.deck_to_dictionary(deck_text)
-
-        for card_name, count in deck_dict.items():
-            buffer[card_name] = buffer.get(card_name, 0.0) + float(count)
-
-        return buffer
+        return self.deck_averager.add_deck_to_buffer(buffer, deck_text)
 
     def render_average_deck(self, buffer: dict[str, float], deck_count: int) -> str:
         """
@@ -115,41 +112,7 @@ class DeckService:
         Returns:
             Deck list as text with average card counts
         """
-        if not buffer or deck_count <= 0:
-            return ""
-
-        mainboard_lines = []
-        sideboard_lines = []
-
-        # Sort cards: mainboard first, then sideboard, alphabetically within each
-        sorted_cards = sorted(buffer.items(), key=lambda kv: (kv[0].startswith("Sideboard"), kv[0]))
-
-        for card, total in sorted_cards:
-            # Calculate average
-            average = float(total) / deck_count
-
-            # Format: show decimals if needed, otherwise integer
-            if average.is_integer():
-                value = str(int(average))
-            else:
-                value = f"{average:.2f}"
-
-            # Remove "Sideboard " prefix for display
-            display_name = card.replace("Sideboard ", "")
-            output = f"{value} {display_name}"
-
-            if card.startswith("Sideboard"):
-                sideboard_lines.append(output)
-            else:
-                mainboard_lines.append(output)
-
-        # Combine with blank line separator
-        lines = mainboard_lines
-        if sideboard_lines:
-            lines.append("")
-            lines.extend(sideboard_lines)
-
-        return "\n".join(lines)
+        return self.deck_averager.render_average_deck(buffer, deck_count)
 
     def build_daily_average(
         self, archetype: dict[str, Any], max_decks: int = 10, source_filter: str | None = None
@@ -166,39 +129,12 @@ class DeckService:
             Tuple of (averaged_deck_text, decks_processed)
         """
         try:
-            # Fetch recent decks for archetype
-            decks = self.metagame_repo.get_decks_for_archetype(
-                archetype, force_refresh=True, source_filter=source_filter
+            return self.deck_averager.build_daily_average(
+                archetype,
+                metagame_repo=self.metagame_repo,
+                max_decks=max_decks,
+                source_filter=source_filter,
             )
-
-            if not decks:
-                logger.warning(f"No decks found for archetype: {archetype.get('name')}")
-                return "", 0
-
-            # Limit to max_decks
-            decks_to_process = decks[:max_decks]
-
-            # Build average
-            buffer: dict[str, float] = {}
-            processed = 0
-
-            for deck in decks_to_process:
-                try:
-                    deck_content = self.metagame_repo.download_deck_content(
-                        deck, source_filter=source_filter
-                    )
-                    buffer = self.add_deck_to_buffer(buffer, deck_content)
-                    processed += 1
-                except Exception as exc:
-                    logger.warning(f"Failed to download deck {deck.get('name')}: {exc}")
-                    continue
-
-            if processed == 0:
-                return "", 0
-
-            # Render the average
-            averaged_deck = self.render_average_deck(buffer, processed)
-            return averaged_deck, processed
 
         except Exception as exc:
             logger.error(f"Failed to build daily average: {exc}")
@@ -355,8 +291,7 @@ class DeckService:
         Returns:
             Filtered list of decks from today
         """
-        today = today or time.strftime("%Y-%m-%d").lower()
-        return [deck for deck in decks if today in str(deck.get("date", "")).lower()]
+        return self.deck_averager.filter_today_decks(decks, today=today)
 
     def build_average_text(
         self,
@@ -376,13 +311,12 @@ class DeckService:
         Returns:
             Averaged deck text
         """
-        buffer = self.deck_repo.build_daily_average_deck(
+        return self.deck_averager.build_average_text(
             todays_decks,
             download_deck,
             read_deck_file,
-            self.add_deck_to_buffer,
+            self.deck_repo,
         )
-        return self.render_average_deck(buffer, len(todays_decks))
 
 
 # Global instance for backward compatibility
