@@ -21,6 +21,9 @@ if TYPE_CHECKING:
 
     from widgets.app_frame import AppFrame
 
+from controllers.app_controller_helpers import AppControllerUIHelpers
+from controllers.bulk_data_helpers import BulkDataHelpers
+from controllers.mtgo_background_helpers import MtgoBackgroundHelpers
 from controllers.session_manager import DeckSelectorSessionManager
 from repositories.card_repository import get_card_repository
 from repositories.deck_repository import get_deck_repository
@@ -37,16 +40,9 @@ from utils.card_data import CardDataManager
 from utils.constants import (
     COLLECTION_CACHE_MAX_AGE_SECONDS,
     GUIDE_STORE,
-    MTGO_BACKGROUND_FETCH_DAYS,
-    MTGO_BACKGROUND_FETCH_DELAY_SECONDS,
-    MTGO_BACKGROUND_FETCH_SLEEP_STEP_SECONDS,
-    MTGO_BACKGROUND_FETCH_SLEEP_STEPS,
-    MTGO_BACKGROUND_FORMATS,
     MTGO_BRIDGE_SHUTDOWN_TIMEOUT_SECONDS,
     MTGO_BRIDGE_USERNAME_TIMEOUT_SECONDS,
     MTGO_DECKLISTS_ENABLED,
-    MTGO_STATUS_MAX_FAILURES,
-    MTGO_STATUS_POLL_SECONDS,
     NOTES_STORE,
     OUTBOARD_STORE,
     ensure_base_dirs,
@@ -119,18 +115,26 @@ class AppController:
         self.outboard_store = self.store_service.load_store(self.outboard_store_path)
         self.guide_store = self.store_service.load_store(self.guide_store_path)
 
-        self._bulk_check_worker_active = False
         self._ui_callbacks: dict[str, Callable[..., Any]] = {}
 
         # Background worker for tasks with lifecycle control
         self._worker = BackgroundWorker()
-        self._mtgo_bridge_consecutive_failures = 0
+        self.frame: AppFrame | None = None
+        self._bulk_data_helpers = BulkDataHelpers(
+            image_service=self.image_service,
+            worker=self._worker,
+            frame_provider=lambda: self.frame,
+        )
+        self._mtgo_background_helpers = MtgoBackgroundHelpers(
+            worker=self._worker,
+            status_check=self.check_mtgo_bridge_status,
+        )
 
         self.frame = self.create_frame()
 
         # Start background MTGO data fetch
         if MTGO_DECKLISTS_ENABLED:
-            self._start_mtgo_background_fetch()
+            self._mtgo_background_helpers.start_background_fetch()
         else:
             logger.info("MTGO decklists disabled; skipping background fetch.")
 
@@ -396,116 +400,16 @@ class AppController:
     # ============= Bulk Data Management =============
 
     def check_and_download_bulk_data(self) -> None:
-        if self._bulk_check_worker_active:
-            logger.debug("Bulk data check already running")
-            return
-
-        callbacks = self._ui_callbacks
-        on_status = callbacks.get("on_status", lambda msg: None)
-        on_download_needed = callbacks.get("on_bulk_download_needed", lambda reason: None)
-        on_download_complete = callbacks.get("on_bulk_download_complete", lambda msg: None)
-        on_download_failed = callbacks.get("on_bulk_download_failed", lambda msg: None)
-
-        on_status("Checking card image database…")
-        self._bulk_check_worker_active = True
-
-        def worker():
-            return self.image_service.check_bulk_data_exists()
-
-        def success_handler(result: tuple[bool, str]):
-            self._bulk_check_worker_active = False
-            exists, reason = result
-
-            if exists:
-                self.load_bulk_data_into_memory(on_status)
-                on_status("Card image database ready")
-                return
-
-            logger.info(f"Bulk data needs download: {reason}")
-            on_download_needed(reason)
-            on_status("Downloading card image database...")
-
-            def _on_download_complete(msg: str) -> None:
-                on_download_complete(msg)
-                self.load_bulk_data_into_memory(on_status, force=True)
-
-            def _on_download_failed(msg: str) -> None:
-                on_download_failed(msg)
-                on_status("Ready")
-
-            self.image_service.download_bulk_metadata_async(
-                on_success=_on_download_complete,
-                on_error=_on_download_failed,
-            )
-
-        def error_handler(exc: Exception):
-            self._bulk_check_worker_active = False
-            logger.warning(f"Failed to check bulk data existence: {exc}")
-            if not self.image_service.get_bulk_data():
-                self.load_bulk_data_into_memory(on_status)
-            else:
-                on_status("Ready")
-
-        self._worker.submit(worker, on_success=success_handler, on_error=error_handler)
+        self._bulk_data_helpers.check_and_download_bulk_data(self._ui_callbacks)
 
     def load_bulk_data_into_memory(
         self, on_status: Callable[[str], None], force: bool = False
     ) -> None:
-        on_status("Preparing card printings cache…")
-
-        def success_callback(data, stats):
-            import wx
-
-            # Persist bulk data and notify UI
-            self.image_service.set_bulk_data(data)
-            if self.frame:
-                wx.CallAfter(self.frame._on_bulk_data_loaded, data, stats)
-
-        def error_callback(msg):
-            import wx
-
-            logger.warning(f"Bulk data load issue: {msg}")
-            if self.frame:
-                wx.CallAfter(self.frame._on_bulk_data_load_failed, msg)
-
-        started = self.image_service.load_printing_index_async(
-            force=force,
-            on_success=success_callback,
-            on_error=error_callback,
-        )
-
-        if not started:
-            on_status("Ready")
+        self._bulk_data_helpers.load_bulk_data_into_memory(on_status, force=force)
 
     def force_bulk_data_update(self) -> None:
         """Force download of bulk data regardless of current state."""
-        if self._bulk_check_worker_active:
-            logger.debug("Bulk data update already running")
-            return
-
-        callbacks = self._ui_callbacks
-        on_status = callbacks.get("on_status", lambda msg: None)
-        on_download_complete = callbacks.get("on_bulk_download_complete", lambda msg: None)
-        on_download_failed = callbacks.get("on_bulk_download_failed", lambda msg: None)
-
-        on_status("Downloading card image database...")
-        self._bulk_check_worker_active = True
-
-        def _on_download_complete(msg: str) -> None:
-            self._bulk_check_worker_active = False
-            on_download_complete(msg)
-            self.load_bulk_data_into_memory(on_status, force=True)
-
-        def _on_download_failed(msg: str) -> None:
-            self._bulk_check_worker_active = False
-            on_download_failed(msg)
-            on_status("Ready")
-
-        self.image_service.download_bulk_metadata_async(
-            on_success=_on_download_complete,
-            on_error=_on_download_failed,
-            force=True,
-        )
+        self._bulk_data_helpers.force_bulk_data_update(self._ui_callbacks)
 
     def save_settings(
         self, window_size: tuple[int, int] | None = None, screen_pos: tuple[int, int] | None = None
@@ -602,7 +506,7 @@ class AppController:
 
         # Step 5: Check MTGO bridge status and start periodic checking
         self.check_mtgo_bridge_status()
-        self._start_mtgo_status_monitoring()
+        self._mtgo_background_helpers.start_status_monitoring()
 
     # ============= Frame Factory =============
 
@@ -613,50 +517,7 @@ class AppController:
 
         # Create the frame
         frame = AppFrame(controller=self, parent=parent)
-
-        def _format_collection_label(info: dict[str, Any]) -> str:
-            filepath = info["filepath"]
-            card_count = info["card_count"]
-            age_hours = info["age_hours"]
-            age_str = f"{age_hours}h ago" if age_hours > 0 else "recent"
-            return f"Collection: {filepath.name} ({card_count} entries, {age_str})"
-
-        def _on_collection_loaded(info: dict[str, Any]) -> None:
-            wx.CallAfter(
-                frame.collection_status_label.SetLabel,
-                _format_collection_label(info),
-            )
-            wx.CallAfter(frame._render_pending_deck)
-
-        # Define UI callback functions that marshal to UI thread
-        self._ui_callbacks = {
-            "on_archetypes_success": lambda archetypes: wx.CallAfter(
-                frame._on_archetypes_loaded, archetypes
-            ),
-            "on_archetypes_error": lambda error: wx.CallAfter(frame._on_archetypes_error, error),
-            "on_collection_loaded": _on_collection_loaded,
-            "on_collection_not_found": lambda: wx.CallAfter(
-                frame.collection_status_label.SetLabel,
-                "No collection found. Click 'Refresh Collection' to fetch from MTGO.",
-            ),
-            "on_collection_refresh_success": lambda filepath, cards: wx.CallAfter(
-                frame._on_collection_fetched, filepath, cards
-            ),
-            "on_collection_failed": lambda msg: wx.CallAfter(
-                frame._on_collection_fetch_failed, msg
-            ),
-            "on_status": lambda message: wx.CallAfter(frame._set_status, message),
-            "on_bulk_download_needed": lambda reason: logger.info(
-                f"Bulk data needs update: {reason}"
-            ),
-            "on_bulk_download_complete": lambda msg: wx.CallAfter(
-                frame._on_bulk_data_downloaded, msg
-            ),
-            "on_bulk_download_failed": lambda msg: wx.CallAfter(frame._on_bulk_data_failed, msg),
-            "on_mtgo_status_change": lambda ready: wx.CallAfter(
-                frame.toolbar.enable_mtgo_buttons, ready
-            ),
-        }
+        self._ui_callbacks = AppControllerUIHelpers(self, frame).build_callbacks()
 
         # Restore UI state from controller's session data
         wx.CallAfter(frame._restore_session_state)
@@ -669,80 +530,6 @@ class AppController:
         )
 
         return frame
-
-    # ============= MTGO Background Fetch =============
-
-    def _start_mtgo_status_monitoring(self) -> None:
-        """Start background thread to periodically check MTGO bridge status."""
-
-        def mtgo_status_check_task():
-            """Background task to check MTGO bridge status every 30 seconds."""
-            while not self._worker.is_stopped():
-                time.sleep(MTGO_STATUS_POLL_SECONDS)
-                if self._worker.is_stopped():
-                    break
-                try:
-                    self.check_mtgo_bridge_status()
-                    self._mtgo_bridge_consecutive_failures = 0
-                except mtgo_bridge_client.BridgeCommandError as exc:
-                    self._mtgo_bridge_consecutive_failures += 1
-                    if self._mtgo_bridge_consecutive_failures >= MTGO_STATUS_MAX_FAILURES:
-                        logger.warning(
-                            f"MTGO bridge failed {self._mtgo_bridge_consecutive_failures} times in a row. "
-                            "Stopping status checks (likely on unsupported platform)."
-                        )
-                        break
-                    logger.debug(f"MTGO status check failed: {exc}")
-                except Exception as exc:
-                    logger.error(f"MTGO status check failed: {exc}", exc_info=True)
-
-        self._worker.submit(mtgo_status_check_task)
-
-    def _start_mtgo_background_fetch(self) -> None:
-        """Start background thread to fetch MTGO data continuously."""
-        from services.mtgo_background_service import fetch_mtgo_data_background
-
-        if not MTGO_DECKLISTS_ENABLED:
-            logger.info("MTGO decklists disabled; background fetch not started.")
-            return
-
-        def mtgo_fetch_task():
-            """Background task to fetch MTGO data continuously."""
-            formats = MTGO_BACKGROUND_FORMATS
-
-            while not self._worker.is_stopped():
-                for mtg_format in formats:
-                    if self._worker.is_stopped():
-                        break
-                    try:
-                        logger.info(f"Starting MTGO background fetch for {mtg_format}...")
-                        stats = fetch_mtgo_data_background(
-                            days=MTGO_BACKGROUND_FETCH_DAYS,
-                            mtg_format=mtg_format,
-                            delay=MTGO_BACKGROUND_FETCH_DELAY_SECONDS,
-                        )
-                        logger.info(
-                            f"MTGO fetch complete for {mtg_format}: "
-                            f"{stats['total_decks_cached']} decks cached from "
-                            f"{stats['events_processed']}/{stats['events_found']} events"
-                        )
-                    except Exception as exc:
-                        logger.error(
-                            f"MTGO background fetch failed for {mtg_format}: {exc}", exc_info=True
-                        )
-
-                if self._worker.is_stopped():
-                    break
-
-                logger.info(
-                    "MTGO background fetch cycle complete. Waiting 1 hour before next cycle..."
-                )
-                for _ in range(MTGO_BACKGROUND_FETCH_SLEEP_STEPS):
-                    if self._worker.is_stopped():
-                        break
-                    time.sleep(MTGO_BACKGROUND_FETCH_SLEEP_STEP_SECONDS)
-
-        self._worker.submit(mtgo_fetch_task)
 
     def shutdown(self, timeout: float = MTGO_BRIDGE_SHUTDOWN_TIMEOUT_SECONDS) -> None:
         """Shutdown all background workers gracefully."""
