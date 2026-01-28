@@ -8,6 +8,18 @@ from loguru import logger
 from utils.constants import DARK_ALT, SUBDUED_TEXT
 
 
+def _split_mana_cost_tokens(cost: str, *, uppercase: bool) -> list[str]:
+    tokens: list[str] = []
+    if not cost:
+        return tokens
+    for part in cost.replace("}", "").split("{"):
+        token = part.strip()
+        if not token:
+            continue
+        tokens.append(token.upper() if uppercase else token)
+    return tokens
+
+
 class ManaIconFactory:
     FALLBACK_COLORS = {
         "w": (253, 251, 206),
@@ -94,16 +106,7 @@ class ManaIconFactory:
         return composed
 
     def _tokenize(self, cost: str) -> list[str]:
-        tokens: list[str] = []
-        if not cost:
-            return tokens
-        parts = cost.replace("}", "").split("{")
-        for part in parts:
-            token = part.strip()
-            if not token:
-                continue
-            tokens.append(token)
-        return tokens
+        return _split_mana_cost_tokens(cost, uppercase=False)
 
     def _get_bitmap(self, symbol: str) -> wx.Bitmap:
         if symbol in self._cache:
@@ -443,14 +446,7 @@ def normalize_mana_query(raw: str) -> str:
 
 
 def tokenize_mana_symbols(cost: str) -> list[str]:
-    tokens: list[str] = []
-    if not cost:
-        return tokens
-    for part in cost.replace("}", "").split("{"):
-        token = part.strip().upper()
-        if token:
-            tokens.append(token)
-    return tokens
+    return _split_mana_cost_tokens(cost, uppercase=True)
 
 
 def type_global_mana_symbol(token: str) -> None:
