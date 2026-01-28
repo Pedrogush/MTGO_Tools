@@ -20,6 +20,16 @@ def _split_mana_cost_tokens(cost: str, *, uppercase: bool) -> list[str]:
 
 
 class ManaIconFactory:
+    _HYBRID_GLYPH_OFFSETS = ((-0.3, -0.3), (0.3, 0.3))
+    _HYBRID_GLYPH_SCALE = 0.52
+    _SHADOW_ALPHA = 80
+    _OUTLINE_ALPHA = 140
+    _OUTLINE_ALPHA_STRONG = 200
+    _OUTLINE_ALPHA_COMPONENT = 160
+    _OUTLINE_WIDTH = 2
+    _PADDING = 2
+    _RENDER_SCALE = 3
+
     FALLBACK_COLORS = {
         "w": (253, 251, 206),
         "u": (188, 218, 247),
@@ -116,7 +126,7 @@ class ManaIconFactory:
         components = self._hybrid_components(key)
         second_color: tuple[int, int, int] | None = None
         glyph = self._glyph_map.get(key or "") if not components else ""
-        scale = 3
+        scale = self._RENDER_SCALE
         size = self._icon_size * scale
         bmp = wx.Bitmap(size, size)
         dc = wx.MemoryDC(bmp)
@@ -126,10 +136,15 @@ class ManaIconFactory:
         cx = cy = size // 2
         radius = (size // 2) - scale
         gctx = wx.GraphicsContext.Create(dc)
-        shadow_colour = wx.Colour(0, 0, 0, 80)
+        shadow_colour = wx.Colour(0, 0, 0, self._SHADOW_ALPHA)
         gctx.SetPen(wx.Pen(wx.Colour(0, 0, 0, 0)))
         gctx.SetBrush(wx.Brush(shadow_colour))
-        gctx.DrawEllipse(cx - radius + scale, cy - radius + scale, radius * 2, radius * 2)
+        gctx.DrawEllipse(
+            cx - radius + scale,
+            cy - radius + scale,
+            radius * 2,
+            radius * 2,
+        )
 
         text_font = self._build_render_font(13 * scale)
         text_color = wx.Colour(20, 20, 20)
@@ -137,7 +152,7 @@ class ManaIconFactory:
             second_color = self._draw_hybrid_circle(gctx, cx, cy, radius, components)
         else:
             fill_color = self._color_for_key(key or "")
-            gctx.SetPen(wx.Pen(wx.Colour(25, 25, 25, 140), 2))
+            gctx.SetPen(wx.Pen(wx.Colour(25, 25, 25, self._OUTLINE_ALPHA), self._OUTLINE_WIDTH))
             gctx.SetBrush(wx.Brush(wx.Colour(*fill_color)))
             gctx.DrawEllipse(cx - radius, cy - radius, radius * 2, radius * 2)
             glyph_to_draw = glyph or self._glyph_fallback(key)
@@ -149,11 +164,16 @@ class ManaIconFactory:
         dc.SelectObject(wx.NullBitmap)
 
         if components and second_color:
-            bmp = self._apply_hybrid_overlay(bmp, cx, cy, radius, second_color)
-            dc = wx.MemoryDC(bmp)
-            gctx = wx.GraphicsContext.Create(dc)
-            self._draw_hybrid_glyph(gctx, cx, cy, radius, components, text_font, text_color)
-            dc.SelectObject(wx.NullBitmap)
+            bmp = self._render_hybrid_overlay(
+                bmp,
+                cx,
+                cy,
+                radius,
+                second_color,
+                components,
+                text_font,
+                text_color,
+            )
         img = bmp.ConvertToImage()
         img = img.Blur(1)
         img = img.Scale(self._icon_size, self._icon_size, wx.IMAGE_QUALITY_HIGH)
@@ -187,8 +207,12 @@ class ManaIconFactory:
         outline: bool = True,
     ) -> None:
         color = self._color_for_key(key or "")
-        pen_color = wx.Colour(25, 25, 25, 160) if outline else wx.Colour(0, 0, 0, 0)
-        width = 2 if outline else 0
+        pen_color = (
+            wx.Colour(25, 25, 25, self._OUTLINE_ALPHA_COMPONENT)
+            if outline
+            else wx.Colour(0, 0, 0, 0)
+        )
+        width = self._OUTLINE_WIDTH if outline else 0
         gctx.SetPen(wx.Pen(pen_color, width))
         gctx.SetBrush(wx.Brush(wx.Colour(*color)))
         gctx.DrawEllipse(cx - radius, cy - radius, radius * 2, radius * 2)
@@ -209,7 +233,7 @@ class ManaIconFactory:
         rect = (cx - radius, cy - radius, radius * 2, radius * 2)
         base = self._color_for_key(components[0])
         second = self._color_for_key(components[1])
-        gctx.SetPen(wx.Pen(wx.Colour(25, 25, 25, 200), 2))
+        gctx.SetPen(wx.Pen(wx.Colour(25, 25, 25, self._OUTLINE_ALPHA_STRONG), self._OUTLINE_WIDTH))
         gctx.SetBrush(wx.Brush(wx.Colour(*base)))
         gctx.DrawEllipse(*rect)
         gctx.StrokeLine(cx - radius, cy + radius, cx + radius, cy - radius)
@@ -225,8 +249,11 @@ class ManaIconFactory:
         font: wx.Font,
         text_color: wx.Colour,
     ) -> None:
-        offsets = [(-radius * 0.3, -radius * 0.3), (radius * 0.3, radius * 0.3)]
-        glyph_font = self._scaled_font(font, 0.52)
+        offsets = [
+            (radius * self._HYBRID_GLYPH_OFFSETS[0][0], radius * self._HYBRID_GLYPH_OFFSETS[0][1]),
+            (radius * self._HYBRID_GLYPH_OFFSETS[1][0], radius * self._HYBRID_GLYPH_OFFSETS[1][1]),
+        ]
+        glyph_font = self._scaled_font(font, self._HYBRID_GLYPH_SCALE)
         for idx, component in enumerate(components):
             glyph = self._glyph_fallback(component)
             if not glyph:
@@ -260,6 +287,24 @@ class ManaIconFactory:
                 if dx + dy >= 0:
                     img.SetRGB(x, y, cr, cg, cb)
         return wx.Bitmap(img)
+
+    def _render_hybrid_overlay(
+        self,
+        bmp: wx.Bitmap,
+        cx: int,
+        cy: int,
+        radius: int,
+        color: tuple[int, int, int],
+        components: list[str],
+        font: wx.Font,
+        text_color: wx.Colour,
+    ) -> wx.Bitmap:
+        bmp = self._apply_hybrid_overlay(bmp, cx, cy, radius, color)
+        dc = wx.MemoryDC(bmp)
+        gctx = wx.GraphicsContext.Create(dc)
+        self._draw_hybrid_glyph(gctx, cx, cy, radius, components, font, text_color)
+        dc.SelectObject(wx.NullBitmap)
+        return bmp
 
     def _scaled_font(self, font: wx.Font, factor: float) -> wx.Font:
         size = max(6, int(font.GetPointSize() * factor))
