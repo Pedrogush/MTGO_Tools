@@ -19,6 +19,7 @@ from typing import Any
 from loguru import logger
 
 from repositories.card_repository import CardRepository, get_card_repository
+from services.collection_parsing import build_inventory
 from utils.constants import (
     COLLECTION_CACHE_MAX_AGE_SECONDS,
     ONE_HOUR_SECONDS,
@@ -81,12 +82,7 @@ class CollectionService:
             cards = self.card_repo.load_collection_from_file(filepath)
 
             # Convert to dictionary for quick lookup
-            self._collection = {}
-            for card in cards:
-                name = card.get("name", "")
-                quantity = card.get("quantity", 0)
-                if name:
-                    self._collection[name] = self._collection.get(name, 0) + quantity
+            self._collection = build_inventory(cards)
 
             self._collection_path = filepath
             self._collection_loaded = True
@@ -161,11 +157,7 @@ class CollectionService:
 
         try:
             data = json.loads(latest.read_text(encoding="utf-8"))
-            mapping = {
-                entry.get("name", "").lower(): int(entry.get("quantity", 0))
-                for entry in data
-                if isinstance(entry, dict)
-            }
+            mapping = build_inventory(data)
 
             self.set_inventory(mapping)
             self.set_collection_path(latest)
@@ -234,11 +226,7 @@ class CollectionService:
             ValueError: If card list is invalid or cannot be parsed
         """
         try:
-            mapping = {
-                entry.get("name", "").lower(): int(entry.get("quantity", 0))
-                for entry in cards
-                if isinstance(entry, dict)
-            }
+            mapping = build_inventory(cards)
 
             self.set_inventory(mapping)
             if filepath:
@@ -402,7 +390,7 @@ class CollectionService:
         Returns:
             True if owns enough copies, False otherwise
         """
-        owned = self._collection.get(card_name, 0)
+        owned = self.get_owned_count(card_name)
         return owned >= required_count
 
     def get_owned_count(self, card_name: str) -> int:
@@ -415,7 +403,9 @@ class CollectionService:
         Returns:
             Number of copies owned
         """
-        return self._collection.get(card_name, 0)
+        if card_name in self._collection:
+            return self._collection[card_name]
+        return self._collection.get(card_name.lower(), 0)
 
     def get_ownership_status(
         self, card_name: str, required: int
