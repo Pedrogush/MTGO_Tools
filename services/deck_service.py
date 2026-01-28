@@ -19,6 +19,7 @@ from repositories.deck_repository import DeckRepository, get_deck_repository
 from repositories.metagame_repository import MetagameRepository, get_metagame_repository
 from services.deck_averager import DeckAverager
 from services.deck_parser import DeckParser
+from services.deck_text_builder import DeckTextBuilder
 
 
 @dataclass(frozen=True)
@@ -38,6 +39,7 @@ class DeckService:
         metagame_repository: MetagameRepository | None = None,
         deck_parser: DeckParser | None = None,
         deck_averager: DeckAverager | None = None,
+        deck_text_builder: DeckTextBuilder | None = None,
     ):
         """
         Initialize the deck service.
@@ -50,6 +52,7 @@ class DeckService:
         self.metagame_repo = metagame_repository or get_metagame_repository()
         self.deck_parser = deck_parser or DeckParser()
         self.deck_averager = deck_averager or DeckAverager(self.deck_parser)
+        self.deck_text_builder = deck_text_builder or DeckTextBuilder()
 
     # ============= Deck Parsing and Analysis =============
 
@@ -208,17 +211,7 @@ class DeckService:
         Returns:
             Formatted deck list text
         """
-        if not zone_cards.get("main") and not zone_cards.get("side"):
-            return ""
-        lines: list[str] = []
-        for entry in zone_cards.get("main", []):
-            lines.append(f"{entry['qty']} {entry['name']}")
-        if zone_cards.get("side"):
-            lines.append("")
-            lines.append("Sideboard")
-            for entry in zone_cards["side"]:
-                lines.append(f"{entry['qty']} {entry['name']}")
-        return "\n".join(lines).strip()
+        return self.deck_text_builder.build_deck_text_from_zones(zone_cards)
 
     def build_deck_text(self, zones: dict[str, list[dict[str, Any]]]) -> str:
         """
@@ -231,33 +224,7 @@ class DeckService:
         Returns:
             Formatted deck list text
         """
-        lines = []
-
-        # Add mainboard cards
-        for zone in ["Maindeck", "Deck", "Main"]:
-            if zone in zones:
-                for card in zones[zone]:
-                    count = card.get("count", 1)
-                    name = card.get("name", "")
-                    if name:
-                        lines.append(f"{count} {name}")
-                break  # Only process first matching zone
-
-        # Add sideboard section
-        sideboard_found = False
-        for zone in ["Sideboard", "Side"]:
-            if zone in zones and zones[zone]:
-                if not sideboard_found:
-                    lines.append("")  # Blank line before sideboard
-                    sideboard_found = True
-                for card in zones[zone]:
-                    count = card.get("count", 1)
-                    name = card.get("name", "")
-                    if name:
-                        lines.append(f"{count} {name}")
-                break  # Only process first matching zone
-
-        return "\n".join(lines)
+        return self.deck_text_builder.build_deck_text(zones)
 
     # ============= Zone Management =============
 
