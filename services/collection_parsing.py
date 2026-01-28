@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 
-def build_inventory(cards: list[dict[str, Any]]) -> dict[str, int]:
+def build_inventory(cards: list[dict[str, Any]], normalize_names: bool = True) -> dict[str, int]:
     """Normalize a list of card entries into a name -> quantity mapping."""
     inventory: dict[str, int] = {}
     for entry in cards:
@@ -20,6 +20,6 @@ def build_inventory(cards: list[dict[str, Any]]) -> dict[str, int]:
             quantity = 0
         if quantity == 0:
             continue
-        key = name.lower()
+        key = name.lower() if normalize_names else name
         inventory[key] = inventory.get(key, 0) + quantity
     return inventory

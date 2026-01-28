@@ -90,7 +90,7 @@ class CollectionService:
             cards = self.card_repo.load_collection_from_file(filepath)
 
             # Convert to dictionary for quick lookup
-            self._collection = build_inventory(cards)
+            self._collection = build_inventory(cards, normalize_names=False)
 
             self._collection_path = filepath
             self._collection_loaded = True
