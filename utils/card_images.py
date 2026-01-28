@@ -33,6 +33,7 @@ import requests
 from loguru import logger
 
 from utils.card_image_path_resolver import CardImagePathResolver
+from utils.card_image_store import CardImageStore
 from utils.constants import BULK_DATA_CACHE_FRESHNESS_SECONDS, CACHE_DIR
 
 # Image cache configuration
@@ -67,7 +68,7 @@ class CardImageCache:
         self.cache_dir = self.cache_dir.resolve()
         self.db_path = self.db_path.resolve()
         self._path_resolver = CardImagePathResolver(self.cache_dir)
-        self._init_database()
+        self._store = CardImageStore(self.db_path)
 
     def _ensure_directories(self) -> None:
         """Create cache directories if they don't exist."""
@@ -75,99 +76,25 @@ class CardImageCache:
         for size in IMAGE_SIZES.values():
             (self.cache_dir / size).mkdir(exist_ok=True)
 
-    def _init_database(self) -> None:
-        """Initialize SQLite database schema."""
-        with sqlite3.connect(self.db_path) as conn:
-            self._create_schema(conn)
-            self._ensure_face_index_support(conn)
-            conn.commit()
-
-    def _create_schema(self, conn: sqlite3.Connection) -> None:
-        """Create base tables if they do not exist."""
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS card_images (
-                uuid TEXT NOT NULL,
-                face_index INTEGER NOT NULL DEFAULT 0,
-                name TEXT NOT NULL,
-                set_code TEXT,
-                collector_number TEXT,
-                image_size TEXT NOT NULL,
-                file_path TEXT NOT NULL,
-                downloaded_at TEXT NOT NULL,
-                scryfall_uri TEXT,
-                artist TEXT,
-                PRIMARY KEY (uuid, face_index, image_size)
-            )
-        """
-        )
-        conn.execute(
-            """
-            CREATE INDEX IF NOT EXISTS idx_card_name ON card_images(name)
-        """
-        )
-        conn.execute(
-            """
-            CREATE INDEX IF NOT EXISTS idx_set_code ON card_images(set_code)
-        """
-        )
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS bulk_data_meta (
-                id INTEGER PRIMARY KEY CHECK (id = 1),
-                downloaded_at TEXT NOT NULL,
-                total_cards INTEGER NOT NULL,
-                bulk_data_uri TEXT NOT NULL
-            )
-        """
-        )
-
-    def _ensure_face_index_support(self, conn: sqlite3.Connection) -> None:
-        """Ensure the card_images table can store multiple faces per UUID."""
-        info = conn.execute("PRAGMA table_info(card_images)").fetchall()
-        has_face_index = any(column[1] == "face_index" for column in info)
-        if has_face_index:
-            return
-
-        logger.info("Migrating card_images table to support multi-face entries")
-        conn.execute("ALTER TABLE card_images RENAME TO card_images_old")
-        self._create_schema(conn)
-        conn.execute(
-            """
-            INSERT INTO card_images (
-                uuid,
-                face_index,
-                name,
-                set_code,
-                collector_number,
-                image_size,
-                file_path,
-                downloaded_at,
-                scryfall_uri,
-                artist
-            )
-            SELECT
-                uuid,
-                0,
-                name,
-                set_code,
-                collector_number,
-                image_size,
-                file_path,
-                downloaded_at,
-                scryfall_uri,
-                artist
-            FROM card_images_old
-        """
-        )
-        conn.execute("DROP TABLE card_images_old")
+    # ------------------------------------------------------------------
+    # Path resolution helpers
+    # ------------------------------------------------------------------
 
     def _resolve_path(self, stored_path: str) -> Path:
-        """Convert stored path strings into usable filesystem Paths.
-
-        Delegates to the dedicated CardImagePathResolver instance.
-        """
+        """Convert a stored path string into a usable filesystem Path."""
         return self._path_resolver.resolve_path(stored_path)
+
+    def _first_existing_path(self, rows: list[tuple[str, ...]]) -> Path | None:
+        """Return the first resolved path that exists on disk, or None."""
+        for (file_path_str,) in rows:
+            path = self._resolve_path(file_path_str)
+            if path.exists():
+                return path
+        return None
+
+    # ------------------------------------------------------------------
+    # Public read interface
+    # ------------------------------------------------------------------
 
     def get_image_path(self, card_name: str, size: str = "normal") -> Path | None:
         """Get cached image path for a card name.
@@ -179,99 +106,52 @@ class CardImageCache:
         Returns:
             Path to cached image file, or None if not cached
         """
-        with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.execute(
-                """
-                SELECT file_path
-                FROM card_images
-                WHERE LOWER(name) = LOWER(?) AND image_size = ?
-                ORDER BY face_index
-                LIMIT 1
-                """,
-                (card_name, size),
-            )
-            row = cursor.fetchone()
-            if row:
-                path = self._resolve_path(row[0])
-                if path.exists():
-                    return path
+        rows = self._store.get_rows_by_name(card_name, size)
+        if rows:
+            found = self._first_existing_path(rows[:1])
+            if found:
+                return found
 
-            alias_path = self._lookup_double_faced_alias(conn, card_name, size)
-            if alias_path:
-                return alias_path
-        return None
+        # Fall back to double-faced alias lookup
+        return self._lookup_double_faced_alias(card_name, size)
 
-    def _lookup_double_faced_alias(
-        self, conn: sqlite3.Connection, card_name: str, size: str
-    ) -> Path | None:
+    def _lookup_double_faced_alias(self, card_name: str, size: str) -> Path | None:
         """Attempt to resolve legacy front/back alias lookups."""
         alias = (card_name or "").strip()
         if not alias or "//" in alias:
             return None
 
         alias_lower = alias.lower()
-        patterns = (
-            f"{alias_lower} // %",
-            f"% // {alias_lower}",
-        )
-
-        for pattern in patterns:
-            cursor = conn.execute(
-                """
-                SELECT file_path
-                FROM card_images
-                WHERE LOWER(name) LIKE ? AND image_size = ?
-                ORDER BY face_index
-                LIMIT 1
-                """,
-                (pattern, size),
-            )
-            row = cursor.fetchone()
-            if row:
-                path = self._resolve_path(row[0])
-                if path.exists():
-                    return path
+        for pattern in (f"{alias_lower} // %", f"% // {alias_lower}"):
+            rows = self._store.get_rows_by_name_pattern(pattern, size)
+            if rows:
+                found = self._first_existing_path(rows[:1])
+                if found:
+                    return found
         return None
 
     def get_image_by_uuid(
         self, uuid: str, size: str = "normal", face_index: int | None = 0
     ) -> Path | None:
         """Get cached image path by Scryfall UUID."""
-        query = "SELECT file_path FROM card_images WHERE uuid = ? AND image_size = ? ORDER BY face_index"
-        params: tuple[object, ...]
-        if face_index is None:
-            params = (uuid, size)
-        else:
-            query = "SELECT file_path FROM card_images WHERE uuid = ? AND face_index = ? AND image_size = ?"
-            params = (uuid, face_index, size)
-
-        with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.execute(query, params)
-            row = cursor.fetchone()
-            if row:
-                path = self._resolve_path(row[0])
-                if path.exists():
-                    return path
+        rows = self._store.get_rows_by_uuid(uuid, size, face_index=face_index)
+        if rows:
+            return self._first_existing_path(rows[:1])
         return None
 
     def get_image_paths_by_uuid(self, uuid: str, size: str = "normal") -> list[Path]:
         """Return all cached face images for a UUID, ordered by face index."""
-        with sqlite3.connect(self.db_path) as conn:
-            rows = conn.execute(
-                """
-                SELECT face_index, file_path
-                FROM card_images
-                WHERE uuid = ? AND image_size = ? AND face_index >= 0
-                ORDER BY face_index
-                """,
-                (uuid, size),
-            ).fetchall()
+        rows = self._store.get_all_face_rows(uuid, size)
         paths: list[Path] = []
         for _, file_path in rows:
             path = self._resolve_path(file_path)
             if path.exists():
                 paths.append(path)
         return paths
+
+    # ------------------------------------------------------------------
+    # Public write interface (delegates to store)
+    # ------------------------------------------------------------------
 
     def add_image(
         self,
@@ -281,57 +161,36 @@ class CardImageCache:
         collector_number: str,
         image_size: str,
         file_path: Path,
-        scryfall_uri: str = None,
-        artist: str = None,
+        scryfall_uri: str | None = None,
+        artist: str | None = None,
         face_index: int = 0,
     ) -> None:
         """Add image record to database."""
-        file_path_str = str(Path(file_path).resolve())
-
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute(
-                """
-                INSERT OR REPLACE INTO card_images
-                (uuid, face_index, name, set_code, collector_number, image_size, file_path,
-                 downloaded_at, scryfall_uri, artist)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-                (
-                    uuid,
-                    face_index,
-                    name,
-                    set_code,
-                    collector_number,
-                    image_size,
-                    file_path_str,
-                    datetime.now(UTC).isoformat(),
-                    scryfall_uri,
-                    artist,
-                ),
-            )
-            conn.commit()
+        self._store.add_image(
+            uuid=uuid,
+            name=name,
+            set_code=set_code,
+            collector_number=collector_number,
+            image_size=image_size,
+            file_path=file_path,
+            scryfall_uri=scryfall_uri,
+            artist=artist,
+            face_index=face_index,
+        )
 
     def get_cache_stats(self) -> dict[str, Any]:
         """Get cache statistics."""
-        with sqlite3.connect(self.db_path) as conn:
-            total = conn.execute("SELECT COUNT(DISTINCT uuid) FROM card_images").fetchone()[0]
-            by_size = {}
-            for size in IMAGE_SIZES.values():
-                count = conn.execute(
-                    "SELECT COUNT(*) FROM card_images WHERE image_size = ?", (size,)
-                ).fetchone()[0]
-                by_size[size] = count
+        return self._store.get_cache_stats()
 
-            bulk_meta = conn.execute(
-                "SELECT downloaded_at, total_cards FROM bulk_data_meta WHERE id = 1"
-            ).fetchone()
+    def get_bulk_data_record(self) -> tuple[str | None, str | None]:
+        """Return (downloaded_at, bulk_data_uri) for the cached bulk-data snapshot."""
+        return self._store.get_bulk_data_record()
 
-        return {
-            "unique_cards": total,
-            "by_size": by_size,
-            "bulk_data_date": bulk_meta[0] if bulk_meta else None,
-            "bulk_total_cards": bulk_meta[1] if bulk_meta else None,
-        }
+    def upsert_bulk_data_meta(
+        self, downloaded_at: str, total_cards: int, bulk_data_uri: str
+    ) -> None:
+        """Persist updated bulk-data metadata."""
+        self._store.upsert_bulk_data_meta(downloaded_at, total_cards, bulk_data_uri)
 
     def is_cached(self, uuid: str, size: str = "normal", face_index: int | None = 0) -> bool:
         """Check if image is already cached."""
@@ -356,13 +215,7 @@ class BulkImageDownloader:
 
     def _get_cached_bulk_data_record(self) -> tuple[str | None, str | None]:
         """Return the saved bulk data metadata (updated_at, download URI)."""
-        with sqlite3.connect(self.cache.db_path) as conn:
-            row = conn.execute(
-                "SELECT downloaded_at, bulk_data_uri FROM bulk_data_meta WHERE id = 1"
-            ).fetchone()
-        if row:
-            return row[0], row[1]
-        return None, None
+        return self.cache.get_bulk_data_record()
 
     def is_bulk_data_outdated(
         self, max_staleness_seconds: int | None = None
@@ -437,19 +290,11 @@ class BulkImageDownloader:
                     f.write(chunk)
 
             # Update database metadata (defer card count to avoid parsing 500MB file)
-            with sqlite3.connect(self.cache.db_path) as conn:
-                conn.execute(
-                    """
-                    INSERT OR REPLACE INTO bulk_data_meta (id, downloaded_at, total_cards, bulk_data_uri)
-                    VALUES (1, ?, ?, ?)
-                """,
-                    (
-                        remote_updated_at or datetime.now(UTC).isoformat(),
-                        0,
-                        download_uri,
-                    ),
-                )
-                conn.commit()
+            self.cache.upsert_bulk_data_meta(
+                downloaded_at=remote_updated_at or datetime.now(UTC).isoformat(),
+                total_cards=0,
+                bulk_data_uri=download_uri,
+            )
 
             logger.info("Bulk data downloaded successfully")
             return True, "Bulk data downloaded"
