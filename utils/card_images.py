@@ -1,42 +1,41 @@
-"""High-throughput card image downloader and cache manager.
+"""Facade module for the card image cache subsystem.
 
-This module provides functionality to:
-1. Download Scryfall bulk data to get all card metadata
-2. Fetch card images from Scryfall CDN (no rate limits on image CDN)
-3. Maintain a local SQLite database of cached images
-4. Support concurrent downloads for high throughput
+Public surface:
+- ``CardImageCache`` -- thin orchestrator that coordinates path resolution
+  and SQLite persistence.
+- ``BulkImageDownloader`` -- high-throughput Scryfall image downloader.
+- ``ensure_printing_index_cache`` -- build/load the compact printings index.
+- Singleton helpers: ``get_cache``, ``get_card_image``, ``get_cache_stats``.
 
-Architecture:
-- Uses Scryfall bulk data JSON for card metadata
-- Downloads images from cards.scryfall.io CDN (no rate limits)
-- Stores images locally with UUID-based filenames
-- SQLite database tracks downloaded images and metadata
-- Supports multiple image sizes (small, normal, large, png)
+Implementation details live in the sibling modules:
+- ``card_image_path_resolver`` -- Windows/WSL path normalisation.
+- ``card_image_store`` -- SQLite schema, migrations, and queries.
+- ``card_image_downloader`` -- HTTP download orchestration.
+- ``card_printing_index`` -- printings index builder.
+
+All module-level constants defined here (``IMAGE_CACHE_DIR``,
+``BULK_DATA_CACHE``, ``PRINTING_INDEX_CACHE``, etc.) remain in this file so
+that tests which monkeypatch them continue to work without changes.
 """
 
 from __future__ import annotations
 
-import json
-import os
-import sqlite3
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime, timezone
+from datetime import timezone
+from pathlib import Path
+from typing import Any
 
 try:  # Python 3.11+ has UTC
     from datetime import UTC
 except ImportError:  # pragma: no cover - compatibility shim for Python 3.10
     UTC = timezone.utc  # noqa: UP017
-from pathlib import Path, PureWindowsPath
-from typing import Any
-
-import requests
-from loguru import logger
 
 from utils.card_image_path_resolver import CardImagePathResolver
 from utils.card_image_store import CardImageStore
-from utils.constants import BULK_DATA_CACHE_FRESHNESS_SECONDS, CACHE_DIR
+from utils.constants import CACHE_DIR
 
-# Image cache configuration
+# ---------------------------------------------------------------------------
+# Path constants (stay here so monkeypatching in tests keeps working)
+# ---------------------------------------------------------------------------
 IMAGE_CACHE_DIR = CACHE_DIR / "card_images"
 IMAGE_DB_PATH = IMAGE_CACHE_DIR / "images.db"
 BULK_DATA_CACHE = IMAGE_CACHE_DIR / "bulk_data.json"
@@ -51,15 +50,19 @@ IMAGE_SIZES = {
     "png": "png",  # 745x1040 - highest quality, transparent
 }
 
-# Download configuration
-BULK_DATA_URL = "https://api.scryfall.com/bulk-data/default-cards"
-MAX_WORKERS = 10  # Concurrent download threads
-CHUNK_SIZE = 8192  # Download chunk size
-REQUEST_TIMEOUT = 30  # Seconds
+
+# ---------------------------------------------------------------------------
+# CardImageCache -- thin orchestrator
+# ---------------------------------------------------------------------------
 
 
 class CardImageCache:
-    """Manages local card image cache with SQLite database."""
+    """Orchestrates path resolution and SQLite persistence for card images.
+
+    Delegates storage to ``CardImageStore`` and path translation to
+    ``CardImagePathResolver``.  Consumers interact exclusively through
+    this class's public methods.
+    """
 
     def __init__(self, cache_dir: Path = IMAGE_CACHE_DIR, db_path: Path = IMAGE_DB_PATH):
         self.cache_dir = Path(cache_dir)
@@ -197,18 +200,21 @@ class CardImageCache:
         return self.get_image_by_uuid(uuid, size, face_index=face_index) is not None
 
 
-# Re-export BulkImageDownloader from its dedicated module for backward
-# compatibility.  All download logic now lives in card_image_downloader.
+# ---------------------------------------------------------------------------
+# Re-exports from dedicated modules (backward compatibility)
+# ---------------------------------------------------------------------------
+
+# BulkImageDownloader -- download orchestration
 from utils.card_image_downloader import BulkImageDownloader  # noqa: E402, F401
 
-
-# Re-export printing index functions from their dedicated module for
-# backward compatibility.  All index logic now lives in card_printing_index.
+# Printing index -- face alias collection and index cache builder
 from utils.card_printing_index import collect_face_aliases as _collect_face_aliases  # noqa: E402, F401
 from utils.card_printing_index import ensure_printing_index_cache  # noqa: E402, F401
 
+# ---------------------------------------------------------------------------
+# Module-level singleton and convenience helpers
+# ---------------------------------------------------------------------------
 
-# Singleton instance
 _cache_instance: CardImageCache | None = None
 
 
@@ -268,7 +274,11 @@ def get_cache_stats() -> dict[str, Any]:
 __all__ = [
     "CardImageCache",
     "BulkImageDownloader",
+    "IMAGE_CACHE_DIR",
+    "IMAGE_DB_PATH",
+    "BULK_DATA_CACHE",
     "PRINTING_INDEX_CACHE",
+    "IMAGE_SIZES",
     "get_cache",
     "get_card_image",
     "download_bulk_images",
