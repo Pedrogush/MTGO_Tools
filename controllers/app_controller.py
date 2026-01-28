@@ -23,6 +23,7 @@ if TYPE_CHECKING:
 
 from controllers.app_controller_ui import AppControllerUIBindings
 from controllers.bulk_data_coordinator import BulkDataCoordinator
+from controllers.mtgo_background_orchestrator import MtgoBackgroundOrchestrator
 from controllers.session_manager import DeckSelectorSessionManager
 from repositories.card_repository import get_card_repository
 from repositories.deck_repository import get_deck_repository
@@ -39,16 +40,9 @@ from utils.card_data import CardDataManager
 from utils.constants import (
     COLLECTION_CACHE_MAX_AGE_SECONDS,
     GUIDE_STORE,
-    MTGO_BACKGROUND_FETCH_DAYS,
-    MTGO_BACKGROUND_FETCH_DELAY_SECONDS,
-    MTGO_BACKGROUND_FETCH_SLEEP_STEP_SECONDS,
-    MTGO_BACKGROUND_FETCH_SLEEP_STEPS,
-    MTGO_BACKGROUND_FORMATS,
     MTGO_BRIDGE_SHUTDOWN_TIMEOUT_SECONDS,
     MTGO_BRIDGE_USERNAME_TIMEOUT_SECONDS,
     MTGO_DECKLISTS_ENABLED,
-    MTGO_STATUS_MAX_FAILURES,
-    MTGO_STATUS_POLL_SECONDS,
     NOTES_STORE,
     OUTBOARD_STORE,
     ensure_base_dirs,
@@ -125,19 +119,22 @@ class AppController:
 
         # Background worker for tasks with lifecycle control
         self._worker = BackgroundWorker()
-        self._mtgo_bridge_consecutive_failures = 0
         self.frame: AppFrame | None = None
         self._bulk_data_coordinator = BulkDataCoordinator(
             image_service=self.image_service,
             worker=self._worker,
             frame_provider=lambda: self.frame,
         )
+        self._mtgo_orchestrator = MtgoBackgroundOrchestrator(
+            worker=self._worker,
+            status_check=self.check_mtgo_bridge_status,
+        )
 
         self.frame = self.create_frame()
 
         # Start background MTGO data fetch
         if MTGO_DECKLISTS_ENABLED:
-            self._start_mtgo_background_fetch()
+            self._mtgo_orchestrator.start_background_fetch()
         else:
             logger.info("MTGO decklists disabled; skipping background fetch.")
 
@@ -509,7 +506,7 @@ class AppController:
 
         # Step 5: Check MTGO bridge status and start periodic checking
         self.check_mtgo_bridge_status()
-        self._start_mtgo_status_monitoring()
+        self._mtgo_orchestrator.start_status_monitoring()
 
     # ============= Frame Factory =============
 
@@ -533,80 +530,6 @@ class AppController:
         )
 
         return frame
-
-    # ============= MTGO Background Fetch =============
-
-    def _start_mtgo_status_monitoring(self) -> None:
-        """Start background thread to periodically check MTGO bridge status."""
-
-        def mtgo_status_check_task():
-            """Background task to check MTGO bridge status every 30 seconds."""
-            while not self._worker.is_stopped():
-                time.sleep(MTGO_STATUS_POLL_SECONDS)
-                if self._worker.is_stopped():
-                    break
-                try:
-                    self.check_mtgo_bridge_status()
-                    self._mtgo_bridge_consecutive_failures = 0
-                except mtgo_bridge_client.BridgeCommandError as exc:
-                    self._mtgo_bridge_consecutive_failures += 1
-                    if self._mtgo_bridge_consecutive_failures >= MTGO_STATUS_MAX_FAILURES:
-                        logger.warning(
-                            f"MTGO bridge failed {self._mtgo_bridge_consecutive_failures} times in a row. "
-                            "Stopping status checks (likely on unsupported platform)."
-                        )
-                        break
-                    logger.debug(f"MTGO status check failed: {exc}")
-                except Exception as exc:
-                    logger.error(f"MTGO status check failed: {exc}", exc_info=True)
-
-        self._worker.submit(mtgo_status_check_task)
-
-    def _start_mtgo_background_fetch(self) -> None:
-        """Start background thread to fetch MTGO data continuously."""
-        from services.mtgo_background_service import fetch_mtgo_data_background
-
-        if not MTGO_DECKLISTS_ENABLED:
-            logger.info("MTGO decklists disabled; background fetch not started.")
-            return
-
-        def mtgo_fetch_task():
-            """Background task to fetch MTGO data continuously."""
-            formats = MTGO_BACKGROUND_FORMATS
-
-            while not self._worker.is_stopped():
-                for mtg_format in formats:
-                    if self._worker.is_stopped():
-                        break
-                    try:
-                        logger.info(f"Starting MTGO background fetch for {mtg_format}...")
-                        stats = fetch_mtgo_data_background(
-                            days=MTGO_BACKGROUND_FETCH_DAYS,
-                            mtg_format=mtg_format,
-                            delay=MTGO_BACKGROUND_FETCH_DELAY_SECONDS,
-                        )
-                        logger.info(
-                            f"MTGO fetch complete for {mtg_format}: "
-                            f"{stats['total_decks_cached']} decks cached from "
-                            f"{stats['events_processed']}/{stats['events_found']} events"
-                        )
-                    except Exception as exc:
-                        logger.error(
-                            f"MTGO background fetch failed for {mtg_format}: {exc}", exc_info=True
-                        )
-
-                if self._worker.is_stopped():
-                    break
-
-                logger.info(
-                    "MTGO background fetch cycle complete. Waiting 1 hour before next cycle..."
-                )
-                for _ in range(MTGO_BACKGROUND_FETCH_SLEEP_STEPS):
-                    if self._worker.is_stopped():
-                        break
-                    time.sleep(MTGO_BACKGROUND_FETCH_SLEEP_STEP_SECONDS)
-
-        self._worker.submit(mtgo_fetch_task)
 
     def shutdown(self, timeout: float = MTGO_BRIDGE_SHUTDOWN_TIMEOUT_SECONDS) -> None:
         """Shutdown all background workers gracefully."""
