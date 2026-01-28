@@ -19,10 +19,10 @@ from typing import Any
 from loguru import logger
 
 from repositories.card_repository import CardRepository, get_card_repository
+from services.collection_cache import find_latest_cached_file, get_file_age_hours
 from services.collection_parsing import build_inventory
 from utils.constants import (
     COLLECTION_CACHE_MAX_AGE_SECONDS,
-    ONE_HOUR_SECONDS,
 )
 
 
@@ -129,8 +129,7 @@ class CollectionService:
         Returns:
             Path to latest file, or None if none found
         """
-        files = sorted(directory.glob(pattern))
-        return files[-1] if files else None
+        return find_latest_cached_file(directory, pattern)
 
     def load_from_cached_file(
         self, directory: Path, pattern: str = "collection_full_trade_*.json"
@@ -163,8 +162,7 @@ class CollectionService:
             self.set_collection_path(latest)
 
             # Calculate file age
-            file_age_seconds = datetime.now().timestamp() - latest.stat().st_mtime
-            age_hours = int(file_age_seconds / ONE_HOUR_SECONDS)
+            age_hours = get_file_age_hours(latest)
 
             logger.info(
                 f"Loaded collection from cache: {len(mapping)} unique cards from {latest.name}"
