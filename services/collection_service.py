@@ -24,6 +24,7 @@ from services.collection_deck_analysis import (
 )
 from services.collection_bridge_refresh import refresh_from_bridge_async as refresh_from_bridge
 from services.collection_exporter import export_collection_to_file
+from services.collection_ownership import format_owned_status
 from services.collection_parsing import build_inventory
 from services.collection_stats import get_collection_statistics as get_collection_statistics_helper
 from utils.constants import (
@@ -111,15 +112,10 @@ class CollectionService:
         Returns:
             Tuple containing the status label and RGB color tuple (R, G, B)
         """
-        collection_inventory = self.get_inventory()
-        if not collection_inventory:
+        if not self.get_inventory():
             return ("Owned —", (185, 191, 202))  # Subdued text color
-        have = collection_inventory.get(name.lower(), 0)
-        if have >= required:
-            return (f"Owned {have}/{required}", (120, 200, 120))  # Green
-        if have > 0:
-            return (f"Owned {have}/{required}", (230, 200, 90))  # Yellow/Orange
-        return ("Owned 0", (230, 120, 120))  # Red
+        have = self.get_owned_count(name)
+        return format_owned_status(have, required)
 
     def find_latest_cached_file(
         self, directory: Path, pattern: str = "collection_full_trade_*.json"
@@ -363,16 +359,7 @@ class CollectionService:
             color_rgb: RGB tuple for display color
         """
         owned = self.get_owned_count(card_name)
-
-        if owned >= required:
-            # Green - fully owned
-            return f"{owned}/{required}", (0, 180, 0)
-        elif owned > 0:
-            # Orange - partially owned
-            return f"{owned}/{required}", (255, 140, 0)
-        else:
-            # Red - not owned
-            return f"0/{required}", (200, 0, 0)
+        return format_owned_status(owned, required)
 
     # ============= Deck Analysis =============
 
