@@ -15,8 +15,7 @@ def test_card_image_cache_migrates_face_index_column(tmp_path):
     cache_dir.mkdir(parents=True, exist_ok=True)
 
     with sqlite3.connect(db_path) as conn:
-        conn.execute(
-            """
+        conn.execute("""
             CREATE TABLE card_images (
                 uuid TEXT NOT NULL,
                 name TEXT NOT NULL,
@@ -28,8 +27,7 @@ def test_card_image_cache_migrates_face_index_column(tmp_path):
                 scryfall_uri TEXT,
                 artist TEXT
             )
-            """
-        )
+            """)
         conn.execute(
             """
             INSERT INTO card_images (

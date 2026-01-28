@@ -104,8 +104,7 @@ class CardImageCache:
 
     def _create_schema(self, conn: sqlite3.Connection) -> None:
         """Create base tables if they do not exist."""
-        conn.execute(
-            """
+        conn.execute("""
             CREATE TABLE IF NOT EXISTS card_images (
                 uuid TEXT NOT NULL,
                 face_index INTEGER NOT NULL DEFAULT 0,
@@ -119,28 +118,21 @@ class CardImageCache:
                 artist TEXT,
                 PRIMARY KEY (uuid, face_index, image_size)
             )
-        """
-        )
-        conn.execute(
-            """
+        """)
+        conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_card_name ON card_images(name)
-        """
-        )
-        conn.execute(
-            """
+        """)
+        conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_set_code ON card_images(set_code)
-        """
-        )
-        conn.execute(
-            """
+        """)
+        conn.execute("""
             CREATE TABLE IF NOT EXISTS bulk_data_meta (
                 id INTEGER PRIMARY KEY CHECK (id = 1),
                 downloaded_at TEXT NOT NULL,
                 total_cards INTEGER NOT NULL,
                 bulk_data_uri TEXT NOT NULL
             )
-        """
-        )
+        """)
 
     def _ensure_face_index_support(self, conn: sqlite3.Connection) -> None:
         """Ensure the card_images table can store multiple faces per UUID."""
@@ -152,8 +144,7 @@ class CardImageCache:
         logger.info("Migrating card_images table to support multi-face entries")
         conn.execute("ALTER TABLE card_images RENAME TO card_images_old")
         self._create_schema(conn)
-        conn.execute(
-            """
+        conn.execute("""
             INSERT INTO card_images (
                 uuid,
                 face_index,
@@ -178,8 +169,7 @@ class CardImageCache:
                 scryfall_uri,
                 artist
             FROM card_images_old
-        """
-        )
+        """)
         conn.execute("DROP TABLE card_images_old")
 
     def _resolve_path(self, stored_path: str) -> Path:
