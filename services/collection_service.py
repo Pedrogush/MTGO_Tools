@@ -17,12 +17,14 @@ from typing import Any
 from loguru import logger
 
 from repositories.card_repository import CardRepository, get_card_repository
+from services.collection_bridge_refresh import refresh_from_bridge_async as refresh_from_bridge
 from services.collection_cache import find_latest_cached_file, get_file_age_hours
 from services.collection_deck_analysis import (
     analyze_deck_ownership as analyze_deck_ownership_helper,
+)
+from services.collection_deck_analysis import (
     get_missing_cards_list as get_missing_cards_list_helper,
 )
-from services.collection_bridge_refresh import refresh_from_bridge_async as refresh_from_bridge
 from services.collection_exporter import export_collection_to_file
 from services.collection_ownership import format_owned_status
 from services.collection_parsing import build_inventory
