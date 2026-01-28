@@ -1,0 +1,6 @@
+"""Deck construction rules and defaults."""
+
+MAINBOARD_MIN_CARDS = 60
+MAINBOARD_TARGET_CARDS = 60
+SIDEBOARD_MAX_CARDS = 15
+DEFAULT_MAX_DECKS = 10

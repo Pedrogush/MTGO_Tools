@@ -11,6 +11,7 @@ from loguru import logger
 from repositories.deck_repository import DeckRepository
 from repositories.metagame_repository import MetagameRepository
 from services.deck_parser import DeckParser
+from utils.constants import DEFAULT_MAX_DECKS
 
 
 class DeckAverager:
@@ -63,7 +64,7 @@ class DeckAverager:
         self,
         archetype: dict[str, Any],
         metagame_repo: MetagameRepository,
-        max_decks: int = 10,
+        max_decks: int = DEFAULT_MAX_DECKS,
         source_filter: str | None = None,
     ) -> tuple[str, int]:
         try:
