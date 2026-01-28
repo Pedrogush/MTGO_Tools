@@ -9,10 +9,8 @@ This module contains all the business logic for managing card collections:
 """
 
 import json
-import threading
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -24,6 +22,7 @@ from services.collection_deck_analysis import (
     analyze_deck_ownership as analyze_deck_ownership_helper,
     get_missing_cards_list as get_missing_cards_list_helper,
 )
+from services.collection_bridge_refresh import refresh_from_bridge_async as refresh_from_bridge
 from services.collection_exporter import export_collection_to_file
 from services.collection_parsing import build_inventory
 from services.collection_stats import get_collection_statistics as get_collection_statistics_helper
@@ -295,63 +294,16 @@ class CollectionService:
         Returns:
             True if fetch was started, False if recent cache was used
         """
-        from utils import mtgo_bridge
-
-        # Check if we have a recent cached collection (unless forced)
-        if not force:
-            latest = self.find_latest_cached_file(directory)
-            if latest:
-                try:
-                    file_age_seconds = datetime.now().timestamp() - latest.stat().st_mtime
-                    if file_age_seconds < cache_max_age_seconds:
-                        logger.info(
-                            f"Using cached collection ({file_age_seconds:.0f}s old, max {cache_max_age_seconds}s)"
-                        )
-                        # Load from cache and call success callback
-                        info = self.load_from_cached_file(directory)
-                        if on_success:
-                            on_success(info["filepath"], [])  # Empty cards list for cache hits
-                        return False  # Didn't start new fetch
-                except Exception as exc:
-                    logger.warning(f"Failed to check collection file age: {exc}")
-
-        # Fetch fresh collection from MTGO Bridge in background
-        def worker():
-            try:
-                # Call the bridge to get collection
-                collection_data = mtgo_bridge.get_collection_snapshot(timeout=60.0)
-
-                if not collection_data:
-                    if on_error:
-                        on_error("Bridge returned empty collection")
-                    return
-
-                # Get cards from bridge response
-                cards = collection_data.get("cards", [])
-                if not cards:
-                    if on_error:
-                        on_error("No cards in collection data")
-                    return
-
-                # Export to file using service
-                filepath = self.export_to_file(cards, directory)
-
-                # Call success callback
-                if on_success:
-                    on_success(filepath, cards)
-
-            except FileNotFoundError as exc:
-                logger.error(f"Bridge not found: {exc}")
-                if on_error:
-                    on_error("MTGO Bridge not found. Build the bridge executable.")
-
-            except Exception as exc:
-                logger.exception("Failed to fetch collection from bridge")
-                if on_error:
-                    on_error(str(exc))
-
-        threading.Thread(target=worker, daemon=True).start()
-        return True  # Started new fetch
+        return refresh_from_bridge(
+            directory=directory,
+            force=force,
+            on_success=on_success,
+            on_error=on_error,
+            cache_max_age_seconds=cache_max_age_seconds,
+            load_from_cached_file=self.load_from_cached_file,
+            export_to_file=self.export_to_file,
+            find_latest_cached_file=self.find_latest_cached_file,
+        )
 
     def is_loaded(self) -> bool:
         """Check if collection has been loaded."""
