@@ -162,7 +162,9 @@ class DeckTextCache:
 
         for attempt in range(max_retries):
             try:
-                with sqlite3.connect(self.db_path, timeout=SQLITE_CONNECTION_TIMEOUT_SECONDS) as conn:
+                with sqlite3.connect(
+                    self.db_path, timeout=SQLITE_CONNECTION_TIMEOUT_SECONDS
+                ) as conn:
                     cursor = conn.cursor()
 
                     now = time.time()

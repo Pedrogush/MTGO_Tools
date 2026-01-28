@@ -17,7 +17,6 @@ from utils.constants import (
     DARK_PANEL,
     LIGHT_TEXT,
     PADDING_BASE,
-    PADDING_LG,
     PADDING_MD,
     PADDING_SM,
     PADDING_XL,
@@ -28,11 +27,11 @@ from utils.constants import (
     TIMER_ALERT_POLL_INTERVAL_MAX_MS,
     TIMER_ALERT_POLL_INTERVAL_MIN_MS,
     TIMER_ALERT_POLL_INTERVAL_MS,
+    TIMER_ALERT_REMOVE_BUTTON_SIZE,
     TIMER_ALERT_REPEAT_INTERVAL_DEFAULT_MS,
     TIMER_ALERT_REPEAT_INTERVAL_DEFAULT_SECONDS,
     TIMER_ALERT_REPEAT_INTERVAL_MAX_SECONDS,
     TIMER_ALERT_REPEAT_INTERVAL_MIN_SECONDS,
-    TIMER_ALERT_REMOVE_BUTTON_SIZE,
     TIMER_ALERT_SCROLL_RATE_Y,
     TIMER_ALERT_STATUS_MIN_HEIGHT,
     TIMER_ALERT_THRESHOLD_INPUT_SIZE,
@@ -70,7 +69,9 @@ class ThresholdPanel(wx.Panel):
         self.SetSizer(sizer)
 
         # MM:SS input
-        self.time_input = wx.TextCtrl(self, size=TIMER_ALERT_THRESHOLD_INPUT_SIZE, value=TIMER_ALERT_DEFAULT_THRESHOLD_VALUE)
+        self.time_input = wx.TextCtrl(
+            self, size=TIMER_ALERT_THRESHOLD_INPUT_SIZE, value=TIMER_ALERT_DEFAULT_THRESHOLD_VALUE
+        )
         self._stylize_entry(self.time_input)
         sizer.Add(self.time_input, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, PADDING_BASE)
 

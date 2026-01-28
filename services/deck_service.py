@@ -175,9 +175,7 @@ class DeckService:
         # Check mainboard size
         mainboard_count = analysis["mainboard_count"]
         if mainboard_count < MAINBOARD_MIN_CARDS:
-            errors.append(
-                f"Mainboard has {mainboard_count} cards (minimum {MAINBOARD_MIN_CARDS})"
-            )
+            errors.append(f"Mainboard has {mainboard_count} cards (minimum {MAINBOARD_MIN_CARDS})")
         elif mainboard_count > MAINBOARD_TARGET_CARDS:
             warnings.append(
                 f"Mainboard has {mainboard_count} cards (more than minimum {MAINBOARD_TARGET_CARDS})"

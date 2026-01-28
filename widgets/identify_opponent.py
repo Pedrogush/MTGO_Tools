@@ -14,8 +14,6 @@ from loguru import logger
 
 from utils.constants import (
     CONFIG_DIR,
-    DARK_ACCENT,
-    DARK_ALT,
     DARK_BG,
     DARK_PANEL,
     DECK_MONITOR_CACHE_FILE,
@@ -105,7 +103,9 @@ class MTGOpponentDeckSpy(wx.Frame):
         style = (
             wx.CAPTION | wx.CLOSE_BOX | wx.STAY_ON_TOP | wx.FRAME_FLOAT_ON_PARENT | wx.MINIMIZE_BOX
         )
-        super().__init__(parent, title="MTGO Opponent Tracker", size=OPPONENT_TRACKER_FRAME_SIZE, style=style)
+        super().__init__(
+            parent, title="MTGO Opponent Tracker", size=OPPONENT_TRACKER_FRAME_SIZE, style=style
+        )
 
         self._poll_timer = wx.Timer(self)
 
@@ -143,10 +143,17 @@ class MTGOpponentDeckSpy(wx.Frame):
         self.status_label = wx.StaticText(panel, label="Watching for MTGO match windows…")
         self._stylize_label(self.status_label, subtle=True)
         self.status_label.Wrap(320)
-        sizer.Add(self.status_label, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, OPPONENT_TRACKER_SECTION_PADDING)
+        sizer.Add(
+            self.status_label,
+            0,
+            wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND,
+            OPPONENT_TRACKER_SECTION_PADDING,
+        )
 
         divider = wx.StaticLine(panel)
-        sizer.Add(divider, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, OPPONENT_TRACKER_SECTION_PADDING)
+        sizer.Add(
+            divider, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, OPPONENT_TRACKER_SECTION_PADDING
+        )
 
         controls = wx.BoxSizer(wx.HORIZONTAL)
         sizer.Add(controls, 0, wx.ALL | wx.EXPAND, OPPONENT_TRACKER_SECTION_PADDING)

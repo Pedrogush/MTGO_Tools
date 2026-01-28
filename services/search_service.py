@@ -15,9 +15,9 @@ from loguru import logger
 
 from repositories.card_repository import CardRepository, get_card_repository
 from utils.card_data import CardDataManager
+from utils.constants import DEFAULT_SEARCH_LIMIT, DEFAULT_SUGGESTION_LIMIT, MIN_PARTIAL_NAME_LENGTH
 from utils.mana_icon_factory import normalize_mana_query
 from utils.search_filters import matches_color_filter, matches_mana_cost, matches_mana_value
-from utils.constants import DEFAULT_SEARCH_LIMIT, DEFAULT_SUGGESTION_LIMIT, MIN_PARTIAL_NAME_LENGTH
 
 
 class SearchService:
