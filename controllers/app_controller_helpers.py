@@ -12,7 +12,7 @@ if TYPE_CHECKING:
     from widgets.app_frame import AppFrame
 
 
-class AppControllerUIBindings:
+class AppControllerUIHelpers:
     def __init__(self, controller: AppController, frame: AppFrame) -> None:
         self._controller = controller
         self._frame = frame

@@ -12,7 +12,7 @@ if TYPE_CHECKING:
     from widgets.app_frame import AppFrame
 
 
-class BulkDataCoordinator:
+class BulkDataHelpers:
     def __init__(
         self,
         *,

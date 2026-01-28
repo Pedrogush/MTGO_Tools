@@ -24,7 +24,7 @@ if TYPE_CHECKING:
     from utils.background_worker import BackgroundWorker
 
 
-class MtgoBackgroundOrchestrator:
+class MtgoBackgroundHelpers:
     def __init__(self, *, worker: BackgroundWorker, status_check: Callable[[], None]) -> None:
         self._worker = worker
         self._status_check = status_check

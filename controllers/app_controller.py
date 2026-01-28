@@ -21,9 +21,9 @@ if TYPE_CHECKING:
 
     from widgets.app_frame import AppFrame
 
-from controllers.app_controller_ui import AppControllerUIBindings
-from controllers.bulk_data_coordinator import BulkDataCoordinator
-from controllers.mtgo_background_orchestrator import MtgoBackgroundOrchestrator
+from controllers.app_controller_helpers import AppControllerUIHelpers
+from controllers.bulk_data_helpers import BulkDataHelpers
+from controllers.mtgo_background_helpers import MtgoBackgroundHelpers
 from controllers.session_manager import DeckSelectorSessionManager
 from repositories.card_repository import get_card_repository
 from repositories.deck_repository import get_deck_repository
@@ -120,12 +120,12 @@ class AppController:
         # Background worker for tasks with lifecycle control
         self._worker = BackgroundWorker()
         self.frame: AppFrame | None = None
-        self._bulk_data_coordinator = BulkDataCoordinator(
+        self._bulk_data_helpers = BulkDataHelpers(
             image_service=self.image_service,
             worker=self._worker,
             frame_provider=lambda: self.frame,
         )
-        self._mtgo_orchestrator = MtgoBackgroundOrchestrator(
+        self._mtgo_background_helpers = MtgoBackgroundHelpers(
             worker=self._worker,
             status_check=self.check_mtgo_bridge_status,
         )
@@ -134,7 +134,7 @@ class AppController:
 
         # Start background MTGO data fetch
         if MTGO_DECKLISTS_ENABLED:
-            self._mtgo_orchestrator.start_background_fetch()
+            self._mtgo_background_helpers.start_background_fetch()
         else:
             logger.info("MTGO decklists disabled; skipping background fetch.")
 
@@ -400,16 +400,16 @@ class AppController:
     # ============= Bulk Data Management =============
 
     def check_and_download_bulk_data(self) -> None:
-        self._bulk_data_coordinator.check_and_download_bulk_data(self._ui_callbacks)
+        self._bulk_data_helpers.check_and_download_bulk_data(self._ui_callbacks)
 
     def load_bulk_data_into_memory(
         self, on_status: Callable[[str], None], force: bool = False
     ) -> None:
-        self._bulk_data_coordinator.load_bulk_data_into_memory(on_status, force=force)
+        self._bulk_data_helpers.load_bulk_data_into_memory(on_status, force=force)
 
     def force_bulk_data_update(self) -> None:
         """Force download of bulk data regardless of current state."""
-        self._bulk_data_coordinator.force_bulk_data_update(self._ui_callbacks)
+        self._bulk_data_helpers.force_bulk_data_update(self._ui_callbacks)
 
     def save_settings(
         self, window_size: tuple[int, int] | None = None, screen_pos: tuple[int, int] | None = None
@@ -506,7 +506,7 @@ class AppController:
 
         # Step 5: Check MTGO bridge status and start periodic checking
         self.check_mtgo_bridge_status()
-        self._mtgo_orchestrator.start_status_monitoring()
+        self._mtgo_background_helpers.start_status_monitoring()
 
     # ============= Frame Factory =============
 
@@ -517,7 +517,7 @@ class AppController:
 
         # Create the frame
         frame = AppFrame(controller=self, parent=parent)
-        self._ui_callbacks = AppControllerUIBindings(self, frame).build_callbacks()
+        self._ui_callbacks = AppControllerUIHelpers(self, frame).build_callbacks()
 
         # Restore UI state from controller's session data
         wx.CallAfter(frame._restore_session_state)
