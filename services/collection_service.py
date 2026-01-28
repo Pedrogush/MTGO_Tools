@@ -20,6 +20,7 @@ from loguru import logger
 
 from repositories.card_repository import CardRepository, get_card_repository
 from services.collection_cache import find_latest_cached_file, get_file_age_hours
+from services.collection_exporter import export_collection_to_file
 from services.collection_parsing import build_inventory
 from utils.constants import (
     COLLECTION_CACHE_MAX_AGE_SECONDS,
@@ -261,23 +262,7 @@ class CollectionService:
             OSError: If file cannot be written
             ValueError: If cards list is invalid
         """
-        try:
-            directory.mkdir(parents=True, exist_ok=True)
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"{filename_prefix}_{timestamp}.json"
-            filepath = directory / filename
-
-            with filepath.open("w", encoding="utf-8") as f:
-                json.dump(cards, f, indent=2)
-
-            logger.info(f"Exported collection to {filepath} ({len(cards)} cards)")
-            return filepath
-        except OSError as exc:
-            logger.error(f"Failed to export collection: {exc}")
-            raise
-        except (TypeError, ValueError) as exc:
-            logger.error(f"Invalid card data for export: {exc}")
-            raise ValueError("Invalid card data for export") from exc
+        return export_collection_to_file(cards, directory, filename_prefix)
 
     # ============= Async Collection Refresh =============
 
