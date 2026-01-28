@@ -20,6 +20,10 @@ from loguru import logger
 
 from repositories.card_repository import CardRepository, get_card_repository
 from services.collection_cache import find_latest_cached_file, get_file_age_hours
+from services.collection_deck_analysis import (
+    analyze_deck_ownership as analyze_deck_ownership_helper,
+    get_missing_cards_list as get_missing_cards_list_helper,
+)
 from services.collection_exporter import export_collection_to_file
 from services.collection_parsing import build_inventory
 from utils.constants import (
@@ -435,60 +439,7 @@ class CollectionService:
                 - missing_cards: list of (card_name, owned, needed) tuples
                 - ownership_percentage: float - percentage fully owned
         """
-        card_requirements: dict[str, int] = {}
-
-        # Parse deck to get requirements
-        for line in deck_text.split("\n"):
-            line = line.strip()
-            if not line:
-                continue
-
-            try:
-                parts = line.split(" ", 1)
-                if len(parts) < 2:
-                    continue
-
-                count = int(float(parts[0]))
-                card_name = parts[1].strip()
-
-                # Remove "Sideboard " prefix if present
-                if card_name.startswith("Sideboard "):
-                    card_name = card_name[10:]
-
-                card_requirements[card_name] = card_requirements.get(card_name, 0) + count
-
-            except (ValueError, IndexError):
-                continue
-
-        # Analyze ownership
-        fully_owned = 0
-        partially_owned = 0
-        not_owned = 0
-        missing_cards = []
-
-        for card_name, needed in card_requirements.items():
-            owned = self.get_owned_count(card_name)
-
-            if owned >= needed:
-                fully_owned += 1
-            elif owned > 0:
-                partially_owned += 1
-                missing_cards.append((card_name, owned, needed))
-            else:
-                not_owned += 1
-                missing_cards.append((card_name, 0, needed))
-
-        total_unique = len(card_requirements)
-        ownership_percentage = (fully_owned / total_unique * 100) if total_unique > 0 else 0.0
-
-        return {
-            "total_unique": total_unique,
-            "fully_owned": fully_owned,
-            "partially_owned": partially_owned,
-            "not_owned": not_owned,
-            "missing_cards": missing_cards,
-            "ownership_percentage": ownership_percentage,
-        }
+        return analyze_deck_ownership_helper(deck_text, self.get_owned_count)
 
     def get_missing_cards_list(self, deck_text: str) -> list[tuple[str, int]]:
         """
@@ -500,15 +451,7 @@ class CollectionService:
         Returns:
             List of (card_name, missing_count) tuples
         """
-        analysis = self.analyze_deck_ownership(deck_text)
-        missing = []
-
-        for card_name, owned, needed in analysis["missing_cards"]:
-            missing_count = needed - owned
-            if missing_count > 0:
-                missing.append((card_name, missing_count))
-
-        return missing
+        return get_missing_cards_list_helper(deck_text, self.get_owned_count)
 
     # ============= Collection Statistics =============
 
