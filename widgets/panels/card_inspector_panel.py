@@ -4,13 +4,14 @@ Card Inspector Panel - Displays detailed card information.
 Shows card image, metadata, oracle text, and allows navigation through different printings.
 """
 
+from collections.abc import Callable
 from typing import Any
 
 import wx
 from loguru import logger
 
 from utils.card_data import CardDataManager
-from utils.card_images import BULK_DATA_CACHE, get_cache, get_card_image
+from utils.card_images import BULK_DATA_CACHE, CardImageRequest, get_cache, get_card_image
 from utils.constants import (
     CARD_IMAGE_COST_MIN_HEIGHT,
     CARD_IMAGE_DISPLAY_HEIGHT,
@@ -60,6 +61,8 @@ class CardInspectorPanel(wx.Panel):
         self.image_cache = get_cache()
         self.bulk_data_by_name: dict[str, list[dict[str, Any]]] | None = None
         self._image_available = False
+        self._image_request_handler: Callable[[CardImageRequest], None] | None = None
+        self._selected_card_handler: Callable[[CardImageRequest | None], None] | None = None
 
         self._build_ui()
         self.reset()
@@ -244,6 +247,24 @@ class CardInspectorPanel(wx.Panel):
         """Set the bulk data index for fast printing lookups."""
         self.bulk_data_by_name = bulk_data_by_name
 
+    def set_image_request_handlers(
+        self,
+        *,
+        on_request: Callable[[CardImageRequest], None] | None,
+        on_selected: Callable[[CardImageRequest | None], None] | None,
+    ) -> None:
+        """Register callbacks for missing image requests and selection updates."""
+        self._image_request_handler = on_request
+        self._selected_card_handler = on_selected
+
+    def handle_image_downloaded(self, request: CardImageRequest) -> None:
+        """Refresh the display if the downloaded image matches the current selection."""
+        if not self.inspector_current_card_name:
+            return
+        if not self._request_matches_current(request):
+            return
+        self._load_current_printing_image()
+
     # ============= Private Methods =============
 
     def _render_mana_cost(self, mana_cost: str) -> None:
@@ -277,6 +298,7 @@ class CardInspectorPanel(wx.Panel):
     def _load_current_printing_image(self) -> None:
         """Load and display the current printing's image."""
         image_available = False
+        active_request: CardImageRequest | None = None
         if not self.inspector_printings:
             # No printings found, try to load any cached image
             image_path = get_card_image(self.inspector_current_card_name, "normal")
@@ -287,12 +309,20 @@ class CardInspectorPanel(wx.Panel):
             else:
                 self.card_image_display.show_placeholder("Not cached")
                 self.nav_panel.Hide()
+            self._notify_selection(active_request)
             self._set_display_mode(image_available)
             return
 
         # Get current printing
         printing = self.inspector_printings[self.inspector_current_printing]
         uuid = printing.get("id")
+        active_request = CardImageRequest(
+            card_name=self.inspector_current_card_name or "",
+            uuid=uuid,
+            set_code=printing.get("set"),
+            collector_number=printing.get("collector_number"),
+            size="normal",
+        )
 
         # Try to load from cache
         image_paths = self.image_cache.get_image_paths_by_uuid(uuid, "normal")
@@ -326,7 +356,11 @@ class CardInspectorPanel(wx.Panel):
         else:
             self.nav_panel.Hide()
 
+        self._notify_selection(active_request)
         self._set_display_mode(image_available)
+
+        if not image_available:
+            self._request_missing_image(active_request)
 
     def _on_prev_printing(self, _event: wx.Event) -> None:
         """Navigate to previous printing."""
@@ -353,3 +387,21 @@ class CardInspectorPanel(wx.Panel):
         self.image_column_panel.Show(image_available)
         self.details_panel.Show(not image_available)
         self.Layout()
+
+    def _notify_selection(self, request: CardImageRequest | None) -> None:
+        if self._selected_card_handler:
+            self._selected_card_handler(request)
+
+    def _request_missing_image(self, request: CardImageRequest | None) -> None:
+        if request is None or not self._image_request_handler:
+            return
+        self._image_request_handler(request)
+
+    def _request_matches_current(self, request: CardImageRequest) -> bool:
+        if self.inspector_current_card_name is None:
+            return False
+        if not self.inspector_printings:
+            return request.card_name == self.inspector_current_card_name
+        printing = self.inspector_printings[self.inspector_current_printing]
+        uuid = printing.get("id")
+        return bool(uuid and request.uuid and uuid == request.uuid)

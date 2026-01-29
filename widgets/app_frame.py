@@ -287,6 +287,15 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
             card_manager=self.controller.card_repo.get_card_manager(),
             mana_icons=self.mana_icons,
         )
+        self.card_inspector_panel.set_image_request_handlers(
+            on_request=lambda request: self.controller.image_service.queue_card_image_download(
+                request, prioritize=True
+            ),
+            on_selected=self.controller.image_service.set_selected_card_request,
+        )
+        self.controller.image_service.set_image_download_callback(
+            self.card_inspector_panel.handle_image_downloaded
+        )
         inspector_sizer.Add(self.card_inspector_panel, 1, wx.EXPAND)
 
         # Keep backward compatibility references (delegate to image service via controller)
