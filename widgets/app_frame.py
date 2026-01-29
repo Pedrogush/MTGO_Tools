@@ -293,8 +293,14 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
             ),
             on_selected=self.controller.image_service.set_selected_card_request,
         )
+        self.card_inspector_panel.set_printings_request_handler(
+            self.controller.image_service.fetch_printings_by_name_async
+        )
         self.controller.image_service.set_image_download_callback(
             self.card_inspector_panel.handle_image_downloaded
+        )
+        self.controller.image_service.set_printings_loaded_callback(
+            self.card_inspector_panel.handle_printings_loaded
         )
         inspector_sizer.Add(self.card_inspector_panel, 1, wx.EXPAND)
 

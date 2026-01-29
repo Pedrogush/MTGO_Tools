@@ -59,6 +59,7 @@ IMAGE_SIZES = {
 # Download configuration
 BULK_DATA_URL = "https://api.scryfall.com/bulk-data/default-cards"
 SCRYFALL_CARD_NAMED_URL = "https://api.scryfall.com/cards/named"
+SCRYFALL_CARD_SEARCH_URL = "https://api.scryfall.com/cards/search"
 MAX_WORKERS = 10  # Concurrent download threads
 CHUNK_SIZE = 8192  # Download chunk size
 REQUEST_TIMEOUT = 30  # Seconds
@@ -455,6 +456,20 @@ class BulkImageDownloader:
         resp = self.session.get(SCRYFALL_CARD_NAMED_URL, params=params, timeout=REQUEST_TIMEOUT)
         resp.raise_for_status()
         return resp.json()
+
+    def fetch_printings_by_name(self, name: str) -> list[dict[str, Any]]:
+        """Fetch all printings for a card name from Scryfall."""
+        params = {"q": f'!"{name}"', "unique": "prints", "order": "released"}
+        results: list[dict[str, Any]] = []
+        url: str | None = SCRYFALL_CARD_SEARCH_URL
+        while url:
+            resp = self.session.get(url, params=params, timeout=REQUEST_TIMEOUT)
+            resp.raise_for_status()
+            payload = resp.json()
+            results.extend(payload.get("data", []))
+            url = payload.get("next_page")
+            params = None
+        return results
 
     def download_card_image_by_name(
         self, name: str, size: str = "normal", set_code: str | None = None

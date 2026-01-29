@@ -121,18 +121,17 @@ class CardImageDownloadQueue:
                 request.card_name, request.size, set_code=request.set_code
             )
         except Exception as exc:
-            logger.error("Card image download failed for %s: %s", request.card_name, exc)
+            logger.error(f"Card image download failed for {request.card_name}: {exc}")
             return False
         elapsed = time.monotonic() - started_at
         if not success:
-            logger.error("Card image download failed for %s: %s", request.card_name, msg)
+            logger.error(f"Card image download failed for {request.card_name}: {msg}")
             return False
         if elapsed > 1.5:
             if not self._is_cached(request):
                 logger.error(
-                    "Assuming card image download failed for %s (%.2fs elapsed).",
-                    request.card_name,
-                    elapsed,
+                    f"Assuming card image download failed for {request.card_name} "
+                    f"({elapsed:.2f}s elapsed)."
                 )
                 return False
         return True
@@ -179,6 +178,9 @@ class ImageService:
         self._download_queue = CardImageDownloadQueue(
             self.image_cache, on_downloaded=self._handle_image_downloaded
         )
+        self._printings_lock = threading.Lock()
+        self._printings_inflight: set[str] = set()
+        self._on_printings_loaded: Callable[[str, list[dict[str, Any]]], None] | None = None
 
     def shutdown(self) -> None:
         """Stop background services owned by the image service."""
@@ -189,6 +191,12 @@ class ImageService:
     ) -> None:
         """Register a callback for completed card image downloads."""
         self._on_image_downloaded = callback
+
+    def set_printings_loaded_callback(
+        self, callback: Callable[[str, list[dict[str, Any]]], None] | None
+    ) -> None:
+        """Register a callback for completed printings fetches."""
+        self._on_printings_loaded = callback
 
     def queue_card_image_download(self, request: CardImageRequest, *, prioritize: bool) -> bool:
         """Queue a card image download request."""
@@ -202,6 +210,62 @@ class ImageService:
         if not self._on_image_downloaded:
             return
         self._call_after(self._on_image_downloaded, request)
+
+    def fetch_printings_by_name_async(self, card_name: str) -> None:
+        """Fetch all printings for a card name in the background."""
+        key = card_name.lower().strip()
+        if not key:
+            return
+        with self._printings_lock:
+            if key in self._printings_inflight:
+                return
+            self._printings_inflight.add(key)
+
+        def worker() -> tuple[str, list[dict[str, Any]]]:
+            downloader = self.image_downloader or BulkImageDownloader(self.image_cache)
+            printings = downloader.fetch_printings_by_name(card_name)
+            mapped = [
+                {
+                    "id": printing.get("id"),
+                    "set": (printing.get("set") or "").upper(),
+                    "set_name": printing.get("set_name") or "",
+                    "collector_number": printing.get("collector_number") or "",
+                    "released_at": printing.get("released_at") or "",
+                }
+                for printing in printings
+                if printing.get("id")
+            ]
+            return card_name, mapped
+
+        def success_handler(result: tuple[str, list[dict[str, Any]]]) -> None:
+            name, mapped = result
+            with self._printings_lock:
+                self._printings_inflight.discard(key)
+            if self._on_printings_loaded:
+                self._call_after(self._on_printings_loaded, name, mapped)
+
+        def error_handler(exc: Exception) -> None:
+            with self._printings_lock:
+                self._printings_inflight.discard(key)
+            logger.error(f"Failed to fetch printings for {card_name}: {exc}")
+
+        def run_task() -> None:
+            self._run_printings_task(worker, success_handler, error_handler)
+
+        threading.Thread(target=run_task, daemon=True).start()
+
+    @staticmethod
+    def _run_printings_task(
+        worker: Callable[[], tuple[str, list[dict[str, Any]]]],
+        on_success: Callable[[tuple[str, list[dict[str, Any]]]], None],
+        on_error: Callable[[Exception], None],
+    ) -> None:
+        try:
+            result = worker()
+        except Exception as exc:
+            on_error(exc)
+            return
+        on_success(result)
 
     @staticmethod
     def _call_after(callback: Callable[..., Any], *args: Any) -> None:

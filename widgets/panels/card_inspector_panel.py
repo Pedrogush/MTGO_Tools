@@ -63,6 +63,8 @@ class CardInspectorPanel(wx.Panel):
         self._image_available = False
         self._image_request_handler: Callable[[CardImageRequest], None] | None = None
         self._selected_card_handler: Callable[[CardImageRequest | None], None] | None = None
+        self._printings_request_handler: Callable[[str], None] | None = None
+        self._printings_request_inflight: str | None = None
 
         self._build_ui()
         self.reset()
@@ -187,6 +189,7 @@ class CardInspectorPanel(wx.Panel):
         self.inspector_printings = []
         self.inspector_current_printing = 0
         self.inspector_current_card_name = None
+        self._printings_request_inflight = None
         self._set_display_mode(False)
 
     def update_card(
@@ -259,12 +262,29 @@ class CardInspectorPanel(wx.Panel):
         self._image_request_handler = on_request
         self._selected_card_handler = on_selected
 
+    def set_printings_request_handler(self, handler: Callable[[str], None] | None) -> None:
+        """Register callback to request printings for a card name."""
+        self._printings_request_handler = handler
+
     def handle_image_downloaded(self, request: CardImageRequest) -> None:
         """Refresh the display if the downloaded image matches the current selection."""
         if not self.inspector_current_card_name:
             return
         if not self._request_matches_current(request):
             return
+        self._load_current_printing_image()
+
+    def handle_printings_loaded(self, card_name: str, printings: list[dict[str, Any]]) -> None:
+        """Update printings list when background fetch completes."""
+        if not self.inspector_current_card_name:
+            return
+        if card_name.lower() != self.inspector_current_card_name.lower():
+            return
+        self._printings_request_inflight = None
+        if not printings:
+            return
+        self.inspector_printings = printings
+        self.inspector_current_printing = 0
         self._load_current_printing_image()
 
     # ============= Private Methods =============
@@ -286,6 +306,7 @@ class CardInspectorPanel(wx.Panel):
         self.inspector_current_card_name = card_name
         self.inspector_printings = []
         self.inspector_current_printing = 0
+        self._printings_request_inflight = None
 
         # Query in-memory bulk data for all printings
         if self.bulk_data_by_name:
@@ -319,6 +340,13 @@ class CardInspectorPanel(wx.Panel):
                         collector_number=None,
                         size="normal",
                     )
+                    if (
+                        self._printings_request_handler
+                        and self._printings_request_inflight
+                        != self.inspector_current_card_name.lower()
+                    ):
+                        self._printings_request_inflight = self.inspector_current_card_name.lower()
+                        self._printings_request_handler(self.inspector_current_card_name)
             self._notify_selection(active_request)
             self._set_display_mode(image_available)
             if not image_available and active_request:
