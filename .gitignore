@@ -44,3 +44,5 @@ build/
 *.spec.bak
 *.svg
 *.mmd
+# git worktrees
+.worktrees/
