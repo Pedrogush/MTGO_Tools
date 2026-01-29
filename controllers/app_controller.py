@@ -534,6 +534,7 @@ class AppController:
     def shutdown(self, timeout: float = MTGO_BRIDGE_SHUTDOWN_TIMEOUT_SECONDS) -> None:
         """Shutdown all background workers gracefully."""
         logger.info("Shutting down AppController background workers...")
+        self.image_service.shutdown()
         self._worker.shutdown(timeout=timeout)
 
 
