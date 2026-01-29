@@ -196,8 +196,10 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
             "open_match_history": self._event_coordinator.open_match_history,
             "open_metagame_analysis": self._event_coordinator.open_metagame_analysis,
             "on_download_card_images": lambda: show_image_download_dialog(
-                self, self.controller.image_service.image_cache,
-                self.controller.image_service.image_downloader, self._set_status
+                self,
+                self.controller.image_service.image_cache,
+                self.controller.image_service.image_downloader,
+                self._set_status,
             ),
             # Deck source callback
             "on_deck_source_changed": self._event_coordinator.on_deck_source_changed,
@@ -205,7 +207,9 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
             "on_deck_selected": self._event_coordinator.on_deck_selected,
             "on_copy_clicked": lambda: self._event_coordinator.on_copy_clicked(None),
             "on_save_clicked": lambda: self._event_coordinator.on_save_clicked(None),
-            "on_daily_average_clicked": lambda: self._event_coordinator.on_daily_average_clicked(None),
+            "on_daily_average_clicked": lambda: self._event_coordinator.on_daily_average_clicked(
+                None
+            ),
             # Sideboard guide callbacks
             "on_add_guide_entry": self._event_coordinator.on_add_guide_entry,
             "on_edit_guide_entry": self._event_coordinator.on_edit_guide_entry,
@@ -222,7 +226,6 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
             # Status callback
             "set_status": self._set_status,
         }
-
 
     # ------------------------------------------------------------------ Left panel helpers -------------------------------------------------
     def _show_left_panel(self, mode: str, force: bool = False) -> None:

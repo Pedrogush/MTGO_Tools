@@ -1,7 +1,6 @@
 """AppState Manager - Window state persistence and restoration."""
 
 from pathlib import Path
-from typing import Any
 
 import wx
 from loguru import logger
@@ -83,7 +82,9 @@ class AppStateManager:
             with open(self.preferences_path, "w") as f:
                 json.dump(prefs, f, indent=2)
 
-            logger.debug(f"Saved window settings: pos=({pos.x}, {pos.y}), size=({size.width}, {size.height})")
+            logger.debug(
+                f"Saved window settings: pos=({pos.x}, {pos.y}), size=({size.width}, {size.height})"
+            )
         except Exception as exc:
             logger.error(f"Failed to save window settings: {exc}")
 

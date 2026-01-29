@@ -1,6 +1,7 @@
 """Dialog Manager - Lifecycle management for child windows."""
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 import wx
 from loguru import logger
@@ -109,7 +110,7 @@ class DialogManager:
         # Create a list copy to avoid modifying dict during iteration
         windows_to_close = list(self._windows.items())
 
-        for attr_name, window in windows_to_close:
+        for _attr_name, window in windows_to_close:
             if _widget_exists(window):
                 try:
                     window.Destroy()

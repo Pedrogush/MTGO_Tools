@@ -1,7 +1,8 @@
 """AppFrame Builder - Responsible for UI construction."""
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Callable, Any
+from typing import TYPE_CHECKING, Any
 
 import wx
 from wx.lib.agw import flatnotebook as fnb
@@ -25,7 +26,6 @@ from utils.mana_icon_factory import ManaIconFactory
 from utils.stylize import stylize_listbox, stylize_textctrl
 from widgets.buttons.deck_action_buttons import DeckActionButtons
 from widgets.buttons.toolbar_buttons import ToolbarButtons
-from widgets.dialogs.image_download_dialog import show_image_download_dialog
 from widgets.panels.card_inspector_panel import CardInspectorPanel
 from widgets.panels.card_table_panel import CardTablePanel
 from widgets.panels.deck_builder_panel import DeckBuilderPanel
@@ -418,9 +418,7 @@ class AppFrameBuilder:
             "deck_action_buttons": deck_action_buttons,
         }
 
-    def build_deck_tables_tab(
-        self, deck_tabs: fnb.FlatNotebook
-    ) -> dict[str, Any]:
+    def build_deck_tables_tab(self, deck_tabs: fnb.FlatNotebook) -> dict[str, Any]:
         """Build the deck tables tab with zone notebooks."""
         deck_tables_page = wx.Panel(deck_tabs)
         deck_tabs.AddPage(deck_tables_page, "Deck Tables")
@@ -440,9 +438,7 @@ class AppFrameBuilder:
             deck_tables_page, label="Collection inventory not loaded."
         )
         collection_status_label.SetForegroundColour(SUBDUED_TEXT)
-        tables_sizer.Add(
-            collection_status_label, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_SM
-        )
+        tables_sizer.Add(collection_status_label, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_SM)
 
         return {
             "deck_tables_page": deck_tables_page,
