@@ -122,26 +122,39 @@ class CardImageDownloadQueue:
     def _download_request(self, request: CardImageRequest) -> bool:
         if self._is_cached(request):
             return True
-        started_at = time.monotonic()
-        try:
-            success, msg = self._downloader.download_card_image_by_name(
-                request.card_name, request.size, set_code=request.set_code
-            )
-        except Exception as exc:
-            logger.error(f"Card image download failed for {request.card_name}: {exc}")
-            return False
-        elapsed = time.monotonic() - started_at
-        if not success:
-            logger.error(f"Card image download failed for {request.card_name}: {msg}")
-            return False
-        if elapsed > 1.5:
-            if not self._is_cached(request):
-                logger.error(
-                    f"Assuming card image download failed for {request.card_name} "
-                    f"({elapsed:.2f}s elapsed)."
+        max_retries = 4
+        backoff_seconds = 0.5
+        attempt = 0
+        while True:
+            started_at = time.monotonic()
+            try:
+                success, msg = self._downloader.download_card_image_by_name(
+                    request.card_name, request.size, set_code=request.set_code
                 )
+            except Exception as exc:
+                success = False
+                msg = str(exc)
+            elapsed = time.monotonic() - started_at
+            if success:
+                if elapsed > 1.5 and not self._is_cached(request):
+                    logger.error(
+                        f"Assuming card image download failed for {request.card_name} "
+                        f"({elapsed:.2f}s elapsed)."
+                    )
+                    return False
+                return True
+
+            if attempt >= max_retries:
+                logger.error(f"Card image download failed for {request.card_name}: {msg}")
                 return False
-        return True
+
+            attempt += 1
+            logger.warning(
+                f"Retrying card image download for {request.card_name} in "
+                f"{backoff_seconds:.1f}s ({attempt}/{max_retries})."
+            )
+            time.sleep(backoff_seconds)
+            backoff_seconds *= 2
 
     def _ensure_selected_priority_locked(self) -> None:
         request = self._selected_request
