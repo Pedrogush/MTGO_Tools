@@ -9,6 +9,7 @@ This module handles:
 """
 
 import threading
+import time
 from collections import deque
 from collections.abc import Callable
 from typing import Any
@@ -114,6 +115,7 @@ class CardImageDownloadQueue:
     def _download_request(self, request: CardImageRequest) -> bool:
         if self._is_cached(request):
             return True
+        started_at = time.monotonic()
         try:
             success, msg = self._downloader.download_card_image_by_name(
                 request.card_name, request.size
@@ -121,9 +123,19 @@ class CardImageDownloadQueue:
         except Exception as exc:
             logger.error("Card image download failed for %s: %s", request.card_name, exc)
             return False
+        elapsed = time.monotonic() - started_at
         if not success:
             logger.error("Card image download failed for %s: %s", request.card_name, msg)
-        return success
+            return False
+        if elapsed > 1.5:
+            if not self._is_cached(request):
+                logger.error(
+                    "Assuming card image download failed for %s (%.2fs elapsed).",
+                    request.card_name,
+                    elapsed,
+                )
+                return False
+        return True
 
     def _ensure_selected_priority_locked(self) -> None:
         request = self._selected_request
