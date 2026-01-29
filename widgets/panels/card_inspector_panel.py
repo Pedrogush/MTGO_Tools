@@ -66,6 +66,7 @@ class CardInspectorPanel(wx.Panel):
         self._selected_card_handler: Callable[[CardImageRequest | None], None] | None = None
         self._printings_request_handler: Callable[[str], None] | None = None
         self._printings_request_inflight: str | None = None
+        self._has_selection = False
 
         self._build_ui()
         self.reset()
@@ -214,6 +215,7 @@ class CardInspectorPanel(wx.Panel):
         self.inspector_current_card_name = None
         self._printings_request_inflight = None
         self._loading_printing = False
+        self._has_selection = False
         self._set_display_mode(False, show_image_column=True)
 
     def update_card(
@@ -228,6 +230,7 @@ class CardInspectorPanel(wx.Panel):
             meta: Optional pre-fetched metadata
         """
         self.active_zone = zone
+        self._has_selection = True
         zone_title = ZONE_TITLES.get(zone, zone.title()) if zone else "Card Search"
         header = f"{card['name']}  ×{card['qty']}  ({zone_title})"
         self.name_label.SetLabel(header)
@@ -472,7 +475,8 @@ class CardInspectorPanel(wx.Panel):
             self.loading_label.Show()
         else:
             self.loading_label.Hide()
-        self.details_panel.Show(not image_available or self._loading_printing)
+        show_details = self._has_selection and (not image_available or self._loading_printing)
+        self.details_panel.Show(show_details)
         self.Layout()
 
     def _notify_selection(self, request: CardImageRequest | None) -> None:
