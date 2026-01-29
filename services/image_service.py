@@ -118,7 +118,7 @@ class CardImageDownloadQueue:
         started_at = time.monotonic()
         try:
             success, msg = self._downloader.download_card_image_by_name(
-                request.card_name, request.size
+                request.card_name, request.size, set_code=request.set_code
             )
         except Exception as exc:
             logger.error("Card image download failed for %s: %s", request.card_name, exc)

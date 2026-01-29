@@ -311,10 +311,6 @@ class CardInspectorPanel(wx.Panel):
             else:
                 self.card_image_display.show_placeholder("Not cached")
                 self.nav_panel.Hide()
-                logger.info(
-                    "No printings data available for {}; queueing name-based download.",
-                    self.inspector_current_card_name,
-                )
                 if self.inspector_current_card_name:
                     active_request = CardImageRequest(
                         card_name=self.inspector_current_card_name,
@@ -352,9 +348,6 @@ class CardInspectorPanel(wx.Panel):
         else:
             name_fallback = get_card_image(self.inspector_current_card_name, "normal")
             if name_fallback and name_fallback.exists():
-                logger.info(
-                    "Falling back to name-based image for %s", self.inspector_current_card_name
-                )
                 self.card_image_display.show_image(name_fallback)
                 image_available = True
             else:

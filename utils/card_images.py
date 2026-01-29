@@ -447,17 +447,20 @@ class BulkImageDownloader:
         resp.raise_for_status()
         return resp.json()
 
-    def fetch_card_by_name(self, name: str) -> dict[str, Any]:
+    def fetch_card_by_name(self, name: str, set_code: str | None = None) -> dict[str, Any]:
         """Fetch card data from Scryfall by exact name."""
-        resp = self.session.get(
-            SCRYFALL_CARD_NAMED_URL, params={"exact": name}, timeout=REQUEST_TIMEOUT
-        )
+        params = {"exact": name}
+        if set_code:
+            params["set"] = set_code.lower()
+        resp = self.session.get(SCRYFALL_CARD_NAMED_URL, params=params, timeout=REQUEST_TIMEOUT)
         resp.raise_for_status()
         return resp.json()
 
-    def download_card_image_by_name(self, name: str, size: str = "normal") -> tuple[bool, str]:
+    def download_card_image_by_name(
+        self, name: str, size: str = "normal", set_code: str | None = None
+    ) -> tuple[bool, str]:
         """Fetch card data by name and download its image(s)."""
-        card = self.fetch_card_by_name(name)
+        card = self.fetch_card_by_name(name, set_code=set_code)
         return self._download_single_image(card, size)
 
     def _get_cached_bulk_data_record(self) -> tuple[str | None, str | None]:
