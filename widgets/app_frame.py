@@ -31,6 +31,7 @@ from utils.window_persistence import WindowPersistenceManager
 from widgets.buttons.deck_action_buttons import DeckActionButtons
 from widgets.buttons.toolbar_buttons import ToolbarButtons
 from widgets.dialogs.image_download_dialog import show_image_download_dialog
+from widgets.factories.zone_table_factory import ZoneTableFactory
 from widgets.handlers.app_event_handlers import AppEventHandlers
 from widgets.handlers.card_table_panel_handler import CardTablePanelHandler
 from widgets.handlers.sideboard_guide_handlers import SideboardGuideHandlers
@@ -347,9 +348,21 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
         self.zone_notebook = self._create_notebook(self.deck_tables_page)
         tables_sizer.Add(self.zone_notebook, 1, wx.EXPAND | wx.BOTTOM, PADDING_MD)
 
-        # Create zone tables
-        self.main_table = self._create_zone_table("main", "Mainboard")
-        self.side_table = self._create_zone_table("side", "Sideboard")
+        # Create zone tables using factory
+        zone_factory = ZoneTableFactory(
+            parent_notebook=self.zone_notebook,
+            mana_icons=self.mana_icons,
+            get_card_metadata=self.controller.card_repo.get_card_metadata,
+            get_owned_status=self.controller.collection_service.get_owned_status,
+            on_delta=self._handle_zone_delta,
+            on_remove=self._handle_zone_remove,
+            on_add=self._handle_zone_add,
+            on_focus=self._handle_card_focus,
+            on_hover=self._handle_card_hover,
+        )
+
+        self.main_table = zone_factory.create_zone_table("main", "Mainboard")
+        self.side_table = zone_factory.create_zone_table("side", "Sideboard")
         self.out_table = None
 
         # Initialize deck renderer
@@ -363,27 +376,6 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
         tables_sizer.Add(
             self.collection_status_label, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_SM
         )
-
-    def _create_zone_table(
-        self, zone: str, tab_name: str, owned_status_func=None
-    ) -> CardTablePanel:
-        if owned_status_func is None:
-            owned_status_func = self.controller.collection_service.get_owned_status
-
-        table = CardTablePanel(
-            self.zone_notebook,
-            zone,
-            self.mana_icons,
-            self.controller.card_repo.get_card_metadata,
-            owned_status_func,
-            self._handle_zone_delta,
-            self._handle_zone_remove,
-            self._handle_zone_add,
-            self._handle_card_focus,
-            self._handle_card_hover,
-        )
-        self.zone_notebook.AddPage(table, tab_name)
-        return table
 
     # ------------------------------------------------------------------ Left panel helpers -------------------------------------------------
     def _show_left_panel(self, mode: str, force: bool = False) -> None:
