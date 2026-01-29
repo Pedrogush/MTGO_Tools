@@ -202,6 +202,16 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
         notebook.SetForegroundColour(LIGHT_TEXT)
         return notebook
 
+    def _create_static_box_sizer(
+        self, parent: wx.Window, label: str, orientation: int = wx.VERTICAL
+    ) -> tuple[wx.StaticBoxSizer, wx.StaticBox]:
+        """Create a styled static box sizer with consistent theming."""
+        static_box = wx.StaticBox(parent, label=label)
+        static_box.SetForegroundColour(LIGHT_TEXT)
+        static_box.SetBackgroundColour(DARK_PANEL)
+        sizer = wx.StaticBoxSizer(static_box, orientation)
+        return sizer, static_box
+
     def _build_toolbar(self, parent: wx.Window) -> ToolbarButtons:
         return ToolbarButtons(
             parent,
@@ -237,10 +247,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
         return panel
 
     def _build_deck_results(self, parent: wx.Window) -> wx.StaticBoxSizer:
-        deck_box = wx.StaticBox(parent, label="Deck Results")
-        deck_box.SetForegroundColour(LIGHT_TEXT)
-        deck_box.SetBackgroundColour(DARK_PANEL)
-        deck_sizer = wx.StaticBoxSizer(deck_box, wx.VERTICAL)
+        deck_sizer, deck_box = self._create_static_box_sizer(parent, "Deck Results")
 
         self.summary_text = wx.TextCtrl(
             deck_box,
@@ -277,10 +284,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
         return deck_sizer
 
     def _build_card_inspector(self, parent: wx.Window) -> wx.StaticBoxSizer:
-        inspector_box = wx.StaticBox(parent, label="Card Inspector")
-        inspector_box.SetForegroundColour(LIGHT_TEXT)
-        inspector_box.SetBackgroundColour(DARK_PANEL)
-        inspector_sizer = wx.StaticBoxSizer(inspector_box, wx.VERTICAL)
+        inspector_sizer, inspector_box = self._create_static_box_sizer(parent, "Card Inspector")
 
         self.card_inspector_panel = CardInspectorPanel(
             inspector_box,
@@ -296,10 +300,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
         return inspector_sizer
 
     def _build_deck_workspace(self, parent: wx.Window) -> wx.StaticBoxSizer:
-        detail_box = wx.StaticBox(parent, label="Deck Workspace")
-        detail_box.SetForegroundColour(LIGHT_TEXT)
-        detail_box.SetBackgroundColour(DARK_PANEL)
-        detail_sizer = wx.StaticBoxSizer(detail_box, wx.VERTICAL)
+        detail_sizer, detail_box = self._create_static_box_sizer(parent, "Deck Workspace")
 
         self.deck_tabs = self._create_notebook(detail_box)
         detail_sizer.Add(self.deck_tabs, 1, wx.EXPAND | wx.ALL, PADDING_MD)
