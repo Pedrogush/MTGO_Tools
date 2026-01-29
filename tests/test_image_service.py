@@ -125,6 +125,23 @@ def test_download_request_404_no_retry(monkeypatch):
             size="normal",
         )
         assert queue._download_request(request) is False
+        assert queue.enqueue(request) is False
+        other_size = CardImageRequest(
+            card_name="Mirrorpool",
+            uuid=None,
+            set_code="aeoe",
+            collector_number=None,
+            size="large",
+        )
+        assert queue.enqueue(other_size) is False
+        other_collector = CardImageRequest(
+            card_name="Mirrorpool",
+            uuid=None,
+            set_code="aeoe",
+            collector_number="42",
+            size="normal",
+        )
+        assert queue.enqueue(other_collector) is False
     finally:
         queue.stop()
 

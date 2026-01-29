@@ -37,6 +37,8 @@ class CardImageDownloadQueue:
     """Background queue for downloading individual card images."""
 
     _MAX_CONCURRENT_DOWNLOADS = 10
+    _NOT_FOUND_LOCK = threading.Lock()
+    _NOT_FOUND_KEYS: set[tuple[str, str]] = set()
 
     def __init__(
         self,
@@ -83,8 +85,19 @@ class CardImageDownloadQueue:
             return False
         if self._is_cached(request):
             return False
+        not_found_key = self._not_found_key(request)
         key = request.queue_key()
         with self._condition:
+            if self._is_not_found_key_blocked(not_found_key):
+                logger.debug(
+                    "Skipping image request for %s (set=%s, size=%s, collector=%s); "
+                    "marked not found.",
+                    request.card_name,
+                    request.set_code,
+                    request.size,
+                    request.collector_number,
+                )
+                return False
             if key in self._inflight_keys:
                 return False
             if key in self._pending_keys:
@@ -126,6 +139,13 @@ class CardImageDownloadQueue:
             self._on_downloaded(request)
 
     def _download_request(self, request: CardImageRequest) -> bool:
+        logger.debug(
+            "Starting image download for %s (set=%s, size=%s, collector=%s).",
+            request.card_name,
+            request.set_code,
+            request.size,
+            request.collector_number,
+        )
         if self._is_cached(request):
             return True
         max_retries = 5
@@ -142,6 +162,7 @@ class CardImageDownloadQueue:
                 msg = str(exc)
             if not success and self._is_not_found_message(msg):
                 logger.error(f"Card image download failed for {request.card_name}: {msg}")
+                self._add_not_found_key(self._not_found_key(request))
                 return False
             elapsed = time.monotonic() - started_at
             if success:
@@ -151,6 +172,7 @@ class CardImageDownloadQueue:
                         f"({elapsed:.2f}s elapsed)."
                     )
                     return False
+                self._discard_not_found_key(self._not_found_key(request))
                 return True
 
             if attempt >= max_retries:
@@ -171,6 +193,28 @@ class CardImageDownloadQueue:
             return False
         lowered = message.lower()
         return "404" in lowered and "not found" in lowered
+
+    @staticmethod
+    def _not_found_key(request: CardImageRequest) -> tuple[str, str]:
+        return (
+            (request.card_name or "").lower(),
+            (request.set_code or "").lower(),
+        )
+
+    @classmethod
+    def _add_not_found_key(cls, key: tuple[str, str]) -> None:
+        with cls._NOT_FOUND_LOCK:
+            cls._NOT_FOUND_KEYS.add(key)
+
+    @classmethod
+    def _discard_not_found_key(cls, key: tuple[str, str]) -> None:
+        with cls._NOT_FOUND_LOCK:
+            cls._NOT_FOUND_KEYS.discard(key)
+
+    @classmethod
+    def _is_not_found_key_blocked(cls, key: tuple[str, str]) -> bool:
+        with cls._NOT_FOUND_LOCK:
+            return key in cls._NOT_FOUND_KEYS
 
     def _handle_download_complete(self, request: CardImageRequest, completed) -> None:
         success = False
@@ -268,7 +312,16 @@ class ImageService:
 
     def queue_card_image_download(self, request: CardImageRequest, *, prioritize: bool) -> bool:
         """Queue a card image download request."""
-        return self._download_queue.enqueue(request, prioritize=prioritize)
+        enqueued = self._download_queue.enqueue(request, prioritize=prioritize)
+        logger.debug(
+            "Queue image request for %s (set=%s, size=%s, collector=%s) -> %s",
+            request.card_name,
+            request.set_code,
+            request.size,
+            request.collector_number,
+            "enqueued" if enqueued else "skipped",
+        )
+        return enqueued
 
     def set_selected_card_request(self, request: CardImageRequest | None) -> None:
         """Update the currently selected card for queue prioritization."""

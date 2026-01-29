@@ -493,6 +493,13 @@ class CardInspectorPanel(wx.Panel):
     def _request_missing_image(self, request: CardImageRequest | None) -> None:
         if request is None or not self._image_request_handler:
             return
+        logger.debug(
+            "Card inspector requesting image for %s (set=%s, size=%s, collector=%s).",
+            request.card_name,
+            request.set_code,
+            request.size,
+            request.collector_number,
+        )
         self._image_request_handler(request)
 
     def _request_matches_current(self, request: CardImageRequest) -> bool:
