@@ -180,6 +180,23 @@ class CardInspectorPanel(wx.Panel):
         self.text_ctrl.SetMinSize((-1, CARD_IMAGE_TEXT_MIN_HEIGHT))
         details.Add(self.text_ctrl, 1, wx.EXPAND | wx.TOP, 4)
 
+        self._apply_fixed_sizing(image_width, nav_btn_size)
+
+    def _apply_fixed_sizing(self, image_width: int, nav_btn_size: wx.Size) -> None:
+        image_height = getattr(self.card_image_display, "image_height", CARD_IMAGE_DISPLAY_HEIGHT)
+        nav_height = nav_btn_size.GetHeight() + 4
+        image_column_height = image_height + 8 + nav_height + 6
+
+        self.image_column_panel.SetMinSize((image_width, image_column_height))
+        self.image_column_panel.SetMaxSize((image_width, image_column_height))
+        self.details_panel.SetMinSize((image_width, image_height))
+        self.details_panel.SetMaxSize((image_width, image_height))
+
+        panel_width = (image_width * 2) + 24
+        panel_height = image_column_height + 12
+        self.SetMinSize((panel_width, panel_height))
+        self.SetMaxSize((panel_width, panel_height))
+
     # ============= Public API =============
 
     def reset(self) -> None:
