@@ -30,13 +30,38 @@ from widgets.timer_alert import TimerAlertFrame
 
 
 class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, wx.Frame):
-    """wxPython-based metagame research + deck builder UI."""
+    """wxPython-based metagame research + deck builder UI.
+
+    This is the main application window that coordinates between:
+    - AppFrameBuilder: UI construction
+    - AppEventCoordinator: Event handling
+    - DialogManager: Child window lifecycle
+    - AppStateManager: Window state persistence
+    - AppController: Business logic and data access
+
+    The frame acts as a thin orchestration layer, delegating responsibilities
+    to specialized components following Single Responsibility Principle.
+
+    Architecture:
+        AppFrame (thin coordinator)
+        ├── AppFrameBuilder (UI construction)
+        ├── AppEventCoordinator (event handling)
+        ├── DialogManager (child windows)
+        ├── AppStateManager (persistence)
+        └── AppController (business logic)
+    """
 
     def __init__(
         self,
         controller: "AppController",
         parent: wx.Window | None = None,
     ):
+        """Initialize the main application frame.
+
+        Args:
+            controller: Application controller for business logic
+            parent: Optional parent window
+        """
         super().__init__(parent, title="MTGO Deck Research & Builder", size=APP_FRAME_SIZE)
 
         # Store controller reference - ALL state and business logic goes through this
@@ -92,7 +117,17 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
 
     # ------------------------------------------------------------------ UI ------------------------------------------------------------------
     def _build_ui(self) -> None:
-        """Build the main UI structure using AppFrameBuilder."""
+        """Build the main UI structure using AppFrameBuilder.
+
+        Delegates all UI construction to AppFrameBuilder, which creates:
+        - Status bar
+        - Left panel (research/builder modes)
+        - Right panel (deck workspace, inspector, results)
+        - All toolbars, buttons, and controls
+
+        The builder returns a widget container with references to all
+        created widgets, which are stored on this frame for access.
+        """
         # Create callbacks dict for builder
         callbacks = self._create_builder_callbacks()
 
@@ -191,6 +226,12 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
 
     # ------------------------------------------------------------------ Left panel helpers -------------------------------------------------
     def _show_left_panel(self, mode: str, force: bool = False) -> None:
+        """Switch between research and builder modes in left panel.
+
+        Args:
+            mode: Either "research" or "builder"
+            force: Force switch even if already in target mode
+        """
         target = "builder" if mode == "builder" else "research"
         if self.left_stack:
             index = 1 if target == "builder" else 0
