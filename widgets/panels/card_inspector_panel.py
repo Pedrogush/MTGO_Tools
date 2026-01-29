@@ -350,7 +350,15 @@ class CardInspectorPanel(wx.Panel):
                 self.card_image_display.show_image(image_paths[0])
             image_available = True
         else:
-            self.card_image_display.show_placeholder("Not cached")
+            name_fallback = get_card_image(self.inspector_current_card_name, "normal")
+            if name_fallback and name_fallback.exists():
+                logger.info(
+                    "Falling back to name-based image for %s", self.inspector_current_card_name
+                )
+                self.card_image_display.show_image(name_fallback)
+                image_available = True
+            else:
+                self.card_image_display.show_placeholder("Not cached")
 
         # Update navigation controls
         if len(self.inspector_printings) > 1:
@@ -416,8 +424,10 @@ class CardInspectorPanel(wx.Panel):
     def _request_matches_current(self, request: CardImageRequest) -> bool:
         if self.inspector_current_card_name is None:
             return False
+        if request.card_name == self.inspector_current_card_name:
+            return True
         if not self.inspector_printings:
-            return request.card_name == self.inspector_current_card_name
+            return False
         printing = self.inspector_printings[self.inspector_current_printing]
         uuid = printing.get("id")
         return bool(uuid and request.uuid and uuid == request.uuid)
