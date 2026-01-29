@@ -177,7 +177,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
         content_split.Add(inspector_column, 1, wx.EXPAND)
 
         inspector_box = self._build_card_inspector(right_panel)
-        inspector_column.Add(inspector_box, 0, wx.EXPAND | wx.BOTTOM, PADDING_LG)
+        inspector_column.Add(inspector_box, 0, wx.BOTTOM, PADDING_LG)
 
         deck_results = self._build_deck_results(right_panel)
         inspector_column.Add(deck_results, 1, wx.EXPAND)
