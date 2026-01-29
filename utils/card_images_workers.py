@@ -17,9 +17,7 @@ from utils.card_images import (
 __all__ = ["build_printing_index_worker", "download_bulk_metadata_worker"]
 
 
-def download_bulk_metadata_worker(
-    *, cache_dir: str, db_path: str, force: bool
-) -> dict[str, Any]:
+def download_bulk_metadata_worker(*, cache_dir: str, db_path: str, force: bool) -> dict[str, Any]:
     cache = CardImageCache(cache_dir=Path(cache_dir), db_path=Path(db_path))
     downloader = BulkImageDownloader(cache)
     success, msg = downloader.download_bulk_metadata(force=force)

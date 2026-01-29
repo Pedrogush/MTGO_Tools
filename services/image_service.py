@@ -18,12 +18,12 @@ from loguru import logger
 
 from utils.card_images import (
     BULK_DATA_CACHE,
+    PRINTING_INDEX_CACHE,
+    PRINTING_INDEX_VERSION,
     BulkImageDownloader,
     CardImageRequest,
     get_cache,
     load_printing_index_payload,
-    PRINTING_INDEX_CACHE,
-    PRINTING_INDEX_VERSION,
 )
 from utils.card_images_workers import (
     build_printing_index_worker,

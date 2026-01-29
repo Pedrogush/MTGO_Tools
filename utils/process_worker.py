@@ -5,10 +5,11 @@ from __future__ import annotations
 import threading
 import traceback
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass
 from multiprocessing import get_context
 from multiprocessing.queues import Queue
-from typing import Any, Callable
+from typing import Any
 
 from loguru import logger
 
