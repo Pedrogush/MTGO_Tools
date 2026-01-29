@@ -71,6 +71,7 @@ class CardInspectorPanel(wx.Panel):
         self._printings_request_handler: Callable[[str], None] | None = None
         self._printings_request_inflight: str | None = None
         self._has_selection = False
+        self._failed_image_requests: set[tuple[str, str]] = set()
 
         self._build_ui()
         self.reset()
@@ -99,6 +100,19 @@ class CardInspectorPanel(wx.Panel):
         image_column.Add(
             self.card_image_display, 0, wx.ALIGN_CENTER_HORIZONTAL | wx.ALL, PADDING_SM
         )
+        self.image_text_panel = wx.Panel(self.image_column_panel)
+        self.image_text_panel.SetBackgroundColour(DARK_PANEL)
+        self.image_text_panel.SetMinSize((CARD_IMAGE_DISPLAY_WIDTH, CARD_IMAGE_DISPLAY_HEIGHT))
+        image_text_sizer = wx.BoxSizer(wx.VERTICAL)
+        self.image_text_panel.SetSizer(image_text_sizer)
+        self.image_text_ctrl = wx.TextCtrl(
+            self.image_text_panel,
+            style=wx.TE_MULTILINE | wx.TE_READONLY | wx.TE_WORDWRAP | wx.NO_BORDER,
+        )
+        stylize_textctrl(self.image_text_ctrl, multiline=True)
+        image_text_sizer.Add(self.image_text_ctrl, 1, wx.EXPAND | wx.ALL, PADDING_SM)
+        image_column.Add(self.image_text_panel, 0, wx.ALIGN_CENTER_HORIZONTAL | wx.ALL, PADDING_SM)
+        self.image_text_panel.Hide()
 
         # Printing navigation panel
         self.nav_panel = wx.Panel(self.image_column_panel)
@@ -214,6 +228,7 @@ class CardInspectorPanel(wx.Panel):
         self.type_label.SetLabel("")
         self.stats_label.SetLabel("")
         self.text_ctrl.ChangeValue("Select a card to inspect.")
+        self.image_text_ctrl.ChangeValue("Select a card to inspect.")
         self._render_mana_cost("")
         self.card_image_display.show_placeholder("Select a card")
         self.nav_panel.Hide()
@@ -272,6 +287,7 @@ class CardInspectorPanel(wx.Panel):
         # Oracle text
         oracle_text = meta.get("oracle_text") or ""
         self.text_ctrl.ChangeValue(oracle_text)
+        self.image_text_ctrl.ChangeValue(oracle_text or "Text unavailable.")
 
         # Load image and printings
         self._load_card_image_and_printings(card["name"])
@@ -302,11 +318,22 @@ class CardInspectorPanel(wx.Panel):
 
     def handle_image_downloaded(self, request: CardImageRequest) -> None:
         """Refresh the display if the downloaded image matches the current selection."""
+        self._failed_image_requests.discard(self._failure_key(request))
         if not self.inspector_current_card_name:
             return
         if not self._request_matches_current(request):
             return
         self._load_current_printing_image()
+
+    def handle_image_download_failed(self, request: CardImageRequest, _message: str) -> None:
+        """Remember failed image downloads to avoid repeated requests."""
+        self._failed_image_requests.add(self._failure_key(request))
+        if not self.inspector_current_card_name:
+            return
+        if not self._request_matches_current(request):
+            return
+        self._loading_printing = False
+        self._set_display_mode(self._image_available)
 
     def handle_printings_loaded(self, card_name: str, printings: list[dict[str, Any]]) -> None:
         """Update printings list when background fetch completes."""
@@ -361,8 +388,7 @@ class CardInspectorPanel(wx.Panel):
             # No printings found, try to load any cached image
             image_path = get_card_image(self.inspector_current_card_name, "normal")
             if image_path and image_path.exists():
-                self.card_image_display.show_image(image_path)
-                image_available = True
+                image_available = self.card_image_display.show_image(image_path)
                 self.nav_panel.Hide()
             else:
                 self.card_image_display.show_placeholder("Not cached")
@@ -405,11 +431,10 @@ class CardInspectorPanel(wx.Panel):
 
         if image_paths:
             if len(image_paths) > 1:
-                self.card_image_display.show_images(image_paths)
+                image_available = self.card_image_display.show_images(image_paths)
             else:
-                self.card_image_display.show_image(image_paths[0])
-            image_available = True
-            self._loading_printing = False
+                image_available = self.card_image_display.show_image(image_paths[0])
+            self._loading_printing = not image_available
         else:
             set_code = active_request.set_code if active_request else None
             name_printing_path = None
@@ -418,9 +443,8 @@ class CardInspectorPanel(wx.Panel):
                     active_request.card_name, set_code, active_request.size
                 )
             if name_printing_path and name_printing_path.exists():
-                self.card_image_display.show_image(name_printing_path)
-                image_available = True
-                self._loading_printing = False
+                image_available = self.card_image_display.show_image(name_printing_path)
+                self._loading_printing = not image_available
             else:
                 self.card_image_display.show_placeholder("Not cached")
                 self._loading_printing = True
@@ -446,7 +470,7 @@ class CardInspectorPanel(wx.Panel):
             self.nav_panel.Hide()
 
         self._notify_selection(active_request)
-        self._set_display_mode(image_available, show_image_column=image_available)
+        self._set_display_mode(image_available)
 
         if not image_available:
             self._request_missing_image(active_request)
@@ -478,6 +502,8 @@ class CardInspectorPanel(wx.Panel):
         if show_image_column is None:
             show_image_column = image_available or bool(self.inspector_printings)
         self.image_column_panel.Show(show_image_column)
+        self.card_image_display.Show(image_available)
+        self.image_text_panel.Show(not image_available)
         if self._loading_printing:
             self.loading_label.Show()
         else:
@@ -493,6 +519,15 @@ class CardInspectorPanel(wx.Panel):
     def _request_missing_image(self, request: CardImageRequest | None) -> None:
         if request is None or not self._image_request_handler:
             return
+        if self._failure_key(request) in self._failed_image_requests:
+            return
+        logger.debug(
+            "Card inspector requesting image for %s (set=%s, size=%s, collector=%s).",
+            request.card_name,
+            request.set_code,
+            request.size,
+            request.collector_number,
+        )
         self._image_request_handler(request)
 
     def _request_matches_current(self, request: CardImageRequest) -> bool:
@@ -505,3 +540,10 @@ class CardInspectorPanel(wx.Panel):
         printing = self.inspector_printings[self.inspector_current_printing]
         uuid = printing.get("id")
         return bool(uuid and request.uuid and uuid == request.uuid)
+
+    @staticmethod
+    def _failure_key(request: CardImageRequest) -> tuple[str, str]:
+        return (
+            (request.card_name or "").lower(),
+            (request.set_code or "").lower(),
+        )

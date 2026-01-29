@@ -12,6 +12,7 @@ import threading
 import time
 from collections import deque
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 from loguru import logger
@@ -35,22 +36,30 @@ from utils.process_worker import ProcessHandle, ProcessWorker
 class CardImageDownloadQueue:
     """Background queue for downloading individual card images."""
 
+    _MAX_CONCURRENT_DOWNLOADS = 10
+    _NOT_FOUND_LOCK = threading.Lock()
+    _NOT_FOUND_KEYS: set[tuple[str, str]] = set()
+
     def __init__(
         self,
         cache,
         *,
         on_downloaded: Callable[[CardImageRequest], None] | None = None,
+        on_failed: Callable[[CardImageRequest, str], None] | None = None,
     ) -> None:
         self._cache = cache
         self._downloader = BulkImageDownloader(cache)
         self._on_downloaded = on_downloaded
+        self._on_failed = on_failed
         self._queue: deque[CardImageRequest] = deque()
         self._pending_keys: set[tuple[str, str, str, str]] = set()
+        self._inflight_keys: set[tuple[str, str, str, str]] = set()
+        self._inflight_count = 0
         self._selected_request: CardImageRequest | None = None
-        self._current_request: CardImageRequest | None = None
         self._stop_event = threading.Event()
         self._lock = threading.Lock()
         self._condition = threading.Condition(self._lock)
+        self._executor = ThreadPoolExecutor(max_workers=self._MAX_CONCURRENT_DOWNLOADS)
         self._thread = threading.Thread(
             target=self._run,
             name="card-image-download-queue",
@@ -64,6 +73,7 @@ class CardImageDownloadQueue:
         with self._condition:
             self._condition.notify_all()
         self._thread.join(timeout=timeout)
+        self._executor.shutdown(wait=True, cancel_futures=True)
 
     def set_selected_request(self, request: CardImageRequest | None) -> None:
         """Update the current selection for priority handling."""
@@ -77,9 +87,20 @@ class CardImageDownloadQueue:
             return False
         if self._is_cached(request):
             return False
+        not_found_key = self._not_found_key(request)
         key = request.queue_key()
         with self._condition:
-            if self._current_request and self._current_request.queue_key() == key:
+            if self._is_not_found_key_blocked(not_found_key):
+                logger.debug(
+                    "Skipping image request for %s (set=%s, size=%s, collector=%s); "
+                    "marked not found.",
+                    request.card_name,
+                    request.set_code,
+                    request.size,
+                    request.collector_number,
+                )
+                return False
+            if key in self._inflight_keys:
                 return False
             if key in self._pending_keys:
                 if prioritize:
@@ -97,21 +118,21 @@ class CardImageDownloadQueue:
     def _run(self) -> None:
         while not self._stop_event.is_set():
             with self._condition:
-                while not self._queue and not self._stop_event.is_set():
+                while (
+                    not self._queue or self._inflight_count >= self._MAX_CONCURRENT_DOWNLOADS
+                ) and not self._stop_event.is_set():
                     self._condition.wait(timeout=0.5)
                 if self._stop_event.is_set():
                     break
                 request = self._queue.popleft()
                 self._pending_keys.discard(request.queue_key())
-                self._current_request = request
+                self._inflight_keys.add(request.queue_key())
+                self._inflight_count += 1
 
-            success = self._download_request(request)
-            if success:
-                self._notify_downloaded(request)
-
-            with self._condition:
-                self._current_request = None
-                self._ensure_selected_priority_locked()
+            future = self._executor.submit(self._download_request, request)
+            future.add_done_callback(
+                lambda completed, req=request: self._handle_download_complete(req, completed)
+            )
 
     def _notify_downloaded(self, request: CardImageRequest) -> None:
         if not self._on_downloaded:
@@ -119,29 +140,104 @@ class CardImageDownloadQueue:
         if self._is_cached(request):
             self._on_downloaded(request)
 
+    def _notify_failed(self, request: CardImageRequest, message: str) -> None:
+        if not self._on_failed:
+            return
+        self._on_failed(request, message)
+
     def _download_request(self, request: CardImageRequest) -> bool:
+        logger.debug(
+            "Starting image download for %s (set=%s, size=%s, collector=%s).",
+            request.card_name,
+            request.set_code,
+            request.size,
+            request.collector_number,
+        )
         if self._is_cached(request):
             return True
-        started_at = time.monotonic()
-        try:
-            success, msg = self._downloader.download_card_image_by_name(
-                request.card_name, request.size, set_code=request.set_code
-            )
-        except Exception as exc:
-            logger.error(f"Card image download failed for {request.card_name}: {exc}")
-            return False
-        elapsed = time.monotonic() - started_at
-        if not success:
-            logger.error(f"Card image download failed for {request.card_name}: {msg}")
-            return False
-        if elapsed > 1.5:
-            if not self._is_cached(request):
-                logger.error(
-                    f"Assuming card image download failed for {request.card_name} "
-                    f"({elapsed:.2f}s elapsed)."
+        max_retries = 5
+        backoff_seconds = 0.5
+        attempt = 0
+        while True:
+            started_at = time.monotonic()
+            try:
+                success, msg = self._downloader.download_card_image_by_name(
+                    request.card_name, request.size, set_code=request.set_code
                 )
+            except Exception as exc:
+                success = False
+                msg = str(exc)
+            if not success and self._is_not_found_message(msg):
+                logger.error(f"Card image download failed for {request.card_name}: {msg}")
+                self._add_not_found_key(self._not_found_key(request))
+                self._notify_failed(request, msg)
                 return False
-        return True
+            elapsed = time.monotonic() - started_at
+            if success:
+                if elapsed > 1.5 and not self._is_cached(request):
+                    logger.error(
+                        f"Assuming card image download failed for {request.card_name} "
+                        f"({elapsed:.2f}s elapsed)."
+                    )
+                    return False
+                self._discard_not_found_key(self._not_found_key(request))
+                return True
+
+            if attempt >= max_retries:
+                logger.error(f"Card image download failed for {request.card_name}: {msg}")
+                return False
+
+            attempt += 1
+            logger.warning(
+                f"Retrying card image download for {request.card_name} in "
+                f"{backoff_seconds:.1f}s ({attempt}/{max_retries})."
+            )
+            time.sleep(backoff_seconds)
+            backoff_seconds *= 2
+
+    @staticmethod
+    def _is_not_found_message(message: str) -> bool:
+        if not message:
+            return False
+        lowered = message.lower()
+        return "404" in lowered and "not found" in lowered
+
+    @staticmethod
+    def _not_found_key(request: CardImageRequest) -> tuple[str, str]:
+        return (
+            (request.card_name or "").lower(),
+            (request.set_code or "").lower(),
+        )
+
+    @classmethod
+    def _add_not_found_key(cls, key: tuple[str, str]) -> None:
+        with cls._NOT_FOUND_LOCK:
+            cls._NOT_FOUND_KEYS.add(key)
+
+    @classmethod
+    def _discard_not_found_key(cls, key: tuple[str, str]) -> None:
+        with cls._NOT_FOUND_LOCK:
+            cls._NOT_FOUND_KEYS.discard(key)
+
+    @classmethod
+    def _is_not_found_key_blocked(cls, key: tuple[str, str]) -> bool:
+        with cls._NOT_FOUND_LOCK:
+            return key in cls._NOT_FOUND_KEYS
+
+    def _handle_download_complete(self, request: CardImageRequest, completed) -> None:
+        success = False
+        try:
+            success = completed.result()
+        except Exception:
+            logger.exception(f"Card image download failed for {request.card_name}")
+        if success:
+            self._notify_downloaded(request)
+        with self._condition:
+            key = request.queue_key()
+            self._inflight_keys.discard(key)
+            self._inflight_count = max(0, self._inflight_count - 1)
+            self._ensure_selected_priority_locked()
+            self._condition.notify()
 
     def _ensure_selected_priority_locked(self) -> None:
         request = self._selected_request
@@ -149,8 +245,11 @@ class CardImageDownloadQueue:
             return
         if self._is_cached(request):
             return
+        not_found_key = self._not_found_key(request)
+        if self._is_not_found_key_blocked(not_found_key):
+            return
         key = request.queue_key()
-        if self._current_request and self._current_request.queue_key() == key:
+        if key in self._inflight_keys:
             return
         if key in self._pending_keys:
             self._remove_request_by_key_locked(key)
@@ -189,8 +288,11 @@ class ImageService:
         self.printing_index_loading: bool = False
         self._bulk_check_worker_active: bool = False
         self._on_image_downloaded: Callable[[CardImageRequest], None] | None = None
+        self._on_image_download_failed: Callable[[CardImageRequest, str], None] | None = None
         self._download_queue = CardImageDownloadQueue(
-            self.image_cache, on_downloaded=self._handle_image_downloaded
+            self.image_cache,
+            on_downloaded=self._handle_image_downloaded,
+            on_failed=self._handle_image_download_failed,
         )
         self._printings_lock = threading.Lock()
         self._printings_inflight: set[str] = set()
@@ -216,6 +318,12 @@ class ImageService:
         """Register a callback for completed card image downloads."""
         self._on_image_downloaded = callback
 
+    def set_image_download_failed_callback(
+        self, callback: Callable[[CardImageRequest, str], None] | None
+    ) -> None:
+        """Register a callback for failed card image downloads."""
+        self._on_image_download_failed = callback
+
     def set_printings_loaded_callback(
         self, callback: Callable[[str, list[dict[str, Any]]], None] | None
     ) -> None:
@@ -224,7 +332,16 @@ class ImageService:
 
     def queue_card_image_download(self, request: CardImageRequest, *, prioritize: bool) -> bool:
         """Queue a card image download request."""
-        return self._download_queue.enqueue(request, prioritize=prioritize)
+        enqueued = self._download_queue.enqueue(request, prioritize=prioritize)
+        logger.debug(
+            "Queue image request for %s (set=%s, size=%s, collector=%s) -> %s",
+            request.card_name,
+            request.set_code,
+            request.size,
+            request.collector_number,
+            "enqueued" if enqueued else "skipped",
+        )
+        return enqueued
 
     def set_selected_card_request(self, request: CardImageRequest | None) -> None:
         """Update the currently selected card for queue prioritization."""
@@ -234,6 +351,11 @@ class ImageService:
         if not self._on_image_downloaded:
             return
         self._call_after(self._on_image_downloaded, request)
+
+    def _handle_image_download_failed(self, request: CardImageRequest, message: str) -> None:
+        if not self._on_image_download_failed:
+            return
+        self._call_after(self._on_image_download_failed, request, message)
 
     def fetch_printings_by_name_async(self, card_name: str) -> None:
         """Fetch all printings for a card name in the background."""
