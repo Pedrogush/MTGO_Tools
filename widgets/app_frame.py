@@ -115,10 +115,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
         self._set_status("Ready")
 
     def _build_left_panel(self, parent: wx.Window) -> wx.Panel:
-        left_panel = wx.Panel(parent)
-        left_panel.SetBackgroundColour(DARK_PANEL)
-        left_sizer = wx.BoxSizer(wx.VERTICAL)
-        left_panel.SetSizer(left_sizer)
+        left_panel, left_sizer = self._create_styled_panel(parent, DARK_PANEL)
 
         self.left_stack = wx.Simplebook(left_panel)
         self.left_stack.SetBackgroundColour(DARK_PANEL)
@@ -152,10 +149,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
         return left_panel
 
     def _build_right_panel(self, parent: wx.Window) -> wx.Panel:
-        right_panel = wx.Panel(parent)
-        right_panel.SetBackgroundColour(DARK_BG)
-        right_sizer = wx.BoxSizer(wx.VERTICAL)
-        right_panel.SetSizer(right_sizer)
+        right_panel, right_sizer = self._create_styled_panel(parent)
 
         # Toolbar
         self.toolbar = self._build_toolbar(right_panel)
@@ -212,6 +206,16 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
         sizer = wx.StaticBoxSizer(static_box, orientation)
         return sizer, static_box
 
+    def _create_styled_panel(
+        self, parent: wx.Window, color: wx.Colour = None
+    ) -> tuple[wx.Panel, wx.BoxSizer]:
+        """Create a panel with dark theme styling and vertical sizer."""
+        panel = wx.Panel(parent)
+        panel.SetBackgroundColour(color or DARK_BG)
+        sizer = wx.BoxSizer(wx.VERTICAL)
+        panel.SetSizer(sizer)
+        return panel, sizer
+
     def _build_toolbar(self, parent: wx.Window) -> ToolbarButtons:
         return ToolbarButtons(
             parent,
@@ -227,10 +231,8 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
         )
 
     def _build_card_data_controls(self, parent: wx.Window) -> wx.Panel:
-        panel = wx.Panel(parent)
-        panel.SetBackgroundColour(DARK_BG)
-        sizer = wx.BoxSizer(wx.HORIZONTAL)
-        panel.SetSizer(sizer)
+        panel, sizer = self._create_styled_panel(parent)
+        sizer.SetOrientation(wx.HORIZONTAL)  # Override to horizontal
 
         source_label = wx.StaticText(panel, label="Deck data source:")
         source_label.SetForegroundColour(LIGHT_TEXT)
