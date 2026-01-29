@@ -23,9 +23,14 @@ class ProcessHandle:
     queue: Queue
 
 
-def _process_wrapper(target: Callable[..., Any], args: tuple[Any, ...], queue: Queue) -> None:
+def _process_wrapper(
+    target: Callable[..., Any],
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any],
+    queue: Queue,
+) -> None:
     try:
-        payload = target(*args)
+        payload = target(*args, **kwargs)
         queue.put({"ok": True, "payload": payload})
     except Exception as exc:
         queue.put(
@@ -50,14 +55,16 @@ class ProcessWorker:
         *,
         target: Callable[..., Any],
         args: tuple[Any, ...],
+        kwargs: dict[str, Any] | None = None,
         on_success: Callable[[Any], None],
         on_error: Callable[[str], None],
         call_after: Callable[[Callable[..., Any], Any], None],
     ) -> ProcessHandle:
         queue: Queue = self._ctx.Queue()
+        kwargs = kwargs or {}
         process = self._ctx.Process(
             target=_process_wrapper,
-            args=(target, args, queue),
+            args=(target, args, kwargs, queue),
             daemon=True,
         )
         handle = ProcessHandle(key=str(uuid.uuid4()), process=process, queue=queue)

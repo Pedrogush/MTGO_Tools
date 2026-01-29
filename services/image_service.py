@@ -343,11 +343,12 @@ class ImageService:
         try:
             self._bulk_download_handle = self._process_worker.run_async(
                 target=download_bulk_metadata_worker,
-                args=(
-                    str(self.image_cache.cache_dir),
-                    str(self.image_cache.db_path),
-                    force,
-                ),
+                args=(),
+                kwargs={
+                    "cache_dir": str(self.image_cache.cache_dir),
+                    "db_path": str(self.image_cache.db_path),
+                    "force": force,
+                },
                 on_success=_on_success,
                 on_error=_on_error,
                 call_after=self._call_after,
@@ -563,11 +564,12 @@ class ImageService:
         try:
             self._printings_handle = self._process_worker.run_async(
                 target=build_printing_index_worker,
-                args=(
-                    str(BULK_DATA_CACHE),
-                    str(PRINTING_INDEX_CACHE),
-                    PRINTING_INDEX_VERSION,
-                ),
+                args=(),
+                kwargs={
+                    "bulk_data_path": str(BULK_DATA_CACHE),
+                    "printings_path": str(PRINTING_INDEX_CACHE),
+                    "printings_version": PRINTING_INDEX_VERSION,
+                },
                 on_success=_on_success,
                 on_error=_on_error,
                 call_after=self._call_after,
