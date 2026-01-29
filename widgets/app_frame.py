@@ -9,6 +9,7 @@ from controllers.app_controller import get_deck_selector_controller
 if TYPE_CHECKING:
     from controllers.app_controller import AppController
 
+from utils.child_window_manager import ChildWindowManager
 from utils.constants import (
     APP_FRAME_MIN_SIZE,
     APP_FRAME_SIZE,
@@ -32,10 +33,7 @@ from widgets.dialogs.image_download_dialog import show_image_download_dialog
 from widgets.handlers.app_event_handlers import AppEventHandlers
 from widgets.handlers.card_table_panel_handler import CardTablePanelHandler
 from widgets.handlers.sideboard_guide_handlers import SideboardGuideHandlers
-from widgets.identify_opponent import MTGOpponentDeckSpy
 from widgets.mana_keyboard import ManaKeyboardFrame, open_mana_keyboard
-from widgets.match_history import MatchHistoryFrame
-from widgets.metagame_analysis import MetagameAnalysisFrame
 from widgets.panels.card_inspector_panel import CardInspectorPanel
 from widgets.panels.card_table_panel import CardTablePanel
 from widgets.panels.deck_builder_panel import DeckBuilderPanel
@@ -44,7 +42,6 @@ from widgets.panels.deck_research_panel import DeckResearchPanel
 from widgets.panels.deck_stats_panel import DeckStatsPanel
 from widgets.panels.radar_panel import RadarDialog
 from widgets.panels.sideboard_guide_panel import SideboardGuidePanel
-from widgets.timer_alert import TimerAlertFrame
 
 
 class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, wx.Frame):
@@ -71,11 +68,8 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
         self.out_table: CardTablePanel | None = None
 
         self.window_persistence = WindowPersistenceManager(self, self.controller)
+        self.child_windows = ChildWindowManager(self)
         self.mana_icons = ManaIconFactory()
-        self.tracker_window: MTGOpponentDeckSpy | None = None
-        self.timer_window: TimerAlertFrame | None = None
-        self.history_window: MatchHistoryFrame | None = None
-        self.metagame_window: MetagameAnalysisFrame | None = None
         self.mana_keyboard_window: ManaKeyboardFrame | None = None
         self._inspector_hover_timer: wx.Timer | None = None
         self._pending_hover: tuple[str, dict[str, Any]] | None = None

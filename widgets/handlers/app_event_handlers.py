@@ -8,7 +8,6 @@ import wx
 from loguru import logger
 
 from utils.card_data import CardDataManager
-from utils.ui_helpers import open_child_window, widget_exists
 from widgets.identify_opponent import MTGOpponentDeckSpy
 from widgets.match_history import MatchHistoryFrame
 from widgets.metagame_analysis import MetagameAnalysisFrame
@@ -200,11 +199,7 @@ class AppEventHandlers:
     def on_close(self: AppFrame, event: wx.CloseEvent) -> None:
         self.window_persistence.cleanup()
         self._save_window_settings()
-        for attr in ("tracker_window", "timer_window", "history_window"):
-            window = getattr(self, attr)
-            if widget_exists(window):
-                window.Destroy()
-                setattr(self, attr, None)
+        self.child_windows.close_all()
         if self.mana_keyboard_window and self.mana_keyboard_window.IsShown():
             self.mana_keyboard_window.Destroy()
             self.mana_keyboard_window = None
@@ -457,44 +452,18 @@ class AppEventHandlers:
 
     # ------------------------------------------------------------------ Helpers --------------------------------------------------------------
     def open_opponent_tracker(self) -> None:
-        open_child_window(
-            self,
-            "tracker_window",
-            MTGOpponentDeckSpy,
-            "Opponent Tracker",
-            self._handle_child_close,
-        )
+        self.child_windows.open_or_focus("tracker_window", MTGOpponentDeckSpy, "Opponent Tracker")
 
     def open_timer_alert(self) -> None:
-        open_child_window(
-            self,
-            "timer_window",
-            TimerAlertFrame,
-            "Timer Alert",
-            self._handle_child_close,
-        )
+        self.child_windows.open_or_focus("timer_window", TimerAlertFrame, "Timer Alert")
 
     def open_match_history(self) -> None:
-        open_child_window(
-            self,
-            "history_window",
-            MatchHistoryFrame,
-            "Match History",
-            self._handle_child_close,
-        )
+        self.child_windows.open_or_focus("history_window", MatchHistoryFrame, "Match History")
 
     def open_metagame_analysis(self) -> None:
-        open_child_window(
-            self,
-            "metagame_window",
-            MetagameAnalysisFrame,
-            "Metagame Analysis",
-            self._handle_child_close,
+        self.child_windows.open_or_focus(
+            "metagame_window", MetagameAnalysisFrame, "Metagame Analysis"
         )
-
-    def _handle_child_close(self, event: wx.CloseEvent, attr: str) -> None:
-        setattr(self, attr, None)
-        event.Skip()
 
     def _start_daily_average_build(self) -> None:
         self.daily_average_button.Disable()
