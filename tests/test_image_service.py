@@ -1,6 +1,8 @@
 """Tests for ImageService business logic."""
 
-from services.image_service import ImageService
+import services.image_service as image_service
+from services.image_service import CardImageDownloadQueue, ImageService
+from utils.card_images import CardImageRequest
 
 
 def test_image_service_initialization():
@@ -55,3 +57,76 @@ def test_is_loading_when_loading():
     service.printing_index_loading = True
 
     assert service.is_loading() is True
+
+
+class _FakeCache:
+    def get_image_path_for_printing(self, card_name, set_code, size):
+        return None
+
+    def get_image_path(self, card_name, size):
+        return None
+
+
+class _FakeDownloader:
+    def __init__(self, responses):
+        self._responses = list(responses)
+        self.calls = 0
+
+    def download_card_image_by_name(self, name, size, set_code=None):
+        self.calls += 1
+        response = self._responses[self.calls - 1]
+        if isinstance(response, Exception):
+            raise response
+        return response
+
+
+def _build_queue(downloader):
+    queue = CardImageDownloadQueue(_FakeCache())
+    queue._downloader = downloader
+    return queue
+
+
+def test_download_request_retries_with_backoff(monkeypatch):
+    sleeps = []
+    monkeypatch.setattr(image_service.time, "sleep", lambda seconds: sleeps.append(seconds))
+    monkeypatch.setattr(image_service.time, "monotonic", lambda: 0.0)
+    downloader = _FakeDownloader([(False, "429 Too Many Requests"), (True, "ok")])
+    queue = _build_queue(downloader)
+    try:
+        request = CardImageRequest(
+            card_name="Mirrorpool",
+            uuid=None,
+            set_code="aeoe",
+            collector_number=None,
+            size="normal",
+        )
+        assert queue._download_request(request) is True
+    finally:
+        queue.stop()
+
+    assert downloader.calls == 2
+    assert sleeps == [0.5]
+
+
+def test_download_request_404_no_retry(monkeypatch):
+    sleeps = []
+    monkeypatch.setattr(image_service.time, "sleep", lambda seconds: sleeps.append(seconds))
+    monkeypatch.setattr(image_service.time, "monotonic", lambda: 0.0)
+    downloader = _FakeDownloader(
+        [Exception("404 Client Error: Not Found for url: https://api.scryfall.com/cards")]
+    )
+    queue = _build_queue(downloader)
+    try:
+        request = CardImageRequest(
+            card_name="Mirrorpool",
+            uuid=None,
+            set_code="aeoe",
+            collector_number=None,
+            size="normal",
+        )
+        assert queue._download_request(request) is False
+    finally:
+        queue.stop()
+
+    assert downloader.calls == 1
+    assert sleeps == []

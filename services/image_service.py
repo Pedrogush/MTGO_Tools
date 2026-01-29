@@ -134,6 +134,9 @@ class CardImageDownloadQueue:
             except Exception as exc:
                 success = False
                 msg = str(exc)
+            if not success and self._is_not_found_message(msg):
+                logger.error(f"Card image download failed for {request.card_name}: {msg}")
+                return False
             elapsed = time.monotonic() - started_at
             if success:
                 if elapsed > 1.5 and not self._is_cached(request):
@@ -155,6 +158,13 @@ class CardImageDownloadQueue:
             )
             time.sleep(backoff_seconds)
             backoff_seconds *= 2
+
+    @staticmethod
+    def _is_not_found_message(message: str) -> bool:
+        if not message:
+            return False
+        lowered = message.lower()
+        return "404" in lowered and "not found" in lowered
 
     def _ensure_selected_priority_locked(self) -> None:
         request = self._selected_request
