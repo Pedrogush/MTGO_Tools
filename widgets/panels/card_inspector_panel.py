@@ -373,7 +373,7 @@ class CardInspectorPanel(wx.Panel):
             size="normal",
         )
 
-        # Try to load from cache
+        # Try to load from cache (printing-specific)
         image_paths = self.image_cache.get_image_paths_by_uuid(uuid, "normal")
 
         if image_paths:
@@ -384,22 +384,16 @@ class CardInspectorPanel(wx.Panel):
             image_available = True
             self._loading_printing = False
         else:
-            name_fallback = get_card_image(self.inspector_current_card_name, "normal")
-            if name_fallback and name_fallback.exists():
-                self.card_image_display.show_image(name_fallback)
+            set_code = active_request.set_code if active_request else None
+            name_printing_path = None
+            if set_code:
+                name_printing_path = self.image_cache.get_image_path_for_printing(
+                    active_request.card_name, set_code, active_request.size
+                )
+            if name_printing_path and name_printing_path.exists():
+                self.card_image_display.show_image(name_printing_path)
                 image_available = True
-                if (
-                    active_request
-                    and active_request.set_code
-                    and self.image_cache.get_image_path_for_printing(
-                        active_request.card_name, active_request.set_code, active_request.size
-                    )
-                    is None
-                ):
-                    self._request_missing_image(active_request)
-                    self._loading_printing = True
-                else:
-                    self._loading_printing = False
+                self._loading_printing = False
             else:
                 self.card_image_display.show_placeholder("Not cached")
                 self._loading_printing = True
