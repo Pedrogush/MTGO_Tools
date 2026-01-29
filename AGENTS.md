@@ -31,6 +31,7 @@
 - Commit messages are concise, present-tense summaries (e.g., “Simplify CI triggers and harden card data refresh”).
 - For PRs: describe scope, testing (`python3 -m pytest ...`), and any UI-impacting changes; link issues when applicable.
 - Avoid force-push on shared branches; prefer small, reviewable changes.
+- When a PR is created or updated, poll PR checks about once per minute; stop only after all checks pass or after 3 polls with no status changes.
 
 ## Agent Workflow
 - Start new tasks by checking out `main`, pulling from remote, then creating a new branch for the work.
