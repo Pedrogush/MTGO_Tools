@@ -58,8 +58,8 @@ IMAGE_SIZES = {
 
 # Download configuration
 BULK_DATA_URL = "https://api.scryfall.com/bulk-data/default-cards"
-SCRYFALL_CARD_ID_URL = "https://api.scryfall.com/cards/{card_id}"
-SCRYFALL_CARD_SET_URL = "https://api.scryfall.com/cards/{set_code}/{collector_number}"
+SCRYFALL_CARD_NAMED_URL = "https://api.scryfall.com/cards/named"
+SCRYFALL_CARD_SEARCH_URL = "https://api.scryfall.com/cards/search"
 MAX_WORKERS = 10  # Concurrent download threads
 CHUNK_SIZE = 8192  # Download chunk size
 REQUEST_TIMEOUT = 30  # Seconds
@@ -85,9 +85,7 @@ class CardImageRequest:
 
     def can_fetch(self) -> bool:
         """Return True when there is enough data to fetch from Scryfall."""
-        if self.uuid:
-            return True
-        return bool(self.set_code and self.collector_number)
+        return bool((self.card_name or "").strip())
 
 
 class CardImageCache:
@@ -329,6 +327,28 @@ class CardImageCache:
                     return path
         return None
 
+    def get_image_path_for_printing(
+        self, card_name: str, set_code: str, size: str = "normal"
+    ) -> Path | None:
+        """Get cached image path for a specific printing."""
+        if not set_code:
+            return self.get_image_path(card_name, size)
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.execute(
+                """
+                SELECT file_path
+                FROM card_images
+                WHERE LOWER(name) = LOWER(?) AND LOWER(set_code) = LOWER(?) AND image_size = ?
+                ORDER BY face_index
+                LIMIT 1
+                """,
+                (card_name, set_code, size),
+            )
+            row = cursor.fetchone()
+            if not row:
+                return None
+            return self._resolve_path(row[0])
+
     def get_image_by_uuid(
         self, uuid: str, size: str = "normal", face_index: int | None = 0
     ) -> Path | None:
@@ -450,32 +470,34 @@ class BulkImageDownloader:
         resp.raise_for_status()
         return resp.json()
 
-    def fetch_card_by_id(self, card_id: str) -> dict[str, Any]:
-        """Fetch card data from Scryfall by UUID."""
-        url = SCRYFALL_CARD_ID_URL.format(card_id=card_id)
-        resp = self.session.get(url, timeout=REQUEST_TIMEOUT)
+    def fetch_card_by_name(self, name: str, set_code: str | None = None) -> dict[str, Any]:
+        """Fetch card data from Scryfall by exact name."""
+        params = {"exact": name}
+        if set_code:
+            params["set"] = set_code.lower()
+        resp = self.session.get(SCRYFALL_CARD_NAMED_URL, params=params, timeout=REQUEST_TIMEOUT)
         resp.raise_for_status()
         return resp.json()
 
-    def fetch_card_by_set(self, set_code: str, collector_number: str) -> dict[str, Any]:
-        """Fetch card data from Scryfall by set code and collector number."""
-        url = SCRYFALL_CARD_SET_URL.format(
-            set_code=set_code.lower(), collector_number=collector_number
-        )
-        resp = self.session.get(url, timeout=REQUEST_TIMEOUT)
-        resp.raise_for_status()
-        return resp.json()
+    def fetch_printings_by_name(self, name: str) -> list[dict[str, Any]]:
+        """Fetch all printings for a card name from Scryfall."""
+        params = {"q": f'!"{name}"', "unique": "prints", "order": "released"}
+        results: list[dict[str, Any]] = []
+        url: str | None = SCRYFALL_CARD_SEARCH_URL
+        while url:
+            resp = self.session.get(url, params=params, timeout=REQUEST_TIMEOUT)
+            resp.raise_for_status()
+            payload = resp.json()
+            results.extend(payload.get("data", []))
+            url = payload.get("next_page")
+            params = None
+        return results
 
-    def download_card_image_by_id(self, card_id: str, size: str = "normal") -> tuple[bool, str]:
-        """Fetch card data by UUID and download its image(s)."""
-        card = self.fetch_card_by_id(card_id)
-        return self._download_single_image(card, size)
-
-    def download_card_image_by_set(
-        self, set_code: str, collector_number: str, size: str = "normal"
+    def download_card_image_by_name(
+        self, name: str, size: str = "normal", set_code: str | None = None
     ) -> tuple[bool, str]:
-        """Fetch card data by set/collector number and download its image(s)."""
-        card = self.fetch_card_by_set(set_code, collector_number)
+        """Fetch card data by name and download its image(s)."""
+        card = self.fetch_card_by_name(name, set_code=set_code)
         return self._download_single_image(card, size)
 
     def _get_cached_bulk_data_record(self) -> tuple[str | None, str | None]:

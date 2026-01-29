@@ -9,6 +9,7 @@ This module handles:
 """
 
 import threading
+import time
 from collections import deque
 from collections.abc import Callable
 from typing import Any
@@ -114,23 +115,26 @@ class CardImageDownloadQueue:
     def _download_request(self, request: CardImageRequest) -> bool:
         if self._is_cached(request):
             return True
+        started_at = time.monotonic()
         try:
-            if request.uuid:
-                success, msg = self._downloader.download_card_image_by_id(
-                    request.uuid, request.size
-                )
-            else:
-                success, msg = self._downloader.download_card_image_by_set(
-                    request.set_code or "",
-                    request.collector_number or "",
-                    request.size,
-                )
+            success, msg = self._downloader.download_card_image_by_name(
+                request.card_name, request.size, set_code=request.set_code
+            )
         except Exception as exc:
-            logger.debug("Card image download failed for %s: %s", request.card_name, exc)
+            logger.error(f"Card image download failed for {request.card_name}: {exc}")
             return False
+        elapsed = time.monotonic() - started_at
         if not success:
-            logger.debug("Card image download skipped for %s: %s", request.card_name, msg)
-        return success
+            logger.error(f"Card image download failed for {request.card_name}: {msg}")
+            return False
+        if elapsed > 1.5:
+            if not self._is_cached(request):
+                logger.error(
+                    f"Assuming card image download failed for {request.card_name} "
+                    f"({elapsed:.2f}s elapsed)."
+                )
+                return False
+        return True
 
     def _ensure_selected_priority_locked(self) -> None:
         request = self._selected_request
@@ -155,11 +159,16 @@ class CardImageDownloadQueue:
                 return
 
     def _is_cached(self, request: CardImageRequest) -> bool:
-        if request.uuid:
-            return bool(self._cache.get_image_paths_by_uuid(request.uuid, request.size))
-        if request.card_name:
-            return self._cache.get_image_path(request.card_name, request.size) is not None
-        return False
+        if not request.card_name:
+            return False
+        if request.set_code:
+            return (
+                self._cache.get_image_path_for_printing(
+                    request.card_name, request.set_code, request.size
+                )
+                is not None
+            )
+        return self._cache.get_image_path(request.card_name, request.size) is not None
 
 
 class ImageService:
@@ -176,6 +185,9 @@ class ImageService:
         self._download_queue = CardImageDownloadQueue(
             self.image_cache, on_downloaded=self._handle_image_downloaded
         )
+        self._printings_lock = threading.Lock()
+        self._printings_inflight: set[str] = set()
+        self._on_printings_loaded: Callable[[str, list[dict[str, Any]]], None] | None = None
 
     def shutdown(self) -> None:
         """Stop background services owned by the image service."""
@@ -186,6 +198,12 @@ class ImageService:
     ) -> None:
         """Register a callback for completed card image downloads."""
         self._on_image_downloaded = callback
+
+    def set_printings_loaded_callback(
+        self, callback: Callable[[str, list[dict[str, Any]]], None] | None
+    ) -> None:
+        """Register a callback for completed printings fetches."""
+        self._on_printings_loaded = callback
 
     def queue_card_image_download(self, request: CardImageRequest, *, prioritize: bool) -> bool:
         """Queue a card image download request."""
@@ -199,6 +217,62 @@ class ImageService:
         if not self._on_image_downloaded:
             return
         self._call_after(self._on_image_downloaded, request)
+
+    def fetch_printings_by_name_async(self, card_name: str) -> None:
+        """Fetch all printings for a card name in the background."""
+        key = card_name.lower().strip()
+        if not key:
+            return
+        with self._printings_lock:
+            if key in self._printings_inflight:
+                return
+            self._printings_inflight.add(key)
+
+        def worker() -> tuple[str, list[dict[str, Any]]]:
+            downloader = self.image_downloader or BulkImageDownloader(self.image_cache)
+            printings = downloader.fetch_printings_by_name(card_name)
+            mapped = [
+                {
+                    "id": printing.get("id"),
+                    "set": (printing.get("set") or "").upper(),
+                    "set_name": printing.get("set_name") or "",
+                    "collector_number": printing.get("collector_number") or "",
+                    "released_at": printing.get("released_at") or "",
+                }
+                for printing in printings
+                if printing.get("id")
+            ]
+            return card_name, mapped
+
+        def success_handler(result: tuple[str, list[dict[str, Any]]]) -> None:
+            name, mapped = result
+            with self._printings_lock:
+                self._printings_inflight.discard(key)
+            if self._on_printings_loaded:
+                self._call_after(self._on_printings_loaded, name, mapped)
+
+        def error_handler(exc: Exception) -> None:
+            with self._printings_lock:
+                self._printings_inflight.discard(key)
+            logger.error(f"Failed to fetch printings for {card_name}: {exc}")
+
+        def run_task() -> None:
+            self._run_printings_task(worker, success_handler, error_handler)
+
+        threading.Thread(target=run_task, daemon=True).start()
+
+    @staticmethod
+    def _run_printings_task(
+        worker: Callable[[], tuple[str, list[dict[str, Any]]]],
+        on_success: Callable[[tuple[str, list[dict[str, Any]]]], None],
+        on_error: Callable[[Exception], None],
+    ) -> None:
+        try:
+            result = worker()
+        except Exception as exc:
+            on_error(exc)
+            return
+        on_success(result)
 
     @staticmethod
     def _call_after(callback: Callable[..., Any], *args: Any) -> None:
