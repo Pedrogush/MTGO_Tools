@@ -10,6 +10,7 @@ from typing import Any
 from curl_cffi import requests
 from loguru import logger
 
+from utils.atomic_io import atomic_write_json
 from utils.constants import (
     ATOMIC_DATA_DOWNLOAD_TIMEOUT_SECONDS,
     ATOMIC_DATA_HEAD_TIMEOUT_SECONDS,
@@ -175,7 +176,7 @@ class CardDataManager:
             with zf.open("AtomicCards.json") as source:
                 raw = json.load(source)
         index = self._build_index(raw.get("data", {}))
-        self.index_path.write_text(json.dumps(index, ensure_ascii=False), encoding="utf-8")
+        atomic_write_json(self.index_path, index, ensure_ascii=False)
         meta_to_store: dict[str, Any] = remote_meta.copy() if remote_meta else {}
         meta_to_store.setdefault("sha512", digest)
         headers = {k.lower(): v for k, v in resp.headers.items()}  # type: ignore[arg-type]
@@ -185,7 +186,7 @@ class CardDataManager:
             meta_to_store.setdefault("last_modified", headers["last-modified"])
         if "content-length" in headers:
             meta_to_store.setdefault("content_length", headers["content-length"])
-        self.meta_path.write_text(json.dumps(meta_to_store, ensure_ascii=False), encoding="utf-8")
+        atomic_write_json(self.meta_path, meta_to_store, ensure_ascii=False)
         self._cards = index["cards"]
         self._cards_by_name = index["cards_by_name"]
 

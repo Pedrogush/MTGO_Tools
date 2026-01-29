@@ -8,7 +8,7 @@ import tempfile
 import threading
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any, Iterable, Iterator
 
 
 _lock_registry: dict[Path, threading.RLock] = {}
@@ -56,6 +56,27 @@ def atomic_write_bytes(path: Path, data: bytes) -> None:
         try:
             with os.fdopen(fd, "wb") as fh:
                 fh.write(data)
+                fh.flush()
+                os.fsync(fh.fileno())
+            os.replace(tmp_file, path)
+            _fsync_dir(path.parent)
+        finally:
+            if tmp_file.exists():
+                try:
+                    tmp_file.unlink()
+                except OSError:
+                    pass
+
+
+def atomic_write_stream(path: Path, chunks: Iterable[bytes]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with locked_path(path):
+        fd, tmp_path = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
+        tmp_file = Path(tmp_path)
+        try:
+            with os.fdopen(fd, "wb") as fh:
+                for chunk in chunks:
+                    fh.write(chunk)
                 fh.flush()
                 os.fsync(fh.fileno())
             os.replace(tmp_file, path)
