@@ -71,6 +71,7 @@ class CardInspectorPanel(wx.Panel):
         self._printings_request_handler: Callable[[str], None] | None = None
         self._printings_request_inflight: str | None = None
         self._has_selection = False
+        self._failed_image_requests: set[tuple[str, str]] = set()
 
         self._build_ui()
         self.reset()
@@ -302,11 +303,22 @@ class CardInspectorPanel(wx.Panel):
 
     def handle_image_downloaded(self, request: CardImageRequest) -> None:
         """Refresh the display if the downloaded image matches the current selection."""
+        self._failed_image_requests.discard(self._failure_key(request))
         if not self.inspector_current_card_name:
             return
         if not self._request_matches_current(request):
             return
         self._load_current_printing_image()
+
+    def handle_image_download_failed(self, request: CardImageRequest, _message: str) -> None:
+        """Remember failed image downloads to avoid repeated requests."""
+        self._failed_image_requests.add(self._failure_key(request))
+        if not self.inspector_current_card_name:
+            return
+        if not self._request_matches_current(request):
+            return
+        self._loading_printing = False
+        self._set_display_mode(self._image_available)
 
     def handle_printings_loaded(self, card_name: str, printings: list[dict[str, Any]]) -> None:
         """Update printings list when background fetch completes."""
@@ -446,7 +458,7 @@ class CardInspectorPanel(wx.Panel):
             self.nav_panel.Hide()
 
         self._notify_selection(active_request)
-        self._set_display_mode(image_available, show_image_column=image_available)
+        self._set_display_mode(image_available)
 
         if not image_available:
             self._request_missing_image(active_request)
@@ -493,6 +505,8 @@ class CardInspectorPanel(wx.Panel):
     def _request_missing_image(self, request: CardImageRequest | None) -> None:
         if request is None or not self._image_request_handler:
             return
+        if self._failure_key(request) in self._failed_image_requests:
+            return
         logger.debug(
             "Card inspector requesting image for %s (set=%s, size=%s, collector=%s).",
             request.card_name,
@@ -512,3 +526,10 @@ class CardInspectorPanel(wx.Panel):
         printing = self.inspector_printings[self.inspector_current_printing]
         uuid = printing.get("id")
         return bool(uuid and request.uuid and uuid == request.uuid)
+
+    @staticmethod
+    def _failure_key(request: CardImageRequest) -> tuple[str, str]:
+        return (
+            (request.card_name or "").lower(),
+            (request.set_code or "").lower(),
+        )
