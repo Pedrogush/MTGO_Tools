@@ -198,9 +198,8 @@ class AppEventHandlers:
         event.Skip()
 
     def on_close(self: AppFrame, event: wx.CloseEvent) -> None:
-        if self._save_timer and self._save_timer.IsRunning():
-            self._save_timer.Stop()
-        self._save_window_settings()
+        # Clean up state manager (stops timer, saves settings)
+        self._state_manager.cleanup()
         # Close all managed dialogs
         self._dialog_manager.close_all()
         # Handle mana keyboard separately (not yet managed by dialog manager)

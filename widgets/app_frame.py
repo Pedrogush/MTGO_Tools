@@ -18,6 +18,7 @@ from widgets.handlers.card_table_panel_handler import CardTablePanelHandler
 from widgets.handlers.sideboard_guide_handlers import SideboardGuideHandlers
 from widgets.identify_opponent import MTGOpponentDeckSpy
 from widgets.mana_keyboard import ManaKeyboardFrame, open_mana_keyboard
+from widgets.managers.app_state_manager import AppStateManager
 from widgets.managers.dialog_manager import DialogManager
 from widgets.match_history import MatchHistoryFrame
 from widgets.metagame_analysis import MetagameAnalysisFrame
@@ -51,10 +52,10 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
         self.builder_panel: DeckBuilderPanel | None = None
         self.out_table: CardTablePanel | None = None
 
-        self._save_timer: wx.Timer | None = None
         self.mana_icons = ManaIconFactory()
         self._dialog_manager = DialogManager(self)
         self._event_coordinator = AppEventCoordinator(self, controller)
+        self._state_manager = AppStateManager(self, controller.preferences_path)
         self.mana_keyboard_window: ManaKeyboardFrame | None = None
         self._inspector_hover_timer: wx.Timer | None = None
         self._pending_hover: tuple[str, dict[str, Any]] | None = None
@@ -62,7 +63,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
 
         # Build UI using AppFrameBuilder
         self._build_ui()
-        self._apply_window_preferences()
+        self._state_manager.load_window_preferences()
         self.SetMinSize(APP_FRAME_MIN_SIZE)
         self.Centre(wx.BOTH)
 
@@ -261,41 +262,12 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
 
     # ------------------------------------------------------------------ Window persistence ---------------------------------------------------
     def _save_window_settings(self) -> None:
-        pos = self.GetPosition()
-        size = self.GetSize()
-        self.controller.save_settings(
-            window_size=(size.width, size.height), screen_pos=(pos.x, pos.y)
-        )
-
-    def _apply_window_preferences(self) -> None:
-        state = self.controller.session_manager.restore_session_state(self.controller.zone_cards)
-
-        # Apply window size
-        if "window_size" in state:
-            try:
-                width, height = state["window_size"]
-                self.SetSize(wx.Size(int(width), int(height)))
-            except (TypeError, ValueError):
-                logger.debug("Ignoring invalid saved window size")
-
-        # Apply window position
-        if "screen_pos" in state:
-            try:
-                x, y = state["screen_pos"]
-                self.SetPosition(wx.Point(int(x), int(y)))
-            except (TypeError, ValueError):
-                logger.debug("Ignoring invalid saved window position")
+        """Delegate to state manager for window settings persistence."""
+        self._state_manager.save_window_settings()
 
     def _schedule_settings_save(self) -> None:
-        if self._save_timer is None:
-            self._save_timer = wx.Timer(self)
-            self.Bind(wx.EVT_TIMER, self._flush_pending_settings, self._save_timer)
-        if self._save_timer.IsRunning():
-            self._save_timer.Stop()
-        self._save_timer.StartOnce(600)
-
-    def _flush_pending_settings(self, _event: wx.TimerEvent) -> None:
-        self._save_window_settings()
+        """Schedule delayed save of window settings."""
+        self._state_manager.schedule_settings_save()
 
     def fetch_archetypes(self, force: bool = False) -> None:
         self.research_panel.set_loading_state()
