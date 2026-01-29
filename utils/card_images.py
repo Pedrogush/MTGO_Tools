@@ -835,6 +835,43 @@ def _collect_face_aliases(card: dict[str, Any], display_name: str) -> set[str]:
     return {alias for alias in aliases if alias.lower() != display_key}
 
 
+def build_printing_index(
+    cards: list[dict[str, Any]],
+) -> tuple[dict[str, list[dict[str, Any]]], dict[str, int]]:
+    """Build a compact printing index from bulk card data."""
+    by_name: dict[str, list[dict[str, Any]]] = {}
+    total_printings = 0
+    for card in cards:
+        name = (card.get("name") or "").strip()
+        uuid = card.get("id")
+        if not name or not uuid:
+            continue
+        key = name.lower()
+        entry = {
+            "id": uuid,
+            "set": (card.get("set") or "").upper(),
+            "set_name": card.get("set_name") or "",
+            "collector_number": card.get("collector_number") or "",
+            "released_at": card.get("released_at") or "",
+        }
+        by_name.setdefault(key, []).append(entry)
+        for alias in _collect_face_aliases(card, name):
+            alias_key = alias.lower()
+            if alias_key == key:
+                continue
+            by_name.setdefault(alias_key, []).append(entry)
+        total_printings += 1
+
+    for entries in by_name.values():
+        entries.sort(key=lambda c: c.get("released_at") or "", reverse=True)
+
+    stats = {
+        "unique_names": len(by_name),
+        "total_printings": total_printings,
+    }
+    return by_name, stats
+
+
 def _load_printing_index_payload() -> dict[str, Any] | None:
     """Load the cached card printings index if available."""
     if not PRINTING_INDEX_CACHE.exists():
@@ -869,38 +906,14 @@ def ensure_printing_index_cache(force: bool = False) -> dict[str, Any]:
         with BULK_DATA_CACHE.open("r", encoding="utf-8") as fh:
             cards = json.load(fh)
 
-    by_name: dict[str, list[dict[str, Any]]] = {}
-    total_printings = 0
-    for card in cards:
-        name = (card.get("name") or "").strip()
-        uuid = card.get("id")
-        if not name or not uuid:
-            continue
-        key = name.lower()
-        entry = {
-            "id": uuid,
-            "set": (card.get("set") or "").upper(),
-            "set_name": card.get("set_name") or "",
-            "collector_number": card.get("collector_number") or "",
-            "released_at": card.get("released_at") or "",
-        }
-        by_name.setdefault(key, []).append(entry)
-        for alias in _collect_face_aliases(card, name):
-            alias_key = alias.lower()
-            if alias_key == key:
-                continue
-            by_name.setdefault(alias_key, []).append(entry)
-        total_printings += 1
-
-    for entries in by_name.values():
-        entries.sort(key=lambda c: c.get("released_at") or "", reverse=True)
+    by_name, stats = build_printing_index(cards)
 
     payload = {
         "version": PRINTING_INDEX_VERSION,
         "generated_at": datetime.now(UTC).isoformat(),
         "bulk_mtime": bulk_mtime,
-        "unique_names": len(by_name),
-        "total_printings": total_printings,
+        "unique_names": stats["unique_names"],
+        "total_printings": stats["total_printings"],
         "data": by_name,
     }
 
@@ -978,6 +991,7 @@ __all__ = [
     "CardImageCache",
     "CardImageRequest",
     "BulkImageDownloader",
+    "build_printing_index",
     "PRINTING_INDEX_CACHE",
     "get_cache",
     "get_card_image",

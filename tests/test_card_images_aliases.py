@@ -87,3 +87,32 @@ def test_card_image_cache_resolves_double_faced_alias(tmp_path):
     assert cache.get_image_path("Insectile Aberration") == back_path
     assert cache.get_image_path("Delver of Secrets // Insectile Aberration") == front_path
     assert cache.get_image_paths_by_uuid("uuid-delver") == [front_path, back_path]
+
+
+def test_build_printing_index_sorts_and_counts():
+    cards = [
+        {
+            "name": "Test Card",
+            "id": "uuid-1",
+            "set": "abc",
+            "set_name": "Alpha",
+            "collector_number": "1",
+            "released_at": "2001-01-01",
+        },
+        {
+            "name": "Test Card",
+            "id": "uuid-2",
+            "set": "def",
+            "set_name": "Delta",
+            "collector_number": "2",
+            "released_at": "2010-01-01",
+        },
+        {"name": "", "id": "missing"},
+    ]
+
+    by_name, stats = card_images.build_printing_index(cards)
+
+    assert stats["unique_names"] == 1
+    assert stats["total_printings"] == 2
+    entries = by_name["test card"]
+    assert [entry["id"] for entry in entries] == ["uuid-2", "uuid-1"]
