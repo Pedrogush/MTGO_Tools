@@ -20,6 +20,7 @@ import json
 import os
 import sqlite3
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass
 from datetime import datetime, timezone
 
 try:  # Python 3.11+ has UTC
@@ -57,9 +58,36 @@ IMAGE_SIZES = {
 
 # Download configuration
 BULK_DATA_URL = "https://api.scryfall.com/bulk-data/default-cards"
+SCRYFALL_CARD_ID_URL = "https://api.scryfall.com/cards/{card_id}"
+SCRYFALL_CARD_SET_URL = "https://api.scryfall.com/cards/{set_code}/{collector_number}"
 MAX_WORKERS = 10  # Concurrent download threads
 CHUNK_SIZE = 8192  # Download chunk size
 REQUEST_TIMEOUT = 30  # Seconds
+
+
+@dataclass(frozen=True)
+class CardImageRequest:
+    """Represents a single card image download request."""
+
+    card_name: str
+    uuid: str | None
+    set_code: str | None
+    collector_number: str | None
+    size: str = "normal"
+
+    def queue_key(self) -> tuple[str, str, str, str]:
+        """Return a stable key for deduping requests."""
+        if self.uuid:
+            return ("uuid", self.uuid.lower(), self.size, "")
+        set_code = (self.set_code or "").lower()
+        collector = (self.collector_number or "").lower()
+        return ("set", set_code, collector, self.size)
+
+    def can_fetch(self) -> bool:
+        """Return True when there is enough data to fetch from Scryfall."""
+        if self.uuid:
+            return True
+        return bool(self.set_code and self.collector_number)
 
 
 class CardImageCache:
@@ -421,6 +449,34 @@ class BulkImageDownloader:
         resp = self.session.get(BULK_DATA_URL, timeout=REQUEST_TIMEOUT)
         resp.raise_for_status()
         return resp.json()
+
+    def fetch_card_by_id(self, card_id: str) -> dict[str, Any]:
+        """Fetch card data from Scryfall by UUID."""
+        url = SCRYFALL_CARD_ID_URL.format(card_id=card_id)
+        resp = self.session.get(url, timeout=REQUEST_TIMEOUT)
+        resp.raise_for_status()
+        return resp.json()
+
+    def fetch_card_by_set(self, set_code: str, collector_number: str) -> dict[str, Any]:
+        """Fetch card data from Scryfall by set code and collector number."""
+        url = SCRYFALL_CARD_SET_URL.format(
+            set_code=set_code.lower(), collector_number=collector_number
+        )
+        resp = self.session.get(url, timeout=REQUEST_TIMEOUT)
+        resp.raise_for_status()
+        return resp.json()
+
+    def download_card_image_by_id(self, card_id: str, size: str = "normal") -> tuple[bool, str]:
+        """Fetch card data by UUID and download its image(s)."""
+        card = self.fetch_card_by_id(card_id)
+        return self._download_single_image(card, size)
+
+    def download_card_image_by_set(
+        self, set_code: str, collector_number: str, size: str = "normal"
+    ) -> tuple[bool, str]:
+        """Fetch card data by set/collector number and download its image(s)."""
+        card = self.fetch_card_by_set(set_code, collector_number)
+        return self._download_single_image(card, size)
 
     def _get_cached_bulk_data_record(self) -> tuple[str | None, str | None]:
         """Return the saved bulk data metadata (updated_at, download URI)."""
@@ -898,6 +954,7 @@ def get_cache_stats() -> dict[str, Any]:
 
 __all__ = [
     "CardImageCache",
+    "CardImageRequest",
     "BulkImageDownloader",
     "PRINTING_INDEX_CACHE",
     "get_cache",
