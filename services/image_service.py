@@ -12,6 +12,7 @@ import threading
 import time
 from collections import deque
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 from loguru import logger
@@ -35,6 +36,8 @@ from utils.process_worker import ProcessHandle, ProcessWorker
 class CardImageDownloadQueue:
     """Background queue for downloading individual card images."""
 
+    _MAX_CONCURRENT_DOWNLOADS = 10
+
     def __init__(
         self,
         cache,
@@ -46,11 +49,13 @@ class CardImageDownloadQueue:
         self._on_downloaded = on_downloaded
         self._queue: deque[CardImageRequest] = deque()
         self._pending_keys: set[tuple[str, str, str, str]] = set()
+        self._inflight_keys: set[tuple[str, str, str, str]] = set()
+        self._inflight_count = 0
         self._selected_request: CardImageRequest | None = None
-        self._current_request: CardImageRequest | None = None
         self._stop_event = threading.Event()
         self._lock = threading.Lock()
         self._condition = threading.Condition(self._lock)
+        self._executor = ThreadPoolExecutor(max_workers=self._MAX_CONCURRENT_DOWNLOADS)
         self._thread = threading.Thread(
             target=self._run,
             name="card-image-download-queue",
@@ -64,6 +69,7 @@ class CardImageDownloadQueue:
         with self._condition:
             self._condition.notify_all()
         self._thread.join(timeout=timeout)
+        self._executor.shutdown(wait=True, cancel_futures=True)
 
     def set_selected_request(self, request: CardImageRequest | None) -> None:
         """Update the current selection for priority handling."""
@@ -79,7 +85,7 @@ class CardImageDownloadQueue:
             return False
         key = request.queue_key()
         with self._condition:
-            if self._current_request and self._current_request.queue_key() == key:
+            if key in self._inflight_keys:
                 return False
             if key in self._pending_keys:
                 if prioritize:
@@ -97,21 +103,21 @@ class CardImageDownloadQueue:
     def _run(self) -> None:
         while not self._stop_event.is_set():
             with self._condition:
-                while not self._queue and not self._stop_event.is_set():
+                while (
+                    not self._queue or self._inflight_count >= self._MAX_CONCURRENT_DOWNLOADS
+                ) and not self._stop_event.is_set():
                     self._condition.wait(timeout=0.5)
                 if self._stop_event.is_set():
                     break
                 request = self._queue.popleft()
                 self._pending_keys.discard(request.queue_key())
-                self._current_request = request
+                self._inflight_keys.add(request.queue_key())
+                self._inflight_count += 1
 
-            success = self._download_request(request)
-            if success:
-                self._notify_downloaded(request)
-
-            with self._condition:
-                self._current_request = None
-                self._ensure_selected_priority_locked()
+            future = self._executor.submit(self._download_request, request)
+            future.add_done_callback(
+                lambda completed, req=request: self._handle_download_complete(req, completed)
+            )
 
     def _notify_downloaded(self, request: CardImageRequest) -> None:
         if not self._on_downloaded:
@@ -166,6 +172,21 @@ class CardImageDownloadQueue:
         lowered = message.lower()
         return "404" in lowered and "not found" in lowered
 
+    def _handle_download_complete(self, request: CardImageRequest, completed) -> None:
+        success = False
+        try:
+            success = completed.result()
+        except Exception:
+            logger.exception(f"Card image download failed for {request.card_name}")
+        if success:
+            self._notify_downloaded(request)
+        with self._condition:
+            key = request.queue_key()
+            self._inflight_keys.discard(key)
+            self._inflight_count = max(0, self._inflight_count - 1)
+            self._ensure_selected_priority_locked()
+            self._condition.notify()
+
     def _ensure_selected_priority_locked(self) -> None:
         request = self._selected_request
         if not request or not request.can_fetch():
@@ -173,7 +194,7 @@ class CardImageDownloadQueue:
         if self._is_cached(request):
             return
         key = request.queue_key()
-        if self._current_request and self._current_request.queue_key() == key:
+        if key in self._inflight_keys:
             return
         if key in self._pending_keys:
             self._remove_request_by_key_locked(key)
