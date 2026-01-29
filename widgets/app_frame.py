@@ -11,6 +11,7 @@ if TYPE_CHECKING:
 from utils.constants import APP_FRAME_MIN_SIZE, APP_FRAME_SIZE
 from utils.mana_icon_factory import ManaIconFactory
 from widgets.builders.app_frame_builder import AppFrameBuilder
+from widgets.coordinators.app_event_coordinator import AppEventCoordinator
 from widgets.dialogs.image_download_dialog import show_image_download_dialog
 from widgets.handlers.app_event_handlers import AppEventHandlers
 from widgets.handlers.card_table_panel_handler import CardTablePanelHandler
@@ -53,6 +54,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
         self._save_timer: wx.Timer | None = None
         self.mana_icons = ManaIconFactory()
         self._dialog_manager = DialogManager(self)
+        self._event_coordinator = AppEventCoordinator(self, controller)
         self.mana_keyboard_window: ManaKeyboardFrame | None = None
         self._inspector_hover_timer: wx.Timer | None = None
         self._pending_hover: tuple[str, dict[str, Any]] | None = None
@@ -64,11 +66,11 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
         self.SetMinSize(APP_FRAME_MIN_SIZE)
         self.Centre(wx.BOTH)
 
-        # Bind events
-        self.Bind(wx.EVT_CLOSE, self.on_close)
-        self.Bind(wx.EVT_SIZE, self.on_window_change)
-        self.Bind(wx.EVT_MOVE, self.on_window_change)
-        self.Bind(wx.EVT_CHAR_HOOK, self._on_hotkey)
+        # Bind events (routed through coordinator)
+        self.Bind(wx.EVT_CLOSE, self._event_coordinator.on_close)
+        self.Bind(wx.EVT_SIZE, self._event_coordinator.on_window_change)
+        self.Bind(wx.EVT_MOVE, self._event_coordinator.on_window_change)
+        self.Bind(wx.EVT_CHAR_HOOK, self._event_coordinator.on_hotkey)
 
     # Backward compatibility properties for dialog windows
     @property
@@ -134,50 +136,53 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
         self._show_left_panel(self.left_mode, force=True)
 
     def _create_builder_callbacks(self) -> dict[str, Any]:
-        """Create callbacks dict for AppFrameBuilder."""
+        """Create callbacks dict for AppFrameBuilder.
+
+        Routes all callbacks through the event coordinator for centralized handling.
+        """
         return {
             # Research panel callbacks
-            "on_format_changed": self.on_format_changed,
-            "on_archetype_filter": self.on_archetype_filter,
-            "on_archetype_selected": self.on_archetype_selected,
-            "on_reload_archetypes": lambda: self.fetch_archetypes(force=True),
+            "on_format_changed": self._event_coordinator.on_format_changed,
+            "on_archetype_filter": self._event_coordinator.on_archetype_filter,
+            "on_archetype_selected": self._event_coordinator.on_archetype_selected,
+            "on_reload_archetypes": lambda: self._event_coordinator.fetch_archetypes(force=True),
             # Builder panel callbacks
             "on_switch_to_research": lambda: self._show_left_panel("research"),
-            "on_ensure_card_data": self.ensure_card_data_loaded,
+            "on_ensure_card_data": self._event_coordinator.ensure_card_data_loaded,
             "open_mana_keyboard": self._open_full_mana_keyboard,
-            "on_builder_search": self._on_builder_search,
-            "on_builder_clear": self._on_builder_clear,
-            "on_builder_result_selected": self._on_builder_result_selected,
-            "on_open_radar_dialog": self._open_radar_dialog,
+            "on_builder_search": self._event_coordinator.on_builder_search,
+            "on_builder_clear": self._event_coordinator.on_builder_clear,
+            "on_builder_result_selected": self._event_coordinator.on_builder_result_selected,
+            "on_open_radar_dialog": self._event_coordinator.open_radar_dialog,
             # Toolbar callbacks
-            "open_opponent_tracker": self.open_opponent_tracker,
-            "open_timer_alert": self.open_timer_alert,
-            "open_match_history": self.open_match_history,
-            "open_metagame_analysis": self.open_metagame_analysis,
+            "open_opponent_tracker": self._event_coordinator.open_opponent_tracker,
+            "open_timer_alert": self._event_coordinator.open_timer_alert,
+            "open_match_history": self._event_coordinator.open_match_history,
+            "open_metagame_analysis": self._event_coordinator.open_metagame_analysis,
             "on_download_card_images": lambda: show_image_download_dialog(
                 self, self.controller.image_service.image_cache,
                 self.controller.image_service.image_downloader, self._set_status
             ),
             # Deck source callback
-            "on_deck_source_changed": self._on_deck_source_changed,
+            "on_deck_source_changed": self._event_coordinator.on_deck_source_changed,
             # Deck results callbacks
-            "on_deck_selected": self.on_deck_selected,
-            "on_copy_clicked": lambda: self.on_copy_clicked(None),
-            "on_save_clicked": lambda: self.on_save_clicked(None),
-            "on_daily_average_clicked": lambda: self.on_daily_average_clicked(None),
+            "on_deck_selected": self._event_coordinator.on_deck_selected,
+            "on_copy_clicked": lambda: self._event_coordinator.on_copy_clicked(None),
+            "on_save_clicked": lambda: self._event_coordinator.on_save_clicked(None),
+            "on_daily_average_clicked": lambda: self._event_coordinator.on_daily_average_clicked(None),
             # Sideboard guide callbacks
-            "on_add_guide_entry": self._on_add_guide_entry,
-            "on_edit_guide_entry": self._on_edit_guide_entry,
-            "on_remove_guide_entry": self._on_remove_guide_entry,
-            "on_edit_exclusions": self._on_edit_exclusions,
-            "on_export_guide": self._on_export_guide,
-            "on_import_guide": self._on_import_guide,
+            "on_add_guide_entry": self._event_coordinator.on_add_guide_entry,
+            "on_edit_guide_entry": self._event_coordinator.on_edit_guide_entry,
+            "on_remove_guide_entry": self._event_coordinator.on_remove_guide_entry,
+            "on_edit_exclusions": self._event_coordinator.on_edit_exclusions,
+            "on_export_guide": self._event_coordinator.on_export_guide,
+            "on_import_guide": self._event_coordinator.on_import_guide,
             # Zone table callbacks
-            "handle_zone_delta": self._handle_zone_delta,
-            "handle_zone_remove": self._handle_zone_remove,
-            "handle_zone_add": self._handle_zone_add,
-            "handle_card_focus": self._handle_card_focus,
-            "handle_card_hover": self._handle_card_hover,
+            "handle_zone_delta": self._event_coordinator.handle_zone_delta,
+            "handle_zone_remove": self._event_coordinator.handle_zone_remove,
+            "handle_zone_add": self._event_coordinator.handle_zone_add,
+            "handle_card_focus": self._event_coordinator.handle_card_focus,
+            "handle_card_hover": self._event_coordinator.handle_card_hover,
             # Status callback
             "set_status": self._set_status,
         }
