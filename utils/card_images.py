@@ -457,9 +457,7 @@ class BulkImageDownloader:
         resp.raise_for_status()
         return resp.json()
 
-    def fetch_card_by_set(
-        self, set_code: str, collector_number: str
-    ) -> dict[str, Any]:
+    def fetch_card_by_set(self, set_code: str, collector_number: str) -> dict[str, Any]:
         """Fetch card data from Scryfall by set code and collector number."""
         url = SCRYFALL_CARD_SET_URL.format(
             set_code=set_code.lower(), collector_number=collector_number

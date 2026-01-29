@@ -17,8 +17,8 @@ from loguru import logger
 
 from utils.card_images import (
     BULK_DATA_CACHE,
-    CardImageRequest,
     BulkImageDownloader,
+    CardImageRequest,
     ensure_printing_index_cache,
     get_cache,
 )
