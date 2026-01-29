@@ -1,3 +1,4 @@
+.claude/
 env/
 magic_online_metagame_crawler.egg-info/
 config/
@@ -14,7 +15,6 @@ box.png
 filtered_only_white.png
 trade_request.png
 __pycache__/
-*.md
 !README.md
 !ARCHITECTURE.md
 !CODEBASE_REVIEW.md
