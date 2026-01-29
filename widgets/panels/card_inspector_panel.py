@@ -21,6 +21,10 @@ from utils.constants import (
     CARD_IMAGE_TEXT_MIN_HEIGHT,
     DARK_PANEL,
     LIGHT_TEXT,
+    PADDING_BASE,
+    PADDING_MD,
+    PADDING_SM,
+    PADDING_XL,
     SUBDUED_TEXT,
     ZONE_TITLES,
 )
@@ -77,14 +81,14 @@ class CardInspectorPanel(wx.Panel):
         self.SetSizer(sizer)
 
         content = wx.BoxSizer(wx.HORIZONTAL)
-        sizer.Add(content, 1, wx.EXPAND | wx.ALL, 6)
+        sizer.Add(content, 1, wx.EXPAND | wx.ALL, PADDING_MD)
 
         # Left column: Card image and printing navigation
         self.image_column_panel = wx.Panel(self)
         self.image_column_panel.SetBackgroundColour(DARK_PANEL)
         image_column = wx.BoxSizer(wx.VERTICAL)
         self.image_column_panel.SetSizer(image_column)
-        content.Add(self.image_column_panel, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 12)
+        content.Add(self.image_column_panel, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, PADDING_XL)
 
         # Card image display
         self.card_image_display = CardImageDisplay(
@@ -92,7 +96,9 @@ class CardInspectorPanel(wx.Panel):
             width=CARD_IMAGE_DISPLAY_WIDTH,
             height=CARD_IMAGE_DISPLAY_HEIGHT,
         )
-        image_column.Add(self.card_image_display, 0, wx.ALIGN_CENTER_HORIZONTAL | wx.ALL, 4)
+        image_column.Add(
+            self.card_image_display, 0, wx.ALIGN_CENTER_HORIZONTAL | wx.ALL, PADDING_SM
+        )
 
         # Printing navigation panel
         self.nav_panel = wx.Panel(self.image_column_panel)
@@ -107,17 +113,17 @@ class CardInspectorPanel(wx.Panel):
 
         # Keep the navigation rail aligned with the card image width so buttons don't jump
         image_width = getattr(self.card_image_display, "image_width", CARD_IMAGE_DISPLAY_WIDTH)
-        self.nav_panel.SetMinSize((image_width, nav_btn_size.GetHeight() + 4))
+        self.nav_panel.SetMinSize((image_width, nav_btn_size.GetHeight() + PADDING_SM))
         self.nav_panel.SetMaxSize((image_width, -1))
 
         self.prev_btn = wx.Button(self.nav_panel, label="◀", size=nav_btn_size)
         stylize_button(self.prev_btn)
         self.prev_btn.Bind(wx.EVT_BUTTON, self._on_prev_printing)
-        nav_sizer.Add(self.prev_btn, 0, wx.RIGHT, 4)
+        nav_sizer.Add(self.prev_btn, 0, wx.RIGHT, PADDING_SM)
 
         self.printing_label_width = max(
             CARD_IMAGE_PRINTING_LABEL_MIN_WIDTH,
-            image_width - (nav_btn_size.GetWidth() * 2) - 16,
+            image_width - (nav_btn_size.GetWidth() * 2) - (PADDING_BASE * 2),
         )
         self.printing_label = wx.StaticText(self.nav_panel, label="")
         self.printing_label.SetMinSize((self.printing_label_width, -1))
@@ -127,15 +133,15 @@ class CardInspectorPanel(wx.Panel):
 
         self.loading_label = wx.StaticText(self.nav_panel, label="Loading printing…")
         self.loading_label.SetForegroundColour(SUBDUED_TEXT)
-        nav_sizer.Add(self.loading_label, 0, wx.LEFT | wx.ALIGN_CENTER_VERTICAL, 6)
+        nav_sizer.Add(self.loading_label, 0, wx.LEFT | wx.ALIGN_CENTER_VERTICAL, PADDING_MD)
         self.loading_label.Hide()
 
         self.next_btn = wx.Button(self.nav_panel, label="▶", size=nav_btn_size)
         stylize_button(self.next_btn)
         self.next_btn.Bind(wx.EVT_BUTTON, self._on_next_printing)
-        nav_sizer.Add(self.next_btn, 0, wx.LEFT, 4)
+        nav_sizer.Add(self.next_btn, 0, wx.LEFT, PADDING_SM)
 
-        image_column.Add(self.nav_panel, 0, wx.ALIGN_CENTER_HORIZONTAL | wx.TOP, 6)
+        image_column.Add(self.nav_panel, 0, wx.ALIGN_CENTER_HORIZONTAL | wx.TOP, PADDING_MD)
         self.nav_panel.Hide()  # Hidden by default
 
         # Right column: Card details
@@ -152,7 +158,7 @@ class CardInspectorPanel(wx.Panel):
         name_font.MakeBold()
         self.name_label.SetFont(name_font)
         self.name_label.SetForegroundColour(LIGHT_TEXT)
-        details.Add(self.name_label, 0, wx.BOTTOM, 4)
+        details.Add(self.name_label, 0, wx.BOTTOM, PADDING_SM)
 
         # Mana cost container
         self.cost_container = wx.Panel(self.details_panel)
@@ -160,17 +166,17 @@ class CardInspectorPanel(wx.Panel):
         self.cost_container.SetMinSize((-1, CARD_IMAGE_COST_MIN_HEIGHT))
         self.cost_sizer = wx.BoxSizer(wx.HORIZONTAL)
         self.cost_container.SetSizer(self.cost_sizer)
-        details.Add(self.cost_container, 0, wx.EXPAND | wx.BOTTOM, 4)
+        details.Add(self.cost_container, 0, wx.EXPAND | wx.BOTTOM, PADDING_SM)
 
         # Type line
         self.type_label = wx.StaticText(self.details_panel, label="")
         self.type_label.SetForegroundColour(SUBDUED_TEXT)
-        details.Add(self.type_label, 0, wx.BOTTOM, 4)
+        details.Add(self.type_label, 0, wx.BOTTOM, PADDING_SM)
 
         # Stats (mana value, P/T, colors, zone)
         self.stats_label = wx.StaticText(self.details_panel, label="")
         self.stats_label.SetForegroundColour(LIGHT_TEXT)
-        details.Add(self.stats_label, 0, wx.BOTTOM, 4)
+        details.Add(self.stats_label, 0, wx.BOTTOM, PADDING_SM)
 
         # Oracle text
         self.text_ctrl = wx.TextCtrl(
@@ -179,22 +185,23 @@ class CardInspectorPanel(wx.Panel):
         )
         stylize_textctrl(self.text_ctrl, multiline=True)
         self.text_ctrl.SetMinSize((-1, CARD_IMAGE_TEXT_MIN_HEIGHT))
-        details.Add(self.text_ctrl, 1, wx.EXPAND | wx.TOP, 4)
+        details.Add(self.text_ctrl, 1, wx.EXPAND | wx.TOP, PADDING_SM)
 
         self._apply_fixed_sizing(image_width, nav_btn_size)
 
     def _apply_fixed_sizing(self, image_width: int, nav_btn_size: wx.Size) -> None:
         image_height = getattr(self.card_image_display, "image_height", CARD_IMAGE_DISPLAY_HEIGHT)
-        nav_height = nav_btn_size.GetHeight() + 4
-        image_column_height = image_height + 8 + nav_height + 6
+        nav_height = nav_btn_size.GetHeight() + PADDING_SM
+        image_column_height = image_height + (PADDING_SM * 2) + nav_height + PADDING_MD
+        column_width = image_width + PADDING_XL + PADDING_MD
 
-        self.image_column_panel.SetMinSize((image_width, image_column_height))
-        self.image_column_panel.SetMaxSize((image_width, image_column_height))
-        self.details_panel.SetMinSize((image_width, image_height))
-        self.details_panel.SetMaxSize((image_width, image_height))
+        self.image_column_panel.SetMinSize((column_width, image_column_height))
+        self.image_column_panel.SetMaxSize((column_width, image_column_height))
+        self.details_panel.SetMinSize((column_width + PADDING_MD, image_height))
+        self.details_panel.SetMaxSize((column_width + PADDING_MD, image_height))
 
-        panel_width = (image_width * 2) + 24
-        panel_height = image_column_height + 12
+        panel_width = column_width + PADDING_XL
+        panel_height = image_column_height + PADDING_XL
         self.SetMinSize((panel_width, panel_height))
         self.SetMaxSize((panel_width, panel_height))
 
