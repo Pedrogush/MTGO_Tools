@@ -889,6 +889,11 @@ def _load_printing_index_payload() -> dict[str, Any] | None:
     return payload
 
 
+def load_printing_index_payload() -> dict[str, Any] | None:
+    """Load the cached card printings index without rebuilding it."""
+    return _load_printing_index_payload()
+
+
 def ensure_printing_index_cache(force: bool = False) -> dict[str, Any]:
     """Ensure a compact card printings index exists for fast wx lookups."""
     IMAGE_CACHE_DIR.mkdir(parents=True, exist_ok=True)
@@ -998,4 +1003,5 @@ __all__ = [
     "download_bulk_images",
     "get_cache_stats",
     "ensure_printing_index_cache",
+    "load_printing_index_payload",
 ]
