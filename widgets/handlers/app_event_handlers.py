@@ -95,7 +95,23 @@ class AppEventHandlers:
         player = deck.get("player", "")
         event = deck.get("event", "")
         result = deck.get("result", "")
-        return f"{date} | {player} — {event} [{result}]".strip()
+        line_parts = [part for part in (player, result) if part]
+        line_one = ", ".join(line_parts) if line_parts else "Unknown"
+        line_two_parts = [part for part in (event, date) if part]
+        line_two = " — ".join(line_two_parts)
+        return f"{line_one} | {line_two}".strip(" |")
+
+    @staticmethod
+    def format_deck_list_entry(deck: dict[str, Any]) -> str:
+        date = deck.get("date", "")
+        player = deck.get("player", "")
+        event = deck.get("event", "")
+        result = deck.get("result", "")
+        line_parts = [part for part in (player, result) if part]
+        line_one = ", ".join(line_parts) if line_parts else "Unknown"
+        line_two_parts = [part for part in (event, date) if part]
+        line_two = " — ".join(line_two_parts)
+        return f"{line_one}\n{line_two}".strip()
 
     # UI Event Handlers
     def on_format_changed(self: AppFrame) -> None:
@@ -247,7 +263,7 @@ class AppEventHandlers:
             self.summary_text.ChangeValue(f"{archetype_name}\n\nNo deck data available.")
             return
         for deck in decks:
-            self.deck_list.Append(self.format_deck_name(deck))
+            self.deck_list.Append(self.format_deck_list_entry(deck))
         self.deck_list.Enable()
         self.daily_average_button.Enable()
         self._present_archetype_summary(archetype_name, decks)
