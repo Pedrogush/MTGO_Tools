@@ -25,6 +25,7 @@ from utils.constants import (
 )
 from utils.mana_icon_factory import ManaIconFactory
 from utils.stylize import stylize_listbox, stylize_textctrl
+from utils.window_persistence import WindowPersistenceManager
 from widgets.buttons.deck_action_buttons import DeckActionButtons
 from widgets.buttons.toolbar_buttons import ToolbarButtons
 from widgets.dialogs.image_download_dialog import show_image_download_dialog
@@ -69,7 +70,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
         self.builder_panel: DeckBuilderPanel | None = None
         self.out_table: CardTablePanel | None = None
 
-        self._save_timer: wx.Timer | None = None
+        self.window_persistence = WindowPersistenceManager(self, self.controller)
         self.mana_icons = ManaIconFactory()
         self.tracker_window: MTGOpponentDeckSpy | None = None
         self.timer_window: TimerAlertFrame | None = None
@@ -454,41 +455,13 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
 
     # ------------------------------------------------------------------ Window persistence ---------------------------------------------------
     def _save_window_settings(self) -> None:
-        pos = self.GetPosition()
-        size = self.GetSize()
-        self.controller.save_settings(
-            window_size=(size.width, size.height), screen_pos=(pos.x, pos.y)
-        )
+        self.window_persistence.save_now()
 
     def _apply_window_preferences(self) -> None:
-        state = self.controller.session_manager.restore_session_state(self.controller.zone_cards)
-
-        # Apply window size
-        if "window_size" in state:
-            try:
-                width, height = state["window_size"]
-                self.SetSize(wx.Size(int(width), int(height)))
-            except (TypeError, ValueError):
-                logger.debug("Ignoring invalid saved window size")
-
-        # Apply window position
-        if "screen_pos" in state:
-            try:
-                x, y = state["screen_pos"]
-                self.SetPosition(wx.Point(int(x), int(y)))
-            except (TypeError, ValueError):
-                logger.debug("Ignoring invalid saved window position")
+        self.window_persistence.apply_saved_preferences()
 
     def _schedule_settings_save(self) -> None:
-        if self._save_timer is None:
-            self._save_timer = wx.Timer(self)
-            self.Bind(wx.EVT_TIMER, self._flush_pending_settings, self._save_timer)
-        if self._save_timer.IsRunning():
-            self._save_timer.Stop()
-        self._save_timer.StartOnce(600)
-
-    def _flush_pending_settings(self, _event: wx.TimerEvent) -> None:
-        self._save_window_settings()
+        self.window_persistence.schedule_save()
 
     def fetch_archetypes(self, force: bool = False) -> None:
         self.research_panel.set_loading_state()

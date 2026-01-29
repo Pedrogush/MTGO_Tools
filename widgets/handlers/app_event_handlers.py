@@ -198,8 +198,7 @@ class AppEventHandlers:
         event.Skip()
 
     def on_close(self: AppFrame, event: wx.CloseEvent) -> None:
-        if self._save_timer and self._save_timer.IsRunning():
-            self._save_timer.Stop()
+        self.window_persistence.cleanup()
         self._save_window_settings()
         for attr in ("tracker_window", "timer_window", "history_window"):
             window = getattr(self, attr)
