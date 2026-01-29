@@ -174,12 +174,17 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
         middle_column.Add(deck_workspace, 1, wx.EXPAND)
 
         inspector_column = wx.BoxSizer(wx.VERTICAL)
-        content_split.Add(inspector_column, 1, wx.EXPAND)
+        content_split.Add(inspector_column, 0, wx.EXPAND)
 
         inspector_box = self._build_card_inspector(right_panel)
-        inspector_column.Add(inspector_box, 1, wx.EXPAND | wx.BOTTOM, PADDING_LG)
+        inspector_static = inspector_box.GetStaticBox()
+        inspector_min_width = inspector_static.GetMinSize().GetWidth()
+        inspector_column.Add(inspector_box, 0, wx.BOTTOM, PADDING_LG)
 
         deck_results = self._build_deck_results(right_panel)
+        deck_results_box = deck_results.GetStaticBox()
+        deck_results_box.SetMinSize((inspector_min_width, -1))
+        deck_results_box.SetMaxSize((inspector_min_width, -1))
         inspector_column.Add(deck_results, 1, wx.EXPAND)
 
         return right_panel
@@ -303,6 +308,10 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
             self.card_inspector_panel.handle_printings_loaded
         )
         inspector_sizer.Add(self.card_inspector_panel, 1, wx.EXPAND)
+        inspector_sizer.Layout()
+        inspector_min_size = inspector_sizer.GetMinSize()
+        inspector_box.SetMinSize(inspector_min_size)
+        inspector_box.SetMaxSize(inspector_min_size)
 
         # Keep backward compatibility references (delegate to image service via controller)
         self.image_cache = self.controller.image_service.image_cache
