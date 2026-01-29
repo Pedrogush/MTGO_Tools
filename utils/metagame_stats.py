@@ -74,16 +74,16 @@ def update_mtgo_deck_cache(
         snapshot = snapshots.get(snapshot_key)
         if snapshot and now.timestamp() - snapshot.get("updated_at", 0) < 60 * 30:
             return snapshot.get("decks", [])
-    
+
         existing_events = cache.get("events", {})
         aggregated: list[dict[str, Any]] = []
-    
+
         months: set[tuple[int, int]] = set()
         probe = start
         while probe <= now:
             months.add((probe.year, probe.month))
             probe += timedelta(days=1)
-    
+
         seen_urls: set[str] = set()
         total_events = 0
         for year, month in sorted(months):
@@ -92,7 +92,7 @@ def update_mtgo_deck_cache(
             except Exception as exc:
                 logger.error(f"Failed to fetch MTGO decklist index {year}-{month:02d}: {exc}")
                 continue
-    
+
             entry_by_url: dict[str, dict[str, Any]] = {}
             entry_payloads: dict[str, Any] = {}
             pending_entries: dict[str, dict[str, Any]] = {}
@@ -120,7 +120,7 @@ def update_mtgo_deck_cache(
                 else:
                     entry_payloads[url] = payload
                 entry_by_url[url] = entry
-    
+
             if pending_entries:
                 max_workers = min(5, len(pending_entries))
                 with ThreadPoolExecutor(max_workers=max_workers) as executor:
@@ -136,7 +136,7 @@ def update_mtgo_deck_cache(
                             continue
                         entry_payloads[url] = payload
                         existing_events[url] = payload
-    
+
             for url, entry in entry_by_url.items():
                 payload = entry_payloads.get(url)
                 if not payload:
@@ -168,10 +168,10 @@ def update_mtgo_deck_cache(
                 total_events += 1
                 if max_events and total_events >= max_events:
                     break
-    
+
             if max_events and total_events >= max_events:
                 break
-    
+
         if aggregated:
             classifier = ArchetypeClassifier()
             target_formats: set[str] = set()
@@ -184,7 +184,7 @@ def update_mtgo_deck_cache(
                     classifier.assign_archetypes(aggregated, format_name)
                 except Exception as exc:  # noqa: BLE001
                     logger.error(f"Failed to classify archetypes for {format_name}: {exc}")
-    
+
             for deck in aggregated:
                 archetype = (deck.get("archetype") or "").strip()
                 event_label = (deck.get("event_name") or "").strip()
@@ -192,7 +192,7 @@ def update_mtgo_deck_cache(
                     deck["archetype"] = "Unknown"
                 elif event_label and archetype.lower() == event_label.lower():
                     deck["archetype"] = "Unknown"
-    
+
         snapshots[snapshot_key] = {
             "updated_at": time.time(),
             "decks": aggregated,

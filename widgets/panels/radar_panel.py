@@ -7,8 +7,8 @@ Shows mainboard and sideboard card frequencies with inclusion rates and expected
 from __future__ import annotations
 
 import threading
-from pathlib import Path
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 import wx

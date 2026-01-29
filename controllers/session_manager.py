@@ -6,6 +6,7 @@ from typing import Any
 
 from loguru import logger
 
+from utils.atomic_io import atomic_write_json, locked_path
 from utils.constants import (
     CONFIG_FILE,
     DECK_SELECTOR_SETTINGS_FILE,
@@ -13,7 +14,6 @@ from utils.constants import (
     FORMAT_OPTIONS,
 )
 from utils.deck import sanitize_zone_cards
-from utils.atomic_io import atomic_write_json, locked_path
 
 
 class DeckSelectorSessionManager:

@@ -13,13 +13,13 @@ from loguru import logger
 
 from navigators.mtgo_decklists import fetch_deck_event, fetch_decklist_index
 from utils.archetype_classifier import ArchetypeClassifier
+from utils.atomic_io import atomic_write_json, locked_path
 from utils.constants import (
     MTGO_BACKGROUND_FETCH_DAYS,
     MTGO_BACKGROUND_FETCH_DELAY_SECONDS,
     MTGO_DECKLISTS_ENABLED,
     MTGO_METADATA_CACHE_FILE,
 )
-from utils.atomic_io import atomic_write_json, locked_path
 from utils.deck_text_cache import get_deck_cache
 
 MTGO_METADATA_CACHE = MTGO_METADATA_CACHE_FILE

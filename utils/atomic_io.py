@@ -6,10 +6,10 @@ import json
 import os
 import tempfile
 import threading
+from collections.abc import Iterable, Iterator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Iterable, Iterator
-
+from typing import Any
 
 _lock_registry: dict[Path, threading.RLock] = {}
 _lock_registry_lock = threading.Lock()

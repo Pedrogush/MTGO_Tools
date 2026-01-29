@@ -17,7 +17,6 @@ import pymongo
 from loguru import logger
 
 from utils.atomic_io import atomic_write_json, atomic_write_text, locked_path
-
 from utils.constants import (
     CACHE_DIR,
     CURR_DECK_FILE,
