@@ -23,6 +23,7 @@ from utils.constants import (
     PADDING_SM,
     SUBDUED_TEXT,
 )
+from utils.deck_action_coordinator import DeckActionCoordinator
 from utils.deck_renderer import DeckRenderer
 from utils.mana_icon_factory import ManaIconFactory
 from utils.session_ui_coordinator import SessionUICoordinator
@@ -75,6 +76,11 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
         self.child_windows = ChildWindowManager(self)
         self.theme_config = UIThemeConfig()
         self.session_coordinator = SessionUICoordinator(self)
+        self.deck_action_coordinator = DeckActionCoordinator(
+            controller=self.controller,
+            get_zone_cards=lambda: self.zone_cards,
+            on_status=self._set_status,
+        )
         self.mana_icons = ManaIconFactory()
         self.mana_keyboard_window: ManaKeyboardFrame | None = None
         self._inspector_hover_timer: wx.Timer | None = None
