@@ -52,6 +52,7 @@ from widgets.ui_theme_config import UIThemeConfig
 class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, wx.Frame):
     """wxPython-based metagame research + deck builder UI."""
 
+    # ---------------------- Initialization ----------------------
     def __init__(
         self,
         controller: "AppController",
@@ -59,11 +60,12 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
     ):
         super().__init__(parent, title="MTGO Deck Research & Builder", size=APP_FRAME_SIZE)
 
-        # Store controller reference - ALL state and business logic goes through this
+        # Controller reference - ALL state and business logic goes through this
         self.controller: AppController = controller
         self.card_data_dialogs_disabled = False
         self._builder_search_pending = False
 
+        # UI component references
         self.sideboard_guide_entries: list[dict[str, str]] = []
         self.sideboard_exclusions: list[str] = []
         self.active_inspector_zone: str | None = None
@@ -72,6 +74,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
         self.builder_panel: DeckBuilderPanel | None = None
         self.out_table: CardTablePanel | None = None
 
+        # Manager and coordinator instances
         self.window_persistence = WindowPersistenceManager(self, self.controller)
         self.child_windows = ChildWindowManager(self)
         self.theme_config = UIThemeConfig()
@@ -83,21 +86,25 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
         )
         self.mana_icons = ManaIconFactory()
         self.mana_keyboard_window: ManaKeyboardFrame | None = None
+
+        # Internal state
         self._inspector_hover_timer: wx.Timer | None = None
         self._pending_hover: tuple[str, dict[str, Any]] | None = None
         self._pending_deck_restore: bool = False
 
+        # Build UI and initialize window
         self._build_ui()
         self._apply_window_preferences()
         self.SetMinSize(APP_FRAME_MIN_SIZE)
         self.Centre(wx.BOTH)
 
+        # Event bindings
         self.Bind(wx.EVT_CLOSE, self.on_close)
         self.Bind(wx.EVT_SIZE, self.on_window_change)
         self.Bind(wx.EVT_MOVE, self.on_window_change)
         self.Bind(wx.EVT_CHAR_HOOK, self._on_hotkey)
 
-    # ------------------------------------------------------------------ UI ------------------------------------------------------------------
+    # ---------------------- UI Construction ----------------------
     def _build_ui(self) -> None:
         """Build the main UI structure."""
         self.SetBackgroundColour(DARK_BG)
@@ -376,7 +383,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
             self.collection_status_label, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_SM
         )
 
-    # ------------------------------------------------------------------ Left panel helpers -------------------------------------------------
+    # ---------------------- Left Panel Helpers ----------------------
     def _show_left_panel(self, mode: str, force: bool = False) -> None:
         target = "builder" if mode == "builder" else "research"
         if self.left_stack:
@@ -413,12 +420,16 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
     def _restore_session_state(self) -> None:
         self.session_coordinator.restore_session_state()
 
+    # ---------------------- State Management ----------------------
     def _set_status(self, message: str) -> None:
         if self.status_bar:
             self.status_bar.SetStatusText(message)
         logger.info(message)
 
-    # ------------------------------------------------------------------ Window persistence ---------------------------------------------------
+    def _restore_session_state(self) -> None:
+        self.session_coordinator.restore_session_state()
+
+    # ---------------------- Window Persistence ----------------------
     def _save_window_settings(self) -> None:
         self.window_persistence.save_now()
 
@@ -428,6 +439,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
     def _schedule_settings_save(self) -> None:
         self.window_persistence.schedule_save()
 
+    # ---------------------- Data Operations ----------------------
     def fetch_archetypes(self, force: bool = False) -> None:
         self.research_panel.set_loading_state()
         self.controller.deck_repo.clear_decks_list()
