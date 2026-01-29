@@ -835,40 +835,10 @@ def _collect_face_aliases(card: dict[str, Any], display_name: str) -> set[str]:
     return {alias for alias in aliases if alias.lower() != display_key}
 
 
-def _load_printing_index_payload() -> dict[str, Any] | None:
-    """Load the cached card printings index if available."""
-    if not PRINTING_INDEX_CACHE.exists():
-        return None
-    try:
-        with locked_path(PRINTING_INDEX_CACHE):
-            with PRINTING_INDEX_CACHE.open("r", encoding="utf-8") as fh:
-                payload = json.load(fh)
-    except Exception as exc:
-        logger.warning(f"Failed to read printings index cache: {exc}")
-        return None
-    if payload.get("version") != PRINTING_INDEX_VERSION:
-        logger.info("Discarding printings index cache due to version mismatch")
-        return None
-    return payload
-
-
-def ensure_printing_index_cache(force: bool = False) -> dict[str, Any]:
-    """Ensure a compact card printings index exists for fast wx lookups."""
-    IMAGE_CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    existing = None if force else _load_printing_index_payload()
-    bulk_mtime = BULK_DATA_CACHE.stat().st_mtime if BULK_DATA_CACHE.exists() else None
-
-    if existing and (bulk_mtime is None or existing.get("bulk_mtime", 0) >= bulk_mtime):
-        return existing
-
-    if bulk_mtime is None:
-        raise FileNotFoundError("Bulk data cache not found; cannot build printings index")
-
-    logger.info("Building card printings index from bulk data…")
-    with locked_path(BULK_DATA_CACHE):
-        with BULK_DATA_CACHE.open("r", encoding="utf-8") as fh:
-            cards = json.load(fh)
-
+def build_printing_index(
+    cards: list[dict[str, Any]],
+) -> tuple[dict[str, list[dict[str, Any]]], dict[str, int]]:
+    """Build a compact printing index from bulk card data."""
     by_name: dict[str, list[dict[str, Any]]] = {}
     total_printings = 0
     for card in cards:
@@ -895,12 +865,60 @@ def ensure_printing_index_cache(force: bool = False) -> dict[str, Any]:
     for entries in by_name.values():
         entries.sort(key=lambda c: c.get("released_at") or "", reverse=True)
 
+    stats = {
+        "unique_names": len(by_name),
+        "total_printings": total_printings,
+    }
+    return by_name, stats
+
+
+def _load_printing_index_payload() -> dict[str, Any] | None:
+    """Load the cached card printings index if available."""
+    if not PRINTING_INDEX_CACHE.exists():
+        return None
+    try:
+        with locked_path(PRINTING_INDEX_CACHE):
+            with PRINTING_INDEX_CACHE.open("r", encoding="utf-8") as fh:
+                payload = json.load(fh)
+    except Exception as exc:
+        logger.warning(f"Failed to read printings index cache: {exc}")
+        return None
+    if payload.get("version") != PRINTING_INDEX_VERSION:
+        logger.info("Discarding printings index cache due to version mismatch")
+        return None
+    return payload
+
+
+def load_printing_index_payload() -> dict[str, Any] | None:
+    """Load the cached card printings index without rebuilding it."""
+    return _load_printing_index_payload()
+
+
+def ensure_printing_index_cache(force: bool = False) -> dict[str, Any]:
+    """Ensure a compact card printings index exists for fast wx lookups."""
+    IMAGE_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    existing = None if force else _load_printing_index_payload()
+    bulk_mtime = BULK_DATA_CACHE.stat().st_mtime if BULK_DATA_CACHE.exists() else None
+
+    if existing and (bulk_mtime is None or existing.get("bulk_mtime", 0) >= bulk_mtime):
+        return existing
+
+    if bulk_mtime is None:
+        raise FileNotFoundError("Bulk data cache not found; cannot build printings index")
+
+    logger.info("Building card printings index from bulk data…")
+    with locked_path(BULK_DATA_CACHE):
+        with BULK_DATA_CACHE.open("r", encoding="utf-8") as fh:
+            cards = json.load(fh)
+
+    by_name, stats = build_printing_index(cards)
+
     payload = {
         "version": PRINTING_INDEX_VERSION,
         "generated_at": datetime.now(UTC).isoformat(),
         "bulk_mtime": bulk_mtime,
-        "unique_names": len(by_name),
-        "total_printings": total_printings,
+        "unique_names": stats["unique_names"],
+        "total_printings": stats["total_printings"],
         "data": by_name,
     }
 
@@ -978,10 +996,12 @@ __all__ = [
     "CardImageCache",
     "CardImageRequest",
     "BulkImageDownloader",
+    "build_printing_index",
     "PRINTING_INDEX_CACHE",
     "get_cache",
     "get_card_image",
     "download_bulk_images",
     "get_cache_stats",
     "ensure_printing_index_cache",
+    "load_printing_index_payload",
 ]

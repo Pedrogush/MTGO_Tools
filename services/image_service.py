@@ -18,11 +18,18 @@ from loguru import logger
 
 from utils.card_images import (
     BULK_DATA_CACHE,
+    PRINTING_INDEX_CACHE,
+    PRINTING_INDEX_VERSION,
     BulkImageDownloader,
     CardImageRequest,
-    ensure_printing_index_cache,
     get_cache,
+    load_printing_index_payload,
 )
+from utils.card_images_workers import (
+    build_printing_index_worker,
+    download_bulk_metadata_worker,
+)
+from utils.process_worker import ProcessHandle, ProcessWorker
 
 
 class CardImageDownloadQueue:
@@ -188,10 +195,20 @@ class ImageService:
         self._printings_lock = threading.Lock()
         self._printings_inflight: set[str] = set()
         self._on_printings_loaded: Callable[[str, list[dict[str, Any]]], None] | None = None
+        self._process_worker = ProcessWorker()
+        self._bulk_download_handle: ProcessHandle | None = None
+        self._printings_handle: ProcessHandle | None = None
 
     def shutdown(self) -> None:
         """Stop background services owned by the image service."""
         self._download_queue.stop()
+        if self._bulk_download_handle:
+            self._process_worker.terminate(self._bulk_download_handle)
+            self._bulk_download_handle = None
+        if self._printings_handle:
+            self._process_worker.terminate(self._printings_handle)
+            self._printings_handle = None
+        self._process_worker.terminate_all()
 
     def set_image_download_callback(
         self, callback: Callable[[CardImageRequest], None] | None
@@ -312,21 +329,33 @@ class ImageService:
             on_error: Callback for failed download (receives error message)
             force: Force download even if vendor metadata matches cache
         """
-        if self.image_downloader is None:
-            self.image_downloader = BulkImageDownloader(self.image_cache)
+        if self._bulk_download_handle and self._bulk_download_handle.process.is_alive():
+            logger.debug("Bulk data download already running")
+            return
 
-        def worker():
-            try:
-                success, msg = self.image_downloader.download_bulk_metadata(force=force)
-                if success:
-                    on_success(msg)
-                else:
-                    on_error(msg)
-            except Exception as exc:
-                logger.exception("Failed to download bulk data")
-                on_error(str(exc))
+        def _on_success(result: dict[str, Any]) -> None:
+            msg = result.get("message", "Bulk data downloaded")
+            on_success(msg)
 
-        threading.Thread(target=worker, daemon=True).start()
+        def _on_error(msg: str) -> None:
+            on_error(msg)
+
+        try:
+            self._bulk_download_handle = self._process_worker.run_async(
+                target=download_bulk_metadata_worker,
+                args=(),
+                kwargs={
+                    "cache_dir": str(self.image_cache.cache_dir),
+                    "db_path": str(self.image_cache.db_path),
+                    "force": force,
+                },
+                on_success=_on_success,
+                on_error=_on_error,
+                call_after=self._call_after,
+            )
+        except Exception as exc:
+            logger.exception("Failed to start bulk metadata process")
+            on_error(str(exc))
 
     def ensure_data_ready(
         self,
@@ -498,22 +527,59 @@ class ImageService:
 
         self.printing_index_loading = True
 
-        def worker():
-            try:
-                payload = ensure_printing_index_cache(force=force)
-                data = payload.get("data", {})
-                stats = {
-                    "unique_names": payload.get("unique_names", len(data)),
-                    "total_printings": payload.get(
-                        "total_printings", sum(len(v) for v in data.values())
-                    ),
-                }
-                on_success(data, stats)
-            except Exception as exc:
-                logger.exception("Failed to prepare card printings index")
-                on_error(str(exc))
+        existing = None if force else load_printing_index_payload()
+        bulk_mtime = BULK_DATA_CACHE.stat().st_mtime if BULK_DATA_CACHE.exists() else None
+        if existing and (bulk_mtime is None or existing.get("bulk_mtime", 0) >= bulk_mtime):
+            data = existing.get("data", {})
+            stats = {
+                "unique_names": existing.get("unique_names", len(data)),
+                "total_printings": existing.get(
+                    "total_printings", sum(len(v) for v in data.values())
+                ),
+            }
+            on_success(data, stats)
+            return True
 
-        threading.Thread(target=worker, daemon=True).start()
+        if self._printings_handle and self._printings_handle.process.is_alive():
+            logger.debug("Printing index process already running")
+            return False
+
+        def _on_success(result: dict[str, Any]) -> None:
+            payload = load_printing_index_payload()
+            if not payload:
+                on_error("Printings index cache missing after build.")
+                return
+            data = payload.get("data", {})
+            stats = {
+                "unique_names": payload.get("unique_names", len(data)),
+                "total_printings": payload.get(
+                    "total_printings", sum(len(v) for v in data.values())
+                ),
+            }
+            on_success(data, stats)
+
+        def _on_error(msg: str) -> None:
+            on_error(msg)
+
+        try:
+            self._printings_handle = self._process_worker.run_async(
+                target=build_printing_index_worker,
+                args=(),
+                kwargs={
+                    "bulk_data_path": str(BULK_DATA_CACHE),
+                    "printings_path": str(PRINTING_INDEX_CACHE),
+                    "printings_version": PRINTING_INDEX_VERSION,
+                },
+                on_success=_on_success,
+                on_error=_on_error,
+                call_after=self._call_after,
+            )
+        except Exception as exc:
+            logger.exception("Failed to start printings index process")
+            on_error(str(exc))
+            self.printing_index_loading = False
+            return False
+
         return True
 
     def set_bulk_data(self, bulk_data: dict[str, list[dict[str, Any]]]) -> None:
