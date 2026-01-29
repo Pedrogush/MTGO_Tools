@@ -16,6 +16,7 @@ from typing import Any
 import pymongo
 from loguru import logger
 
+from utils.atomic_io import atomic_write_json, atomic_write_text, locked_path
 from utils.constants import (
     CACHE_DIR,
     CURR_DECK_FILE,
@@ -247,14 +248,13 @@ class DeckRepository:
         candidates = [CURR_DECK_FILE, LEGACY_CURR_DECK_CACHE, LEGACY_CURR_DECK_ROOT]
         for candidate in candidates:
             if candidate.exists():
-                with candidate.open("r", encoding="utf-8") as fh:
-                    contents = fh.read()
+                with locked_path(candidate):
+                    with candidate.open("r", encoding="utf-8") as fh:
+                        contents = fh.read()
                 # Migrate from legacy locations
                 if candidate != CURR_DECK_FILE:
                     try:
-                        CURR_DECK_FILE.parent.mkdir(parents=True, exist_ok=True)
-                        with CURR_DECK_FILE.open("w", encoding="utf-8") as target:
-                            target.write(contents)
+                        atomic_write_text(CURR_DECK_FILE, contents)
                         try:
                             candidate.unlink()
                         except OSError:
@@ -293,8 +293,7 @@ class DeckRepository:
             file_path = directory / f"{safe_name}_{counter}.txt"
             counter += 1
 
-        with file_path.open("w", encoding="utf-8") as f:
-            f.write(deck_content)
+        atomic_write_text(file_path, deck_content)
 
         logger.info(f"Saved deck to file: {file_path}")
         return file_path
@@ -514,8 +513,9 @@ class DeckRepository:
         if not path.exists():
             return {}
         try:
-            with path.open("r", encoding="utf-8") as f:
-                return json.load(f)
+            with locked_path(path):
+                with path.open("r", encoding="utf-8") as f:
+                    return json.load(f)
         except (json.JSONDecodeError, OSError) as exc:
             logger.warning(f"Failed to load {path}: {exc}")
             return {}
@@ -523,9 +523,7 @@ class DeckRepository:
     def _save_json_store(self, path: Path, data: dict[str, Any]) -> None:
         """Save JSON data to a file store."""
         try:
-            path.parent.mkdir(parents=True, exist_ok=True)
-            with path.open("w", encoding="utf-8") as f:
-                json.dump(data, f, indent=2)
+            atomic_write_json(path, data, indent=2)
         except OSError as exc:
             logger.error(f"Failed to save {path}: {exc}")
 

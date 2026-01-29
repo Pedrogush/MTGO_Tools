@@ -3,6 +3,7 @@ from pathlib import Path
 from loguru import logger
 
 from utils import constants
+from utils.atomic_io import atomic_write_text, locked_path
 
 LEGACY_CURR_DECK_CACHE = Path("cache") / "curr_deck.txt"
 LEGACY_CURR_DECK_ROOT = Path("curr_deck.txt")
@@ -133,13 +134,12 @@ def read_curr_deck_file() -> str:
     candidates = [curr_deck_file, LEGACY_CURR_DECK_CACHE, LEGACY_CURR_DECK_ROOT]
     for candidate in candidates:
         if candidate.exists():
-            with candidate.open("r", encoding="utf-8") as fh:
-                contents = fh.read()
+            with locked_path(candidate):
+                with candidate.open("r", encoding="utf-8") as fh:
+                    contents = fh.read()
             if candidate != curr_deck_file:
                 try:
-                    curr_deck_file.parent.mkdir(parents=True, exist_ok=True)
-                    with curr_deck_file.open("w", encoding="utf-8") as target:
-                        target.write(contents)
+                    atomic_write_text(curr_deck_file, contents)
                     try:
                         candidate.unlink()
                     except OSError:

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import threading
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 import wx
@@ -15,6 +16,7 @@ import wx.dataview as dv
 from loguru import logger
 
 from services.radar_service import CardFrequency, RadarData, RadarService, get_radar_service
+from utils.atomic_io import atomic_write_text
 from utils.constants import DARK_ALT, DARK_PANEL, LIGHT_TEXT
 
 
@@ -484,8 +486,7 @@ class RadarDialog(wx.Dialog):
                 ) as fileDialog:
                     if fileDialog.ShowModal() == wx.ID_OK:
                         path = fileDialog.GetPath()
-                        with open(path, "w", encoding="utf-8") as f:
-                            f.write(decklist)
+                        atomic_write_text(Path(path), decklist)
                         logger.info(f"Radar exported to {path}")
 
             except ValueError as exc:

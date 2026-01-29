@@ -14,6 +14,7 @@ from loguru import logger
 
 from navigators.mtgo_decklists import fetch_deck_event, fetch_decklist_index
 from utils.archetype_classifier import ArchetypeClassifier
+from utils.atomic_io import atomic_write_json, locked_path
 from utils.constants import MTGO_DECK_CACHE_FILE, MTGO_DECKLISTS_ENABLED
 
 try:
@@ -28,17 +29,16 @@ def _load_cache() -> dict[str, Any]:
     if not MTGO_DECK_CACHE_FILE.exists():
         return {}
     try:
-        with MTGO_DECK_CACHE_FILE.open("r", encoding="utf-8") as fh:
-            return json.load(fh)
+        with locked_path(MTGO_DECK_CACHE_FILE):
+            with MTGO_DECK_CACHE_FILE.open("r", encoding="utf-8") as fh:
+                return json.load(fh)
     except json.JSONDecodeError as exc:
         logger.warning(f"Invalid deck cache JSON: {exc}")
         return {}
 
 
 def _save_cache(cache: dict[str, Any]) -> None:
-    MTGO_DECK_CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
-    with MTGO_DECK_CACHE_FILE.open("w", encoding="utf-8") as fh:
-        json.dump(cache, fh, indent=2)
+    atomic_write_json(MTGO_DECK_CACHE_FILE, cache, indent=2)
 
 
 def _parse_iso(date_str: str | None) -> datetime | None:
@@ -67,139 +67,140 @@ def update_mtgo_deck_cache(
     now = datetime.now(UTC)
     start = now - timedelta(days=days)
 
-    cache = _load_cache()
-    snapshots = cache.setdefault("snapshots", {})
-    snapshot_key = f"{(fmt or 'all').lower()}::{days}"
-    snapshot = snapshots.get(snapshot_key)
-    if snapshot and now.timestamp() - snapshot.get("updated_at", 0) < 60 * 30:
-        return snapshot.get("decks", [])
+    with locked_path(MTGO_DECK_CACHE_FILE):
+        cache = _load_cache()
+        snapshots = cache.setdefault("snapshots", {})
+        snapshot_key = f"{(fmt or 'all').lower()}::{days}"
+        snapshot = snapshots.get(snapshot_key)
+        if snapshot and now.timestamp() - snapshot.get("updated_at", 0) < 60 * 30:
+            return snapshot.get("decks", [])
 
-    existing_events = cache.get("events", {})
-    aggregated: list[dict[str, Any]] = []
+        existing_events = cache.get("events", {})
+        aggregated: list[dict[str, Any]] = []
 
-    months: set[tuple[int, int]] = set()
-    probe = start
-    while probe <= now:
-        months.add((probe.year, probe.month))
-        probe += timedelta(days=1)
+        months: set[tuple[int, int]] = set()
+        probe = start
+        while probe <= now:
+            months.add((probe.year, probe.month))
+            probe += timedelta(days=1)
 
-    seen_urls: set[str] = set()
-    total_events = 0
-    for year, month in sorted(months):
-        try:
-            entries = fetch_decklist_index(year, month)
-        except Exception as exc:
-            logger.error(f"Failed to fetch MTGO decklist index {year}-{month:02d}: {exc}")
-            continue
-
-        entry_by_url: dict[str, dict[str, Any]] = {}
-        entry_payloads: dict[str, Any] = {}
-        pending_entries: dict[str, dict[str, Any]] = {}
-        for entry in entries:
-            if max_events and (total_events + len(entry_by_url)) >= max_events:
-                break
-            if fmt:
-                entry_fmt = (entry.get("format") or "").lower()
-                if entry_fmt and entry_fmt != fmt.lower():
-                    continue
-            publish_date = _parse_iso(entry.get("publish_date"))
-            if not publish_date:
+        seen_urls: set[str] = set()
+        total_events = 0
+        for year, month in sorted(months):
+            try:
+                entries = fetch_decklist_index(year, month)
+            except Exception as exc:
+                logger.error(f"Failed to fetch MTGO decklist index {year}-{month:02d}: {exc}")
                 continue
-            if publish_date.tzinfo is None:
-                publish_date = publish_date.replace(tzinfo=UTC)
-            if not (start <= publish_date <= now):
-                continue
-            url = entry.get("url")
-            if not url or url in seen_urls:
-                continue
-            seen_urls.add(url)
-            payload = existing_events.get(url)
-            if payload is None:
-                pending_entries[url] = entry
-            else:
-                entry_payloads[url] = payload
-            entry_by_url[url] = entry
 
-        if pending_entries:
-            max_workers = min(5, len(pending_entries))
-            with ThreadPoolExecutor(max_workers=max_workers) as executor:
-                future_map = {
-                    executor.submit(fetch_deck_event, url): url for url in pending_entries
-                }
-                for future in as_completed(future_map):
-                    url = future_map[future]
-                    try:
-                        payload = future.result()
-                    except Exception as exc:
-                        logger.error(f"Failed to fetch deck event {url}: {exc}")
+            entry_by_url: dict[str, dict[str, Any]] = {}
+            entry_payloads: dict[str, Any] = {}
+            pending_entries: dict[str, dict[str, Any]] = {}
+            for entry in entries:
+                if max_events and (total_events + len(entry_by_url)) >= max_events:
+                    break
+                if fmt:
+                    entry_fmt = (entry.get("format") or "").lower()
+                    if entry_fmt and entry_fmt != fmt.lower():
                         continue
+                publish_date = _parse_iso(entry.get("publish_date"))
+                if not publish_date:
+                    continue
+                if publish_date.tzinfo is None:
+                    publish_date = publish_date.replace(tzinfo=UTC)
+                if not (start <= publish_date <= now):
+                    continue
+                url = entry.get("url")
+                if not url or url in seen_urls:
+                    continue
+                seen_urls.add(url)
+                payload = existing_events.get(url)
+                if payload is None:
+                    pending_entries[url] = entry
+                else:
                     entry_payloads[url] = payload
-                    existing_events[url] = payload
+                entry_by_url[url] = entry
 
-        for url, entry in entry_by_url.items():
-            payload = entry_payloads.get(url)
-            if not payload:
-                continue
-            publish_date = _parse_iso(entry.get("publish_date")) or now
-            if publish_date.tzinfo is None:
-                publish_date = publish_date.replace(tzinfo=UTC)
-            event_name = payload.get("name") or entry.get("title")
-            decks = payload.get("decklists", [])
-            for deck in decks:
-                mainboard = _convert_cards(deck.get("main_deck", []))
-                sideboard = _convert_cards(deck.get("sideboard_deck", []))
-                archetype = deck.get("archetype") or entry.get("title")
-                final_format = entry.get("format") or fmt or "Unknown"
-                aggregated.append(
-                    {
-                        "event_url": url,
-                        "event_name": event_name,
-                        "publish_date": publish_date.isoformat(),
-                        "event_type": entry.get("event_type"),
-                        "format": final_format,
-                        "deck_name": archetype,
-                        "player": deck.get("player"),
-                        "archetype": archetype,
-                        "mainboard": mainboard,
-                        "sideboard": sideboard,
+            if pending_entries:
+                max_workers = min(5, len(pending_entries))
+                with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                    future_map = {
+                        executor.submit(fetch_deck_event, url): url for url in pending_entries
                     }
-                )
-            total_events += 1
+                    for future in as_completed(future_map):
+                        url = future_map[future]
+                        try:
+                            payload = future.result()
+                        except Exception as exc:
+                            logger.error(f"Failed to fetch deck event {url}: {exc}")
+                            continue
+                        entry_payloads[url] = payload
+                        existing_events[url] = payload
+
+            for url, entry in entry_by_url.items():
+                payload = entry_payloads.get(url)
+                if not payload:
+                    continue
+                publish_date = _parse_iso(entry.get("publish_date")) or now
+                if publish_date.tzinfo is None:
+                    publish_date = publish_date.replace(tzinfo=UTC)
+                event_name = payload.get("name") or entry.get("title")
+                decks = payload.get("decklists", [])
+                for deck in decks:
+                    mainboard = _convert_cards(deck.get("main_deck", []))
+                    sideboard = _convert_cards(deck.get("sideboard_deck", []))
+                    archetype = deck.get("archetype") or entry.get("title")
+                    final_format = entry.get("format") or fmt or "Unknown"
+                    aggregated.append(
+                        {
+                            "event_url": url,
+                            "event_name": event_name,
+                            "publish_date": publish_date.isoformat(),
+                            "event_type": entry.get("event_type"),
+                            "format": final_format,
+                            "deck_name": archetype,
+                            "player": deck.get("player"),
+                            "archetype": archetype,
+                            "mainboard": mainboard,
+                            "sideboard": sideboard,
+                        }
+                    )
+                total_events += 1
+                if max_events and total_events >= max_events:
+                    break
+
             if max_events and total_events >= max_events:
                 break
 
-        if max_events and total_events >= max_events:
-            break
+        if aggregated:
+            classifier = ArchetypeClassifier()
+            target_formats: set[str] = set()
+            if fmt:
+                target_formats.add(fmt)
+            else:
+                target_formats = {deck.get("format") for deck in aggregated if deck.get("format")}
+            for format_name in sorted(filter(None, target_formats)):
+                try:
+                    classifier.assign_archetypes(aggregated, format_name)
+                except Exception as exc:  # noqa: BLE001
+                    logger.error(f"Failed to classify archetypes for {format_name}: {exc}")
 
-    if aggregated:
-        classifier = ArchetypeClassifier()
-        target_formats: set[str] = set()
-        if fmt:
-            target_formats.add(fmt)
-        else:
-            target_formats = {deck.get("format") for deck in aggregated if deck.get("format")}
-        for format_name in sorted(filter(None, target_formats)):
-            try:
-                classifier.assign_archetypes(aggregated, format_name)
-            except Exception as exc:  # noqa: BLE001
-                logger.error(f"Failed to classify archetypes for {format_name}: {exc}")
+            for deck in aggregated:
+                archetype = (deck.get("archetype") or "").strip()
+                event_label = (deck.get("event_name") or "").strip()
+                if not archetype:
+                    deck["archetype"] = "Unknown"
+                elif event_label and archetype.lower() == event_label.lower():
+                    deck["archetype"] = "Unknown"
 
-        for deck in aggregated:
-            archetype = (deck.get("archetype") or "").strip()
-            event_label = (deck.get("event_name") or "").strip()
-            if not archetype:
-                deck["archetype"] = "Unknown"
-            elif event_label and archetype.lower() == event_label.lower():
-                deck["archetype"] = "Unknown"
-
-    snapshots[snapshot_key] = {
-        "updated_at": time.time(),
-        "decks": aggregated,
-    }
-    cache["snapshots"] = snapshots
-    cache["events"] = existing_events
-    _save_cache(cache)
-    return aggregated
+        snapshots[snapshot_key] = {
+            "updated_at": time.time(),
+            "decks": aggregated,
+        }
+        cache["snapshots"] = snapshots
+        cache["events"] = existing_events
+        _save_cache(cache)
+        return aggregated
 
 
 def load_aggregated_decks() -> list[dict[str, Any]]:

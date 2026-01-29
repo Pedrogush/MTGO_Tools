@@ -13,6 +13,7 @@ from loguru import logger
 
 from navigators.mtgo_decklists import fetch_deck_event, fetch_decklist_index
 from utils.archetype_classifier import ArchetypeClassifier
+from utils.atomic_io import atomic_write_json, locked_path
 from utils.constants import (
     MTGO_BACKGROUND_FETCH_DAYS,
     MTGO_BACKGROUND_FETCH_DELAY_SECONDS,
@@ -113,27 +114,26 @@ def save_mtgo_deck_metadata(archetype: str, mtg_format: str, deck_metadata: dict
     cache_key = f"{mtg_format}:{archetype}"
 
     try:
-        if MTGO_METADATA_CACHE.exists():
-            try:
-                with MTGO_METADATA_CACHE.open("r", encoding="utf-8") as fh:
-                    data = json.load(fh)
-            except json.JSONDecodeError:
-                logger.warning("MTGO metadata cache invalid JSON; resetting file")
+        with locked_path(MTGO_METADATA_CACHE):
+            if MTGO_METADATA_CACHE.exists():
+                try:
+                    with MTGO_METADATA_CACHE.open("r", encoding="utf-8") as fh:
+                        data = json.load(fh)
+                except json.JSONDecodeError:
+                    logger.warning("MTGO metadata cache invalid JSON; resetting file")
+                    data = {}
+            else:
                 data = {}
-        else:
-            data = {}
 
-        if cache_key not in data:
-            data[cache_key] = []
+            if cache_key not in data:
+                data[cache_key] = []
 
-        deck_id = deck_metadata.get("number")
-        existing_ids = {d.get("number") for d in data[cache_key]}
-        if deck_id not in existing_ids:
-            data[cache_key].append(deck_metadata)
+            deck_id = deck_metadata.get("number")
+            existing_ids = {d.get("number") for d in data[cache_key]}
+            if deck_id not in existing_ids:
+                data[cache_key].append(deck_metadata)
 
-        MTGO_METADATA_CACHE.parent.mkdir(parents=True, exist_ok=True)
-        with MTGO_METADATA_CACHE.open("w", encoding="utf-8") as fh:
-            json.dump(data, fh, indent=2)
+            atomic_write_json(MTGO_METADATA_CACHE, data, indent=2)
 
     except Exception as exc:
         logger.error(f"Failed to save MTGO deck metadata: {exc}")
@@ -161,8 +161,9 @@ def load_mtgo_deck_metadata(archetype: str, mtg_format: str) -> list[dict]:
             return []
 
         try:
-            with MTGO_METADATA_CACHE.open("r", encoding="utf-8") as fh:
-                data = json.load(fh)
+            with locked_path(MTGO_METADATA_CACHE):
+                with MTGO_METADATA_CACHE.open("r", encoding="utf-8") as fh:
+                    data = json.load(fh)
         except json.JSONDecodeError:
             logger.warning("MTGO metadata cache invalid JSON; returning empty results")
             return []

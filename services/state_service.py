@@ -7,6 +7,7 @@ from typing import Any
 from loguru import logger
 
 from utils import constants
+from utils.atomic_io import atomic_write_json, locked_path
 from utils.deck import sanitize_zone_cards
 
 
@@ -20,17 +21,16 @@ class StateService:
         if not self.settings_path.exists():
             return {}
         try:
-            with self.settings_path.open("r", encoding="utf-8") as fh:
-                return json.load(fh)
+            with locked_path(self.settings_path):
+                with self.settings_path.open("r", encoding="utf-8") as fh:
+                    return json.load(fh)
         except json.JSONDecodeError as exc:  # pragma: no cover - defensive logging
             logger.warning(f"Failed to load deck selector settings: {exc}")
             return {}
 
     def save(self, data: dict[str, Any]) -> None:
         try:
-            self.settings_path.parent.mkdir(parents=True, exist_ok=True)
-            with self.settings_path.open("w", encoding="utf-8") as fh:
-                json.dump(data, fh, indent=2)
+            atomic_write_json(self.settings_path, data, indent=2)
         except OSError as exc:  # pragma: no cover - defensive logging
             logger.warning(f"Unable to persist deck selector settings: {exc}")
 

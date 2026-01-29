@@ -6,6 +6,7 @@ from typing import Any
 
 from loguru import logger
 
+from utils.atomic_io import atomic_write_json, locked_path
 from utils.constants import (
     CONFIG_FILE,
     DECK_SELECTOR_SETTINGS_FILE,
@@ -39,8 +40,9 @@ class DeckSelectorSessionManager:
         if not path.exists():
             return {}
         try:
-            with path.open("r", encoding="utf-8") as fh:
-                return json.load(fh)
+            with locked_path(path):
+                with path.open("r", encoding="utf-8") as fh:
+                    return json.load(fh)
         except json.JSONDecodeError as exc:
             logger.warning(f"Invalid JSON at {path}: {exc}")
             return {}
@@ -80,10 +82,8 @@ class DeckSelectorSessionManager:
         return path
 
     def _persist_config(self) -> None:
-        self.config_file.parent.mkdir(parents=True, exist_ok=True)
         try:
-            with self.config_file.open("w", encoding="utf-8") as fh:
-                json.dump(self.config, fh, indent=2)
+            atomic_write_json(self.config_file, self.config, indent=2)
         except OSError as exc:
             logger.warning(f"Unable to persist config at {self.config_file}: {exc}")
 
@@ -121,10 +121,8 @@ class DeckSelectorSessionManager:
         elif "saved_deck_info" in data:
             data.pop("saved_deck_info")
 
-        self.settings_file.parent.mkdir(parents=True, exist_ok=True)
         try:
-            with self.settings_file.open("w", encoding="utf-8") as fh:
-                json.dump(data, fh, indent=2)
+            atomic_write_json(self.settings_file, data, indent=2)
         except OSError as exc:
             logger.warning(f"Unable to persist deck selector settings: {exc}")
             return

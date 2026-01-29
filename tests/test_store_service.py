@@ -96,10 +96,10 @@ def test_save_store_handles_write_errors(monkeypatch, tmp_path: Path, store_serv
     """Errors during write operations are swallowed gracefully."""
     target = tmp_path / "store.json"
 
-    def fake_write_text(self, *args, **kwargs):  # pylint: disable=unused-argument
+    def fake_atomic_write(*args, **kwargs):  # pylint: disable=unused-argument
         raise OSError("no space left on device")
 
-    monkeypatch.setattr(type(target), "write_text", fake_write_text)
+    monkeypatch.setattr("services.store_service.atomic_write_json", fake_atomic_write)
 
     store_service.save_store(target, {"notes": {}})
     assert not target.exists()

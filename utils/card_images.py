@@ -32,6 +32,12 @@ from typing import Any
 import requests
 from loguru import logger
 
+from utils.atomic_io import (
+    atomic_write_bytes,
+    atomic_write_json,
+    atomic_write_stream,
+    locked_path,
+)
 from utils.constants import BULK_DATA_CACHE_FRESHNESS_SECONDS, CACHE_DIR
 
 # Image cache configuration
@@ -494,9 +500,7 @@ class BulkImageDownloader:
             resp = self.session.get(download_uri, stream=True, timeout=120)
             resp.raise_for_status()
 
-            with BULK_DATA_CACHE.open("wb") as f:
-                for chunk in resp.iter_content(chunk_size=CHUNK_SIZE):
-                    f.write(chunk)
+            atomic_write_stream(BULK_DATA_CACHE, resp.iter_content(chunk_size=CHUNK_SIZE))
 
             # Update database metadata (defer card count to avoid parsing 500MB file)
             with sqlite3.connect(self.cache.db_path) as conn:
@@ -627,8 +631,7 @@ class BulkImageDownloader:
         file_path = self.cache.cache_dir / size / filename
 
         try:
-            with file_path.open("wb") as fh:
-                fh.write(resp.content)
+            atomic_write_bytes(file_path, resp.content)
         except Exception as exc:
             logger.debug(f"Failed to write image {name}: {exc}")
             return False, f"Error saving image for {name}: {exc}", None
@@ -676,7 +679,8 @@ class BulkImageDownloader:
             }
 
         try:
-            cards_data = json.loads(BULK_DATA_CACHE.read_text(encoding="utf-8"))
+            with locked_path(BULK_DATA_CACHE):
+                cards_data = json.loads(BULK_DATA_CACHE.read_text(encoding="utf-8"))
             if max_cards:
                 cards_data = cards_data[:max_cards]
 
@@ -758,8 +762,9 @@ def _load_printing_index_payload() -> dict[str, Any] | None:
     if not PRINTING_INDEX_CACHE.exists():
         return None
     try:
-        with PRINTING_INDEX_CACHE.open("r", encoding="utf-8") as fh:
-            payload = json.load(fh)
+        with locked_path(PRINTING_INDEX_CACHE):
+            with PRINTING_INDEX_CACHE.open("r", encoding="utf-8") as fh:
+                payload = json.load(fh)
     except Exception as exc:
         logger.warning(f"Failed to read printings index cache: {exc}")
         return None
@@ -782,8 +787,9 @@ def ensure_printing_index_cache(force: bool = False) -> dict[str, Any]:
         raise FileNotFoundError("Bulk data cache not found; cannot build printings index")
 
     logger.info("Building card printings index from bulk data…")
-    with BULK_DATA_CACHE.open("r", encoding="utf-8") as fh:
-        cards = json.load(fh)
+    with locked_path(BULK_DATA_CACHE):
+        with BULK_DATA_CACHE.open("r", encoding="utf-8") as fh:
+            cards = json.load(fh)
 
     by_name: dict[str, list[dict[str, Any]]] = {}
     total_printings = 0
@@ -821,8 +827,7 @@ def ensure_printing_index_cache(force: bool = False) -> dict[str, Any]:
     }
 
     try:
-        with PRINTING_INDEX_CACHE.open("w", encoding="utf-8") as fh:
-            json.dump(payload, fh, separators=(",", ":"))
+        atomic_write_json(PRINTING_INDEX_CACHE, payload, separators=(",", ":"))
         logger.info(
             "Cached card printings index ({unique_names} names, {total_printings} printings)",
             unique_names=payload["unique_names"],
