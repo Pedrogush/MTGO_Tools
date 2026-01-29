@@ -24,6 +24,7 @@ from utils.constants import (
     PADDING_SM,
     SUBDUED_TEXT,
 )
+from utils.deck_renderer import DeckRenderer
 from utils.mana_icon_factory import ManaIconFactory
 from utils.stylize import stylize_listbox, stylize_textctrl
 from utils.window_persistence import WindowPersistenceManager
@@ -351,6 +352,9 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
         self.side_table = self._create_zone_table("side", "Sideboard")
         self.out_table = None
 
+        # Initialize deck renderer
+        self.deck_renderer = DeckRenderer(self.main_table, self.side_table, self.out_table)
+
         # Collection status
         self.collection_status_label = wx.StaticText(
             self.deck_tables_page, label="Collection inventory not loaded."
@@ -477,10 +481,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
         self.controller.deck_repo.set_current_deck(None)
         self.summary_text.ChangeValue("Select an archetype to view decks.")
         self.zone_cards = {"main": [], "side": [], "out": []}
-        self.main_table.set_cards([])
-        self.side_table.set_cards([])
-        if self.out_table:
-            self.out_table.set_cards(self.zone_cards["out"])
+        self.deck_renderer.clear_all_zones()
         self.controller.deck_repo.set_current_deck_text("")
         self._update_stats("")
         self.deck_notes_panel.clear()
@@ -489,10 +490,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
 
     def _render_current_deck(self) -> None:
         """Render the saved deck into the UI once card data is available."""
-        self.main_table.set_cards(self.zone_cards["main"])
-        self.side_table.set_cards(self.zone_cards["side"])
-        if self.out_table:
-            self.out_table.set_cards(self.zone_cards["out"])
+        self.deck_renderer.render_zones(self.zone_cards)
         deck_text = self.controller.deck_repo.get_current_deck_text()
         if deck_text:
             self._update_stats(deck_text)
@@ -515,7 +513,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
         self._on_deck_content_ready(content, source="mtggoldfish")
 
     def _has_deck_loaded(self) -> bool:
-        return bool(self.zone_cards["main"] or self.zone_cards["side"])
+        return self.deck_renderer.has_deck_loaded(self.zone_cards)
 
     def _update_stats(self, deck_text: str) -> None:
         self.deck_stats_panel.update_stats(deck_text, self.zone_cards)

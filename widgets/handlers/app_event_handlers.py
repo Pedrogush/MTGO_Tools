@@ -275,10 +275,7 @@ class AppEventHandlers:
             key=lambda card: card["name"].lower(),
         )
         self.zone_cards["out"] = self._load_outboard_for_current()
-        self.main_table.set_cards(self.zone_cards["main"])
-        self.side_table.set_cards(self.zone_cards["side"])
-        if self.out_table:
-            self.out_table.set_cards(self.zone_cards["out"])
+        self.deck_renderer.render_zones(self.zone_cards)
         self._update_stats(deck_text)
         self.copy_button.Enable(True)
         self.save_button.Enable(True)
