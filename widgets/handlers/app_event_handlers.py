@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import threading
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -90,27 +91,32 @@ class AppEventHandlers:
         return self.controller._loading_lock
 
     @staticmethod
+    def _normalize_date(value: str) -> str:
+        if not value:
+            return ""
+        match = re.search(r"\d{4}-\d{2}-\d{2}", value)
+        return match.group(0) if match else value
+
+    @staticmethod
     def format_deck_name(deck: dict[str, Any]) -> str:
-        date = deck.get("date", "")
+        date = AppEventHandlers._normalize_date(deck.get("date", ""))
         player = deck.get("player", "")
         event = deck.get("event", "")
         result = deck.get("result", "")
-        line_parts = [part for part in (player, result) if part]
+        line_parts = [part for part in (player, result, date) if part]
         line_one = ", ".join(line_parts) if line_parts else "Unknown"
-        line_two_parts = [part for part in (event, date) if part]
-        line_two = " — ".join(line_two_parts)
+        line_two = event
         return f"{line_one} | {line_two}".strip(" |")
 
     @staticmethod
     def format_deck_list_entry(deck: dict[str, Any]) -> str:
-        date = deck.get("date", "")
+        date = AppEventHandlers._normalize_date(deck.get("date", ""))
         player = deck.get("player", "")
         event = deck.get("event", "")
         result = deck.get("result", "")
-        line_parts = [part for part in (player, result) if part]
+        line_parts = [part for part in (player, result, date) if part]
         line_one = ", ".join(line_parts) if line_parts else "Unknown"
-        line_two_parts = [part for part in (event, date) if part]
-        line_two = " — ".join(line_two_parts)
+        line_two = event
         return f"{line_one}\n{line_two}".strip()
 
     # UI Event Handlers
