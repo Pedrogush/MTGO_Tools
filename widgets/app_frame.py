@@ -44,6 +44,7 @@ from widgets.panels.deck_stats_panel import DeckStatsPanel
 from widgets.panels.radar_panel import RadarDialog
 from widgets.panels.sideboard_guide_panel import SideboardGuidePanel
 from widgets.timer_alert import TimerAlertFrame
+from widgets.managers.dialog_manager import DialogManager
 
 
 class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, wx.Frame):
@@ -71,14 +72,28 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
 
         self._save_timer: wx.Timer | None = None
         self.mana_icons = ManaIconFactory()
-        self.tracker_window: MTGOpponentDeckSpy | None = None
-        self.timer_window: TimerAlertFrame | None = None
-        self.history_window: MatchHistoryFrame | None = None
-        self.metagame_window: MetagameAnalysisFrame | None = None
+        self._dialog_manager = DialogManager(self)
         self.mana_keyboard_window: ManaKeyboardFrame | None = None
         self._inspector_hover_timer: wx.Timer | None = None
         self._pending_hover: tuple[str, dict[str, Any]] | None = None
         self._pending_deck_restore: bool = False
+
+    # Backward compatibility properties for dialog windows
+    @property
+    def tracker_window(self) -> MTGOpponentDeckSpy | None:
+        return self._dialog_manager.get_window("tracker_window")
+
+    @property
+    def timer_window(self) -> TimerAlertFrame | None:
+        return self._dialog_manager.get_window("timer_window")
+
+    @property
+    def history_window(self) -> MatchHistoryFrame | None:
+        return self._dialog_manager.get_window("history_window")
+
+    @property
+    def metagame_window(self) -> MetagameAnalysisFrame | None:
+        return self._dialog_manager.get_window("metagame_window")
 
         self._build_ui()
         self._apply_window_preferences()
@@ -412,9 +427,14 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
             self._schedule_settings_save()
 
     def _open_full_mana_keyboard(self) -> None:
+        # Note: Mana keyboard uses a different opening pattern, integrate later
         self.mana_keyboard_window = open_mana_keyboard(
             self, self.mana_icons, self.mana_keyboard_window, self._on_mana_keyboard_closed
         )
+
+    def _on_mana_keyboard_closed(self, event: wx.CloseEvent) -> None:
+        self.mana_keyboard_window = None
+        event.Skip()
 
     def _open_radar_dialog(self):
         """Open the Radar dialog for archetype card frequency analysis."""

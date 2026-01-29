@@ -201,11 +201,9 @@ class AppEventHandlers:
         if self._save_timer and self._save_timer.IsRunning():
             self._save_timer.Stop()
         self._save_window_settings()
-        for attr in ("tracker_window", "timer_window", "history_window"):
-            window = getattr(self, attr)
-            if widget_exists(window):
-                window.Destroy()
-                setattr(self, attr, None)
+        # Close all managed dialogs
+        self._dialog_manager.close_all()
+        # Handle mana keyboard separately (not yet managed by dialog manager)
         if self.mana_keyboard_window and self.mana_keyboard_window.IsShown():
             self.mana_keyboard_window.Destroy()
             self.mana_keyboard_window = None
@@ -347,10 +345,6 @@ class AppEventHandlers:
         self._set_status("Ready")
         logger.warning(f"Bulk data download failed: {error_msg}")
 
-    def _on_mana_keyboard_closed(self: AppFrame, event: wx.CloseEvent) -> None:
-        self.mana_keyboard_window = None
-        event.Skip()
-
     # Builder Panel Handlers
     def _on_builder_search(self: AppFrame) -> None:
         card_manager = self.controller.card_repo.get_card_manager()
@@ -458,44 +452,32 @@ class AppEventHandlers:
 
     # ------------------------------------------------------------------ Helpers --------------------------------------------------------------
     def open_opponent_tracker(self) -> None:
-        open_child_window(
-            self,
+        self._dialog_manager.open_window(
             "tracker_window",
             MTGOpponentDeckSpy,
             "Opponent Tracker",
-            self._handle_child_close,
         )
 
     def open_timer_alert(self) -> None:
-        open_child_window(
-            self,
+        self._dialog_manager.open_window(
             "timer_window",
             TimerAlertFrame,
             "Timer Alert",
-            self._handle_child_close,
         )
 
     def open_match_history(self) -> None:
-        open_child_window(
-            self,
+        self._dialog_manager.open_window(
             "history_window",
             MatchHistoryFrame,
             "Match History",
-            self._handle_child_close,
         )
 
     def open_metagame_analysis(self) -> None:
-        open_child_window(
-            self,
+        self._dialog_manager.open_window(
             "metagame_window",
             MetagameAnalysisFrame,
             "Metagame Analysis",
-            self._handle_child_close,
         )
-
-    def _handle_child_close(self, event: wx.CloseEvent, attr: str) -> None:
-        setattr(self, attr, None)
-        event.Skip()
 
     def _start_daily_average_build(self) -> None:
         self.daily_average_button.Disable()
