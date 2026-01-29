@@ -131,16 +131,29 @@ class CardImageDownloadQueue:
         max_retries = 4
         backoff_seconds = 0.5
         attempt = 0
+        tried_without_set = False
         while True:
             started_at = time.monotonic()
             try:
+                set_code = request.set_code
+                if tried_without_set:
+                    set_code = None
                 success, msg = self._downloader.download_card_image_by_name(
-                    request.card_name, request.size, set_code=request.set_code
+                    request.card_name, request.size, set_code=set_code
                 )
             except Exception as exc:
                 success = False
                 msg = str(exc)
             if not success and self._is_not_found_message(msg):
+                if request.set_code and not tried_without_set:
+                    logger.warning(
+                        f"Card image printing not found for {request.card_name} "
+                        f"(set {request.set_code}); retrying without set filter."
+                    )
+                    tried_without_set = True
+                    attempt = 0
+                    backoff_seconds = 0.5
+                    continue
                 logger.error(f"Card image download failed for {request.card_name}: {msg}")
                 return False
             elapsed = time.monotonic() - started_at

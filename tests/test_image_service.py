@@ -130,3 +130,30 @@ def test_download_request_404_no_retry(monkeypatch):
 
     assert downloader.calls == 1
     assert sleeps == []
+
+
+def test_download_request_404_with_set_falls_back(monkeypatch):
+    sleeps = []
+    monkeypatch.setattr(image_service.time, "sleep", lambda seconds: sleeps.append(seconds))
+    monkeypatch.setattr(image_service.time, "monotonic", lambda: 0.0)
+    downloader = _FakeDownloader(
+        [
+            Exception("404 Client Error: Not Found for url: https://api.scryfall.com/cards"),
+            (True, "ok"),
+        ]
+    )
+    queue = _build_queue(downloader)
+    try:
+        request = CardImageRequest(
+            card_name="Mirrorpool",
+            uuid=None,
+            set_code="aeoe",
+            collector_number=None,
+            size="normal",
+        )
+        assert queue._download_request(request) is True
+    finally:
+        queue.stop()
+
+    assert downloader.calls == 2
+    assert sleeps == []
