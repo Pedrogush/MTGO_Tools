@@ -98,10 +98,29 @@ class AppEventHandlers:
         return match.group(0) if match else value
 
     @staticmethod
+    def _strip_extra_dates(value: str) -> str:
+        if not value:
+            return ""
+        matches = list(re.finditer(r"\d{4}-\d{2}-\d{2}", value))
+        if len(matches) <= 1:
+            return value
+        result = value
+        for match in reversed(matches[1:]):
+            start, end = match.span()
+            prefix_start = start
+            while prefix_start > 0 and result[prefix_start - 1] in " -–—|/":
+                prefix_start -= 1
+            suffix_end = end
+            while suffix_end < len(result) and result[suffix_end] in " -–—|/":
+                suffix_end += 1
+            result = f"{result[:prefix_start].rstrip()} {result[suffix_end:].lstrip()}"
+        return " ".join(result.split())
+
+    @staticmethod
     def format_deck_name(deck: dict[str, Any]) -> str:
         date = AppEventHandlers._normalize_date(deck.get("date", ""))
         player = deck.get("player", "")
-        event = deck.get("event", "")
+        event = AppEventHandlers._strip_extra_dates(deck.get("event", ""))
         result = deck.get("result", "")
         line_parts = [part for part in (player, result, date) if part]
         line_one = ", ".join(line_parts) if line_parts else "Unknown"
@@ -112,7 +131,7 @@ class AppEventHandlers:
     def format_deck_list_entry(deck: dict[str, Any]) -> str:
         date = AppEventHandlers._normalize_date(deck.get("date", ""))
         player = deck.get("player", "")
-        event = deck.get("event", "")
+        event = AppEventHandlers._strip_extra_dates(deck.get("event", ""))
         result = deck.get("result", "")
         line_parts = [part for part in (player, result, date) if part]
         line_one = ", ".join(line_parts) if line_parts else "Unknown"
