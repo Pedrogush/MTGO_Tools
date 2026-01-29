@@ -2,49 +2,29 @@ from typing import TYPE_CHECKING, Any
 
 import wx
 from loguru import logger
-from wx.lib.agw import flatnotebook as fnb
 
 from controllers.app_controller import get_deck_selector_controller
 
 if TYPE_CHECKING:
     from controllers.app_controller import AppController
 
-from utils.constants import (
-    APP_FRAME_MIN_SIZE,
-    APP_FRAME_SIZE,
-    APP_FRAME_SUMMARY_MIN_HEIGHT,
-    DARK_ACCENT,
-    DARK_BG,
-    DARK_PANEL,
-    FORMAT_OPTIONS,
-    LIGHT_TEXT,
-    PADDING_LG,
-    PADDING_MD,
-    PADDING_SM,
-    SUBDUED_TEXT,
-)
+from utils.constants import APP_FRAME_MIN_SIZE, APP_FRAME_SIZE
 from utils.mana_icon_factory import ManaIconFactory
-from utils.stylize import stylize_listbox, stylize_textctrl
-from widgets.buttons.deck_action_buttons import DeckActionButtons
-from widgets.buttons.toolbar_buttons import ToolbarButtons
+from widgets.builders.app_frame_builder import AppFrameBuilder
 from widgets.dialogs.image_download_dialog import show_image_download_dialog
 from widgets.handlers.app_event_handlers import AppEventHandlers
 from widgets.handlers.card_table_panel_handler import CardTablePanelHandler
 from widgets.handlers.sideboard_guide_handlers import SideboardGuideHandlers
 from widgets.identify_opponent import MTGOpponentDeckSpy
 from widgets.mana_keyboard import ManaKeyboardFrame, open_mana_keyboard
+from widgets.managers.dialog_manager import DialogManager
 from widgets.match_history import MatchHistoryFrame
 from widgets.metagame_analysis import MetagameAnalysisFrame
-from widgets.panels.card_inspector_panel import CardInspectorPanel
 from widgets.panels.card_table_panel import CardTablePanel
 from widgets.panels.deck_builder_panel import DeckBuilderPanel
-from widgets.panels.deck_notes_panel import DeckNotesPanel
 from widgets.panels.deck_research_panel import DeckResearchPanel
-from widgets.panels.deck_stats_panel import DeckStatsPanel
 from widgets.panels.radar_panel import RadarDialog
-from widgets.panels.sideboard_guide_panel import SideboardGuidePanel
 from widgets.timer_alert import TimerAlertFrame
-from widgets.managers.dialog_manager import DialogManager
 
 
 class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, wx.Frame):
@@ -78,6 +58,18 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
         self._pending_hover: tuple[str, dict[str, Any]] | None = None
         self._pending_deck_restore: bool = False
 
+        # Build UI using AppFrameBuilder
+        self._build_ui()
+        self._apply_window_preferences()
+        self.SetMinSize(APP_FRAME_MIN_SIZE)
+        self.Centre(wx.BOTH)
+
+        # Bind events
+        self.Bind(wx.EVT_CLOSE, self.on_close)
+        self.Bind(wx.EVT_SIZE, self.on_window_change)
+        self.Bind(wx.EVT_MOVE, self.on_window_change)
+        self.Bind(wx.EVT_CHAR_HOOK, self._on_hotkey)
+
     # Backward compatibility properties for dialog windows
     @property
     def tracker_window(self) -> MTGOpponentDeckSpy | None:
@@ -95,323 +87,101 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
     def metagame_window(self) -> MetagameAnalysisFrame | None:
         return self._dialog_manager.get_window("metagame_window")
 
-        self._build_ui()
-        self._apply_window_preferences()
-        self.SetMinSize(APP_FRAME_MIN_SIZE)
-        self.Centre(wx.BOTH)
-
-        self.Bind(wx.EVT_CLOSE, self.on_close)
-        self.Bind(wx.EVT_SIZE, self.on_window_change)
-        self.Bind(wx.EVT_MOVE, self.on_window_change)
-        self.Bind(wx.EVT_CHAR_HOOK, self._on_hotkey)
-
     # ------------------------------------------------------------------ UI ------------------------------------------------------------------
     def _build_ui(self) -> None:
-        """Build the main UI structure."""
-        self.SetBackgroundColour(DARK_BG)
-        self._setup_status_bar()
+        """Build the main UI structure using AppFrameBuilder."""
+        # Create callbacks dict for builder
+        callbacks = self._create_builder_callbacks()
 
-        root_panel = wx.Panel(self)
-        root_panel.SetBackgroundColour(DARK_BG)
-        root_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        root_panel.SetSizer(root_sizer)
+        # Build UI via builder
+        builder = AppFrameBuilder(self, self.controller, self.mana_icons, callbacks)
+        widgets = builder.build_all()
 
-        # Build left and right panels
-        left_panel = self._build_left_panel(root_panel)
-        root_sizer.Add(left_panel, 0, wx.EXPAND | wx.ALL, PADDING_LG)
+        # Store widget references
+        self.status_bar = widgets.status_bar
+        self.left_stack = widgets.left_stack
+        self.research_panel = widgets.research_panel
+        self.builder_panel = widgets.builder_panel
+        self.toolbar = widgets.toolbar
+        self.deck_source_choice = widgets.deck_source_choice
+        self.zone_notebook = widgets.zone_notebook
+        self.main_table = widgets.main_table
+        self.side_table = widgets.side_table
+        self.out_table = widgets.out_table
+        self.deck_tabs = widgets.deck_tabs
+        self.deck_stats_panel = widgets.deck_stats_panel
+        self.sideboard_guide_panel = widgets.sideboard_guide_panel
+        self.deck_notes_panel = widgets.deck_notes_panel
+        self.card_inspector_panel = widgets.card_inspector_panel
+        self.summary_text = widgets.summary_text
+        self.deck_list = widgets.deck_list
+        self.deck_action_buttons = widgets.deck_action_buttons
+        self.collection_status_label = widgets.collection_status_label
+        self.daily_average_button = widgets.daily_average_button
+        self.copy_button = widgets.copy_button
+        self.save_button = widgets.save_button
+        self.stats_summary = widgets.stats_summary
+        self.deck_tables_page = widgets.deck_tables_page
 
-        right_panel = self._build_right_panel(root_panel)
-        root_sizer.Add(right_panel, 1, wx.EXPAND | wx.ALL, PADDING_LG)
-
-    def _setup_status_bar(self) -> None:
-        self.status_bar = self.CreateStatusBar()
-        self.status_bar.SetBackgroundColour(DARK_PANEL)
-        self.status_bar.SetForegroundColour(LIGHT_TEXT)
-        self._set_status("Ready")
-
-    def _build_left_panel(self, parent: wx.Window) -> wx.Panel:
-        left_panel = wx.Panel(parent)
-        left_panel.SetBackgroundColour(DARK_PANEL)
-        left_sizer = wx.BoxSizer(wx.VERTICAL)
-        left_panel.SetSizer(left_sizer)
-
-        self.left_stack = wx.Simplebook(left_panel)
-        self.left_stack.SetBackgroundColour(DARK_PANEL)
-        left_sizer.Add(self.left_stack, 1, wx.EXPAND)
-
-        self.research_panel = DeckResearchPanel(
-            parent=self.left_stack,
-            format_options=FORMAT_OPTIONS,
-            initial_format=self.controller.current_format,
-            on_format_changed=self.on_format_changed,
-            on_archetype_filter=self.on_archetype_filter,
-            on_archetype_selected=self.on_archetype_selected,
-            on_reload_archetypes=lambda: self.fetch_archetypes(force=True),
-        )
-        self.left_stack.AddPage(self.research_panel, "Research")
-
-        self.builder_panel = DeckBuilderPanel(
-            parent=self.left_stack,
-            mana_icons=self.mana_icons,
-            on_switch_to_research=lambda: self._show_left_panel("research"),
-            on_ensure_card_data=self.ensure_card_data_loaded,
-            open_mana_keyboard=self._open_full_mana_keyboard,
-            on_search=self._on_builder_search,
-            on_clear=self._on_builder_clear,
-            on_result_selected=self._on_builder_result_selected,
-            on_open_radar_dialog=self._open_radar_dialog,
-        )
-        self.left_stack.AddPage(self.builder_panel, "Builder")
-        self._show_left_panel(self.left_mode, force=True)
-
-        return left_panel
-
-    def _build_right_panel(self, parent: wx.Window) -> wx.Panel:
-        right_panel = wx.Panel(parent)
-        right_panel.SetBackgroundColour(DARK_BG)
-        right_sizer = wx.BoxSizer(wx.VERTICAL)
-        right_panel.SetSizer(right_sizer)
-
-        # Toolbar
-        self.toolbar = self._build_toolbar(right_panel)
-        right_sizer.Add(self.toolbar, 0, wx.EXPAND | wx.BOTTOM, PADDING_MD)
-
-        card_data_controls = self._build_card_data_controls(right_panel)
-        right_sizer.Add(card_data_controls, 0, wx.EXPAND | wx.BOTTOM, PADDING_LG)
-
-        content_split = wx.BoxSizer(wx.HORIZONTAL)
-        right_sizer.Add(content_split, 1, wx.EXPAND | wx.BOTTOM, PADDING_LG)
-
-        middle_column = wx.BoxSizer(wx.VERTICAL)
-        content_split.Add(middle_column, 2, wx.EXPAND | wx.RIGHT, PADDING_LG)
-
-        deck_workspace = self._build_deck_workspace(right_panel)
-        middle_column.Add(deck_workspace, 1, wx.EXPAND)
-
-        inspector_column = wx.BoxSizer(wx.VERTICAL)
-        content_split.Add(inspector_column, 1, wx.EXPAND)
-
-        inspector_box = self._build_card_inspector(right_panel)
-        inspector_column.Add(inspector_box, 1, wx.EXPAND | wx.BOTTOM, PADDING_LG)
-
-        deck_results = self._build_deck_results(right_panel)
-        inspector_column.Add(deck_results, 1, wx.EXPAND)
-
-        return right_panel
-
-    def _create_notebook(self, parent: wx.Window) -> fnb.FlatNotebook:
-        notebook = fnb.FlatNotebook(
-            parent,
-            agwStyle=(
-                fnb.FNB_FANCY_TABS
-                | fnb.FNB_SMART_TABS
-                | fnb.FNB_NO_X_BUTTON
-                | fnb.FNB_NO_NAV_BUTTONS
-            ),
-        )
-        notebook.SetTabAreaColour(DARK_PANEL)
-        notebook.SetActiveTabColour(DARK_ACCENT)
-        notebook.SetNonActiveTabTextColour(SUBDUED_TEXT)
-        notebook.SetActiveTabTextColour(wx.Colour(12, 14, 18))
-        notebook.SetBackgroundColour(DARK_BG)
-        notebook.SetForegroundColour(LIGHT_TEXT)
-        return notebook
-
-    def _build_toolbar(self, parent: wx.Window) -> ToolbarButtons:
-        return ToolbarButtons(
-            parent,
-            on_open_opponent_tracker=self.open_opponent_tracker,
-            on_open_timer_alert=self.open_timer_alert,
-            on_open_match_history=self.open_match_history,
-            on_open_metagame_analysis=self.open_metagame_analysis,
-            on_load_collection=lambda: self.controller.refresh_collection_from_bridge(force=True),
-            on_download_card_images=lambda: show_image_download_dialog(
-                self, self.image_cache, self.image_downloader, self._set_status
-            ),
-            on_update_card_database=lambda: self.controller.force_bulk_data_update(),
-        )
-
-    def _build_card_data_controls(self, parent: wx.Window) -> wx.Panel:
-        panel = wx.Panel(parent)
-        panel.SetBackgroundColour(DARK_BG)
-        sizer = wx.BoxSizer(wx.HORIZONTAL)
-        panel.SetSizer(sizer)
-
-        source_label = wx.StaticText(panel, label="Deck data source:")
-        source_label.SetForegroundColour(LIGHT_TEXT)
-        sizer.Add(source_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, PADDING_SM)
-
-        self.deck_source_choice = wx.Choice(panel, choices=["Both", "MTGGoldfish", "MTGO.com"])
-        current_source = self.controller.get_deck_data_source()
-        source_map = {"both": 0, "mtggoldfish": 1, "mtgo": 2}
-        self.deck_source_choice.SetSelection(source_map.get(current_source, 0))
-        self.deck_source_choice.Bind(wx.EVT_CHOICE, self._on_deck_source_changed)
-        sizer.Add(self.deck_source_choice, 0, wx.ALIGN_CENTER_VERTICAL)
-
-        sizer.AddStretchSpacer(1)
-        return panel
-
-    def _build_deck_results(self, parent: wx.Window) -> wx.StaticBoxSizer:
-        deck_box = wx.StaticBox(parent, label="Deck Results")
-        deck_box.SetForegroundColour(LIGHT_TEXT)
-        deck_box.SetBackgroundColour(DARK_PANEL)
-        deck_sizer = wx.StaticBoxSizer(deck_box, wx.VERTICAL)
-
-        self.summary_text = wx.TextCtrl(
-            deck_box,
-            style=wx.TE_MULTILINE | wx.TE_READONLY | wx.TE_WORDWRAP | wx.NO_BORDER,
-        )
-        stylize_textctrl(self.summary_text, multiline=True)
-        self.summary_text.SetMinSize((-1, APP_FRAME_SUMMARY_MIN_HEIGHT))
-        deck_sizer.Add(self.summary_text, 0, wx.EXPAND | wx.ALL, PADDING_MD)
-
-        self.deck_list = wx.ListBox(deck_box, style=wx.LB_SINGLE)
-        stylize_listbox(self.deck_list)
-        self.deck_list.Bind(wx.EVT_LISTBOX, self.on_deck_selected)
-        deck_sizer.Add(self.deck_list, 1, wx.EXPAND | wx.ALL, PADDING_MD)
-
-        # Deck action buttons
-        self.deck_action_buttons = DeckActionButtons(
-            deck_box,
-            on_copy=lambda: self.on_copy_clicked(None),
-            on_save=lambda: self.on_save_clicked(None),
-            on_daily_average=lambda: self.on_daily_average_clicked(None),
-        )
-        deck_sizer.Add(
-            self.deck_action_buttons,
-            0,
-            wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM,
-            PADDING_MD,
-        )
-
-        # Keep references for backward compatibility
-        self.daily_average_button = self.deck_action_buttons.daily_average_button
-        self.copy_button = self.deck_action_buttons.copy_button
-        self.save_button = self.deck_action_buttons.save_button
-
-        return deck_sizer
-
-    def _build_card_inspector(self, parent: wx.Window) -> wx.StaticBoxSizer:
-        inspector_box = wx.StaticBox(parent, label="Card Inspector")
-        inspector_box.SetForegroundColour(LIGHT_TEXT)
-        inspector_box.SetBackgroundColour(DARK_PANEL)
-        inspector_sizer = wx.StaticBoxSizer(inspector_box, wx.VERTICAL)
-
-        self.card_inspector_panel = CardInspectorPanel(
-            inspector_box,
-            card_manager=self.controller.card_repo.get_card_manager(),
-            mana_icons=self.mana_icons,
-        )
-        self.card_inspector_panel.set_image_request_handlers(
-            on_request=lambda request: self.controller.image_service.queue_card_image_download(
-                request, prioritize=True
-            ),
-            on_selected=self.controller.image_service.set_selected_card_request,
-        )
-        self.card_inspector_panel.set_printings_request_handler(
-            self.controller.image_service.fetch_printings_by_name_async
-        )
-        self.controller.image_service.set_image_download_callback(
-            self.card_inspector_panel.handle_image_downloaded
-        )
-        self.controller.image_service.set_printings_loaded_callback(
-            self.card_inspector_panel.handle_printings_loaded
-        )
-        inspector_sizer.Add(self.card_inspector_panel, 1, wx.EXPAND)
-
-        # Keep backward compatibility references (delegate to image service via controller)
+        # Keep backward compatibility references for image service
         self.image_cache = self.controller.image_service.image_cache
         self.image_downloader = self.controller.image_service.image_downloader
 
-        return inspector_sizer
+        # Set initial status
+        self._set_status("Ready")
 
-    def _build_deck_workspace(self, parent: wx.Window) -> wx.StaticBoxSizer:
-        detail_box = wx.StaticBox(parent, label="Deck Workspace")
-        detail_box.SetForegroundColour(LIGHT_TEXT)
-        detail_box.SetBackgroundColour(DARK_PANEL)
-        detail_sizer = wx.StaticBoxSizer(detail_box, wx.VERTICAL)
+        # Show initial left panel mode
+        self._show_left_panel(self.left_mode, force=True)
 
-        self.deck_tabs = self._create_notebook(detail_box)
-        detail_sizer.Add(self.deck_tabs, 1, wx.EXPAND | wx.ALL, PADDING_MD)
+    def _create_builder_callbacks(self) -> dict[str, Any]:
+        """Create callbacks dict for AppFrameBuilder."""
+        return {
+            # Research panel callbacks
+            "on_format_changed": self.on_format_changed,
+            "on_archetype_filter": self.on_archetype_filter,
+            "on_archetype_selected": self.on_archetype_selected,
+            "on_reload_archetypes": lambda: self.fetch_archetypes(force=True),
+            # Builder panel callbacks
+            "on_switch_to_research": lambda: self._show_left_panel("research"),
+            "on_ensure_card_data": self.ensure_card_data_loaded,
+            "open_mana_keyboard": self._open_full_mana_keyboard,
+            "on_builder_search": self._on_builder_search,
+            "on_builder_clear": self._on_builder_clear,
+            "on_builder_result_selected": self._on_builder_result_selected,
+            "on_open_radar_dialog": self._open_radar_dialog,
+            # Toolbar callbacks
+            "open_opponent_tracker": self.open_opponent_tracker,
+            "open_timer_alert": self.open_timer_alert,
+            "open_match_history": self.open_match_history,
+            "open_metagame_analysis": self.open_metagame_analysis,
+            "on_download_card_images": lambda: show_image_download_dialog(
+                self, self.controller.image_service.image_cache,
+                self.controller.image_service.image_downloader, self._set_status
+            ),
+            # Deck source callback
+            "on_deck_source_changed": self._on_deck_source_changed,
+            # Deck results callbacks
+            "on_deck_selected": self.on_deck_selected,
+            "on_copy_clicked": lambda: self.on_copy_clicked(None),
+            "on_save_clicked": lambda: self.on_save_clicked(None),
+            "on_daily_average_clicked": lambda: self.on_daily_average_clicked(None),
+            # Sideboard guide callbacks
+            "on_add_guide_entry": self._on_add_guide_entry,
+            "on_edit_guide_entry": self._on_edit_guide_entry,
+            "on_remove_guide_entry": self._on_remove_guide_entry,
+            "on_edit_exclusions": self._on_edit_exclusions,
+            "on_export_guide": self._on_export_guide,
+            "on_import_guide": self._on_import_guide,
+            # Zone table callbacks
+            "handle_zone_delta": self._handle_zone_delta,
+            "handle_zone_remove": self._handle_zone_remove,
+            "handle_zone_add": self._handle_zone_add,
+            "handle_card_focus": self._handle_card_focus,
+            "handle_card_hover": self._handle_card_hover,
+            # Status callback
+            "set_status": self._set_status,
+        }
 
-        # Deck tables tab
-        self._build_deck_tables_tab()
-
-        # Stats, guide, and notes tabs
-        self.deck_stats_panel = DeckStatsPanel(
-            self.deck_tabs,
-            card_manager=self.controller.card_repo.get_card_manager(),
-            deck_service=self.controller.deck_service,
-        )
-        self.deck_tabs.AddPage(self.deck_stats_panel, "Stats")
-        # Maintain compatibility with callers/tests that accessed the old label directly.
-        self.stats_summary = self.deck_stats_panel.summary_label
-
-        self.sideboard_guide_panel = SideboardGuidePanel(
-            self.deck_tabs,
-            on_add_entry=self._on_add_guide_entry,
-            on_edit_entry=self._on_edit_guide_entry,
-            on_remove_entry=self._on_remove_guide_entry,
-            on_edit_exclusions=self._on_edit_exclusions,
-            on_export_csv=self._on_export_guide,
-            on_import_csv=self._on_import_guide,
-        )
-        self.deck_tabs.AddPage(self.sideboard_guide_panel, "Sideboard Guide")
-
-        self.deck_notes_panel = DeckNotesPanel(
-            self.deck_tabs,
-            deck_repo=self.controller.deck_repo,
-            store_service=self.controller.store_service,
-            notes_store=self.controller.deck_notes_store,
-            notes_store_path=self.controller.notes_store_path,
-            on_status_update=self._set_status,
-        )
-        self.deck_tabs.AddPage(self.deck_notes_panel, "Deck Notes")
-        return detail_sizer
-
-    def _build_deck_tables_tab(self) -> None:
-        self.deck_tables_page = wx.Panel(self.deck_tabs)
-        self.deck_tabs.AddPage(self.deck_tables_page, "Deck Tables")
-        tables_sizer = wx.BoxSizer(wx.VERTICAL)
-        self.deck_tables_page.SetSizer(tables_sizer)
-
-        self.zone_notebook = self._create_notebook(self.deck_tables_page)
-        tables_sizer.Add(self.zone_notebook, 1, wx.EXPAND | wx.BOTTOM, PADDING_MD)
-
-        # Create zone tables
-        self.main_table = self._create_zone_table("main", "Mainboard")
-        self.side_table = self._create_zone_table("side", "Sideboard")
-        self.out_table = None
-
-        # Collection status
-        self.collection_status_label = wx.StaticText(
-            self.deck_tables_page, label="Collection inventory not loaded."
-        )
-        self.collection_status_label.SetForegroundColour(SUBDUED_TEXT)
-        tables_sizer.Add(
-            self.collection_status_label, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_SM
-        )
-
-    def _create_zone_table(
-        self, zone: str, tab_name: str, owned_status_func=None
-    ) -> CardTablePanel:
-        if owned_status_func is None:
-            owned_status_func = self.controller.collection_service.get_owned_status
-
-        table = CardTablePanel(
-            self.zone_notebook,
-            zone,
-            self.mana_icons,
-            self.controller.card_repo.get_card_metadata,
-            owned_status_func,
-            self._handle_zone_delta,
-            self._handle_zone_remove,
-            self._handle_zone_add,
-            self._handle_card_focus,
-            self._handle_card_hover,
-        )
-        self.zone_notebook.AddPage(table, tab_name)
-        return table
 
     # ------------------------------------------------------------------ Left panel helpers -------------------------------------------------
     def _show_left_panel(self, mode: str, force: bool = False) -> None:
