@@ -378,6 +378,15 @@ class CardInspectorPanel(wx.Panel):
             if name_fallback and name_fallback.exists():
                 self.card_image_display.show_image(name_fallback)
                 image_available = True
+                if (
+                    active_request
+                    and active_request.set_code
+                    and self.image_cache.get_image_path_for_printing(
+                        active_request.card_name, active_request.set_code, active_request.size
+                    )
+                    is None
+                ):
+                    self._request_missing_image(active_request)
             else:
                 self.card_image_display.show_placeholder("Not cached")
 

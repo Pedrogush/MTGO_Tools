@@ -161,6 +161,13 @@ class CardImageDownloadQueue:
     def _is_cached(self, request: CardImageRequest) -> bool:
         if not request.card_name:
             return False
+        if request.set_code:
+            return (
+                self._cache.get_image_path_for_printing(
+                    request.card_name, request.set_code, request.size
+                )
+                is not None
+            )
         return self._cache.get_image_path(request.card_name, request.size) is not None
 
 

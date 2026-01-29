@@ -327,6 +327,28 @@ class CardImageCache:
                     return path
         return None
 
+    def get_image_path_for_printing(
+        self, card_name: str, set_code: str, size: str = "normal"
+    ) -> Path | None:
+        """Get cached image path for a specific printing."""
+        if not set_code:
+            return self.get_image_path(card_name, size)
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.execute(
+                """
+                SELECT file_path
+                FROM card_images
+                WHERE LOWER(name) = LOWER(?) AND LOWER(set_code) = LOWER(?) AND image_size = ?
+                ORDER BY face_index
+                LIMIT 1
+                """,
+                (card_name, set_code, size),
+            )
+            row = cursor.fetchone()
+            if not row:
+                return None
+            return self._resolve_path(row[0])
+
     def get_image_by_uuid(
         self, uuid: str, size: str = "normal", face_index: int | None = 0
     ) -> Path | None:
