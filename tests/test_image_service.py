@@ -80,8 +80,8 @@ class _FakeDownloader:
         return response
 
 
-def _build_queue(downloader):
-    queue = CardImageDownloadQueue(_FakeCache())
+def _build_queue(downloader, *, on_failed=None):
+    queue = CardImageDownloadQueue(_FakeCache(), on_failed=on_failed)
     queue._downloader = downloader
     return queue
 
@@ -112,10 +112,11 @@ def test_download_request_404_no_retry(monkeypatch):
     sleeps = []
     monkeypatch.setattr(image_service.time, "sleep", lambda seconds: sleeps.append(seconds))
     monkeypatch.setattr(image_service.time, "monotonic", lambda: 0.0)
+    failed = []
     downloader = _FakeDownloader(
         [Exception("404 Client Error: Not Found for url: https://api.scryfall.com/cards")]
     )
-    queue = _build_queue(downloader)
+    queue = _build_queue(downloader, on_failed=lambda request, msg: failed.append((request, msg)))
     try:
         request = CardImageRequest(
             card_name="Mirrorpool",
@@ -147,3 +148,27 @@ def test_download_request_404_no_retry(monkeypatch):
 
     assert downloader.calls == 1
     assert sleeps == []
+    assert len(failed) == 1
+
+
+def test_selected_request_skips_not_found():
+    downloader = _FakeDownloader([(False, "nope")])
+    queue = _build_queue(downloader)
+    request = CardImageRequest(
+        card_name="Mirrorpool",
+        uuid=None,
+        set_code="aeoe",
+        collector_number=None,
+        size="normal",
+    )
+    not_found_key = queue._not_found_key(request)
+    try:
+        queue.stop()
+        queue._add_not_found_key(not_found_key)
+        queue.set_selected_request(request)
+        with queue._condition:
+            assert request.queue_key() not in queue._pending_keys
+            assert request.queue_key() not in queue._inflight_keys
+            assert request not in queue._queue
+    finally:
+        queue._discard_not_found_key(not_found_key)

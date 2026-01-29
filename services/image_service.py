@@ -45,10 +45,12 @@ class CardImageDownloadQueue:
         cache,
         *,
         on_downloaded: Callable[[CardImageRequest], None] | None = None,
+        on_failed: Callable[[CardImageRequest, str], None] | None = None,
     ) -> None:
         self._cache = cache
         self._downloader = BulkImageDownloader(cache)
         self._on_downloaded = on_downloaded
+        self._on_failed = on_failed
         self._queue: deque[CardImageRequest] = deque()
         self._pending_keys: set[tuple[str, str, str, str]] = set()
         self._inflight_keys: set[tuple[str, str, str, str]] = set()
@@ -138,6 +140,11 @@ class CardImageDownloadQueue:
         if self._is_cached(request):
             self._on_downloaded(request)
 
+    def _notify_failed(self, request: CardImageRequest, message: str) -> None:
+        if not self._on_failed:
+            return
+        self._on_failed(request, message)
+
     def _download_request(self, request: CardImageRequest) -> bool:
         logger.debug(
             "Starting image download for %s (set=%s, size=%s, collector=%s).",
@@ -163,6 +170,7 @@ class CardImageDownloadQueue:
             if not success and self._is_not_found_message(msg):
                 logger.error(f"Card image download failed for {request.card_name}: {msg}")
                 self._add_not_found_key(self._not_found_key(request))
+                self._notify_failed(request, msg)
                 return False
             elapsed = time.monotonic() - started_at
             if success:
@@ -237,6 +245,9 @@ class CardImageDownloadQueue:
             return
         if self._is_cached(request):
             return
+        not_found_key = self._not_found_key(request)
+        if self._is_not_found_key_blocked(not_found_key):
+            return
         key = request.queue_key()
         if key in self._inflight_keys:
             return
@@ -277,8 +288,11 @@ class ImageService:
         self.printing_index_loading: bool = False
         self._bulk_check_worker_active: bool = False
         self._on_image_downloaded: Callable[[CardImageRequest], None] | None = None
+        self._on_image_download_failed: Callable[[CardImageRequest, str], None] | None = None
         self._download_queue = CardImageDownloadQueue(
-            self.image_cache, on_downloaded=self._handle_image_downloaded
+            self.image_cache,
+            on_downloaded=self._handle_image_downloaded,
+            on_failed=self._handle_image_download_failed,
         )
         self._printings_lock = threading.Lock()
         self._printings_inflight: set[str] = set()
@@ -303,6 +317,12 @@ class ImageService:
     ) -> None:
         """Register a callback for completed card image downloads."""
         self._on_image_downloaded = callback
+
+    def set_image_download_failed_callback(
+        self, callback: Callable[[CardImageRequest, str], None] | None
+    ) -> None:
+        """Register a callback for failed card image downloads."""
+        self._on_image_download_failed = callback
 
     def set_printings_loaded_callback(
         self, callback: Callable[[str, list[dict[str, Any]]], None] | None
@@ -331,6 +351,11 @@ class ImageService:
         if not self._on_image_downloaded:
             return
         self._call_after(self._on_image_downloaded, request)
+
+    def _handle_image_download_failed(self, request: CardImageRequest, message: str) -> None:
+        if not self._on_image_download_failed:
+            return
+        self._call_after(self._on_image_download_failed, request, message)
 
     def fetch_printings_by_name_async(self, card_name: str) -> None:
         """Fetch all printings for a card name in the background."""
