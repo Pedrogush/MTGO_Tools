@@ -202,6 +202,13 @@ class ImageService:
     def shutdown(self) -> None:
         """Stop background services owned by the image service."""
         self._download_queue.stop()
+        if self._bulk_download_handle:
+            self._process_worker.terminate(self._bulk_download_handle)
+            self._bulk_download_handle = None
+        if self._printings_handle:
+            self._process_worker.terminate(self._printings_handle)
+            self._printings_handle = None
+        self._process_worker.terminate_all()
 
     def set_image_download_callback(
         self, callback: Callable[[CardImageRequest], None] | None
