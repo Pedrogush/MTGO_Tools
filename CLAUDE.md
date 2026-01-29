@@ -8,16 +8,18 @@ A Python tool for Magic: The Gathering Online that combines web scraping, log fi
 
 **Key Features:**
 - **Opponent Tracking Widget:** Real-time window-title-based opponent identification with automatic deck lookup from tournament results
+- **Hypergeometric Calculator:** Built-in probability calculator for draw odds (e.g., "chance to draw a 4-of in opening hand")
 - **Metagame Research:** Browse and analyze MTGGoldfish archetype data, deck lists, and tournament results
 - **Match History:** Parse MTGO GameLog files to extract historical match data, opponent names, and results
 - **Deck Editor:** Interactive deck list editor with card adjustment, averaging, and export capabilities
 - **Challenge Timer Alerts:** Monitor and alert on MTGO challenge timer countdowns
 
 **Key Modules:**
-- `widgets/identify_opponent_wx.py` - Real-time opponent tracking overlay (window title based)
+- `widgets/identify_opponent.py` - Real-time opponent tracking overlay with hypergeometric calculator
 - `widgets/deck_selector_wx.py` - Deck browser and editor GUI
 - `navigators/mtggoldfish.py` - MTGGoldfish web scraping
 - `utils/find_opponent_names.py` - Simple opponent detection via MTGO window titles
+- `utils/math_utils.py` - Hypergeometric probability calculations for draw odds
 - `utils/metagame.py` - Player lookup and metagame data processing
 - `utils/gamelog_parser.py` - MTGO GameLog parsing for match history
 - `dotnet/MTGOBridge/Program.cs` - C# bridge to MTGOSDK for MTGO client interaction
@@ -942,4 +944,57 @@ Looks up recent decks from MTGGoldfish
 ✅ Window title detection functional
 
 The opponent tracker is now stable and works reliably without MTGOSDK dependencies!
+
+# Hypergeometric Calculator (Issue #151)
+
+## Overview
+
+Added a built-in hypergeometric probability calculator to the Opponent Tracker widget. This helps players calculate draw probabilities during matches (e.g., "What's the chance my opponent has drawn their combo piece?").
+
+## Features
+
+- **Collapsible Panel:** Toggle with "Calculator" / "Hide Calc" button
+- **Input Fields:**
+  - Deck Size (1-250, default: 60)
+  - Copies in Deck (0-60, default: 4)
+  - Cards Drawn (0-60, default: 7)
+  - Target Copies (0-60, default: 1)
+- **Preset Buttons:** Quick access to common scenarios
+  - "Open 60" - Opening hand in 60-card deck (7 cards)
+  - "Open 40" - Opening hand in 40-card limited deck
+  - "T3 Play" - Turn 3 on the play (9 cards seen)
+  - "T3 Draw" - Turn 3 on the draw (10 cards seen)
+- **Results:** Shows both exact probability and "at least" probability
+- **Persistence:** Calculator visibility state saved across sessions
+
+## Usage Example
+
+To calculate the probability of drawing at least 1 Lightning Bolt in your opening hand:
+1. Open Opponent Tracker
+2. Click "Calculator" to show the panel
+3. Set: Deck=60, Copies=4, Drawn=7, Target=1
+4. Click "Calculate"
+5. Result: ~39.95% exact, ~39.95% at least 1
+
+## Mathematical Approach
+
+Uses the hypergeometric distribution formula:
+```
+P(X = k) = [C(K, k) × C(N-K, n-k)] / C(N, n)
+```
+
+Where:
+- N = deck size
+- K = copies of target card in deck
+- n = cards drawn
+- k = target number of copies to draw
+
+Implementation uses Python's `math.comb()` for efficient computation without external dependencies.
+
+## Files
+
+- `utils/math_utils.py` - Hypergeometric calculation functions
+- `tests/test_math_utils.py` - 27 unit tests for probability functions
+- `widgets/identify_opponent.py` - Calculator panel UI integration
+
 - This project runs in Windows, but Claude Code is being run in WSL, therefore there is no way to test UI features directly, we must iterate back and forth.
