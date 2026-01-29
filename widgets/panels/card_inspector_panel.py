@@ -312,11 +312,21 @@ class CardInspectorPanel(wx.Panel):
                 self.card_image_display.show_placeholder("Not cached")
                 self.nav_panel.Hide()
                 logger.info(
-                    "No printings data available for %s; image download cannot be queued yet.",
+                    "No printings data available for {}; queueing name-based download.",
                     self.inspector_current_card_name,
                 )
+                if self.inspector_current_card_name:
+                    active_request = CardImageRequest(
+                        card_name=self.inspector_current_card_name,
+                        uuid=None,
+                        set_code=None,
+                        collector_number=None,
+                        size="normal",
+                    )
             self._notify_selection(active_request)
             self._set_display_mode(image_available)
+            if not image_available and active_request:
+                self._request_missing_image(active_request)
             return
 
         # Get current printing

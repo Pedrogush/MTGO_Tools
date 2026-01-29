@@ -115,21 +115,14 @@ class CardImageDownloadQueue:
         if self._is_cached(request):
             return True
         try:
-            if request.uuid:
-                success, msg = self._downloader.download_card_image_by_id(
-                    request.uuid, request.size
-                )
-            else:
-                success, msg = self._downloader.download_card_image_by_set(
-                    request.set_code or "",
-                    request.collector_number or "",
-                    request.size,
-                )
+            success, msg = self._downloader.download_card_image_by_name(
+                request.card_name, request.size
+            )
         except Exception as exc:
-            logger.debug("Card image download failed for %s: %s", request.card_name, exc)
+            logger.error("Card image download failed for %s: %s", request.card_name, exc)
             return False
         if not success:
-            logger.debug("Card image download skipped for %s: %s", request.card_name, msg)
+            logger.error("Card image download failed for %s: %s", request.card_name, msg)
         return success
 
     def _ensure_selected_priority_locked(self) -> None:
@@ -155,11 +148,9 @@ class CardImageDownloadQueue:
                 return
 
     def _is_cached(self, request: CardImageRequest) -> bool:
-        if request.uuid:
-            return bool(self._cache.get_image_paths_by_uuid(request.uuid, request.size))
-        if request.card_name:
-            return self._cache.get_image_path(request.card_name, request.size) is not None
-        return False
+        if not request.card_name:
+            return False
+        return self._cache.get_image_path(request.card_name, request.size) is not None
 
 
 class ImageService:

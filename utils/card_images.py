@@ -58,8 +58,7 @@ IMAGE_SIZES = {
 
 # Download configuration
 BULK_DATA_URL = "https://api.scryfall.com/bulk-data/default-cards"
-SCRYFALL_CARD_ID_URL = "https://api.scryfall.com/cards/{card_id}"
-SCRYFALL_CARD_SET_URL = "https://api.scryfall.com/cards/{set_code}/{collector_number}"
+SCRYFALL_CARD_NAMED_URL = "https://api.scryfall.com/cards/named"
 MAX_WORKERS = 10  # Concurrent download threads
 CHUNK_SIZE = 8192  # Download chunk size
 REQUEST_TIMEOUT = 30  # Seconds
@@ -85,9 +84,7 @@ class CardImageRequest:
 
     def can_fetch(self) -> bool:
         """Return True when there is enough data to fetch from Scryfall."""
-        if self.uuid:
-            return True
-        return bool(self.set_code and self.collector_number)
+        return bool((self.card_name or "").strip())
 
 
 class CardImageCache:
@@ -450,32 +447,17 @@ class BulkImageDownloader:
         resp.raise_for_status()
         return resp.json()
 
-    def fetch_card_by_id(self, card_id: str) -> dict[str, Any]:
-        """Fetch card data from Scryfall by UUID."""
-        url = SCRYFALL_CARD_ID_URL.format(card_id=card_id)
-        resp = self.session.get(url, timeout=REQUEST_TIMEOUT)
-        resp.raise_for_status()
-        return resp.json()
-
-    def fetch_card_by_set(self, set_code: str, collector_number: str) -> dict[str, Any]:
-        """Fetch card data from Scryfall by set code and collector number."""
-        url = SCRYFALL_CARD_SET_URL.format(
-            set_code=set_code.lower(), collector_number=collector_number
+    def fetch_card_by_name(self, name: str) -> dict[str, Any]:
+        """Fetch card data from Scryfall by exact name."""
+        resp = self.session.get(
+            SCRYFALL_CARD_NAMED_URL, params={"exact": name}, timeout=REQUEST_TIMEOUT
         )
-        resp = self.session.get(url, timeout=REQUEST_TIMEOUT)
         resp.raise_for_status()
         return resp.json()
 
-    def download_card_image_by_id(self, card_id: str, size: str = "normal") -> tuple[bool, str]:
-        """Fetch card data by UUID and download its image(s)."""
-        card = self.fetch_card_by_id(card_id)
-        return self._download_single_image(card, size)
-
-    def download_card_image_by_set(
-        self, set_code: str, collector_number: str, size: str = "normal"
-    ) -> tuple[bool, str]:
-        """Fetch card data by set/collector number and download its image(s)."""
-        card = self.fetch_card_by_set(set_code, collector_number)
+    def download_card_image_by_name(self, name: str, size: str = "normal") -> tuple[bool, str]:
+        """Fetch card data by name and download its image(s)."""
+        card = self.fetch_card_by_name(name)
         return self._download_single_image(card, size)
 
     def _get_cached_bulk_data_record(self) -> tuple[str | None, str | None]:
