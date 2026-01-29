@@ -429,7 +429,8 @@ class CardInspectorPanel(wx.Panel):
     def _set_display_mode(self, image_available: bool) -> None:
         """Toggle between image-only and text fallback views."""
         self._image_available = image_available
-        self.image_column_panel.Show(image_available)
+        show_image_column = image_available or bool(self.inspector_printings)
+        self.image_column_panel.Show(show_image_column)
         self.details_panel.Show(not image_available)
         self.Layout()
 
