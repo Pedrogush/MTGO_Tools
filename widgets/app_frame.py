@@ -28,6 +28,7 @@ from utils.deck_renderer import DeckRenderer
 from utils.mana_icon_factory import ManaIconFactory
 from utils.stylize import stylize_listbox, stylize_textctrl
 from utils.window_persistence import WindowPersistenceManager
+from widgets.builders.toolbar_builder import ToolbarBuilder
 from widgets.buttons.deck_action_buttons import DeckActionButtons
 from widgets.buttons.toolbar_buttons import ToolbarButtons
 from widgets.dialogs.image_download_dialog import show_image_download_dialog
@@ -214,8 +215,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
         return panel, sizer
 
     def _build_toolbar(self, parent: wx.Window) -> ToolbarButtons:
-        return ToolbarButtons(
-            parent,
+        toolbar_builder = ToolbarBuilder(
             on_open_opponent_tracker=self.open_opponent_tracker,
             on_open_timer_alert=self.open_timer_alert,
             on_open_match_history=self.open_match_history,
@@ -226,6 +226,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
             ),
             on_update_card_database=lambda: self.controller.force_bulk_data_update(),
         )
+        return toolbar_builder.build(parent)
 
     def _build_card_data_controls(self, parent: wx.Window) -> wx.Panel:
         panel, sizer = self._create_styled_panel(parent)
