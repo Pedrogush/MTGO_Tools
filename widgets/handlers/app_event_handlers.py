@@ -382,10 +382,15 @@ class AppEventHandlers:
     def _on_builder_clear(self: AppFrame) -> None:
         self.builder_panel.clear_filters()
 
-    def _on_builder_result_selected(self: AppFrame, idx: int) -> None:
+    def _on_builder_result_selected(self: AppFrame, idx: int | None) -> None:
+        if idx is None:
+            if self.card_inspector_panel.active_zone is None:
+                self.card_inspector_panel.reset()
+            return
         meta = self.builder_panel.get_result_at_index(idx)
         if not meta:
             return
+        self._clear_zone_selections()
         faux_card = {"name": meta.get("name", "Unknown"), "qty": 1}
         self.card_inspector_panel.update_card(faux_card, zone=None, meta=meta)
 

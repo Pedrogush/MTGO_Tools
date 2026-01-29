@@ -62,7 +62,7 @@ class DeckBuilderPanel(wx.Panel):
         open_mana_keyboard: Callable[[], None],
         on_search: Callable[[], None],
         on_clear: Callable[[], None],
-        on_result_selected: Callable[[int], None],
+        on_result_selected: Callable[[int | None], None],
         on_open_radar_dialog: Callable[[], RadarData | None] | None = None,
     ) -> None:
         super().__init__(parent)
@@ -265,6 +265,7 @@ class DeckBuilderPanel(wx.Panel):
         results.SetBackgroundColour(DARK_ALT)
         results.SetForegroundColour(LIGHT_TEXT)
         results.Bind(wx.EVT_LIST_ITEM_SELECTED, self._on_result_item_selected)
+        results.Bind(wx.EVT_LEFT_DOWN, self._on_results_left_down)
         sizer.Add(results, 1, wx.EXPAND | wx.ALL, 6)
         self.results_ctrl = results
 
@@ -286,6 +287,17 @@ class DeckBuilderPanel(wx.Panel):
         if idx == wx.NOT_FOUND:
             return
         self._on_result_selected(idx)
+
+    def _on_results_left_down(self, event: wx.MouseEvent) -> None:
+        if not self.results_ctrl:
+            event.Skip()
+            return
+        idx, _ = self.results_ctrl.HitTest(event.GetPosition())
+        if idx != wx.NOT_FOUND and self.results_ctrl.IsSelected(idx):
+            self.clear_result_selection()
+            self._on_result_selected(None)
+            return
+        event.Skip()
 
     def _append_mana_symbol(self, token: str) -> None:
         """Append a mana symbol to the mana cost field."""
@@ -385,6 +397,13 @@ class DeckBuilderPanel(wx.Panel):
         selected = self.results_ctrl.GetFirstSelected()
         return self.get_result_at_index(selected) if selected != wx.NOT_FOUND else None
 
+    def clear_result_selection(self) -> None:
+        if not self.results_ctrl:
+            return
+        selected = self.results_ctrl.GetFirstSelected()
+        if selected != wx.NOT_FOUND:
+            self.results_ctrl.Select(selected, on=0)
+
     def _on_search(self) -> None:
         """Trigger search callback."""
         self._on_search_callback()
@@ -399,7 +418,7 @@ class DeckBuilderPanel(wx.Panel):
         """Handle clear button click."""
         self._on_clear_callback()
 
-    def _on_result_selected(self, idx: int) -> None:
+    def _on_result_selected(self, idx: int | None) -> None:
         """Handle result list item selection."""
         self._on_result_selected_callback(idx)
 

@@ -134,6 +134,7 @@ class CardTablePanel(wx.Panel):
 
     def _handle_card_click(self, zone: str, card: dict[str, Any], panel: CardBoxPanel) -> None:
         if self.active_panel is panel:
+            self.clear_selection()
             return
         if self.active_panel:
             self.active_panel.set_active(False)
