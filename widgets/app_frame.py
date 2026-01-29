@@ -14,7 +14,6 @@ from utils.constants import (
     APP_FRAME_MIN_SIZE,
     APP_FRAME_SIZE,
     APP_FRAME_SUMMARY_MIN_HEIGHT,
-    DARK_ACCENT,
     DARK_BG,
     DARK_PANEL,
     FORMAT_OPTIONS,
@@ -45,6 +44,7 @@ from widgets.panels.deck_research_panel import DeckResearchPanel
 from widgets.panels.deck_stats_panel import DeckStatsPanel
 from widgets.panels.radar_panel import RadarDialog
 from widgets.panels.sideboard_guide_panel import SideboardGuidePanel
+from widgets.ui_theme_config import UIThemeConfig
 
 
 class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, wx.Frame):
@@ -72,6 +72,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
 
         self.window_persistence = WindowPersistenceManager(self, self.controller)
         self.child_windows = ChildWindowManager(self)
+        self.theme_config = UIThemeConfig()
         self.mana_icons = ManaIconFactory()
         self.mana_keyboard_window: ManaKeyboardFrame | None = None
         self._inspector_hover_timer: wx.Timer | None = None
@@ -179,19 +180,9 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
     def _create_notebook(self, parent: wx.Window) -> fnb.FlatNotebook:
         notebook = fnb.FlatNotebook(
             parent,
-            agwStyle=(
-                fnb.FNB_FANCY_TABS
-                | fnb.FNB_SMART_TABS
-                | fnb.FNB_NO_X_BUTTON
-                | fnb.FNB_NO_NAV_BUTTONS
-            ),
+            agwStyle=self.theme_config.get_notebook_style(),
         )
-        notebook.SetTabAreaColour(DARK_PANEL)
-        notebook.SetActiveTabColour(DARK_ACCENT)
-        notebook.SetNonActiveTabTextColour(SUBDUED_TEXT)
-        notebook.SetActiveTabTextColour(wx.Colour(12, 14, 18))
-        notebook.SetBackgroundColour(DARK_BG)
-        notebook.SetForegroundColour(LIGHT_TEXT)
+        self.theme_config.apply_to_notebook(notebook)
         return notebook
 
     def _create_static_box_sizer(
@@ -199,8 +190,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
     ) -> tuple[wx.StaticBoxSizer, wx.StaticBox]:
         """Create a styled static box sizer with consistent theming."""
         static_box = wx.StaticBox(parent, label=label)
-        static_box.SetForegroundColour(LIGHT_TEXT)
-        static_box.SetBackgroundColour(DARK_PANEL)
+        self.theme_config.apply_to_static_box(static_box)
         sizer = wx.StaticBoxSizer(static_box, orientation)
         return sizer, static_box
 
