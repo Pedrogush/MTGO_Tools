@@ -197,7 +197,7 @@ class CardInspectorPanel(wx.Panel):
         self.inspector_current_card_name = None
         self._printings_request_inflight = None
         self._loading_printing = False
-        self._set_display_mode(False)
+        self._set_display_mode(False, show_image_column=True)
 
     def update_card(
         self, card: dict[str, Any], zone: str | None = None, meta: dict[str, Any] | None = None
@@ -357,7 +357,7 @@ class CardInspectorPanel(wx.Panel):
                         self._printings_request_handler(self.inspector_current_card_name)
                         self._loading_printing = True
             self._notify_selection(active_request)
-            self._set_display_mode(image_available)
+            self._set_display_mode(image_available, show_image_column=image_available)
             if not image_available and active_request:
                 self._request_missing_image(active_request)
             return
@@ -419,7 +419,7 @@ class CardInspectorPanel(wx.Panel):
             self.nav_panel.Hide()
 
         self._notify_selection(active_request)
-        self._set_display_mode(image_available)
+        self._set_display_mode(image_available, show_image_column=image_available)
 
         if not image_available:
             self._request_missing_image(active_request)
@@ -443,10 +443,13 @@ class CardInspectorPanel(wx.Panel):
             self.printing_label.Wrap(self.printing_label_width)
         self.nav_panel.Layout()
 
-    def _set_display_mode(self, image_available: bool) -> None:
+    def _set_display_mode(
+        self, image_available: bool, *, show_image_column: bool | None = None
+    ) -> None:
         """Toggle between image-only and text fallback views."""
         self._image_available = image_available
-        show_image_column = image_available or bool(self.inspector_printings)
+        if show_image_column is None:
+            show_image_column = image_available or bool(self.inspector_printings)
         self.image_column_panel.Show(show_image_column)
         if self._loading_printing:
             self.loading_label.Show()
