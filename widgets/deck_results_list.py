@@ -27,6 +27,9 @@ class DeckResultsList(wx.VListBox):
         self.SetItemCount(0)
         self.Refresh()
 
+    def GetCount(self) -> int:
+        return len(self._items)
+
     def _split_lines(self, text: str) -> tuple[str, str]:
         lines = [line.strip() for line in text.splitlines() if line.strip()]
         if not lines:
