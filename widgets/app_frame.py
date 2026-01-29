@@ -25,6 +25,7 @@ from utils.constants import (
 )
 from utils.deck_renderer import DeckRenderer
 from utils.mana_icon_factory import ManaIconFactory
+from utils.session_ui_coordinator import SessionUICoordinator
 from utils.stylize import stylize_listbox, stylize_textctrl
 from utils.window_persistence import WindowPersistenceManager
 from widgets.builders.toolbar_builder import ToolbarBuilder
@@ -73,6 +74,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
         self.window_persistence = WindowPersistenceManager(self, self.controller)
         self.child_windows = ChildWindowManager(self)
         self.theme_config = UIThemeConfig()
+        self.session_coordinator = SessionUICoordinator(self)
         self.mana_icons = ManaIconFactory()
         self.mana_keyboard_window: ManaKeyboardFrame | None = None
         self._inspector_hover_timer: wx.Timer | None = None
@@ -403,31 +405,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
         return None
 
     def _restore_session_state(self) -> None:
-        state = self.controller.session_manager.restore_session_state(self.controller.zone_cards)
-
-        # Restore left panel mode
-        self._show_left_panel(state["left_mode"], force=True)
-
-        has_saved_deck = bool(state.get("zone_cards"))
-
-        # Restore zone cards
-        if has_saved_deck:
-            if self.controller.card_repo.is_card_data_ready():
-                self._render_current_deck()
-            else:
-                self._pending_deck_restore = True
-                self._set_status("Loading card database to restore saved deck...")
-                self.ensure_card_data_loaded()
-
-        # Restore deck text
-        if (
-            state.get("deck_text")
-            and self.controller.card_repo.is_card_data_ready()
-            and not has_saved_deck
-        ):
-            self._update_stats(state["deck_text"])
-            self.copy_button.Enable(True)
-            self.save_button.Enable(True)
+        self.session_coordinator.restore_session_state()
 
     def _set_status(self, message: str) -> None:
         if self.status_bar:
