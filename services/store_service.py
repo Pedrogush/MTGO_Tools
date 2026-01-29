@@ -8,6 +8,8 @@ from typing import Any
 
 from loguru import logger
 
+from utils.atomic_io import atomic_write_json, locked_path
+
 
 class StoreService:
     """Service that reads and writes lightweight JSON stores."""
@@ -25,7 +27,8 @@ class StoreService:
         if not path.exists():
             return {}
         try:
-            return json.loads(path.read_text(encoding="utf-8"))
+            with locked_path(path):
+                return json.loads(path.read_text(encoding="utf-8"))
         except json.JSONDecodeError:
             logger.warning(f"Invalid JSON at {path}; ignoring store")
             return {}
@@ -42,8 +45,7 @@ class StoreService:
             data: Dictionary payload
         """
         try:
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+            atomic_write_json(path, data, indent=2, ensure_ascii=False)
         except OSError as exc:
             logger.warning(f"Failed to write {path}: {exc}")
 
