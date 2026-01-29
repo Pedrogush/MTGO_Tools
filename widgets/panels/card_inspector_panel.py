@@ -61,6 +61,7 @@ class CardInspectorPanel(wx.Panel):
         self.image_cache = get_cache()
         self.bulk_data_by_name: dict[str, list[dict[str, Any]]] | None = None
         self._image_available = False
+        self._loading_printing = False
         self._image_request_handler: Callable[[CardImageRequest], None] | None = None
         self._selected_card_handler: Callable[[CardImageRequest | None], None] | None = None
         self._printings_request_handler: Callable[[str], None] | None = None
@@ -122,6 +123,11 @@ class CardInspectorPanel(wx.Panel):
         self.printing_label.SetMaxSize((self.printing_label_width, -1))
         self.printing_label.SetForegroundColour(SUBDUED_TEXT)
         nav_sizer.Add(self.printing_label, 1, wx.ALIGN_CENTER_VERTICAL | wx.ALIGN_CENTER)
+
+        self.loading_label = wx.StaticText(self.nav_panel, label="Loading printing…")
+        self.loading_label.SetForegroundColour(SUBDUED_TEXT)
+        nav_sizer.Add(self.loading_label, 0, wx.LEFT | wx.ALIGN_CENTER_VERTICAL, 6)
+        self.loading_label.Hide()
 
         self.next_btn = wx.Button(self.nav_panel, label="▶", size=nav_btn_size)
         stylize_button(self.next_btn)
@@ -190,6 +196,7 @@ class CardInspectorPanel(wx.Panel):
         self.inspector_current_printing = 0
         self.inspector_current_card_name = None
         self._printings_request_inflight = None
+        self._loading_printing = False
         self._set_display_mode(False)
 
     def update_card(
@@ -307,6 +314,7 @@ class CardInspectorPanel(wx.Panel):
         self.inspector_printings = []
         self.inspector_current_printing = 0
         self._printings_request_inflight = None
+        self._loading_printing = False
 
         # Query in-memory bulk data for all printings
         if self.bulk_data_by_name:
@@ -347,6 +355,7 @@ class CardInspectorPanel(wx.Panel):
                     ):
                         self._printings_request_inflight = self.inspector_current_card_name.lower()
                         self._printings_request_handler(self.inspector_current_card_name)
+                        self._loading_printing = True
             self._notify_selection(active_request)
             self._set_display_mode(image_available)
             if not image_available and active_request:
@@ -373,6 +382,7 @@ class CardInspectorPanel(wx.Panel):
             else:
                 self.card_image_display.show_image(image_paths[0])
             image_available = True
+            self._loading_printing = False
         else:
             name_fallback = get_card_image(self.inspector_current_card_name, "normal")
             if name_fallback and name_fallback.exists():
@@ -387,8 +397,12 @@ class CardInspectorPanel(wx.Panel):
                     is None
                 ):
                     self._request_missing_image(active_request)
+                    self._loading_printing = True
+                else:
+                    self._loading_printing = False
             else:
                 self.card_image_display.show_placeholder("Not cached")
+                self._loading_printing = True
 
         # Update navigation controls
         if len(self.inspector_printings) > 1:
@@ -440,7 +454,11 @@ class CardInspectorPanel(wx.Panel):
         self._image_available = image_available
         show_image_column = image_available or bool(self.inspector_printings)
         self.image_column_panel.Show(show_image_column)
-        self.details_panel.Show(not image_available)
+        if self._loading_printing:
+            self.loading_label.Show()
+        else:
+            self.loading_label.Hide()
+        self.details_panel.Show(not image_available or self._loading_printing)
         self.Layout()
 
     def _notify_selection(self, request: CardImageRequest | None) -> None:
