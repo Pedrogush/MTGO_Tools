@@ -177,6 +177,17 @@ class CardTablePanelHandler:
             return None
         return self.builder_panel.get_selected_result()
 
+    def _has_selected_card(self: AppFrame) -> bool:
+        return (
+            self._get_selected_zone_card() is not None
+            or self._get_selected_search_card() is not None
+        )
+
+    def _clear_zone_selections(self: AppFrame) -> None:
+        for table in (self.main_table, self.side_table, self.out_table):
+            if table:
+                table.clear_selection()
+
     def _get_active_zone_for_add(self: AppFrame) -> str:
         if not self.zone_notebook:
             return "main"
@@ -223,11 +234,15 @@ class CardTablePanelHandler:
             if self.card_inspector_panel.active_zone == zone:
                 self.card_inspector_panel.reset()
             return
+        if self.builder_panel:
+            self.builder_panel.clear_result_selection()
         self._collapse_other_zone_tables(zone)
         meta = self.controller.card_repo.get_card_metadata(card["name"])
         self.card_inspector_panel.update_card(card, zone=zone, meta=meta)
 
     def _handle_card_hover(self: AppFrame, zone: str, card: dict[str, Any]) -> None:
+        if self._has_selected_card():
+            return
         self._pending_hover = (zone, card)
         if self._inspector_hover_timer is None:
             self._inspector_hover_timer = wx.Timer(self)
@@ -239,6 +254,9 @@ class CardTablePanelHandler:
 
     def _flush_hover_preview(self: AppFrame, _event: wx.TimerEvent) -> None:
         if not self._pending_hover:
+            return
+        if self._has_selected_card():
+            self._pending_hover = None
             return
         zone, card = self._pending_hover
         self._pending_hover = None
