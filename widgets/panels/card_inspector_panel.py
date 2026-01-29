@@ -246,6 +246,8 @@ class CardInspectorPanel(wx.Panel):
     def set_bulk_data(self, bulk_data_by_name: dict[str, list[dict[str, Any]]]) -> None:
         """Set the bulk data index for fast printing lookups."""
         self.bulk_data_by_name = bulk_data_by_name
+        if self.inspector_current_card_name:
+            self._load_card_image_and_printings(self.inspector_current_card_name)
 
     def set_image_request_handlers(
         self,
@@ -309,6 +311,10 @@ class CardInspectorPanel(wx.Panel):
             else:
                 self.card_image_display.show_placeholder("Not cached")
                 self.nav_panel.Hide()
+                logger.info(
+                    "No printings data available for %s; image download cannot be queued yet.",
+                    self.inspector_current_card_name,
+                )
             self._notify_selection(active_request)
             self._set_display_mode(image_available)
             return
