@@ -102,9 +102,7 @@ class CardInspectorPanel(wx.Panel):
         )
         self.image_text_panel = wx.Panel(self.image_column_panel)
         self.image_text_panel.SetBackgroundColour(DARK_PANEL)
-        self.image_text_panel.SetMinSize(
-            (CARD_IMAGE_DISPLAY_WIDTH, CARD_IMAGE_DISPLAY_HEIGHT)
-        )
+        self.image_text_panel.SetMinSize((CARD_IMAGE_DISPLAY_WIDTH, CARD_IMAGE_DISPLAY_HEIGHT))
         image_text_sizer = wx.BoxSizer(wx.VERTICAL)
         self.image_text_panel.SetSizer(image_text_sizer)
         self.image_text_ctrl = wx.TextCtrl(
@@ -113,9 +111,7 @@ class CardInspectorPanel(wx.Panel):
         )
         stylize_textctrl(self.image_text_ctrl, multiline=True)
         image_text_sizer.Add(self.image_text_ctrl, 1, wx.EXPAND | wx.ALL, PADDING_SM)
-        image_column.Add(
-            self.image_text_panel, 0, wx.ALIGN_CENTER_HORIZONTAL | wx.ALL, PADDING_SM
-        )
+        image_column.Add(self.image_text_panel, 0, wx.ALIGN_CENTER_HORIZONTAL | wx.ALL, PADDING_SM)
         self.image_text_panel.Hide()
 
         # Printing navigation panel
