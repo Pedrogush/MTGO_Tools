@@ -12,6 +12,7 @@ import wx
 from curl_cffi import requests
 from loguru import logger
 
+from utils.atomic_io import atomic_write_json, locked_path
 from utils.constants import (
     CONFIG_DIR,
     DARK_BG,
@@ -295,9 +296,7 @@ class MTGOpponentDeckSpy(wx.Frame):
             "screen_pos": position,
         }
         try:
-            DECK_MONITOR_CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
-            with DECK_MONITOR_CONFIG_FILE.open("w", encoding="utf-8") as fh:
-                json.dump(config, fh, indent=4)
+            atomic_write_json(DECK_MONITOR_CONFIG_FILE, config, indent=4)
         except OSError as exc:
             logger.warning(f"Failed to write deck monitor config: {exc}")
 
@@ -313,17 +312,16 @@ class MTGOpponentDeckSpy(wx.Frame):
             return
 
         try:
-            with source_file.open("r", encoding="utf-8") as fh:
-                data = json.load(fh)
+            with locked_path(source_file):
+                with source_file.open("r", encoding="utf-8") as fh:
+                    data = json.load(fh)
         except json.JSONDecodeError as exc:
             logger.warning(f"Invalid deck monitor config: {exc}")
             return
 
         if legacy_source:
             try:
-                DECK_MONITOR_CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
-                with DECK_MONITOR_CONFIG_FILE.open("w", encoding="utf-8") as fh:
-                    json.dump(data, fh, indent=4)
+                atomic_write_json(DECK_MONITOR_CONFIG_FILE, data, indent=4)
             except OSError as exc:
                 logger.warning(f"Failed to migrate deck monitor config: {exc}")
         self._saved_position = data.get("screen_pos")
@@ -331,9 +329,7 @@ class MTGOpponentDeckSpy(wx.Frame):
     def _save_cache(self) -> None:
         payload = {"entries": self.cache}
         try:
-            DECK_MONITOR_CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
-            with DECK_MONITOR_CACHE_FILE.open("w", encoding="utf-8") as fh:
-                json.dump(payload, fh, indent=2)
+            atomic_write_json(DECK_MONITOR_CACHE_FILE, payload, indent=2)
         except OSError as exc:
             logger.debug(f"Unable to write deck monitor cache: {exc}")
 
@@ -347,8 +343,9 @@ class MTGOpponentDeckSpy(wx.Frame):
             if not candidate.exists():
                 continue
             try:
-                with candidate.open("r", encoding="utf-8") as fh:
-                    data = json.load(fh)
+                with locked_path(candidate):
+                    with candidate.open("r", encoding="utf-8") as fh:
+                        data = json.load(fh)
             except json.JSONDecodeError:
                 logger.debug(f"Skipping invalid cache file {candidate}")
                 continue

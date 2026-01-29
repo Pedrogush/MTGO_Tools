@@ -20,6 +20,7 @@ from navigators.mtggoldfish import (
     get_archetype_decks,
     get_archetypes,
 )
+from utils.atomic_io import atomic_write_json, locked_path
 from utils.constants import (
     ARCHETYPE_DECKS_CACHE_FILE,
     ARCHETYPE_LIST_CACHE_FILE,
@@ -215,8 +216,9 @@ class MetagameRepository:
             return None
 
         try:
-            with self.archetype_list_cache_file.open("r", encoding="utf-8") as fh:
-                data = json.load(fh)
+            with locked_path(self.archetype_list_cache_file):
+                with self.archetype_list_cache_file.open("r", encoding="utf-8") as fh:
+                    data = json.load(fh)
         except json.JSONDecodeError as exc:
             logger.warning(f"Cached archetype list invalid: {exc}")
             return None
@@ -242,25 +244,22 @@ class MetagameRepository:
             mtg_format: MTG format
             items: List of archetype dictionaries
         """
-        data: dict[str, Any] = {}
-        if self.archetype_list_cache_file.exists():
+        with locked_path(self.archetype_list_cache_file):
+            data: dict[str, Any] = {}
+            if self.archetype_list_cache_file.exists():
+                try:
+                    with self.archetype_list_cache_file.open("r", encoding="utf-8") as fh:
+                        data = json.load(fh)
+                except json.JSONDecodeError as exc:
+                    logger.warning(f"Archetype cache invalid, rebuilding: {exc}")
+
+            data[mtg_format] = {"timestamp": time.time(), "items": items}
+
             try:
-                with self.archetype_list_cache_file.open("r", encoding="utf-8") as fh:
-                    data = json.load(fh)
-            except json.JSONDecodeError as exc:
-                logger.warning(f"Archetype cache invalid, rebuilding: {exc}")
-
-        data[mtg_format] = {"timestamp": time.time(), "items": items}
-
-        try:
-            # Save back
-            self.archetype_list_cache_file.parent.mkdir(parents=True, exist_ok=True)
-            with self.archetype_list_cache_file.open("w", encoding="utf-8") as fh:
-                json.dump(data, fh, indent=2)
-
-            logger.debug(f"Cached {len(items)} archetypes for {mtg_format}")
-        except (OSError, json.JSONDecodeError) as exc:
-            logger.warning(f"Failed to cache archetypes: {exc}")
+                atomic_write_json(self.archetype_list_cache_file, data, indent=2)
+                logger.debug(f"Cached {len(items)} archetypes for {mtg_format}")
+            except (OSError, json.JSONDecodeError) as exc:
+                logger.warning(f"Failed to cache archetypes: {exc}")
 
     def _load_cached_decks(
         self, archetype_url: str, max_age: int | None | object = _USE_DEFAULT_MAX_AGE
@@ -283,8 +282,9 @@ class MetagameRepository:
             return None
 
         try:
-            with self.archetype_decks_cache_file.open("r", encoding="utf-8") as fh:
-                data = json.load(fh)
+            with locked_path(self.archetype_decks_cache_file):
+                with self.archetype_decks_cache_file.open("r", encoding="utf-8") as fh:
+                    data = json.load(fh)
         except json.JSONDecodeError as exc:
             logger.warning(f"Cached deck list invalid: {exc}")
             return None
@@ -310,25 +310,22 @@ class MetagameRepository:
             archetype_url: URL identifying the archetype
             items: List of deck dictionaries
         """
-        data: dict[str, Any] = {}
-        if self.archetype_decks_cache_file.exists():
+        with locked_path(self.archetype_decks_cache_file):
+            data: dict[str, Any] = {}
+            if self.archetype_decks_cache_file.exists():
+                try:
+                    with self.archetype_decks_cache_file.open("r", encoding="utf-8") as fh:
+                        data = json.load(fh)
+                except json.JSONDecodeError as exc:
+                    logger.warning(f"Deck cache invalid, rebuilding: {exc}")
+
+            data[archetype_url] = {"timestamp": time.time(), "items": items}
+
             try:
-                with self.archetype_decks_cache_file.open("r", encoding="utf-8") as fh:
-                    data = json.load(fh)
-            except json.JSONDecodeError as exc:
-                logger.warning(f"Deck cache invalid, rebuilding: {exc}")
-
-        data[archetype_url] = {"timestamp": time.time(), "items": items}
-
-        try:
-            # Save back
-            self.archetype_decks_cache_file.parent.mkdir(parents=True, exist_ok=True)
-            with self.archetype_decks_cache_file.open("w", encoding="utf-8") as fh:
-                json.dump(data, fh, indent=2)
-
-            logger.debug(f"Cached {len(items)} decks for archetype")
-        except (OSError, json.JSONDecodeError) as exc:
-            logger.warning(f"Failed to cache decks: {exc}")
+                atomic_write_json(self.archetype_decks_cache_file, data, indent=2)
+                logger.debug(f"Cached {len(items)} decks for archetype")
+            except (OSError, json.JSONDecodeError) as exc:
+                logger.warning(f"Failed to cache decks: {exc}")
 
     def _filter_decks_by_source(
         self, decks: list[dict[str, Any]], source_filter: str | None
