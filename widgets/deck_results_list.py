@@ -9,6 +9,7 @@ class DeckResultsList(wx.VListBox):
     _ITEM_MARGIN = 6
     _CARD_RADIUS = 8
     _CARD_PADDING = 8
+    _MIN_FONT_SIZE = 8
 
     def __init__(self, parent: wx.Window) -> None:
         super().__init__(parent, style=wx.BORDER_NONE)
@@ -49,6 +50,16 @@ class DeckResultsList(wx.VListBox):
         dc.SetPen(wx.Pen(self.GetBackgroundColour()))
         dc.DrawRectangle(rect)
 
+    def _fit_font_to_width(self, dc: wx.DC, text: str, font: wx.Font, max_width: int) -> wx.Font:
+        sized_font = wx.Font(font)
+        for point_size in range(font.GetPointSize(), self._MIN_FONT_SIZE - 1, -1):
+            sized_font.SetPointSize(point_size)
+            dc.SetFont(sized_font)
+            text_width, _ = dc.GetTextExtent(text)
+            if text_width <= max_width:
+                return sized_font
+        return sized_font
+
     def OnDrawItem(self, dc: wx.DC, rect: wx.Rect, n: int) -> None:
         if n < 0 or n >= len(self._items):
             return
@@ -70,10 +81,18 @@ class DeckResultsList(wx.VListBox):
         dc.SetTextForeground(card_fg)
         line_one_width, line_one_height = dc.GetTextExtent(line_one)
 
-        font.SetWeight(wx.FONTWEIGHT_NORMAL)
-        dc.SetFont(font)
-        dc.SetTextForeground(sub_fg)
-        line_two_width, line_two_height = dc.GetTextExtent(line_two)
+        base_font = self.GetFont()
+        base_font.SetWeight(wx.FONTWEIGHT_NORMAL)
+        max_text_width = max(card_rect.width - (self._CARD_PADDING * 2), 0)
+        if line_two:
+            line_two_font = self._fit_font_to_width(dc, line_two, base_font, max_text_width)
+            dc.SetFont(line_two_font)
+            dc.SetTextForeground(sub_fg)
+            line_two_width, line_two_height = dc.GetTextExtent(line_two)
+        else:
+            line_two_font = base_font
+            line_two_width = 0
+            line_two_height = 0
 
         content_height = line_one_height
         if line_two:
@@ -88,8 +107,7 @@ class DeckResultsList(wx.VListBox):
         dc.DrawText(line_one, center_x - (line_one_width // 2), start_y)
 
         if line_two:
-            font.SetWeight(wx.FONTWEIGHT_NORMAL)
-            dc.SetFont(font)
+            dc.SetFont(line_two_font)
             dc.SetTextForeground(sub_fg)
             dc.DrawText(
                 line_two,
