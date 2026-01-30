@@ -66,12 +66,24 @@ class DeckResultsList(wx.VListBox):
         prefix = text.split("-", 1)[0].rstrip()
         return f"{prefix}..." if prefix else "..."
 
+    def _fit_truncated_line(self, dc: wx.DC, text: str, max_width: int) -> str:
+        if not text:
+            return text
+        dc.SetFont(self.GetFont())
+        while text:
+            text_width, _ = dc.GetTextExtent(text)
+            if text_width <= max_width:
+                return text
+            words = text.rsplit(" ", 1)
+            if len(words) == 1:
+                return "..."
+            text = f"{words[0].rstrip()}..."
+        return text
+
     def OnDrawItem(self, dc: wx.DC, rect: wx.Rect, n: int) -> None:
         if n < 0 or n >= len(self._items):
             return
         line_one, line_two = self._items[n]
-        if line_two:
-            line_two = self._truncate_line_two(line_two)
         is_selected = self.IsSelected(n)
         card_bg = self._card_border if is_selected else self._card_bg
         card_fg = self._selection_fg if is_selected else self._line_one_color
@@ -79,6 +91,10 @@ class DeckResultsList(wx.VListBox):
 
         card_rect = wx.Rect(rect)
         card_rect.Deflate(self._ITEM_MARGIN, self._ITEM_MARGIN)
+        max_text_width = max(card_rect.width - (self._CARD_PADDING * 2), 0)
+        if line_two:
+            line_two = self._truncate_line_two(line_two)
+            line_two = self._fit_truncated_line(dc, line_two, max_text_width)
         dc.SetBrush(wx.Brush(card_bg))
         dc.SetPen(wx.Pen(self._card_border))
         dc.DrawRoundedRectangle(card_rect, self._CARD_RADIUS)
@@ -91,7 +107,6 @@ class DeckResultsList(wx.VListBox):
 
         base_font = self.GetFont()
         base_font.SetWeight(wx.FONTWEIGHT_NORMAL)
-        max_text_width = max(card_rect.width - (self._CARD_PADDING * 2), 0)
         if line_two:
             line_two_font = self._fit_font_to_width(dc, line_two, base_font, max_text_width)
             dc.SetFont(line_two_font)
