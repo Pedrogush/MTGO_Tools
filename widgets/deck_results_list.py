@@ -60,10 +60,18 @@ class DeckResultsList(wx.VListBox):
                 return sized_font
         return sized_font
 
+    def _truncate_line_two(self, text: str) -> str:
+        if "-" not in text:
+            return text
+        prefix = text.split("-", 1)[0].rstrip()
+        return f"{prefix}..." if prefix else "..."
+
     def OnDrawItem(self, dc: wx.DC, rect: wx.Rect, n: int) -> None:
         if n < 0 or n >= len(self._items):
             return
         line_one, line_two = self._items[n]
+        if line_two:
+            line_two = self._truncate_line_two(line_two)
         is_selected = self.IsSelected(n)
         card_bg = self._card_border if is_selected else self._card_bg
         card_fg = self._selection_fg if is_selected else self._line_one_color
