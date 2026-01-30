@@ -24,9 +24,10 @@ from utils.constants import (
     SUBDUED_TEXT,
 )
 from utils.mana_icon_factory import ManaIconFactory
-from utils.stylize import stylize_listbox, stylize_textctrl
+from utils.stylize import stylize_textctrl
 from widgets.buttons.deck_action_buttons import DeckActionButtons
 from widgets.buttons.toolbar_buttons import ToolbarButtons
+from widgets.deck_results_list import DeckResultsList
 from widgets.dialogs.image_download_dialog import show_image_download_dialog
 from widgets.handlers.app_event_handlers import AppEventHandlers
 from widgets.handlers.card_table_panel_handler import CardTablePanelHandler
@@ -185,6 +186,9 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
         deck_results_box = deck_results.GetStaticBox()
         deck_results_box.SetMinSize((inspector_min_width, -1))
         deck_results_box.SetMaxSize((inspector_min_width, -1))
+        list_min_width = max(inspector_min_width - (PADDING_MD * 2), 0)
+        self.summary_text.SetMinSize((list_min_width, APP_FRAME_SUMMARY_MIN_HEIGHT))
+        self.deck_list.SetMinSize((list_min_width, -1))
         inspector_column.Add(deck_results, 1, wx.EXPAND)
 
         return right_panel
@@ -255,8 +259,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
         self.summary_text.SetMinSize((-1, APP_FRAME_SUMMARY_MIN_HEIGHT))
         deck_sizer.Add(self.summary_text, 0, wx.EXPAND | wx.ALL, PADDING_MD)
 
-        self.deck_list = wx.ListBox(deck_box, style=wx.LB_SINGLE)
-        stylize_listbox(self.deck_list)
+        self.deck_list = DeckResultsList(deck_box)
         self.deck_list.Bind(wx.EVT_LISTBOX, self.on_deck_selected)
         deck_sizer.Add(self.deck_list, 1, wx.EXPAND | wx.ALL, PADDING_MD)
 
