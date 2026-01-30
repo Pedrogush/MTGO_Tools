@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import wx
 
-from utils.constants import DARK_ACCENT, DARK_ALT, LIGHT_TEXT, SUBDUED_TEXT
+from utils.constants import DARK_ACCENT, DARK_ALT, DARK_PANEL, LIGHT_TEXT, SUBDUED_TEXT
 
 
 class DeckResultsList(wx.VListBox):
@@ -15,7 +15,7 @@ class DeckResultsList(wx.VListBox):
         self._items: list[tuple[str, str]] = []
         self._line_one_color = wx.Colour(*LIGHT_TEXT)
         self._line_two_color = wx.Colour(*SUBDUED_TEXT)
-        self._card_bg = wx.Colour(*DARK_ALT)
+        self._card_bg = wx.Colour(*DARK_PANEL)
         self._card_border = wx.Colour(*DARK_ACCENT)
         self._selection_fg = wx.Colour(15, 17, 22)
         self.SetBackgroundColour(DARK_ALT)
