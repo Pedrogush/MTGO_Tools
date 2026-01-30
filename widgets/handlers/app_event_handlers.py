@@ -102,10 +102,10 @@ class AppEventHandlers:
         if not value:
             return ""
         matches = list(re.finditer(r"\d{4}-\d{2}-\d{2}", value))
-        if len(matches) <= 1:
+        if not matches:
             return value
         result = value
-        for match in reversed(matches[1:]):
+        for match in reversed(matches):
             start, end = match.span()
             prefix_start = start
             while prefix_start > 0 and result[prefix_start - 1] in " -–—|/":
