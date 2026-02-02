@@ -1,0 +1,184 @@
+"""
+Automation client for sending commands to the running application.
+"""
+
+import json
+import socket
+import time
+from typing import Any
+
+from automation.server import BUFFER_SIZE, DEFAULT_PORT
+
+
+class AutomationError(Exception):
+    """Raised when an automation command fails."""
+    pass
+
+
+class ConnectionError(AutomationError):
+    """Raised when unable to connect to the automation server."""
+    pass
+
+
+class AutomationClient:
+    """Client for sending commands to the automation server."""
+
+    def __init__(self, host: str = "127.0.0.1", port: int = DEFAULT_PORT, timeout: float = 30.0):
+        self.host = host
+        self.port = port
+        self.timeout = timeout
+
+    def _send_command(self, command: str, **kwargs: Any) -> dict[str, Any]:
+        """Send a command to the server and return the response."""
+        request = {"command": command, "args": kwargs}
+
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                sock.settimeout(self.timeout)
+                sock.connect((self.host, self.port))
+                sock.sendall(json.dumps(request).encode("utf-8"))
+                data = sock.recv(BUFFER_SIZE)
+                response = json.loads(data.decode("utf-8"))
+
+                if not response.get("success", False):
+                    raise AutomationError(response.get("error", "Unknown error"))
+
+                return response.get("result", {})
+        except socket.error as e:
+            raise ConnectionError(f"Failed to connect to automation server: {e}") from e
+        except json.JSONDecodeError as e:
+            raise AutomationError(f"Invalid response from server: {e}") from e
+
+    def ping(self) -> dict[str, Any]:
+        """Check if the server is responding."""
+        return self._send_command("ping")
+
+    def wait_for_server(self, timeout: float = 30.0, interval: float = 0.5) -> bool:
+        """Wait for the server to become available."""
+        start_time = time.time()
+        while time.time() - start_time < timeout:
+            try:
+                self.ping()
+                return True
+            except ConnectionError:
+                time.sleep(interval)
+        return False
+
+    def screenshot(self, path: str | None = None) -> dict[str, Any]:
+        """Take a screenshot of the application window.
+
+        Args:
+            path: Optional path to save the screenshot. If not provided,
+                  a timestamped filename will be generated.
+
+        Returns:
+            Dict with 'path', 'width', and 'height' keys.
+        """
+        kwargs = {}
+        if path is not None:
+            kwargs["path"] = path
+        return self._send_command("screenshot", **kwargs)
+
+    def get_status(self) -> str:
+        """Get the status bar text."""
+        result = self._send_command("get_status")
+        return result.get("status", "")
+
+    def get_window_info(self) -> dict[str, Any]:
+        """Get window information (title, position, size, etc.)."""
+        return self._send_command("get_window_info")
+
+    def list_widgets(self) -> dict[str, Any]:
+        """List available widgets and their states."""
+        return self._send_command("list_widgets")
+
+    def click(self, widget: str, label: str | None = None) -> dict[str, Any]:
+        """Click a button by widget name and optional label.
+
+        Args:
+            widget: Name of the widget container (e.g., 'toolbar', 'deck_list')
+            label: Optional button label to click within the widget
+
+        Returns:
+            Dict with 'clicked' boolean and details.
+        """
+        kwargs = {"widget": widget}
+        if label is not None:
+            kwargs["label"] = label
+        return self._send_command("click", **kwargs)
+
+    def set_format(self, format_name: str) -> dict[str, Any]:
+        """Set the current format.
+
+        Args:
+            format_name: Name of the format (e.g., 'Modern', 'Standard')
+        """
+        return self._send_command("set_format", format_name=format_name)
+
+    def get_format(self) -> str:
+        """Get the current format."""
+        result = self._send_command("get_format")
+        return result.get("format", "")
+
+    def get_archetypes(self) -> list[dict[str, str]]:
+        """Get list of available archetypes."""
+        result = self._send_command("get_archetypes")
+        return result.get("archetypes", [])
+
+    def select_archetype(self, index: int | None = None, name: str | None = None) -> dict[str, Any]:
+        """Select an archetype by index or name.
+
+        Args:
+            index: Index of the archetype to select
+            name: Name of the archetype to select (alternative to index)
+        """
+        kwargs = {}
+        if index is not None:
+            kwargs["index"] = index
+        if name is not None:
+            kwargs["name"] = name
+        return self._send_command("select_archetype", **kwargs)
+
+    def get_deck_list(self) -> list[dict[str, Any]]:
+        """Get the list of decks in the deck results list."""
+        result = self._send_command("get_deck_list")
+        return result.get("decks", [])
+
+    def select_deck(self, index: int) -> dict[str, Any]:
+        """Select a deck by index."""
+        return self._send_command("select_deck", index=index)
+
+    def get_deck_text(self) -> str:
+        """Get the current deck text."""
+        result = self._send_command("get_deck_text")
+        return result.get("deck_text", "")
+
+    def switch_tab(self, tab_name: str) -> dict[str, Any]:
+        """Switch to a specific tab in the deck workspace.
+
+        Args:
+            tab_name: Name of the tab (e.g., 'Deck Tables', 'Stats', 'Sideboard Guide')
+        """
+        return self._send_command("switch_tab", tab_name=tab_name)
+
+    def wait(self, ms: int = 1000) -> None:
+        """Wait for a specified number of milliseconds.
+
+        Args:
+            ms: Number of milliseconds to wait
+        """
+        self._send_command("wait", ms=ms)
+
+
+def connect(host: str = "127.0.0.1", port: int = DEFAULT_PORT, timeout: float = 30.0) -> AutomationClient:
+    """Create and return an automation client.
+
+    Args:
+        host: Server host address
+        port: Server port
+        timeout: Connection timeout in seconds
+
+    Returns:
+        Connected AutomationClient instance
+    """
+    return AutomationClient(host=host, port=port, timeout=timeout)

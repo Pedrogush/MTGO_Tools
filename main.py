@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+import argparse
+
 import wx
 from loguru import logger
 
@@ -11,12 +13,18 @@ from utils.constants import LOGS_DIR, ensure_base_dirs
 from utils.logging_config import configure_logging
 from widgets.splash_frame import LoadingFrame
 
+# Global flag for automation mode
+_automation_enabled = False
+_automation_port = 19847
+
 
 class MetagameWxApp(wx.App):
     """Bootstrap the redesigned deck builder."""
 
     def OnInit(self) -> bool:  # noqa: N802 - wx override
         logger.info("Starting MTGO Metagame Deck Builder (wx)")
+        if _automation_enabled:
+            logger.info(f"Automation server will start on port {_automation_port}")
         self.loading_frame = LoadingFrame()
         self.loading_frame.Show()
         self.loading_frame.Layout()
@@ -29,6 +37,18 @@ class MetagameWxApp(wx.App):
         controller = get_deck_selector_controller()
         self.controller = controller
         self.SetTopWindow(controller.frame)
+
+        # Start automation server if enabled
+        self._automation_server = None
+        if _automation_enabled:
+            try:
+                from automation.server import AutomationServer
+
+                self._automation_server = AutomationServer(controller.frame, port=_automation_port)
+                self._automation_server.start()
+                logger.info(f"Automation server started on port {_automation_port}")
+            except Exception as e:
+                logger.error(f"Failed to start automation server: {e}")
 
         def show_main() -> None:
             frame = controller.frame
@@ -45,6 +65,13 @@ class MetagameWxApp(wx.App):
             self.loading_frame.set_ready(show_main)
         else:
             show_main()
+
+    def OnExit(self) -> int:  # noqa: N802 - wx override
+        """Clean up when the application exits."""
+        if getattr(self, "_automation_server", None):
+            logger.info("Stopping automation server...")
+            self._automation_server.stop()
+        return 0
 
     def OnExceptionInMainLoop(self) -> bool:  # noqa: N802 - wx override
         """Handle exceptions in the main event loop."""
@@ -68,11 +95,37 @@ class MetagameWxApp(wx.App):
         return True
 
 
+def parse_args() -> argparse.Namespace:
+    """Parse command-line arguments."""
+    parser = argparse.ArgumentParser(description="MTGO Metagame Deck Builder")
+    parser.add_argument(
+        "--automation",
+        action="store_true",
+        help="Enable automation server for CLI control",
+    )
+    parser.add_argument(
+        "--automation-port",
+        type=int,
+        default=19847,
+        help="Port for automation server (default: 19847)",
+    )
+    return parser.parse_args()
+
+
 def main() -> None:
+    global _automation_enabled, _automation_port
+
+    args = parse_args()
+    _automation_enabled = args.automation
+    _automation_port = args.automation_port
+
     ensure_base_dirs()
     log_file = configure_logging(LOGS_DIR)
     if log_file:
         logger.info(f"Writing logs to {log_file}")
+
+    if _automation_enabled:
+        logger.info(f"Automation mode enabled on port {_automation_port}")
 
     # Install global exception handler for exceptions outside of wx mainloop
     import sys
