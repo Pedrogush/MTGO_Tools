@@ -197,6 +197,14 @@ class CardTablePanel(wx.Panel):
         self.active_panel = None
         self.selected_name = None
 
+    def refresh_card_image(self, card_name: str) -> None:
+        if not card_name:
+            return
+        key = card_name.lower()
+        for widget in self.card_widgets:
+            if widget.card["name"].lower() == key:
+                widget.refresh_image()
+
     def _notify_selection(self, card: dict[str, Any] | None) -> None:
         if self._on_select:
             self._on_select(self.zone, card)

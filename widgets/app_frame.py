@@ -9,6 +9,7 @@ from controllers.app_controller import get_deck_selector_controller
 if TYPE_CHECKING:
     from controllers.app_controller import AppController
 
+from utils.card_images import CardImageRequest
 from utils.constants import (
     APP_FRAME_MIN_SIZE,
     APP_FRAME_SIZE,
@@ -305,7 +306,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
             self.controller.image_service.fetch_printings_by_name_async
         )
         self.controller.image_service.set_image_download_callback(
-            self.card_inspector_panel.handle_image_downloaded
+            self._handle_image_downloaded
         )
         self.controller.image_service.set_printings_loaded_callback(
             self.card_inspector_panel.handle_printings_loaded
@@ -321,6 +322,13 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
         self.image_downloader = self.controller.image_service.image_downloader
 
         return inspector_sizer
+
+    def _handle_image_downloaded(self, request: CardImageRequest) -> None:
+        self.card_inspector_panel.handle_image_downloaded(request)
+        self.main_table.refresh_card_image(request.card_name)
+        self.side_table.refresh_card_image(request.card_name)
+        if self.out_table:
+            self.out_table.refresh_card_image(request.card_name)
 
     def _build_deck_workspace(self, parent: wx.Window) -> wx.StaticBoxSizer:
         detail_box = wx.StaticBox(parent, label="Deck Workspace")

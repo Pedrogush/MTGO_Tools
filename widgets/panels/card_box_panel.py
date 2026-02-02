@@ -110,6 +110,12 @@ class CardBoxPanel(wx.Panel):
         self.Layout()
         self.Refresh()
 
+    def refresh_image(self) -> None:
+        self._image_attempted = False
+        self._image_available = False
+        self._card_bitmap = None
+        self.Refresh()
+
     def set_active(self, active: bool) -> None:
         if self._active == active:
             return
