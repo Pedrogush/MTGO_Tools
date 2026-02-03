@@ -135,7 +135,7 @@ fi
 echo_info "Building PyInstaller executable..."
 cd "$PROJECT_ROOT"
 
-# Check if main.py exists (should be main_wx.py according to spec)
+# Check if main.py exists
 if [ ! -f "main.py" ]; then
     echo_error "main.py not found. Please ensure the entry point exists."
     exit 1

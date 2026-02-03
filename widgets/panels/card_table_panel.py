@@ -10,7 +10,7 @@ from widgets.panels.card_box_panel import CardBoxPanel
 
 
 class CardTablePanel(wx.Panel):
-    GRID_COLUMNS = 6
+    GRID_COLUMNS = 4
     GRID_GAP = 8
 
     def __init__(
@@ -61,7 +61,14 @@ class CardTablePanel(wx.Panel):
 
     @classmethod
     def grid_width(cls) -> int:
-        return (DECK_CARD_WIDTH * cls.GRID_COLUMNS) + (cls.GRID_GAP * (cls.GRID_COLUMNS - 1))
+        scrollbar_width = wx.SystemSettings.GetMetric(wx.SYS_VSCROLL_X)
+        if scrollbar_width <= 0:
+            scrollbar_width = 16
+        return (
+            (DECK_CARD_WIDTH * cls.GRID_COLUMNS)
+            + (cls.GRID_GAP * (cls.GRID_COLUMNS - 1))
+            + scrollbar_width
+        )
 
     def set_cards(self, cards: list[dict[str, Any]]) -> None:
         if self._try_incremental_update(cards):
@@ -125,9 +132,9 @@ class CardTablePanel(wx.Panel):
                 )
                 self.grid_sizer.Add(cell, 0, wx.EXPAND)
                 self.card_widgets.append(cell)
-            remainder = len(self.cards) % 6
+            remainder = len(self.cards) % self.GRID_COLUMNS
             if remainder:
-                for _ in range(6 - remainder):
+                for _ in range(self.GRID_COLUMNS - remainder):
                     spacer = wx.Panel(self.scroller)
                     spacer.SetBackgroundColour(DARK_PANEL)
                     self.grid_sizer.Add(spacer, 0, wx.EXPAND)

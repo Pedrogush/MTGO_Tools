@@ -70,6 +70,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
         self.research_panel: DeckResearchPanel | None = None
         self.builder_panel: DeckBuilderPanel | None = None
         self.out_table: CardTablePanel | None = None
+        self.root_panel: wx.Panel | None = None
 
         self._save_timer: wx.Timer | None = None
         self.mana_icons = ManaIconFactory()
@@ -84,7 +85,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
 
         self._build_ui()
         self._apply_window_preferences()
-        self.SetMinSize(APP_FRAME_MIN_SIZE)
+        self._apply_min_size()
         self.Centre(wx.BOTH)
 
         self.Bind(wx.EVT_CLOSE, self.on_close)
@@ -98,16 +99,16 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
         self.SetBackgroundColour(DARK_BG)
         self._setup_status_bar()
 
-        root_panel = wx.Panel(self)
-        root_panel.SetBackgroundColour(DARK_BG)
+        self.root_panel = wx.Panel(self)
+        self.root_panel.SetBackgroundColour(DARK_BG)
         root_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        root_panel.SetSizer(root_sizer)
+        self.root_panel.SetSizer(root_sizer)
 
         # Build left and right panels
-        left_panel = self._build_left_panel(root_panel)
+        left_panel = self._build_left_panel(self.root_panel)
         root_sizer.Add(left_panel, 0, wx.EXPAND | wx.ALL, PADDING_LG)
 
-        right_panel = self._build_right_panel(root_panel)
+        right_panel = self._build_right_panel(self.root_panel)
         root_sizer.Add(right_panel, 1, wx.EXPAND | wx.ALL, PADDING_LG)
 
     def _setup_status_bar(self) -> None:
@@ -516,6 +517,23 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
                 self.SetPosition(wx.Point(int(x), int(y)))
             except (TypeError, ValueError):
                 logger.debug("Ignoring invalid saved window position")
+
+    def _apply_min_size(self) -> None:
+        if not self.root_panel or not self.root_panel.GetSizer():
+            self.SetMinSize(APP_FRAME_MIN_SIZE)
+            return
+        self.root_panel.Layout()
+        min_size = self.root_panel.GetSizer().GetMinSize()
+        try:
+            min_size = self.ClientToWindowSize(min_size)
+        except AttributeError:
+            pass
+        self.SetMinSize(
+            wx.Size(
+                max(APP_FRAME_MIN_SIZE[0], min_size.GetWidth()),
+                max(APP_FRAME_MIN_SIZE[1], min_size.GetHeight()),
+            )
+        )
 
     def _schedule_settings_save(self) -> None:
         if self._save_timer is None:
