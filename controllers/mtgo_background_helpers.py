@@ -1,14 +1,12 @@
-"""Background orchestration for MTGO bridge status and decklist refreshes."""
+"""Background orchestration for MTGO decklist refreshes."""
 
 from __future__ import annotations
 
 import time
-from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 from loguru import logger
 
-from utils import mtgo_bridge_client
 from utils.constants import (
     MTGO_BACKGROUND_FETCH_DAYS,
     MTGO_BACKGROUND_FETCH_DELAY_SECONDS,
@@ -16,8 +14,6 @@ from utils.constants import (
     MTGO_BACKGROUND_FETCH_SLEEP_STEPS,
     MTGO_BACKGROUND_FORMATS,
     MTGO_DECKLISTS_ENABLED,
-    MTGO_STATUS_MAX_FAILURES,
-    MTGO_STATUS_POLL_SECONDS,
 )
 
 if TYPE_CHECKING:
@@ -25,36 +21,8 @@ if TYPE_CHECKING:
 
 
 class MtgoBackgroundHelpers:
-    def __init__(self, *, worker: BackgroundWorker, status_check: Callable[[], None]) -> None:
+    def __init__(self, *, worker: BackgroundWorker) -> None:
         self._worker = worker
-        self._status_check = status_check
-        self._consecutive_failures = 0
-
-    def start_status_monitoring(self) -> None:
-        """Start background thread to periodically check MTGO bridge status."""
-
-        def mtgo_status_check_task():
-            """Background task to check MTGO bridge status every 30 seconds."""
-            while not self._worker.is_stopped():
-                time.sleep(MTGO_STATUS_POLL_SECONDS)
-                if self._worker.is_stopped():
-                    break
-                try:
-                    self._status_check()
-                    self._consecutive_failures = 0
-                except mtgo_bridge_client.BridgeCommandError as exc:
-                    self._consecutive_failures += 1
-                    if self._consecutive_failures >= MTGO_STATUS_MAX_FAILURES:
-                        logger.warning(
-                            f"MTGO bridge failed {self._consecutive_failures} times in a row. "
-                            "Stopping status checks (likely on unsupported platform)."
-                        )
-                        break
-                    logger.debug(f"MTGO status check failed: {exc}")
-                except Exception as exc:
-                    logger.error(f"MTGO status check failed: {exc}", exc_info=True)
-
-        self._worker.submit(mtgo_status_check_task)
 
     def start_background_fetch(self) -> None:
         """Start background thread to fetch MTGO data continuously."""

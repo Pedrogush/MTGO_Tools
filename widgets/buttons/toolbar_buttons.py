@@ -59,15 +59,6 @@ class ToolbarButtons(wx.Panel):
 
         self._button_row.AddStretchSpacer(1)
 
-    # ============= Public API =============
-
-    def enable_mtgo_buttons(self, enable: bool = True) -> None:
-        """Enable or disable MTGO-dependent buttons."""
-        self.load_collection_button.Enable(enable)
-        self.opponent_tracker_button.Enable(enable)
-        self.timer_alert_button.Enable(enable)
-        self.match_history_button.Enable(enable)
-
     # ============= Helpers =============
 
     def _add_button(

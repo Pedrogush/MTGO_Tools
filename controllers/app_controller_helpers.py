@@ -61,7 +61,4 @@ class AppControllerUIHelpers:
                 frame._on_bulk_data_downloaded, msg
             ),
             "on_bulk_download_failed": lambda msg: wx.CallAfter(frame._on_bulk_data_failed, msg),
-            "on_mtgo_status_change": lambda ready: wx.CallAfter(
-                frame.toolbar.enable_mtgo_buttons, ready
-            ),
         }
