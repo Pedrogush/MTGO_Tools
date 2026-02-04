@@ -72,6 +72,7 @@ class CardInspectorPanel(wx.Panel):
         self._printings_request_inflight: str | None = None
         self._has_selection = False
         self._failed_image_requests: set[tuple[str, str]] = set()
+        self._image_request_name: str | None = None
 
         self._build_ui()
         self.reset()
@@ -238,6 +239,7 @@ class CardInspectorPanel(wx.Panel):
         self._printings_request_inflight = None
         self._loading_printing = False
         self._has_selection = False
+        self._image_request_name = None
         self._set_display_mode(False, show_image_column=True)
 
     def update_card(
@@ -262,6 +264,7 @@ class CardInspectorPanel(wx.Panel):
             meta = self.card_manager.get_card(card["name"]) or {}
         else:
             meta = meta or {}
+        self._image_request_name = self._resolve_image_request_name(card, meta)
 
         # Render mana cost
         mana_cost = meta.get("mana_cost", "")
@@ -387,6 +390,8 @@ class CardInspectorPanel(wx.Panel):
         if not self.inspector_printings:
             # No printings found, try to load any cached image
             image_path = get_card_image(self.inspector_current_card_name, "normal")
+            if not image_path and self._image_request_name:
+                image_path = get_card_image(self._image_request_name, "normal")
             if image_path and image_path.exists():
                 image_available = self.card_image_display.show_image(image_path)
                 self.nav_panel.Hide()
@@ -395,7 +400,7 @@ class CardInspectorPanel(wx.Panel):
                 self.nav_panel.Hide()
                 if self.inspector_current_card_name:
                     active_request = CardImageRequest(
-                        card_name=self.inspector_current_card_name,
+                        card_name=self._image_request_name or self.inspector_current_card_name,
                         uuid=None,
                         set_code=None,
                         collector_number=None,
@@ -419,7 +424,7 @@ class CardInspectorPanel(wx.Panel):
         printing = self.inspector_printings[self.inspector_current_printing]
         uuid = printing.get("id")
         active_request = CardImageRequest(
-            card_name=self.inspector_current_card_name or "",
+            card_name=self._image_request_name or self.inspector_current_card_name or "",
             uuid=uuid,
             set_code=printing.get("set"),
             collector_number=printing.get("collector_number"),
@@ -435,6 +440,12 @@ class CardInspectorPanel(wx.Panel):
             else:
                 image_available = self.card_image_display.show_image(image_paths[0])
             self._loading_printing = not image_available
+            if (
+                len(image_paths) == 1
+                and self._image_request_name
+                and "//" in self._image_request_name
+            ):
+                self._request_missing_image(active_request)
         else:
             set_code = active_request.set_code if active_request else None
             name_printing_path = None
@@ -515,6 +526,19 @@ class CardInspectorPanel(wx.Panel):
     def _notify_selection(self, request: CardImageRequest | None) -> None:
         if self._selected_card_handler:
             self._selected_card_handler(request)
+
+    def _resolve_image_request_name(
+        self, card: dict[str, Any], meta: dict[str, Any] | None
+    ) -> str | None:
+        base_name = (card.get("name") or "").strip()
+        if not meta:
+            return base_name or None
+        aliases = meta.get("aliases") if isinstance(meta, dict) else None
+        if isinstance(aliases, list):
+            for alias in aliases:
+                if isinstance(alias, str) and "//" in alias:
+                    return alias
+        return base_name or None
 
     def _request_missing_image(self, request: CardImageRequest | None) -> None:
         if request is None or not self._image_request_handler:

@@ -49,6 +49,7 @@ class CardBoxPanel(wx.Panel):
         self._card_bitmap: wx.Bitmap | None = None
         self._image_available = False
         self._image_attempted = False
+        self._image_name_candidates: list[str] = []
 
         self.SetBackgroundColour(DARK_ALT)
         self.SetBackgroundStyle(wx.BG_STYLE_PAINT)
@@ -167,6 +168,7 @@ class CardBoxPanel(wx.Panel):
         self._image_attempted = False
         self._image_available = False
         self._card_bitmap = None
+        self._image_name_candidates = self._build_image_name_candidates(card, meta)
 
         qty_value = card["qty"]
         qty_for_check = int(qty_value) if isinstance(qty_value, float) else qty_value
@@ -210,7 +212,11 @@ class CardBoxPanel(wx.Panel):
 
     def _refresh_card_bitmap(self) -> None:
         self._image_attempted = True
-        image_path = get_card_image(self.card["name"], "normal")
+        image_path = None
+        for name in self._image_name_candidates:
+            image_path = get_card_image(name, "normal")
+            if image_path and image_path.exists():
+                break
         if image_path and image_path.exists():
             try:
                 img = wx.Image(str(image_path), wx.BITMAP_TYPE_ANY)
@@ -225,6 +231,26 @@ class CardBoxPanel(wx.Panel):
                 return
         self._image_available = False
         self._card_bitmap = None
+
+    def _build_image_name_candidates(
+        self, card: dict[str, Any], meta: dict[str, Any]
+    ) -> list[str]:
+        candidates: list[str] = []
+        base_name = card.get("name")
+        if base_name:
+            candidates.append(base_name)
+        aliases = meta.get("aliases") if isinstance(meta, dict) else None
+        if isinstance(aliases, list):
+            for alias in aliases:
+                if alias and alias not in candidates:
+                    candidates.append(alias)
+        # Prioritize the combined face name if present.
+        for alias in list(candidates):
+            if "//" in alias and alias != candidates[0]:
+                candidates.insert(1, alias)
+                candidates.remove(alias)
+                break
+        return candidates
 
     def _scale_image_to_card(self, image: wx.Image) -> wx.Image:
         img_width = image.GetWidth()
