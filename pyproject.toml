@@ -13,6 +13,12 @@ classifiers = [
     "Operating System :: Microsoft :: Windows",
 ]
 
+[project.scripts]
+mtgo-opponent-tracker = "widgets.identify_opponent:main"
+mtgo-match-history = "widgets.match_history:main"
+mtgo-timer-alert = "widgets.timer_alert:main"
+mtgo-metagame = "widgets.metagame_analysis:main"
+
 [tool.ruff]
 # Exclude common directories
 exclude = [
