@@ -26,8 +26,59 @@ A Python tool for Magic: The Gathering Online that combines web scraping, log fi
 **Use Case:** Helps competitive MTGO players by providing intelligence on opponents' recent decks and facilitating metagame research, all through passive observation and web scraping (no gameplay automation).
 
 ```bash
-python main.py  
+python main.py
 ```
+
+# Standalone Widget Entry Points
+
+All MTGO-related widgets can now be launched independently without running the main GUI.
+
+## Running as Python Modules
+
+Each widget can be executed directly using Python's module syntax:
+
+```bash
+# Opponent Tracker - Real-time opponent detection and deck lookup
+python -m widgets.identify_opponent
+
+# Match History - View MTGO match history from GameLog files
+python -m widgets.match_history
+
+# Timer Alert - Challenge timer countdown alerts
+python -m widgets.timer_alert
+
+# Metagame Analysis - Archetype distribution visualization
+python -m widgets.metagame_analysis
+```
+
+## Console Scripts (After Installation)
+
+When the package is installed via `pip install -e .`, these console commands become available:
+
+```bash
+mtgo-opponent-tracker    # Launch opponent tracking widget
+mtgo-match-history       # Launch match history viewer
+mtgo-timer-alert         # Launch timer alert widget
+mtgo-metagame            # Launch metagame analysis
+```
+
+## Requirements by Widget
+
+- **mtgo-opponent-tracker**: Requires MTGO to be running with an active match window
+- **mtgo-match-history**: Requires GameLog files (MTGO creates these automatically)
+- **mtgo-timer-alert**: Requires MTGO to be running + MTGOBridge.exe compiled
+- **mtgo-metagame**: No MTGO required (web scraping only)
+
+## Implementation
+
+Each widget has a `main()` function that:
+1. Ensures base directories exist (`ensure_base_dirs()`)
+2. Configures logging to `logs/` directory
+3. Creates wxPython application instance
+4. Instantiates the widget frame
+5. Runs the event loop
+
+See the bootstrap pattern in each widget's `if __name__ == "__main__"` block.
 
 # CI/PR Workflow
 
