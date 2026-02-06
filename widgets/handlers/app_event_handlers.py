@@ -452,7 +452,9 @@ class AppEventHandlers:
             return
         selection = self.language_choice.GetSelection()
         locale = (
-            self._language_values[selection] if 0 <= selection < len(self._language_values) else "en-US"
+            self._language_values[selection]
+            if 0 <= selection < len(self._language_values)
+            else "en-US"
         )
         self.locale = locale
         self.controller.set_language(locale)

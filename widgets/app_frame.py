@@ -281,7 +281,9 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
 
         language_choices = [LOCALE_LABELS[locale] for locale in self._language_values]
         self.language_choice = wx.Choice(panel, choices=language_choices)
-        language_index = self._language_values.index(self.locale) if self.locale in self._language_values else 0
+        language_index = (
+            self._language_values.index(self.locale) if self.locale in self._language_values else 0
+        )
         self.language_choice.SetSelection(language_index)
         self.language_choice.Bind(wx.EVT_CHOICE, self._on_language_changed)
         sizer.Add(self.language_choice, 0, wx.ALIGN_CENTER_VERTICAL)
