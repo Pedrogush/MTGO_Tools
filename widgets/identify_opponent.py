@@ -32,6 +32,7 @@ from utils.constants import (
     SUBDUED_TEXT,
 )
 from utils.find_opponent_names import find_opponent_names
+from utils.math_utils import hypergeometric_at_least, hypergeometric_probability
 
 LEGACY_DECK_MONITOR_CONFIG = Path("deck_monitor_config.json")
 LEGACY_DECK_MONITOR_CACHE = Path("deck_monitor_cache.json")
@@ -115,6 +116,7 @@ class MTGOpponentDeckSpy(wx.Frame):
         self.last_seen_decks: dict[str, str] = {}  # format -> deck name
 
         self._saved_position: list[int] | None = None
+        self._calculator_visible: bool = False
 
         self._load_cache()
         self._load_config()
@@ -166,10 +168,18 @@ class MTGOpponentDeckSpy(wx.Frame):
         refresh_button.Bind(wx.EVT_BUTTON, lambda _evt: self._manual_refresh(force=True))
         controls.Add(refresh_button, 0, wx.RIGHT, OPPONENT_TRACKER_SECTION_PADDING)
 
+        self.calc_toggle_btn = wx.Button(panel, label="Calculator")
+        self._stylize_secondary_button(self.calc_toggle_btn)
+        self.calc_toggle_btn.Bind(wx.EVT_BUTTON, self._toggle_calculator_panel)
+        controls.Add(self.calc_toggle_btn, 0, wx.RIGHT, OPPONENT_TRACKER_SECTION_PADDING)
+
         close_button = wx.Button(panel, label="Close")
         self._stylize_secondary_button(close_button)
         close_button.Bind(wx.EVT_BUTTON, lambda _evt: self.Close())
         controls.Add(close_button, 0)
+
+        # Calculator Panel (initially hidden)
+        self._build_calculator_panel(panel, sizer)
 
         sizer.AddSpacer(OPPONENT_TRACKER_SPACER_HEIGHT)
 
@@ -190,6 +200,185 @@ class MTGOpponentDeckSpy(wx.Frame):
         font = button.GetFont()
         font.MakeBold()
         button.SetFont(font)
+
+    def _build_calculator_panel(self, panel: wx.Panel, parent_sizer: wx.BoxSizer) -> None:
+        """Build the collapsible hypergeometric calculator panel."""
+        self.calc_panel = wx.Panel(panel)
+        self.calc_panel.SetBackgroundColour(DARK_PANEL)
+
+        calc_sizer = wx.BoxSizer(wx.VERTICAL)
+        self.calc_panel.SetSizer(calc_sizer)
+
+        # Title
+        title = wx.StaticText(self.calc_panel, label="Hypergeometric Calculator")
+        title.SetForegroundColour(LIGHT_TEXT)
+        title_font = title.GetFont()
+        title_font.MakeBold()
+        title.SetFont(title_font)
+        calc_sizer.Add(title, 0, wx.ALL, 6)
+
+        # Input grid
+        grid = wx.FlexGridSizer(4, 2, 4, 8)
+        calc_sizer.Add(grid, 0, wx.ALL | wx.EXPAND, 6)
+
+        # Deck Size
+        lbl_deck = wx.StaticText(self.calc_panel, label="Deck Size:")
+        lbl_deck.SetForegroundColour(LIGHT_TEXT)
+        self.spin_deck_size = wx.SpinCtrl(
+            self.calc_panel, min=1, max=250, initial=60, size=(70, -1)
+        )
+        self.spin_deck_size.SetToolTip("Total cards in deck (N)")
+        grid.Add(lbl_deck, 0, wx.ALIGN_CENTER_VERTICAL)
+        grid.Add(self.spin_deck_size, 0)
+
+        # Copies in Deck
+        lbl_copies = wx.StaticText(self.calc_panel, label="Copies in Deck:")
+        lbl_copies.SetForegroundColour(LIGHT_TEXT)
+        self.spin_copies = wx.SpinCtrl(self.calc_panel, min=0, max=60, initial=4, size=(70, -1))
+        self.spin_copies.SetToolTip("Number of target cards in deck (K)")
+        grid.Add(lbl_copies, 0, wx.ALIGN_CENTER_VERTICAL)
+        grid.Add(self.spin_copies, 0)
+
+        # Cards Drawn
+        lbl_drawn = wx.StaticText(self.calc_panel, label="Cards Drawn:")
+        lbl_drawn.SetForegroundColour(LIGHT_TEXT)
+        self.spin_drawn = wx.SpinCtrl(self.calc_panel, min=0, max=60, initial=7, size=(70, -1))
+        self.spin_drawn.SetToolTip("Number of cards drawn (n)")
+        grid.Add(lbl_drawn, 0, wx.ALIGN_CENTER_VERTICAL)
+        grid.Add(self.spin_drawn, 0)
+
+        # Target Copies
+        lbl_target = wx.StaticText(self.calc_panel, label="Target Copies:")
+        lbl_target.SetForegroundColour(LIGHT_TEXT)
+        self.spin_target = wx.SpinCtrl(self.calc_panel, min=0, max=60, initial=1, size=(70, -1))
+        self.spin_target.SetToolTip("Desired number of target cards (k)")
+        grid.Add(lbl_target, 0, wx.ALIGN_CENTER_VERTICAL)
+        grid.Add(self.spin_target, 0)
+
+        # Preset buttons
+        preset_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        calc_sizer.Add(preset_sizer, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 6)
+
+        presets = [
+            ("Open 60", 60, 7),
+            ("Open 40", 40, 7),
+            ("T3 Play", 60, 9),
+            ("T3 Draw", 60, 10),
+        ]
+        for label, deck, drawn in presets:
+            btn = wx.Button(self.calc_panel, label=label, size=(55, 24))
+            btn.SetBackgroundColour(DARK_BG)
+            btn.SetForegroundColour(LIGHT_TEXT)
+            btn.Bind(
+                wx.EVT_BUTTON,
+                lambda evt, d=deck, n=drawn: self._apply_preset(d, n),
+            )
+            preset_sizer.Add(btn, 0, wx.RIGHT, 4)
+
+        # Action buttons
+        action_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        calc_sizer.Add(action_sizer, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 6)
+
+        calc_btn = wx.Button(self.calc_panel, label="Calculate")
+        calc_btn.SetBackgroundColour("#2a6b2a")
+        calc_btn.SetForegroundColour(LIGHT_TEXT)
+        font = calc_btn.GetFont()
+        font.MakeBold()
+        calc_btn.SetFont(font)
+        calc_btn.Bind(wx.EVT_BUTTON, self._on_calculate)
+        action_sizer.Add(calc_btn, 0, wx.RIGHT, 8)
+
+        clear_btn = wx.Button(self.calc_panel, label="Clear")
+        clear_btn.SetBackgroundColour(DARK_BG)
+        clear_btn.SetForegroundColour(LIGHT_TEXT)
+        clear_btn.Bind(wx.EVT_BUTTON, self._on_clear_calculator)
+        action_sizer.Add(clear_btn, 0)
+
+        # Bind Enter key on spin controls
+        for spin in [
+            self.spin_deck_size,
+            self.spin_copies,
+            self.spin_drawn,
+            self.spin_target,
+        ]:
+            spin.Bind(wx.EVT_TEXT_ENTER, self._on_calculate)
+
+        # Result display
+        self.calc_result_label = wx.StaticText(self.calc_panel, label="")
+        self.calc_result_label.SetForegroundColour(LIGHT_TEXT)
+        calc_sizer.Add(self.calc_result_label, 0, wx.ALL, 6)
+
+        # Add panel to parent sizer but hide initially
+        parent_sizer.Add(
+            self.calc_panel,
+            0,
+            wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND,
+            OPPONENT_TRACKER_SECTION_PADDING,
+        )
+        self.calc_panel.Hide()
+
+    def _toggle_calculator_panel(self, _event: wx.CommandEvent | None = None) -> None:
+        """Toggle calculator panel visibility."""
+        self._calculator_visible = not self._calculator_visible
+        if self._calculator_visible:
+            self.calc_panel.Show()
+            self.calc_toggle_btn.SetLabel("Hide Calc")
+        else:
+            self.calc_panel.Hide()
+            self.calc_toggle_btn.SetLabel("Calculator")
+        self.Layout()
+        self.Fit()
+
+    def _apply_preset(self, deck_size: int, cards_drawn: int) -> None:
+        """Apply a preset to the calculator inputs and run calculation."""
+        self.spin_deck_size.SetValue(deck_size)
+        self.spin_drawn.SetValue(cards_drawn)
+        self._on_calculate(None)
+
+    def _on_calculate(self, _event: wx.CommandEvent | None) -> None:
+        """Calculate and display hypergeometric probability."""
+        try:
+            deck_size = self.spin_deck_size.GetValue()
+            copies = self.spin_copies.GetValue()
+            drawn = self.spin_drawn.GetValue()
+            target = self.spin_target.GetValue()
+
+            # Validate inputs
+            if copies > deck_size:
+                self.calc_result_label.SetLabel("Error: Copies > Deck Size")
+                return
+            if drawn > deck_size:
+                self.calc_result_label.SetLabel("Error: Drawn > Deck Size")
+                return
+            if target > copies:
+                self.calc_result_label.SetLabel("Error: Target > Copies")
+                return
+            if target > drawn:
+                self.calc_result_label.SetLabel("Error: Target > Drawn")
+                return
+
+            exact_prob = hypergeometric_probability(deck_size, copies, drawn, target)
+            at_least_prob = hypergeometric_at_least(deck_size, copies, drawn, target)
+
+            result_text = (
+                f"Exact ({target}): {exact_prob * 100:.2f}%\n"
+                f"At least {target}: {at_least_prob * 100:.2f}%"
+            )
+            self.calc_result_label.SetLabel(result_text)
+
+        except ValueError as e:
+            self.calc_result_label.SetLabel(f"Error: {e}")
+        except Exception as e:
+            logger.error(f"Calculator error: {e}")
+            self.calc_result_label.SetLabel("Calculation error")
+
+    def _on_clear_calculator(self, _event: wx.CommandEvent) -> None:
+        """Reset calculator to default values."""
+        self.spin_deck_size.SetValue(60)
+        self.spin_copies.SetValue(4)
+        self.spin_drawn.SetValue(7)
+        self.spin_target.SetValue(1)
+        self.calc_result_label.SetLabel("")
 
     # ------------------------------------------------------------------ Event handlers -------------------------------------------------------
     def _manual_refresh(self, force: bool = False) -> None:
@@ -294,6 +483,7 @@ class MTGOpponentDeckSpy(wx.Frame):
 
         config = {
             "screen_pos": position,
+            "calculator_visible": self._calculator_visible,
         }
         try:
             atomic_write_json(DECK_MONITOR_CONFIG_FILE, config, indent=4)
@@ -325,6 +515,7 @@ class MTGOpponentDeckSpy(wx.Frame):
             except OSError as exc:
                 logger.warning(f"Failed to migrate deck monitor config: {exc}")
         self._saved_position = data.get("screen_pos")
+        self._calculator_visible = data.get("calculator_visible", False)
 
     def _save_cache(self) -> None:
         payload = {"entries": self.cache}
@@ -368,6 +559,12 @@ class MTGOpponentDeckSpy(wx.Frame):
                 self.SetPosition(wx.Point(int(x), int(y)))
             except (TypeError, ValueError, RuntimeError):
                 logger.debug("Ignoring invalid saved window position")
+        # Restore calculator panel visibility
+        if getattr(self, "_calculator_visible", False):
+            self.calc_panel.Show()
+            self.calc_toggle_btn.SetLabel("Hide Calc")
+            self.Layout()
+            self.Fit()
 
     def _is_widget_ok(self, widget: wx.Window) -> bool:
         """Check if a widget is still valid and not destroyed."""
