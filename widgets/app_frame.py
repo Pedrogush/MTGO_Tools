@@ -143,6 +143,14 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
             on_archetype_filter=self.on_archetype_filter,
             on_archetype_selected=self.on_archetype_selected,
             on_reload_archetypes=lambda: self.fetch_archetypes(force=True),
+            labels={
+                "format": self._t("research.format"),
+                "search_hint": self._t("research.search_hint"),
+                "reload_archetypes": self._t("research.reload_archetypes"),
+                "loading_archetypes": self._t("research.loading_archetypes"),
+                "failed_archetypes": self._t("research.failed_archetypes"),
+                "no_archetypes": self._t("research.no_archetypes"),
+            },
         )
         self.left_stack.AddPage(self.research_panel, "Research")
 
@@ -305,6 +313,11 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
             on_copy=lambda: self.on_copy_clicked(None),
             on_save=lambda: self.on_save_clicked(None),
             on_daily_average=lambda: self.on_daily_average_clicked(None),
+            labels={
+                "daily_average": self._t("deck_actions.daily_average"),
+                "copy": self._t("deck_actions.copy"),
+                "save_deck": self._t("deck_actions.save_deck"),
+            },
         )
         deck_sizer.Add(
             self.deck_action_buttons,
