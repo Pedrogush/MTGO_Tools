@@ -292,7 +292,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
         return panel
 
     def _build_deck_results(self, parent: wx.Window) -> wx.StaticBoxSizer:
-        deck_box = wx.StaticBox(parent, label="Deck Results")
+        deck_box = wx.StaticBox(parent, label=self._t("app.box.deck_results"))
         deck_box.SetForegroundColour(LIGHT_TEXT)
         deck_box.SetBackgroundColour(DARK_PANEL)
         deck_sizer = wx.StaticBoxSizer(deck_box, wx.VERTICAL)
@@ -336,7 +336,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
         return deck_sizer
 
     def _build_card_inspector(self, parent: wx.Window) -> wx.StaticBoxSizer:
-        inspector_box = wx.StaticBox(parent, label="Card Inspector")
+        inspector_box = wx.StaticBox(parent, label=self._t("app.box.card_inspector"))
         inspector_box.SetForegroundColour(LIGHT_TEXT)
         inspector_box.SetBackgroundColour(DARK_PANEL)
         inspector_sizer = wx.StaticBoxSizer(inspector_box, wx.VERTICAL)
@@ -379,7 +379,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
             self.out_table.refresh_card_image(request.card_name)
 
     def _build_deck_workspace(self, parent: wx.Window) -> wx.StaticBoxSizer:
-        detail_box = wx.StaticBox(parent, label="Deck Workspace")
+        detail_box = wx.StaticBox(parent, label=self._t("app.box.deck_workspace"))
         detail_box.SetForegroundColour(LIGHT_TEXT)
         detail_box.SetBackgroundColour(DARK_PANEL)
         detail_sizer = wx.StaticBoxSizer(detail_box, wx.VERTICAL)
@@ -402,7 +402,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
             card_manager=self.controller.card_repo.get_card_manager(),
             deck_service=self.controller.deck_service,
         )
-        self.deck_tabs.AddPage(self.deck_stats_panel, "Stats")
+        self.deck_tabs.AddPage(self.deck_stats_panel, self._t("app.tab.stats"))
         # Maintain compatibility with callers/tests that accessed the old label directly.
         self.stats_summary = self.deck_stats_panel.summary_label
 
@@ -415,7 +415,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
             on_export_csv=self._on_export_guide,
             on_import_csv=self._on_import_guide,
         )
-        self.deck_tabs.AddPage(self.sideboard_guide_panel, "Sideboard Guide")
+        self.deck_tabs.AddPage(self.sideboard_guide_panel, self._t("app.tab.sideboard_guide"))
 
         self.deck_notes_panel = DeckNotesPanel(
             self.deck_tabs,
@@ -425,12 +425,12 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
             notes_store_path=self.controller.notes_store_path,
             on_status_update=self._set_status,
         )
-        self.deck_tabs.AddPage(self.deck_notes_panel, "Deck Notes")
+        self.deck_tabs.AddPage(self.deck_notes_panel, self._t("app.tab.deck_notes"))
         return detail_sizer
 
     def _build_deck_tables_tab(self) -> None:
         self.deck_tables_page = wx.Panel(self.deck_tabs)
-        self.deck_tabs.AddPage(self.deck_tables_page, "Deck Tables")
+        self.deck_tabs.AddPage(self.deck_tables_page, self._t("app.tab.deck_tables"))
         tables_sizer = wx.BoxSizer(wx.VERTICAL)
         self.deck_tables_page.SetSizer(tables_sizer)
 
@@ -438,13 +438,13 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
         tables_sizer.Add(self.zone_notebook, 1, wx.EXPAND | wx.BOTTOM, PADDING_MD)
 
         # Create zone tables
-        self.main_table = self._create_zone_table("main", "Mainboard")
-        self.side_table = self._create_zone_table("side", "Sideboard")
+        self.main_table = self._create_zone_table("main", self._t("app.tab.mainboard"))
+        self.side_table = self._create_zone_table("side", self._t("app.tab.sideboard"))
         self.out_table = None
 
         # Collection status
         self.collection_status_label = wx.StaticText(
-            self.deck_tables_page, label="Collection inventory not loaded."
+            self.deck_tables_page, label=self._t("app.placeholder.collection_not_loaded")
         )
         self.collection_status_label.SetForegroundColour(SUBDUED_TEXT)
         tables_sizer.Add(
@@ -520,7 +520,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
                 self._render_current_deck()
             else:
                 self._pending_deck_restore = True
-                self._set_status("Loading card database to restore saved deck...")
+                self._set_status(self._t("app.status.loading_card_database"))
                 self.ensure_card_data_loaded()
 
         # Restore deck text
@@ -614,7 +614,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
 
     def _clear_deck_display(self) -> None:
         self.controller.deck_repo.set_current_deck(None)
-        self.summary_text.ChangeValue("Select an archetype to view decks.")
+        self.summary_text.ChangeValue(self._t("app.placeholder.select_archetype"))
         self.zone_cards = {"main": [], "side": [], "out": []}
         self.main_table.set_cards([])
         self.side_table.set_cards([])
