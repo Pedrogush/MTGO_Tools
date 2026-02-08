@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import threading
 import time
 from pathlib import Path
 from typing import Any
@@ -12,6 +13,9 @@ import wx
 from curl_cffi import requests
 from loguru import logger
 
+from repositories.metagame_repository import MetagameRepository, get_metagame_repository
+from services.radar_service import RadarData, RadarService, get_radar_service
+from utils.archetype_resolver import find_archetype_by_name
 from utils.atomic_io import atomic_write_json, locked_path
 from utils.constants import (
     CONFIG_DIR,
@@ -33,6 +37,7 @@ from utils.constants import (
 )
 from utils.find_opponent_names import find_opponent_names
 from utils.math_utils import hypergeometric_at_least, hypergeometric_probability
+from widgets.panels.compact_radar_panel import CompactRadarPanel
 
 LEGACY_DECK_MONITOR_CONFIG = Path("deck_monitor_config.json")
 LEGACY_DECK_MONITOR_CACHE = Path("deck_monitor_cache.json")
@@ -101,7 +106,12 @@ class MTGOpponentDeckSpy(wx.Frame):
     CACHE_TTL = OPPONENT_TRACKER_CACHE_TTL_SECONDS
     POLL_INTERVAL_MS = OPPONENT_TRACKER_POLL_INTERVAL_MS
 
-    def __init__(self, parent: wx.Window | None = None) -> None:
+    def __init__(
+        self,
+        parent: wx.Window | None = None,
+        radar_service: RadarService | None = None,
+        metagame_repository: MetagameRepository | None = None,
+    ) -> None:
         style = (
             wx.CAPTION | wx.CLOSE_BOX | wx.STAY_ON_TOP | wx.FRAME_FLOAT_ON_PARENT | wx.MINIMIZE_BOX
         )
@@ -117,6 +127,15 @@ class MTGOpponentDeckSpy(wx.Frame):
 
         self._saved_position: list[int] | None = None
         self._calculator_visible: bool = False
+
+        # Radar integration
+        self.radar_service: RadarService = radar_service or get_radar_service()
+        self.metagame_repo: MetagameRepository = metagame_repository or get_metagame_repository()
+        self.current_radar: RadarData | None = None
+        self._radar_worker_thread: threading.Thread | None = None
+        self._radar_cancel_requested: bool = False
+        self._last_radar_archetype: str = ""
+        self._radar_visible: bool = False
 
         self._load_cache()
         self._load_config()
@@ -173,6 +192,11 @@ class MTGOpponentDeckSpy(wx.Frame):
         self.calc_toggle_btn.Bind(wx.EVT_BUTTON, self._toggle_calculator_panel)
         controls.Add(self.calc_toggle_btn, 0, wx.RIGHT, OPPONENT_TRACKER_SECTION_PADDING)
 
+        self.radar_toggle_btn = wx.Button(panel, label="Radar")
+        self._stylize_secondary_button(self.radar_toggle_btn)
+        self.radar_toggle_btn.Bind(wx.EVT_BUTTON, self._toggle_radar_panel)
+        controls.Add(self.radar_toggle_btn, 0, wx.RIGHT, OPPONENT_TRACKER_SECTION_PADDING)
+
         close_button = wx.Button(panel, label="Close")
         self._stylize_secondary_button(close_button)
         close_button.Bind(wx.EVT_BUTTON, lambda _evt: self.Close())
@@ -180,6 +204,15 @@ class MTGOpponentDeckSpy(wx.Frame):
 
         # Calculator Panel (initially hidden)
         self._build_calculator_panel(panel, sizer)
+
+        # Radar Panel (initially hidden)
+        self.radar_panel = CompactRadarPanel(panel)
+        sizer.Add(
+            self.radar_panel,
+            1,
+            wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND,
+            OPPONENT_TRACKER_SECTION_PADDING,
+        )
 
         sizer.AddSpacer(OPPONENT_TRACKER_SPACER_HEIGHT)
 
@@ -329,6 +362,18 @@ class MTGOpponentDeckSpy(wx.Frame):
         self.Layout()
         self.Fit()
 
+    def _toggle_radar_panel(self, _event: wx.CommandEvent | None = None) -> None:
+        """Toggle radar panel visibility."""
+        self._radar_visible = not self._radar_visible
+        if self._radar_visible:
+            self.radar_panel.Show()
+            self.radar_toggle_btn.SetLabel("Hide Radar")
+        else:
+            self.radar_panel.Hide()
+            self.radar_toggle_btn.SetLabel("Radar")
+        self.Layout()
+        self.Fit()
+
     def _apply_preset(self, deck_size: int, cards_drawn: int) -> None:
         """Apply a preset to the calculator inputs and run calculation."""
         self.spin_deck_size.SetValue(deck_size)
@@ -380,6 +425,132 @@ class MTGOpponentDeckSpy(wx.Frame):
         self.spin_target.SetValue(1)
         self.calc_result_label.SetLabel("")
 
+    # ------------------------------------------------------------------ Radar integration ---------------------------------------------------
+    def _trigger_radar_load(self) -> None:
+        """
+        Trigger radar loading for the opponent's archetype.
+
+        Called after opponent deck is successfully looked up.
+        Picks the first format with a known deck and loads radar for that archetype.
+        """
+        if not self.last_seen_decks:
+            return
+
+        # Pick first format with a known deck
+        format_name, archetype_name = next(iter(self.last_seen_decks.items()))
+
+        if not archetype_name or archetype_name == "Unknown":
+            logger.debug("Skipping radar load: no valid archetype")
+            return
+
+        # Skip if same archetype already loaded or currently loading
+        if archetype_name == self._last_radar_archetype:
+            logger.debug(f"Radar already loaded for {archetype_name}")
+            return
+
+        if self._radar_worker_thread and self._radar_worker_thread.is_alive():
+            logger.debug("Radar loading already in progress")
+            return
+
+        # Resolve archetype name to archetype dict
+        archetype_dict = find_archetype_by_name(archetype_name, format_name, self.metagame_repo)
+
+        if not archetype_dict:
+            logger.warning(f"Could not resolve archetype: {archetype_name} in {format_name}")
+            wx.CallAfter(self.radar_panel.set_error, f"Archetype '{archetype_name}' not found")
+            return
+
+        # Update tracking
+        self._last_radar_archetype = archetype_name
+
+        # Show loading state
+        wx.CallAfter(self.radar_panel.set_loading, f"Loading radar for {archetype_name}...")
+
+        # Start background thread to generate radar
+        self._radar_cancel_requested = False
+        self._radar_worker_thread = threading.Thread(
+            target=self._generate_radar_worker,
+            args=(archetype_dict, format_name),
+            daemon=True,
+        )
+        self._radar_worker_thread.start()
+        logger.info(f"Started radar generation for {archetype_name} ({format_name})")
+
+    def _generate_radar_worker(self, archetype_dict: dict[str, Any], format_name: str) -> None:
+        """
+        Worker thread to generate radar data.
+
+        Runs in background thread, uses wx.CallAfter for UI updates.
+
+        Args:
+            archetype_dict: Archetype dictionary with 'name' and 'href' keys
+            format_name: MTG format (e.g., "Modern")
+        """
+        try:
+            # Progress callback - safely updates UI from worker thread
+            def update_progress(current: int, total: int, deck_name: str) -> None:
+                if self._radar_cancel_requested:
+                    raise InterruptedError("Radar generation cancelled")
+
+                # Update status label with progress
+                wx.CallAfter(
+                    self.radar_panel.set_loading,
+                    f"Analyzing deck {current}/{total}...",
+                )
+
+            # Calculate radar (this is the I/O heavy operation)
+            radar = self.radar_service.calculate_radar(
+                archetype_dict,
+                format_name,
+                max_decks=10,
+                progress_callback=update_progress,
+            )
+
+            # Display results on UI thread
+            if not self._radar_cancel_requested:
+                wx.CallAfter(self._display_radar, radar)
+
+        except InterruptedError:
+            # User cancelled or switched opponents
+            logger.info("Radar generation cancelled")
+            wx.CallAfter(self.radar_panel.clear)
+
+        except Exception as exc:
+            # Error occurred
+            logger.exception(f"Failed to generate radar: {exc}")
+            wx.CallAfter(self.radar_panel.set_error, "Failed to load radar")
+
+        finally:
+            # Reset worker thread reference
+            self._radar_worker_thread = None
+
+    def _display_radar(self, radar: RadarData) -> None:
+        """
+        Display radar data in the compact panel.
+
+        Args:
+            radar: RadarData to display
+        """
+        self.current_radar = radar
+        self.radar_panel.display_radar(radar)
+
+        # Show radar panel if not already visible
+        if not self._radar_visible:
+            self._radar_visible = True
+            self.radar_panel.Show()
+            self.radar_toggle_btn.SetLabel("Hide Radar")
+            self.Layout()
+            self.Fit()
+
+        logger.info(f"Radar displayed for {radar.archetype_name}")
+
+    def _clear_radar_display(self) -> None:
+        """Clear the radar display."""
+        self._radar_cancel_requested = True
+        self.current_radar = None
+        self._last_radar_archetype = ""
+        self.radar_panel.clear()
+
     # ------------------------------------------------------------------ Event handlers -------------------------------------------------------
     def _manual_refresh(self, force: bool = False) -> None:
         if self.player_name:
@@ -403,6 +574,7 @@ class MTGOpponentDeckSpy(wx.Frame):
             self.status_label.SetLabel("Waiting for MTGO match window…")
             self.player_name = ""
             self.last_seen_decks = {}
+            self._clear_radar_display()
             self._refresh_opponent_display()
             return
 
@@ -410,6 +582,7 @@ class MTGOpponentDeckSpy(wx.Frame):
             self.status_label.SetLabel("No active match detected")
             self.player_name = ""
             self.last_seen_decks = {}
+            self._clear_radar_display()
             self._refresh_opponent_display()
             return
 
@@ -419,7 +592,12 @@ class MTGOpponentDeckSpy(wx.Frame):
         # Only lookup decks if opponent changed
         if opponent_name != self.player_name:
             self.player_name = opponent_name
+            self._clear_radar_display()
             self.last_seen_decks = self._lookup_decks_all_formats(self.player_name, force=False)
+
+            # Trigger radar loading after successful deck lookup
+            if self.last_seen_decks:
+                wx.CallAfter(self._trigger_radar_load)
 
         self.status_label.SetLabel(f"Match detected: vs {self.player_name}")
         self.status_label.Wrap(320)
@@ -484,6 +662,7 @@ class MTGOpponentDeckSpy(wx.Frame):
         config = {
             "screen_pos": position,
             "calculator_visible": self._calculator_visible,
+            "radar_visible": self._radar_visible,
         }
         try:
             atomic_write_json(DECK_MONITOR_CONFIG_FILE, config, indent=4)
@@ -516,6 +695,7 @@ class MTGOpponentDeckSpy(wx.Frame):
                 logger.warning(f"Failed to migrate deck monitor config: {exc}")
         self._saved_position = data.get("screen_pos")
         self._calculator_visible = data.get("calculator_visible", False)
+        self._radar_visible = data.get("radar_visible", False)
 
     def _save_cache(self) -> None:
         payload = {"entries": self.cache}
@@ -565,6 +745,12 @@ class MTGOpponentDeckSpy(wx.Frame):
             self.calc_toggle_btn.SetLabel("Hide Calc")
             self.Layout()
             self.Fit()
+        # Restore radar panel visibility
+        if getattr(self, "_radar_visible", False):
+            self.radar_panel.Show()
+            self.radar_toggle_btn.SetLabel("Hide Radar")
+            self.Layout()
+            self.Fit()
 
     def _is_widget_ok(self, widget: wx.Window) -> bool:
         """Check if a widget is still valid and not destroyed."""
@@ -580,6 +766,13 @@ class MTGOpponentDeckSpy(wx.Frame):
     # ------------------------------------------------------------------ Lifecycle -------------------------------------------------------------
     def on_close(self, event: wx.CloseEvent) -> None:
         self._save_config()
+
+        # Cancel any running radar worker
+        if self._radar_worker_thread and self._radar_worker_thread.is_alive():
+            self._radar_cancel_requested = True
+            # Give it a moment to clean up
+            self._radar_worker_thread.join(timeout=1.0)
+
         if self._poll_timer.IsRunning():
             self._poll_timer.Stop()
         event.Skip()
