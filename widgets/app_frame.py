@@ -482,6 +482,10 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
             notes_store=self.controller.deck_notes_store,
             notes_store_path=self.controller.notes_store_path,
             on_status_update=self._set_status,
+            labels={
+                key.replace("deck_notes.", ""): self._t(key)
+                for key in ["deck_notes.button.save_notes", "deck_notes.status.notes_saved"]
+            },
         )
         self.deck_tabs.AddPage(self.deck_notes_panel, self._t("app.tab.deck_notes"))
         return detail_sizer

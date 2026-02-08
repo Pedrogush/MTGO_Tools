@@ -31,6 +31,7 @@ class DeckNotesPanel(wx.Panel):
         notes_store: dict,
         notes_store_path: Path,
         on_status_update: Callable[[str], None],
+        labels: dict[str, str] | None = None,
     ):
         """
         Initialize the deck notes panel.
@@ -42,6 +43,7 @@ class DeckNotesPanel(wx.Panel):
             notes_store: Dictionary containing deck notes
             notes_store_path: Path to notes store file
             on_status_update: Callback for status updates
+            labels: Localized label strings
         """
         super().__init__(parent)
         self.SetBackgroundColour(DARK_PANEL)
@@ -51,6 +53,7 @@ class DeckNotesPanel(wx.Panel):
         self.notes_store = notes_store
         self.notes_store_path = notes_store_path
         self.on_status_update = on_status_update
+        self._labels = labels or {}
 
         self._build_ui()
 
@@ -68,7 +71,7 @@ class DeckNotesPanel(wx.Panel):
         buttons = wx.BoxSizer(wx.HORIZONTAL)
         sizer.Add(buttons, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 6)
 
-        self.save_btn = wx.Button(self, label="Save Notes")
+        self.save_btn = wx.Button(self, label=self._labels.get("button.save_notes", "Save Notes"))
         stylize_button(self.save_btn)
         self.save_btn.Bind(wx.EVT_BUTTON, self._on_save_clicked)
         buttons.Add(self.save_btn, 0, wx.RIGHT, 6)
@@ -110,7 +113,7 @@ class DeckNotesPanel(wx.Panel):
         deck_key = self.deck_repo.get_current_deck_key()
         self.notes_store[deck_key] = self.get_notes()
         self.store_service.save_store(self.notes_store_path, self.notes_store)
-        self.on_status_update("Deck notes saved.")
+        self.on_status_update(self._labels.get("status.notes_saved", "Deck notes saved."))
 
     # ============= Private Methods =============
 
