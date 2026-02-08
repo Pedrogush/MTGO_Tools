@@ -64,6 +64,7 @@ class DeckBuilderPanel(wx.Panel):
         on_clear: Callable[[], None],
         on_result_selected: Callable[[int | None], None],
         on_open_radar_dialog: Callable[[], RadarData | None] | None = None,
+        labels: dict[str, str] | None = None,
     ) -> None:
         super().__init__(parent)
 
@@ -76,6 +77,7 @@ class DeckBuilderPanel(wx.Panel):
         self._on_clear_callback = on_clear
         self._on_result_selected_callback = on_result_selected
         self._on_open_radar_dialog = on_open_radar_dialog
+        self._labels = labels or {}
 
         # State variables
         self.inputs: dict[str, wx.TextCtrl] = {}
@@ -106,22 +108,43 @@ class DeckBuilderPanel(wx.Panel):
         self.SetSizer(sizer)
 
         # Back button
-        back_btn = wx.Button(self, label="Deck Research")
+        back_btn = wx.Button(self, label=self._labels.get("button.deck_research", "Deck Research"))
         stylize_button(back_btn)
         back_btn.Bind(wx.EVT_BUTTON, lambda _evt: self._on_back_clicked())
         sizer.Add(back_btn, 0, wx.EXPAND | wx.ALL, 6)
 
         # Info label
-        info = wx.StaticText(self, label="Deck Builder: search MTG cards by property.")
+        info = wx.StaticText(
+            self,
+            label=self._labels.get(
+                "info.description", "Deck Builder: search MTG cards by property."
+            ),
+        )
         stylize_label(info, True)
         sizer.Add(info, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 6)
 
         # Search fields
         field_specs = [
-            ("name", "Card Name", "e.g. Ragavan"),
-            ("type", "Type Line", "Artifact Creature"),
-            ("mana", "Mana Cost", "Curly braces like {1}{G} or shorthand (e.g. GGG)"),
-            ("text", "Oracle Text", "Keywords or abilities"),
+            (
+                "name",
+                self._labels.get("field.card_name", "Card Name"),
+                self._labels.get("hint.card_name", "e.g. Ragavan"),
+            ),
+            (
+                "type",
+                self._labels.get("field.type_line", "Type Line"),
+                self._labels.get("hint.type_line", "Artifact Creature"),
+            ),
+            (
+                "mana",
+                self._labels.get("field.mana_cost", "Mana Cost"),
+                self._labels.get("hint.mana_cost", "Curly braces like {1}{G} {W/U} {2/R}"),
+            ),
+            (
+                "text",
+                self._labels.get("field.oracle_text", "Oracle Text"),
+                self._labels.get("hint.oracle_text", "Keywords or abilities"),
+            ),
         ]
         for key, label_text, hint in field_specs:
             lbl = wx.StaticText(self, label=label_text)
@@ -138,10 +161,12 @@ class DeckBuilderPanel(wx.Panel):
             if key == "mana":
                 # Exact match checkbox
                 match_row = wx.BoxSizer(wx.HORIZONTAL)
-                match_label = wx.StaticText(self, label="Match")
+                match_label = wx.StaticText(self, label=self._labels.get("label.match", "Match"))
                 stylize_label(match_label, True)
                 match_row.Add(match_label, 0, wx.RIGHT, 6)
-                exact_cb = wx.CheckBox(self, label="Exact symbols")
+                exact_cb = wx.CheckBox(
+                    self, label=self._labels.get("checkbox.exact_symbols", "Exact symbols")
+                )
                 exact_cb.SetForegroundColour(LIGHT_TEXT)
                 exact_cb.SetBackgroundColour(DARK_PANEL)
                 match_row.Add(exact_cb, 0)
@@ -156,7 +181,9 @@ class DeckBuilderPanel(wx.Panel):
                 for token in ["W", "U", "B", "R", "G", "C", "X"]:
                     btn = create_mana_button(self, token, self._append_mana_symbol, self.mana_icons)
                     keyboard_row.Add(btn, 0, wx.ALL, 2)
-                all_btn = wx.Button(self, label="All", size=(52, 28))
+                all_btn = wx.Button(
+                    self, label=self._labels.get("button.all", "All"), size=(52, 28)
+                )
                 stylize_button(all_btn)
                 all_btn.Bind(wx.EVT_BUTTON, lambda _evt: self._open_mana_keyboard())
                 keyboard_row.Add(all_btn, 0, wx.ALL, 2)
@@ -167,7 +194,9 @@ class DeckBuilderPanel(wx.Panel):
 
         # Mana value filter
         mv_row = wx.BoxSizer(wx.HORIZONTAL)
-        mv_label = wx.StaticText(self, label="Mana Value Filter")
+        mv_label = wx.StaticText(
+            self, label=self._labels.get("label.mana_value_filter", "Mana Value Filter")
+        )
         stylize_label(mv_label, True)
         mv_row.Add(mv_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 6)
         mv_choice = wx.Choice(self, choices=["Any", "<", "≤", "=", "≥", ">"])
@@ -178,14 +207,14 @@ class DeckBuilderPanel(wx.Panel):
         mv_row.Add(mv_choice, 0, wx.RIGHT, 6)
         mv_value = wx.TextCtrl(self)
         stylize_textctrl(mv_value)
-        mv_value.SetHint("e.g. 3")
+        mv_value.SetHint(self._labels.get("hint.mana_value", "e.g. 3"))
         self.mv_value = mv_value
         mv_value.Bind(wx.EVT_TEXT, self._on_filters_changed)
         mv_row.Add(mv_value, 1)
         sizer.Add(mv_row, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 6)
 
         # Format checkboxes
-        formats_label = wx.StaticText(self, label="Formats")
+        formats_label = wx.StaticText(self, label=self._labels.get("label.formats", "Formats"))
         stylize_label(formats_label, True)
         sizer.Add(formats_label, 0, wx.LEFT | wx.RIGHT, 6)
         formats_grid = wx.FlexGridSizer(0, 2, 4, 8)
@@ -199,11 +228,21 @@ class DeckBuilderPanel(wx.Panel):
         sizer.Add(formats_grid, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 6)
 
         # Color identity filter
-        color_label = wx.StaticText(self, label="Color Identity Filter")
+        color_label = wx.StaticText(
+            self, label=self._labels.get("label.color_identity_filter", "Color Identity Filter")
+        )
         stylize_label(color_label, True)
         sizer.Add(color_label, 0, wx.LEFT | wx.RIGHT, 6)
 
-        color_mode = wx.Choice(self, choices=["Any", "At least", "Exactly", "Not these"])
+        color_mode = wx.Choice(
+            self,
+            choices=[
+                self._labels.get("filter.any", "Any"),
+                self._labels.get("filter.at_least", "At least"),
+                self._labels.get("filter.exactly", "Exactly"),
+                self._labels.get("filter.not_these", "Not these"),
+            ],
+        )
         color_mode.SetSelection(0)
         stylize_choice(color_mode)
         self.color_mode_choice = color_mode
@@ -211,14 +250,25 @@ class DeckBuilderPanel(wx.Panel):
         sizer.Add(color_mode, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 6)
 
         colors_row = wx.BoxSizer(wx.HORIZONTAL)
-        for code, label in [
-            ("W", "White"),
-            ("U", "Blue"),
-            ("B", "Black"),
-            ("R", "Red"),
-            ("G", "Green"),
-            ("C", "Colorless"),
+        for code, label_key in [
+            ("W", "color.white"),
+            ("U", "color.blue"),
+            ("B", "color.black"),
+            ("R", "color.red"),
+            ("G", "color.green"),
+            ("C", "color.colorless"),
         ]:
+            label = self._labels.get(
+                label_key,
+                {
+                    "color.white": "White",
+                    "color.blue": "Blue",
+                    "color.black": "Black",
+                    "color.red": "Red",
+                    "color.green": "Green",
+                    "color.colorless": "Colorless",
+                }[label_key],
+            )
             cb = wx.CheckBox(self, label=label)
             cb.SetForegroundColour(LIGHT_TEXT)
             cb.SetBackgroundColour(DARK_PANEL)
@@ -229,20 +279,29 @@ class DeckBuilderPanel(wx.Panel):
 
         # Clear button
         controls = wx.BoxSizer(wx.HORIZONTAL)
-        clear_btn = wx.Button(self, label="Clear Filters")
+        clear_btn = wx.Button(self, label=self._labels.get("button.clear_filters", "Clear Filters"))
         stylize_button(clear_btn)
         clear_btn.Bind(wx.EVT_BUTTON, lambda _evt: self._on_clear())
         controls.Add(clear_btn, 0, wx.RIGHT, 6)
 
         # Radar toggle checkbox
-        self.radar_cb = wx.CheckBox(self, label="Use Radar Filter")
+        self.radar_cb = wx.CheckBox(
+            self, label=self._labels.get("checkbox.use_radar_filter", "Use Radar Filter")
+        )
         self.radar_cb.SetForegroundColour(LIGHT_TEXT)
         self.radar_cb.SetBackgroundColour(DARK_PANEL)
         self.radar_cb.Bind(wx.EVT_CHECKBOX, self._on_radar_toggle)
         controls.Add(self.radar_cb, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 6)
 
         # Radar zone choice
-        self.radar_zone_choice = wx.Choice(self, choices=["Both", "Mainboard", "Sideboard"])
+        self.radar_zone_choice = wx.Choice(
+            self,
+            choices=[
+                self._labels.get("radar_zone.both", "Both"),
+                self._labels.get("radar_zone.mainboard", "Mainboard"),
+                self._labels.get("radar_zone.sideboard", "Sideboard"),
+            ],
+        )
         self.radar_zone_choice.SetSelection(0)
         stylize_choice(self.radar_zone_choice)
         self.radar_zone_choice.Enable(False)
@@ -250,7 +309,9 @@ class DeckBuilderPanel(wx.Panel):
         controls.Add(self.radar_zone_choice, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 6)
 
         # Open Radar button
-        self.open_radar_btn = wx.Button(self, label="Open Radar...")
+        self.open_radar_btn = wx.Button(
+            self, label=self._labels.get("button.open_radar", "Open Radar...")
+        )
         stylize_button(self.open_radar_btn)
         self.open_radar_btn.Bind(wx.EVT_BUTTON, self._on_open_radar)
         controls.Add(self.open_radar_btn, 0)
@@ -260,8 +321,8 @@ class DeckBuilderPanel(wx.Panel):
 
         # Results list (virtual ListCtrl for handling large datasets)
         results = _SearchResultsView(self, style=0)
-        results.InsertColumn(0, "Name", width=230)
-        results.InsertColumn(1, "Mana Cost", width=120)
+        results.InsertColumn(0, self._labels.get("column.name", "Name"), width=230)
+        results.InsertColumn(1, self._labels.get("column.mana_cost", "Mana Cost"), width=120)
         results.SetBackgroundColour(DARK_ALT)
         results.SetForegroundColour(LIGHT_TEXT)
         results.Bind(wx.EVT_LIST_ITEM_SELECTED, self._on_result_item_selected)
@@ -270,7 +331,12 @@ class DeckBuilderPanel(wx.Panel):
         self.results_ctrl = results
 
         # Status label
-        status = wx.StaticText(self, label="Results update automatically as you type.")
+        status = wx.StaticText(
+            self,
+            label=self._labels.get(
+                "status.results_update", "Results update automatically as you type."
+            ),
+        )
         status.SetForegroundColour(SUBDUED_TEXT)
         sizer.Add(status, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 6)
         self.status_label = status
@@ -352,7 +418,9 @@ class DeckBuilderPanel(wx.Panel):
             self.results_ctrl.SetData([])
 
         if self.status_label:
-            self.status_label.SetLabel("Filters cleared.")
+            self.status_label.SetLabel(
+                self._labels.get("status.filters_cleared", "Filters cleared.")
+            )
         if self.mana_exact_cb:
             self.mana_exact_cb.SetValue(False)
         if self.mv_comparator:
@@ -382,7 +450,11 @@ class DeckBuilderPanel(wx.Panel):
         self.results_ctrl.SetData(results)
         if self.status_label:
             count = len(results)
-            self.status_label.SetLabel(f"Showing {count} card{'s' if count != 1 else ''}.")
+            self.status_label.SetLabel(
+                self._labels.get("status.showing_cards", "Showing {count} card(s).").format(
+                    count=count
+                )
+            )
 
     def get_result_at_index(self, idx: int) -> dict[str, Any] | None:
         """Get the result card data at the given index."""
@@ -443,8 +515,11 @@ class DeckBuilderPanel(wx.Panel):
 
         if self.radar_enabled and not self.active_radar:
             wx.MessageBox(
-                "Please open a radar using the 'Open Radar...' button.",
-                "No Radar Loaded",
+                self._labels.get(
+                    "dialog.no_radar_loaded",
+                    "Please open a radar using the 'Open Radar...' button.",
+                ),
+                self._labels.get("dialog.no_radar_title", "No Radar Loaded"),
                 wx.OK | wx.ICON_INFORMATION,
             )
             self.radar_cb.SetValue(False)
@@ -480,7 +555,13 @@ class DeckBuilderPanel(wx.Panel):
 
         if self.status_label:
             self.status_label.SetLabel(
-                f"Radar active: {radar.archetype_name} "
-                f"({len(radar.mainboard_cards)} MB, {len(radar.sideboard_cards)} SB cards)"
+                self._labels.get(
+                    "status.radar_active",
+                    "Radar active: {archetype} ({mb_count} MB, {sb_count} SB cards)",
+                ).format(
+                    archetype=radar.archetype_name,
+                    mb_count=len(radar.mainboard_cards),
+                    sb_count=len(radar.sideboard_cards),
+                )
             )
         self._schedule_search()
