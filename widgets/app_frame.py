@@ -447,6 +447,18 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
             self.deck_tabs,
             card_manager=self.controller.card_repo.get_card_manager(),
             deck_service=self.controller.deck_service,
+            labels={
+                key.replace("stats.", ""): self._t(key)
+                for key in [
+                    "stats.no_deck_loaded",
+                    "stats.column.cmc",
+                    "stats.column.count",
+                    "stats.column.color",
+                    "stats.column.share",
+                    "stats.summary",
+                    "stats.color.colorless",
+                ]
+            },
         )
         self.deck_tabs.AddPage(self.deck_stats_panel, self._t("app.tab.stats"))
         # Maintain compatibility with callers/tests that accessed the old label directly.

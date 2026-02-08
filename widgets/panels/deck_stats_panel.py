@@ -23,6 +23,7 @@ class DeckStatsPanel(wx.Panel):
         parent: wx.Window,
         card_manager: CardDataManager | None = None,
         deck_service: DeckService | None = None,
+        labels: dict[str, str] | None = None,
     ):
         """
         Initialize the deck stats panel.
@@ -31,6 +32,7 @@ class DeckStatsPanel(wx.Panel):
             parent: Parent window
             card_manager: Card data manager for metadata lookups
             deck_service: Deck service for analysis
+            labels: Localized label strings
         """
         super().__init__(parent)
         self.SetBackgroundColour(DARK_PANEL)
@@ -38,6 +40,7 @@ class DeckStatsPanel(wx.Panel):
         self.card_manager = card_manager
         self.deck_service = deck_service or get_deck_service()
         self.zone_cards: dict[str, list[dict[str, Any]]] = {}
+        self._labels = labels or {}
 
         self._build_ui()
 
@@ -47,7 +50,9 @@ class DeckStatsPanel(wx.Panel):
         self.SetSizer(sizer)
 
         # Summary statistics
-        self.summary_label = wx.StaticText(self, label="No deck loaded.")
+        self.summary_label = wx.StaticText(
+            self, label=self._labels.get("no_deck_loaded", "No deck loaded.")
+        )
         self.summary_label.SetForegroundColour(LIGHT_TEXT)
         sizer.Add(self.summary_label, 0, wx.ALL, 6)
 
@@ -57,16 +62,16 @@ class DeckStatsPanel(wx.Panel):
 
         # Mana curve list
         self.curve_list = dv.DataViewListCtrl(self)
-        self.curve_list.AppendTextColumn("CMC", width=80)
-        self.curve_list.AppendTextColumn("Count", width=80)
+        self.curve_list.AppendTextColumn(self._labels.get("column.cmc", "CMC"), width=80)
+        self.curve_list.AppendTextColumn(self._labels.get("column.count", "Count"), width=80)
         self.curve_list.SetBackgroundColour(DARK_ALT)
         self.curve_list.SetForegroundColour(LIGHT_TEXT)
         split.Add(self.curve_list, 0, wx.RIGHT, 12)
 
         # Color concentration list
         self.color_list = dv.DataViewListCtrl(self)
-        self.color_list.AppendTextColumn("Color", width=120)
-        self.color_list.AppendTextColumn("Share", width=100)
+        self.color_list.AppendTextColumn(self._labels.get("column.color", "Color"), width=120)
+        self.color_list.AppendTextColumn(self._labels.get("column.share", "Share"), width=100)
         self.color_list.SetBackgroundColour(DARK_ALT)
         self.color_list.SetForegroundColour(LIGHT_TEXT)
         split.Add(self.color_list, 0)
@@ -84,7 +89,7 @@ class DeckStatsPanel(wx.Panel):
         self.zone_cards = zone_cards
 
         if not deck_text.strip():
-            self.summary_label.SetLabel("No deck loaded.")
+            self.summary_label.SetLabel(self._labels.get("no_deck_loaded", "No deck loaded."))
             self.curve_list.DeleteAllItems()
             self.color_list.DeleteAllItems()
             return
@@ -93,10 +98,15 @@ class DeckStatsPanel(wx.Panel):
         stats = self.deck_service.analyze_deck(deck_text)
 
         # Update summary
-        summary = (
-            f"Mainboard: {stats['mainboard_count']} cards ({stats['unique_mainboard']} unique)  |  "
-            f"Sideboard: {stats['sideboard_count']} cards ({stats['unique_sideboard']} unique)  |  "
-            f"Estimated lands: {stats['estimated_lands']}"
+        summary = self._labels.get(
+            "summary",
+            "Mainboard: {mainboard_count} cards ({unique_mainboard} unique) | Sideboard: {sideboard_count} cards ({unique_sideboard} unique) | Estimated lands: {estimated_lands}",
+        ).format(
+            mainboard_count=stats["mainboard_count"],
+            unique_mainboard=stats["unique_mainboard"],
+            sideboard_count=stats["sideboard_count"],
+            unique_sideboard=stats["unique_sideboard"],
+            estimated_lands=stats["estimated_lands"],
         )
         self.summary_label.SetLabel(summary)
 
@@ -110,7 +120,7 @@ class DeckStatsPanel(wx.Panel):
 
     def clear(self) -> None:
         """Clear all statistics."""
-        self.summary_label.SetLabel("No deck loaded.")
+        self.summary_label.SetLabel(self._labels.get("no_deck_loaded", "No deck loaded."))
         self.curve_list.DeleteAllItems()
         self.color_list.DeleteAllItems()
 
@@ -166,7 +176,7 @@ class DeckStatsPanel(wx.Panel):
             identity = meta.get("color_identity") if meta else []
 
             if not identity:
-                totals["Colorless"] += entry["qty"]
+                totals[self._labels.get("color.colorless", "Colorless")] += entry["qty"]
             else:
                 # Count each color separately
                 for color in identity:
