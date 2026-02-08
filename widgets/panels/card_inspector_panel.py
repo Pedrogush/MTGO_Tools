@@ -41,6 +41,7 @@ class CardInspectorPanel(wx.Panel):
         parent: wx.Window,
         card_manager: CardDataManager | None = None,
         mana_icons: ManaIconFactory | None = None,
+        labels: dict[str, str] | None = None,
     ):
         """
         Initialize the card inspector panel.
@@ -49,12 +50,14 @@ class CardInspectorPanel(wx.Panel):
             parent: Parent window
             card_manager: Card data manager for metadata lookups
             mana_icons: Mana icon factory for rendering mana costs
+            labels: Localized label dictionary
         """
         super().__init__(parent)
         self.SetBackgroundColour(DARK_PANEL)
 
         self.card_manager = card_manager
         self.mana_icons = mana_icons or ManaIconFactory()
+        self._labels = labels or {}
 
         # State
         self.active_zone: str | None = None
@@ -146,7 +149,9 @@ class CardInspectorPanel(wx.Panel):
         self.printing_label.SetForegroundColour(SUBDUED_TEXT)
         nav_sizer.Add(self.printing_label, 1, wx.ALIGN_CENTER_VERTICAL | wx.ALIGN_CENTER)
 
-        self.loading_label = wx.StaticText(self.nav_panel, label="Loading printing…")
+        self.loading_label = wx.StaticText(
+            self.nav_panel, label=self._labels.get("loading_printing", "Loading printing…")
+        )
         self.loading_label.SetForegroundColour(SUBDUED_TEXT)
         nav_sizer.Add(self.loading_label, 0, wx.LEFT | wx.ALIGN_CENTER_VERTICAL, PADDING_MD)
         self.loading_label.Hide()
@@ -167,7 +172,9 @@ class CardInspectorPanel(wx.Panel):
         content.Add(self.details_panel, 1, wx.EXPAND)
 
         # Card name
-        self.name_label = wx.StaticText(self.details_panel, label="Select a card to inspect.")
+        self.name_label = wx.StaticText(
+            self.details_panel, label=self._labels.get("select_card", "Select a card to inspect.")
+        )
         name_font = self.name_label.GetFont()
         name_font.SetPointSize(name_font.GetPointSize() + 2)
         name_font.MakeBold()
@@ -224,14 +231,15 @@ class CardInspectorPanel(wx.Panel):
 
     def reset(self) -> None:
         """Reset the inspector to default state."""
+        select_card_text = self._labels.get("select_card", "Select a card to inspect.")
         self.active_zone = None
-        self.name_label.SetLabel("Select a card to inspect.")
+        self.name_label.SetLabel(select_card_text)
         self.type_label.SetLabel("")
         self.stats_label.SetLabel("")
-        self.text_ctrl.ChangeValue("Select a card to inspect.")
-        self.image_text_ctrl.ChangeValue("Select a card to inspect.")
+        self.text_ctrl.ChangeValue(select_card_text)
+        self.image_text_ctrl.ChangeValue(select_card_text)
         self._render_mana_cost("")
-        self.card_image_display.show_placeholder("Select a card")
+        self.card_image_display.show_placeholder(self._labels.get("select_card", "Select a card"))
         self.nav_panel.Hide()
         self.inspector_printings = []
         self.inspector_current_printing = 0
@@ -271,7 +279,9 @@ class CardInspectorPanel(wx.Panel):
         self._render_mana_cost(mana_cost)
 
         # Type line
-        type_line = meta.get("type_line") or "Type data unavailable."
+        type_line = meta.get("type_line") or self._labels.get(
+            "type_unavailable", "Type data unavailable."
+        )
         self.type_label.SetLabel(type_line)
 
         # Stats line
@@ -283,14 +293,17 @@ class CardInspectorPanel(wx.Panel):
         if meta.get("loyalty"):
             stats_bits.append(f"Loyalty {meta['loyalty']}")
         colors = meta.get("color_identity", [])
-        stats_bits.append(f"Colors: {'/'.join(colors) if colors else 'Colorless'}")
+        colorless_text = self._labels.get("colorless", "Colorless")
+        stats_bits.append(f"Colors: {'/'.join(colors) if colors else colorless_text}")
         stats_bits.append(f"Zone: {zone_title}")
         self.stats_label.SetLabel("  |  ".join(stats_bits))
 
         # Oracle text
         oracle_text = meta.get("oracle_text") or ""
         self.text_ctrl.ChangeValue(oracle_text)
-        self.image_text_ctrl.ChangeValue(oracle_text or "Text unavailable.")
+        self.image_text_ctrl.ChangeValue(
+            oracle_text or self._labels.get("text_unavailable", "Text unavailable.")
+        )
 
         # Load image and printings
         self._load_card_image_and_printings(card["name"])
@@ -396,7 +409,9 @@ class CardInspectorPanel(wx.Panel):
                 image_available = self.card_image_display.show_image(image_path)
                 self.nav_panel.Hide()
             else:
-                self.card_image_display.show_placeholder("Not cached")
+                self.card_image_display.show_placeholder(
+                    self._labels.get("not_cached", "Not cached")
+                )
                 self.nav_panel.Hide()
                 if self.inspector_current_card_name:
                     active_request = CardImageRequest(
@@ -457,7 +472,9 @@ class CardInspectorPanel(wx.Panel):
                 image_available = self.card_image_display.show_image(name_printing_path)
                 self._loading_printing = not image_available
             else:
-                self.card_image_display.show_placeholder("Not cached")
+                self.card_image_display.show_placeholder(
+                    self._labels.get("not_cached", "Not cached")
+                )
                 self._loading_printing = True
 
         # Update navigation controls

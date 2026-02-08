@@ -391,6 +391,14 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
             inspector_box,
             card_manager=self.controller.card_repo.get_card_manager(),
             mana_icons=self.mana_icons,
+            labels={
+                "loading_printing": self._t("inspector.loading_printing"),
+                "select_card": self._t("inspector.select_card"),
+                "type_unavailable": self._t("inspector.type_unavailable"),
+                "text_unavailable": self._t("inspector.text_unavailable"),
+                "colorless": self._t("inspector.colorless"),
+                "not_cached": self._t("inspector.not_cached"),
+            },
         )
         self.card_inspector_panel.set_image_request_handlers(
             on_request=lambda request: self.controller.image_service.queue_card_image_download(
