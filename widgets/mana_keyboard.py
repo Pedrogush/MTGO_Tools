@@ -3,6 +3,7 @@ from collections.abc import Callable
 import wx
 
 from utils.constants import DARK_BG, FULL_MANA_SYMBOLS, LIGHT_TEXT
+from utils.i18n import get_user_locale, translate
 from utils.mana_icon_factory import ManaIconFactory, type_global_mana_symbol
 
 
@@ -24,7 +25,8 @@ class ManaKeyboardFrame(wx.Frame):
         root = wx.BoxSizer(wx.VERTICAL)
         panel.SetSizer(root)
 
-        info = wx.StaticText(panel, label="Click a symbol to type it anywhere")
+        locale = get_user_locale()
+        info = wx.StaticText(panel, label=translate(locale, "mana_keyboard.instruction"))
         info.SetForegroundColour(LIGHT_TEXT)
         root.Add(info, 0, wx.ALIGN_CENTER | wx.ALL, 8)
 

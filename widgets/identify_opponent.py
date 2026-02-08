@@ -36,6 +36,7 @@ from utils.constants import (
     SUBDUED_TEXT,
 )
 from utils.find_opponent_names import find_opponent_names
+from utils.i18n import get_user_locale, translate
 from utils.math_utils import hypergeometric_at_least, hypergeometric_probability
 from widgets.panels.compact_radar_panel import CompactRadarPanel
 
@@ -137,6 +138,9 @@ class MTGOpponentDeckSpy(wx.Frame):
         self._last_radar_archetype: str = ""
         self._radar_visible: bool = False
 
+        # Localization
+        self._locale = get_user_locale()
+
         self._load_cache()
         self._load_config()
 
@@ -148,6 +152,10 @@ class MTGOpponentDeckSpy(wx.Frame):
 
         wx.CallAfter(self._start_polling)
 
+    def _t(self, key: str, **kwargs) -> str:
+        """Translate a key using the current locale."""
+        return translate(self._locale, key, **kwargs)
+
     # ------------------------------------------------------------------ UI ------------------------------------------------------------------
     def _build_ui(self) -> None:
         self.SetBackgroundColour(DARK_BG)
@@ -157,12 +165,12 @@ class MTGOpponentDeckSpy(wx.Frame):
         sizer = wx.BoxSizer(wx.VERTICAL)
         panel.SetSizer(sizer)
 
-        self.deck_label = wx.StaticText(panel, label="Opponent not detected")
+        self.deck_label = wx.StaticText(panel, label=self._t("opponent.status.not_detected"))
         self._stylize_label(self.deck_label)
         self.deck_label.Wrap(OPPONENT_TRACKER_LABEL_WRAP_WIDTH)
         sizer.Add(self.deck_label, 0, wx.ALL | wx.EXPAND, OPPONENT_TRACKER_SECTION_PADDING)
 
-        self.status_label = wx.StaticText(panel, label="Watching for MTGO match windows…")
+        self.status_label = wx.StaticText(panel, label=self._t("opponent.status.watching"))
         self._stylize_label(self.status_label, subtle=True)
         self.status_label.Wrap(320)
         sizer.Add(
@@ -182,22 +190,22 @@ class MTGOpponentDeckSpy(wx.Frame):
 
         controls.AddStretchSpacer(1)
 
-        refresh_button = wx.Button(panel, label="Refresh")
+        refresh_button = wx.Button(panel, label=self._t("opponent.button.refresh"))
         self._stylize_secondary_button(refresh_button)
         refresh_button.Bind(wx.EVT_BUTTON, lambda _evt: self._manual_refresh(force=True))
         controls.Add(refresh_button, 0, wx.RIGHT, OPPONENT_TRACKER_SECTION_PADDING)
 
-        self.calc_toggle_btn = wx.Button(panel, label="Calculator")
+        self.calc_toggle_btn = wx.Button(panel, label=self._t("opponent.button.calculator"))
         self._stylize_secondary_button(self.calc_toggle_btn)
         self.calc_toggle_btn.Bind(wx.EVT_BUTTON, self._toggle_calculator_panel)
         controls.Add(self.calc_toggle_btn, 0, wx.RIGHT, OPPONENT_TRACKER_SECTION_PADDING)
 
-        self.radar_toggle_btn = wx.Button(panel, label="Radar")
+        self.radar_toggle_btn = wx.Button(panel, label=self._t("opponent.button.radar"))
         self._stylize_secondary_button(self.radar_toggle_btn)
         self.radar_toggle_btn.Bind(wx.EVT_BUTTON, self._toggle_radar_panel)
         controls.Add(self.radar_toggle_btn, 0, wx.RIGHT, OPPONENT_TRACKER_SECTION_PADDING)
 
-        close_button = wx.Button(panel, label="Close")
+        close_button = wx.Button(panel, label=self._t("opponent.button.close"))
         self._stylize_secondary_button(close_button)
         close_button.Bind(wx.EVT_BUTTON, lambda _evt: self.Close())
         controls.Add(close_button, 0)
@@ -243,7 +251,7 @@ class MTGOpponentDeckSpy(wx.Frame):
         self.calc_panel.SetSizer(calc_sizer)
 
         # Title
-        title = wx.StaticText(self.calc_panel, label="Hypergeometric Calculator")
+        title = wx.StaticText(self.calc_panel, label=self._t("opponent.calc.title"))
         title.SetForegroundColour(LIGHT_TEXT)
         title_font = title.GetFont()
         title_font.MakeBold()
@@ -255,36 +263,36 @@ class MTGOpponentDeckSpy(wx.Frame):
         calc_sizer.Add(grid, 0, wx.ALL | wx.EXPAND, 6)
 
         # Deck Size
-        lbl_deck = wx.StaticText(self.calc_panel, label="Deck Size:")
+        lbl_deck = wx.StaticText(self.calc_panel, label=self._t("opponent.calc.deck_size"))
         lbl_deck.SetForegroundColour(LIGHT_TEXT)
         self.spin_deck_size = wx.SpinCtrl(
             self.calc_panel, min=1, max=250, initial=60, size=(70, -1)
         )
-        self.spin_deck_size.SetToolTip("Total cards in deck (N)")
+        self.spin_deck_size.SetToolTip(self._t("opponent.calc.tooltip.deck_size"))
         grid.Add(lbl_deck, 0, wx.ALIGN_CENTER_VERTICAL)
         grid.Add(self.spin_deck_size, 0)
 
         # Copies in Deck
-        lbl_copies = wx.StaticText(self.calc_panel, label="Copies in Deck:")
+        lbl_copies = wx.StaticText(self.calc_panel, label=self._t("opponent.calc.copies_in_deck"))
         lbl_copies.SetForegroundColour(LIGHT_TEXT)
         self.spin_copies = wx.SpinCtrl(self.calc_panel, min=0, max=60, initial=4, size=(70, -1))
-        self.spin_copies.SetToolTip("Number of target cards in deck (K)")
+        self.spin_copies.SetToolTip(self._t("opponent.calc.tooltip.copies"))
         grid.Add(lbl_copies, 0, wx.ALIGN_CENTER_VERTICAL)
         grid.Add(self.spin_copies, 0)
 
         # Cards Drawn
-        lbl_drawn = wx.StaticText(self.calc_panel, label="Cards Drawn:")
+        lbl_drawn = wx.StaticText(self.calc_panel, label=self._t("opponent.calc.cards_drawn"))
         lbl_drawn.SetForegroundColour(LIGHT_TEXT)
         self.spin_drawn = wx.SpinCtrl(self.calc_panel, min=0, max=60, initial=7, size=(70, -1))
-        self.spin_drawn.SetToolTip("Number of cards drawn (n)")
+        self.spin_drawn.SetToolTip(self._t("opponent.calc.tooltip.drawn"))
         grid.Add(lbl_drawn, 0, wx.ALIGN_CENTER_VERTICAL)
         grid.Add(self.spin_drawn, 0)
 
         # Target Copies
-        lbl_target = wx.StaticText(self.calc_panel, label="Target Copies:")
+        lbl_target = wx.StaticText(self.calc_panel, label=self._t("opponent.calc.target_copies"))
         lbl_target.SetForegroundColour(LIGHT_TEXT)
         self.spin_target = wx.SpinCtrl(self.calc_panel, min=0, max=60, initial=1, size=(70, -1))
-        self.spin_target.SetToolTip("Desired number of target cards (k)")
+        self.spin_target.SetToolTip(self._t("opponent.calc.tooltip.target"))
         grid.Add(lbl_target, 0, wx.ALIGN_CENTER_VERTICAL)
         grid.Add(self.spin_target, 0)
 
@@ -293,10 +301,10 @@ class MTGOpponentDeckSpy(wx.Frame):
         calc_sizer.Add(preset_sizer, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 6)
 
         presets = [
-            ("Open 60", 60, 7),
-            ("Open 40", 40, 7),
-            ("T3 Play", 60, 9),
-            ("T3 Draw", 60, 10),
+            (self._t("opponent.calc.preset.open_60"), 60, 7),
+            (self._t("opponent.calc.preset.open_40"), 40, 7),
+            (self._t("opponent.calc.preset.t3_play"), 60, 9),
+            (self._t("opponent.calc.preset.t3_draw"), 60, 10),
         ]
         for label, deck, drawn in presets:
             btn = wx.Button(self.calc_panel, label=label, size=(55, 24))
@@ -312,7 +320,7 @@ class MTGOpponentDeckSpy(wx.Frame):
         action_sizer = wx.BoxSizer(wx.HORIZONTAL)
         calc_sizer.Add(action_sizer, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 6)
 
-        calc_btn = wx.Button(self.calc_panel, label="Calculate")
+        calc_btn = wx.Button(self.calc_panel, label=self._t("opponent.calc.button.calculate"))
         calc_btn.SetBackgroundColour("#2a6b2a")
         calc_btn.SetForegroundColour(LIGHT_TEXT)
         font = calc_btn.GetFont()
@@ -321,7 +329,7 @@ class MTGOpponentDeckSpy(wx.Frame):
         calc_btn.Bind(wx.EVT_BUTTON, self._on_calculate)
         action_sizer.Add(calc_btn, 0, wx.RIGHT, 8)
 
-        clear_btn = wx.Button(self.calc_panel, label="Clear")
+        clear_btn = wx.Button(self.calc_panel, label=self._t("opponent.calc.button.clear"))
         clear_btn.SetBackgroundColour(DARK_BG)
         clear_btn.SetForegroundColour(LIGHT_TEXT)
         clear_btn.Bind(wx.EVT_BUTTON, self._on_clear_calculator)
@@ -355,10 +363,10 @@ class MTGOpponentDeckSpy(wx.Frame):
         self._calculator_visible = not self._calculator_visible
         if self._calculator_visible:
             self.calc_panel.Show()
-            self.calc_toggle_btn.SetLabel("Hide Calc")
+            self.calc_toggle_btn.SetLabel(self._t("opponent.button.hide_calc"))
         else:
             self.calc_panel.Hide()
-            self.calc_toggle_btn.SetLabel("Calculator")
+            self.calc_toggle_btn.SetLabel(self._t("opponent.button.calculator"))
         self.Layout()
         self.Fit()
 
@@ -367,10 +375,10 @@ class MTGOpponentDeckSpy(wx.Frame):
         self._radar_visible = not self._radar_visible
         if self._radar_visible:
             self.radar_panel.Show()
-            self.radar_toggle_btn.SetLabel("Hide Radar")
+            self.radar_toggle_btn.SetLabel(self._t("opponent.button.hide_radar"))
         else:
             self.radar_panel.Hide()
-            self.radar_toggle_btn.SetLabel("Radar")
+            self.radar_toggle_btn.SetLabel(self._t("opponent.button.radar"))
         self.Layout()
         self.Fit()
 
@@ -390,24 +398,26 @@ class MTGOpponentDeckSpy(wx.Frame):
 
             # Validate inputs
             if copies > deck_size:
-                self.calc_result_label.SetLabel("Error: Copies > Deck Size")
+                self.calc_result_label.SetLabel(self._t("opponent.calc.error.copies_gt_deck"))
                 return
             if drawn > deck_size:
-                self.calc_result_label.SetLabel("Error: Drawn > Deck Size")
+                self.calc_result_label.SetLabel(self._t("opponent.calc.error.drawn_gt_deck"))
                 return
             if target > copies:
-                self.calc_result_label.SetLabel("Error: Target > Copies")
+                self.calc_result_label.SetLabel(self._t("opponent.calc.error.target_gt_copies"))
                 return
             if target > drawn:
-                self.calc_result_label.SetLabel("Error: Target > Drawn")
+                self.calc_result_label.SetLabel(self._t("opponent.calc.error.target_gt_drawn"))
                 return
 
             exact_prob = hypergeometric_probability(deck_size, copies, drawn, target)
             at_least_prob = hypergeometric_at_least(deck_size, copies, drawn, target)
 
-            result_text = (
-                f"Exact ({target}): {exact_prob * 100:.2f}%\n"
-                f"At least {target}: {at_least_prob * 100:.2f}%"
+            result_text = self._t(
+                "opponent.calc.result",
+                target=target,
+                exact=f"{exact_prob * 100:.2f}",
+                at_least=f"{at_least_prob * 100:.2f}",
             )
             self.calc_result_label.SetLabel(result_text)
 
@@ -538,7 +548,7 @@ class MTGOpponentDeckSpy(wx.Frame):
         if not self._radar_visible:
             self._radar_visible = True
             self.radar_panel.Show()
-            self.radar_toggle_btn.SetLabel("Hide Radar")
+            self.radar_toggle_btn.SetLabel(self._t("opponent.button.hide_radar"))
             self.Layout()
             self.Fit()
 
@@ -559,7 +569,7 @@ class MTGOpponentDeckSpy(wx.Frame):
 
     # ------------------------------------------------------------------ Opponent detection ---------------------------------------------------
     def _start_polling(self) -> None:
-        self.status_label.SetLabel("Watching for MTGO match windows…")
+        self.status_label.SetLabel(self._t("opponent.status.watching"))
         self._poll_timer.Start(self.POLL_INTERVAL_MS)
         self._check_for_opponent()
 
@@ -571,7 +581,7 @@ class MTGOpponentDeckSpy(wx.Frame):
             opponents = find_opponent_names()
         except Exception as exc:  # noqa: BLE001
             logger.debug(f"Failed to detect opponent from window titles: {exc}")
-            self.status_label.SetLabel("Waiting for MTGO match window…")
+            self.status_label.SetLabel(self._t("opponent.status.waiting"))
             self.player_name = ""
             self.last_seen_decks = {}
             self._clear_radar_display()
@@ -579,7 +589,7 @@ class MTGOpponentDeckSpy(wx.Frame):
             return
 
         if not opponents:
-            self.status_label.SetLabel("No active match detected")
+            self.status_label.SetLabel(self._t("opponent.status.no_match"))
             self.player_name = ""
             self.last_seen_decks = {}
             self._clear_radar_display()
@@ -599,7 +609,7 @@ class MTGOpponentDeckSpy(wx.Frame):
             if self.last_seen_decks:
                 wx.CallAfter(self._trigger_radar_load)
 
-        self.status_label.SetLabel(f"Match detected: vs {self.player_name}")
+        self.status_label.SetLabel(self._t("opponent.status.match_detected", name=self.player_name))
         self.status_label.Wrap(320)
         self._refresh_opponent_display()
 
@@ -632,9 +642,9 @@ class MTGOpponentDeckSpy(wx.Frame):
 
     def _refresh_opponent_display(self) -> None:
         if not self.player_name:
-            text = "Opponent not detected"
+            text = self._t("opponent.status.not_detected")
         elif not self.last_seen_decks:
-            text = f"{self.player_name}: no recent decks found"
+            text = self._t("opponent.status.no_decks", name=self.player_name)
         elif len(self.last_seen_decks) == 1:
             # Single format found
             fmt, deck = next(iter(self.last_seen_decks.items()))
@@ -742,13 +752,13 @@ class MTGOpponentDeckSpy(wx.Frame):
         # Restore calculator panel visibility
         if getattr(self, "_calculator_visible", False):
             self.calc_panel.Show()
-            self.calc_toggle_btn.SetLabel("Hide Calc")
+            self.calc_toggle_btn.SetLabel(self._t("opponent.button.hide_calc"))
             self.Layout()
             self.Fit()
         # Restore radar panel visibility
         if getattr(self, "_radar_visible", False):
             self.radar_panel.Show()
-            self.radar_toggle_btn.SetLabel("Hide Radar")
+            self.radar_toggle_btn.SetLabel(self._t("opponent.button.hide_radar"))
             self.Layout()
             self.Fit()
 

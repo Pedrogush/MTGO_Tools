@@ -14,6 +14,7 @@ from matplotlib.figure import Figure
 
 from navigators.mtggoldfish import get_archetype_stats
 from utils.constants import DARK_ALT, DARK_BG, DARK_PANEL, LIGHT_TEXT, SUBDUED_TEXT
+from utils.i18n import get_user_locale, translate
 
 
 class MetagameAnalysisFrame(wx.Frame):
@@ -30,11 +31,18 @@ class MetagameAnalysisFrame(wx.Frame):
         self.previous_data: dict[str, int] = {}
         self.stats_data: dict[str, Any] = {}
 
+        # Localization
+        self._locale = get_user_locale()
+
         self._build_ui()
         self.Centre(wx.BOTH)
 
         self.Bind(wx.EVT_CLOSE, self.on_close)
         wx.CallAfter(self.refresh_data)
+
+    def _t(self, key: str, **kwargs) -> str:
+        """Translate a key using the current locale."""
+        return translate(self._locale, key, **kwargs)
 
     def _build_ui(self) -> None:
         panel = wx.Panel(self)
@@ -46,7 +54,10 @@ class MetagameAnalysisFrame(wx.Frame):
         main_sizer.Add(toolbar, 0, wx.ALL | wx.EXPAND, 10)
 
         toolbar.Add(
-            wx.StaticText(panel, label="Format:"), 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 5
+            wx.StaticText(panel, label=self._t("metagame.label.format")),
+            0,
+            wx.ALIGN_CENTER_VERTICAL | wx.RIGHT,
+            5,
         )
         self.format_choice = wx.Choice(
             panel,
@@ -66,7 +77,7 @@ class MetagameAnalysisFrame(wx.Frame):
         toolbar.Add(self.format_choice, 0, wx.RIGHT, 15)
 
         toolbar.Add(
-            wx.StaticText(panel, label="Time Window (days):"),
+            wx.StaticText(panel, label=self._t("metagame.label.time_window")),
             0,
             wx.ALIGN_CENTER_VERTICAL | wx.RIGHT,
             5,
@@ -78,7 +89,7 @@ class MetagameAnalysisFrame(wx.Frame):
         toolbar.Add(self.days_spin, 0, wx.RIGHT, 15)
 
         toolbar.Add(
-            wx.StaticText(panel, label="Starting from day:"),
+            wx.StaticText(panel, label=self._t("metagame.label.starting_from")),
             0,
             wx.ALIGN_CENTER_VERTICAL | wx.RIGHT,
             5,
@@ -89,14 +100,14 @@ class MetagameAnalysisFrame(wx.Frame):
         self.offset_spin.Bind(wx.EVT_SPINCTRL, self.on_offset_change)
         toolbar.Add(self.offset_spin, 0, wx.RIGHT, 15)
 
-        self.refresh_button = wx.Button(panel, label="Refresh Data")
+        self.refresh_button = wx.Button(panel, label=self._t("metagame.button.refresh"))
         self._stylize_button(self.refresh_button)
         self.refresh_button.Bind(wx.EVT_BUTTON, lambda _evt: self.refresh_data())
         toolbar.Add(self.refresh_button, 0, wx.RIGHT, 10)
 
         toolbar.AddStretchSpacer(1)
 
-        self.status_label = wx.StaticText(panel, label="Ready")
+        self.status_label = wx.StaticText(panel, label=self._t("metagame.status.ready"))
         self.status_label.SetForegroundColour(SUBDUED_TEXT)
         toolbar.Add(self.status_label, 0, wx.ALIGN_CENTER_VERTICAL)
 

@@ -11,6 +11,7 @@ import wx.dataview as dv
 from loguru import logger
 
 from utils.gamelog_parser import parse_all_gamelogs
+from utils.i18n import get_user_locale, translate
 
 DARK_BG = wx.Colour(20, 22, 27)
 DARK_PANEL = wx.Colour(34, 39, 46)
@@ -31,12 +32,19 @@ class MatchHistoryFrame(wx.Frame):
         self.end_filter: str | None = None
         self.current_username: str | None = None
 
+        # Localization
+        self._locale = get_user_locale()
+
         self._build_ui()
         self.Centre(wx.BOTH)
 
         self.Bind(wx.EVT_CLOSE, self.on_close)
         wx.CallAfter(self._init_username)
         wx.CallAfter(self.refresh_history)
+
+    def _t(self, key: str, **kwargs) -> str:
+        """Translate a key using the current locale."""
+        return translate(self._locale, key, **kwargs)
 
     def _init_username(self) -> None:
         """Get current MTGO username in background."""
@@ -64,18 +72,18 @@ class MatchHistoryFrame(wx.Frame):
         toolbar = wx.BoxSizer(wx.HORIZONTAL)
         sizer.Add(toolbar, 0, wx.ALL | wx.EXPAND, 10)
 
-        self.refresh_button = wx.Button(panel, label="Refresh")
+        self.refresh_button = wx.Button(panel, label=self._t("match_history.button.refresh"))
         self._stylize_button(self.refresh_button)
         self.refresh_button.Bind(wx.EVT_BUTTON, lambda _evt: self.refresh_history())
         toolbar.Add(self.refresh_button, 0)
 
         toolbar.AddStretchSpacer(1)
 
-        self.status_label = wx.StaticText(panel, label="Ready")
+        self.status_label = wx.StaticText(panel, label=self._t("match_history.status.ready"))
         self.status_label.SetForegroundColour(SUBDUED_TEXT)
         toolbar.Add(self.status_label, 0, wx.ALIGN_CENTER_VERTICAL)
 
-        metrics_box = wx.StaticBox(panel, label="Win-Rate Metrics")
+        metrics_box = wx.StaticBox(panel, label=self._t("match_history.box.win_rate"))
         metrics_box.SetForegroundColour(LIGHT_TEXT)
         metrics_box.SetBackgroundColour(DARK_PANEL)
         metrics_sizer = wx.StaticBoxSizer(metrics_box, wx.VERTICAL)
