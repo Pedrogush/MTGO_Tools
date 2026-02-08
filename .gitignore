@@ -45,4 +45,4 @@ build/
 *.svg
 *.mmd
 # git worktrees
-.worktrees/
+.worktrees/screenshots/
