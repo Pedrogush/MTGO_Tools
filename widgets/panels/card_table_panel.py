@@ -25,6 +25,7 @@ class CardTablePanel(wx.Panel):
         on_add: Callable[[str], None],
         on_select: Callable[[str, dict[str, Any] | None], None],
         on_hover: Callable[[str, dict[str, Any]], None] | None = None,
+        labels: dict[str, str] | None = None,
     ) -> None:
         super().__init__(parent)
         self.zone = zone
@@ -36,6 +37,7 @@ class CardTablePanel(wx.Panel):
         self._on_add = on_add
         self._on_select = on_select
         self._on_hover = on_hover
+        self._labels = labels or {}
         self.cards: list[dict[str, Any]] = []
         self.card_widgets: list[CardBoxPanel] = []
         self.active_panel: CardBoxPanel | None = None
@@ -46,7 +48,7 @@ class CardTablePanel(wx.Panel):
         self.SetSizer(outer)
 
         header = wx.BoxSizer(wx.HORIZONTAL)
-        self.count_label = wx.StaticText(self, label="0 cards")
+        self.count_label = wx.StaticText(self, label=self._labels.get("count.zero", "0 cards"))
         self.count_label.SetForegroundColour(SUBDUED_TEXT)
         header.Add(self.count_label, 0, wx.ALIGN_CENTER_VERTICAL)
         header.AddStretchSpacer(1)
@@ -106,7 +108,7 @@ class CardTablePanel(wx.Panel):
                 # Still need to update card reference even if qty didn't change
                 widget.card = new_card
 
-        self.count_label.SetLabel(f"{total} card{'s' if total != 1 else ''}")
+        self.count_label.SetLabel(self._labels.get("count", "{total} card(s)").format(total=total))
         return True
 
     def _rebuild_grid(self) -> None:
@@ -116,7 +118,9 @@ class CardTablePanel(wx.Panel):
             self.card_widgets = []
             self.active_panel = None
             total = sum(card["qty"] for card in self.cards)
-            self.count_label.SetLabel(f"{total} card{'s' if total != 1 else ''}")
+            self.count_label.SetLabel(
+                self._labels.get("count", "{total} card(s)").format(total=total)
+            )
             for card in self.cards:
                 cell = CardBoxPanel(
                     self.scroller,

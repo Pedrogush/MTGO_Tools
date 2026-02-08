@@ -554,6 +554,10 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
             self._handle_zone_add,
             self._handle_card_focus,
             self._handle_card_hover,
+            labels={
+                "count.zero": self._t("card_table.count.zero"),
+                "count": self._t("card_table.count"),
+            },
         )
         self.zone_notebook.AddPage(table, tab_name)
         return table
