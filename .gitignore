@@ -8,6 +8,7 @@ logs/
 /assets/
 /stubs/
 /logs/
+/screenshots/
 dotnet/MTGOBridge/*
 !dotnet/MTGOBridge/Program.cs
 !dotnet/MTGOBridge/MTGOBridge.csproj
@@ -45,4 +46,4 @@ build/
 *.svg
 *.mmd
 # git worktrees
-.worktrees/screenshots/
+.worktrees/
