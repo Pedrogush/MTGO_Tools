@@ -63,13 +63,16 @@ class CardTablePanelHandler:
             candidates = [name for name in main_cards if name.lower() not in existing]
             if not candidates:
                 wx.MessageBox(
-                    "All mainboard cards are already in the outboard list.",
-                    "Outboard",
+                    self._t("card_table_handler.outboard_all_added"),
+                    self._t("card_table_handler.outboard_title"),
                     wx.OK | wx.ICON_INFORMATION,
                 )
                 return
             dlg = wx.SingleChoiceDialog(
-                self, "Select a mainboard card eligible for sideboarding.", "Outboard", candidates
+                self,
+                self._t("card_table_handler.outboard_select"),
+                self._t("card_table_handler.outboard_title"),
+                candidates,
             )
             if dlg.ShowModal() != wx.ID_OK:
                 dlg.Destroy()
@@ -85,7 +88,9 @@ class CardTablePanelHandler:
             return
 
         dlg = wx.TextEntryDialog(
-            self, f"Add card to {ZONE_TITLES.get(zone, zone)} (format: 'Qty Card Name')", "Add Card"
+            self,
+            self._t("card_table_handler.add_card_prompt", zone=ZONE_TITLES.get(zone, zone)),
+            self._t("card_table_handler.add_card_title"),
         )
         if dlg.ShowModal() != wx.ID_OK:
             dlg.Destroy()

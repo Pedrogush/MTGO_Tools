@@ -133,7 +133,9 @@ class SideboardGuideHandlers:
         index = self.sideboard_guide_panel.get_selected_index()
         if index is None:
             wx.MessageBox(
-                "Select an entry to edit.", "Sideboard Guide", wx.OK | wx.ICON_INFORMATION
+                self._t("sideboard_handler.select_to_edit"),
+                self._t("sideboard_handler.title"),
+                wx.OK | wx.ICON_INFORMATION,
             )
             return
         data = self.sideboard_guide_entries[index]
@@ -157,7 +159,9 @@ class SideboardGuideHandlers:
         index = self.sideboard_guide_panel.get_selected_index()
         if index is None:
             wx.MessageBox(
-                "Select an entry to remove.", "Sideboard Guide", wx.OK | wx.ICON_INFORMATION
+                self._t("sideboard_handler.select_to_remove"),
+                self._t("sideboard_handler.title"),
+                wx.OK | wx.ICON_INFORMATION,
             )
             return
         del self.sideboard_guide_entries[index]
@@ -168,8 +172,8 @@ class SideboardGuideHandlers:
         archetype_names = [item.get("name", "") for item in self.archetypes]
         dlg = wx.MultiChoiceDialog(
             self,
-            "Select archetypes to exclude from the printed guide.",
-            "Sideboard Guide",
+            self._t("sideboard_handler.select_archetypes"),
+            self._t("sideboard_handler.title"),
             archetype_names,
         )
         selected_indices = [
@@ -193,7 +197,7 @@ class SideboardGuideHandlers:
 
         dlg = wx.FileDialog(
             self,
-            "Export Sideboard Guide",
+            self._t("sideboard_handler.export_title"),
             wildcard="CSV files (*.csv)|*.csv",
             style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT,
         )
@@ -207,9 +211,9 @@ class SideboardGuideHandlers:
 
         try:
             self._export_guide_to_csv(file_path)
-            self._set_status("Sideboard guide exported successfully.")
+            self._set_status(self._t("sideboard_handler.export_success"))
         except Exception as exc:
-            self._set_status("Error exporting sideboard guide to CSV.")
+            self._set_status(self._t("sideboard_handler.export_error"))
             logger.exception(f"Error exporting sideboard guide to CSV: {exc}")
 
     def _on_import_guide(self: AppFrame) -> None:
@@ -218,7 +222,7 @@ class SideboardGuideHandlers:
 
         file_dlg = wx.FileDialog(
             self,
-            "Import Sideboard Guide",
+            self._t("sideboard_handler.import_title"),
             wildcard="CSV files (*.csv)|*.csv",
             style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST,
         )
@@ -230,23 +234,26 @@ class SideboardGuideHandlers:
         file_path = file_dlg.GetPath()
         file_dlg.Destroy()
 
-        options_dlg = wx.Dialog(self, title="Import Options", size=(400, 150))
+        options_dlg = wx.Dialog(
+            self, title=self._t("sideboard_handler.import_options_title"), size=(400, 150)
+        )
         panel = wx.Panel(options_dlg)
         sizer = wx.BoxSizer(wx.VERTICAL)
 
-        enable_double_checkbox = wx.CheckBox(panel, label="Enable double entries")
-        enable_double_checkbox.SetToolTip(
-            "If unchecked, will overwrite existing entries for matching archetypes. "
-            "If checked, will add entries even if archetypes already exist."
+        enable_double_checkbox = wx.CheckBox(
+            panel, label=self._t("sideboard_handler.import_enable_doubles")
         )
+        enable_double_checkbox.SetToolTip(self._t("sideboard_handler.import_info"))
         sizer.Add(enable_double_checkbox, 0, wx.ALL, 12)
 
         btn_sizer = wx.BoxSizer(wx.HORIZONTAL)
         btn_sizer.AddStretchSpacer()
-        ok_btn = wx.Button(panel, label="Import", id=wx.ID_OK)
+        ok_btn = wx.Button(panel, label=self._t("sideboard_handler.button.import"), id=wx.ID_OK)
         ok_btn.SetDefault()
         btn_sizer.Add(ok_btn, 0, wx.RIGHT, 8)
-        cancel_btn = wx.Button(panel, label="Cancel", id=wx.ID_CANCEL)
+        cancel_btn = wx.Button(
+            panel, label=self._t("sideboard_handler.button.cancel"), id=wx.ID_CANCEL
+        )
         btn_sizer.Add(cancel_btn, 0)
         sizer.Add(btn_sizer, 0, wx.EXPAND | wx.ALL, 8)
 
@@ -264,7 +271,7 @@ class SideboardGuideHandlers:
             imported_entries, warnings = self._import_guide_from_csv(file_path)
 
             if not imported_entries:
-                self._set_status("No valid guide entries found in CSV.")
+                self._set_status(self._t("sideboard_handler.import_no_entries"))
                 return
 
             if not enable_double_entries:
@@ -287,15 +294,19 @@ class SideboardGuideHandlers:
             self._refresh_guide_view()
 
             if warnings:
-                warning_msg = (
-                    f"Imported {len(imported_entries)} entries with warnings: {'; '.join(warnings)}"
+                warning_msg = self._t(
+                    "sideboard_handler.import_success_warnings",
+                    count=len(imported_entries),
+                    warnings="; ".join(warnings),
                 )
                 self.sideboard_guide_panel.set_warning(warning_msg)
             else:
-                self._set_status(f"Successfully imported {len(imported_entries)} guide entries.")
+                self._set_status(
+                    self._t("sideboard_handler.import_success", count=len(imported_entries))
+                )
 
         except Exception as exc:
-            self._set_status("Error importing sideboard guide from CSV.")
+            self._set_status(self._t("sideboard_handler.import_error"))
             logger.exception(f"Error importing sideboard guide from CSV: {exc}")
 
     def _export_guide_to_csv(self: AppFrame, file_path: str) -> None:
