@@ -14,6 +14,7 @@ from utils.constants import (
     FORMAT_OPTIONS,
 )
 from utils.deck import sanitize_zone_cards
+from utils.i18n import DEFAULT_LOCALE, SUPPORTED_LOCALES, normalize_locale
 
 
 class DeckSelectorSessionManager:
@@ -65,6 +66,14 @@ class DeckSelectorSessionManager:
         valid_source = source if source in {"mtggoldfish", "mtgo", "both"} else "both"
         self.settings["deck_data_source"] = valid_source
 
+    def get_language(self, default: str = DEFAULT_LOCALE) -> str:
+        language = self.settings.get("language", default)
+        return normalize_locale(language)
+
+    def update_language(self, language: str) -> None:
+        valid_language = language if language in SUPPORTED_LOCALES else DEFAULT_LOCALE
+        self.settings["language"] = valid_language
+
     def ensure_deck_save_dir(self) -> Path:
         """Resolve the deck save directory from config, creating it if needed."""
         raw_path = self.config.get("deck_selector_save_path") or self.default_deck_dir
@@ -105,6 +114,7 @@ class DeckSelectorSessionManager:
                 "format": current_format,
                 "left_mode": left_mode,
                 "deck_data_source": deck_data_source,
+                "language": self.get_language(),
                 "saved_deck_text": self.deck_repo.get_current_deck_text(),
                 "saved_zone_cards": self._serialize_zone_cards(zone_cards),
             }

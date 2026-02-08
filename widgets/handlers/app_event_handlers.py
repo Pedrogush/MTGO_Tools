@@ -439,9 +439,26 @@ class AppEventHandlers:
         if not self.deck_source_choice:
             return
         selection = self.deck_source_choice.GetSelection()
-        source_map = {0: "both", 1: "mtggoldfish", 2: "mtgo"}
-        source = source_map.get(selection, "both")
+        source = (
+            self._deck_source_values[selection]
+            if 0 <= selection < len(self._deck_source_values)
+            else "both"
+        )
         self.controller.set_deck_data_source(source)
+        self._schedule_settings_save()
+
+    def _on_language_changed(self: AppFrame, _event: wx.CommandEvent | None) -> None:
+        if not self.language_choice:
+            return
+        selection = self.language_choice.GetSelection()
+        locale = (
+            self._language_values[selection]
+            if 0 <= selection < len(self._language_values)
+            else "en-US"
+        )
+        self.locale = locale
+        self.controller.set_language(locale)
+        self._set_status(self._t("app.status.language_changed"))
         self._schedule_settings_save()
 
     def _on_daily_average_success(

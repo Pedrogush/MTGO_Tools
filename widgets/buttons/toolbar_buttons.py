@@ -22,6 +22,7 @@ class ToolbarButtons(wx.Panel):
         on_load_collection: Callable[[], None] | None = None,
         on_download_card_images: Callable[[], None] | None = None,
         on_update_card_database: Callable[[], None] | None = None,
+        labels: dict[str, str] | None = None,
     ):
         """
         Initialize the toolbar button panel.
@@ -37,24 +38,31 @@ class ToolbarButtons(wx.Panel):
             on_update_card_database: Callback for "Update Card Database"
         """
         super().__init__(parent)
+        labels = labels or {}
 
         self._button_row = wx.BoxSizer(wx.HORIZONTAL)
         self.SetSizer(self._button_row)
 
         self.opponent_tracker_button = self._add_button(
-            "Opponent Tracker", on_open_opponent_tracker
+            labels.get("opponent_tracker", "Opponent Tracker"), on_open_opponent_tracker
         )
-        self.timer_alert_button = self._add_button("Timer Alert", on_open_timer_alert)
-        self.match_history_button = self._add_button("Match History", on_open_match_history)
+        self.timer_alert_button = self._add_button(
+            labels.get("timer_alert", "Timer Alert"), on_open_timer_alert
+        )
+        self.match_history_button = self._add_button(
+            labels.get("match_history", "Match History"), on_open_match_history
+        )
         self.metagame_analysis_button = self._add_button(
-            "Metagame Analysis", on_open_metagame_analysis
+            labels.get("metagame_analysis", "Metagame Analysis"), on_open_metagame_analysis
         )
-        self.load_collection_button = self._add_button("Load Collection", on_load_collection)
+        self.load_collection_button = self._add_button(
+            labels.get("load_collection", "Load Collection"), on_load_collection
+        )
         self.download_images_button = self._add_button(
-            "Download Card Images", on_download_card_images
+            labels.get("download_card_images", "Download Card Images"), on_download_card_images
         )
         self.update_database_button = self._add_button(
-            "Update Card Database", on_update_card_database
+            labels.get("update_card_database", "Update Card Database"), on_update_card_database
         )
 
         self._button_row.AddStretchSpacer(1)

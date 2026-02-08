@@ -26,6 +26,7 @@ class DeckResearchPanel(wx.Panel):
         on_archetype_filter: Callable[[], None],
         on_archetype_selected: Callable[[], None],
         on_reload_archetypes: Callable[[], None],
+        labels: dict[str, str] | None = None,
     ) -> None:
         super().__init__(parent)
 
@@ -38,6 +39,7 @@ class DeckResearchPanel(wx.Panel):
         # Store initial format
         self.initial_format = initial_format
         self.format_options = format_options
+        self._labels = labels or {}
 
         # Build UI
         self._build_ui()
@@ -49,7 +51,7 @@ class DeckResearchPanel(wx.Panel):
         self.SetSizer(sizer)
 
         # Format selection
-        format_label = wx.StaticText(self, label="Format")
+        format_label = wx.StaticText(self, label=self._labels.get("format", "Format"))
         stylize_label(format_label)
         sizer.Add(format_label, 0, wx.TOP | wx.LEFT | wx.RIGHT, 6)
 
@@ -62,7 +64,7 @@ class DeckResearchPanel(wx.Panel):
         # Search control
         self.search_ctrl = wx.SearchCtrl(self, style=wx.TE_PROCESS_ENTER)
         self.search_ctrl.ShowSearchButton(True)
-        self.search_ctrl.SetHint("Search archetypes…")
+        self.search_ctrl.SetHint(self._labels.get("search_hint", "Search archetypes..."))
         self.search_ctrl.Bind(wx.EVT_TEXT, lambda _evt: self._on_archetype_filter())
         stylize_textctrl(self.search_ctrl)
         sizer.Add(self.search_ctrl, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 6)
@@ -74,7 +76,9 @@ class DeckResearchPanel(wx.Panel):
         sizer.Add(self.archetype_list, 1, wx.EXPAND | wx.ALL, 6)
 
         # Reload button
-        refresh_button = wx.Button(self, label="Reload Archetypes")
+        refresh_button = wx.Button(
+            self, label=self._labels.get("reload_archetypes", "Reload Archetypes")
+        )
         stylize_button(refresh_button)
         refresh_button.Bind(wx.EVT_BUTTON, lambda _evt: self._on_reload_archetypes())
         sizer.Add(refresh_button, 0, wx.EXPAND | wx.ALL, 6)
@@ -95,13 +99,15 @@ class DeckResearchPanel(wx.Panel):
     def set_loading_state(self) -> None:
         """Set the panel to loading state."""
         self.archetype_list.Clear()
-        self.archetype_list.Append("Loading…")
+        self.archetype_list.Append(self._labels.get("loading_archetypes", "Loading..."))
         self.archetype_list.Disable()
 
     def set_error_state(self) -> None:
         """Set the panel to error state."""
         self.archetype_list.Clear()
-        self.archetype_list.Append("Failed to load archetypes.")
+        self.archetype_list.Append(
+            self._labels.get("failed_archetypes", "Failed to load archetypes.")
+        )
 
     def populate_archetypes(self, archetype_names: list[str]) -> None:
         """
@@ -112,7 +118,7 @@ class DeckResearchPanel(wx.Panel):
         """
         self.archetype_list.Clear()
         if not archetype_names:
-            self.archetype_list.Append("No archetypes found.")
+            self.archetype_list.Append(self._labels.get("no_archetypes", "No archetypes found."))
             self.archetype_list.Disable()
             return
 

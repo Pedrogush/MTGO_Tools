@@ -45,6 +45,7 @@ from utils.constants import (
     OUTBOARD_STORE,
     ensure_base_dirs,
 )
+from utils.i18n import normalize_locale
 
 
 class AppController:
@@ -84,6 +85,7 @@ class AppController:
 
         # Settings management
         self.current_format = self.session_manager.get_current_format()
+        self.current_language = self.session_manager.get_language()
 
         # Deck data source preference
         self._deck_data_source = self.session_manager.get_deck_data_source()
@@ -403,6 +405,16 @@ class AppController:
             return
         self._deck_data_source = source
         self.session_manager.update_deck_data_source(source)
+
+    def get_language(self) -> str:
+        return self.current_language
+
+    def set_language(self, language: str) -> None:
+        normalized = normalize_locale(language)
+        if self.current_language == normalized:
+            return
+        self.current_language = normalized
+        self.session_manager.update_language(normalized)
 
     # ============= Business Logic Methods =============
 

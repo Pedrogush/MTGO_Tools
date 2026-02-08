@@ -20,6 +20,7 @@ class DeckActionButtons(wx.Panel):
         on_copy: Callable[[], None] | None = None,
         on_save: Callable[[], None] | None = None,
         on_daily_average: Callable[[], None] | None = None,
+        labels: dict[str, str] | None = None,
     ):
         """
         Initialize the deck action buttons panel.
@@ -35,6 +36,7 @@ class DeckActionButtons(wx.Panel):
         self.on_copy = on_copy
         self.on_save = on_save
         self.on_daily_average = on_daily_average
+        self._labels = labels or {}
 
         self._build_ui()
 
@@ -44,21 +46,23 @@ class DeckActionButtons(wx.Panel):
         self.SetSizer(button_row)
 
         # Today's Average button
-        self.daily_average_button = wx.Button(self, label="Today's Average")
+        self.daily_average_button = wx.Button(
+            self, label=self._labels.get("daily_average", "Today's Average")
+        )
         stylize_button(self.daily_average_button)
         self.daily_average_button.Disable()
         self.daily_average_button.Bind(wx.EVT_BUTTON, self._on_daily_average_clicked)
         button_row.Add(self.daily_average_button, 0, wx.RIGHT, 6)
 
         # Copy button
-        self.copy_button = wx.Button(self, label="Copy")
+        self.copy_button = wx.Button(self, label=self._labels.get("copy", "Copy"))
         stylize_button(self.copy_button)
         self.copy_button.Disable()
         self.copy_button.Bind(wx.EVT_BUTTON, self._on_copy_clicked)
         button_row.Add(self.copy_button, 0, wx.RIGHT, 6)
 
         # Save Deck button
-        self.save_button = wx.Button(self, label="Save Deck")
+        self.save_button = wx.Button(self, label=self._labels.get("save_deck", "Save Deck"))
         stylize_button(self.save_button)
         self.save_button.Disable()
         self.save_button.Bind(wx.EVT_BUTTON, self._on_save_clicked)

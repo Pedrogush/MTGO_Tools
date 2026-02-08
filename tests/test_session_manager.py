@@ -1,8 +1,21 @@
 from __future__ import annotations
 
+import importlib.util
 import json
+from pathlib import Path
 
-from controllers.session_manager import DeckSelectorSessionManager
+
+def _load_session_manager_class() -> type:
+    module_path = Path(__file__).resolve().parents[1] / "controllers" / "session_manager.py"
+    spec = importlib.util.spec_from_file_location("session_manager_for_tests", module_path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError("Unable to load session_manager module for tests")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module.DeckSelectorSessionManager
+
+
+DeckSelectorSessionManager = _load_session_manager_class()
 
 
 class StubDeckRepo:
@@ -63,12 +76,20 @@ def test_session_manager_persists_and_restores(tmp_path):
     data = json.loads(settings_file.read_text(encoding="utf-8"))
     assert data["saved_deck_text"] == "4 Lightning Bolt"
     assert data["deck_data_source"] == "mtgo"
+    assert data["language"] == "en-US"
 
 
 def test_session_manager_validates_defaults_and_config(tmp_path):
     settings_file = tmp_path / "settings.json"
     settings_file.write_text(
-        json.dumps({"format": "Legacy??", "left_mode": "invalid", "deck_data_source": "bad"}),
+        json.dumps(
+            {
+                "format": "Legacy??",
+                "left_mode": "invalid",
+                "deck_data_source": "bad",
+                "language": "invalid",
+            }
+        ),
         encoding="utf-8",
     )
     config_file = tmp_path / "config.json"
@@ -85,9 +106,14 @@ def test_session_manager_validates_defaults_and_config(tmp_path):
     assert manager.get_current_format() == "Modern"
     assert manager.get_left_mode() == "research"
     assert manager.get_deck_data_source() == "both"
+    assert manager.get_language() == "en-US"
 
     manager.update_deck_data_source("mtgo")
     assert manager.settings["deck_data_source"] == "mtgo"
+    manager.update_language("pt-BR")
+    assert manager.settings["language"] == "pt-BR"
+    manager.update_language("es-ES")
+    assert manager.settings["language"] == "en-US"
 
     deck_dir = manager.ensure_deck_save_dir()
     assert deck_dir.exists()

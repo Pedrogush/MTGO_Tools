@@ -24,6 +24,7 @@ from utils.constants import (
     PADDING_SM,
     SUBDUED_TEXT,
 )
+from utils.i18n import LOCALE_LABELS, SUPPORTED_LOCALES, translate
 from utils.mana_icon_factory import ManaIconFactory
 from utils.stylize import stylize_textctrl
 from widgets.buttons.deck_action_buttons import DeckActionButtons
@@ -56,12 +57,19 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
         controller: "AppController",
         parent: wx.Window | None = None,
     ):
-        super().__init__(parent, title="MTGO Deck Research & Builder", size=APP_FRAME_SIZE)
+        super().__init__(
+            parent,
+            title=translate(controller.get_language(), "app.title.main_frame"),
+            size=APP_FRAME_SIZE,
+        )
 
         # Store controller reference - ALL state and business logic goes through this
         self.controller: AppController = controller
         self.card_data_dialogs_disabled = False
         self._builder_search_pending = False
+        self.locale = self.controller.get_language()
+        self._deck_source_values = ["both", "mtggoldfish", "mtgo"]
+        self._language_values = list(SUPPORTED_LOCALES)
 
         self.sideboard_guide_entries: list[dict[str, str]] = []
         self.sideboard_exclusions: list[str] = []
@@ -115,7 +123,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
         self.status_bar = self.CreateStatusBar()
         self.status_bar.SetBackgroundColour(DARK_PANEL)
         self.status_bar.SetForegroundColour(LIGHT_TEXT)
-        self._set_status("Ready")
+        self._set_status(self._t("app.status.ready"))
 
     def _build_left_panel(self, parent: wx.Window) -> wx.Panel:
         left_panel = wx.Panel(parent)
@@ -135,6 +143,14 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
             on_archetype_filter=self.on_archetype_filter,
             on_archetype_selected=self.on_archetype_selected,
             on_reload_archetypes=lambda: self.fetch_archetypes(force=True),
+            labels={
+                "format": self._t("research.format"),
+                "search_hint": self._t("research.search_hint"),
+                "reload_archetypes": self._t("research.reload_archetypes"),
+                "loading_archetypes": self._t("research.loading_archetypes"),
+                "failed_archetypes": self._t("research.failed_archetypes"),
+                "no_archetypes": self._t("research.no_archetypes"),
+            },
         )
         self.left_stack.AddPage(self.research_panel, "Research")
 
@@ -225,6 +241,15 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
                 self, self.image_cache, self.image_downloader, self._set_status
             ),
             on_update_card_database=lambda: self.controller.force_bulk_data_update(),
+            labels={
+                "opponent_tracker": self._t("toolbar.opponent_tracker"),
+                "timer_alert": self._t("toolbar.timer_alert"),
+                "match_history": self._t("toolbar.match_history"),
+                "metagame_analysis": self._t("toolbar.metagame_analysis"),
+                "load_collection": self._t("toolbar.load_collection"),
+                "download_card_images": self._t("toolbar.download_card_images"),
+                "update_card_database": self._t("toolbar.update_card_database"),
+            },
         )
 
     def _build_card_data_controls(self, parent: wx.Window) -> wx.Panel:
@@ -233,16 +258,35 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
         sizer = wx.BoxSizer(wx.HORIZONTAL)
         panel.SetSizer(sizer)
 
-        source_label = wx.StaticText(panel, label="Deck data source:")
+        source_label = wx.StaticText(panel, label=self._t("app.label.deck_data_source"))
         source_label.SetForegroundColour(LIGHT_TEXT)
         sizer.Add(source_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, PADDING_SM)
 
-        self.deck_source_choice = wx.Choice(panel, choices=["Both", "MTGGoldfish", "MTGO.com"])
+        source_choices = [
+            self._t("app.choice.source.both"),
+            self._t("app.choice.source.mtggoldfish"),
+            self._t("app.choice.source.mtgo"),
+        ]
+        self.deck_source_choice = wx.Choice(panel, choices=source_choices)
         current_source = self.controller.get_deck_data_source()
-        source_map = {"both": 0, "mtggoldfish": 1, "mtgo": 2}
+        source_map = {value: idx for idx, value in enumerate(self._deck_source_values)}
         self.deck_source_choice.SetSelection(source_map.get(current_source, 0))
         self.deck_source_choice.Bind(wx.EVT_CHOICE, self._on_deck_source_changed)
         sizer.Add(self.deck_source_choice, 0, wx.ALIGN_CENTER_VERTICAL)
+
+        sizer.AddSpacer(PADDING_LG)
+        language_label = wx.StaticText(panel, label=self._t("app.label.language"))
+        language_label.SetForegroundColour(LIGHT_TEXT)
+        sizer.Add(language_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, PADDING_SM)
+
+        language_choices = [LOCALE_LABELS[locale] for locale in self._language_values]
+        self.language_choice = wx.Choice(panel, choices=language_choices)
+        language_index = (
+            self._language_values.index(self.locale) if self.locale in self._language_values else 0
+        )
+        self.language_choice.SetSelection(language_index)
+        self.language_choice.Bind(wx.EVT_CHOICE, self._on_language_changed)
+        sizer.Add(self.language_choice, 0, wx.ALIGN_CENTER_VERTICAL)
 
         sizer.AddStretchSpacer(1)
         return panel
@@ -271,6 +315,11 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
             on_copy=lambda: self.on_copy_clicked(None),
             on_save=lambda: self.on_save_clicked(None),
             on_daily_average=lambda: self.on_daily_average_clicked(None),
+            labels={
+                "daily_average": self._t("deck_actions.daily_average"),
+                "copy": self._t("deck_actions.copy"),
+                "save_deck": self._t("deck_actions.save_deck"),
+            },
         )
         deck_sizer.Add(
             self.deck_action_buttons,
@@ -488,6 +537,9 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
         if self.status_bar:
             self.status_bar.SetStatusText(message)
         logger.info(message)
+
+    def _t(self, key: str, **kwargs: object) -> str:
+        return translate(self.locale, key, **kwargs)
 
     # ------------------------------------------------------------------ Window persistence ---------------------------------------------------
     def _save_window_settings(self) -> None:
