@@ -28,6 +28,7 @@ class SideboardGuidePanel(wx.Panel):
         on_edit_exclusions: Callable[[], None],
         on_export_csv: Callable[[], None],
         on_import_csv: Callable[[], None],
+        labels: dict[str, str] | None = None,
     ):
         """
         Initialize the sideboard guide panel.
@@ -40,6 +41,7 @@ class SideboardGuidePanel(wx.Panel):
             on_edit_exclusions: Callback for editing archetype exclusions
             on_export_csv: Callback for exporting guide to CSV
             on_import_csv: Callback for importing guide from CSV
+            labels: Localized label dictionary
         """
         super().__init__(parent)
         self.SetBackgroundColour(DARK_PANEL)
@@ -50,6 +52,7 @@ class SideboardGuidePanel(wx.Panel):
         self.on_edit_exclusions = on_edit_exclusions
         self.on_export_csv = on_export_csv
         self.on_import_csv = on_import_csv
+        self._labels = labels or {}
 
         self.entries: list[dict[str, str]] = []
         self.exclusions: list[str] = []
@@ -63,12 +66,18 @@ class SideboardGuidePanel(wx.Panel):
 
         # Guide entries list
         self.guide_view = dv.DataViewListCtrl(self, style=dv.DV_ROW_LINES)
-        self.guide_view.AppendTextColumn("Archetype", width=150)
-        self.guide_view.AppendTextColumn("Play: Out", width=150)
-        self.guide_view.AppendTextColumn("Play: In", width=150)
-        self.guide_view.AppendTextColumn("Draw: Out", width=150)
-        self.guide_view.AppendTextColumn("Draw: In", width=150)
-        self.guide_view.AppendTextColumn("Notes", width=180)
+        self.guide_view.AppendTextColumn(
+            self._labels.get("column.archetype", "Archetype"), width=150
+        )
+        self.guide_view.AppendTextColumn(
+            self._labels.get("column.play_out", "Play: Out"), width=150
+        )
+        self.guide_view.AppendTextColumn(self._labels.get("column.play_in", "Play: In"), width=150)
+        self.guide_view.AppendTextColumn(
+            self._labels.get("column.draw_out", "Draw: Out"), width=150
+        )
+        self.guide_view.AppendTextColumn(self._labels.get("column.draw_in", "Draw: In"), width=150)
+        self.guide_view.AppendTextColumn(self._labels.get("column.notes", "Notes"), width=180)
         self.guide_view.SetBackgroundColour(DARK_ALT)
         self.guide_view.SetForegroundColour(LIGHT_TEXT)
         sizer.Add(self.guide_view, 1, wx.EXPAND | wx.ALL, 6)
@@ -77,32 +86,36 @@ class SideboardGuidePanel(wx.Panel):
         buttons = wx.BoxSizer(wx.HORIZONTAL)
         sizer.Add(buttons, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 6)
 
-        self.add_btn = wx.Button(self, label="Add Entry")
+        self.add_btn = wx.Button(self, label=self._labels.get("button.add_entry", "Add Entry"))
         stylize_button(self.add_btn)
         self.add_btn.Bind(wx.EVT_BUTTON, self._on_add_clicked)
         buttons.Add(self.add_btn, 0, wx.RIGHT, 6)
 
-        self.edit_btn = wx.Button(self, label="Edit Entry")
+        self.edit_btn = wx.Button(self, label=self._labels.get("button.edit_entry", "Edit Entry"))
         stylize_button(self.edit_btn)
         self.edit_btn.Bind(wx.EVT_BUTTON, self._on_edit_clicked)
         buttons.Add(self.edit_btn, 0, wx.RIGHT, 6)
 
-        self.remove_btn = wx.Button(self, label="Remove Entry")
+        self.remove_btn = wx.Button(
+            self, label=self._labels.get("button.remove_entry", "Remove Entry")
+        )
         stylize_button(self.remove_btn)
         self.remove_btn.Bind(wx.EVT_BUTTON, self._on_remove_clicked)
         buttons.Add(self.remove_btn, 0, wx.RIGHT, 6)
 
-        self.exclusions_btn = wx.Button(self, label="Exclude Archetypes")
+        self.exclusions_btn = wx.Button(
+            self, label=self._labels.get("button.exclude_archetypes", "Exclude Archetypes")
+        )
         stylize_button(self.exclusions_btn)
         self.exclusions_btn.Bind(wx.EVT_BUTTON, self._on_exclusions_clicked)
         buttons.Add(self.exclusions_btn, 0, wx.RIGHT, 6)
 
-        self.export_btn = wx.Button(self, label="Export CSV")
+        self.export_btn = wx.Button(self, label=self._labels.get("button.export_csv", "Export CSV"))
         stylize_button(self.export_btn)
         self.export_btn.Bind(wx.EVT_BUTTON, self._on_export_clicked)
         buttons.Add(self.export_btn, 0, wx.RIGHT, 6)
 
-        self.import_btn = wx.Button(self, label="Import CSV")
+        self.import_btn = wx.Button(self, label=self._labels.get("button.import_csv", "Import CSV"))
         stylize_button(self.import_btn)
         self.import_btn.Bind(wx.EVT_BUTTON, self._on_import_clicked)
         buttons.Add(self.import_btn, 0)
@@ -110,7 +123,9 @@ class SideboardGuidePanel(wx.Panel):
         buttons.AddStretchSpacer(1)
 
         # Exclusions label
-        self.exclusions_label = wx.StaticText(self, label="Exclusions: —")
+        self.exclusions_label = wx.StaticText(
+            self, label=self._labels.get("label.exclusions", "Exclusions: —")
+        )
         self.exclusions_label.SetForegroundColour(SUBDUED_TEXT)
         sizer.Add(self.exclusions_label, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 6)
 
@@ -200,9 +215,11 @@ class SideboardGuidePanel(wx.Panel):
         # Update exclusions label
         if self.exclusions:
             text = ", ".join(self.exclusions)
+            self.exclusions_label.SetLabel(
+                self._labels.get("label.exclusions_list", "Exclusions: {list}").format(list=text)
+            )
         else:
-            text = "—"
-        self.exclusions_label.SetLabel(f"Exclusions: {text}")
+            self.exclusions_label.SetLabel(self._labels.get("label.exclusions", "Exclusions: —"))
 
     def _format_card_list(self, cards: dict[str, int] | str) -> str:
         """

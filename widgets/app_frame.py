@@ -472,6 +472,22 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
             on_edit_exclusions=self._on_edit_exclusions,
             on_export_csv=self._on_export_guide,
             on_import_csv=self._on_import_guide,
+            labels={
+                "column.archetype": self._t("sideboard_guide.column.archetype"),
+                "column.play_out": self._t("sideboard_guide.column.play_out"),
+                "column.play_in": self._t("sideboard_guide.column.play_in"),
+                "column.draw_out": self._t("sideboard_guide.column.draw_out"),
+                "column.draw_in": self._t("sideboard_guide.column.draw_in"),
+                "column.notes": self._t("sideboard_guide.column.notes"),
+                "button.add_entry": self._t("sideboard_guide.button.add_entry"),
+                "button.edit_entry": self._t("sideboard_guide.button.edit_entry"),
+                "button.remove_entry": self._t("sideboard_guide.button.remove_entry"),
+                "button.exclude_archetypes": self._t("sideboard_guide.button.exclude_archetypes"),
+                "button.export_csv": self._t("sideboard_guide.button.export_csv"),
+                "button.import_csv": self._t("sideboard_guide.button.import_csv"),
+                "label.exclusions": self._t("sideboard_guide.label.exclusions"),
+                "label.exclusions_list": self._t("sideboard_guide.label.exclusions_list"),
+            },
         )
         self.deck_tabs.AddPage(self.sideboard_guide_panel, self._t("app.tab.sideboard_guide"))
 
