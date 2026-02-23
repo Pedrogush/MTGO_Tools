@@ -347,3 +347,57 @@ def test_get_image_path_is_thread_safe(tmp_path):
 
     assert not errors, f"Thread errors: {errors}"
     assert all(r == image_file for r in results)
+
+
+def test_get_image_path_concurrent_add_and_get_is_race_free(tmp_path):
+    """Concurrent add_image() writers and get_image_path() readers must not race.
+
+    A threading.Barrier synchronises all threads to start simultaneously,
+    maximising the probability of a writer and reader hitting the TOCTOU
+    window that the _path_cache_lock was introduced to protect.
+    """
+    cache = card_images.CardImageCache(
+        cache_dir=tmp_path / "cache", db_path=tmp_path / "cache" / "images.db"
+    )
+    files: dict[str, object] = {}
+    for i in range(5):
+        f = cache.cache_dir / "normal" / f"uuid-race-{i}.jpg"
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_bytes(b"fake")
+        files[f"Race Card {i}"] = f
+
+    barrier = threading.Barrier(len(files) * 2)
+    errors: list[Exception] = []
+
+    def writer(name: str, path: object) -> None:
+        try:
+            barrier.wait()
+            cache.add_image(
+                uuid=f"uuid-race-{name}",
+                name=name,
+                set_code="SET",
+                collector_number="1",
+                image_size="normal",
+                file_path=path,
+            )
+        except Exception as exc:
+            errors.append(exc)
+
+    def reader(name: str) -> None:
+        try:
+            barrier.wait()
+            cache.get_image_path(name, "normal")
+        except Exception as exc:
+            errors.append(exc)
+
+    threads = []
+    for name, path in files.items():
+        threads.append(threading.Thread(target=writer, args=(name, path)))
+        threads.append(threading.Thread(target=reader, args=(name,)))
+
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert not errors, f"Race errors: {errors}"
