@@ -39,7 +39,11 @@ from utils.atomic_io import (
     atomic_write_stream,
     locked_path,
 )
-from utils.constants import BULK_DATA_CACHE_FRESHNESS_SECONDS, CACHE_DIR
+from utils.constants import (
+    BULK_DATA_CACHE_FRESHNESS_SECONDS,
+    CACHE_DIR,
+    SQLITE_CONNECTION_TIMEOUT_SECONDS,
+)
 
 # Image cache configuration
 IMAGE_CACHE_DIR = CACHE_DIR / "card_images"
@@ -129,7 +133,7 @@ class CardImageCache:
 
     def _init_database(self) -> None:
         """Initialize SQLite database schema."""
-        with sqlite3.connect(self.db_path) as conn:
+        with sqlite3.connect(self.db_path, timeout=SQLITE_CONNECTION_TIMEOUT_SECONDS) as conn:
             self._create_schema(conn)
             self._ensure_face_index_support(conn)
             conn.commit()
@@ -273,7 +277,7 @@ class CardImageCache:
         Returns:
             Path to cached image file, or None if not cached
         """
-        with sqlite3.connect(self.db_path) as conn:
+        with sqlite3.connect(self.db_path, timeout=SQLITE_CONNECTION_TIMEOUT_SECONDS) as conn:
             cursor = conn.execute(
                 """
                 SELECT file_path
@@ -333,7 +337,7 @@ class CardImageCache:
         """Get cached image path for a specific printing."""
         if not set_code:
             return self.get_image_path(card_name, size)
-        with sqlite3.connect(self.db_path) as conn:
+        with sqlite3.connect(self.db_path, timeout=SQLITE_CONNECTION_TIMEOUT_SECONDS) as conn:
             cursor = conn.execute(
                 """
                 SELECT file_path
@@ -361,7 +365,7 @@ class CardImageCache:
             query = "SELECT file_path FROM card_images WHERE uuid = ? AND face_index = ? AND image_size = ?"
             params = (uuid, face_index, size)
 
-        with sqlite3.connect(self.db_path) as conn:
+        with sqlite3.connect(self.db_path, timeout=SQLITE_CONNECTION_TIMEOUT_SECONDS) as conn:
             cursor = conn.execute(query, params)
             row = cursor.fetchone()
             if row:
@@ -372,7 +376,7 @@ class CardImageCache:
 
     def get_image_paths_by_uuid(self, uuid: str, size: str = "normal") -> list[Path]:
         """Return all cached face images for a UUID, ordered by face index."""
-        with sqlite3.connect(self.db_path) as conn:
+        with sqlite3.connect(self.db_path, timeout=SQLITE_CONNECTION_TIMEOUT_SECONDS) as conn:
             rows = conn.execute(
                 """
                 SELECT face_index, file_path
@@ -404,7 +408,7 @@ class CardImageCache:
         """Add image record to database."""
         file_path_str = str(Path(file_path).resolve())
 
-        with sqlite3.connect(self.db_path) as conn:
+        with sqlite3.connect(self.db_path, timeout=SQLITE_CONNECTION_TIMEOUT_SECONDS) as conn:
             conn.execute(
                 """
                 INSERT OR REPLACE INTO card_images
@@ -429,7 +433,7 @@ class CardImageCache:
 
     def get_cache_stats(self) -> dict[str, Any]:
         """Get cache statistics."""
-        with sqlite3.connect(self.db_path) as conn:
+        with sqlite3.connect(self.db_path, timeout=SQLITE_CONNECTION_TIMEOUT_SECONDS) as conn:
             total = conn.execute("SELECT COUNT(DISTINCT uuid) FROM card_images").fetchone()[0]
             by_size = {}
             for size in IMAGE_SIZES.values():
@@ -502,7 +506,7 @@ class BulkImageDownloader:
 
     def _get_cached_bulk_data_record(self) -> tuple[str | None, str | None]:
         """Return the saved bulk data metadata (updated_at, download URI)."""
-        with sqlite3.connect(self.cache.db_path) as conn:
+        with sqlite3.connect(self.cache.db_path, timeout=SQLITE_CONNECTION_TIMEOUT_SECONDS) as conn:
             row = conn.execute(
                 "SELECT downloaded_at, bulk_data_uri FROM bulk_data_meta WHERE id = 1"
             ).fetchone()
@@ -581,7 +585,9 @@ class BulkImageDownloader:
             atomic_write_stream(BULK_DATA_CACHE, resp.iter_content(chunk_size=CHUNK_SIZE))
 
             # Update database metadata (defer card count to avoid parsing 500MB file)
-            with sqlite3.connect(self.cache.db_path) as conn:
+            with sqlite3.connect(
+                self.cache.db_path, timeout=SQLITE_CONNECTION_TIMEOUT_SECONDS
+            ) as conn:
                 conn.execute(
                     """
                     INSERT OR REPLACE INTO bulk_data_meta (id, downloaded_at, total_cards, bulk_data_uri)
