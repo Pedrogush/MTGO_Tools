@@ -12,6 +12,7 @@ from pathlib import Path
 
 import wx
 from loguru import logger
+from PIL import Image as PilImage
 
 from utils.constants import (
     CARD_IMAGE_ANIMATION_ALPHA_STEP,
@@ -254,29 +255,26 @@ class CardImageDisplay(wx.Panel):
         Returns:
             Blended bitmap
         """
-        # Convert bitmaps to images for pixel manipulation
         img1 = bmp1.ConvertToImage()
         img2 = bmp2.ConvertToImage()
 
-        # Ensure same size
-        if img1.GetSize() != img2.GetSize():
+        w1, h1 = img1.GetWidth(), img1.GetHeight()
+        w2, h2 = img2.GetWidth(), img2.GetHeight()
+
+        # Normalise to same size (preserves existing size-mismatch contract)
+        if (w1, h1) != (w2, h2):
             img1 = img1.Resize(img2.GetSize(), (0, 0))
+            w1, h1 = w2, h2
 
-        # Create a copy and blend manually
-        result = img1.Copy()
+        # Convert wx.Image RGB data to PIL, blend in C, convert back.
+        # wx.Image.GetData() always returns raw RGB bytes (3 bytes/pixel, no alpha),
+        # matching PIL.Image.frombytes("RGB"). Semantics: out = img1*(1-alpha) + img2*alpha.
+        pil1 = PilImage.frombytes("RGB", (w1, h1), bytes(img1.GetData()))
+        pil2 = PilImage.frombytes("RGB", (w2, h2), bytes(img2.GetData()))
+        blended = PilImage.blend(pil1, pil2, alpha)
 
-        # Blend RGB values
-        data1 = img1.GetData()
-        data2 = img2.GetData()
-        blended_data = bytearray(len(data1))
-
-        for i in range(0, len(data1), 3):
-            blended_data[i] = int(data1[i] * (1 - alpha) + data2[i] * alpha)
-            blended_data[i + 1] = int(data1[i + 1] * (1 - alpha) + data2[i + 1] * alpha)
-            blended_data[i + 2] = int(data1[i + 2] * (1 - alpha) + data2[i + 2] * alpha)
-
-        result.SetData(bytes(blended_data))
-
+        result = wx.Image(w1, h1)
+        result.SetData(blended.tobytes())
         return wx.Bitmap(result)
 
     def _update_navigation(self) -> None:
