@@ -10,9 +10,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import numpy as np
 import wx
 from loguru import logger
 from PIL import Image as PilImage
+from PIL import ImageDraw
 
 from utils.constants import (
     CARD_IMAGE_ANIMATION_ALPHA_STEP,
@@ -462,56 +464,25 @@ class CardImageDisplay(wx.Panel):
         Returns:
             A new wx.Image with rounded corners
         """
-        # Make a copy to avoid modifying the original
         img = image.Copy()
-
-        # Ensure image has alpha channel
         if not img.HasAlpha():
             img.InitAlpha()
 
-        width = img.GetWidth()
-        height = img.GetHeight()
+        w, h = img.GetWidth(), img.GetHeight()
 
-        # Get alpha data as bytearray for modification
-        alpha_data = bytearray(img.GetAlpha())
+        # Build a binary rounded-rectangle mask via PIL (C-native rasterisation).
+        # Interior pixels are 255; outside-corner pixels are 0.
+        mask_pil = PilImage.new("L", (w, h), 0)
+        draw = ImageDraw.Draw(mask_pil)
+        draw.rounded_rectangle([0, 0, w - 1, h - 1], radius=radius, fill=255)
+        mask_bytes = np.frombuffer(mask_pil.tobytes(), dtype=np.uint8)
 
-        # Helper function to check if a point is inside the rounded rectangle
-        def is_inside_rounded_rect(px, py):
-            # Check if point is in corner regions
-            # Top-left corner
-            if px < radius and py < radius:
-                dx = radius - px
-                dy = radius - py
-                return (dx * dx + dy * dy) <= (radius * radius)
-            # Top-right corner
-            elif px >= width - radius and py < radius:
-                dx = px - (width - radius - 1)
-                dy = radius - py
-                return (dx * dx + dy * dy) <= (radius * radius)
-            # Bottom-left corner
-            elif px < radius and py >= height - radius:
-                dx = radius - px
-                dy = py - (height - radius - 1)
-                return (dx * dx + dy * dy) <= (radius * radius)
-            # Bottom-right corner
-            elif px >= width - radius and py >= height - radius:
-                dx = px - (width - radius - 1)
-                dy = py - (height - radius - 1)
-                return (dx * dx + dy * dy) <= (radius * radius)
-            # Not in any corner region - always inside
-            return True
-
-        # Apply rounded corner mask to alpha channel
-        for y in range(height):
-            for x in range(width):
-                idx = y * width + x
-                if not is_inside_rounded_rect(x, y):
-                    alpha_data[idx] = 0  # Make transparent
-                # else: keep existing alpha value
-
-        # Set the modified alpha data
-        img.SetAlpha(bytes(alpha_data))
-
+        # Apply mask: np.minimum preserves partial alpha inside the rect and
+        # forces alpha=0 in the transparent corner regions.
+        # bytes(img.GetAlpha()) creates a copy, so frombuffer is not read-only.
+        existing_alpha = np.frombuffer(bytes(img.GetAlpha()), dtype=np.uint8)
+        new_alpha = np.minimum(existing_alpha, mask_bytes)
+        img.SetAlpha(new_alpha.tobytes())
         return img
 
     def _create_placeholder_bitmap(self, text: str) -> wx.Bitmap:
