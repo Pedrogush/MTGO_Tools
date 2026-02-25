@@ -17,8 +17,9 @@ from utils.stylize import (
 from widgets.buttons.mana_button import create_mana_button
 
 
-_MANA_IMG_H = 18  # Row image height for the mana cost column
-_MANA_IMG_W = 96  # Fixed canvas width (fits within the 120px "Mana Cost" column)
+_MANA_IMG_H = 26   # Row image height — matches ManaIconFactory default icon_size (no downscale)
+_MANA_IMG_W = 116  # Canvas width (spans most of the 120px "Mana Cost" column)
+_MANA_ICON_GAP = 1  # Pixels between adjacent mana icons
 
 
 class _SearchResultsView(wx.ListCtrl):
@@ -39,32 +40,77 @@ class _SearchResultsView(wx.ListCtrl):
         self.Refresh()
 
     def _build_mana_image_list(self) -> None:
-        """Build a wx.ImageList mapping each unique mana cost to a composite bitmap."""
+        """Build a wx.ImageList mapping each unique mana cost to a composite bitmap.
+
+        Each symbol is fetched individually via bitmap_for_symbol (which renders
+        on DARK_ALT), then scaled to _MANA_IMG_H and right-justified on a
+        DARK_ALT canvas.  This avoids the black inter-symbol gaps that appear
+        when bitmap_for_cost composites onto a transparent/black background.
+        """
+        from utils.mana_icon_factory import tokenize_mana_symbols
+
         assert self._mana_icons is not None
         unique_costs = {card.get("mana_cost", "") for card in self._data if card.get("mana_cost")}
         img_list = wx.ImageList(_MANA_IMG_W, _MANA_IMG_H)
         self._mana_img_index = {}
 
         for cost in unique_costs:
-            bmp = self._mana_icons.bitmap_for_cost(cost)
-            if not bmp:
+            tokens = tokenize_mana_symbols(cost)
+            if not tokens:
                 continue
-            img = bmp.ConvertToImage()
-            orig_h = img.GetHeight()
-            if orig_h <= 0:
-                continue
-            scale = _MANA_IMG_H / orig_h
-            new_w = max(1, min(_MANA_IMG_W, int(img.GetWidth() * scale)))
-            scaled = img.Scale(new_w, _MANA_IMG_H, wx.IMAGE_QUALITY_HIGH)
 
-            # Draw onto a fixed-size canvas with the list's background colour.
+            # Scale each symbol bitmap to _MANA_IMG_H.
+            # bitmap_for_symbol renders on DARK_ALT, so no colour bleed at edges.
+            scaled_icons: list[wx.Bitmap] = []
+            for token in tokens:
+                raw = self._mana_icons.bitmap_for_symbol(token)
+                img = raw.ConvertToImage()
+                orig_h = img.GetHeight()
+                if orig_h <= 0:
+                    continue
+                factor = _MANA_IMG_H / orig_h
+                new_w = max(1, int(img.GetWidth() * factor))
+                scaled_icons.append(wx.Bitmap(img.Scale(new_w, _MANA_IMG_H, wx.IMAGE_QUALITY_HIGH)))
+
+            if not scaled_icons:
+                continue
+
+            total_w = (
+                sum(b.GetWidth() for b in scaled_icons)
+                + max(0, len(scaled_icons) - 1) * _MANA_ICON_GAP
+            )
+
+            # If icons overflow the canvas, scale them down proportionally.
+            if total_w > _MANA_IMG_W:
+                ratio = _MANA_IMG_W / total_w
+                rescaled = []
+                for b in scaled_icons:
+                    img2 = b.ConvertToImage()
+                    nw = max(1, int(img2.GetWidth() * ratio))
+                    nh = max(1, int(img2.GetHeight() * ratio))
+                    rescaled.append(wx.Bitmap(img2.Scale(nw, nh, wx.IMAGE_QUALITY_HIGH)))
+                scaled_icons = rescaled
+                total_w = (
+                    sum(b.GetWidth() for b in scaled_icons)
+                    + max(0, len(scaled_icons) - 1) * _MANA_ICON_GAP
+                )
+
+            # DARK_ALT canvas — gaps between icons match the list background.
             canvas = wx.Bitmap(_MANA_IMG_W, _MANA_IMG_H)
             dc = wx.MemoryDC(canvas)
             dc.SetBackground(wx.Brush(DARK_ALT))
             dc.Clear()
-            dc.DrawBitmap(wx.Bitmap(scaled), 0, 0, False)
-            dc.SelectObject(wx.NullBitmap)
 
+            # Right-justify: start at (canvas_width - total_icon_width).
+            x = _MANA_IMG_W - total_w
+            for idx, icon_bmp in enumerate(scaled_icons):
+                y = (_MANA_IMG_H - icon_bmp.GetHeight()) // 2
+                dc.DrawBitmap(icon_bmp, x, max(0, y), False)
+                x += icon_bmp.GetWidth()
+                if idx < len(scaled_icons) - 1:
+                    x += _MANA_ICON_GAP
+
+            dc.SelectObject(wx.NullBitmap)
             self._mana_img_index[cost] = img_list.Add(canvas)
 
         self.AssignImageList(img_list, wx.IMAGE_LIST_SMALL)
@@ -78,24 +124,23 @@ class _SearchResultsView(wx.ListCtrl):
         if column == 0:
             return card.get("name", "Unknown")
         elif column == 1:
+            # Mana cost column: suppress text when an icon image is shown.
             cost = card.get("mana_cost", "")
-            # When an icon image is available, suppress the text so only the image shows.
             if self._mana_icons and cost in self._mana_img_index:
                 return ""
             return cost if cost else "—"
         return ""
 
-    def OnGetItemColumnImage(self, item: int, column: int) -> int:
-        """Return the image-list index for the mana cost column icon."""
-        if column != 1 or not self._mana_icons:
-            return -1
-        if item < 0 or item >= len(self._data):
+    def OnGetItemImage(self, item: int) -> int:
+        """No image on column 0 (Name)."""
+        return -1
+
+    def OnGetItemColumnImage(self, item: int, col: int) -> int:
+        """Return the image-list index for the mana cost icon (column 1)."""
+        if col != 1 or not self._mana_icons or item < 0 or item >= len(self._data):
             return -1
         cost = self._data[item].get("mana_cost", "")
         return self._mana_img_index.get(cost, -1)
-
-    def OnGetItemImage(self, item: int) -> int:
-        return -1
 
     def GetItemText(self, row: int, col: int = 0) -> str:
         """Legacy method for test compatibility."""
