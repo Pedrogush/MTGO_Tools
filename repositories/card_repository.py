@@ -65,7 +65,7 @@ class CardRepository:
             return card_info
         except RuntimeError as exc:
             # Card data not loaded yet
-            logger.warning(f"Card data not loaded: {exc}")
+            logger.debug(f"Card data not loaded: {exc}")
             return None
         except Exception as exc:
             logger.warning(f"Failed to get metadata for {card_name}: {exc}")
