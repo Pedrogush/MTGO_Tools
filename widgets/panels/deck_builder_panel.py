@@ -116,14 +116,20 @@ class _SearchResultsView(wx.ListCtrl):
         self.AssignImageList(img_list, wx.IMAGE_LIST_SMALL)
 
     def OnGetItemText(self, item: int, column: int) -> str:
-        """Return text for the given item and column."""
+        """Return text for the given item and column.
+
+        Column layout:
+          0 - hidden dummy (absorbs the IMAGE_LIST_SMALL indent, zero width)
+          1 - card Name
+          2 - Mana Cost text (suppressed when an icon image is shown)
+        """
         if item < 0 or item >= len(self._data):
             return ""
 
         card = self._data[item]
-        if column == 0:
+        if column == 1:
             return card.get("name", "Unknown")
-        elif column == 1:
+        elif column == 2:
             # Mana cost column: suppress text when an icon image is shown.
             cost = card.get("mana_cost", "")
             if self._mana_icons and cost in self._mana_img_index:
@@ -132,19 +138,23 @@ class _SearchResultsView(wx.ListCtrl):
         return ""
 
     def OnGetItemImage(self, item: int) -> int:
-        """No image on column 0 (Name)."""
+        """No image on the hidden dummy column 0."""
         return -1
 
     def OnGetItemColumnImage(self, item: int, col: int) -> int:
-        """Return the image-list index for the mana cost icon (column 1)."""
-        if col != 1 or not self._mana_icons or item < 0 or item >= len(self._data):
+        """Return the image-list index for the mana cost icon (column 2)."""
+        if col != 2 or not self._mana_icons or item < 0 or item >= len(self._data):
             return -1
         cost = self._data[item].get("mana_cost", "")
         return self._mana_img_index.get(cost, -1)
 
     def GetItemText(self, row: int, col: int = 0) -> str:
-        """Legacy method for test compatibility."""
-        return self.OnGetItemText(row, col)
+        """Legacy method for test compatibility.
+
+        Callers use logical columns (0=Name, 1=Mana Cost); shift by 1 internally
+        to account for the hidden dummy column 0.
+        """
+        return self.OnGetItemText(row, col + 1)
 
 
 class DeckBuilderPanel(wx.Panel):
@@ -359,13 +369,17 @@ class DeckBuilderPanel(wx.Panel):
 
         # Results list (virtual ListCtrl for handling large datasets)
         results = _SearchResultsView(self, style=0, mana_icons=self.mana_icons)
-        results.InsertColumn(0, "Name", width=230)
-        results.InsertColumn(1, "Mana Cost", width=120)
+        # Column 0 is a hidden 0-width dummy that absorbs the Windows IMAGE_LIST_SMALL
+        # indent (equal to the image-list item width).  Columns 1+ are sub-item columns
+        # and are never indented by LVSIL_SMALL, so the Name cell is unindented.
+        results.InsertColumn(0, "", width=0)
+        results.InsertColumn(1, "Name", format=wx.LIST_FORMAT_LEFT, width=245)
+        results.InsertColumn(2, "Mana Cost", width=145)
         results.SetBackgroundColour(DARK_ALT)
         results.SetForegroundColour(LIGHT_TEXT)
         results.Bind(wx.EVT_LIST_ITEM_SELECTED, self._on_result_item_selected)
         results.Bind(wx.EVT_LEFT_DOWN, self._on_results_left_down)
-        sizer.Add(results, 1, wx.EXPAND | wx.ALL, 6)
+        sizer.Add(results, 1, wx.EXPAND | wx.LEFT, 6)
         self.results_ctrl = results
 
         # Status label
