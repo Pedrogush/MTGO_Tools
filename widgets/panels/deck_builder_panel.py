@@ -17,18 +17,57 @@ from utils.stylize import (
 from widgets.buttons.mana_button import create_mana_button
 
 
+_MANA_IMG_H = 18  # Row image height for the mana cost column
+_MANA_IMG_W = 96  # Fixed canvas width (fits within the 120px "Mana Cost" column)
+
+
 class _SearchResultsView(wx.ListCtrl):
     """Virtual ListCtrl for efficiently displaying large card search results."""
 
-    def __init__(self, parent: wx.Window, style: int):
+    def __init__(self, parent: wx.Window, style: int, mana_icons: ManaIconFactory | None = None):
         super().__init__(parent, style=style | wx.LC_REPORT | wx.LC_VIRTUAL | wx.LC_SINGLE_SEL)
         self._data: list[dict[str, Any]] = []
+        self._mana_icons = mana_icons
+        self._mana_img_index: dict[str, int] = {}
 
     def SetData(self, data: list[dict[str, Any]]) -> None:
         """Set the data source and refresh the display."""
         self._data = data
+        if self._mana_icons:
+            self._build_mana_image_list()
         self.SetItemCount(len(data))
         self.Refresh()
+
+    def _build_mana_image_list(self) -> None:
+        """Build a wx.ImageList mapping each unique mana cost to a composite bitmap."""
+        assert self._mana_icons is not None
+        unique_costs = {card.get("mana_cost", "") for card in self._data if card.get("mana_cost")}
+        img_list = wx.ImageList(_MANA_IMG_W, _MANA_IMG_H)
+        self._mana_img_index = {}
+
+        for cost in unique_costs:
+            bmp = self._mana_icons.bitmap_for_cost(cost)
+            if not bmp:
+                continue
+            img = bmp.ConvertToImage()
+            orig_h = img.GetHeight()
+            if orig_h <= 0:
+                continue
+            scale = _MANA_IMG_H / orig_h
+            new_w = max(1, min(_MANA_IMG_W, int(img.GetWidth() * scale)))
+            scaled = img.Scale(new_w, _MANA_IMG_H, wx.IMAGE_QUALITY_HIGH)
+
+            # Draw onto a fixed-size canvas with the list's background colour.
+            canvas = wx.Bitmap(_MANA_IMG_W, _MANA_IMG_H)
+            dc = wx.MemoryDC(canvas)
+            dc.SetBackground(wx.Brush(DARK_ALT))
+            dc.Clear()
+            dc.DrawBitmap(wx.Bitmap(scaled), 0, 0, False)
+            dc.SelectObject(wx.NullBitmap)
+
+            self._mana_img_index[cost] = img_list.Add(canvas)
+
+        self.AssignImageList(img_list, wx.IMAGE_LIST_SMALL)
 
     def OnGetItemText(self, item: int, column: int) -> str:
         """Return text for the given item and column."""
@@ -39,9 +78,24 @@ class _SearchResultsView(wx.ListCtrl):
         if column == 0:
             return card.get("name", "Unknown")
         elif column == 1:
-            mana_cost = card.get("mana_cost", "")
-            return mana_cost if mana_cost else "—"
+            cost = card.get("mana_cost", "")
+            # When an icon image is available, suppress the text so only the image shows.
+            if self._mana_icons and cost in self._mana_img_index:
+                return ""
+            return cost if cost else "—"
         return ""
+
+    def OnGetItemColumnImage(self, item: int, column: int) -> int:
+        """Return the image-list index for the mana cost column icon."""
+        if column != 1 or not self._mana_icons:
+            return -1
+        if item < 0 or item >= len(self._data):
+            return -1
+        cost = self._data[item].get("mana_cost", "")
+        return self._mana_img_index.get(cost, -1)
+
+    def OnGetItemImage(self, item: int) -> int:
+        return -1
 
     def GetItemText(self, row: int, col: int = 0) -> str:
         """Legacy method for test compatibility."""
@@ -259,7 +313,7 @@ class DeckBuilderPanel(wx.Panel):
         sizer.Add(controls, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 6)
 
         # Results list (virtual ListCtrl for handling large datasets)
-        results = _SearchResultsView(self, style=0)
+        results = _SearchResultsView(self, style=0, mana_icons=self.mana_icons)
         results.InsertColumn(0, "Name", width=230)
         results.InsertColumn(1, "Mana Cost", width=120)
         results.SetBackgroundColour(DARK_ALT)

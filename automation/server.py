@@ -52,6 +52,7 @@ class AutomationServer:
             "get_deck_text": self._handle_get_deck_text,
             "switch_tab": self._handle_switch_tab,
             "wait": self._handle_wait,
+            "builder_search": self._handle_builder_search,
         }
 
     def register_handler(self, command: str, handler: Callable[..., Any]) -> None:
@@ -424,3 +425,19 @@ class AutomationServer:
         """Wait for a specified number of milliseconds."""
         time.sleep(ms / 1000.0)
         return {"waited": ms}
+
+    def _handle_builder_search(self, card_name: str = "") -> dict[str, Any]:
+        """Switch to the deck builder panel and search for a card by name."""
+        if not self.frame.builder_panel:
+            return {"searched": False, "error": "Builder panel not available"}
+        # Switch to builder view
+        if hasattr(self.frame, "_show_left_panel"):
+            self.frame._show_left_panel("builder", force=True)
+        # Set the card name and trigger search
+        name_ctrl = self.frame.builder_panel.inputs.get("name")
+        if name_ctrl is None:
+            return {"searched": False, "error": "Name input not found"}
+        name_ctrl.ChangeValue(card_name)
+        if hasattr(self.frame, "_on_builder_search"):
+            self.frame._on_builder_search()
+        return {"searched": True, "card_name": card_name}

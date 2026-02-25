@@ -171,6 +171,14 @@ class AutomationClient:
         """
         self._send_command("wait", ms=ms)
 
+    def builder_search(self, card_name: str = "") -> dict[str, Any]:
+        """Switch to the deck builder panel and search for a card by name.
+
+        Args:
+            card_name: Card name to search for
+        """
+        return self._send_command("builder_search", card_name=card_name)
+
 
 def connect(
     host: str = "127.0.0.1", port: int = DEFAULT_PORT, timeout: float = 30.0
