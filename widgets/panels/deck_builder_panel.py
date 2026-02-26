@@ -29,6 +29,17 @@ class _SearchResultsView(wx.ListCtrl):
         self._data: list[dict[str, Any]] = []
         self._mana_icons = mana_icons
         self._mana_img_index: dict[str, int] = {}
+        self.Bind(wx.EVT_SIZE, self._on_size)
+
+    def _on_size(self, event: wx.SizeEvent) -> None:
+        """Resize Name column to fill available width so no blank third column appears."""
+        event.Skip()
+        self._fit_name_column()
+
+    def _fit_name_column(self) -> None:
+        """Set Name column (index 1) width to consume all space left by Mana Cost column."""
+        name_w = max(40, self.GetClientSize().width - _MANA_IMG_W)
+        self.SetColumnWidth(1, name_w)
 
     def SetData(self, data: list[dict[str, Any]]) -> None:
         """Set the data source and refresh the display."""
