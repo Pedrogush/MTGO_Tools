@@ -4,7 +4,9 @@ from typing import Any
 try:
     from datetime import UTC
 except ImportError:  # pragma: no cover - Python 3.10 fallback
-    UTC = UTC
+    from datetime import timezone
+
+    UTC = timezone.utc  # noqa: F811,UP017
 
 from utils.metagame_stats import (
     _filter_decks,

@@ -3,9 +3,15 @@
 from __future__ import annotations
 
 import json
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+
+try:
+    from datetime import UTC, datetime
+except ImportError:  # Python 3.10
+    from datetime import datetime, timezone
+
+    UTC = timezone.utc  # noqa: F811,UP017
 
 from utils.atomic_io import atomic_write_json, locked_path
 from utils.card_images import (

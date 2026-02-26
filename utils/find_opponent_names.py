@@ -1,4 +1,12 @@
-import pygetwindow
+try:
+    import pygetwindow
+except NotImplementedError:
+
+    class _Stub:
+        def getAllTitles(self) -> list[str]:  # pragma: no cover
+            return []
+
+    pygetwindow = _Stub()  # type: ignore[assignment]
 
 
 def find_opponent_names():

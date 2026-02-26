@@ -16,8 +16,7 @@ from utils.stylize import (
 )
 from widgets.buttons.mana_button import create_mana_button
 
-
-_MANA_IMG_H = 26   # Row image height — matches ManaIconFactory default icon_size (no downscale)
+_MANA_IMG_H = 26  # Row image height — matches ManaIconFactory default icon_size (no downscale)
 _MANA_IMG_W = 200  # Canvas width — matches the 145px "Mana Cost" column
 _MANA_ICON_GAP = 1  # Pixels between adjacent mana icons
 
@@ -72,13 +71,10 @@ class _SearchResultsView(wx.ListCtrl):
 
             # Compute each symbol's width if scaled to full row height.
             widths_at_full_h = [
-                max(1, int(b.GetWidth() * _MANA_IMG_H / b.GetHeight()))
-                if b.GetHeight() > 0 else 1
+                max(1, int(b.GetWidth() * _MANA_IMG_H / b.GetHeight())) if b.GetHeight() > 0 else 1
                 for b in raws
             ]
-            total_at_full_h = (
-                sum(widths_at_full_h) + max(0, len(raws) - 1) * _MANA_ICON_GAP
-            )
+            total_at_full_h = sum(widths_at_full_h) + max(0, len(raws) - 1) * _MANA_ICON_GAP
 
             # Single squeeze factor: 1.0 when icons fit, <1.0 when they overflow.
             squeeze = min(1.0, _MANA_IMG_W / total_at_full_h) if total_at_full_h > 0 else 1.0
@@ -92,7 +88,10 @@ class _SearchResultsView(wx.ListCtrl):
                     wx.Bitmap(bmp.ConvertToImage().Scale(final_w, final_h, wx.IMAGE_QUALITY_HIGH))
                 )
 
-            total_w = sum(b.GetWidth() for b in scaled_icons) + max(0, len(scaled_icons) - 1) * _MANA_ICON_GAP
+            total_w = (
+                sum(b.GetWidth() for b in scaled_icons)
+                + max(0, len(scaled_icons) - 1) * _MANA_ICON_GAP
+            )
 
             # DARK_ALT canvas — gaps between icons match the list background.
             canvas = wx.Bitmap(_MANA_IMG_W, _MANA_IMG_H)
