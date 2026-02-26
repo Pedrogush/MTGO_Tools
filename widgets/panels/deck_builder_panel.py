@@ -16,36 +16,143 @@ from utils.stylize import (
 )
 from widgets.buttons.mana_button import create_mana_button
 
+_MANA_IMG_H = 26  # Row image height — matches ManaIconFactory default icon_size (no downscale)
+_MANA_IMG_W = 200  # Canvas width — matches the 145px "Mana Cost" column
+_MANA_ICON_GAP = 1  # Pixels between adjacent mana icons
+
 
 class _SearchResultsView(wx.ListCtrl):
     """Virtual ListCtrl for efficiently displaying large card search results."""
 
-    def __init__(self, parent: wx.Window, style: int):
+    def __init__(self, parent: wx.Window, style: int, mana_icons: ManaIconFactory | None = None):
         super().__init__(parent, style=style | wx.LC_REPORT | wx.LC_VIRTUAL | wx.LC_SINGLE_SEL)
         self._data: list[dict[str, Any]] = []
+        self._mana_icons = mana_icons
+        self._mana_img_index: dict[str, int] = {}
 
     def SetData(self, data: list[dict[str, Any]]) -> None:
         """Set the data source and refresh the display."""
         self._data = data
+        if self._mana_icons:
+            self._build_mana_image_list()
         self.SetItemCount(len(data))
         self.Refresh()
 
+    def _build_mana_image_list(self) -> None:
+        """Build a wx.ImageList mapping each unique mana cost to a composite bitmap.
+
+        Each symbol is scaled from its raw source bitmap directly to its final
+        display size in a single pass, avoiding quality loss from chained
+        downscales.  The final height is _MANA_IMG_H when all symbols fit within
+        the canvas, or proportionally smaller when they would overflow.
+        """
+        from utils.mana_icon_factory import tokenize_mana_symbols
+
+        assert self._mana_icons is not None
+        unique_costs = {card.get("mana_cost", "") for card in self._data if card.get("mana_cost")}
+        img_list = wx.ImageList(_MANA_IMG_W, _MANA_IMG_H)
+        self._mana_img_index = {}
+
+        for cost in unique_costs:
+            tokens = tokenize_mana_symbols(cost)
+            if not tokens:
+                continue
+
+            # Collect render-scale bitmaps (before the factory's own downscale).
+            # Using hires gives a single downscale from ~78px to the final size
+            # instead of two chained downscales (78→26, then 26→final).
+            raws: list[wx.Bitmap] = []
+            for token in tokens:
+                raw = self._mana_icons.bitmap_for_symbol_hires(token)
+                if raw and raw.IsOk():
+                    raws.append(raw)
+            if not raws:
+                continue
+
+            # Compute each symbol's width if scaled to full row height.
+            widths_at_full_h = [
+                max(1, int(b.GetWidth() * _MANA_IMG_H / b.GetHeight())) if b.GetHeight() > 0 else 1
+                for b in raws
+            ]
+            total_at_full_h = sum(widths_at_full_h) + max(0, len(raws) - 1) * _MANA_ICON_GAP
+
+            # Single squeeze factor: 1.0 when icons fit, <1.0 when they overflow.
+            squeeze = min(1.0, _MANA_IMG_W / total_at_full_h) if total_at_full_h > 0 else 1.0
+            final_h = max(1, int(_MANA_IMG_H * squeeze))
+
+            # Single-pass scale: raw → final size.
+            scaled_icons: list[wx.Bitmap] = []
+            for bmp, w_full in zip(raws, widths_at_full_h):
+                final_w = max(1, int(w_full * squeeze))
+                scaled_icons.append(
+                    wx.Bitmap(bmp.ConvertToImage().Scale(final_w, final_h, wx.IMAGE_QUALITY_HIGH))
+                )
+
+            total_w = (
+                sum(b.GetWidth() for b in scaled_icons)
+                + max(0, len(scaled_icons) - 1) * _MANA_ICON_GAP
+            )
+
+            # DARK_ALT canvas — gaps between icons match the list background.
+            canvas = wx.Bitmap(_MANA_IMG_W, _MANA_IMG_H)
+            dc = wx.MemoryDC(canvas)
+            dc.SetBackground(wx.Brush(DARK_ALT))
+            dc.Clear()
+
+            # Right-justify: start at (canvas_width - total_icon_width).
+            x = _MANA_IMG_W - total_w
+            for idx, icon_bmp in enumerate(scaled_icons):
+                y = (_MANA_IMG_H - icon_bmp.GetHeight()) // 2
+                dc.DrawBitmap(icon_bmp, x, max(0, y), False)
+                x += icon_bmp.GetWidth()
+                if idx < len(scaled_icons) - 1:
+                    x += _MANA_ICON_GAP
+
+            dc.SelectObject(wx.NullBitmap)
+            self._mana_img_index[cost] = img_list.Add(canvas)
+
+        self.AssignImageList(img_list, wx.IMAGE_LIST_SMALL)
+
     def OnGetItemText(self, item: int, column: int) -> str:
-        """Return text for the given item and column."""
+        """Return text for the given item and column.
+
+        Column layout:
+          0 - hidden dummy (absorbs the IMAGE_LIST_SMALL indent, zero width)
+          1 - card Name
+          2 - Mana Cost text (suppressed when an icon image is shown)
+        """
         if item < 0 or item >= len(self._data):
             return ""
 
         card = self._data[item]
-        if column == 0:
+        if column == 1:
             return card.get("name", "Unknown")
-        elif column == 1:
-            mana_cost = card.get("mana_cost", "")
-            return mana_cost if mana_cost else "—"
+        elif column == 2:
+            # Mana cost column: suppress text when an icon image is shown.
+            cost = card.get("mana_cost", "")
+            if self._mana_icons and cost in self._mana_img_index:
+                return ""
+            return cost if cost else "—"
         return ""
 
+    def OnGetItemImage(self, item: int) -> int:
+        """No image on the hidden dummy column 0."""
+        return -1
+
+    def OnGetItemColumnImage(self, item: int, col: int) -> int:
+        """Return the image-list index for the mana cost icon (column 2)."""
+        if col != 2 or not self._mana_icons or item < 0 or item >= len(self._data):
+            return -1
+        cost = self._data[item].get("mana_cost", "")
+        return self._mana_img_index.get(cost, -1)
+
     def GetItemText(self, row: int, col: int = 0) -> str:
-        """Legacy method for test compatibility."""
-        return self.OnGetItemText(row, col)
+        """Legacy method for test compatibility.
+
+        Callers use logical columns (0=Name, 1=Mana Cost); shift by 1 internally
+        to account for the hidden dummy column 0.
+        """
+        return self.OnGetItemText(row, col + 1)
 
 
 class DeckBuilderPanel(wx.Panel):
@@ -259,14 +366,18 @@ class DeckBuilderPanel(wx.Panel):
         sizer.Add(controls, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 6)
 
         # Results list (virtual ListCtrl for handling large datasets)
-        results = _SearchResultsView(self, style=0)
-        results.InsertColumn(0, "Name", width=230)
-        results.InsertColumn(1, "Mana Cost", width=120)
+        results = _SearchResultsView(self, style=0, mana_icons=self.mana_icons)
+        # Column 0 is a hidden 0-width dummy that absorbs the Windows IMAGE_LIST_SMALL
+        # indent (equal to the image-list item width).  Columns 1+ are sub-item columns
+        # and are never indented by LVSIL_SMALL, so the Name cell is unindented.
+        results.InsertColumn(0, "", width=0)
+        results.InsertColumn(1, "Name", format=wx.LIST_FORMAT_LEFT, width=180)
+        results.InsertColumn(2, "Mana Cost", width=_MANA_IMG_W)
         results.SetBackgroundColour(DARK_ALT)
         results.SetForegroundColour(LIGHT_TEXT)
         results.Bind(wx.EVT_LIST_ITEM_SELECTED, self._on_result_item_selected)
         results.Bind(wx.EVT_LEFT_DOWN, self._on_results_left_down)
-        sizer.Add(results, 1, wx.EXPAND | wx.ALL, 6)
+        sizer.Add(results, 1, wx.EXPAND | wx.LEFT, 6)
         self.results_ctrl = results
 
         # Status label

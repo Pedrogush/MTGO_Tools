@@ -42,6 +42,7 @@ class ManaIconFactory:
 
     def __init__(self, icon_size: int = 26) -> None:
         self._cache: dict[str, wx.Bitmap] = {}
+        self._hires_cache: dict[str, wx.Bitmap] = {}  # pre-downscale, render-scale resolution
         self._cost_cache: dict[str, wx.Bitmap] = {}
         assets_root = self._assets_root()
         self._glyph_map, self._color_map = ManaIconResources.load_css_resources(
@@ -70,6 +71,21 @@ class ManaIconFactory:
         icon_span = self._icon_size + 2
         panel.SetMinSize((max(icon_span, len(tokens) * icon_span), self._icon_size + 6))
         return panel
+
+    def bitmap_for_symbol_hires(self, symbol: str) -> wx.Bitmap:
+        """Return the symbol bitmap at render-scale resolution (before final downscale).
+
+        Callers that need to scale to an arbitrary target size should use this
+        instead of bitmap_for_symbol to avoid a second downscale of an already
+        small source.
+        """
+        token = symbol.strip()
+        if token.startswith("{") and token.endswith("}"):
+            token = token[1:-1]
+        key = token or ""
+        if key not in self._hires_cache:
+            self._get_bitmap(key)  # populates both caches as a side-effect
+        return self._hires_cache.get(key) or self._get_bitmap(key)
 
     def bitmap_for_symbol(self, symbol: str) -> wx.Bitmap:
         token = symbol.strip()
@@ -176,6 +192,7 @@ class ManaIconFactory:
             )
         img = bmp.ConvertToImage()
         img = img.Blur(1)
+        self._hires_cache[symbol] = wx.Bitmap(img)  # store at render-scale before downscale
         img = img.Scale(self._icon_size, self._icon_size, wx.IMAGE_QUALITY_HIGH)
         final = wx.Bitmap(img)
         self._cache[symbol] = final
