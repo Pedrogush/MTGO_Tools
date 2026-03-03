@@ -16,7 +16,6 @@ Architecture:
 
 from __future__ import annotations
 
-import json
 import os
 import sqlite3
 import threading
@@ -37,6 +36,7 @@ from loguru import logger
 from utils.atomic_io import (
     atomic_write_bytes,
     atomic_write_json,
+    atomic_write_msgpack,
     atomic_write_stream,
     locked_path,
 )
@@ -45,6 +45,7 @@ from utils.constants import (
     CACHE_DIR,
     SQLITE_CONNECTION_TIMEOUT_SECONDS,
 )
+from utils.data_cache_io import load_cache
 from utils.perf import timed
 
 # Image cache configuration
@@ -800,7 +801,7 @@ class BulkImageDownloader:
 
         try:
             with locked_path(BULK_DATA_CACHE):
-                cards_data = json.loads(BULK_DATA_CACHE.read_text(encoding="utf-8"))
+                cards_data = load_cache(BULK_DATA_CACHE)
             if max_cards:
                 cards_data = cards_data[:max_cards]
 
@@ -916,12 +917,11 @@ def build_printing_index(
 
 def _load_printing_index_payload() -> dict[str, Any] | None:
     """Load the cached card printings index if available."""
-    if not PRINTING_INDEX_CACHE.exists():
+    msg_path = PRINTING_INDEX_CACHE.with_suffix(".msgpack")
+    if not PRINTING_INDEX_CACHE.exists() and not msg_path.exists():
         return None
     try:
-        with locked_path(PRINTING_INDEX_CACHE):
-            with PRINTING_INDEX_CACHE.open("r", encoding="utf-8") as fh:
-                payload = json.load(fh)
+        payload = load_cache(PRINTING_INDEX_CACHE)
     except Exception as exc:
         logger.warning(f"Failed to read printings index cache: {exc}")
         return None
@@ -950,8 +950,7 @@ def ensure_printing_index_cache(force: bool = False) -> dict[str, Any]:
 
     logger.info("Building card printings index from bulk data…")
     with locked_path(BULK_DATA_CACHE):
-        with BULK_DATA_CACHE.open("r", encoding="utf-8") as fh:
-            cards = json.load(fh)
+        cards = load_cache(BULK_DATA_CACHE)
 
     by_name, stats = build_printing_index(cards)
 
@@ -966,6 +965,7 @@ def ensure_printing_index_cache(force: bool = False) -> dict[str, Any]:
 
     try:
         atomic_write_json(PRINTING_INDEX_CACHE, payload, separators=(",", ":"))
+        atomic_write_msgpack(PRINTING_INDEX_CACHE.with_suffix(".msgpack"), payload)
         logger.info(
             "Cached card printings index ({unique_names} names, {total_printings} printings)",
             unique_names=payload["unique_names"],

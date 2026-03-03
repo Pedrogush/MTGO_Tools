@@ -10,13 +10,14 @@ from typing import Any
 from curl_cffi import requests
 from loguru import logger
 
-from utils.atomic_io import atomic_write_json
+from utils.atomic_io import atomic_write_json, atomic_write_msgpack
 from utils.constants import (
     ATOMIC_DATA_DOWNLOAD_TIMEOUT_SECONDS,
     ATOMIC_DATA_HEAD_TIMEOUT_SECONDS,
     ATOMIC_DATA_URL,
     CARD_DATA_DIR,
 )
+from utils.data_cache_io import load_cache
 
 
 def load_card_manager(data_dir: Path | str = CARD_DATA_DIR, force: bool = False) -> CardDataManager:
@@ -177,6 +178,7 @@ class CardDataManager:
                 raw = json.load(source)
         index = self._build_index(raw.get("data", {}))
         atomic_write_json(self.index_path, index, ensure_ascii=False)
+        atomic_write_msgpack(self.index_path.with_suffix(".msgpack"), index)
         meta_to_store: dict[str, Any] = remote_meta.copy() if remote_meta else {}
         meta_to_store.setdefault("sha512", digest)
         headers = {k.lower(): v for k, v in resp.headers.items()}  # type: ignore[arg-type]
@@ -191,7 +193,13 @@ class CardDataManager:
         self._cards_by_name = index["cards_by_name"]
 
     def _load_index(self) -> None:
-        data = self._load_json(self.index_path)
+        msg_path = self.index_path.with_suffix(".msgpack")
+        if not self.index_path.exists() and not msg_path.exists():
+            raise RuntimeError("Card data index missing or invalid")
+        try:
+            data = load_cache(self.index_path)
+        except Exception as exc:
+            raise RuntimeError("Card data index missing or invalid") from exc
         if not data:
             raise RuntimeError("Card data index missing or invalid")
         self._cards = data["cards"]

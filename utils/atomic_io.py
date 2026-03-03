@@ -103,3 +103,11 @@ def atomic_write_json(
 ) -> None:
     data = json.dumps(payload, indent=indent, ensure_ascii=ensure_ascii, separators=separators)
     atomic_write_text(path, data)
+
+
+def atomic_write_msgpack(path: Path, payload: Any) -> None:
+    """Serialise *payload* to msgpack and write atomically."""
+    import msgpack  # lazy import – optional dependency
+
+    data = msgpack.packb(payload, use_bin_type=True)
+    atomic_write_bytes(path, data)

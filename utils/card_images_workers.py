@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any
 
@@ -13,12 +12,13 @@ except ImportError:  # Python 3.10
 
     UTC = timezone.utc  # noqa: F811,UP017
 
-from utils.atomic_io import atomic_write_json, locked_path
+from utils.atomic_io import atomic_write_json, atomic_write_msgpack, locked_path
 from utils.card_images import (
     BulkImageDownloader,
     CardImageCache,
     build_printing_index,
 )
+from utils.data_cache_io import load_cache
 
 __all__ = ["build_printing_index_worker", "download_bulk_metadata_worker"]
 
@@ -45,8 +45,7 @@ def build_printing_index_worker(
         raise FileNotFoundError("Bulk data cache not found; cannot build printings index")
 
     with locked_path(bulk_path):
-        with bulk_path.open("r", encoding="utf-8") as fh:
-            cards = json.load(fh)
+        cards = load_cache(bulk_path)
 
     by_name, stats = build_printing_index(cards)
     payload = {
@@ -58,6 +57,7 @@ def build_printing_index_worker(
         "data": by_name,
     }
     atomic_write_json(printings_cache, payload, separators=(",", ":"))
+    atomic_write_msgpack(printings_cache.with_suffix(".msgpack"), payload)
     return {
         "unique_names": payload["unique_names"],
         "total_printings": payload["total_printings"],
