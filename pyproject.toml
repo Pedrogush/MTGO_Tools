@@ -67,6 +67,11 @@ ignore = [
 # Ignore complexity in test files
 "test_*.py" = ["C901"]
 "**/tests/**" = ["C901"]
+# Widget entry points insert project root into sys.path before other imports
+"widgets/identify_opponent.py" = ["E402"]
+"widgets/match_history.py" = ["E402"]
+"widgets/timer_alert.py" = ["E402"]
+"widgets/metagame_analysis.py" = ["E402"]
 
 [tool.black]
 line-length = 100

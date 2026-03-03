@@ -2,6 +2,16 @@
 
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
+# Ensure the project root is on sys.path when the file is run directly
+# (e.g. `python widgets/identify_opponent.py`).  Has no effect when the
+# package is imported normally or via the installed console script.
+_project_root = Path(__file__).resolve().parent.parent
+if str(_project_root) not in sys.path:
+    sys.path.insert(0, str(_project_root))
+
 import json
 import threading
 import time
