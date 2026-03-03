@@ -100,6 +100,7 @@ class CardTablePanel(wx.Panel):
     def _update_panels(self, cards: list[dict[str, Any]]) -> None:
         """Update the fixed pool of panels in-place; no widgets are created or destroyed."""
         self.Freeze()
+        needs_image_load: list[CardBoxPanel] = []
         try:
             self.scroller.Freeze()
             try:
@@ -109,7 +110,15 @@ class CardTablePanel(wx.Panel):
 
                 for i, panel in enumerate(self._pool):
                     if i < len(cards):
-                        panel.assign_card(cards[i], self.zone)
+                        card = cards[i]
+                        if panel.card is card:
+                            # Same dict object: the card identity is unchanged, only qty
+                            # may have been modified in-place.  Refresh the label only —
+                            # no image invalidation or reload needed.
+                            panel.update_qty()
+                        else:
+                            panel.assign_card(card, self.zone)
+                            needs_image_load.append(panel)
                         self.grid_sizer.Show(panel, True)
                     else:
                         self.grid_sizer.Show(panel, False)
@@ -126,8 +135,8 @@ class CardTablePanel(wx.Panel):
         finally:
             self.Thaw()
 
-        # Fire all image loads simultaneously after the UI is unfrozen.
-        for panel in self.card_widgets:
+        # Fire image loads only for panels whose card assignment changed.
+        for panel in needs_image_load:
             panel.load_image_async()
 
     def _handle_card_click(self, zone: str, card: dict[str, Any], panel: CardBoxPanel) -> None:
