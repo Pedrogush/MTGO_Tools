@@ -179,6 +179,72 @@ class AutomationClient:
         """
         return self._send_command("builder_search", card_name=card_name)
 
+    def load_deck_text(self, deck_text: str) -> dict[str, Any]:
+        """Load a deck directly from text into the mainboard/sideboard zones.
+
+        Args:
+            deck_text: Deck list text in standard format (4 Card Name\\nSideboard\\n2 Other Card)
+        """
+        return self._send_command("load_deck_text", deck_text=deck_text)
+
+    def get_zone_cards(self, zone: str = "main") -> dict[str, Any]:
+        """Get the cards currently in a zone.
+
+        Args:
+            zone: 'main', 'side', or 'out'
+        """
+        return self._send_command("get_zone_cards", zone=zone)
+
+    def add_card_to_zone(self, zone: str, card_name: str, qty: int = 1) -> dict[str, Any]:
+        """Add one or more copies of a card to a zone.
+
+        Args:
+            zone: 'main' or 'side'
+            card_name: Name of the card to add
+            qty: Number of copies to add (default 1)
+        """
+        return self._send_command("add_card_to_zone", zone=zone, card_name=card_name, qty=qty)
+
+    def subtract_card_from_zone(self, zone: str, card_name: str, qty: int = 1) -> dict[str, Any]:
+        """Remove one or more copies of a card from a zone.
+
+        Args:
+            zone: 'main' or 'side'
+            card_name: Name of the card to remove
+            qty: Number of copies to remove (default 1)
+        """
+        return self._send_command(
+            "subtract_card_from_zone", zone=zone, card_name=card_name, qty=qty
+        )
+
+    def get_scroll_pos(self, zone: str = "main") -> dict[str, Any]:
+        """Get the scroll position of a zone's card table.
+
+        Args:
+            zone: 'main', 'side', or 'out'
+        """
+        return self._send_command("get_scroll_pos", zone=zone)
+
+    def get_builder_result_count(self) -> dict[str, Any]:
+        """Get the number of search results in the deck builder panel."""
+        return self._send_command("get_builder_result_count")
+
+    def open_widget(self, widget_name: str) -> dict[str, Any]:
+        """Open a top-level widget window.
+
+        Args:
+            widget_name: 'opponent_tracker', 'match_history', 'timer_alert', or 'metagame'
+        """
+        return self._send_command("open_widget", widget_name=widget_name)
+
+    def get_card_images_loaded(self, zone: str = "main") -> dict[str, Any]:
+        """Count how many card panels in a zone have loaded card face images.
+
+        Args:
+            zone: 'main', 'side', or 'out'
+        """
+        return self._send_command("get_card_images_loaded", zone=zone)
+
 
 def connect(
     host: str = "127.0.0.1", port: int = DEFAULT_PORT, timeout: float = 30.0

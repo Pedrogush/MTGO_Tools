@@ -28,6 +28,7 @@ __pycache__/
 settings.local.json
 data/
 vendor/
+automation/golden/*.png
 session*.txt
 agent*.txt
 command*.txt

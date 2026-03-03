@@ -181,6 +181,18 @@ python -m automation click <widget> --label <button>
 python -m automation switch-tab "Stats"
 python -m automation wait 500        # Wait 500ms (e.g. after triggering async load)
 python -m automation builder-search "Lightning Bolt"
+
+# Zone editing commands (deck builder tests)
+python -m automation load-deck --file deck.txt           # Load a deck from file
+python -m automation load-deck --text "4 Lightning Bolt\nSideboard\n2 Negate"
+python -m automation get-zone-cards --zone main          # List mainboard cards
+python -m automation get-zone-cards --zone side          # List sideboard cards
+python -m automation add-card --zone main --name "Lightning Bolt"
+python -m automation add-card --zone side --name "Rest in Peace" --qty 2
+python -m automation remove-card --zone main --name "Goblin Guide"
+python -m automation get-scroll-pos --zone main          # Check scroll position
+python -m automation get-builder-results                 # Count of search results + mana symbols
+python -m automation open-widget opponent_tracker        # Open a widget window
 ```
 
 All commands accept `--json` for machine-readable output and `--timeout <seconds>` (default 30).
@@ -189,7 +201,30 @@ All commands accept `--json` for machine-readable output and `--timeout <seconds
 - `automation/server.py` — socket server embedded in the app (`AutomationServer`, default port 19847)
 - `automation/client.py` — Python client (`AutomationClient`, `wait_for_server()`)
 - `automation/cli.py` — CLI entry point (`python -m automation`)
-- `automation/test_runner.py` — example automated test suite
+- `automation/test_runner.py` — basic connectivity test suite
+- `automation/e2e_tests.py` — **UI regression test suite** (run locally, not in CI)
+
+## UI Regression Tests
+
+The `automation/e2e_tests.py` suite covers add/subtract cards, scrollbar persistence,
+mana symbol rendering, buttons, widget opening, and card face loading.  It is
+**not wired into GitHub Actions** and is meant for local verification only.
+
+```bash
+# Run all e2e tests (app must be running with --automation)
+python -m automation.e2e_tests
+
+# Run a specific group
+python -m automation.e2e_tests --only builder
+python -m automation.e2e_tests --only scrollbar
+python -m automation.e2e_tests --only mana
+```
+
+Golden screenshots (for visual review) are saved to `automation/golden/`.
+
+**Convention:** When using the automation CLI to diagnose and fix a UI bug,
+add a test to `automation/e2e_tests.py` that reproduces the exact command
+sequence used.  This ensures the fix is verifiable and prevents regressions.
 
 # Notes
 

@@ -53,6 +53,15 @@ class AutomationServer:
             "switch_tab": self._handle_switch_tab,
             "wait": self._handle_wait,
             "builder_search": self._handle_builder_search,
+            # Zone editing commands
+            "load_deck_text": self._handle_load_deck_text,
+            "get_zone_cards": self._handle_get_zone_cards,
+            "add_card_to_zone": self._handle_add_card_to_zone,
+            "subtract_card_from_zone": self._handle_subtract_card_from_zone,
+            "get_scroll_pos": self._handle_get_scroll_pos,
+            "get_builder_result_count": self._handle_get_builder_result_count,
+            "open_widget": self._handle_open_widget,
+            "get_card_images_loaded": self._handle_get_card_images_loaded,
         }
 
     def register_handler(self, command: str, handler: Callable[..., Any]) -> None:
@@ -441,3 +450,135 @@ class AutomationServer:
         if hasattr(self.frame, "_on_builder_search"):
             self.frame._on_builder_search()
         return {"searched": True, "card_name": card_name}
+
+    def _handle_load_deck_text(self, deck_text: str) -> dict[str, Any]:
+        """Load a deck from text into the mainboard/sideboard zones."""
+        if not hasattr(self.frame, "_on_deck_content_ready"):
+            return {"loaded": False, "error": "Frame does not support _on_deck_content_ready"}
+        self.frame._on_deck_content_ready(deck_text, source="automation")
+        zone_cards = getattr(self.frame, "zone_cards", {})
+        return {
+            "loaded": True,
+            "mainboard_count": sum(c["qty"] for c in zone_cards.get("main", [])),
+            "sideboard_count": sum(c["qty"] for c in zone_cards.get("side", [])),
+        }
+
+    def _handle_get_zone_cards(self, zone: str = "main") -> dict[str, Any]:
+        """Get the cards in a zone (main, side, or out)."""
+        zone_cards = getattr(self.frame, "zone_cards", {})
+        cards = zone_cards.get(zone, [])
+        return {
+            "zone": zone,
+            "cards": [{"name": c["name"], "qty": c["qty"]} for c in cards],
+            "total_qty": sum(c["qty"] for c in cards),
+            "unique_cards": len(cards),
+        }
+
+    def _handle_add_card_to_zone(self, zone: str, card_name: str, qty: int = 1) -> dict[str, Any]:
+        """Add a card to a zone by directly calling the zone delta handler."""
+        if not hasattr(self.frame, "_handle_zone_delta"):
+            return {"added": False, "error": "Frame does not support _handle_zone_delta"}
+        self.frame._handle_zone_delta(zone, card_name, qty)
+        zone_cards = getattr(self.frame, "zone_cards", {})
+        cards = zone_cards.get(zone, [])
+        card_entry = next((c for c in cards if c["name"].lower() == card_name.lower()), None)
+        return {
+            "added": True,
+            "zone": zone,
+            "card_name": card_name,
+            "new_qty": card_entry["qty"] if card_entry else 0,
+            "total_qty": sum(c["qty"] for c in cards),
+        }
+
+    def _handle_subtract_card_from_zone(
+        self, zone: str, card_name: str, qty: int = 1
+    ) -> dict[str, Any]:
+        """Subtract (decrement) a card from a zone."""
+        if not hasattr(self.frame, "_handle_zone_delta"):
+            return {"subtracted": False, "error": "Frame does not support _handle_zone_delta"}
+        self.frame._handle_zone_delta(zone, card_name, -qty)
+        zone_cards = getattr(self.frame, "zone_cards", {})
+        cards = zone_cards.get(zone, [])
+        card_entry = next((c for c in cards if c["name"].lower() == card_name.lower()), None)
+        return {
+            "subtracted": True,
+            "zone": zone,
+            "card_name": card_name,
+            "new_qty": card_entry["qty"] if card_entry else 0,
+            "total_qty": sum(c["qty"] for c in cards),
+        }
+
+    def _handle_get_scroll_pos(self, zone: str = "main") -> dict[str, Any]:
+        """Get the scroll position of a zone's scrolled panel."""
+        table = None
+        if zone == "main":
+            table = getattr(self.frame, "main_table", None)
+        elif zone == "side":
+            table = getattr(self.frame, "side_table", None)
+        elif zone == "out":
+            table = getattr(self.frame, "out_table", None)
+
+        if table is None:
+            return {
+                "zone": zone,
+                "scroll_x": 0,
+                "scroll_y": 0,
+                "error": f"No table for zone: {zone}",
+            }
+
+        scroller = getattr(table, "scroller", None)
+        if scroller is None:
+            return {"zone": zone, "scroll_x": 0, "scroll_y": 0, "error": "No scroller on table"}
+
+        x, y = scroller.GetViewStart()
+        return {"zone": zone, "scroll_x": x, "scroll_y": y}
+
+    def _handle_get_builder_result_count(self) -> dict[str, Any]:
+        """Get the number of results currently shown in the builder search panel."""
+        if not self.frame.builder_panel:
+            return {"count": 0, "error": "Builder panel not available"}
+        results_ctrl = getattr(self.frame.builder_panel, "results_ctrl", None)
+        if results_ctrl is None:
+            return {"count": 0}
+        count = results_ctrl.GetItemCount()
+        mana_images = len(getattr(results_ctrl, "_mana_img_index", {}))
+        return {"count": count, "mana_symbol_variants": mana_images}
+
+    def _handle_open_widget(self, widget_name: str) -> dict[str, Any]:
+        """Open a top-level widget window (opponent_tracker, match_history, timer_alert, metagame)."""
+        handler_map = {
+            "opponent_tracker": "open_opponent_tracker",
+            "match_history": "open_match_history",
+            "timer_alert": "open_timer_alert",
+            "metagame": "open_metagame_analysis",
+        }
+        method_name = handler_map.get(widget_name)
+        if not method_name:
+            return {"opened": False, "error": f"Unknown widget: {widget_name}"}
+        method = getattr(self.frame, method_name, None)
+        if method is None:
+            return {"opened": False, "error": f"Method not found: {method_name}"}
+        method()
+        return {"opened": True, "widget": widget_name}
+
+    def _handle_get_card_images_loaded(self, zone: str = "main") -> dict[str, Any]:
+        """Count how many card panels in a zone have successfully loaded images."""
+        table = None
+        if zone == "main":
+            table = getattr(self.frame, "main_table", None)
+        elif zone == "side":
+            table = getattr(self.frame, "side_table", None)
+        elif zone == "out":
+            table = getattr(self.frame, "out_table", None)
+
+        if table is None:
+            return {"zone": zone, "loaded": 0, "total": 0, "error": f"No table for zone: {zone}"}
+
+        card_widgets = getattr(table, "card_widgets", [])
+        total = len(card_widgets)
+        loaded = 0
+        for panel in card_widgets:
+            bmp = getattr(panel, "_card_bitmap", None)
+            if bmp is not None and hasattr(bmp, "IsOk") and bmp.IsOk():
+                loaded += 1
+        return {"zone": zone, "loaded": loaded, "total": total}

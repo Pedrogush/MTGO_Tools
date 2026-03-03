@@ -190,6 +190,73 @@ def cmd_wait(client: AutomationClient, args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_load_deck(client: AutomationClient, args: argparse.Namespace) -> int:
+    """Load a deck from a text file or inline text."""
+    if args.file:
+        import os
+
+        if not os.path.exists(args.file):
+            print(f"File not found: {args.file}", file=sys.stderr)
+            return 1
+        with open(args.file, encoding="utf-8") as f:
+            deck_text = f.read()
+    else:
+        deck_text = args.text or ""
+    result = client.load_deck_text(deck_text)
+    print(format_output(result, args.json))
+    return 0 if result.get("loaded") else 1
+
+
+def cmd_get_zone_cards(client: AutomationClient, args: argparse.Namespace) -> int:
+    """Get cards in a zone."""
+    result = client.get_zone_cards(args.zone)
+    if args.json:
+        print(format_output(result, True))
+    else:
+        zone = result.get("zone", args.zone)
+        cards = result.get("cards", [])
+        total = result.get("total_qty", 0)
+        print(f"{zone.title()} ({total} cards):")
+        for card in cards:
+            print(f"  {card['qty']}x {card['name']}")
+    return 0
+
+
+def cmd_add_card(client: AutomationClient, args: argparse.Namespace) -> int:
+    """Add a card to a zone."""
+    result = client.add_card_to_zone(args.zone, args.name, args.qty)
+    print(format_output(result, args.json))
+    return 0 if result.get("added") else 1
+
+
+def cmd_remove_card(client: AutomationClient, args: argparse.Namespace) -> int:
+    """Remove (subtract) a card from a zone."""
+    result = client.subtract_card_from_zone(args.zone, args.name, args.qty)
+    print(format_output(result, args.json))
+    return 0 if result.get("subtracted") else 1
+
+
+def cmd_get_scroll_pos(client: AutomationClient, args: argparse.Namespace) -> int:
+    """Get scroll position of a zone."""
+    result = client.get_scroll_pos(args.zone)
+    print(format_output(result, args.json))
+    return 0
+
+
+def cmd_get_builder_results(client: AutomationClient, args: argparse.Namespace) -> int:
+    """Get builder search result count."""
+    result = client.get_builder_result_count()
+    print(format_output(result, args.json))
+    return 0
+
+
+def cmd_open_widget(client: AutomationClient, args: argparse.Namespace) -> int:
+    """Open a widget window."""
+    result = client.open_widget(args.widget_name)
+    print(format_output(result, args.json))
+    return 0 if result.get("opened") else 1
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Control the MTGO Tools application from the command line.",
@@ -272,6 +339,42 @@ Examples:
     p = subparsers.add_parser("wait", help="Wait for specified milliseconds")
     p.add_argument("ms", type=int, help="Milliseconds to wait")
 
+    # load-deck
+    p = subparsers.add_parser("load-deck", help="Load a deck from text or file")
+    p.add_argument("--text", "-t", help="Deck text inline")
+    p.add_argument("--file", "-f", help="Path to deck text file")
+
+    # get-zone-cards
+    p = subparsers.add_parser("get-zone-cards", help="Get cards in a zone")
+    p.add_argument("--zone", "-z", default="main", help="Zone: main, side, or out (default: main)")
+
+    # add-card
+    p = subparsers.add_parser("add-card", help="Add a card to a zone")
+    p.add_argument("--zone", "-z", default="main", help="Zone: main or side (default: main)")
+    p.add_argument("--name", "-n", required=True, help="Card name")
+    p.add_argument("--qty", "-q", type=int, default=1, help="Quantity to add (default: 1)")
+
+    # remove-card
+    p = subparsers.add_parser("remove-card", help="Remove (subtract) a card from a zone")
+    p.add_argument("--zone", "-z", default="main", help="Zone: main or side (default: main)")
+    p.add_argument("--name", "-n", required=True, help="Card name")
+    p.add_argument("--qty", "-q", type=int, default=1, help="Quantity to remove (default: 1)")
+
+    # get-scroll-pos
+    p = subparsers.add_parser("get-scroll-pos", help="Get scroll position of a zone table")
+    p.add_argument("--zone", "-z", default="main", help="Zone: main, side, or out (default: main)")
+
+    # get-builder-results
+    subparsers.add_parser("get-builder-results", help="Get builder search result count")
+
+    # open-widget
+    p = subparsers.add_parser("open-widget", help="Open a widget window")
+    p.add_argument(
+        "widget_name",
+        choices=["opponent_tracker", "match_history", "timer_alert", "metagame"],
+        help="Widget to open",
+    )
+
     args = parser.parse_args()
 
     if not args.command:
@@ -295,6 +398,13 @@ Examples:
         "get-deck": cmd_get_deck,
         "switch-tab": cmd_switch_tab,
         "wait": cmd_wait,
+        "load-deck": cmd_load_deck,
+        "get-zone-cards": cmd_get_zone_cards,
+        "add-card": cmd_add_card,
+        "remove-card": cmd_remove_card,
+        "get-scroll-pos": cmd_get_scroll_pos,
+        "get-builder-results": cmd_get_builder_results,
+        "open-widget": cmd_open_widget,
     }
 
     handler = handlers.get(args.command)
