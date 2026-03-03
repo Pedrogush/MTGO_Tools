@@ -210,7 +210,7 @@ class AppEventHandlers:
         current_deck = self.controller.deck_repo.get_current_deck()
         if current_deck:
             default_name = self.format_deck_name(current_deck).replace(" | ", "_")
-        dlg = wx.TextEntryDialog(self, "Deck name:", "Save Deck", default_name=default_name)
+        dlg = wx.TextEntryDialog(self, "Deck name:", "Save Deck", default_name)
         if dlg.ShowModal() != wx.ID_OK:
             dlg.Destroy()
             return

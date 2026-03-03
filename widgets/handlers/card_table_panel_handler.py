@@ -19,12 +19,12 @@ class CardTablePanelHandler:
 
     def _after_zone_change(self, zone: str) -> None:
         if zone == "main":
-            self.main_table.set_cards(self.zone_cards["main"])
+            self.main_table.set_cards(self.zone_cards["main"], preserve_scroll=True)
         elif zone == "side":
-            self.side_table.set_cards(self.zone_cards["side"])
+            self.side_table.set_cards(self.zone_cards["side"], preserve_scroll=True)
         else:
             if self.out_table:
-                self.out_table.set_cards(self.zone_cards["out"])
+                self.out_table.set_cards(self.zone_cards["out"], preserve_scroll=True)
             self._persist_outboard_for_current()
         deck_text = self.controller.deck_service.build_deck_text_from_zones(self.zone_cards)
         self.controller.deck_repo.set_current_deck_text(deck_text)

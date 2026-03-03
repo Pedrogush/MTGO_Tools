@@ -281,7 +281,11 @@ class DeckRepository:
         if directory is None:
             directory = DECKS_DIR
 
-        directory.mkdir(parents=True, exist_ok=True)
+        if not directory.exists():
+            raise FileNotFoundError(
+                f"Deck save directory does not exist: {directory}\n"
+                "Please create it before saving decks."
+            )
 
         # Sanitize filename with fallback for empty/whitespace names
         safe_name = sanitize_filename(deck_name, fallback="saved_deck")

@@ -14,7 +14,7 @@ def _default_base_dir() -> Path:
 BASE_DATA_DIR = _default_base_dir()
 CONFIG_DIR = BASE_DATA_DIR / "config"
 CACHE_DIR = BASE_DATA_DIR / "cache"
-DECKS_DIR = BASE_DATA_DIR / "decks"
+DECKS_DIR = Path.home() / "Documents" / "mtgo_decks"
 DECK_SAVE_DIR = DECKS_DIR
 LOGS_DIR = BASE_DATA_DIR / "logs"
 CARD_DATA_DIR = BASE_DATA_DIR / "data"

@@ -92,12 +92,12 @@ class CardTablePanel(wx.Panel):
         # GRID_COLUMNS panels plus the vertical scrollbar.
         return (DECK_CARD_WIDTH + cls.GRID_GAP) * cls.GRID_COLUMNS + scrollbar_width
 
-    def set_cards(self, cards: list[dict[str, Any]]) -> None:
+    def set_cards(self, cards: list[dict[str, Any]], preserve_scroll: bool = False) -> None:
         self.cards = cards
-        self._update_panels(cards)
+        self._update_panels(cards, preserve_scroll)
 
     @timed
-    def _update_panels(self, cards: list[dict[str, Any]]) -> None:
+    def _update_panels(self, cards: list[dict[str, Any]], preserve_scroll: bool = False) -> None:
         """Update the fixed pool of panels in-place; no widgets are created or destroyed."""
         self.Freeze()
         needs_image_load: list[CardBoxPanel] = []
@@ -125,15 +125,16 @@ class CardTablePanel(wx.Panel):
 
                 self.card_widgets = self._pool[: len(cards)]
 
-                y_scroll = self.scroller.GetScrollPos(wx.VERTICAL)
-
                 self.grid_sizer.Layout()
                 self.scroller.Layout()
                 self.scroller.FitInside()
-                self.scroller.SetupScrolling(scroll_x=False, scroll_y=True, rate_x=5, rate_y=5)
-
-                if y_scroll > 0:
-                    self.scroller.Scroll(-1, y_scroll)
+                self.scroller.SetupScrolling(
+                    scroll_x=False,
+                    scroll_y=True,
+                    rate_x=5,
+                    rate_y=5,
+                    scrollToTop=not preserve_scroll,
+                )
 
                 self._restore_selection()
             finally:
