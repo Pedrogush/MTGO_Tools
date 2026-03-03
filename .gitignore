@@ -46,3 +46,5 @@ build/
 *.mmd
 # git worktrees
 .worktrees/
+# local install
+*.egg-info/

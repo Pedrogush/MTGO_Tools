@@ -182,6 +182,9 @@ class DeckBuilderPanel(wx.Panel):
         on_clear: Callable[[], None],
         on_result_selected: Callable[[int | None], None],
         on_open_radar_dialog: Callable[[], RadarData | None] | None = None,
+        on_add_to_main: Callable[[str], None] | None = None,
+        on_add_to_side: Callable[[str], None] | None = None,
+        on_add_to_active_zone: Callable[[str], None] | None = None,
     ) -> None:
         super().__init__(parent)
 
@@ -194,6 +197,9 @@ class DeckBuilderPanel(wx.Panel):
         self._on_clear_callback = on_clear
         self._on_result_selected_callback = on_result_selected
         self._on_open_radar_dialog = on_open_radar_dialog
+        self._on_add_to_main = on_add_to_main
+        self._on_add_to_side = on_add_to_side
+        self._on_add_to_active_zone = on_add_to_active_zone
 
         # State variables
         self.inputs: dict[str, wx.TextCtrl] = {}
@@ -205,6 +211,8 @@ class DeckBuilderPanel(wx.Panel):
         self.color_mode_choice: wx.Choice | None = None
         self.results_ctrl: _SearchResultsView | None = None
         self.status_label: wx.StaticText | None = None
+        self._add_main_btn: wx.Button | None = None
+        self._add_side_btn: wx.Button | None = None
         self.results_cache: list[dict[str, Any]] = []
         self._search_timer = wx.Timer(self)
         self.Bind(wx.EVT_TIMER, self._on_search_timer, self._search_timer)
@@ -388,8 +396,28 @@ class DeckBuilderPanel(wx.Panel):
         results.SetForegroundColour(LIGHT_TEXT)
         results.Bind(wx.EVT_LIST_ITEM_SELECTED, self._on_result_item_selected)
         results.Bind(wx.EVT_LEFT_DOWN, self._on_results_left_down)
+        results.Bind(wx.EVT_LIST_ITEM_ACTIVATED, self._on_result_activated)
+        results.Bind(wx.EVT_KEY_DOWN, self._on_result_key_down)
         sizer.Add(results, 1, wx.EXPAND | wx.LEFT, 6)
         self.results_ctrl = results
+
+        # Add to zone buttons
+        add_btns_row = wx.BoxSizer(wx.HORIZONTAL)
+        add_main_btn = wx.Button(self, label="+ Mainboard")
+        stylize_button(add_main_btn)
+        add_main_btn.Enable(False)
+        add_main_btn.Bind(wx.EVT_BUTTON, lambda _evt: self._on_add_to_zone("main"))
+        add_btns_row.Add(add_main_btn, 1, wx.RIGHT, 4)
+        self._add_main_btn = add_main_btn
+
+        add_side_btn = wx.Button(self, label="+ Sideboard")
+        stylize_button(add_side_btn)
+        add_side_btn.Enable(False)
+        add_side_btn.Bind(wx.EVT_BUTTON, lambda _evt: self._on_add_to_zone("side"))
+        add_btns_row.Add(add_side_btn, 1)
+        self._add_side_btn = add_side_btn
+
+        sizer.Add(add_btns_row, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, 6)
 
         # Status label
         status = wx.StaticText(self, label="Results update automatically as you type.")
@@ -409,6 +437,7 @@ class DeckBuilderPanel(wx.Panel):
         if idx == wx.NOT_FOUND:
             return
         self._on_result_selected(idx)
+        self._update_add_buttons()
 
     def _on_results_left_down(self, event: wx.MouseEvent) -> None:
         if not self.results_ctrl:
@@ -420,6 +449,50 @@ class DeckBuilderPanel(wx.Panel):
             self._on_result_selected(None)
             return
         event.Skip()
+
+    def _on_result_activated(self, event: wx.ListEvent) -> None:
+        """Handle double-click or Enter on search result."""
+        idx = event.GetIndex()
+        self._add_result_by_index(idx)
+
+    def _on_result_key_down(self, event: wx.KeyEvent) -> None:
+        """Handle + key in search results to add to active zone."""
+        if event.GetKeyCode() == ord("+") and not event.ControlDown():
+            if self.results_ctrl:
+                selected = self.results_ctrl.GetFirstSelected()
+                if selected != wx.NOT_FOUND:
+                    self._add_result_by_index(selected)
+                    return
+        event.Skip()
+
+    def _add_result_by_index(self, idx: int) -> None:
+        """Add the search result at the given index to the active zone."""
+        card = self.get_result_at_index(idx)
+        if card and self._on_add_to_active_zone:
+            name = card.get("name")
+            if name:
+                self._on_add_to_active_zone(name)
+
+    def _on_add_to_zone(self, zone: str) -> None:
+        """Handle add-to-zone button click."""
+        card = self.get_selected_result()
+        if not card:
+            return
+        name = card.get("name")
+        if not name:
+            return
+        if zone == "main" and self._on_add_to_main:
+            self._on_add_to_main(name)
+        elif zone == "side" and self._on_add_to_side:
+            self._on_add_to_side(name)
+
+    def _update_add_buttons(self) -> None:
+        """Enable or disable add buttons based on current selection."""
+        has_selection = self.get_selected_result() is not None
+        if self._add_main_btn:
+            self._add_main_btn.Enable(has_selection and bool(self._on_add_to_main))
+        if self._add_side_btn:
+            self._add_side_btn.Enable(has_selection and bool(self._on_add_to_side))
 
     def _append_mana_symbol(self, token: str) -> None:
         """Append a mana symbol to the mana cost field."""
@@ -525,6 +598,7 @@ class DeckBuilderPanel(wx.Panel):
         selected = self.results_ctrl.GetFirstSelected()
         if selected != wx.NOT_FOUND:
             self.results_ctrl.Select(selected, on=0)
+        self._update_add_buttons()
 
     def _on_search(self) -> None:
         """Trigger search callback."""

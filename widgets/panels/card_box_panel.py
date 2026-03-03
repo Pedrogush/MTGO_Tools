@@ -140,6 +140,19 @@ class CardBoxPanel(wx.Panel):
         self.Layout()
         self.Refresh()
 
+    def update_qty(self) -> None:
+        """Refresh only the quantity display without affecting image state.
+
+        Use when the card identity is unchanged and only qty has been modified
+        in-place on the existing card dict.
+        """
+        qty_value = self.card["qty"]
+        qty_for_check = int(qty_value) if isinstance(qty_value, float) else qty_value
+        _, owned_colour_rgb = self._owned_status(self.card["name"], qty_for_check)
+        self.qty_label.SetForegroundColour(wx.Colour(*owned_colour_rgb))
+        self.qty_label.SetLabel(str(qty_value))
+        self.Refresh()
+
     def load_image_async(self) -> None:
         """Start asynchronous image loading in a background thread.
 

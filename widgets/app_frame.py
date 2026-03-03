@@ -164,6 +164,9 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
             on_clear=self._on_builder_clear,
             on_result_selected=self._on_builder_result_selected,
             on_open_radar_dialog=self._open_radar_dialog,
+            on_add_to_main=lambda name: self._handle_zone_delta("main", name, 1),
+            on_add_to_side=lambda name: self._handle_zone_delta("side", name, 1),
+            on_add_to_active_zone=self._add_search_card_to_active_zone,
         )
         self.left_stack.AddPage(self.builder_panel, "Builder")
         self._show_left_panel(self.left_mode, force=True)

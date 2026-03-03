@@ -19,12 +19,12 @@ class CardTablePanelHandler:
 
     def _after_zone_change(self, zone: str) -> None:
         if zone == "main":
-            self.main_table.set_cards(self.zone_cards["main"])
+            self.main_table.set_cards(self.zone_cards["main"], preserve_scroll=True)
         elif zone == "side":
-            self.side_table.set_cards(self.zone_cards["side"])
+            self.side_table.set_cards(self.zone_cards["side"], preserve_scroll=True)
         else:
             if self.out_table:
-                self.out_table.set_cards(self.zone_cards["out"])
+                self.out_table.set_cards(self.zone_cards["out"], preserve_scroll=True)
             self._persist_outboard_for_current()
         deck_text = self.controller.deck_service.build_deck_text_from_zones(self.zone_cards)
         self.controller.deck_repo.set_current_deck_text(deck_text)
@@ -200,6 +200,12 @@ class CardTablePanelHandler:
             if table and self.zone_notebook.GetPageIndex(table) == selection:
                 return zone if zone in {"main", "side"} else "main"
         return "main"
+
+    def _add_search_card_to_active_zone(self: AppFrame, name: str) -> None:
+        """Add a card from the builder search results to the currently active zone."""
+        zone = self._get_active_zone_for_add()
+        self._handle_zone_delta(zone, name, 1)
+        self._focus_card_in_zone(zone, name)
 
     def _focus_card_in_zone(self: AppFrame, zone: str, card_name: str) -> None:
         table = self._get_table_for_zone(zone)
