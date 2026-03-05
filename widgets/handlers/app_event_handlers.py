@@ -174,7 +174,7 @@ class AppEventHandlers:
         self.controller.deck_repo.set_current_deck(deck)
         self.copy_button.Disable()
         self.save_button.Disable()
-        self._set_status(f"Loading deck {self.format_deck_name(deck)}…")
+        self._set_status(self._t("status.loading_deck", deck_name=self.format_deck_name(deck)))
         self._show_left_panel("builder")
         self._download_and_display_deck(deck)
         self._schedule_settings_save()
@@ -190,27 +190,39 @@ class AppEventHandlers:
     def on_copy_clicked(self: AppFrame, _event: wx.CommandEvent) -> None:
         deck_content = self.controller.build_deck_text(self.zone_cards).strip()
         if not deck_content:
-            wx.MessageBox("No deck to copy.", "Copy Deck", wx.OK | wx.ICON_INFORMATION)
+            wx.MessageBox(
+                self._t("msg.no_deck_to_copy"),
+                self._t("dialog.copy_deck"),
+                wx.OK | wx.ICON_INFORMATION,
+            )
             return
         if wx.TheClipboard.Open():
             try:
                 wx.TheClipboard.SetData(wx.TextDataObject(deck_content))
             finally:
                 wx.TheClipboard.Close()
-            self._set_status("Deck copied to clipboard.")
+            self._set_status(self._t("status.deck_copied"))
         else:  # pragma: no cover
-            wx.MessageBox("Could not access clipboard.", "Copy Deck", wx.OK | wx.ICON_WARNING)
+            wx.MessageBox(
+                self._t("msg.clipboard_error"), self._t("dialog.copy_deck"), wx.OK | wx.ICON_WARNING
+            )
 
     def on_save_clicked(self: AppFrame, _event: wx.CommandEvent) -> None:
         deck_content = self.controller.build_deck_text(self.zone_cards).strip()
         if not deck_content:
-            wx.MessageBox("Load a deck first.", "Save Deck", wx.OK | wx.ICON_INFORMATION)
+            wx.MessageBox(
+                self._t("msg.load_deck_first"),
+                self._t("dialog.save_deck"),
+                wx.OK | wx.ICON_INFORMATION,
+            )
             return
         default_name = "saved_deck"
         current_deck = self.controller.deck_repo.get_current_deck()
         if current_deck:
             default_name = self.format_deck_name(current_deck).replace(" | ", "_")
-        dlg = wx.TextEntryDialog(self, "Deck name:", "Save Deck", default_name)
+        dlg = wx.TextEntryDialog(
+            self, self._t("msg.deck_name_prompt"), self._t("dialog.save_deck"), default_name
+        )
         if dlg.ShowModal() != wx.ID_OK:
             dlg.Destroy()
             return
@@ -225,14 +237,18 @@ class AppEventHandlers:
                 deck=current_deck,
             )
         except OSError as exc:  # pragma: no cover
-            wx.MessageBox(f"Failed to write deck file:\n{exc}", "Save Deck", wx.OK | wx.ICON_ERROR)
+            wx.MessageBox(
+                self._t("msg.deck_write_failed", error=exc),
+                self._t("dialog.save_deck"),
+                wx.OK | wx.ICON_ERROR,
+            )
             return
 
-        message = f"Deck saved to {file_path}"
+        message = self._t("msg.deck_saved_path", path=file_path)
         if deck_id:
-            message += f"\nDatabase ID: {deck_id}"
-        wx.MessageBox(message, "Deck Saved", wx.OK | wx.ICON_INFORMATION)
-        self._set_status("Deck saved successfully.")
+            message += self._t("msg.deck_saved_db_id", deck_id=deck_id)
+        wx.MessageBox(message, self._t("dialog.deck_saved"), wx.OK | wx.ICON_INFORMATION)
+        self._set_status(self._t("status.deck_saved"))
 
     def on_window_change(self: AppFrame, event: wx.Event) -> None:
         self._schedule_settings_save()
@@ -262,18 +278,20 @@ class AppEventHandlers:
         self._populate_archetype_list()
         self.research_panel.enable_controls()
         count = len(self.archetypes)
-        self._set_status(f"Loaded {count} archetypes for {self.current_format}.")
-        self.summary_text.ChangeValue(
-            f"Select an archetype to view decks.\nLoaded {count} archetypes."
+        self._set_status(
+            self._t("status.archetypes_loaded", count=count, format=self.current_format)
         )
+        self.summary_text.ChangeValue(self._t("msg.archetypes_loaded_hint", count=count))
 
     def _on_archetypes_error(self: AppFrame, error: Exception) -> None:
         with self._loading_lock:
             self.loading_archetypes = False
         self.research_panel.set_error_state()
-        self._set_status(f"Error: {error}")
+        self._set_status(self._t("status.error", error=error))
         wx.MessageBox(
-            f"Unable to load archetypes:\n{error}", "Archetype Error", wx.OK | wx.ICON_ERROR
+            self._t("msg.archetypes_load_failed", error=error),
+            self._t("dialog.archetype_error"),
+            wx.OK | wx.ICON_ERROR,
         )
 
     def _on_decks_loaded(self: AppFrame, archetype_name: str, decks: list[dict[str, Any]]) -> None:
@@ -282,33 +300,39 @@ class AppEventHandlers:
         self.controller.deck_repo.set_decks_list(decks)
         self.deck_list.Clear()
         if not decks:
-            self.deck_list.Append("No decks found.")
+            self.deck_list.Append(self._t("msg.no_decks_found"))
             self.deck_list.Disable()
-            self._set_status(f"No decks for {archetype_name}.")
-            self.summary_text.ChangeValue(f"{archetype_name}\n\nNo deck data available.")
+            self._set_status(self._t("status.no_decks_for_archetype", archetype=archetype_name))
+            self.summary_text.ChangeValue(self._t("msg.no_deck_data", archetype=archetype_name))
             return
         for deck in decks:
             self.deck_list.Append(self.format_deck_list_entry(deck))
         self.deck_list.Enable()
         self.daily_average_button.Enable()
         self._present_archetype_summary(archetype_name, decks)
-        self._set_status(
-            f"Loaded {len(decks)} decks for {archetype_name}. Click a deck to load it."
-        )
+        self._set_status(self._t("status.decks_loaded", count=len(decks), archetype=archetype_name))
 
     def _on_decks_error(self: AppFrame, error: Exception) -> None:
         with self._loading_lock:
             self.loading_decks = False
         self.deck_list.Clear()
-        self.deck_list.Append("Failed to load decks.")
-        self._set_status(f"Error loading decks: {error}")
-        wx.MessageBox(f"Failed to load deck lists:\n{error}", "Deck Error", wx.OK | wx.ICON_ERROR)
+        self.deck_list.Append(self._t("msg.failed_load_decks"))
+        self._set_status(self._t("status.error_loading_decks", error=error))
+        wx.MessageBox(
+            self._t("msg.deck_lists_load_failed", error=error),
+            self._t("dialog.deck_error"),
+            wx.OK | wx.ICON_ERROR,
+        )
 
     def _on_deck_download_error(self: AppFrame, error: Exception) -> None:
         self.copy_button.Disable()
         self.save_button.Disable()
-        self._set_status(f"Deck download failed: {error}")
-        wx.MessageBox(f"Failed to download deck:\n{error}", "Deck Download", wx.OK | wx.ICON_ERROR)
+        self._set_status(self._t("status.deck_download_failed", error=error))
+        wx.MessageBox(
+            self._t("msg.deck_download_failed", error=error),
+            self._t("dialog.deck_download"),
+            wx.OK | wx.ICON_ERROR,
+        )
 
     def _on_deck_content_ready(self: AppFrame, deck_text: str, source: str = "manual") -> None:
         self.controller.deck_repo.set_current_deck_text(deck_text)
@@ -331,7 +355,7 @@ class AppEventHandlers:
         self.save_button.Enable(True)
         self.deck_notes_panel.load_notes_for_current()
         self._load_guide_for_current()
-        self._set_status(f"Deck ready ({source}).")
+        self._set_status(self._t("status.deck_ready", source=source))
         self._show_left_panel("builder")
         self._schedule_settings_save()
 
@@ -342,17 +366,23 @@ class AppEventHandlers:
                 card_count = info["card_count"]
             except ValueError as exc:
                 logger.error(f"Failed to load collection: {exc}")
-                self.collection_status_label.SetLabel(f"Collection load failed: {exc}")
+                self.collection_status_label.SetLabel(
+                    self._t("msg.collection_load_failed", error=exc)
+                )
                 return
         else:
             card_count = len(self.controller.collection_service.get_inventory())
 
-        self.collection_status_label.SetLabel(f"Collection: {filepath.name} ({card_count} entries)")
+        self.collection_status_label.SetLabel(
+            self._t("msg.collection_loaded", filename=filepath.name, count=card_count)
+        )
         self._render_pending_deck()
 
     def _on_collection_fetch_failed(self: AppFrame, error_msg: str) -> None:
         self.controller.collection_service.clear_inventory()
-        self.collection_status_label.SetLabel(f"Collection fetch failed: {error_msg}")
+        self.collection_status_label.SetLabel(
+            self._t("msg.collection_fetch_failed", error=error_msg)
+        )
         logger.warning(f"Collection fetch failed: {error_msg}")
 
     def _on_bulk_data_loaded(
@@ -361,7 +391,7 @@ class AppEventHandlers:
         self.controller.image_service.clear_printing_index_loading()
         self.controller.image_service.set_bulk_data(by_name)
         self.card_inspector_panel.set_bulk_data(by_name)
-        self._set_status("Ready")
+        self._set_status(self._t("app.status.ready"))
         logger.info(
             "Printings index ready: {unique} names / {total} printings",
             unique=stats.get("unique_names"),
@@ -377,7 +407,7 @@ class AppEventHandlers:
         logger.warning(f"Card printings index load failed: {error_msg}")
 
     def _on_bulk_data_downloaded(self: AppFrame, msg: str) -> None:
-        self._set_status("Card image database downloaded, indexing printings…")
+        self._set_status(self._t("status.card_db_downloaded"))
         logger.info(f"Bulk data downloaded: {msg}")
         self.controller.load_bulk_data_into_memory(
             on_status=lambda status: wx.CallAfter(self._set_status, status),
@@ -385,7 +415,7 @@ class AppEventHandlers:
         )
 
     def _on_bulk_data_failed(self: AppFrame, error_msg: str) -> None:
-        self._set_status("Ready")
+        self._set_status(self._t("app.status.ready"))
         logger.warning(f"Bulk data download failed: {error_msg}")
 
     def _on_mana_keyboard_closed(self: AppFrame, event: wx.CloseEvent) -> None:
@@ -400,9 +430,7 @@ class AppEventHandlers:
                 self.ensure_card_data_loaded()
             self._builder_search_pending = True
             if self.builder_panel and self.builder_panel.status_label:
-                self.builder_panel.status_label.SetLabel(
-                    "Loading card data… (search will run automatically)"
-                )
+                self.builder_panel.status_label.SetLabel(self._t("status.loading_card_data_search"))
             return
 
         self._builder_search_pending = False
@@ -414,7 +442,7 @@ class AppEventHandlers:
                 float(mv_value_text)
             except ValueError:
                 if self.builder_panel and self.builder_panel.status_label:
-                    self.builder_panel.status_label.SetLabel("Mana value must be numeric.")
+                    self.builder_panel.status_label.SetLabel(self._t("msg.mana_value_numeric"))
                 return
 
         results = self.controller.search_service.search_with_builder_filters(filters, card_manager)
@@ -482,9 +510,11 @@ class AppEventHandlers:
             logger.debug("Error closing progress dialog after failure: %s", exc)
         self.daily_average_button.Enable()
         wx.MessageBox(
-            f"Failed to build daily average:\n{error}", "Daily Average", wx.OK | wx.ICON_ERROR
+            self._t("msg.daily_average_failed_body", error=error),
+            self._t("dialog.daily_average"),
+            wx.OK | wx.ICON_ERROR,
         )
-        self._set_status(f"Daily average failed: {error}")
+        self._set_status(self._t("status.daily_average_failed", error=error))
 
     def ensure_card_data_loaded(self) -> None:
         def on_success(manager: CardDataManager):
@@ -505,8 +535,8 @@ class AppEventHandlers:
             # Show error dialog on UI thread
             wx.CallAfter(
                 wx.MessageBox,
-                f"Failed to load card database:\n{error}",
-                "Card Data Error",
+                self._t("msg.card_data_load_failed", error=error),
+                self._t("dialog.card_data_error"),
                 wx.OK | wx.ICON_ERROR,
             )
 
@@ -564,8 +594,8 @@ class AppEventHandlers:
         self.daily_average_button.Disable()
 
         progress_dialog = wx.ProgressDialog(
-            "Daily Average",
-            "Downloading decks…",
+            self._t("dialog.daily_average"),
+            self._t("status.downloading_decks"),
             maximum=100,
             parent=self,
             style=wx.PD_APP_MODAL | wx.PD_ELAPSED_TIME,
@@ -580,14 +610,16 @@ class AppEventHandlers:
             ),
             on_status=lambda msg: wx.CallAfter(self._set_status, msg),
             on_progress=lambda current, total: wx.CallAfter(
-                progress_dialog.Update, current, f"Processed {current}/{total} decks…"
+                progress_dialog.Update,
+                current,
+                self._t("msg.progress_decks", current=current, total=total),
             ),
         )
 
         if not can_proceed:
             progress_dialog.Close()
             self.daily_average_button.Enable()
-            wx.MessageBox(message, "Daily Average", wx.OK | wx.ICON_INFORMATION)
+            wx.MessageBox(message, self._t("dialog.daily_average"), wx.OK | wx.ICON_INFORMATION)
             return
 
         progress_dialog.SetRange(int(message.split()[1]))
@@ -595,7 +627,9 @@ class AppEventHandlers:
     def _download_and_display_deck(self, deck: dict[str, Any]) -> None:
         deck_number = deck.get("number")
         if not deck_number:
-            wx.MessageBox("Deck identifier missing.", "Deck Error", wx.OK | wx.ICON_ERROR)
+            wx.MessageBox(
+                self._t("msg.deck_id_missing"), self._t("dialog.deck_error"), wx.OK | wx.ICON_ERROR
+            )
             return
 
         # Update UI state immediately
@@ -616,13 +650,13 @@ class AppEventHandlers:
             date = deck.get("date", "").lower()
             by_date[date] = by_date.get(date, 0) + 1
         latest_dates = sorted(by_date.items(), reverse=True)[:7]
-        lines = [archetype_name, "", f"Total decks loaded: {len(decks)}", ""]
+        lines = [archetype_name, "", self._t("msg.total_decks_loaded", count=len(decks)), ""]
         if latest_dates:
-            lines.append("Recent activity:")
+            lines.append(self._t("msg.recent_activity"))
             for day, count in latest_dates:
                 lines.append(f"  {day}: {count} deck(s)")
         else:
-            lines.append("No recent deck activity.")
+            lines.append(self._t("msg.no_recent_activity"))
         self.summary_text.ChangeValue("\n".join(lines))
 
     def _load_decks_for_archetype(self, archetype: dict[str, Any]) -> None:
@@ -630,9 +664,9 @@ class AppEventHandlers:
 
         # Update UI state immediately
         self.deck_list.Clear()
-        self.deck_list.Append("Loading…")
+        self.deck_list.Append(self._t("status.loading"))
         self.deck_list.Disable()
-        self.summary_text.ChangeValue(f"{name}\n\nFetching deck results…")
+        self.summary_text.ChangeValue(self._t("msg.fetching_decks", archetype=name))
 
         # Delegate to controller
         self.controller.load_decks_for_archetype(
