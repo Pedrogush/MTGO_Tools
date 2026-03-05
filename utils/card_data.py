@@ -192,6 +192,11 @@ class CardDataManager:
                 formats.append(fmt)
         return sorted(formats)
 
+    @property
+    def is_loaded(self) -> bool:
+        """Return True if card data has been loaded into memory."""
+        return self._cards is not None
+
     def _require_cards(self) -> None:
         if self._cards is None:
             raise RuntimeError("Card data not loaded; call ensure_latest first")

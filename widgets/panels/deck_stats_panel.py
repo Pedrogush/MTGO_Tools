@@ -23,6 +23,7 @@ class DeckStatsPanel(wx.Panel):
         parent: wx.Window,
         card_manager: CardDataManager | None = None,
         deck_service: DeckService | None = None,
+        labels: dict[str, str] | None = None,
     ):
         """
         Initialize the deck stats panel.
@@ -31,6 +32,7 @@ class DeckStatsPanel(wx.Panel):
             parent: Parent window
             card_manager: Card data manager for metadata lookups
             deck_service: Deck service for analysis
+            labels: Optional translated label overrides
         """
         super().__init__(parent)
         self.SetBackgroundColour(DARK_PANEL)
@@ -38,6 +40,7 @@ class DeckStatsPanel(wx.Panel):
         self.card_manager = card_manager
         self.deck_service = deck_service or get_deck_service()
         self.zone_cards: dict[str, list[dict[str, Any]]] = {}
+        self._labels = labels or {}
 
         self._build_ui()
 
@@ -46,8 +49,10 @@ class DeckStatsPanel(wx.Panel):
         sizer = wx.BoxSizer(wx.VERTICAL)
         self.SetSizer(sizer)
 
+        no_deck_label = self._labels.get("no_deck", "No deck loaded.")
+
         # Summary statistics
-        self.summary_label = wx.StaticText(self, label="No deck loaded.")
+        self.summary_label = wx.StaticText(self, label=no_deck_label)
         self.summary_label.SetForegroundColour(LIGHT_TEXT)
         sizer.Add(self.summary_label, 0, wx.ALL, 6)
 
@@ -57,16 +62,16 @@ class DeckStatsPanel(wx.Panel):
 
         # Mana curve list
         self.curve_list = dv.DataViewListCtrl(self)
-        self.curve_list.AppendTextColumn("CMC", width=80)
-        self.curve_list.AppendTextColumn("Count", width=80)
+        self.curve_list.AppendTextColumn(self._labels.get("col_cmc", "CMC"), width=80)
+        self.curve_list.AppendTextColumn(self._labels.get("col_count", "Count"), width=80)
         self.curve_list.SetBackgroundColour(DARK_ALT)
         self.curve_list.SetForegroundColour(LIGHT_TEXT)
         split.Add(self.curve_list, 0, wx.RIGHT, 12)
 
         # Color concentration list
         self.color_list = dv.DataViewListCtrl(self)
-        self.color_list.AppendTextColumn("Color", width=120)
-        self.color_list.AppendTextColumn("Share", width=100)
+        self.color_list.AppendTextColumn(self._labels.get("col_color", "Color"), width=120)
+        self.color_list.AppendTextColumn(self._labels.get("col_share", "Share"), width=100)
         self.color_list.SetBackgroundColour(DARK_ALT)
         self.color_list.SetForegroundColour(LIGHT_TEXT)
         split.Add(self.color_list, 0)
@@ -84,7 +89,7 @@ class DeckStatsPanel(wx.Panel):
         self.zone_cards = zone_cards
 
         if not deck_text.strip():
-            self.summary_label.SetLabel("No deck loaded.")
+            self.summary_label.SetLabel(self._labels.get("no_deck", "No deck loaded."))
             self.curve_list.DeleteAllItems()
             self.color_list.DeleteAllItems()
             return
@@ -110,7 +115,7 @@ class DeckStatsPanel(wx.Panel):
 
     def clear(self) -> None:
         """Clear all statistics."""
-        self.summary_label.SetLabel("No deck loaded.")
+        self.summary_label.SetLabel(self._labels.get("no_deck", "No deck loaded."))
         self.curve_list.DeleteAllItems()
         self.color_list.DeleteAllItems()
 
@@ -120,7 +125,7 @@ class DeckStatsPanel(wx.Panel):
         """Render the mana curve chart."""
         self.curve_list.DeleteAllItems()
 
-        if not self.card_manager:
+        if not self.card_manager or not self.card_manager.is_loaded:
             return
 
         # Count cards by mana value
@@ -130,7 +135,7 @@ class DeckStatsPanel(wx.Panel):
             mana_value = meta.get("mana_value") if meta else None
 
             # Bucket the mana value
-            if isinstance(mana_value, (int, float)):
+            if isinstance(mana_value, int | float):
                 value = int(mana_value)
                 bucket = "7+" if value >= 7 else str(value)
             else:
@@ -156,7 +161,7 @@ class DeckStatsPanel(wx.Panel):
         """Render the color concentration chart."""
         self.color_list.DeleteAllItems()
 
-        if not self.card_manager:
+        if not self.card_manager or not self.card_manager.is_loaded:
             return
 
         # Count cards by color identity

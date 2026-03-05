@@ -404,6 +404,13 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
             self.deck_tabs,
             card_manager=self.controller.card_repo.get_card_manager(),
             deck_service=self.controller.deck_service,
+            labels={
+                "no_deck": self._t("stats.no_deck"),
+                "col_cmc": self._t("stats.col_cmc"),
+                "col_count": self._t("stats.col_count"),
+                "col_color": self._t("stats.col_color"),
+                "col_share": self._t("stats.col_share"),
+            },
         )
         self.deck_tabs.AddPage(self.deck_stats_panel, self._t("tab.stats"))
         # Maintain compatibility with callers/tests that accessed the old label directly.
@@ -417,6 +424,22 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
             on_edit_exclusions=self._on_edit_exclusions,
             on_export_csv=self._on_export_guide,
             on_import_csv=self._on_import_guide,
+            labels={
+                "col_archetype": self._t("guide.col_archetype"),
+                "col_play_out": self._t("guide.col_play_out"),
+                "col_play_in": self._t("guide.col_play_in"),
+                "col_draw_out": self._t("guide.col_draw_out"),
+                "col_draw_in": self._t("guide.col_draw_in"),
+                "col_notes": self._t("guide.col_notes"),
+                "btn_add": self._t("guide.btn_add"),
+                "btn_edit": self._t("guide.btn_edit"),
+                "btn_remove": self._t("guide.btn_remove"),
+                "btn_exclusions": self._t("guide.btn_exclusions"),
+                "btn_export": self._t("guide.btn_export"),
+                "btn_import": self._t("guide.btn_import"),
+                "exclusions_none": self._t("guide.exclusions_none"),
+                "exclusions": self._t("guide.exclusions"),
+            },
         )
         self.deck_tabs.AddPage(self.sideboard_guide_panel, self._t("tab.sideboard_guide"))
 
@@ -427,6 +450,10 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
             notes_store=self.controller.deck_notes_store,
             notes_store_path=self.controller.notes_store_path,
             on_status_update=self._set_status,
+            labels={
+                "btn_save": self._t("notes.btn_save"),
+                "saved": self._t("notes.saved"),
+            },
         )
         self.deck_tabs.AddPage(self.deck_notes_panel, self._t("tab.deck_notes"))
         return detail_sizer
