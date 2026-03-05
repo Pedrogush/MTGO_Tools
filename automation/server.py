@@ -60,6 +60,7 @@ class AutomationServer:
             "subtract_card_from_zone": self._handle_subtract_card_from_zone,
             "get_scroll_pos": self._handle_get_scroll_pos,
             "get_builder_result_count": self._handle_get_builder_result_count,
+            "get_builder_top_item": self._handle_get_builder_top_item,
             "open_widget": self._handle_open_widget,
             "get_card_images_loaded": self._handle_get_card_images_loaded,
         }
@@ -543,6 +544,16 @@ class AutomationServer:
         count = results_ctrl.GetItemCount()
         mana_images = len(getattr(results_ctrl, "_mana_img_index", {}))
         return {"count": count, "mana_symbol_variants": mana_images}
+
+    def _handle_get_builder_top_item(self) -> dict[str, Any]:
+        """Get the index of the topmost visible item in the builder search results."""
+        if not self.frame.builder_panel:
+            return {"top_item": 0, "error": "Builder panel not available"}
+        results_ctrl = getattr(self.frame.builder_panel, "results_ctrl", None)
+        if results_ctrl is None:
+            return {"top_item": 0}
+        top = results_ctrl.GetTopItem()
+        return {"top_item": top}
 
     def _handle_open_widget(self, widget_name: str) -> dict[str, Any]:
         """Open a top-level widget window (opponent_tracker, match_history, timer_alert, metagame)."""

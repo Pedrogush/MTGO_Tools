@@ -229,6 +229,10 @@ class AutomationClient:
         """Get the number of search results in the deck builder panel."""
         return self._send_command("get_builder_result_count")
 
+    def get_builder_top_item(self) -> dict[str, Any]:
+        """Get the index of the topmost visible item in the builder search results."""
+        return self._send_command("get_builder_top_item")
+
     def open_widget(self, widget_name: str) -> dict[str, Any]:
         """Open a top-level widget window.
 

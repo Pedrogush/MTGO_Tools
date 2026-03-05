@@ -295,6 +295,33 @@ def test_scrollbar_persists_after_subtract(client: AutomationClient) -> None:
     )
 
 
+def test_builder_search_scroll_resets(client: AutomationClient) -> None:
+    """Builder results should scroll back to the top when the result set shrinks.
+
+    Reproduces issue #233: typing a narrow query (e.g. "Relic of Progenitus") after
+    having scrolled down in a broad result set made the single result render off-screen
+    near the bottom because the scroll position was not reset on SetData().
+    """
+    # Broad search — produces many results so the list is scrollable
+    client.builder_search("a")
+    time.sleep(0.8)  # wait for card data + virtual list to populate
+
+    broad_count = client.get_builder_result_count().get("count", 0)
+    if broad_count == 0:
+        print("    (skip: no card data loaded — broad search returned 0 results)")
+        return
+
+    # Narrow to a single card that is unlikely to share a name with others
+    client.builder_search("Relic of Progenitus")
+    time.sleep(0.5)
+
+    top = client.get_builder_top_item().get("top_item", -1)
+    assert top == 0, (
+        f"After narrowing search results the topmost visible item was {top}, expected 0. "
+        "Builder scroll position was not reset when the result set shrank."
+    )
+
+
 def test_mana_symbols_render_in_builder(client: AutomationClient) -> None:
     """Builder search results should show rendered mana symbol images.
 
@@ -430,6 +457,11 @@ ALL_TESTS: list[tuple[str, str, Callable[[AutomationClient], None]]] = [
     ("builder", "Subtract to zero removes card", test_subtract_to_zero_removes_card),
     ("scrollbar", "Scrollbar persists after add", test_scrollbar_persists_after_add),
     ("scrollbar", "Scrollbar persists after subtract", test_scrollbar_persists_after_subtract),
+    (
+        "scrollbar",
+        "Builder search scroll resets on narrow results",
+        test_builder_search_scroll_resets,
+    ),
     ("mana", "Mana symbols render in builder", test_mana_symbols_render_in_builder),
     ("buttons", "Add to Mainboard button functional", test_builder_add_to_main_button),
     (

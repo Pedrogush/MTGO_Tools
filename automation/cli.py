@@ -250,6 +250,13 @@ def cmd_get_builder_results(client: AutomationClient, args: argparse.Namespace) 
     return 0
 
 
+def cmd_get_builder_top_item(client: AutomationClient, args: argparse.Namespace) -> int:
+    """Get the index of the topmost visible item in builder search results."""
+    result = client.get_builder_top_item()
+    print(format_output(result, args.json))
+    return 0
+
+
 def cmd_open_widget(client: AutomationClient, args: argparse.Namespace) -> int:
     """Open a widget window."""
     result = client.open_widget(args.widget_name)
@@ -404,6 +411,7 @@ Examples:
         "remove-card": cmd_remove_card,
         "get-scroll-pos": cmd_get_scroll_pos,
         "get-builder-results": cmd_get_builder_results,
+        "get-builder-top-item": cmd_get_builder_top_item,
         "open-widget": cmd_open_widget,
     }
 
