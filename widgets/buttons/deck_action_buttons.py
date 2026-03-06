@@ -45,37 +45,41 @@ class DeckActionButtons(wx.Panel):
 
     def _build_ui(self) -> None:
         """Build the button panel UI."""
-        button_row = wx.BoxSizer(wx.HORIZONTAL)
-        self.SetSizer(button_row)
+        col_sizer = wx.BoxSizer(wx.VERTICAL)
+        self.SetSizer(col_sizer)
 
-        # Today's Average button
+        # Row 1: Load Deck | Save Deck
+        row1 = wx.BoxSizer(wx.HORIZONTAL)
+        col_sizer.Add(row1, 0, wx.EXPAND | wx.BOTTOM, 4)
+
+        self.load_button = wx.Button(self, label=self._labels.get("load_deck", "Load Deck"))
+        stylize_button(self.load_button)
+        self.load_button.Bind(wx.EVT_BUTTON, self._on_load_clicked)
+        row1.Add(self.load_button, 1, wx.RIGHT, 6)
+
+        self.save_button = wx.Button(self, label=self._labels.get("save_deck", "Save Deck"))
+        stylize_button(self.save_button)
+        self.save_button.Disable()
+        self.save_button.Bind(wx.EVT_BUTTON, self._on_save_clicked)
+        row1.Add(self.save_button, 1)
+
+        # Row 2: Today's Average | Copy
+        row2 = wx.BoxSizer(wx.HORIZONTAL)
+        col_sizer.Add(row2, 0, wx.EXPAND)
+
         self.daily_average_button = wx.Button(
             self, label=self._labels.get("daily_average", "Today's Average")
         )
         stylize_button(self.daily_average_button)
         self.daily_average_button.Disable()
         self.daily_average_button.Bind(wx.EVT_BUTTON, self._on_daily_average_clicked)
-        button_row.Add(self.daily_average_button, 0, wx.RIGHT, 6)
+        row2.Add(self.daily_average_button, 1, wx.RIGHT, 6)
 
-        # Copy button
         self.copy_button = wx.Button(self, label=self._labels.get("copy", "Copy"))
         stylize_button(self.copy_button)
         self.copy_button.Disable()
         self.copy_button.Bind(wx.EVT_BUTTON, self._on_copy_clicked)
-        button_row.Add(self.copy_button, 0, wx.RIGHT, 6)
-
-        # Load Deck button
-        self.load_button = wx.Button(self, label=self._labels.get("load_deck", "Load Deck"))
-        stylize_button(self.load_button)
-        self.load_button.Bind(wx.EVT_BUTTON, self._on_load_clicked)
-        button_row.Add(self.load_button, 0, wx.RIGHT, 6)
-
-        # Save Deck button
-        self.save_button = wx.Button(self, label=self._labels.get("save_deck", "Save Deck"))
-        stylize_button(self.save_button)
-        self.save_button.Disable()
-        self.save_button.Bind(wx.EVT_BUTTON, self._on_save_clicked)
-        button_row.Add(self.save_button, 0)
+        row2.Add(self.copy_button, 1)
 
     # ============= Public API =============
 

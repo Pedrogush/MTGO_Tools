@@ -9,7 +9,6 @@ import wx
 from loguru import logger
 
 from utils.card_data import CardDataManager
-from utils.constants import DECKS_DIR
 from utils.ui_helpers import open_child_window, widget_exists
 from widgets.identify_opponent import MTGOpponentDeckSpy
 from widgets.match_history import MatchHistoryFrame
@@ -189,7 +188,8 @@ class AppEventHandlers:
         self._start_daily_average_build()
 
     def on_load_deck_clicked(self: AppFrame) -> None:
-        default_dir = str(DECKS_DIR) if DECKS_DIR.exists() else str(Path.home())
+        save_dir = self.controller.deck_save_dir
+        default_dir = str(save_dir) if save_dir.exists() else str(Path.home())
         with wx.FileDialog(
             self,
             "Load Deck",
