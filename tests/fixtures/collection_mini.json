@@ -1,0 +1,14 @@
+[
+  {"name": "Lightning Bolt", "quantity": 4},
+  {"name": "Counterspell", "quantity": 4},
+  {"name": "Snapcaster Mage", "quantity": 4},
+  {"name": "Spell Pierce", "quantity": 2},
+  {"name": "Opt", "quantity": 4},
+  {"name": "Thoughtseize", "quantity": 4},
+  {"name": "Fatal Push", "quantity": 4},
+  {"name": "Tarmogoyf", "quantity": 4},
+  {"name": "Path to Exile", "quantity": 4},
+  {"name": "Island", "quantity": 20},
+  {"name": "Mountain", "quantity": 10},
+  {"name": "Forest", "quantity": 8}
+]
