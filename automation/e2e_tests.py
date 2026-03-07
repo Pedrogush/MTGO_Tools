@@ -311,6 +311,14 @@ def test_builder_search_scroll_resets(client: AutomationClient) -> None:
         print("    (skip: no card data loaded — broad search returned 0 results)")
         return
 
+    # Scroll down to simulate a user who scrolled before typing a narrow query
+    client.scroll_builder_results(items=30)
+    time.sleep(0.1)
+    top_after_scroll = client.get_builder_top_item().get("top_item", 0)
+    if top_after_scroll == 0:
+        print("    (skip: list is not tall enough to scroll — fewer than 30 visible items)")
+        return
+
     # Narrow to a single card that is unlikely to share a name with others
     client.builder_search("Relic of Progenitus")
     time.sleep(0.5)
