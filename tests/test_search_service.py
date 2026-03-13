@@ -266,6 +266,128 @@ def test_get_card_suggestions_success():
     assert "Lightning Bolt" in suggestions
 
 
+# ============= Name Match Mode Tests =============
+
+
+def _make_builder_filters(**kwargs) -> dict:
+    """Create a minimal builder filters dict with defaults."""
+    defaults = {
+        "name": "",
+        "name_match": "contains",
+        "type": "",
+        "text": "",
+        "mana": "",
+        "mana_exact": False,
+        "mv_comparator": "Any",
+        "mv_value": "",
+        "formats": [],
+        "color_mode": "Any",
+        "selected_colors": [],
+        "radar_enabled": False,
+        "radar_cards": set(),
+    }
+    defaults.update(kwargs)
+    return defaults
+
+
+def _make_card_manager_mock(cards: list[dict]) -> Mock:
+    manager = Mock()
+    manager.search_cards = Mock(return_value=cards)
+    return manager
+
+
+def test_name_match_contains_finds_substring():
+    """Default 'contains' mode matches the whole query as a substring."""
+    mock_repo = SimpleNamespace()
+    service = SearchService(card_repository=mock_repo)
+
+    cards = [
+        create_mock_card(name="Clock of Omens"),
+        create_mock_card(name="Lightning Bolt"),
+    ]
+    manager = _make_card_manager_mock(cards)
+    for c in cards:
+        c["name_lower"] = c["name"].lower()
+
+    filters = _make_builder_filters(name="clock of omens")
+    results = service.search_with_builder_filters(filters, manager)
+    assert len(results) == 1
+    assert results[0]["name"] == "Clock of Omens"
+
+
+def test_name_match_contains_rejects_non_substring():
+    """Default 'contains' mode rejects queries that aren't exact substrings."""
+    mock_repo = SimpleNamespace()
+    service = SearchService(card_repository=mock_repo)
+
+    cards = [create_mock_card(name="Clock of Omens")]
+    manager = _make_card_manager_mock(cards)
+    for c in cards:
+        c["name_lower"] = c["name"].lower()
+
+    # "clock omens" skips "of", so it's not a substring of "clock of omens"
+    filters = _make_builder_filters(name="clock omens")
+    results = service.search_with_builder_filters(filters, manager)
+    assert results == []
+
+
+def test_name_match_any_word_finds_card_by_partial_name():
+    """'any_word' mode finds 'Clock of Omens' when any typed word appears in the name."""
+    mock_repo = SimpleNamespace()
+    service = SearchService(card_repository=mock_repo)
+
+    cards = [
+        create_mock_card(name="Clock of Omens"),
+        create_mock_card(name="Lightning Bolt"),
+    ]
+    manager = _make_card_manager_mock(cards)
+    for c in cards:
+        c["name_lower"] = c["name"].lower()
+
+    # "clock omens" — both words appear in "clock of omens"
+    filters = _make_builder_filters(name="clock omens", name_match="any_word")
+    results = service.search_with_builder_filters(filters, manager)
+    assert any(r["name"] == "Clock of Omens" for r in results)
+
+
+def test_name_match_any_word_or_logic():
+    """'any_word' mode returns cards matching ANY of the typed words."""
+    mock_repo = SimpleNamespace()
+    service = SearchService(card_repository=mock_repo)
+
+    cards = [
+        create_mock_card(name="Clock of Omens"),
+        create_mock_card(name="Lightning Bolt"),
+        create_mock_card(name="Island"),
+    ]
+    manager = _make_card_manager_mock(cards)
+    for c in cards:
+        c["name_lower"] = c["name"].lower()
+
+    # "clock lightning" matches both Clock of Omens and Lightning Bolt
+    filters = _make_builder_filters(name="clock lightning", name_match="any_word")
+    results = service.search_with_builder_filters(filters, manager)
+    names = {r["name"] for r in results}
+    assert "Clock of Omens" in names
+    assert "Lightning Bolt" in names
+    assert "Island" not in names
+
+
+def test_name_match_any_word_case_insensitive():
+    """'any_word' mode is case-insensitive."""
+    mock_repo = SimpleNamespace()
+    service = SearchService(card_repository=mock_repo)
+
+    cards = [create_mock_card(name="Clock of Omens")]
+    manager = _make_card_manager_mock(cards)
+    for c in cards:
+        c["name_lower"] = c["name"].lower()
+
+    filters = _make_builder_filters(name="CLOCK", name_match="any_word")
+    results = service.search_with_builder_filters(filters, manager)
+    assert len(results) == 1
+
+
 # ============= Deck Search Tests =============
 
 

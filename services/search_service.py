@@ -156,6 +156,7 @@ class SearchService:
 
         Filter keys expected:
             - name: str - Card name filter
+            - name_match: str - Name match mode: "contains" (default substring) or "any_word" (any space-separated word)
             - type: str - Type line filter
             - text: str - Oracle text filter
             - mana: str - Mana cost pattern
@@ -197,7 +198,12 @@ class SearchService:
             # Name filter
             if filters.get("name"):
                 name_lower = card.get("name_lower", "")
-                if filters["name"].lower() not in name_lower:
+                name_query = filters["name"].lower()
+                if filters.get("name_match") == "any_word":
+                    words = name_query.split()
+                    if not words or not any(w in name_lower for w in words):
+                        continue
+                elif name_query not in name_lower:
                     continue
 
             # Type filter

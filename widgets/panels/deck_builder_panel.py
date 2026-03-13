@@ -205,6 +205,7 @@ class DeckBuilderPanel(wx.Panel):
 
         # State variables
         self.inputs: dict[str, wx.TextCtrl] = {}
+        self.name_any_word_cb: wx.CheckBox | None = None
         self.mana_exact_cb: wx.CheckBox | None = None
         self.mv_comparator: wx.Choice | None = None
         self.mv_value: wx.TextCtrl | None = None
@@ -261,6 +262,20 @@ class DeckBuilderPanel(wx.Panel):
             ctrl.Bind(wx.EVT_TEXT, self._on_filters_changed)
             sizer.Add(ctrl, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 6)
             self.inputs[key] = ctrl
+
+            # Name field gets "Any Word" match mode checkbox
+            if key == "name":
+                name_match_row = wx.BoxSizer(wx.HORIZONTAL)
+                any_word_cb = wx.CheckBox(self, label="Any word match")
+                any_word_cb.SetForegroundColour(LIGHT_TEXT)
+                any_word_cb.SetBackgroundColour(DARK_PANEL)
+                any_word_cb.SetToolTip(
+                    "When checked, finds cards where any space-separated word appears in the name."
+                )
+                any_word_cb.Bind(wx.EVT_CHECKBOX, self._on_filters_changed)
+                self.name_any_word_cb = any_word_cb
+                name_match_row.Add(any_word_cb, 0)
+                sizer.Add(name_match_row, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 6)
 
             # Mana cost field gets extra controls
             if key == "mana":
@@ -512,6 +527,11 @@ class DeckBuilderPanel(wx.Panel):
     def get_filters(self) -> dict[str, Any]:
         """Get all current filter values."""
         filters = {key: ctrl.GetValue().strip() for key, ctrl in self.inputs.items()}
+        filters["name_match"] = (
+            "any_word"
+            if (self.name_any_word_cb and self.name_any_word_cb.IsChecked())
+            else "contains"
+        )
         filters["mana_exact"] = self.mana_exact_cb.IsChecked() if self.mana_exact_cb else False
         filters["mv_comparator"] = (
             self.mv_comparator.GetStringSelection() if self.mv_comparator else "Any"
@@ -550,6 +570,8 @@ class DeckBuilderPanel(wx.Panel):
 
         if self.status_label:
             self.status_label.SetLabel("Filters cleared.")
+        if self.name_any_word_cb:
+            self.name_any_word_cb.SetValue(False)
         if self.mana_exact_cb:
             self.mana_exact_cb.SetValue(False)
         if self.mv_comparator:
