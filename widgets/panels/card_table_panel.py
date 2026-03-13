@@ -172,6 +172,7 @@ class CardTablePanel(wx.Panel):
             return
         if self.active_panel:
             self.active_panel.set_active(False)
+            self.active_panel.Update()
         self.active_panel = panel
         self.selected_name = card["name"]
         panel.set_active(True)
