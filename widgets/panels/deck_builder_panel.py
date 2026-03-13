@@ -46,10 +46,9 @@ class _SearchResultsView(wx.ListCtrl):
         self._data = data
         if self._mana_icons:
             self._build_mana_image_list()
-        self.ScrollList(0, -99999)
+        if self.GetItemCount() > 0:
+            self.EnsureVisible(0)
         self.SetItemCount(len(data))
-        if data:
-            wx.CallAfter(self.EnsureVisible, 0)
         self.Refresh()
 
     def _build_mana_image_list(self) -> None:
