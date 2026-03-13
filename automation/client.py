@@ -233,6 +233,10 @@ class AutomationClient:
         """Get the index of the topmost visible item in the builder search results."""
         return self._send_command("get_builder_top_item")
 
+    def scroll_builder_results(self, items: int = 10) -> dict[str, Any]:
+        """Scroll the builder results list by the given number of items."""
+        return self._send_command("scroll_builder_results", items=items)
+
     def open_widget(self, widget_name: str) -> dict[str, Any]:
         """Open a top-level widget window.
 

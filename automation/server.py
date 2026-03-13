@@ -61,6 +61,7 @@ class AutomationServer:
             "get_scroll_pos": self._handle_get_scroll_pos,
             "get_builder_result_count": self._handle_get_builder_result_count,
             "get_builder_top_item": self._handle_get_builder_top_item,
+            "scroll_builder_results": self._handle_scroll_builder_results,
             "open_widget": self._handle_open_widget,
             "get_card_images_loaded": self._handle_get_card_images_loaded,
         }
@@ -554,6 +555,22 @@ class AutomationServer:
             return {"top_item": 0}
         top = results_ctrl.GetTopItem()
         return {"top_item": top}
+
+    def _handle_scroll_builder_results(self, items: int = 10) -> dict[str, Any]:
+        """Scroll the builder results list by the given number of items."""
+        if not self.frame.builder_panel:
+            return {"scrolled": False, "error": "Builder panel not available"}
+        results_ctrl = getattr(self.frame.builder_panel, "results_ctrl", None)
+        if results_ctrl is None:
+            return {"scrolled": False, "error": "results_ctrl not found"}
+        count = results_ctrl.GetItemCount()
+        if count == 0:
+            return {"scrolled": False, "error": "No items in results list"}
+        # Get pixel height of one item from its rect
+        rect = results_ctrl.GetItemRect(0)
+        item_h = rect.height if rect.height > 0 else 18
+        results_ctrl.ScrollList(0, items * item_h)
+        return {"scrolled": True, "items": items, "pixels": items * item_h}
 
     def _handle_open_widget(self, widget_name: str) -> dict[str, Any]:
         """Open a top-level widget window (opponent_tracker, match_history, timer_alert, metagame)."""
