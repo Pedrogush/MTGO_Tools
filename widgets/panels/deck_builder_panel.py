@@ -206,6 +206,7 @@ class DeckBuilderPanel(wx.Panel):
         # State variables
         self.inputs: dict[str, wx.TextCtrl] = {}
         self.mana_exact_cb: wx.CheckBox | None = None
+        self.text_mode_choice: wx.Choice | None = None
         self.mv_comparator: wx.Choice | None = None
         self.mv_value: wx.TextCtrl | None = None
         self.format_checks: list[wx.CheckBox] = []
@@ -261,6 +262,21 @@ class DeckBuilderPanel(wx.Panel):
             ctrl.Bind(wx.EVT_TEXT, self._on_filters_changed)
             sizer.Add(ctrl, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 6)
             self.inputs[key] = ctrl
+
+            # Oracle text field gets a match mode selector
+            if key == "text":
+                text_mode_row = wx.BoxSizer(wx.HORIZONTAL)
+                text_mode_label = wx.StaticText(self, label="Match")
+                stylize_label(text_mode_label, True)
+                text_mode_row.Add(text_mode_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 6)
+                text_mode_choice = wx.Choice(self, choices=["All words", "Any word"])
+                text_mode_choice.SetSelection(0)
+                stylize_choice(text_mode_choice)
+                self.text_mode_choice = text_mode_choice
+                text_mode_choice.Bind(wx.EVT_CHOICE, self._on_filters_changed)
+                text_mode_row.Add(text_mode_choice, 0)
+                text_mode_row.AddStretchSpacer(1)
+                sizer.Add(text_mode_row, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 6)
 
             # Mana cost field gets extra controls
             if key == "mana":
@@ -513,6 +529,10 @@ class DeckBuilderPanel(wx.Panel):
         """Get all current filter values."""
         filters = {key: ctrl.GetValue().strip() for key, ctrl in self.inputs.items()}
         filters["mana_exact"] = self.mana_exact_cb.IsChecked() if self.mana_exact_cb else False
+        text_mode_sel = (
+            self.text_mode_choice.GetStringSelection() if self.text_mode_choice else "All words"
+        )
+        filters["text_mode"] = "any" if text_mode_sel == "Any word" else "all"
         filters["mv_comparator"] = (
             self.mv_comparator.GetStringSelection() if self.mv_comparator else "Any"
         )
@@ -552,6 +572,8 @@ class DeckBuilderPanel(wx.Panel):
             self.status_label.SetLabel("Filters cleared.")
         if self.mana_exact_cb:
             self.mana_exact_cb.SetValue(False)
+        if self.text_mode_choice:
+            self.text_mode_choice.SetSelection(0)
         if self.mv_comparator:
             self.mv_comparator.SetSelection(0)
         if self.mv_value:

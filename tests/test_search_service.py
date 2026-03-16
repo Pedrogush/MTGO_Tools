@@ -444,3 +444,105 @@ def test_matches_text_filter_no_text():
     card = create_mock_card(oracle_text="")
 
     assert service._matches_text_filter(card, "anything") is False
+
+
+def test_matches_text_filter_any_mode_hit():
+    """Test any-word text filter matches when at least one word is present."""
+    mock_repo = SimpleNamespace()
+    service = SearchService(card_repository=mock_repo)
+
+    card = create_mock_card(oracle_text="Tap target artifact. Return it to its owner's hand.")
+
+    # "tap" is in the text — should match
+    assert service._matches_text_filter(card, "tap untapped", mode="any") is True
+
+
+def test_matches_text_filter_any_mode_miss():
+    """Test any-word text filter does not match when no words are present."""
+    mock_repo = SimpleNamespace()
+    service = SearchService(card_repository=mock_repo)
+
+    card = create_mock_card(oracle_text="Draw a card.")
+
+    assert service._matches_text_filter(card, "tap untapped", mode="any") is False
+
+
+def test_matches_text_filter_all_mode_requires_full_phrase():
+    """Test all-mode (default) requires the full phrase to be present."""
+    mock_repo = SimpleNamespace()
+    service = SearchService(card_repository=mock_repo)
+
+    card = create_mock_card(oracle_text="Tap target creature. Return it to its owner's hand.")
+
+    # "tap" alone is in text, but "tap untapped" as a phrase is not
+    assert service._matches_text_filter(card, "tap untapped", mode="all") is False
+    assert service._matches_text_filter(card, "tap target", mode="all") is True
+
+
+def test_filter_cards_text_mode_any():
+    """Test filter_cards with text_mode='any' returns cards matching any word."""
+    mock_repo = SimpleNamespace()
+    service = SearchService(card_repository=mock_repo)
+
+    cards = [
+        create_mock_card(name="Tap Card", oracle_text="Tap target creature."),
+        create_mock_card(name="Untap Card", oracle_text="Untap target permanent."),
+        create_mock_card(name="Draw Card", oracle_text="Draw a card."),
+    ]
+
+    filtered = service.filter_cards(cards, text_contains="tap untapped", text_mode="any")
+
+    assert len(filtered) == 2
+    names = [c["name"] for c in filtered]
+    assert "Tap Card" in names
+    assert "Untap Card" in names
+
+
+def test_search_with_builder_filters_text_mode_any():
+    """Test search_with_builder_filters passes text_mode='any' correctly."""
+    mock_card_manager = Mock()
+    mock_card_manager.search_cards = Mock(
+        return_value=[
+            {
+                "name": "Tap Artifact",
+                "name_lower": "tap artifact",
+                "oracle_text": "Tap target artifact.",
+                "type_line": "Instant",
+                "mana_cost": "{1}",
+                "mana_value": 1,
+                "color_identity": [],
+                "legalities": {},
+            },
+            {
+                "name": "Untap Creature",
+                "name_lower": "untap creature",
+                "oracle_text": "Untap target creature.",
+                "type_line": "Instant",
+                "mana_cost": "{1}",
+                "mana_value": 1,
+                "color_identity": [],
+                "legalities": {},
+            },
+            {
+                "name": "Counter Spell",
+                "name_lower": "counter spell",
+                "oracle_text": "Counter target spell.",
+                "type_line": "Instant",
+                "mana_cost": "{U}{U}",
+                "mana_value": 2,
+                "color_identity": ["U"],
+                "legalities": {},
+            },
+        ]
+    )
+
+    mock_repo = SimpleNamespace()
+    service = SearchService(card_repository=mock_repo)
+
+    filters = {"text": "tap untapped", "text_mode": "any"}
+    results = service.search_with_builder_filters(filters, mock_card_manager)
+
+    assert len(results) == 2
+    names = [c["name"] for c in results]
+    assert "Tap Artifact" in names
+    assert "Untap Creature" in names
