@@ -29,6 +29,10 @@ class _SearchResultsView(wx.ListCtrl):
         self._data: list[dict[str, Any]] = []
         self._mana_icons = mana_icons
         self._mana_img_index: dict[str, int] = {}
+        self._mana_img_list: wx.ImageList | None = None
+        if mana_icons:
+            self._mana_img_list = wx.ImageList(_MANA_IMG_W, _MANA_IMG_H)
+            self.AssignImageList(self._mana_img_list, wx.IMAGE_LIST_SMALL)
         self.Bind(wx.EVT_SIZE, self._on_size)
 
     def _on_size(self, event: wx.SizeEvent) -> None:
@@ -44,29 +48,31 @@ class _SearchResultsView(wx.ListCtrl):
     def SetData(self, data: list[dict[str, Any]]) -> None:
         """Set the data source and refresh the display."""
         self._data = data
-        if self._mana_icons:
-            self._build_mana_image_list()
+        if self._mana_icons and self._mana_img_list is not None:
+            self._update_mana_cache()
         if self.GetItemCount() > 0:
             self.EnsureVisible(0)
         self.SetItemCount(len(data))
         self.Refresh()
 
-    def _build_mana_image_list(self) -> None:
-        """Build a wx.ImageList mapping each unique mana cost to a composite bitmap.
+    def _update_mana_cache(self) -> None:
+        """Add bitmaps for mana costs not yet in the persistent image list.
 
-        Each symbol is scaled from its raw source bitmap directly to its final
-        display size in a single pass, avoiding quality loss from chained
-        downscales.  The final height is _MANA_IMG_H when all symbols fit within
-        the canvas, or proportionally smaller when they would overflow.
+        The image list is created once and only grows — existing indices are
+        stable so OnGetItemColumnImage lookups remain valid across searches.
+        Only costs absent from the cache require bitmap rendering, making
+        repeated searches (including empty-filter / browse-all) O(new_costs).
         """
         from utils.mana_icon_factory import tokenize_mana_symbols
 
         assert self._mana_icons is not None
+        assert self._mana_img_list is not None
         unique_costs = {card.get("mana_cost", "") for card in self._data if card.get("mana_cost")}
-        img_list = wx.ImageList(_MANA_IMG_W, _MANA_IMG_H)
-        self._mana_img_index = {}
+        new_costs = unique_costs - set(self._mana_img_index)
+        if not new_costs:
+            return
 
-        for cost in unique_costs:
+        for cost in new_costs:
             tokens = tokenize_mana_symbols(cost)
             if not tokens:
                 continue
@@ -122,9 +128,7 @@ class _SearchResultsView(wx.ListCtrl):
                     x += _MANA_ICON_GAP
 
             dc.SelectObject(wx.NullBitmap)
-            self._mana_img_index[cost] = img_list.Add(canvas)
-
-        self.AssignImageList(img_list, wx.IMAGE_LIST_SMALL)
+            self._mana_img_index[cost] = self._mana_img_list.Add(canvas)
 
     def OnGetItemText(self, item: int, column: int) -> str:
         """Return text for the given item and column.
