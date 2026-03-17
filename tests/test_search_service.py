@@ -444,3 +444,77 @@ def test_matches_text_filter_no_text():
     card = create_mock_card(oracle_text="")
 
     assert service._matches_text_filter(card, "anything") is False
+
+
+# ============= Land Colorless Tests =============
+
+
+def create_mock_land(name="Forest", color_identity=None, type_line="Basic Land — Forest"):
+    """Helper to create a mock land card."""
+    return {
+        "name": name,
+        "name_lower": name.lower(),
+        "colors": [],
+        "color_identity": color_identity or ["G"],
+        "type_line": type_line,
+        "mana_cost": "",
+        "mana_value": 0,
+        "cmc": 0,
+        "oracle_text": "",
+        "legalities": {},
+    }
+
+
+def test_lands_treated_as_colorless_in_color_filter():
+    """Lands should be treated as colorless regardless of color_identity."""
+    mock_repo = SimpleNamespace()
+    service = SearchService(card_repository=mock_repo)
+
+    forest = create_mock_land(name="Forest", color_identity=["G"])
+
+    # Forest should NOT match a green color filter
+    assert service._matches_color_filter(forest, ["G"], "At least") is False
+    assert service._matches_color_filter(forest, ["G"], "Exactly") is False
+
+    # Forest SHOULD match a colorless filter
+    assert service._matches_color_filter(forest, ["C"], "At least") is True
+    assert service._matches_color_filter(forest, ["C"], "Exactly") is True
+
+    # Forest should pass "Not these" for any color (it's colorless)
+    assert service._matches_color_filter(forest, ["G", "U", "R"], "Not these") is True
+
+
+def test_filter_cards_lands_excluded_from_color_filter():
+    """Lands should not appear in color-filtered results for non-colorless colors."""
+    mock_repo = SimpleNamespace()
+    service = SearchService(card_repository=mock_repo)
+
+    cards = [
+        create_mock_card(name="Llanowar Elves", colors=["G"], type_line="Creature — Elf Druid"),
+        create_mock_land(name="Forest", color_identity=["G"]),
+        create_mock_land(
+            name="Breeding Pool", color_identity=["G", "U"], type_line="Land — Forest Island"
+        ),
+    ]
+
+    # Filtering for green should only return the creature, not lands
+    filtered = service.filter_cards(cards, colors=["G"], color_mode="At least")
+
+    assert len(filtered) == 1
+    assert filtered[0]["name"] == "Llanowar Elves"
+
+
+def test_filter_cards_lands_appear_in_colorless_filter():
+    """Lands should appear when filtering for colorless."""
+    mock_repo = SimpleNamespace()
+    service = SearchService(card_repository=mock_repo)
+
+    cards = [
+        create_mock_card(name="Llanowar Elves", colors=["G"], type_line="Creature — Elf Druid"),
+        create_mock_land(name="Forest", color_identity=["G"]),
+    ]
+
+    filtered = service.filter_cards(cards, colors=["C"], color_mode="At least")
+
+    assert len(filtered) == 1
+    assert filtered[0]["name"] == "Forest"

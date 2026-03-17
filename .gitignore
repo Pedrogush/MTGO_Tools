@@ -49,3 +49,4 @@ build/
 .worktrees/
 # local install
 *.egg-info/
+issues/

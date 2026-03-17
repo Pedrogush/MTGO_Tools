@@ -229,10 +229,10 @@ class SearchService:
                 if not matches_mana_value(card.get("mana_value"), mv_value, mv_cmp):
                     continue
 
-            # Color identity filter
+            # Color identity filter (lands are treated as colorless)
             if selected_colors and color_mode != "Any":
                 if not matches_color_filter(
-                    card.get("color_identity") or [], selected_colors, color_mode
+                    self._get_card_colors_for_filter(card), selected_colors, color_mode
                 ):
                     continue
 
@@ -257,10 +257,18 @@ class SearchService:
 
     def _matches_color_filter(self, card: dict[str, Any], colors: list[str], mode: str) -> bool:
         """Check if card matches color filter."""
+        card_colors = self._get_card_colors_for_filter(card)
+        return matches_color_filter(card_colors, colors, mode)
+
+    def _get_card_colors_for_filter(self, card: dict[str, Any]) -> list[str]:
+        """Return the colors to use for color filtering, treating lands as colorless."""
+        type_line = (card.get("type_line") or card.get("type") or "").lower()
+        if "land" in type_line:
+            return []
         card_colors = card.get("colors", []) or card.get("color_identity", [])
         if isinstance(card_colors, str):
             card_colors = list(card_colors)
-        return matches_color_filter(card_colors, colors, mode)
+        return card_colors
 
     def _matches_type_filter(self, card: dict[str, Any], types: list[str]) -> bool:
         """Check if card matches type filter."""
