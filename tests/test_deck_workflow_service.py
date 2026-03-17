@@ -28,6 +28,15 @@ class FakeDeckRepo:
     def set_current_deck(self, deck: dict | None) -> None:
         self.current_deck = deck or {}
 
+    def save_deck_to_file(self, deck_name: str, deck_content: str, directory) -> object:
+        from pathlib import Path
+        from utils.deck import sanitize_filename
+
+        safe_name = sanitize_filename(deck_name, fallback="saved_deck")
+        path = Path(directory) / f"{safe_name}.txt"
+        path.write_text(deck_content, encoding="utf-8")
+        return path
+
     def save_to_db(self, **payload):
         self.saved_payload = payload
         return 123

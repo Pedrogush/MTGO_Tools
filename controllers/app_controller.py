@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 
     from widgets.app_frame import AppFrame
 
-from controllers.app_controller_helpers import AppControllerUIHelpers
+from controllers.app_controller_helpers import AppControllerUIHelpers, UICallbacks
 from controllers.bulk_data_helpers import BulkDataHelpers
 from controllers.mtgo_background_helpers import MtgoBackgroundHelpers
 from controllers.session_manager import DeckSelectorSessionManager
@@ -115,7 +115,7 @@ class AppController:
         self.outboard_store = self.store_service.load_store(self.outboard_store_path)
         self.guide_store = self.store_service.load_store(self.guide_store_path)
 
-        self._ui_callbacks: dict[str, Callable[..., Any]] = {}
+        self._ui_callbacks: UICallbacks | None = None
 
         # Background worker for tasks with lifecycle control
         self._worker = BackgroundWorker()
@@ -352,9 +352,9 @@ class AppController:
         self, directory: Path | None = None, force: bool = False
     ) -> None:
         callbacks = self._ui_callbacks
-        on_status = callbacks.get("on_status", lambda msg: None)
-        on_success = callbacks.get("on_collection_refresh_success")
-        on_error = callbacks.get("on_collection_failed")
+        on_status = callbacks.on_status if callbacks else lambda msg: None
+        on_success = callbacks.on_collection_refresh_success if callbacks else None
+        on_error = callbacks.on_collection_failed if callbacks else None
         directory = directory or self.deck_save_dir
 
         on_status("Fetching collection from MTGO...")
@@ -465,22 +465,20 @@ class AppController:
         callbacks = self._ui_callbacks
 
         self.fetch_archetypes(
-            on_success=callbacks.get("on_archetypes_success"),
-            on_error=callbacks.get("on_archetypes_error"),
-            on_status=callbacks.get("on_status"),
+            on_success=callbacks.on_archetypes_success if callbacks else None,
+            on_error=callbacks.on_archetypes_error if callbacks else None,
+            on_status=callbacks.on_status if callbacks else None,
             force=force_archetypes,
         )
 
         # Step 3: Load collection from cache (non-blocking)
         success, info = self.load_collection_from_cache(deck_save_dir)
         if success and info:
-            callback = callbacks.get("on_collection_loaded")
-            if callback:
-                callback(info)
+            if callbacks:
+                callbacks.on_collection_loaded(info)
         else:
-            callback = callbacks.get("on_collection_not_found")
-            if callback:
-                callback()
+            if callbacks:
+                callbacks.on_collection_not_found()
 
         # Step 4: Check and download bulk data if needed (non-blocking)
         self.check_and_download_bulk_data()

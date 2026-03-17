@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any
 from loguru import logger
 
 if TYPE_CHECKING:
+    from controllers.app_controller_helpers import UICallbacks
     from utils.background_worker import BackgroundWorker
     from widgets.app_frame import AppFrame
 
@@ -25,15 +26,15 @@ class BulkDataHelpers:
         self._frame_provider = frame_provider
         self._bulk_check_worker_active = False
 
-    def check_and_download_bulk_data(self, callbacks: dict[str, Callable[..., Any]]) -> None:
+    def check_and_download_bulk_data(self, callbacks: UICallbacks | None) -> None:
         if self._bulk_check_worker_active:
             logger.debug("Bulk data check already running")
             return
 
-        on_status = callbacks.get("on_status", lambda msg: None)
-        on_download_needed = callbacks.get("on_bulk_download_needed", lambda reason: None)
-        on_download_complete = callbacks.get("on_bulk_download_complete", lambda msg: None)
-        on_download_failed = callbacks.get("on_bulk_download_failed", lambda msg: None)
+        on_status = callbacks.on_status if callbacks else lambda msg: None
+        on_download_needed = callbacks.on_bulk_download_needed if callbacks else lambda reason: None
+        on_download_complete = callbacks.on_bulk_download_complete if callbacks else lambda msg: None
+        on_download_failed = callbacks.on_bulk_download_failed if callbacks else lambda msg: None
 
         on_status("Checking card image database…")
         self._bulk_check_worker_active = True
@@ -108,15 +109,15 @@ class BulkDataHelpers:
         if not started:
             on_status("Ready")
 
-    def force_bulk_data_update(self, callbacks: dict[str, Callable[..., Any]]) -> None:
+    def force_bulk_data_update(self, callbacks: UICallbacks | None) -> None:
         """Force download of bulk data regardless of current state."""
         if self._bulk_check_worker_active:
             logger.debug("Bulk data update already running")
             return
 
-        on_status = callbacks.get("on_status", lambda msg: None)
-        on_download_complete = callbacks.get("on_bulk_download_complete", lambda msg: None)
-        on_download_failed = callbacks.get("on_bulk_download_failed", lambda msg: None)
+        on_status = callbacks.on_status if callbacks else lambda msg: None
+        on_download_complete = callbacks.on_bulk_download_complete if callbacks else lambda msg: None
+        on_download_failed = callbacks.on_bulk_download_failed if callbacks else lambda msg: None
 
         on_status("Downloading card image database...")
         self._bulk_check_worker_active = True

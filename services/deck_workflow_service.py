@@ -6,7 +6,7 @@ from typing import Any
 from loguru import logger
 
 from navigators.mtggoldfish import download_deck, get_archetypes
-from utils.deck import read_curr_deck_file, sanitize_filename
+from utils.deck import read_curr_deck_file
 
 
 class DeckWorkflowService:
@@ -88,10 +88,7 @@ class DeckWorkflowService:
         deck: dict[str, Any] | None,
         deck_save_dir,
     ) -> tuple:
-        safe_name = sanitize_filename(deck_name or "saved_deck") or "saved_deck"
-        file_path = deck_save_dir / f"{safe_name}.txt"
-        with file_path.open("w", encoding="utf-8") as fh:
-            fh.write(deck_content)
+        file_path = self.deck_repo.save_deck_to_file(deck_name, deck_content, deck_save_dir)
 
         deck_id = None
         try:
