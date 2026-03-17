@@ -315,7 +315,7 @@ class SearchService:
             return False
         text_lower = text.lower()
         if mode == "any":
-            return any(word in text_lower for word in query.lower().split())
+            return all(word in text_lower for word in query.lower().split())
         return query.lower() in text_lower
 
     # ============= Search Suggestions =============

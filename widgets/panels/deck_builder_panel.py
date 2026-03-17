@@ -269,7 +269,7 @@ class DeckBuilderPanel(wx.Panel):
                 text_match_label = wx.StaticText(self, label="Match")
                 stylize_label(text_match_label, True)
                 text_match_row.Add(text_match_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 6)
-                text_mode_choice = wx.Choice(self, choices=["All words", "Any word"])
+                text_mode_choice = wx.Choice(self, choices=["Exact phrase", "All words"])
                 text_mode_choice.SetSelection(0)
                 stylize_choice(text_mode_choice)
                 self.text_mode_choice = text_mode_choice
