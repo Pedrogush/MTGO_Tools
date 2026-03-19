@@ -202,13 +202,24 @@ All commands accept `--json` for machine-readable output and `--timeout <seconds
 - `automation/client.py` — Python client (`AutomationClient`, `wait_for_server()`)
 - `automation/cli.py` — CLI entry point (`python -m automation`)
 - `automation/test_runner.py` — basic connectivity test suite
-- `automation/e2e_tests.py` — **UI regression test suite** (run locally, not in CI)
+- `automation/e2e_tests/` — **UI regression test suite** (run locally, not in CI)
 
 ## UI Regression Tests
 
-The `automation/e2e_tests.py` suite covers add/subtract cards, scrollbar persistence,
+The `automation/e2e_tests/` package covers add/subtract cards, scrollbar persistence,
 mana symbol rendering, buttons, widget opening, and card face loading.  It is
 **not wired into GitHub Actions** and is meant for local verification only.
+
+Test modules by area:
+- `test_launch.py` — app connectivity
+- `test_builder.py` — deck workspace (add/subtract cards, roundtrip)
+- `test_scrollbar.py` — scrollbar persistence in zones and builder results
+- `test_mana.py` — mana symbol rendering
+- `test_buttons.py` — button enablement
+- `test_widgets.py` — sub-widget window opening
+- `test_images.py` — card face image loading
+- `test_golden.py` — golden screenshot capture
+- `common.py` — shared infrastructure (runner, helpers, dummy deck)
 
 ```bash
 # Run all e2e tests (app must be running with --automation)
@@ -223,8 +234,9 @@ python -m automation.e2e_tests --only mana
 Golden screenshots (for visual review) are saved to `automation/golden/`.
 
 **Convention:** When using the automation CLI to diagnose and fix a UI bug,
-add a test to `automation/e2e_tests.py` that reproduces the exact command
-sequence used.  This ensures the fix is verifiable and prevents regressions.
+add a test to the relevant module in `automation/e2e_tests/` that reproduces
+the exact command sequence used.  This ensures the fix is verifiable and
+prevents regressions.
 
 # Notes
 

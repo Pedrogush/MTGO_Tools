@@ -114,6 +114,9 @@ exclude = [
 module = "tests.*"
 ignore_errors = true
 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
 [tool.bandit]
 exclude_dirs = [
     "env",
