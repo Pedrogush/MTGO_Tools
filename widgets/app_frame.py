@@ -30,7 +30,6 @@ from utils.stylize import stylize_textctrl
 from widgets.buttons.deck_action_buttons import DeckActionButtons
 from widgets.buttons.toolbar_buttons import ToolbarButtons
 from widgets.deck_results_list import DeckResultsList
-from widgets.dialogs.feedback_dialog import show_feedback_dialog
 from widgets.dialogs.image_download_dialog import show_image_download_dialog
 from widgets.handlers.app_event_handlers import AppEventHandlers
 from widgets.handlers.card_table_panel_handler import CardTablePanelHandler
