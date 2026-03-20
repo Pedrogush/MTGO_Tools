@@ -9,7 +9,9 @@ import wx
 from loguru import logger
 
 from utils.card_data import CardDataManager
+from utils.constants import LOGS_DIR
 from utils.ui_helpers import open_child_window, widget_exists
+from widgets.dialogs.feedback_dialog import show_feedback_dialog
 from widgets.identify_opponent import MTGOpponentDeckSpy
 from widgets.match_history import MatchHistoryFrame
 from widgets.metagame_analysis import MetagameAnalysisFrame
@@ -587,6 +589,14 @@ class AppEventHandlers:
             MetagameAnalysisFrame,
             "Metagame Analysis",
             self._handle_child_close,
+        )
+
+    def _open_feedback_dialog(self) -> None:
+        show_feedback_dialog(
+            self,
+            LOGS_DIR,
+            event_logging_enabled=self.controller.get_event_logging_enabled(),
+            on_event_logging_changed=self.controller.set_event_logging_enabled,
         )
 
     def _handle_child_close(self, event: wx.CloseEvent, attr: str) -> None:

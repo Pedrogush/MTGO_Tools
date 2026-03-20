@@ -245,6 +245,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
                 self, self.image_cache, self.image_downloader, self._set_status
             ),
             on_update_card_database=lambda: self.controller.force_bulk_data_update(),
+            on_export_diagnostics=self._open_feedback_dialog,
             labels={
                 "opponent_tracker": self._t("toolbar.opponent_tracker"),
                 "timer_alert": self._t("toolbar.timer_alert"),
@@ -253,6 +254,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
                 "load_collection": self._t("toolbar.load_collection"),
                 "download_card_images": self._t("toolbar.download_card_images"),
                 "update_card_database": self._t("toolbar.update_card_database"),
+                "export_diagnostics": self._t("toolbar.export_diagnostics"),
             },
         )
 

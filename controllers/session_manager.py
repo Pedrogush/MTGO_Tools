@@ -74,6 +74,13 @@ class DeckSelectorSessionManager:
         valid_language = language if language in SUPPORTED_LOCALES else DEFAULT_LOCALE
         self.settings["language"] = valid_language
 
+    def get_event_logging_enabled(self, default: bool = False) -> bool:
+        value = self.settings.get("event_logging_enabled", default)
+        return bool(value)
+
+    def update_event_logging_enabled(self, enabled: bool) -> None:
+        self.settings["event_logging_enabled"] = bool(enabled)
+
     def ensure_deck_save_dir(self) -> Path:
         """Resolve the deck save directory from config, creating it if needed."""
         raw_path = self.config.get("deck_selector_save_path") or self.default_deck_dir
