@@ -28,6 +28,7 @@ class SideboardGuidePanel(wx.Panel):
         on_edit_exclusions: Callable[[], None],
         on_export_csv: Callable[[], None],
         on_import_csv: Callable[[], None],
+        on_pin_guide: Callable[[], None] | None = None,
     ):
         """
         Initialize the sideboard guide panel.
@@ -40,6 +41,7 @@ class SideboardGuidePanel(wx.Panel):
             on_edit_exclusions: Callback for editing archetype exclusions
             on_export_csv: Callback for exporting guide to CSV
             on_import_csv: Callback for importing guide from CSV
+            on_pin_guide: Callback for pinning the current deck's guide for the opponent tracker
         """
         super().__init__(parent)
         self.SetBackgroundColour(DARK_PANEL)
@@ -50,6 +52,7 @@ class SideboardGuidePanel(wx.Panel):
         self.on_edit_exclusions = on_edit_exclusions
         self.on_export_csv = on_export_csv
         self.on_import_csv = on_import_csv
+        self.on_pin_guide = on_pin_guide
 
         self.entries: list[dict[str, str]] = []
         self.exclusions: list[str] = []
@@ -105,9 +108,19 @@ class SideboardGuidePanel(wx.Panel):
         self.import_btn = wx.Button(self, label="Import CSV")
         stylize_button(self.import_btn)
         self.import_btn.Bind(wx.EVT_BUTTON, self._on_import_clicked)
-        buttons.Add(self.import_btn, 0)
+        buttons.Add(self.import_btn, 0, wx.RIGHT, 6)
 
         buttons.AddStretchSpacer(1)
+
+        self.pin_btn = wx.Button(self, label="Pin for Tracker")
+        stylize_button(self.pin_btn)
+        self.pin_btn.SetToolTip(
+            "Pin this deck's sideboard guide so the Opponent Tracker can look up matchup plans automatically."
+        )
+        self.pin_btn.Bind(wx.EVT_BUTTON, self._on_pin_clicked)
+        if self.on_pin_guide is None:
+            self.pin_btn.Disable()
+        buttons.Add(self.pin_btn, 0)
 
         # Exclusions label
         self.exclusions_label = wx.StaticText(self, label="Exclusions: —")
@@ -250,3 +263,20 @@ class SideboardGuidePanel(wx.Panel):
     def _on_import_clicked(self, _event: wx.Event) -> None:
         """Handle Import CSV button click."""
         self.on_import_csv()
+
+    def _on_pin_clicked(self, _event: wx.Event) -> None:
+        """Handle Pin for Tracker button click."""
+        if self.on_pin_guide:
+            self.on_pin_guide()
+
+    def set_pinned(self, pinned: bool) -> None:
+        """
+        Update the pin button label to reflect current pinned state.
+
+        Args:
+            pinned: True if this deck's guide is currently pinned
+        """
+        if pinned:
+            self.pin_btn.SetLabel("Pinned \u2713")
+        else:
+            self.pin_btn.SetLabel("Pin for Tracker")

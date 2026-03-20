@@ -64,7 +64,13 @@ from utils.constants.search import (
     DEFAULT_SUGGESTION_LIMIT,
     MIN_PARTIAL_NAME_LENGTH,
 )
-from utils.constants.storage import CARD_INSPECTOR_LOG, GUIDE_STORE, NOTES_STORE, OUTBOARD_STORE
+from utils.constants.storage import (
+    ACTIVE_GUIDE_FILE,
+    CARD_INSPECTOR_LOG,
+    GUIDE_STORE,
+    NOTES_STORE,
+    OUTBOARD_STORE,
+)
 from utils.constants.timing import (
     ATOMIC_DATA_DOWNLOAD_TIMEOUT_SECONDS,
     ATOMIC_DATA_HEAD_TIMEOUT_SECONDS,
@@ -205,6 +211,7 @@ __all__ = [
     "ARCHETYPE_LIST_CACHE_FILE",
     "ARCHETYPE_DECKS_CACHE_FILE",
     "ensure_base_dirs",
+    "ACTIVE_GUIDE_FILE",
     "CARD_INSPECTOR_LOG",
     "GUIDE_STORE",
     "NOTES_STORE",

@@ -28,6 +28,7 @@ from services.radar_service import RadarData, RadarService, get_radar_service
 from utils.archetype_resolver import find_archetype_by_name
 from utils.atomic_io import atomic_write_json, locked_path
 from utils.constants import (
+    ACTIVE_GUIDE_FILE,
     CONFIG_DIR,
     DARK_BG,
     DARK_PANEL,
@@ -35,6 +36,7 @@ from utils.constants import (
     DECK_MONITOR_CONFIG_FILE,
     FORMAT_OPTIONS,
     GOLDFISH,
+    GUIDE_STORE,
     LIGHT_TEXT,
     MTGGOLDFISH_REQUEST_TIMEOUT_SECONDS,
     OPPONENT_TRACKER_CACHE_TTL_SECONDS,
@@ -48,6 +50,7 @@ from utils.constants import (
 from utils.find_opponent_names import find_opponent_names
 from utils.math_utils import hypergeometric_at_least, hypergeometric_probability
 from widgets.panels.compact_radar_panel import CompactRadarPanel
+from widgets.panels.compact_sideboard_panel import CompactSideboardPanel
 
 LEGACY_DECK_MONITOR_CONFIG = Path("deck_monitor_config.json")
 LEGACY_DECK_MONITOR_CACHE = Path("deck_monitor_cache.json")
@@ -147,6 +150,10 @@ class MTGOpponentDeckSpy(wx.Frame):
         self._last_radar_archetype: str = ""
         self._radar_visible: bool = False
 
+        # Sideboard guide integration
+        self._guide_visible: bool = False
+        self._last_guide_archetype: str = ""
+
         self._load_cache()
         self._load_config()
 
@@ -207,6 +214,11 @@ class MTGOpponentDeckSpy(wx.Frame):
         self.radar_toggle_btn.Bind(wx.EVT_BUTTON, self._toggle_radar_panel)
         controls.Add(self.radar_toggle_btn, 0, wx.RIGHT, OPPONENT_TRACKER_SECTION_PADDING)
 
+        self.guide_toggle_btn = wx.Button(panel, label="Guide")
+        self._stylize_secondary_button(self.guide_toggle_btn)
+        self.guide_toggle_btn.Bind(wx.EVT_BUTTON, self._toggle_guide_panel)
+        controls.Add(self.guide_toggle_btn, 0, wx.RIGHT, OPPONENT_TRACKER_SECTION_PADDING)
+
         close_button = wx.Button(panel, label="Close")
         self._stylize_secondary_button(close_button)
         close_button.Bind(wx.EVT_BUTTON, lambda _evt: self.Close())
@@ -219,6 +231,15 @@ class MTGOpponentDeckSpy(wx.Frame):
         self.radar_panel = CompactRadarPanel(panel)
         sizer.Add(
             self.radar_panel,
+            1,
+            wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND,
+            OPPONENT_TRACKER_SECTION_PADDING,
+        )
+
+        # Sideboard Guide Panel (initially hidden)
+        self.sideboard_panel = CompactSideboardPanel(panel)
+        sizer.Add(
+            self.sideboard_panel,
             1,
             wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND,
             OPPONENT_TRACKER_SECTION_PADDING,
@@ -383,6 +404,95 @@ class MTGOpponentDeckSpy(wx.Frame):
             self.radar_toggle_btn.SetLabel("Radar")
         self.Layout()
         self.Fit()
+
+    def _toggle_guide_panel(self, _event: wx.CommandEvent | None = None) -> None:
+        """Toggle sideboard guide panel visibility."""
+        self._guide_visible = not self._guide_visible
+        if self._guide_visible:
+            self.sideboard_panel.Show()
+            self.guide_toggle_btn.SetLabel("Hide Guide")
+            # Load guide if we have an opponent archetype
+            if self.last_seen_decks:
+                self._update_guide_display()
+            else:
+                self.sideboard_panel.set_no_pinned_deck()
+        else:
+            self.sideboard_panel.Hide()
+            self.guide_toggle_btn.SetLabel("Guide")
+        self.Layout()
+        self.Fit()
+
+    def _update_guide_display(self) -> None:
+        """Look up the current opponent archetype in the pinned guide and update the panel."""
+        if not self.last_seen_decks:
+            self.sideboard_panel.clear()
+            return
+
+        _format_name, archetype_name = next(iter(self.last_seen_decks.items()))
+        if not archetype_name or archetype_name == "Unknown":
+            self.sideboard_panel.clear()
+            return
+
+        # Load pinned guide
+        if not ACTIVE_GUIDE_FILE.exists():
+            self.sideboard_panel.set_no_pinned_deck()
+            return
+
+        try:
+            with ACTIVE_GUIDE_FILE.open("r", encoding="utf-8") as fh:
+                active = json.load(fh)
+        except Exception as exc:
+            logger.warning(f"Failed to read active guide file: {exc}")
+            self.sideboard_panel.set_no_pinned_deck()
+            return
+
+        deck_hash = active.get("deck_hash", "")
+        if not deck_hash:
+            self.sideboard_panel.set_no_pinned_deck()
+            return
+
+        # Load guide store
+        try:
+            if GUIDE_STORE.exists():
+                with GUIDE_STORE.open("r", encoding="utf-8") as fh:
+                    guide_store = json.load(fh)
+            else:
+                guide_store = {}
+        except Exception as exc:
+            logger.warning(f"Failed to read guide store: {exc}")
+            guide_store = {}
+
+        payload = guide_store.get(deck_hash) or {}
+        entries: list[dict] = payload.get("entries", [])
+        exclusions: list[str] = payload.get("exclusions", [])
+
+        if not entries:
+            self.sideboard_panel.set_no_guide(archetype_name)
+            return
+
+        # Find matching entry (case-insensitive substring match)
+        archetype_lower = archetype_name.lower()
+        match = None
+        for entry in entries:
+            entry_arch = entry.get("archetype", "")
+            if entry_arch in exclusions:
+                continue
+            if entry_arch.lower() == archetype_lower:
+                match = entry
+                break
+        if match is None:
+            for entry in entries:
+                entry_arch = entry.get("archetype", "")
+                if entry_arch in exclusions:
+                    continue
+                if archetype_lower in entry_arch.lower() or entry_arch.lower() in archetype_lower:
+                    match = entry
+                    break
+
+        if match is None:
+            self.sideboard_panel.set_no_guide(archetype_name)
+        else:
+            self.sideboard_panel.display_entry(match, archetype_name)
 
     def _apply_preset(self, deck_size: int, cards_drawn: int) -> None:
         """Apply a preset to the calculator inputs and run calculation."""
@@ -560,6 +670,8 @@ class MTGOpponentDeckSpy(wx.Frame):
         self.current_radar = None
         self._last_radar_archetype = ""
         self.radar_panel.clear()
+        self._last_guide_archetype = ""
+        self.sideboard_panel.clear()
 
     # ------------------------------------------------------------------ Event handlers -------------------------------------------------------
     def _manual_refresh(self, force: bool = False) -> None:
@@ -608,6 +720,8 @@ class MTGOpponentDeckSpy(wx.Frame):
             # Trigger radar loading after successful deck lookup
             if self.last_seen_decks:
                 wx.CallAfter(self._trigger_radar_load)
+                if self._guide_visible:
+                    wx.CallAfter(self._update_guide_display)
 
         self.status_label.SetLabel(f"Match detected: vs {self.player_name}")
         self.status_label.Wrap(320)
@@ -673,6 +787,7 @@ class MTGOpponentDeckSpy(wx.Frame):
             "screen_pos": position,
             "calculator_visible": self._calculator_visible,
             "radar_visible": self._radar_visible,
+            "guide_visible": self._guide_visible,
         }
         try:
             atomic_write_json(DECK_MONITOR_CONFIG_FILE, config, indent=4)
@@ -706,6 +821,7 @@ class MTGOpponentDeckSpy(wx.Frame):
         self._saved_position = data.get("screen_pos")
         self._calculator_visible = data.get("calculator_visible", False)
         self._radar_visible = data.get("radar_visible", False)
+        self._guide_visible = data.get("guide_visible", False)
 
     def _save_cache(self) -> None:
         payload = {"entries": self.cache}
@@ -759,6 +875,12 @@ class MTGOpponentDeckSpy(wx.Frame):
         if getattr(self, "_radar_visible", False):
             self.radar_panel.Show()
             self.radar_toggle_btn.SetLabel("Hide Radar")
+            self.Layout()
+            self.Fit()
+        # Restore guide panel visibility
+        if getattr(self, "_guide_visible", False):
+            self.sideboard_panel.Show()
+            self.guide_toggle_btn.SetLabel("Hide Guide")
             self.Layout()
             self.Fit()
 
