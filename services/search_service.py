@@ -269,10 +269,18 @@ class SearchService:
         return matches_color_filter(card_colors, colors, mode)
 
     def _get_card_colors_for_filter(self, card: dict[str, Any]) -> list[str]:
-        """Return the colors to use for color filtering, treating lands as colorless."""
+        """Return the colors to use for color filtering.
+
+        Most lands are treated as colorless. However, lands that have actual
+        card colors in their mtgjson entry (e.g. Dryad Arbor, which is a green
+        Forest Land creature with colors=["G"]) retain those colors.
+        """
         type_line = (card.get("type_line") or card.get("type") or "").lower()
         if "land" in type_line:
-            return []
+            card_colors = card.get("colors", [])
+            if isinstance(card_colors, str):
+                card_colors = list(card_colors)
+            return card_colors
         card_colors = card.get("colors", []) or card.get("color_identity", [])
         if isinstance(card_colors, str):
             card_colors = list(card_colors)

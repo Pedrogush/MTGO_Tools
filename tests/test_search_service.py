@@ -533,12 +533,14 @@ def test_matches_text_filter_no_text():
 # ============= Land Colorless Tests =============
 
 
-def create_mock_land(name="Forest", color_identity=None, type_line="Basic Land — Forest"):
+def create_mock_land(
+    name="Forest", colors=None, color_identity=None, type_line="Basic Land — Forest"
+):
     """Helper to create a mock land card."""
     return {
         "name": name,
         "name_lower": name.lower(),
-        "colors": [],
+        "colors": colors or [],
         "color_identity": color_identity or ["G"],
         "type_line": type_line,
         "mana_cost": "",
@@ -550,11 +552,11 @@ def create_mock_land(name="Forest", color_identity=None, type_line="Basic Land �
 
 
 def test_lands_treated_as_colorless_in_color_filter():
-    """Lands should be treated as colorless regardless of color_identity."""
+    """Lands with no card colors (colors=[]) are treated as colorless."""
     mock_repo = SimpleNamespace()
     service = SearchService(card_repository=mock_repo)
 
-    forest = create_mock_land(name="Forest", color_identity=["G"])
+    forest = create_mock_land(name="Forest", colors=[], color_identity=["G"])
 
     # Forest should NOT match a green color filter
     assert service._matches_color_filter(forest, ["G"], "At least") is False
@@ -566,6 +568,30 @@ def test_lands_treated_as_colorless_in_color_filter():
 
     # Forest should pass "Not these" for any color (it's colorless)
     assert service._matches_color_filter(forest, ["G", "U", "R"], "Not these") is True
+
+
+def test_dryad_arbor_treated_as_green_in_color_filter():
+    """Dryad Arbor is a green land (colors=["G"]) and should be treated as green, not colorless."""
+    mock_repo = SimpleNamespace()
+    service = SearchService(card_repository=mock_repo)
+
+    dryad_arbor = create_mock_land(
+        name="Dryad Arbor",
+        colors=["G"],
+        color_identity=["G"],
+        type_line="Land Creature — Forest Dryad",
+    )
+
+    # Dryad Arbor SHOULD match a green color filter
+    assert service._matches_color_filter(dryad_arbor, ["G"], "At least") is True
+    assert service._matches_color_filter(dryad_arbor, ["G"], "Exactly") is True
+
+    # Dryad Arbor should NOT match a colorless filter
+    assert service._matches_color_filter(dryad_arbor, ["C"], "At least") is False
+    assert service._matches_color_filter(dryad_arbor, ["C"], "Exactly") is False
+
+    # Dryad Arbor should NOT pass "Not these" when green is excluded
+    assert service._matches_color_filter(dryad_arbor, ["G"], "Not these") is False
 
 
 def test_filter_cards_lands_excluded_from_color_filter():
