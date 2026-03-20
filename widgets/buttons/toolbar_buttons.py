@@ -22,6 +22,7 @@ class ToolbarButtons(wx.Panel):
         on_load_collection: Callable[[], None] | None = None,
         on_download_card_images: Callable[[], None] | None = None,
         on_update_card_database: Callable[[], None] | None = None,
+        on_export_diagnostics: Callable[[], None] | None = None,
         labels: dict[str, str] | None = None,
     ):
         """
@@ -36,6 +37,7 @@ class ToolbarButtons(wx.Panel):
             on_load_collection: Callback for "Load Collection"
             on_download_card_images: Callback for "Download Card Images"
             on_update_card_database: Callback for "Update Card Database"
+            on_export_diagnostics: Callback for "Export Diagnostics"
         """
         super().__init__(parent)
         labels = labels or {}
@@ -63,6 +65,9 @@ class ToolbarButtons(wx.Panel):
         )
         self.update_database_button = self._add_button(
             labels.get("update_card_database", "Update Card Database"), on_update_card_database
+        )
+        self.export_diagnostics_button = self._add_button(
+            labels.get("export_diagnostics", "Export Diagnostics"), on_export_diagnostics
         )
 
         self._button_row.AddStretchSpacer(1)

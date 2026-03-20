@@ -30,6 +30,7 @@ from utils.stylize import stylize_textctrl
 from widgets.buttons.deck_action_buttons import DeckActionButtons
 from widgets.buttons.toolbar_buttons import ToolbarButtons
 from widgets.deck_results_list import DeckResultsList
+from widgets.dialogs.feedback_dialog import show_feedback_dialog
 from widgets.dialogs.image_download_dialog import show_image_download_dialog
 from widgets.handlers.app_event_handlers import AppEventHandlers
 from widgets.handlers.card_table_panel_handler import CardTablePanelHandler
@@ -245,6 +246,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
                 self, self.image_cache, self.image_downloader, self._set_status
             ),
             on_update_card_database=lambda: self.controller.force_bulk_data_update(),
+            on_export_diagnostics=self._open_feedback_dialog,
             labels={
                 "opponent_tracker": self._t("toolbar.opponent_tracker"),
                 "timer_alert": self._t("toolbar.timer_alert"),
@@ -253,6 +255,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
                 "load_collection": self._t("toolbar.load_collection"),
                 "download_card_images": self._t("toolbar.download_card_images"),
                 "update_card_database": self._t("toolbar.update_card_database"),
+                "export_diagnostics": self._t("toolbar.export_diagnostics"),
             },
         )
 

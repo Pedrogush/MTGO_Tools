@@ -39,12 +39,14 @@ from utils.card_data import CardDataManager
 from utils.constants import (
     COLLECTION_CACHE_MAX_AGE_SECONDS,
     GUIDE_STORE,
+    LOGS_DIR,
     MTGO_BRIDGE_SHUTDOWN_TIMEOUT_SECONDS,
     MTGO_DECKLISTS_ENABLED,
     NOTES_STORE,
     OUTBOARD_STORE,
     ensure_base_dirs,
 )
+from utils.diagnostics import EventLogger
 from utils.i18n import normalize_locale
 
 
@@ -89,6 +91,12 @@ class AppController:
 
         # Deck data source preference
         self._deck_data_source = self.session_manager.get_deck_data_source()
+
+        # Event logger (opt-in, local-only)
+        self.event_logger = EventLogger(
+            LOGS_DIR,
+            enabled=self.session_manager.get_event_logging_enabled(),
+        )
 
         # Config-backed deck save directory
         self.deck_save_dir = self.session_manager.ensure_deck_save_dir()
@@ -415,6 +423,13 @@ class AppController:
             return
         self.current_language = normalized
         self.session_manager.update_language(normalized)
+
+    def get_event_logging_enabled(self) -> bool:
+        return self.event_logger.enabled
+
+    def set_event_logging_enabled(self, enabled: bool) -> None:
+        self.event_logger.enabled = enabled
+        self.session_manager.update_event_logging_enabled(enabled)
 
     # ============= Business Logic Methods =============
 
