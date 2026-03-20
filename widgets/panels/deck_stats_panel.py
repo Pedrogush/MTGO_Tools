@@ -1,7 +1,8 @@
 """
 Deck Stats Panel - Displays deck statistics, mana curve, and color distribution.
 
-Shows summary statistics, mana curve breakdown, and color concentration analysis.
+Shows summary statistics, mana curve breakdown, color concentration, type counts,
+and opening-hand land probability analysis.
 """
 
 from collections import Counter
@@ -12,7 +13,19 @@ import wx.dataview as dv
 
 from services.deck_service import DeckService, get_deck_service
 from utils.card_data import CardDataManager
-from utils.constants import DARK_ALT, DARK_PANEL, LIGHT_TEXT
+from utils.constants import DARK_ALT, DARK_PANEL, LIGHT_TEXT, SUBDUED_TEXT
+from utils.math_utils import hypergeometric_at_least
+
+_CARD_TYPES = [
+    "Land",
+    "Creature",
+    "Instant",
+    "Sorcery",
+    "Enchantment",
+    "Artifact",
+    "Planeswalker",
+    "Battle",
+]
 
 
 class DeckStatsPanel(wx.Panel):
@@ -51,7 +64,7 @@ class DeckStatsPanel(wx.Panel):
         self.summary_label.SetForegroundColour(LIGHT_TEXT)
         sizer.Add(self.summary_label, 0, wx.ALL, 6)
 
-        # Split view for curve and color charts
+        # Split view for curve, color, and type charts
         split = wx.BoxSizer(wx.HORIZONTAL)
         sizer.Add(split, 1, wx.EXPAND | wx.ALL, 6)
 
@@ -69,7 +82,20 @@ class DeckStatsPanel(wx.Panel):
         self.color_list.AppendTextColumn("Share", width=100)
         self.color_list.SetBackgroundColour(DARK_ALT)
         self.color_list.SetForegroundColour(LIGHT_TEXT)
-        split.Add(self.color_list, 0)
+        split.Add(self.color_list, 0, wx.RIGHT, 12)
+
+        # Type counts list
+        self.type_list = dv.DataViewListCtrl(self)
+        self.type_list.AppendTextColumn("Type", width=120)
+        self.type_list.AppendTextColumn("Count", width=80)
+        self.type_list.SetBackgroundColour(DARK_ALT)
+        self.type_list.SetForegroundColour(LIGHT_TEXT)
+        split.Add(self.type_list, 0)
+
+        # Hand/land probability label
+        self.hand_land_label = wx.StaticText(self, label="")
+        self.hand_land_label.SetForegroundColour(SUBDUED_TEXT)
+        sizer.Add(self.hand_land_label, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 6)
 
     # ============= Public API =============
 
@@ -87,6 +113,8 @@ class DeckStatsPanel(wx.Panel):
             self.summary_label.SetLabel("No deck loaded.")
             self.curve_list.DeleteAllItems()
             self.color_list.DeleteAllItems()
+            self.type_list.DeleteAllItems()
+            self.hand_land_label.SetLabel("")
             return
 
         # Analyze deck
@@ -103,6 +131,8 @@ class DeckStatsPanel(wx.Panel):
         # Render charts
         self._render_curve()
         self._render_color_concentration()
+        self._render_type_counts()
+        self._render_hand_land_pct(stats["mainboard_count"], stats["estimated_lands"])
 
     def set_card_manager(self, card_manager: CardDataManager) -> None:
         """Set the card data manager for metadata lookups."""
@@ -113,6 +143,8 @@ class DeckStatsPanel(wx.Panel):
         self.summary_label.SetLabel("No deck loaded.")
         self.curve_list.DeleteAllItems()
         self.color_list.DeleteAllItems()
+        self.type_list.DeleteAllItems()
+        self.hand_land_label.SetLabel("")
 
     # ============= Private Methods =============
 
@@ -130,7 +162,7 @@ class DeckStatsPanel(wx.Panel):
             mana_value = meta.get("mana_value") if meta else None
 
             # Bucket the mana value
-            if isinstance(mana_value, (int, float)):
+            if isinstance(mana_value, int | float):
                 value = int(mana_value)
                 bucket = "7+" if value >= 7 else str(value)
             else:
@@ -196,3 +228,49 @@ class DeckStatsPanel(wx.Panel):
             percentage = (count / grand_total) * 100
             share = f"{count} ({percentage:.1f}%)"
             self.color_list.AppendItem([name, share])
+
+    def _render_type_counts(self) -> None:
+        """Render card type counts for the mainboard."""
+        self.type_list.DeleteAllItems()
+
+        counts: Counter[str] = Counter()
+        for entry in self.zone_cards.get("main", []):
+            type_line = ""
+            if self.card_manager:
+                meta = self.card_manager.get_card(entry["name"])
+                type_line = (meta.get("type_line") or "") if meta else ""
+
+            matched = False
+            for card_type in _CARD_TYPES:
+                if card_type.lower() in type_line.lower():
+                    counts[card_type] += entry["qty"]
+                    matched = True
+            if not matched:
+                counts["Other"] += entry["qty"]
+
+        # Show types in display order, omit zero-count types
+        display_order = _CARD_TYPES + ["Other"]
+        for card_type in display_order:
+            if counts[card_type]:
+                self.type_list.AppendItem([card_type, str(counts[card_type])])
+
+    def _render_hand_land_pct(self, deck_size: int, land_count: int) -> None:
+        """Render opening-hand land probability label."""
+        if deck_size <= 0 or land_count <= 0:
+            self.hand_land_label.SetLabel("")
+            return
+
+        parts = []
+        for target in (2, 3, 4):
+            if target > land_count:
+                break
+            try:
+                pct = hypergeometric_at_least(deck_size, land_count, 7, target) * 100
+                parts.append(f"≥{target} lands: {pct:.1f}%")
+            except ValueError:
+                break
+
+        if parts:
+            self.hand_land_label.SetLabel("Opening hand (7 cards) — " + "  |  ".join(parts))
+        else:
+            self.hand_land_label.SetLabel("")
