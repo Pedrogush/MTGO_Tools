@@ -9,11 +9,10 @@ from collections import Counter
 from typing import Any
 
 import wx
-import wx.dataview as dv
 
 from services.deck_service import DeckService, get_deck_service
 from utils.card_data import CardDataManager
-from utils.constants import DARK_ALT, DARK_PANEL, LIGHT_TEXT, SUBDUED_TEXT
+from utils.constants import DARK_ACCENT, DARK_ALT, DARK_PANEL, LIGHT_TEXT, SUBDUED_TEXT
 from utils.math_utils import hypergeometric_at_least
 
 _CARD_TYPES = [
@@ -26,6 +25,125 @@ _CARD_TYPES = [
     "Planeswalker",
     "Battle",
 ]
+
+# MTG color identity → (display name, bar colour)
+_COLOR_MAP: dict[str, tuple[str, tuple[int, int, int]]] = {
+    "W": ("White", (220, 210, 170)),
+    "U": ("Blue", (59, 130, 246)),
+    "B": ("Black", (140, 120, 160)),
+    "R": ("Red", (210, 70, 50)),
+    "G": ("Green", (60, 160, 70)),
+    "C": ("Colorless", (160, 150, 130)),
+    "Colorless": ("Colorless", (160, 150, 130)),
+}
+
+_ROW_H = 22
+_LABEL_W = 90
+_VALUE_W = 60
+_BAR_PAD = 6
+_TITLE_H = 22
+
+
+class BarChartPanel(wx.Panel):
+    """Custom panel that draws a horizontal bar chart."""
+
+    def __init__(self, parent: wx.Window, title: str = "") -> None:
+        super().__init__(parent)
+        self.SetBackgroundColour(wx.Colour(*DARK_ALT))
+        self._title = title
+        # list of (label, display_value, raw_value, bar_colour)
+        self._items: list[tuple[str, str, int, tuple[int, int, int]]] = []
+        self.Bind(wx.EVT_PAINT, self._on_paint)
+        self.Bind(wx.EVT_SIZE, self._on_size)
+
+    def set_data(
+        self,
+        items: list[tuple[str, str, int]],
+        bar_colour: tuple[int, int, int] = DARK_ACCENT,
+        per_item_colours: list[tuple[int, int, int]] | None = None,
+    ) -> None:
+        """Set chart data and trigger a repaint.
+
+        Args:
+            items: List of (label, display_value, raw_value) tuples.
+            bar_colour: Default bar colour for all items.
+            per_item_colours: Optional per-item override colours.
+        """
+        self._items = [
+            (
+                label,
+                display_val,
+                raw_val,
+                per_item_colours[i] if per_item_colours else bar_colour,
+            )
+            for i, (label, display_val, raw_val) in enumerate(items)
+        ]
+        min_h = _TITLE_H + len(self._items) * _ROW_H + _BAR_PAD * 2
+        self.SetMinSize((-1, min_h))
+        self.Refresh()
+
+    def clear(self) -> None:
+        self._items = []
+        self.Refresh()
+
+    # ---- drawing ----
+
+    def _on_size(self, _evt: wx.SizeEvent) -> None:
+        self.Refresh()
+
+    def _on_paint(self, _evt: wx.PaintEvent) -> None:
+        dc = wx.BufferedPaintDC(self)
+        self._draw(dc)
+
+    def _draw(self, dc: wx.DC) -> None:
+        w, h = self.GetClientSize()
+        if w <= 0 or h <= 0:
+            return
+
+        dc.SetBackground(wx.Brush(wx.Colour(*DARK_ALT)))
+        dc.Clear()
+
+        # Title
+        y = 4
+        if self._title:
+            dc.SetTextForeground(wx.Colour(*SUBDUED_TEXT))
+            dc.SetFont(wx.Font(8, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+            dc.DrawText(self._title, _BAR_PAD, y)
+            y += _TITLE_H
+
+        if not self._items:
+            return
+
+        max_val = max(raw for _, _, raw, _ in self._items) or 1
+        bar_area_w = max(w - _LABEL_W - _VALUE_W - _BAR_PAD * 3, 20)
+
+        dc.SetFont(wx.Font(9, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+
+        for label, display_val, raw_val, colour in self._items:
+            bar_w = int(bar_area_w * raw_val / max_val)
+
+            # Row background (subtle alternation already from panel bg)
+            row_y = y + (_ROW_H - 14) // 2
+
+            # Label
+            dc.SetTextForeground(wx.Colour(*LIGHT_TEXT))
+            lbl_tw, _ = dc.GetTextExtent(label)
+            lbl_x = _LABEL_W - lbl_tw - _BAR_PAD
+            dc.DrawText(label, max(lbl_x, 0), row_y)
+
+            # Bar
+            bar_x = _LABEL_W + _BAR_PAD
+            bar_y = y + (_ROW_H - 12) // 2
+            dc.SetBrush(wx.Brush(wx.Colour(*colour)))
+            dc.SetPen(wx.TRANSPARENT_PEN)
+            if bar_w > 0:
+                dc.DrawRoundedRectangle(bar_x, bar_y, bar_w, 12, 3)
+
+            # Value
+            dc.SetTextForeground(wx.Colour(*SUBDUED_TEXT))
+            dc.DrawText(display_val, bar_x + bar_area_w + _BAR_PAD, row_y)
+
+            y += _ROW_H
 
 
 class DeckStatsPanel(wx.Panel):
@@ -68,29 +186,17 @@ class DeckStatsPanel(wx.Panel):
         split = wx.BoxSizer(wx.HORIZONTAL)
         sizer.Add(split, 1, wx.EXPAND | wx.ALL, 6)
 
-        # Mana curve list
-        self.curve_list = dv.DataViewListCtrl(self)
-        self.curve_list.AppendTextColumn("CMC", width=80)
-        self.curve_list.AppendTextColumn("Count", width=80)
-        self.curve_list.SetBackgroundColour(DARK_ALT)
-        self.curve_list.SetForegroundColour(LIGHT_TEXT)
-        split.Add(self.curve_list, 1, wx.RIGHT | wx.EXPAND, 12)
+        # Mana curve bar chart
+        self.curve_chart = BarChartPanel(self, title="Mana Curve")
+        split.Add(self.curve_chart, 1, wx.RIGHT | wx.EXPAND, 12)
 
-        # Color concentration list
-        self.color_list = dv.DataViewListCtrl(self)
-        self.color_list.AppendTextColumn("Color", width=100)
-        self.color_list.AppendTextColumn("Share", width=90)
-        self.color_list.SetBackgroundColour(DARK_ALT)
-        self.color_list.SetForegroundColour(LIGHT_TEXT)
-        split.Add(self.color_list, 1, wx.RIGHT | wx.EXPAND, 12)
+        # Color concentration bar chart
+        self.color_chart = BarChartPanel(self, title="Color Share")
+        split.Add(self.color_chart, 1, wx.RIGHT | wx.EXPAND, 12)
 
-        # Type counts list
-        self.type_list = dv.DataViewListCtrl(self)
-        self.type_list.AppendTextColumn("Type", width=120)
-        self.type_list.AppendTextColumn("Count", width=80)
-        self.type_list.SetBackgroundColour(DARK_ALT)
-        self.type_list.SetForegroundColour(LIGHT_TEXT)
-        split.Add(self.type_list, 1, wx.EXPAND)
+        # Type counts bar chart
+        self.type_chart = BarChartPanel(self, title="Card Types")
+        split.Add(self.type_chart, 1, wx.EXPAND)
 
         # Hand/land probability label
         self.hand_land_label = wx.StaticText(self, label="")
@@ -111,9 +217,9 @@ class DeckStatsPanel(wx.Panel):
 
         if not deck_text.strip():
             self.summary_label.SetLabel("No deck loaded.")
-            self.curve_list.DeleteAllItems()
-            self.color_list.DeleteAllItems()
-            self.type_list.DeleteAllItems()
+            self.curve_chart.clear()
+            self.color_chart.clear()
+            self.type_chart.clear()
             self.hand_land_label.SetLabel("")
             return
 
@@ -148,9 +254,9 @@ class DeckStatsPanel(wx.Panel):
     def clear(self) -> None:
         """Clear all statistics."""
         self.summary_label.SetLabel("No deck loaded.")
-        self.curve_list.DeleteAllItems()
-        self.color_list.DeleteAllItems()
-        self.type_list.DeleteAllItems()
+        self.curve_chart.clear()
+        self.color_chart.clear()
+        self.type_chart.clear()
         self.hand_land_label.SetLabel("")
 
     # ============= Private Methods =============
@@ -175,19 +281,16 @@ class DeckStatsPanel(wx.Panel):
         return lands, mdfcs
 
     def _render_curve(self) -> None:
-        """Render the mana curve chart."""
-        self.curve_list.DeleteAllItems()
-
+        """Render the mana curve bar chart."""
         if not self.card_manager:
+            self.curve_chart.clear()
             return
 
-        # Count cards by mana value
         counts: Counter[str] = Counter()
         for entry in self.zone_cards.get("main", []):
             meta = self.card_manager.get_card(entry["name"])
             mana_value = meta.get("mana_value") if meta else None
 
-            # Bucket the mana value
             if isinstance(mana_value, int | float):
                 value = int(mana_value)
                 bucket = "7+" if value >= 7 else str(value)
@@ -196,7 +299,6 @@ class DeckStatsPanel(wx.Panel):
 
             counts[bucket] += entry["qty"]
 
-        # Sort buckets numerically
         def curve_key(bucket: str) -> int:
             if bucket == "X":
                 return 99
@@ -206,18 +308,18 @@ class DeckStatsPanel(wx.Panel):
                 return int(bucket)
             return 98
 
-        # Add to list
-        for bucket in sorted(counts.keys(), key=curve_key):
-            self.curve_list.AppendItem([bucket, str(counts[bucket])])
+        items = [
+            (bucket, str(counts[bucket]), counts[bucket])
+            for bucket in sorted(counts.keys(), key=curve_key)
+        ]
+        self.curve_chart.set_data(items, bar_colour=DARK_ACCENT)
 
     def _render_color_concentration(self) -> None:
-        """Render the color concentration chart."""
-        self.color_list.DeleteAllItems()
-
+        """Render the color concentration bar chart."""
         if not self.card_manager:
+            self.color_chart.clear()
             return
 
-        # Count cards by color identity
         totals: Counter[str] = Counter()
         for entry in self.zone_cards.get("main", []):
             meta = self.card_manager.get_card(entry["name"])
@@ -226,39 +328,29 @@ class DeckStatsPanel(wx.Panel):
             if not identity:
                 totals["Colorless"] += entry["qty"]
             else:
-                # Count each color separately
                 for color in identity:
                     totals[color] += entry["qty"]
 
-        # Calculate total for percentages
         grand_total = sum(totals.values())
         if grand_total == 0:
+            self.color_chart.clear()
             return
 
-        # Sort by count descending
         sorted_colors = sorted(totals.items(), key=lambda x: x[1], reverse=True)
 
-        # Color name mapping
-        color_names = {
-            "W": "White",
-            "U": "Blue",
-            "B": "Black",
-            "R": "Red",
-            "G": "Green",
-            "C": "Colorless",
-        }
-
-        # Add to list with percentages
+        items = []
+        colours = []
         for color, count in sorted_colors:
-            name = color_names.get(color, color)
+            name, bar_colour = _COLOR_MAP.get(color, (color, DARK_ACCENT))
             percentage = (count / grand_total) * 100
-            share = f"{count} ({percentage:.1f}%)"
-            self.color_list.AppendItem([name, share])
+            display = f"{count} ({percentage:.1f}%)"
+            items.append((name, display, count))
+            colours.append(bar_colour)
+
+        self.color_chart.set_data(items, per_item_colours=colours)
 
     def _render_type_counts(self) -> None:
-        """Render card type counts for the mainboard."""
-        self.type_list.DeleteAllItems()
-
+        """Render card type count bar chart for the mainboard."""
         counts: Counter[str] = Counter()
         for entry in self.zone_cards.get("main", []):
             type_line = ""
@@ -274,11 +366,13 @@ class DeckStatsPanel(wx.Panel):
             if not matched:
                 counts["Other"] += entry["qty"]
 
-        # Show types in display order, omit zero-count types
         display_order = _CARD_TYPES + ["Other"]
-        for card_type in display_order:
-            if counts[card_type]:
-                self.type_list.AppendItem([card_type, str(counts[card_type])])
+        items = [
+            (card_type, str(counts[card_type]), counts[card_type])
+            for card_type in display_order
+            if counts[card_type]
+        ]
+        self.type_chart.set_data(items, bar_colour=DARK_ACCENT)
 
     def _render_hand_land_pct(self, deck_size: int, land_count: int) -> None:
         """Render opening-hand land probability label."""
