@@ -495,18 +495,41 @@ def extract_cards_played(content: str, player_name: str) -> list[str]:
         List of unique card names
     """
     cards = set()
-    lines = content.split("\n")
 
     # Convert to display format for matching
     display_name = normalize_player_name(player_name, False)
 
-    for line in lines:
-        # Check if this player's action
-        if f"@P{player_name}" in line or f"@P{display_name}" in line:
-            # Extract cards in format @[Card Name@:id,instance:@]
-            card_matches = re.findall(r"@\[([^@]+)@:\d+,\d+:@\]", line)
-            for card in card_matches:
-                cards.add(card)
+    # The GameLog binary format uses non-newline binary bytes as record
+    # separators; the file may contain only a handful of actual '\n' characters
+    # across thousands of action records.  Splitting on '\n' produces huge
+    # multi-action chunks containing both players' actions, making it
+    # impossible to attribute cards to the correct player.
+    #
+    # Splitting on '@P' instead gives one segment per game action.  Each
+    # segment starts with the acting player's name, so a simple startswith()
+    # check unambiguously identifies who performed the action.
+    #
+    # Within each segment we use a verb whitelist to extract only the card
+    # that is the grammatical object of that verb (the player's own card).
+    # This avoids cross-contamination from patterns like:
+    #   "player is being attacked by @[Opponent's Creature]"
+    #   "player draws 3 cards with @[Opponent's Spell]"      (Burning Inquiry etc.)
+    #   "player casts @[Own Spell] targeting @[Opponent's Permanent]"
+    # In the last case the verb pattern captures only the spell, not the target.
+    _CARD_REF = r"@\[([^@]+)@:\d+,\d+:@\]"
+    _OWN_CARD_PATTERNS = [
+        re.compile(r"(?:plays|casts)\s+" + _CARD_REF),
+        re.compile(r"activates an ability of " + _CARD_REF),
+        re.compile(r"puts a triggered ability from " + _CARD_REF),
+        re.compile(r"(?:discards|cycles|reveals)\s+" + _CARD_REF),
+    ]
+
+    for segment in content.split("@P"):
+        if not (segment.startswith(player_name) or segment.startswith(display_name)):
+            continue
+        for pattern in _OWN_CARD_PATTERNS:
+            for m in pattern.finditer(segment):
+                cards.add(m.group(1))
 
     return sorted(cards)
 
