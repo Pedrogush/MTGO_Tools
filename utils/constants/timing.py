@@ -70,8 +70,14 @@ SCRYFALL_DOWNLOAD_CHUNK_SIZE = 8192  # byte chunk size when streaming downloaded
 SCRYFALL_DOWNLOAD_PROGRESS_INTERVAL = 100  # invoke progress callback every N completed cards
 
 # Card image download queue — retry and timing configuration
-IMAGE_DOWNLOAD_QUEUE_STOP_TIMEOUT_SECONDS = 2.0  # max seconds to wait for queue thread to join on stop
-IMAGE_DOWNLOAD_QUEUE_IDLE_WAIT_SECONDS = 0.5  # condition wait timeout when queue is empty or at capacity
+IMAGE_DOWNLOAD_QUEUE_STOP_TIMEOUT_SECONDS = (
+    2.0  # max seconds to wait for queue thread to join on stop
+)
+IMAGE_DOWNLOAD_QUEUE_IDLE_WAIT_SECONDS = (
+    0.5  # condition wait timeout when queue is empty or at capacity
+)
 IMAGE_DOWNLOAD_MAX_RETRIES = 5  # max retry attempts before giving up on a card image download
 IMAGE_DOWNLOAD_INITIAL_BACKOFF_SECONDS = 0.5  # initial backoff delay before first retry
-IMAGE_DOWNLOAD_SLOW_THRESHOLD_SECONDS = 1.5  # elapsed time above which a "successful" download is treated as failed
+IMAGE_DOWNLOAD_SLOW_THRESHOLD_SECONDS = (
+    1.5  # elapsed time above which a "successful" download is treated as failed
+)
