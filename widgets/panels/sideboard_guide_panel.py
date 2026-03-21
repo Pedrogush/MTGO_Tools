@@ -80,32 +80,32 @@ class SideboardGuidePanel(wx.Panel):
         buttons = wx.BoxSizer(wx.HORIZONTAL)
         sizer.Add(buttons, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 6)
 
-        self.add_btn = wx.Button(self, label="Add Entry")
+        self.add_btn = wx.Button(self, label="Add")
         stylize_button(self.add_btn)
         self.add_btn.Bind(wx.EVT_BUTTON, self._on_add_clicked)
         buttons.Add(self.add_btn, 0, wx.RIGHT, 6)
 
-        self.edit_btn = wx.Button(self, label="Edit Entry")
+        self.edit_btn = wx.Button(self, label="Edit")
         stylize_button(self.edit_btn)
         self.edit_btn.Bind(wx.EVT_BUTTON, self._on_edit_clicked)
         buttons.Add(self.edit_btn, 0, wx.RIGHT, 6)
 
-        self.remove_btn = wx.Button(self, label="Remove Entry")
+        self.remove_btn = wx.Button(self, label="Delete")
         stylize_button(self.remove_btn)
         self.remove_btn.Bind(wx.EVT_BUTTON, self._on_remove_clicked)
         buttons.Add(self.remove_btn, 0, wx.RIGHT, 6)
 
-        self.exclusions_btn = wx.Button(self, label="Exclude Archetypes")
+        self.exclusions_btn = wx.Button(self, label="Exclusions")
         stylize_button(self.exclusions_btn)
         self.exclusions_btn.Bind(wx.EVT_BUTTON, self._on_exclusions_clicked)
         buttons.Add(self.exclusions_btn, 0, wx.RIGHT, 6)
 
-        self.export_btn = wx.Button(self, label="Export CSV")
+        self.export_btn = wx.Button(self, label="Export")
         stylize_button(self.export_btn)
         self.export_btn.Bind(wx.EVT_BUTTON, self._on_export_clicked)
         buttons.Add(self.export_btn, 0, wx.RIGHT, 6)
 
-        self.import_btn = wx.Button(self, label="Import CSV")
+        self.import_btn = wx.Button(self, label="Import")
         stylize_button(self.import_btn)
         self.import_btn.Bind(wx.EVT_BUTTON, self._on_import_clicked)
         buttons.Add(self.import_btn, 0, wx.RIGHT, 6)
@@ -114,6 +114,7 @@ class SideboardGuidePanel(wx.Panel):
 
         self.pin_btn = wx.Button(self, label="Pin for Tracker")
         stylize_button(self.pin_btn)
+        self.pin_btn.SetBackgroundColour(wx.Colour(140, 90, 210))
         self.pin_btn.SetToolTip(
             "Pin this deck's sideboard guide so the Opponent Tracker can look up matchup plans automatically."
         )
