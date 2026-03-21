@@ -8,6 +8,7 @@ logs/
 /assets/
 /stubs/
 /logs/
+/screenshots/
 dotnet/MTGOBridge/*
 !dotnet/MTGOBridge/Program.cs
 !dotnet/MTGOBridge/MTGOBridge.csproj
