@@ -7,6 +7,8 @@ from typing import TYPE_CHECKING, Any
 import wx
 from loguru import logger
 
+from utils.atomic_io import atomic_write_json
+from utils.constants import ACTIVE_GUIDE_FILE
 from widgets.dialogs.guide_entry_dialog import GuideEntryDialog
 
 if TYPE_CHECKING:
@@ -38,6 +40,21 @@ class SideboardGuideHandlers:
             if name and qty > 0:
                 cleaned.append({"name": name, "qty": qty})
         return cleaned
+
+    def _refresh_pin_indicator(self: AppFrame) -> None:
+        """Update the pin button to reflect whether the current deck is pinned."""
+        if not ACTIVE_GUIDE_FILE.exists():
+            self.sideboard_guide_panel.set_pinned(False)
+            return
+        try:
+            import json
+
+            with ACTIVE_GUIDE_FILE.open("r", encoding="utf-8") as fh:
+                data = json.load(fh)
+            current_hash = self.controller.deck_repo.get_current_decklist_hash()
+            self.sideboard_guide_panel.set_pinned(data.get("deck_hash") == current_hash)
+        except Exception:
+            self.sideboard_guide_panel.set_pinned(False)
 
     def _load_guide_for_current(self: AppFrame) -> None:
         # Use decklist hash so each unique 75 has its own guide
@@ -72,6 +89,7 @@ class SideboardGuideHandlers:
         self.sideboard_guide_panel.set_entries(
             self.sideboard_guide_entries, self.sideboard_exclusions
         )
+        self._refresh_pin_indicator()
 
     def _persist_guide_for_current(self: AppFrame) -> None:
         key = self.controller.deck_repo.get_current_decklist_hash()
@@ -464,6 +482,26 @@ class SideboardGuideHandlers:
             warnings.append(f"Cards not in deck: {', '.join(sorted(missing_cards))}")
 
         return imported_entries, warnings
+
+    def _on_pin_guide(self: AppFrame) -> None:
+        """Pin the current deck's sideboard guide for use in the Opponent Tracker."""
+        deck_hash = self.controller.deck_repo.get_current_decklist_hash()
+        current_deck = self.controller.deck_repo.get_current_deck()
+        deck_name = ""
+        if current_deck:
+            deck_name = current_deck.get("name") or current_deck.get("archetype") or ""
+
+        payload = {"deck_hash": deck_hash, "deck_name": deck_name}
+        try:
+            atomic_write_json(ACTIVE_GUIDE_FILE, payload, indent=2)
+            self.sideboard_guide_panel.set_pinned(True)
+            self._set_status(
+                f"Pinned guide for '{deck_name or deck_hash[:8]}' to Opponent Tracker."
+            )
+            logger.info(f"Pinned guide: hash={deck_hash}, name={deck_name!r}")
+        except OSError as exc:
+            logger.error(f"Failed to save active guide: {exc}")
+            self._set_status("Error: could not pin guide.")
 
     def _parse_card_text(self: AppFrame, text: str) -> dict[str, int]:
         """Parse text like '2x Lightning Bolt, 1x Mountain' into a dict."""
