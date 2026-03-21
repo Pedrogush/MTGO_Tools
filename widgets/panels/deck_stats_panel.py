@@ -91,11 +91,9 @@ def _load_mana_svgs() -> dict[str, str]:
         if path.exists():
             svg = path.read_text(encoding="utf-8")
             svg = svg.replace('width="32" height="32"', 'width="18" height="18"')
-            svg = svg.replace("fill=\"#444\"", "fill=\"#ECECEC\"")
+            svg = svg.replace('fill="#444"', 'fill="#ECECEC"')
             # Strip the XML comment line to reduce HTML payload
-            svg = "\n".join(
-                line for line in svg.splitlines() if not line.startswith("<!--")
-            )
+            svg = "\n".join(line for line in svg.splitlines() if not line.startswith("<!--"))
             result[key] = svg.strip()
     return result
 
@@ -340,7 +338,6 @@ html, body {
 """
 
 
-
 _JS_TOOLTIP = """
 <div id="tooltip"></div>
 <script>
@@ -385,7 +382,7 @@ def _build_vbars(
             f'<div class="vbar-val" style="font-size:{val_font_size}px">{escape(val_text)}</div>'
             f'<div class="vbar" style="height:{pct:.1f}%;background:{colour};"></div>'
             f'<div class="vbar-lbl">{lbl_html}</div>'
-            f'</div>'
+            f"</div>"
         )
     html += "</div>"
     return html
@@ -412,9 +409,9 @@ def _build_hbars(
             f'<div class="hbar-label"{dim}>{escape(label)}</div>'
             f'<div class="hbar-track">'
             f'<div class="hbar" style="width:{pct:.1f}%;background:{colour};"></div>'
-            f'</div>'
+            f"</div>"
             f'<div class="hbar-count"{dim}>{count if count else ""}</div>'
-            f'</div>'
+            f"</div>"
         )
     html += "</div>"
     return html
@@ -466,7 +463,10 @@ def _build_html(
 
 _EMPTY_HTML = _build_html(
     "No deck loaded.",
-    [], [], [], [],
+    [],
+    [],
+    [],
+    [],
 )
 
 
