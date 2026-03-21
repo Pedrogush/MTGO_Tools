@@ -732,6 +732,44 @@ def parse_gamelog_file(file_path: str) -> dict | None:
         return None
 
 
+def infer_username_from_matches(matches: list[dict]) -> str | None:
+    """
+    Infer the current user's username from a list of parsed matches.
+
+    The local user appears in every match because GameLog files are stored on
+    their machine.  Any player present in ≥80% of matches is treated as the
+    local user.
+
+    Args:
+        matches: List of parsed match dicts from parse_gamelog_file
+
+    Returns:
+        Most likely current username, or None if it cannot be determined
+    """
+    if not matches:
+        return None
+
+    from collections import Counter
+
+    player_counts: Counter[str] = Counter()
+    for match in matches:
+        for player in match.get("players", []):
+            player_counts[player] += 1
+
+    if not player_counts:
+        return None
+
+    total = len(matches)
+    threshold = total * 0.8
+
+    name, count = player_counts.most_common(1)[0]
+    if count >= threshold:
+        logger.debug(f"Inferred current username as '{name}' ({count}/{total} matches)")
+        return name
+
+    return None
+
+
 def find_gamelog_files(directory: str, since_date: datetime | None = None) -> list[str]:
     """
     Find all GameLog files in directory, optionally filtered by date.

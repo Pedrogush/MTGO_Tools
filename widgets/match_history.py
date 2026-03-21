@@ -17,7 +17,7 @@ import wx
 import wx.dataview as dv
 from loguru import logger
 
-from utils.gamelog_parser import parse_all_gamelogs
+from utils.gamelog_parser import infer_username_from_matches, parse_all_gamelogs
 
 DARK_BG = wx.Colour(20, 22, 27)
 DARK_PANEL = wx.Colour(34, 39, 46)
@@ -57,9 +57,16 @@ class MatchHistoryFrame(wx.Frame):
         threading.Thread(target=worker, daemon=True).start()
 
     def _set_username(self, username: str | None) -> None:
-        """Set the current username."""
-        self.current_username = username
-        logger.debug(f"Set current username: {username}")
+        """Set the current username and re-render history if already loaded."""
+        if username and username != self.current_username:
+            self.current_username = username
+            logger.debug(f"Set current username: {username}")
+            if self.history_items:
+                # Re-render so player perspective is corrected now that we know who we are
+                self._populate_history(self.history_items)
+        else:
+            self.current_username = username
+            logger.debug(f"Set current username: {username}")
 
     # ------------------------------------------------------------------ UI ------------------------------------------------------------------
     def _build_ui(self) -> None:
@@ -197,6 +204,12 @@ class MatchHistoryFrame(wx.Frame):
             return
 
         self.history_items = matches
+
+        # Fall back to inferring who the local user is when the bridge is offline
+        if not self.current_username:
+            self.current_username = infer_username_from_matches(matches)
+            if self.current_username:
+                logger.debug(f"Using inferred username: {self.current_username}")
 
         for match in matches:
             if not isinstance(match, dict):
