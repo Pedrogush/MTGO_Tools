@@ -27,6 +27,7 @@ from repositories.metagame_repository import MetagameRepository, get_metagame_re
 from services.radar_service import RadarData, RadarService, get_radar_service
 from utils.archetype_resolver import find_archetype_by_name
 from utils.atomic_io import atomic_write_json, locked_path
+from utils.background_worker import BackgroundWorker
 from utils.constants import (
     ACTIVE_GUIDE_FILE,
     CALC_ACTION_BUTTON_SPACING,
@@ -170,6 +171,11 @@ class MTGOpponentDeckSpy(wx.Frame):
 
         self._saved_position: list[int] | None = None
         self._calculator_visible: bool = False
+
+        # Background poll worker
+        self._bg_worker = BackgroundWorker()
+        self._poll_generation: int = 0
+        self._poll_in_progress: bool = False
 
         # Radar integration
         self.radar_service: RadarService = radar_service or get_radar_service()
@@ -733,51 +739,84 @@ class MTGOpponentDeckSpy(wx.Frame):
     def _manual_refresh(self, force: bool = False) -> None:
         if self.player_name:
             self.cache.pop(self.player_name, None)
-            self._check_for_opponent()
+        # Cancel any in-progress poll and submit a fresh one
+        self._poll_in_progress = False
+        self._submit_poll()
 
     # ------------------------------------------------------------------ Opponent detection ---------------------------------------------------
     def _start_polling(self) -> None:
         self.status_label.SetLabel("Watching for MTGO match windows…")
         self._poll_timer.Start(self.POLL_INTERVAL_MS)
-        self._check_for_opponent()
+        self._submit_poll()
 
     def _on_poll_tick(self, _event: wx.TimerEvent) -> None:
-        self._check_for_opponent()
+        self._submit_poll()
 
-    def _check_for_opponent(self) -> None:
+    def _submit_poll(self) -> None:
+        """Submit a background poll if one is not already running."""
+        if self._poll_in_progress:
+            return
+        self._poll_in_progress = True
+        self._poll_generation += 1
+        self._bg_worker.submit(
+            self._poll_worker,
+            self._poll_generation,
+            self.player_name,
+            on_success=self._apply_poll_result,
+            on_error=self._on_poll_error,
+        )
+
+    def _poll_worker(self, generation: int, current_player: str) -> dict:
+        """Background thread: detect opponent and fetch decks if opponent changed."""
         try:
             opponents = find_opponent_names()
         except Exception as exc:  # noqa: BLE001
             logger.debug(f"Failed to detect opponent from window titles: {exc}")
-            self.status_label.SetLabel("Waiting for MTGO match window…")
-            self.player_name = ""
-            self.last_seen_decks = {}
-            self._clear_radar_display()
-            self._refresh_opponent_display()
-            return
+            return {"generation": generation, "kind": "error"}
 
         if not opponents:
-            self.status_label.SetLabel("No active match detected")
+            return {"generation": generation, "kind": "no_match"}
+
+        opponent_name = opponents[0]
+        if opponent_name == current_player:
+            return {"generation": generation, "kind": "same", "opponent": opponent_name}
+
+        decks = self._lookup_decks_all_formats(opponent_name, force=False)
+        return {"generation": generation, "kind": "new", "opponent": opponent_name, "decks": decks}
+
+    def _on_poll_error(self, exc: Exception) -> None:
+        """UI thread: release the in-progress guard after an unexpected poll error."""
+        self._poll_in_progress = False
+        logger.error(f"Unexpected poll worker error: {exc}")
+
+    def _apply_poll_result(self, result: dict) -> None:
+        """UI thread: apply results from the background poll worker."""
+        if result["generation"] != self._poll_generation:
+            return  # Stale — a newer poll supersedes this one
+
+        self._poll_in_progress = False
+        kind = result["kind"]
+
+        if kind in ("error", "no_match"):
+            label = (
+                "Waiting for MTGO match window…" if kind == "error" else "No active match detected"
+            )
+            self.status_label.SetLabel(label)
             self.player_name = ""
             self.last_seen_decks = {}
             self._clear_radar_display()
             self._refresh_opponent_display()
             return
 
-        # Take the first opponent found
-        opponent_name = opponents[0]
-
-        # Only lookup decks if opponent changed
-        if opponent_name != self.player_name:
+        opponent_name = result["opponent"]
+        if kind == "new":
             self.player_name = opponent_name
             self._clear_radar_display()
-            self.last_seen_decks = self._lookup_decks_all_formats(self.player_name, force=False)
-
-            # Trigger radar loading after successful deck lookup
+            self.last_seen_decks = result["decks"]
             if self.last_seen_decks:
-                wx.CallAfter(self._trigger_radar_load)
+                self._trigger_radar_load()
                 if self._guide_visible:
-                    wx.CallAfter(self._update_guide_display)
+                    self._update_guide_display()
 
         self.status_label.SetLabel(f"Match detected: vs {self.player_name}")
         self.status_label.Wrap(OPPONENT_TRACKER_LABEL_WRAP_WIDTH)
@@ -965,6 +1004,7 @@ class MTGOpponentDeckSpy(wx.Frame):
 
         if self._poll_timer.IsRunning():
             self._poll_timer.Stop()
+        self._bg_worker.shutdown(timeout=5.0)
         event.Skip()
 
 
