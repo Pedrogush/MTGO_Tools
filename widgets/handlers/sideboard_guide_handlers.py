@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import threading
 from typing import TYPE_CHECKING, Any
 
 import wx
@@ -229,12 +230,17 @@ class SideboardGuideHandlers:
         file_path = dlg.GetPath()
         dlg.Destroy()
 
-        try:
-            self._export_guide_to_csv(file_path)
-            self._set_status("Sideboard guide exported successfully.")
-        except Exception as exc:
-            self._set_status("Error exporting sideboard guide to CSV.")
-            logger.exception(f"Error exporting sideboard guide to CSV: {exc}")
+        self._set_status("Exporting…")
+
+        def worker() -> None:
+            try:
+                self._export_guide_to_csv(file_path)
+                wx.CallAfter(self._set_status, "Sideboard guide exported successfully.")
+            except Exception as exc:
+                wx.CallAfter(self._set_status, "Error exporting sideboard guide to CSV.")
+                logger.exception(f"Error exporting sideboard guide to CSV: {exc}")
+
+        threading.Thread(target=worker, daemon=True).start()
 
     def _on_import_guide(self: AppFrame) -> None:
         """Import sideboard guide from CSV format."""
@@ -288,43 +294,51 @@ class SideboardGuideHandlers:
         enable_double_entries = enable_double_checkbox.GetValue()
         options_dlg.Destroy()
 
-        try:
-            imported_entries, warnings = self._import_guide_from_csv(file_path)
+        self._set_status("Importing…")
 
-            if not imported_entries:
-                self._set_status("No valid guide entries found in CSV.")
+        def worker() -> None:
+            try:
+                imported_entries, warnings = self._import_guide_from_csv(file_path)
+            except Exception as exc:
+                wx.CallAfter(self._set_status, "Error importing sideboard guide from CSV.")
+                logger.exception(f"Error importing sideboard guide from CSV: {exc}")
                 return
 
-            if not enable_double_entries:
-                for imported_entry in imported_entries:
-                    archetype_name = imported_entry.get("archetype")
-                    existing_index = None
-                    for i, entry in enumerate(self.sideboard_guide_entries):
-                        if entry.get("archetype") == archetype_name:
-                            existing_index = i
-                            break
+            def apply() -> None:
+                if not imported_entries:
+                    self._set_status("No valid guide entries found in CSV.")
+                    return
 
-                    if existing_index is not None:
-                        self.sideboard_guide_entries[existing_index] = imported_entry
-                    else:
-                        self.sideboard_guide_entries.append(imported_entry)
-            else:
-                self.sideboard_guide_entries.extend(imported_entries)
+                if not enable_double_entries:
+                    for imported_entry in imported_entries:
+                        archetype_name = imported_entry.get("archetype")
+                        existing_index = None
+                        for i, entry in enumerate(self.sideboard_guide_entries):
+                            if entry.get("archetype") == archetype_name:
+                                existing_index = i
+                                break
 
-            self._persist_guide_for_current()
-            self._refresh_guide_view()
+                        if existing_index is not None:
+                            self.sideboard_guide_entries[existing_index] = imported_entry
+                        else:
+                            self.sideboard_guide_entries.append(imported_entry)
+                else:
+                    self.sideboard_guide_entries.extend(imported_entries)
 
-            if warnings:
-                warning_msg = (
-                    f"Imported {len(imported_entries)} entries with warnings: {'; '.join(warnings)}"
-                )
-                self.sideboard_guide_panel.set_warning(warning_msg)
-            else:
-                self._set_status(f"Successfully imported {len(imported_entries)} guide entries.")
+                self._persist_guide_for_current()
+                self._refresh_guide_view()
 
-        except Exception as exc:
-            self._set_status("Error importing sideboard guide from CSV.")
-            logger.exception(f"Error importing sideboard guide from CSV: {exc}")
+                if warnings:
+                    warning_msg = f"Imported {len(imported_entries)} entries with warnings: {'; '.join(warnings)}"
+                    self.sideboard_guide_panel.set_warning(warning_msg)
+                else:
+                    self._set_status(
+                        f"Successfully imported {len(imported_entries)} guide entries."
+                    )
+
+            wx.CallAfter(apply)
+
+        threading.Thread(target=worker, daemon=True).start()
 
     def _export_guide_to_csv(self: AppFrame, file_path: str) -> None:
         """
