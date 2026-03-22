@@ -594,7 +594,9 @@ class DeckStatsPanel(wx.Panel):
         lands = mdfcs = 0
         for entry in self.zone_cards.get("main", []):
             qty = entry["qty"]
-            meta = self.card_manager.get_card(entry["name"]) if self._card_data_available() else None
+            meta = (
+                self.card_manager.get_card(entry["name"]) if self._card_data_available() else None
+            )
             type_line = (meta.get("type_line") or "").lower() if meta else ""
             back_type_line = (meta.get("back_type_line") or "").lower() if meta else ""
             if "land" in type_line:
