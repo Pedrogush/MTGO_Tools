@@ -486,14 +486,20 @@ class AppController:
             force=force_archetypes,
         )
 
-        # Step 3: Load collection from cache (non-blocking)
-        success, info = self.load_collection_from_cache(deck_save_dir)
-        if success and info:
-            if callbacks:
-                callbacks.on_collection_loaded(info)
-        else:
-            if callbacks:
-                callbacks.on_collection_not_found()
+        # Step 3: Load collection from cache (background thread)
+        def _load_collection():
+            return self.load_collection_from_cache(deck_save_dir)
+
+        def _on_collection_load_done(result: tuple[bool, dict[str, Any] | None]):
+            success, info = result
+            if success and info:
+                if callbacks:
+                    callbacks.on_collection_loaded(info)
+            else:
+                if callbacks:
+                    callbacks.on_collection_not_found()
+
+        self._worker.submit(_load_collection, on_success=_on_collection_load_done)
 
         # Step 4: Check and download bulk data if needed (non-blocking)
         self.check_and_download_bulk_data()
