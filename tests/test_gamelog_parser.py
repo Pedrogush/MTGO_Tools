@@ -133,7 +133,9 @@ class TestGamelogParserVsScreenshots:
 
     def test_infers_username_as_local_username(self, inferred_username):
         local_username = os.environ.get("MTGO_USERNAME")
-        assert local_username is not None, "MTGO_USERNAME env var not set (source env/Scripts/activate)"
+        assert (
+            local_username is not None
+        ), "MTGO_USERNAME env var not set (source env/Scripts/activate)"
         assert inferred_username == local_username
 
     def test_parsed_count_in_expected_range(self, parsed_matches, truth):

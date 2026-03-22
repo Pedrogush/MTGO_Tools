@@ -29,9 +29,14 @@ SUBDUED_TEXT = wx.Colour(185, 191, 202)
 class MatchHistoryFrame(wx.Frame):
     """Simple window displaying recent MTGO matches grouped by event."""
 
+    _FIXED_WIDTH = 850
+    _COL_WIDTHS = [100, 90, 140]  # Result, Mulligans, Date (pixels)
+
     def __init__(self, parent: wx.Window | None = None) -> None:
         style = wx.DEFAULT_FRAME_STYLE | wx.STAY_ON_TOP
-        super().__init__(parent, title="MTGO Match History (wx)", size=(850, 460), style=style)
+        super().__init__(parent, title="MTGO Match History (wx)", size=(self._FIXED_WIDTH, 460), style=style)
+        # Lock horizontal size; allow vertical resize only
+        self.SetSizeHints(self._FIXED_WIDTH, 300, self._FIXED_WIDTH, -1)
 
         self.history_items: list[dict[str, Any]] = []
         self.start_filter: str | None = None
@@ -40,8 +45,10 @@ class MatchHistoryFrame(wx.Frame):
 
         self._build_ui()
         self.Centre(wx.BOTH)
+        self.Bind(wx.EVT_SIZE, self._on_frame_size)
 
         self.Bind(wx.EVT_CLOSE, self.on_close)
+        wx.CallAfter(self._fit_tree_columns)
         wx.CallAfter(self._init_username)
         wx.CallAfter(self.refresh_history)
 
@@ -96,30 +103,39 @@ class MatchHistoryFrame(wx.Frame):
         box_parent = metrics_sizer.GetStaticBox()
         sizer.Add(metrics_sizer, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, 6)
 
-        metrics_grid = wx.FlexGridSizer(cols=2, hgap=12, vgap=4)
+        metrics_inner = wx.BoxSizer(wx.VERTICAL)
+        metrics_sizer.Add(metrics_inner, 0, wx.EXPAND | wx.ALL, 8)
+
+        row1 = wx.BoxSizer(wx.HORIZONTAL)
         self.match_rate_label = wx.StaticText(box_parent, label="Absolute Match Win Rate: —")
         self.match_rate_label.SetForegroundColour(LIGHT_TEXT)
-        metrics_grid.Add(self.match_rate_label, 0, wx.ALIGN_LEFT)
+        row1.Add(self.match_rate_label, 1, wx.ALIGN_CENTER_VERTICAL)
         self.game_rate_label = wx.StaticText(box_parent, label="Absolute Game Win Rate: —")
         self.game_rate_label.SetForegroundColour(LIGHT_TEXT)
-        metrics_grid.Add(self.game_rate_label, 0, wx.ALIGN_LEFT)
+        row1.Add(self.game_rate_label, 1, wx.ALIGN_CENTER_VERTICAL)
+        metrics_inner.Add(row1, 0, wx.EXPAND | wx.BOTTOM, 4)
+
+        row2 = wx.BoxSizer(wx.HORIZONTAL)
         self.filtered_match_rate_label = wx.StaticText(
             box_parent, label="Match Win Rate (filtered): —"
         )
         self.filtered_match_rate_label.SetForegroundColour(LIGHT_TEXT)
-        metrics_grid.Add(self.filtered_match_rate_label, 0, wx.ALIGN_LEFT)
+        row2.Add(self.filtered_match_rate_label, 1, wx.ALIGN_CENTER_VERTICAL)
         self.filtered_game_rate_label = wx.StaticText(
             box_parent, label="Game Win Rate (filtered): —"
         )
         self.filtered_game_rate_label.SetForegroundColour(LIGHT_TEXT)
-        metrics_grid.Add(self.filtered_game_rate_label, 0, wx.ALIGN_LEFT)
+        row2.Add(self.filtered_game_rate_label, 1, wx.ALIGN_CENTER_VERTICAL)
+        metrics_inner.Add(row2, 0, wx.EXPAND | wx.BOTTOM, 4)
+
+        row3 = wx.BoxSizer(wx.HORIZONTAL)
         self.mulligan_rate_label = wx.StaticText(box_parent, label="Mulligan Rate: —")
         self.mulligan_rate_label.SetForegroundColour(LIGHT_TEXT)
-        metrics_grid.Add(self.mulligan_rate_label, 0, wx.ALIGN_LEFT)
+        row3.Add(self.mulligan_rate_label, 1, wx.ALIGN_CENTER_VERTICAL)
         self.avg_mulligans_label = wx.StaticText(box_parent, label="Avg Mulligans/Match: —")
         self.avg_mulligans_label.SetForegroundColour(LIGHT_TEXT)
-        metrics_grid.Add(self.avg_mulligans_label, 0, wx.ALIGN_LEFT)
-        metrics_sizer.Add(metrics_grid, 0, wx.EXPAND | wx.ALL, 8)
+        row3.Add(self.avg_mulligans_label, 1, wx.ALIGN_CENTER_VERTICAL)
+        metrics_inner.Add(row3, 0, wx.EXPAND)
 
         filter_row = wx.BoxSizer(wx.HORIZONTAL)
         metrics_sizer.Add(filter_row, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 6)
@@ -156,6 +172,24 @@ class MatchHistoryFrame(wx.Frame):
         self.tree.AppendColumn("Date", width=140)
         self.tree.Bind(dv.EVT_TREELIST_ITEM_ACTIVATED, self.on_item_activated)
         sizer.Add(self.tree, 1, wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, 10)
+
+    def _on_frame_size(self, event: wx.SizeEvent) -> None:
+        event.Skip()
+        wx.CallAfter(self._fit_tree_columns)
+
+    def _fit_tree_columns(self) -> None:
+        """Expand the Players column so the tree fills its width with no horizontal scrollbar."""
+        if not self.tree:
+            return
+        dv_ctrl = self.tree.GetDataView()
+        tree_w = self.tree.GetClientSize().width
+        scrollbar_w = wx.SystemSettings.GetMetric(wx.SYS_VSCROLL_X)
+        # Column 0 in the DataViewCtrl is the internal tree-expander column;
+        # our first user column (Players) is at index 1.
+        expander_w = dv_ctrl.GetColumn(0).GetWidth()
+        col0_w = tree_w - expander_w - sum(self._COL_WIDTHS) - scrollbar_w
+        if col0_w > 80:
+            dv_ctrl.GetColumn(1).SetWidth(col0_w)
 
     def _stylize_button(self, button: wx.Button) -> None:
         button.SetBackgroundColour(DARK_PANEL)
