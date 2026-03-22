@@ -75,6 +75,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
         self.sideboard_guide_entries: list[dict[str, str]] = []
         self.sideboard_exclusions: list[str] = []
         self.active_inspector_zone: str | None = None
+        self.left_panel: wx.Panel | None = None
         self.left_stack: wx.Simplebook | None = None
         self.research_panel: DeckResearchPanel | None = None
         self.builder_panel: DeckBuilderPanel | None = None
@@ -115,6 +116,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
 
         # Build left and right panels
         left_panel = self._build_left_panel(self.root_panel)
+        self.left_panel = left_panel
         root_sizer.Add(left_panel, 0, wx.EXPAND | wx.ALL, PADDING_LG)
 
         right_panel = self._build_right_panel(self.root_panel)
@@ -395,6 +397,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
 
         self.deck_tabs = self._create_notebook(detail_box)
         detail_sizer.Add(self.deck_tabs, 1, wx.EXPAND | wx.ALL, PADDING_MD)
+        self.deck_tabs.Bind(fnb.EVT_FLATNOTEBOOK_PAGE_CHANGED, self._on_deck_tab_changed)
 
         # Deck tables tab
         self._build_deck_tables_tab()
@@ -483,6 +486,16 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
         return table
 
     # ------------------------------------------------------------------ Left panel helpers -------------------------------------------------
+    def _on_deck_tab_changed(self, event: wx.Event) -> None:
+        """Show or hide the left search panel based on the active deck tab."""
+        # Tab 0 is "Deck Tables" (zone editors); other tabs don't need card search.
+        show = self.deck_tabs.GetSelection() == 0
+        if self.left_panel and self.root_panel:
+            sizer = self.root_panel.GetSizer()
+            sizer.Show(self.left_panel, show)
+            self.root_panel.Layout()
+        event.Skip()
+
     def _show_left_panel(self, mode: str, force: bool = False) -> None:
         target = "builder" if mode == "builder" else "research"
         if self.left_stack:
