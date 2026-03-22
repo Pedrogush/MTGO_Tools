@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import threading
 from collections.abc import Callable
 from pathlib import Path
 
@@ -97,6 +98,11 @@ class FeedbackDialog(wx.Dialog):
         self._include_events_check.SetValue(True)
         sizer.Add(self._include_events_check, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
 
+        # Status label (shown during export)
+        self._status_label = wx.StaticText(panel, label="")
+        self._status_label.SetForegroundColour(SUBDUED_TEXT)
+        sizer.Add(self._status_label, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
+
         # Buttons
         sizer.AddStretchSpacer(1)
         btn_sizer = wx.BoxSizer(wx.HORIZONTAL)
@@ -105,10 +111,10 @@ class FeedbackDialog(wx.Dialog):
         close_btn = wx.Button(panel, wx.ID_CANCEL, label="Close")
         btn_sizer.Add(close_btn, 0, wx.RIGHT, 6)
 
-        export_btn = wx.Button(panel, wx.ID_OK, label="Export to File…")
-        export_btn.SetDefault()
-        export_btn.Bind(wx.EVT_BUTTON, self._on_export)
-        btn_sizer.Add(export_btn, 0)
+        self._export_btn = wx.Button(panel, wx.ID_OK, label="Export to File…")
+        self._export_btn.SetDefault()
+        self._export_btn.Bind(wx.EVT_BUTTON, self._on_export)
+        btn_sizer.Add(self._export_btn, 0)
 
         sizer.Add(btn_sizer, 0, wx.EXPAND | wx.ALL, 10)
 
@@ -137,24 +143,38 @@ class FeedbackDialog(wx.Dialog):
         notes = self._notes_ctrl.GetValue()
         include_events = self._include_events_check.GetValue()
 
-        try:
-            out = export_diagnostics_bundle(
-                dest,
-                logs_dir=self._logs_dir,
-                notes=notes,
-                include_events=include_events,
-            )
-            wx.MessageBox(
-                f"Diagnostics bundle saved to:\n{out}",
-                "Export complete",
-                wx.OK | wx.ICON_INFORMATION,
-            )
-        except Exception as exc:
-            logger.exception("Failed to export diagnostics bundle")
+        self._export_btn.Disable()
+        self._status_label.SetLabel("Exporting…")
+
+        def _worker() -> None:
+            try:
+                out = export_diagnostics_bundle(
+                    dest,
+                    logs_dir=self._logs_dir,
+                    notes=notes,
+                    include_events=include_events,
+                )
+                wx.CallAfter(self._on_export_done, out, None)
+            except Exception as exc:
+                logger.exception("Failed to export diagnostics bundle")
+                wx.CallAfter(self._on_export_done, None, exc)
+
+        threading.Thread(target=_worker, daemon=True).start()
+
+    def _on_export_done(self, out: Path | None, exc: Exception | None) -> None:
+        self._status_label.SetLabel("")
+        self._export_btn.Enable()
+        if exc is not None:
             wx.MessageBox(
                 f"Export failed: {exc}",
                 "Export Error",
                 wx.OK | wx.ICON_ERROR,
+            )
+        else:
+            wx.MessageBox(
+                f"Diagnostics bundle saved to:\n{out}",
+                "Export complete",
+                wx.OK | wx.ICON_INFORMATION,
             )
 
 
