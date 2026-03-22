@@ -75,6 +75,8 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
         self.sideboard_guide_entries: list[dict[str, str]] = []
         self.sideboard_exclusions: list[str] = []
         self.active_inspector_zone: str | None = None
+        self.inspector_column: wx.BoxSizer | None = None
+        self.content_split: wx.BoxSizer | None = None
         self.left_stack: wx.Simplebook | None = None
         self.research_panel: DeckResearchPanel | None = None
         self.builder_panel: DeckBuilderPanel | None = None
@@ -188,6 +190,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
         right_sizer.Add(card_data_controls, 0, wx.EXPAND | wx.BOTTOM, PADDING_LG)
 
         content_split = wx.BoxSizer(wx.HORIZONTAL)
+        self.content_split = content_split
         right_sizer.Add(content_split, 1, wx.EXPAND | wx.BOTTOM, PADDING_LG)
 
         middle_column = wx.BoxSizer(wx.VERTICAL)
@@ -197,6 +200,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
         middle_column.Add(deck_workspace, 1, wx.EXPAND)
 
         inspector_column = wx.BoxSizer(wx.VERTICAL)
+        self.inspector_column = inspector_column
         content_split.Add(inspector_column, 0, wx.EXPAND)
 
         inspector_box = self._build_card_inspector(right_panel)
@@ -395,6 +399,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
 
         self.deck_tabs = self._create_notebook(detail_box)
         detail_sizer.Add(self.deck_tabs, 1, wx.EXPAND | wx.ALL, PADDING_MD)
+        self.deck_tabs.Bind(fnb.EVT_FLATNOTEBOOK_PAGE_CHANGED, self._on_deck_tab_changed)
 
         # Deck tables tab
         self._build_deck_tables_tab()
@@ -483,6 +488,15 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
         return table
 
     # ------------------------------------------------------------------ Left panel helpers -------------------------------------------------
+    def _on_deck_tab_changed(self, event: wx.Event) -> None:
+        """Show or hide the right inspector panel based on the active deck tab."""
+        # Tab 0 is "Deck Tables" (zone editors); other tabs don't need card inspection.
+        show = self.deck_tabs.GetSelection() == 0
+        if self.content_split and self.inspector_column and self.root_panel:
+            self.content_split.Show(self.inspector_column, show, recursive=True)
+            self.root_panel.Layout()
+        event.Skip()
+
     def _show_left_panel(self, mode: str, force: bool = False) -> None:
         target = "builder" if mode == "builder" else "research"
         if self.left_stack:
