@@ -148,6 +148,25 @@ pytest -v
 pytest tests/ui/
 ```
 
+#### GameLog / Match History Tests
+
+The gamelog parser integration tests (`tests/test_gamelog_parser.py`) parse your local MTGO GameLog files and compare results against your own match history. They require:
+
+1. **MTGO GameLog files** present on the machine (created automatically by MTGO during matches).
+2. **`MTGO_USERNAME`** environment variable set to your MTGO username.
+
+If you activated the virtual environment via `env/Scripts/activate` (bash) or `env\Scripts\activate.bat` (Windows cmd), this variable is set automatically to the configured username. For a different machine or user, edit the relevant activate script and replace `pedrogush` with your own MTGO username:
+
+```bash
+# env/Scripts/activate (bash)
+export MTGO_USERNAME="your_mtgo_username"
+
+# env\Scripts\activate.bat (cmd)
+set MTGO_USERNAME=your_mtgo_username
+```
+
+Tests are skipped automatically when no GameLog directory is found, so they are safe to run on machines without MTGO installed.
+
 ### Code Quality
 
 The project uses:
