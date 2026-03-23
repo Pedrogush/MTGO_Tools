@@ -92,7 +92,7 @@ class SideboardGuidePanel(wx.Panel):
         empty_sizer.AddStretchSpacer(1)
         empty_label = wx.StaticText(
             self.empty_state_panel,
-            label='No matchup notes yet.\nClick "Add" or right-click an archetype to create a sideboard guide entry.',
+            label='No matchup notes yet.\nClick "Add" to create a sideboard guide entry.',
             style=wx.ALIGN_CENTRE_HORIZONTAL,
         )
         empty_label.SetForegroundColour(SUBDUED_TEXT)
