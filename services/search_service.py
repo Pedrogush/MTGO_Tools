@@ -233,12 +233,12 @@ class SearchService:
                     continue
 
             # Mana value filter
-            if mv_value is not None and mv_cmp != "Any":
+            if mv_value is not None and mv_cmp not in ("Any", "-"):
                 if not matches_mana_value(card.get("mana_value"), mv_value, mv_cmp):
                     continue
 
             # Color identity filter (lands are treated as colorless)
-            if selected_colors and color_mode != "Any":
+            if selected_colors and color_mode not in ("Any", "-"):
                 if not matches_color_filter(
                     self._get_card_colors_for_filter(card), selected_colors, color_mode
                 ):

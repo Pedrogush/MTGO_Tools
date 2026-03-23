@@ -38,16 +38,16 @@ def matches_mana_value(card_value: Any, target: float, comparator: str) -> bool:
 
 
 def matches_color_filter(card_colors: list[str], selected: list[str], mode: str) -> bool:
-    if not selected or mode == "Any":
+    if not selected or mode in ("Any", "-"):
         return True
     selected_set = {c.upper() for c in selected}
     card_set = {c.upper() for c in card_colors if c}
     if not card_set:
         card_set = {"C"}
-    if mode == "At least":
+    if mode in ("At least", "≥"):
         return selected_set.issubset(card_set)
-    if mode == "Exactly":
+    if mode in ("Exactly", "="):
         return card_set == selected_set
-    if mode == "Not these":
+    if mode in ("Not these", "≠"):
         return selected_set.isdisjoint(card_set)
     return True

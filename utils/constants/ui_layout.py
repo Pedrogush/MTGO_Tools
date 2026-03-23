@@ -50,7 +50,7 @@ GUIDE_COL_NOTES_WIDTH = 180  # width of Notes column (px)
 # Deck Builder Panel — search results list layout
 BUILDER_NAME_COL_MIN_WIDTH = 40  # minimum width of the Name column (px)
 BUILDER_NAME_COL_DEFAULT_WIDTH = 180  # initial width of the Name column (px)
-BUILDER_FORMATS_GRID_COLS = 2  # number of columns in the formats FlexGridSizer
+BUILDER_FORMATS_GRID_COLS = 3  # number of columns in the formats FlexGridSizer
 BUILDER_FORMATS_GRID_HGAP = 8  # horizontal gap between format checkbox cells (px)
 BUILDER_MANA_ALL_BTN_SIZE = (52, 28)  # size of the "All" mana keyboard button (px)
 

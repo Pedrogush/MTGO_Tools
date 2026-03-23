@@ -154,74 +154,74 @@ def test_matches_mana_value_fractional():
 
 
 def test_matches_color_filter_any_mode():
-    """Test color filter with 'Any' mode (no filtering)."""
-    assert matches_color_filter(["G"], ["R", "U"], "Any") is True
-    assert matches_color_filter([], ["W"], "Any") is True
+    """Test color filter with '-' mode (no filtering)."""
+    assert matches_color_filter(["G"], ["R", "U"], "-") is True
+    assert matches_color_filter([], ["W"], "-") is True
 
 
 def test_matches_color_filter_empty_selected():
     """Test color filter with no selected colors."""
-    assert matches_color_filter(["G", "U"], [], "At least") is True
-    assert matches_color_filter(["G", "U"], [], "Exactly") is True
+    assert matches_color_filter(["G", "U"], [], "≥") is True
+    assert matches_color_filter(["G", "U"], [], "=") is True
 
 
 def test_matches_color_filter_at_least_single():
-    """Test 'At least' mode with single color."""
-    assert matches_color_filter(["G"], ["G"], "At least") is True
-    assert matches_color_filter(["G", "U"], ["G"], "At least") is True
-    assert matches_color_filter(["U"], ["G"], "At least") is False
+    """Test '≥' (at least) mode with single color."""
+    assert matches_color_filter(["G"], ["G"], "≥") is True
+    assert matches_color_filter(["G", "U"], ["G"], "≥") is True
+    assert matches_color_filter(["U"], ["G"], "≥") is False
 
 
 def test_matches_color_filter_at_least_multiple():
-    """Test 'At least' mode with multiple colors."""
-    assert matches_color_filter(["G", "U"], ["G", "U"], "At least") is True
-    assert matches_color_filter(["W", "U", "B", "R", "G"], ["G", "U"], "At least") is True
-    assert matches_color_filter(["G"], ["G", "U"], "At least") is False
+    """Test '≥' (at least) mode with multiple colors."""
+    assert matches_color_filter(["G", "U"], ["G", "U"], "≥") is True
+    assert matches_color_filter(["W", "U", "B", "R", "G"], ["G", "U"], "≥") is True
+    assert matches_color_filter(["G"], ["G", "U"], "≥") is False
 
 
 def test_matches_color_filter_exactly_single():
-    """Test 'Exactly' mode with single color."""
-    assert matches_color_filter(["G"], ["G"], "Exactly") is True
-    assert matches_color_filter(["G", "U"], ["G"], "Exactly") is False
-    assert matches_color_filter(["U"], ["G"], "Exactly") is False
+    """Test '=' (exactly) mode with single color."""
+    assert matches_color_filter(["G"], ["G"], "=") is True
+    assert matches_color_filter(["G", "U"], ["G"], "=") is False
+    assert matches_color_filter(["U"], ["G"], "=") is False
 
 
 def test_matches_color_filter_exactly_multiple():
-    """Test 'Exactly' mode with multiple colors."""
-    assert matches_color_filter(["G", "U"], ["G", "U"], "Exactly") is True
-    assert matches_color_filter(["U", "G"], ["G", "U"], "Exactly") is True
-    assert matches_color_filter(["G", "U", "R"], ["G", "U"], "Exactly") is False
-    assert matches_color_filter(["G"], ["G", "U"], "Exactly") is False
+    """Test '=' (exactly) mode with multiple colors."""
+    assert matches_color_filter(["G", "U"], ["G", "U"], "=") is True
+    assert matches_color_filter(["U", "G"], ["G", "U"], "=") is True
+    assert matches_color_filter(["G", "U", "R"], ["G", "U"], "=") is False
+    assert matches_color_filter(["G"], ["G", "U"], "=") is False
 
 
 def test_matches_color_filter_not_these():
-    """Test 'Not these' mode."""
-    assert matches_color_filter(["R"], ["G", "U"], "Not these") is True
-    assert matches_color_filter(["G"], ["G", "U"], "Not these") is False
-    assert matches_color_filter(["G", "U"], ["G"], "Not these") is False
-    assert matches_color_filter(["W", "B"], ["R", "G"], "Not these") is True
+    """Test '≠' (not these) mode."""
+    assert matches_color_filter(["R"], ["G", "U"], "≠") is True
+    assert matches_color_filter(["G"], ["G", "U"], "≠") is False
+    assert matches_color_filter(["G", "U"], ["G"], "≠") is False
+    assert matches_color_filter(["W", "B"], ["R", "G"], "≠") is True
 
 
 def test_matches_color_filter_colorless():
     """Test color filter with colorless cards."""
     # Empty color list should be treated as colorless "C"
-    assert matches_color_filter([], ["C"], "At least") is True
-    assert matches_color_filter([], ["C"], "Exactly") is True
-    assert matches_color_filter([], ["G"], "Not these") is True
+    assert matches_color_filter([], ["C"], "≥") is True
+    assert matches_color_filter([], ["C"], "=") is True
+    assert matches_color_filter([], ["G"], "≠") is True
 
 
 def test_matches_color_filter_case_insensitive():
     """Test that color filter is case insensitive."""
-    assert matches_color_filter(["g"], ["G"], "At least") is True
-    assert matches_color_filter(["G"], ["g"], "At least") is True
-    assert matches_color_filter(["g", "u"], ["G", "U"], "Exactly") is True
+    assert matches_color_filter(["g"], ["G"], "≥") is True
+    assert matches_color_filter(["G"], ["g"], "≥") is True
+    assert matches_color_filter(["g", "u"], ["G", "U"], "=") is True
 
 
 def test_matches_color_filter_colorless_not_these():
-    """Test 'Not these' mode with colorless."""
+    """Test '≠' mode with colorless."""
     # Colorless card should not match any color
-    assert matches_color_filter([], ["G"], "Not these") is True
-    assert matches_color_filter([], ["W", "U", "B", "R", "G"], "Not these") is True
+    assert matches_color_filter([], ["G"], "≠") is True
+    assert matches_color_filter([], ["W", "U", "B", "R", "G"], "≠") is True
 
 
 def test_matches_color_filter_unknown_mode():
