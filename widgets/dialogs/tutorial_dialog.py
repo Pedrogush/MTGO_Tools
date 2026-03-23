@@ -114,7 +114,9 @@ class TutorialDialog(wx.Dialog):
         self._body_label.Wrap(self.GetClientSize().GetWidth() - 40)
         self._back_btn.Enable(self._step > 0)
         is_last = self._step == self._total - 1
-        self._next_btn.SetLabel(self._t("tutorial.btn.finish") if is_last else self._t("tutorial.btn.next"))
+        self._next_btn.SetLabel(
+            self._t("tutorial.btn.finish") if is_last else self._t("tutorial.btn.next")
+        )
         self._skip_btn.Show(not is_last)
         self.Layout()
 
