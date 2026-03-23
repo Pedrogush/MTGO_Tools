@@ -27,13 +27,42 @@ from loguru import logger
 
 from utils.constants import BRIDGE_PROCESS_TERMINATE_TIMEOUT_SECONDS
 
-# Default .NET publish locations we will probe for MTGOBridge.exe
-_DEFAULT_BRIDGE_CANDIDATES = [
-    Path("dotnet/MTGOBridge/bin/Release/net9.0-windows7.0/win-x64/publish/MTGOBridge.exe"),
-    Path("dotnet/MTGOBridge/bin/Release/net9.0-windows7.0/MTGOBridge.exe"),
-    Path("dotnet/MTGOBridge/bin/Debug/net9.0-windows7.0/win-x64/publish/MTGOBridge.exe"),
-    Path("dotnet/MTGOBridge/bin/Debug/net9.0-windows7.0/MTGOBridge.exe"),
-]
+# Manual download URL shown to users when the bridge is missing.
+BRIDGE_MANUAL_DOWNLOAD_URL = (
+    "https://github.com/Pedrogush/MTGOBridge/releases/latest"
+)
+
+
+def _installed_app_dir() -> Path | None:
+    """Return the directory containing the running executable, if determinable."""
+    import sys
+
+    exe = getattr(sys, "frozen", False) and sys.executable
+    if exe:
+        return Path(exe).parent
+    return None
+
+
+def _default_bridge_candidates() -> list[Path]:
+    """Return probe paths for MTGOBridge.exe in priority order.
+
+    Order:
+    1. Install-time path: ``{app_dir}/mtgo_integration/MTGOBridge.exe``
+    2. Local dev build paths (Release then Debug)
+    """
+    candidates: list[Path] = []
+
+    app_dir = _installed_app_dir()
+    if app_dir is not None:
+        candidates.append(app_dir / "mtgo_integration" / "MTGOBridge.exe")
+
+    candidates += [
+        Path("dotnet/MTGOBridge/bin/Release/net9.0-windows7.0/win-x64/publish/MTGOBridge.exe"),
+        Path("dotnet/MTGOBridge/bin/Release/net9.0-windows7.0/MTGOBridge.exe"),
+        Path("dotnet/MTGOBridge/bin/Debug/net9.0-windows7.0/win-x64/publish/MTGOBridge.exe"),
+        Path("dotnet/MTGOBridge/bin/Debug/net9.0-windows7.0/MTGOBridge.exe"),
+    ]
+    return candidates
 
 
 class BridgeCommandError(RuntimeError):
@@ -53,7 +82,7 @@ def _resolve_bridge_path(explicit: str | os.PathLike[str] | None = None) -> Path
         if candidate.exists():
             return candidate
 
-    for candidate in _DEFAULT_BRIDGE_CANDIDATES:
+    for candidate in _default_bridge_candidates():
         if candidate.exists():
             return candidate
     return None
@@ -63,7 +92,9 @@ def _require_bridge_path(explicit: str | os.PathLike[str] | None = None) -> Path
     resolved = _resolve_bridge_path(explicit)
     if resolved is None:
         raise FileNotFoundError(
-            "MTGO bridge executable not found. Set MTGO_BRIDGE_PATH or build the project."
+            "MTGO bridge executable not found. "
+            "Set MTGO_BRIDGE_PATH, build the project, or download the bridge from: "
+            f"{BRIDGE_MANUAL_DOWNLOAD_URL}"
         )
     return resolved
 

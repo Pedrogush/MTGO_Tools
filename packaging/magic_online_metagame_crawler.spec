@@ -31,37 +31,16 @@ datas = []
 for rel in [
     "vendor/mtgo_format_data",
     "vendor/mtgo_archetype_parser",
-    "vendor/mtgosdk",
+    # vendor/mtgosdk excluded — bridge is downloaded at install time
     "assets/mana",
 ]:
     src = project_root / rel
     if src.exists():
         datas += tree(src, rel)
 
+# MTGOBridge.exe is no longer bundled in the PyInstaller output.
+# It is downloaded to {app}/mtgo_integration/ by the Inno Setup installer.
 binaries = []
-bridge_candidates = [
-    project_root
-    / "dotnet"
-    / "MTGOBridge"
-    / "bin"
-    / "Release"
-    / "net9.0-windows7.0"
-    / "win-x64"
-    / "publish"
-    / "MTGOBridge.exe",
-    project_root
-    / "dotnet"
-    / "MTGOBridge"
-    / "bin"
-    / "Release"
-    / "net9.0-windows7.0"
-    / "publish"
-    / "MTGOBridge.exe",
-]
-for candidate in bridge_candidates:
-    if candidate.exists():
-        binaries.append((str(candidate), "MTGOBridge.exe"))
-        break
 
 entry_point = project_root / "main.py"
 
