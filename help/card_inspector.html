@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Card Inspector</title>
+<style>
+body { font-family: Arial, sans-serif; margin: 20px; color: #222; }
+h1 { color: #1a3a5c; border-bottom: 2px solid #1a3a5c; padding-bottom: 6px; }
+h2 { color: #2a5a8c; }
+a { color: #1a5fa0; }
+</style>
+</head>
+<body>
+<h1>Card Inspector</h1>
+<p>The <strong>Card Inspector</strong> sits on the right side of the main window. It shows detailed
+information about the currently focused card.</p>
+
+<h2>Displayed information</h2>
+<ul>
+  <li><strong>Card image</strong> &mdash; downloaded from Scryfall. Images are cached locally after
+      the first download. If an image has not been downloaded yet, a placeholder is shown and the
+      download starts automatically.</li>
+  <li><strong>Card name</strong> and <strong>mana cost</strong> with mana symbols.</li>
+  <li><strong>Type line</strong> (creature type, instant, sorcery, etc.).</li>
+  <li><strong>Oracle text</strong> &mdash; the card&rsquo;s rules text.</li>
+  <li><strong>Power / toughness</strong> or <strong>loyalty</strong> where applicable.</li>
+  <li><strong>Printing selector</strong> &mdash; a dropdown to choose between different printings
+      of the same card. Changing the printing updates the displayed image.</li>
+</ul>
+
+<h2>Triggering the inspector</h2>
+<p>The inspector updates whenever you:</p>
+<ul>
+  <li>Hover over a card row in the <a href="deck_workspace.html">Deck Workspace</a>.</li>
+  <li>Click a card row to select it.</li>
+  <li>Click a search result in the <a href="deck_builder.html">Deck Builder</a>.</li>
+</ul>
+
+<h2>Image downloads</h2>
+<p>Card images are downloaded on demand and stored in the local image cache. You can also
+pre-download images in bulk via <strong>Settings &rarr; Download Card Images</strong>.</p>
+
+<h2>See also</h2>
+<ul>
+  <li><a href="deck_workspace.html">Deck Workspace</a></li>
+  <li><a href="settings.html">Settings</a></li>
+</ul>
+</body>
+</html>

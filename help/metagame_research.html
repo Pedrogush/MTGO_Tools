@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Metagame Research Panel</title>
+<style>
+body { font-family: Arial, sans-serif; margin: 20px; color: #222; }
+h1 { color: #1a3a5c; border-bottom: 2px solid #1a3a5c; padding-bottom: 6px; }
+h2 { color: #2a5a8c; }
+table { border-collapse: collapse; width: 100%; }
+th { background: #1a3a5c; color: #fff; padding: 6px 10px; text-align: left; }
+td { padding: 5px 10px; border-bottom: 1px solid #ddd; vertical-align: top; }
+a { color: #1a5fa0; }
+</style>
+</head>
+<body>
+<h1>Metagame Research Panel</h1>
+<p>The <strong>Metagame Research</strong> panel occupies the left side of the main window. It lets you
+browse competitive archetypes for any supported MTGO format, using data fetched from MTGGoldfish.</p>
+
+<h2>Controls</h2>
+<table>
+  <tr><th>Control</th><th>Description</th></tr>
+  <tr><td><strong>Format dropdown</strong></td>
+      <td>Selects the competitive format (Modern, Legacy, Pioneer, Standard, Pauper, Vintage, etc.).
+          Changing the format clears the current archetype list and fetches new data.</td></tr>
+  <tr><td><strong>Search box</strong></td>
+      <td>Filters the archetype list in real time. Type part of an archetype name to narrow the list.</td></tr>
+  <tr><td><strong>Archetype list</strong></td>
+      <td>Displays the archetypes available for the selected format. Click an entry to load its decklists
+          into the <a href="deck_results.html">Deck Results</a> panel.</td></tr>
+  <tr><td><strong>Reload Archetypes</strong></td>
+      <td>Forces a fresh fetch from MTGGoldfish, bypassing the local cache.</td></tr>
+</table>
+
+<h2>Data source</h2>
+<p>Archetype data is sourced from MTGGoldfish and cached locally. You can control whether the app also
+shows decks from MTGO.com via <strong>Settings &rarr; Deck data source</strong>. By default only
+MTGGoldfish data is shown.</p>
+
+<h2>See also</h2>
+<ul>
+  <li><a href="deck_results.html">Deck Results &amp; Actions</a></li>
+  <li><a href="deck_builder.html">Deck Builder</a></li>
+  <li><a href="settings.html">Settings</a></li>
+</ul>
+</body>
+</html>

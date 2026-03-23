@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Deck Workspace</title>
+<style>
+body { font-family: Arial, sans-serif; margin: 20px; color: #222; }
+h1 { color: #1a3a5c; border-bottom: 2px solid #1a3a5c; padding-bottom: 6px; }
+h2 { color: #2a5a8c; }
+table { border-collapse: collapse; width: 100%; }
+th { background: #1a3a5c; color: #fff; padding: 6px 10px; text-align: left; }
+td { padding: 5px 10px; border-bottom: 1px solid #ddd; vertical-align: top; }
+a { color: #1a5fa0; }
+</style>
+</head>
+<body>
+<h1>Deck Workspace</h1>
+<p>The <strong>Deck Workspace</strong> is the tabbed area in the centre of the main window. It shows
+the cards and supporting information for the currently loaded deck.</p>
+
+<h2>Tabs</h2>
+<table>
+  <tr><th>Tab</th><th>Description</th></tr>
+  <tr><td><strong>Mainboard</strong></td>
+      <td>Displays the 60-card main deck as a sortable grid. Each row shows the card count, name,
+          mana cost, type, and ownership status (if a collection is loaded). Use the
+          <strong>+</strong> and <strong>&minus;</strong> controls in each row to adjust counts when
+          building your own deck.</td></tr>
+  <tr><td><strong>Sideboard</strong></td>
+      <td>Displays the 15-card sideboard in the same format as the Mainboard tab.</td></tr>
+  <tr><td><strong>Sideboard Guide</strong></td>
+      <td>Matchup-by-matchup sideboarding notes. See <a href="sideboard_guide.html">Sideboard Guide</a>.</td></tr>
+  <tr><td><strong>Deck Notes</strong></td>
+      <td>Free-form text notes saved per deck. See <a href="deck_notes.html">Deck Notes</a>.</td></tr>
+</table>
+
+<h2>Card rows</h2>
+<p>Hovering over a card row previews the card in the <a href="card_inspector.html">Card Inspector</a>
+panel. Clicking a row selects it and updates the inspector with full detail including mana cost,
+type, and card image.</p>
+
+<h2>Collection overlay</h2>
+<p>If you have loaded your MTGO collection (via <strong>Settings &rarr; Load Collection</strong>),
+each card row is annotated to show how many copies you own. Rows where you own all required copies
+are highlighted differently from rows where you are missing cards.</p>
+
+<h2>See also</h2>
+<ul>
+  <li><a href="card_inspector.html">Card Inspector</a></li>
+  <li><a href="deck_builder.html">Deck Builder</a></li>
+  <li><a href="deck_results.html">Deck Results &amp; Actions</a></li>
+  <li><a href="sideboard_guide.html">Sideboard Guide</a></li>
+  <li><a href="deck_notes.html">Deck Notes</a></li>
+</ul>
+</body>
+</html>

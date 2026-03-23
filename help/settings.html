@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Settings</title>
+<style>
+body { font-family: Arial, sans-serif; margin: 20px; color: #222; }
+h1 { color: #1a3a5c; border-bottom: 2px solid #1a3a5c; padding-bottom: 6px; }
+h2 { color: #2a5a8c; }
+table { border-collapse: collapse; width: 100%; }
+th { background: #1a3a5c; color: #fff; padding: 6px 10px; text-align: left; }
+td { padding: 5px 10px; border-bottom: 1px solid #ddd; vertical-align: top; }
+a { color: #1a5fa0; }
+</style>
+</head>
+<body>
+<h1>Settings</h1>
+<p>Access settings by clicking the <strong>&#9881;</strong> (gear) button at the top-right of the
+toolbar. A dropdown menu appears with the following options.</p>
+
+<h2>Menu items</h2>
+<table>
+  <tr><th>Item</th><th>Description</th></tr>
+  <tr><td><strong>Load Collection</strong></td>
+      <td>Triggers a refresh of your MTGO collection via the MTGOBridge component (.NET). After
+          loading, each card row in the <a href="deck_workspace.html">Deck Workspace</a> shows how
+          many copies you own. Requires the .NET bridge to be available.</td></tr>
+  <tr><td><strong>Download Card Images</strong></td>
+      <td>Opens a dialog to bulk-download card images from Scryfall. You can choose to download
+          images only for cards in your current deck, or for all cards in the database. Downloaded
+          images are cached locally and used by the
+          <a href="card_inspector.html">Card Inspector</a>.</td></tr>
+  <tr><td><strong>Update Card Database</strong></td>
+      <td>Forces a fresh download of the card metadata database (names, costs, types, oracle text)
+          from MTGJSON. This is required before the <a href="deck_builder.html">Deck Builder</a>
+          can search cards.</td></tr>
+  <tr><td><strong>Export Diagnostics</strong></td>
+      <td>Exports a diagnostics bundle (logs, settings, version info) to help with bug reports.
+          No personal or account data is included.</td></tr>
+  <tr><td><strong>Show Tutorial</strong></td>
+      <td>Reopens the first-run tutorial wizard that introduces the main features of MTGO Tools.</td></tr>
+  <tr><td><strong>Help</strong></td>
+      <td>Opens this help system. You can also press <strong>F1</strong> at any time.</td></tr>
+</table>
+
+<h2>Deck data source submenu</h2>
+<table>
+  <tr><th>Option</th><th>Description</th></tr>
+  <tr><td><strong>Both</strong></td>
+      <td>Shows decks from both MTGGoldfish and MTGO.com (when MTGO decklists are enabled).</td></tr>
+  <tr><td><strong>MTGGoldfish</strong></td>
+      <td>Shows only MTGGoldfish decklists. This is the default.</td></tr>
+  <tr><td><strong>MTGO.com</strong></td>
+      <td>Shows only MTGO.com decklists. Requires the MTGO decklists feature to be enabled via
+          the <code>MTGO_DECKLISTS_ENABLED</code> environment variable.</td></tr>
+</table>
+
+<h2>Language submenu</h2>
+<p>Choose between <strong>English</strong> and <strong>Portugu&ecirc;s (Brasil)</strong>. The
+language applies to all UI labels. A full restart is recommended to apply the change everywhere.</p>
+
+<h2>Session state</h2>
+<p>The following are saved automatically and restored on the next launch:</p>
+<ul>
+  <li>Selected format.</li>
+  <li>Left-panel mode (Research or Builder).</li>
+  <li>Current deck text and zone contents.</li>
+  <li>Window size and position.</li>
+  <li>Language and deck data source selections.</li>
+</ul>
+</body>
+</html>
