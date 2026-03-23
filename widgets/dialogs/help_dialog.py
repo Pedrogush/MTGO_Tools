@@ -20,7 +20,7 @@ def _get_controller() -> wx.html.HtmlHelpController:
         _controller = wx.html.HtmlHelpController(style=wx.html.HF_DEFAULT_STYLE)
         hhp = os.path.normpath(_HHP_FILE)
         if os.path.isfile(hhp):
-            _controller.AddBook(hhp, show_wait_msg=False)
+            _controller.AddBook(hhp, False)
     return _controller
 
 
