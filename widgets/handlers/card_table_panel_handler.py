@@ -189,15 +189,15 @@ class CardTablePanelHandler:
                 table.clear_selection()
 
     def _get_active_zone_for_add(self: AppFrame) -> str:
-        if not self.zone_notebook:
+        if not self.deck_tabs:
             return "main"
-        selection = self.zone_notebook.GetSelection()
+        selection = self.deck_tabs.GetSelection()
         for zone, table in (
             ("main", self.main_table),
             ("side", self.side_table),
             ("out", self.out_table),
         ):
-            if table and self.zone_notebook.GetPageIndex(table) == selection:
+            if table and self.deck_tabs.GetPageIndex(table) == selection:
                 return zone if zone in {"main", "side"} else "main"
         return "main"
 

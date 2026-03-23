@@ -429,7 +429,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
         self.deck_tabs = self._create_notebook(detail_box)
         detail_sizer.Add(self.deck_tabs, 1, wx.EXPAND | wx.ALL, PADDING_MD)
 
-        # Deck tables tab
+        # Mainboard and Sideboard as top-level tabs
         self._build_deck_tables_tab()
         deck_tabs_width = CardTablePanel.grid_width()
         self.deck_tabs.SetMinSize((deck_tabs_width, -1))
@@ -438,16 +438,16 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
         detail_box.SetMinSize((detail_box_width, -1))
         detail_box.SetMaxSize((detail_box_width, -1))
 
-        # Stats, guide, and notes tabs
-        self.deck_stats_panel = DeckStatsPanel(
-            self.deck_tabs,
-            card_manager=self.controller.card_repo.get_card_manager(),
-            deck_service=self.controller.deck_service,
+        # Collection status label below the tabs
+        self.collection_status_label = wx.StaticText(
+            detail_box, label="Collection inventory not loaded."
         )
-        self.deck_tabs.AddPage(self.deck_stats_panel, "Stats")
-        # Maintain compatibility with callers/tests that accessed the old label directly.
-        self.stats_summary = self.deck_stats_panel.summary_label
+        self.collection_status_label.SetForegroundColour(SUBDUED_TEXT)
+        detail_sizer.Add(
+            self.collection_status_label, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_SM
+        )
 
+        # Sideboard Guide and Notes tabs
         self.sideboard_guide_panel = SideboardGuidePanel(
             self.deck_tabs,
             on_add_entry=self._on_add_guide_entry,
@@ -469,30 +469,22 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
             on_status_update=self._set_status,
         )
         self.deck_tabs.AddPage(self.deck_notes_panel, "Deck Notes")
+
+        # Stats panel kept hidden; stats_summary preserved for callers.
+        self.deck_stats_panel = DeckStatsPanel(
+            detail_box,
+            card_manager=self.controller.card_repo.get_card_manager(),
+            deck_service=self.controller.deck_service,
+        )
+        self.deck_stats_panel.Hide()
+        self.stats_summary = self.deck_stats_panel.summary_label
         return detail_sizer
 
     def _build_deck_tables_tab(self) -> None:
-        self.deck_tables_page = wx.Panel(self.deck_tabs)
-        self.deck_tabs.AddPage(self.deck_tables_page, "Deck Tables")
-        tables_sizer = wx.BoxSizer(wx.VERTICAL)
-        self.deck_tables_page.SetSizer(tables_sizer)
-
-        self.zone_notebook = self._create_notebook(self.deck_tables_page)
-        tables_sizer.Add(self.zone_notebook, 1, wx.EXPAND | wx.BOTTOM, PADDING_MD)
-
-        # Create zone tables
+        self.zone_notebook = None
         self.main_table = self._create_zone_table("main", "Mainboard")
         self.side_table = self._create_zone_table("side", "Sideboard")
         self.out_table = None
-
-        # Collection status
-        self.collection_status_label = wx.StaticText(
-            self.deck_tables_page, label="Collection inventory not loaded."
-        )
-        self.collection_status_label.SetForegroundColour(SUBDUED_TEXT)
-        tables_sizer.Add(
-            self.collection_status_label, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_SM
-        )
 
     def _create_zone_table(
         self, zone: str, tab_name: str, owned_status_func=None
@@ -501,7 +493,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
             owned_status_func = self.controller.collection_service.get_owned_status
 
         table = CardTablePanel(
-            self.zone_notebook,
+            self.deck_tabs,
             zone,
             self.mana_icons,
             self.controller.card_repo.get_card_metadata,
@@ -512,7 +504,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
             self._handle_card_focus,
             self._handle_card_hover,
         )
-        self.zone_notebook.AddPage(table, tab_name)
+        self.deck_tabs.AddPage(table, tab_name)
         return table
 
     # ------------------------------------------------------------------ Left panel helpers -------------------------------------------------
