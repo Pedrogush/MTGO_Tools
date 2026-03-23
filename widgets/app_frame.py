@@ -32,6 +32,7 @@ from widgets.buttons.deck_action_buttons import DeckActionButtons
 from widgets.buttons.toolbar_buttons import ToolbarButtons
 from widgets.deck_results_list import DeckResultsList
 from widgets.dialogs.image_download_dialog import show_image_download_dialog
+from widgets.dialogs.tutorial_dialog import show_tutorial
 from widgets.handlers.app_event_handlers import AppEventHandlers
 from widgets.handlers.card_table_panel_handler import CardTablePanelHandler
 from widgets.handlers.sideboard_guide_handlers import SideboardGuideHandlers
@@ -275,6 +276,11 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
             menu,
             self._t("toolbar.export_diagnostics"),
             self._open_feedback_dialog,
+        )
+        self._append_menu_item(
+            menu,
+            self._t("toolbar.show_tutorial"),
+            self._open_tutorial,
         )
         menu.AppendSeparator()
         self._append_radio_submenu(
@@ -543,8 +549,14 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
         dialog.Destroy()
         return None
 
+    def _open_tutorial(self) -> None:
+        show_tutorial(self)
+        self.controller.session_manager.mark_tutorial_shown()
+
     def _restore_session_state(self) -> None:
         state = self.controller.session_manager.restore_session_state(self.controller.zone_cards)
+        if not self.controller.session_manager.is_tutorial_shown():
+            wx.CallAfter(self._open_tutorial)
 
         # Restore left panel mode
         self._show_left_panel(state["left_mode"], force=True)
