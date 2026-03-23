@@ -518,25 +518,13 @@ class AppEventHandlers:
         )
         self._apply_language(locale)
 
-    def _on_daily_average_success(
-        self, buffer: dict[str, float], deck_count: int, progress_dialog: wx.ProgressDialog
-    ) -> None:
+    def _on_daily_average_success(self, buffer: dict[str, float], deck_count: int) -> None:
         self.daily_average_button.Enable()
         deck_text = self.controller.deck_service.render_average_deck(buffer, deck_count)
         self._on_deck_content_ready(deck_text, source="average")
 
-        try:
-            progress_dialog.Update(deck_count)
-            progress_dialog.Close()
-        except Exception as dialog_exc:
-            logger.error(f"Error closing progress dialog: {dialog_exc}")
-
-    def _on_daily_average_error(self, error: Exception, progress_dialog: wx.ProgressDialog) -> None:
+    def _on_daily_average_error(self, error: Exception) -> None:
         logger.error(f"Daily average error: {error}")
-        try:
-            progress_dialog.Close()
-        except Exception as exc:
-            logger.debug("Error closing progress dialog after failure: %s", exc)
         self.daily_average_button.Enable()
         wx.MessageBox(
             f"Failed to build daily average:\n{error}", "Daily Average", wx.OK | wx.ICON_ERROR
@@ -628,25 +616,14 @@ class AppEventHandlers:
     def _start_daily_average_build(self) -> None:
         self.daily_average_button.Disable()
 
-        # progress_dialog is assigned after the synchronous can_proceed check so
-        # the dialog is never created when there are no decks to process.
-        # Callbacks capture the name by reference and are only invoked from the
-        # background thread via wx.CallAfter, which runs after this method returns
-        # and the dialog has already been assigned.
-        progress_dialog = None
-
         can_proceed, message = self.controller.build_daily_average_deck(
             on_success=lambda buffer, deck_count: wx.CallAfter(
-                self._on_daily_average_success, buffer, deck_count, progress_dialog
+                self._on_daily_average_success, buffer, deck_count
             ),
-            on_error=lambda error: wx.CallAfter(
-                self._on_daily_average_error, error, progress_dialog
-            ),
+            on_error=lambda error: wx.CallAfter(self._on_daily_average_error, error),
             on_status=lambda msg: wx.CallAfter(self._set_status, msg),
-            on_progress=lambda current, total: (
-                wx.CallAfter(progress_dialog.Update, current, f"Processed {current}/{total} decks…")
-                if progress_dialog
-                else None
+            on_progress=lambda current, total: wx.CallAfter(
+                self._set_status, f"Building average… {current}/{total} decks"
             ),
         )
 
@@ -654,14 +631,6 @@ class AppEventHandlers:
             self.daily_average_button.Enable()
             wx.MessageBox(message, "Daily Average", wx.OK | wx.ICON_INFORMATION)
             return
-
-        progress_dialog = wx.ProgressDialog(
-            "Daily Average",
-            "Downloading decks…",
-            maximum=int(message.split()[1]),
-            parent=self,
-            style=wx.PD_APP_MODAL | wx.PD_ELAPSED_TIME,
-        )
 
     def _download_and_display_deck(self, deck: dict[str, Any]) -> None:
         deck_number = deck.get("number")
