@@ -284,6 +284,17 @@ def deck_selector_factory(wx_app) -> AppFrame:
         frame.metagame_repo = controller.metagame_repo
         frame.deck_action_buttons = getattr(frame, "deck_action_buttons", None)
 
+        # Prevent the first-run tutorial dialog from hanging tests.
+        # Introduced in PR #301 (commit 273ae4d): _restore_session_state queues
+        # wx.CallAfter(self._open_tutorial) when is_tutorial_shown() returns False.
+        # In a fresh temp-dir environment there is no saved config, so
+        # is_tutorial_shown() always returns False. When pump_ui_events() processes
+        # the queued callback it runs show_tutorial() → dlg.ShowModal(), which blocks
+        # indefinitely waiting for user input and hangs the entire test session.
+        # Marking the tutorial shown here updates the in-memory settings dict so that
+        # _restore_session_state (which fires later via wx.CallAfter) skips the dialog.
+        controller.session_manager.mark_tutorial_shown()
+
         # Make archetype/deck loading synchronous for tests
         local_archetypes = [
             {"name": "Mono Red Aggro", "href": "mono-red-aggro"},
