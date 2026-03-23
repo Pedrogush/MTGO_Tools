@@ -550,7 +550,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
         return None
 
     def _open_tutorial(self) -> None:
-        show_tutorial(self)
+        show_tutorial(self, locale=self.locale)
         self.controller.session_manager.mark_tutorial_shown()
 
     def _restore_session_state(self) -> None:

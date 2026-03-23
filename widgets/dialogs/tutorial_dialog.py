@@ -5,103 +5,39 @@ from __future__ import annotations
 import wx
 
 from utils.constants import DARK_BG, DARK_PANEL, LIGHT_TEXT, SUBDUED_TEXT
+from utils.i18n import DEFAULT_LOCALE, translate
 
-_STEPS: list[tuple[str, str]] = [
-    (
-        "Welcome to MTGO Tools",
-        (
-            "MTGO Tools helps you research the competitive metagame, build and edit decks, "
-            "track opponents, and manage your MTGO collection — all in one desktop app.\n\n"
-            "This short tour covers the main features. You can revisit it any time from "
-            "Settings \u2192 Show Tutorial."
-        ),
-    ),
-    (
-        "Metagame Research",
-        (
-            "The left panel is your metagame research hub.\n\n"
-            "\u2022  Choose a format (Modern, Legacy, \u2026) from the dropdown.\n"
-            "\u2022  Type in the search box to filter archetypes by name.\n"
-            "\u2022  Click an archetype to load its decklists in the Deck Results panel.\n"
-            "\u2022  Use \u201cReload Archetypes\u201d to refresh data from MTGGoldfish."
-        ),
-    ),
-    (
-        "Deck Workspace",
-        (
-            "The centre area shows the currently loaded deck.\n\n"
-            "\u2022  Mainboard \u2014 your 60-card main deck.\n"
-            "\u2022  Sideboard \u2014 your 15-card sideboard.\n"
-            "\u2022  Hover over or click a card row to inspect it in the Card Inspector "
-            "on the right.\n"
-            "\u2022  Use the + / \u2212 controls to edit counts when building your own deck."
-        ),
-    ),
-    (
-        "Toolbar Tools",
-        (
-            "The toolbar at the top of the right panel provides quick access to:\n\n"
-            "\u2022  Opponent Tracker \u2014 detects the opponent from your MTGO window title "
-            "and looks up their most-played archetypes.\n"
-            "\u2022  Timer Alert \u2014 configurable countdown to warn you before time runs out "
-            "in a round.\n"
-            "\u2022  Match History \u2014 parses your MTGO GameLog files and shows recent results.\n"
-            "\u2022  Metagame Analysis \u2014 a top-level breakdown of the current format."
-        ),
-    ),
-    (
-        "Deck Builder",
-        (
-            "Switch the left panel to Builder mode to search for cards and craft your own deck.\n\n"
-            "\u2022  Type a card name or keyword in the search box.\n"
-            "\u2022  Click a result to preview it in the Card Inspector.\n"
-            "\u2022  Use \u201cAdd to Main\u201d or \u201cAdd to Side\u201d to add it to your deck.\n"
-            "\u2022  Open the Mana Keyboard for quick mana-cost symbol input.\n"
-            "\u2022  Use \u201cCopy\u201d to copy the deck list to your clipboard."
-        ),
-    ),
-    (
-        "Sideboard Guide",
-        (
-            "The Sideboard Guide tab lets you record matchup-by-matchup notes.\n\n"
-            "\u2022  Add an entry for each archetype you face.\n"
-            "\u2022  Record cards to bring IN and take OUT for each matchup.\n"
-            "\u2022  Mark flex slots \u2014 cards whose count varies by matchup.\n"
-            "\u2022  Pin the guide to keep it visible while reviewing other tabs.\n"
-            "\u2022  Export or import as CSV to share guides with teammates."
-        ),
-    ),
-    (
-        "You\u2019re All Set!",
-        (
-            "That\u2019s the quick tour of MTGO Tools.\n\n"
-            "A few more tips:\n"
-            "\u2022  Use the \u2699 Settings menu to load your MTGO collection, download card "
-            "images, update the card database, or change the language.\n"
-            "\u2022  Deck Notes let you keep free-form notes attached to any deck.\n"
-            "\u2022  Session state (current deck, format, window size) is saved automatically.\n\n"
-            "Good luck in your matches!"
-        ),
-    ),
+_STEP_KEYS: list[tuple[str, str]] = [
+    ("tutorial.step0.title", "tutorial.step0.body"),
+    ("tutorial.step1.title", "tutorial.step1.body"),
+    ("tutorial.step2.title", "tutorial.step2.body"),
+    ("tutorial.step3.title", "tutorial.step3.body"),
+    ("tutorial.step4.title", "tutorial.step4.body"),
+    ("tutorial.step5.title", "tutorial.step5.body"),
+    ("tutorial.step6.title", "tutorial.step6.body"),
 ]
 
 
 class TutorialDialog(wx.Dialog):
     """Multi-page wizard that introduces the main features of MTGO Tools."""
 
-    def __init__(self, parent: wx.Window) -> None:
+    def __init__(self, parent: wx.Window, locale: str = DEFAULT_LOCALE) -> None:
+        self._locale = locale
         super().__init__(
             parent,
-            title="MTGO Tools \u2014 Quick Tour",
+            title=self._t("tutorial.dialog_title"),
             size=(540, 420),
             style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER,
         )
         self.SetBackgroundColour(DARK_BG)
         self._step = 0
-        self._total = len(_STEPS)
+        self._total = len(_STEP_KEYS)
         self._build_ui()
         self._refresh()
         self.Centre()
+
+    def _t(self, key: str) -> str:
+        return translate(self._locale, key)
 
     # ------------------------------------------------------------------ build --
     def _build_ui(self) -> None:
@@ -149,18 +85,18 @@ class TutorialDialog(wx.Dialog):
         btn_sizer = wx.BoxSizer(wx.HORIZONTAL)
         btn_bar.SetSizer(btn_sizer)
 
-        self._skip_btn = wx.Button(btn_bar, label="Skip Tour")
+        self._skip_btn = wx.Button(btn_bar, label=self._t("tutorial.btn.skip"))
         self._skip_btn.SetForegroundColour(SUBDUED_TEXT)
         self._skip_btn.Bind(wx.EVT_BUTTON, self._on_skip)
         btn_sizer.Add(self._skip_btn, 0, wx.ALL, 8)
 
         btn_sizer.AddStretchSpacer(1)
 
-        self._back_btn = wx.Button(btn_bar, wx.ID_BACKWARD, label="< Back")
+        self._back_btn = wx.Button(btn_bar, wx.ID_BACKWARD, label=self._t("tutorial.btn.back"))
         self._back_btn.Bind(wx.EVT_BUTTON, self._on_back)
         btn_sizer.Add(self._back_btn, 0, wx.TOP | wx.BOTTOM | wx.RIGHT, 8)
 
-        self._next_btn = wx.Button(btn_bar, wx.ID_FORWARD, label="Next >")
+        self._next_btn = wx.Button(btn_bar, wx.ID_FORWARD, label=self._t("tutorial.btn.next"))
         self._next_btn.SetDefault()
         self._next_btn.Bind(wx.EVT_BUTTON, self._on_next)
         btn_sizer.Add(self._next_btn, 0, wx.TOP | wx.BOTTOM | wx.RIGHT, 8)
@@ -171,14 +107,14 @@ class TutorialDialog(wx.Dialog):
 
     # ------------------------------------------------------------------ nav --
     def _refresh(self) -> None:
-        title, body = _STEPS[self._step]
-        self._title_label.SetLabel(title)
+        title_key, body_key = _STEP_KEYS[self._step]
+        self._title_label.SetLabel(self._t(title_key))
         self._progress_label.SetLabel(f"{self._step + 1} / {self._total}")
-        self._body_label.SetLabel(body)
+        self._body_label.SetLabel(self._t(body_key))
         self._body_label.Wrap(self.GetClientSize().GetWidth() - 40)
         self._back_btn.Enable(self._step > 0)
         is_last = self._step == self._total - 1
-        self._next_btn.SetLabel("Finish" if is_last else "Next >")
+        self._next_btn.SetLabel(self._t("tutorial.btn.finish") if is_last else self._t("tutorial.btn.next"))
         self._skip_btn.Show(not is_last)
         self.Layout()
 
@@ -208,9 +144,9 @@ class TutorialDialog(wx.Dialog):
             self.Layout()
 
 
-def show_tutorial(parent: wx.Window) -> None:
+def show_tutorial(parent: wx.Window, locale: str = DEFAULT_LOCALE) -> None:
     """Show the tutorial dialog modally and destroy it afterwards."""
-    dlg = TutorialDialog(parent)
+    dlg = TutorialDialog(parent, locale=locale)
     dlg.Bind(wx.EVT_SIZE, dlg.OnSize)
     dlg.ShowModal()
     dlg.Destroy()
