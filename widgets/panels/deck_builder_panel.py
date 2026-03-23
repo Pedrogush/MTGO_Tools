@@ -7,8 +7,6 @@ import wx
 
 from services.radar_service import RadarData
 from utils.constants import (
-    BUILDER_FORMATS_GRID_COLS,
-    BUILDER_FORMATS_GRID_HGAP,
     BUILDER_MANA_ALL_BTN_SIZE,
     BUILDER_MANA_CANVAS_WIDTH,
     BUILDER_MANA_ICON_GAP,
@@ -234,8 +232,8 @@ class DeckBuilderPanel(wx.Panel):
         self.mana_exact_cb: wx.CheckBox | None = None
         self.mv_comparator: wx.Choice | None = None
         self.mv_value: wx.TextCtrl | None = None
-        self.format_checks: list[wx.CheckBox] = []
-        self.color_checks: dict[str, wx.CheckBox] = {}
+        self.format_choice: wx.Choice | None = None
+        self.color_checks: dict[str, wx.ToggleButton] = {}
         self.color_mode_choice: wx.Choice | None = None
         self.text_mode_choice: wx.Choice | None = None
         self.results_ctrl: _SearchResultsView | None = None
@@ -286,25 +284,21 @@ class DeckBuilderPanel(wx.Panel):
             stylize_textctrl(ctrl)
             ctrl.SetHint(hint)
             ctrl.Bind(wx.EVT_TEXT, self._on_filters_changed)
-            sizer.Add(ctrl, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_SM)
             self.inputs[key] = ctrl
 
-            # Oracle Text field gets a match-mode selector
+            # Oracle Text field gets match-mode selector on same row as input
             if key == "text":
-                text_match_row = wx.BoxSizer(wx.HORIZONTAL)
-                text_match_label = wx.StaticText(self, label="Match")
-                stylize_label(text_match_label, True)
-                text_match_row.Add(
-                    text_match_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, PADDING_MD
-                )
-                text_mode_choice = wx.Choice(self, choices=["Exact phrase", "All words"])
+                text_row = wx.BoxSizer(wx.HORIZONTAL)
+                text_row.Add(ctrl, 1, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, PADDING_SM)
+                text_mode_choice = wx.Choice(self, choices=["=", "≈"])
                 text_mode_choice.SetSelection(0)
                 stylize_choice(text_mode_choice)
                 self.text_mode_choice = text_mode_choice
                 text_mode_choice.Bind(wx.EVT_CHOICE, self._on_filters_changed)
-                text_match_row.Add(text_mode_choice, 0)
-                text_match_row.AddStretchSpacer(1)
-                sizer.Add(text_match_row, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_XS)
+                text_row.Add(text_mode_choice, 0, wx.ALIGN_CENTER_VERTICAL)
+                sizer.Add(text_row, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_SM)
+            else:
+                sizer.Add(ctrl, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_SM)
 
             # Mana cost field gets extra controls
             if key == "mana":
@@ -341,68 +335,71 @@ class DeckBuilderPanel(wx.Panel):
                 )
 
         # Mana value filter
-        mv_row = wx.BoxSizer(wx.HORIZONTAL)
         mv_label = wx.StaticText(self, label="Mana Value Filter")
         stylize_label(mv_label, True)
-        mv_row.Add(mv_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, PADDING_MD)
-        mv_choice = wx.Choice(self, choices=["Any", "<", "≤", "=", "≥", ">"])
-        mv_choice.SetSelection(0)
-        stylize_choice(mv_choice)
-        self.mv_comparator = mv_choice
-        mv_choice.Bind(wx.EVT_CHOICE, self._on_filters_changed)
-        mv_row.Add(mv_choice, 0, wx.RIGHT, PADDING_MD)
+        sizer.Add(mv_label, 0, wx.LEFT | wx.RIGHT, PADDING_MD)
+        mv_row = wx.BoxSizer(wx.HORIZONTAL)
         mv_value = wx.TextCtrl(self)
         stylize_textctrl(mv_value)
         mv_value.SetHint("e.g. 3")
         self.mv_value = mv_value
         mv_value.Bind(wx.EVT_TEXT, self._on_filters_changed)
-        mv_row.Add(mv_value, 1)
+        mv_row.Add(mv_value, 1, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, PADDING_SM)
+        mv_choice = wx.Choice(self, choices=["-", "<", "≤", "=", "≥", ">"])
+        mv_choice.SetSelection(0)
+        stylize_choice(mv_choice)
+        self.mv_comparator = mv_choice
+        mv_choice.Bind(wx.EVT_CHOICE, self._on_filters_changed)
+        mv_row.Add(mv_choice, 0, wx.ALIGN_CENTER_VERTICAL)
         sizer.Add(mv_row, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_SM)
 
-        # Format checkboxes
-        formats_label = wx.StaticText(self, label="Formats")
-        stylize_label(formats_label, True)
-        sizer.Add(formats_label, 0, wx.LEFT | wx.RIGHT, PADDING_MD)
-        formats_grid = wx.FlexGridSizer(
-            0, BUILDER_FORMATS_GRID_COLS, PADDING_SM, BUILDER_FORMATS_GRID_HGAP
-        )
-        for fmt in FORMAT_OPTIONS:
-            cb = wx.CheckBox(self, label=fmt)
-            cb.SetForegroundColour(LIGHT_TEXT)
-            cb.SetBackgroundColour(DARK_PANEL)
-            formats_grid.Add(cb, 0, wx.RIGHT, PADDING_MD)
-            cb.Bind(wx.EVT_CHECKBOX, self._on_filters_changed)
-            self.format_checks.append(cb)
-        sizer.Add(formats_grid, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_SM)
+        # Color identity filter (left) + Format filter (right) on same line
+        color_format_row = wx.BoxSizer(wx.HORIZONTAL)
 
-        # Color identity filter
+        color_col = wx.BoxSizer(wx.VERTICAL)
         color_label = wx.StaticText(self, label="Color Identity Filter")
         stylize_label(color_label, True)
-        sizer.Add(color_label, 0, wx.LEFT | wx.RIGHT, PADDING_MD)
-
-        color_mode = wx.Choice(self, choices=["Any", "At least", "Exactly", "Not these"])
+        color_col.Add(color_label, 0, wx.BOTTOM, PADDING_XS)
+        color_controls = wx.BoxSizer(wx.HORIZONTAL)
+        color_mode = wx.Choice(self, choices=["-", "≥", "=", "≠"])
         color_mode.SetSelection(0)
         stylize_choice(color_mode)
         self.color_mode_choice = color_mode
         color_mode.Bind(wx.EVT_CHOICE, self._on_filters_changed)
-        sizer.Add(color_mode, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_SM)
+        color_controls.Add(color_mode, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, PADDING_SM)
+        for code in ["W", "U", "B", "R", "G", "C"]:
+            bmp: wx.Bitmap | None = None
+            try:
+                bmp = self.mana_icons.bitmap_for_symbol(code)
+            except Exception:
+                bmp = None
+            if bmp and bmp.IsOk():
+                btn: wx.ToggleButton = wx.BitmapToggleButton(
+                    self, wx.ID_ANY, bmp, size=(bmp.GetWidth() + 8, bmp.GetHeight() + 8)
+                )
+            else:
+                btn = wx.ToggleButton(self, label=code, size=(28, 28))
+                btn.SetForegroundColour(LIGHT_TEXT)
+            btn.SetBackgroundColour(DARK_ALT)
+            btn.Bind(wx.EVT_TOGGLEBUTTON, self._on_filters_changed)
+            color_controls.Add(btn, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, PADDING_XS)
+            self.color_checks[code] = btn
+        color_col.Add(color_controls, 0)
+        color_format_row.Add(color_col, 1, wx.RIGHT, PADDING_MD)
 
-        colors_row = wx.BoxSizer(wx.HORIZONTAL)
-        for code, label in [
-            ("W", "White"),
-            ("U", "Blue"),
-            ("B", "Black"),
-            ("R", "Red"),
-            ("G", "Green"),
-            ("C", "Colorless"),
-        ]:
-            cb = wx.CheckBox(self, label=label)
-            cb.SetForegroundColour(LIGHT_TEXT)
-            cb.SetBackgroundColour(DARK_PANEL)
-            colors_row.Add(cb, 0, wx.RIGHT, PADDING_SM)
-            cb.Bind(wx.EVT_CHECKBOX, self._on_filters_changed)
-            self.color_checks[code] = cb
-        sizer.Add(colors_row, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_SM)
+        format_col = wx.BoxSizer(wx.VERTICAL)
+        format_label = wx.StaticText(self, label="Format")
+        stylize_label(format_label, True)
+        format_col.Add(format_label, 0, wx.BOTTOM, PADDING_XS)
+        format_choice = wx.Choice(self, choices=["Any"] + list(FORMAT_OPTIONS))
+        format_choice.SetSelection(0)
+        stylize_choice(format_choice)
+        self.format_choice = format_choice
+        format_choice.Bind(wx.EVT_CHOICE, self._on_filters_changed)
+        format_col.Add(format_choice, 0, wx.EXPAND)
+        color_format_row.Add(format_col, 0)
+
+        sizer.Add(color_format_row, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_SM)
 
         # Clear button
         controls = wx.BoxSizer(wx.HORIZONTAL)
@@ -572,12 +569,16 @@ class DeckBuilderPanel(wx.Panel):
         )
         mv_value_text = self.mv_value.GetValue().strip() if self.mv_value else ""
         filters["mv_value"] = mv_value_text
-        filters["formats"] = [cb.GetLabel().lower() for cb in self.format_checks if cb.IsChecked()]
+        filters["formats"] = (
+            [self.format_choice.GetStringSelection().lower()]
+            if self.format_choice and self.format_choice.GetSelection() > 0
+            else []
+        )
         filters["color_mode"] = (
             self.color_mode_choice.GetStringSelection() if self.color_mode_choice else "Any"
         )
         filters["selected_colors"] = [
-            code for code, cb in self.color_checks.items() if cb.IsChecked()
+            code for code, btn in self.color_checks.items() if btn.GetValue()
         ]
 
         # Add radar filter if enabled
@@ -612,8 +613,8 @@ class DeckBuilderPanel(wx.Panel):
             self.mv_comparator.SetSelection(0)
         if self.mv_value:
             self.mv_value.ChangeValue("")
-        for cb in self.format_checks:
-            cb.SetValue(False)
+        if self.format_choice:
+            self.format_choice.SetSelection(0)
         if self.color_mode_choice:
             self.color_mode_choice.SetSelection(0)
         for cb in self.color_checks.values():
