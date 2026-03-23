@@ -496,6 +496,11 @@ class CardInspectorPanel(wx.Panel):
         need_double_face: bool,
     ) -> None:
         """Apply a has-printings image lookup result on the UI thread."""
+        try:
+            if not self:
+                return
+        except RuntimeError:
+            return
         if gen != self._image_lookup_gen:
             return
         image_available = False

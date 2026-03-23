@@ -200,6 +200,10 @@ class CardImageDisplay(wx.Panel):
 
             return True
 
+        except RuntimeError:
+            # Widget was destroyed (e.g. during app shutdown) while a
+            # CallAfter callback was still pending – silently bail out.
+            return False
         except Exception as exc:
             logger.exception(f"Error loading image {image_path}: {exc}")
             return False

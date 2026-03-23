@@ -200,6 +200,11 @@ class CardBoxPanel(wx.Panel):
 
     def _on_image_load_done(self, gen: int, pil_img: "PilImage.Image | None") -> None:
         """Main-thread callback: apply the loaded image bitmap."""
+        try:
+            if not self:
+                return
+        except RuntimeError:
+            return
         if gen != self._image_generation:
             return  # stale result superseded by a newer assign_card / load
         if pil_img is None:
