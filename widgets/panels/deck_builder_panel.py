@@ -261,6 +261,7 @@ class DeckBuilderPanel(wx.Panel):
         # Back button
         back_btn = wx.Button(self, label="Deck Research")
         stylize_button(back_btn)
+        back_btn.SetToolTip("Switch back to Deck Research mode")
         back_btn.Bind(wx.EVT_BUTTON, lambda _evt: self._on_back_clicked())
         sizer.Add(back_btn, 0, wx.EXPAND | wx.ALL, PADDING_MD)
 
@@ -271,18 +272,29 @@ class DeckBuilderPanel(wx.Panel):
 
         # Search fields
         field_specs = [
-            ("name", "Card Name", "e.g. Ragavan"),
-            ("type", "Type Line", "Artifact Creature"),
-            ("mana", "Mana Cost", "Curly braces like {1}{G} or shorthand (e.g. GGG)"),
-            ("text", "Oracle Text", "Keywords or abilities"),
+            ("name", "Card Name", "e.g. Ragavan", "Filter cards by name"),
+            (
+                "type",
+                "Type Line",
+                "Artifact Creature",
+                "Filter cards by type line (e.g. Creature, Instant)",
+            ),
+            (
+                "mana",
+                "Mana Cost",
+                "Curly braces like {1}{G} or shorthand (e.g. GGG)",
+                "Filter cards by mana cost",
+            ),
+            ("text", "Oracle Text", "Keywords or abilities", "Filter cards by oracle text"),
         ]
-        for key, label_text, hint in field_specs:
+        for key, label_text, hint, tooltip in field_specs:
             lbl = wx.StaticText(self, label=label_text)
             stylize_label(lbl, True)
             sizer.Add(lbl, 0, wx.LEFT | wx.RIGHT, PADDING_MD)
             ctrl = wx.TextCtrl(self)
             stylize_textctrl(ctrl)
             ctrl.SetHint(hint)
+            ctrl.SetToolTip(tooltip)
             ctrl.Bind(wx.EVT_TEXT, self._on_filters_changed)
             self.inputs[key] = ctrl
 
@@ -293,6 +305,7 @@ class DeckBuilderPanel(wx.Panel):
                 text_mode_choice = wx.Choice(self, choices=["=", "≈"])
                 text_mode_choice.SetSelection(0)
                 stylize_choice(text_mode_choice)
+                text_mode_choice.SetToolTip("= matches all words; ≈ matches any word")
                 self.text_mode_choice = text_mode_choice
                 text_mode_choice.Bind(wx.EVT_CHOICE, self._on_filters_changed)
                 text_row.Add(text_mode_choice, 0, wx.ALIGN_CENTER_VERTICAL)
@@ -310,6 +323,9 @@ class DeckBuilderPanel(wx.Panel):
                 exact_cb = wx.CheckBox(self, label="Exact symbols")
                 exact_cb.SetForegroundColour(LIGHT_TEXT)
                 exact_cb.SetBackgroundColour(DARK_PANEL)
+                exact_cb.SetToolTip(
+                    "When checked, match the exact mana symbols (no extras allowed)"
+                )
                 match_row.Add(exact_cb, 0)
                 self.mana_exact_cb = exact_cb
                 exact_cb.Bind(wx.EVT_CHECKBOX, self._on_filters_changed)
@@ -324,6 +340,7 @@ class DeckBuilderPanel(wx.Panel):
                     keyboard_row.Add(btn, 0, wx.ALL, PADDING_XS)
                 all_btn = wx.Button(self, label="All", size=BUILDER_MANA_ALL_BTN_SIZE)
                 stylize_button(all_btn)
+                all_btn.SetToolTip("Open the full mana symbol keyboard")
                 all_btn.Bind(wx.EVT_BUTTON, lambda _evt: self._open_mana_keyboard())
                 keyboard_row.Add(all_btn, 0, wx.ALL, PADDING_XS)
                 keyboard_row.AddStretchSpacer(1)
@@ -342,12 +359,14 @@ class DeckBuilderPanel(wx.Panel):
         mv_value = wx.TextCtrl(self)
         stylize_textctrl(mv_value)
         mv_value.SetHint("e.g. 3")
+        mv_value.SetToolTip("Enter a mana value (converted mana cost) to filter by")
         self.mv_value = mv_value
         mv_value.Bind(wx.EVT_TEXT, self._on_filters_changed)
         mv_row.Add(mv_value, 1, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, PADDING_SM)
         mv_choice = wx.Choice(self, choices=["-", "<", "≤", "=", "≥", ">"])
         mv_choice.SetSelection(0)
         stylize_choice(mv_choice)
+        mv_choice.SetToolTip("Comparison operator for the mana value filter")
         self.mv_comparator = mv_choice
         mv_choice.Bind(wx.EVT_CHOICE, self._on_filters_changed)
         mv_row.Add(mv_choice, 0, wx.ALIGN_CENTER_VERTICAL)
@@ -364,6 +383,7 @@ class DeckBuilderPanel(wx.Panel):
         color_mode = wx.Choice(self, choices=["-", "≥", "=", "≠"])
         color_mode.SetSelection(0)
         stylize_choice(color_mode)
+        color_mode.SetToolTip("≥ includes, = exactly, ≠ excludes the selected colors")
         self.color_mode_choice = color_mode
         color_mode.Bind(wx.EVT_CHOICE, self._on_filters_changed)
         color_controls.Add(color_mode, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, PADDING_SM)
@@ -384,6 +404,15 @@ class DeckBuilderPanel(wx.Panel):
                 btn = wx.ToggleButton(self, label=code, size=(28, 28))
                 btn.SetForegroundColour(LIGHT_TEXT)
             btn.SetBackgroundColour(DARK_ALT)
+            color_names = {
+                "W": "White",
+                "U": "Blue",
+                "B": "Black",
+                "R": "Red",
+                "G": "Green",
+                "C": "Colorless",
+            }
+            btn.SetToolTip(f"Toggle {color_names.get(code, code)} color filter")
             btn.Bind(wx.EVT_TOGGLEBUTTON, self._on_filters_changed)
             color_controls.Add(btn, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, PADDING_XS)
             self.color_checks[code] = btn
@@ -397,6 +426,7 @@ class DeckBuilderPanel(wx.Panel):
         format_choice = wx.Choice(self, choices=["Any"] + list(FORMAT_OPTIONS))
         format_choice.SetSelection(0)
         stylize_choice(format_choice)
+        format_choice.SetToolTip("Filter results to cards legal in the selected format")
         self.format_choice = format_choice
         format_choice.Bind(wx.EVT_CHOICE, self._on_filters_changed)
         format_col.Add(format_choice, 0, wx.EXPAND)
@@ -408,6 +438,7 @@ class DeckBuilderPanel(wx.Panel):
         controls = wx.BoxSizer(wx.HORIZONTAL)
         clear_btn = wx.Button(self, label="Clear Filters")
         stylize_button(clear_btn)
+        clear_btn.SetToolTip("Reset all search filters")
         clear_btn.Bind(wx.EVT_BUTTON, lambda _evt: self._on_clear())
         controls.Add(clear_btn, 0, wx.RIGHT, PADDING_MD)
 
@@ -415,6 +446,7 @@ class DeckBuilderPanel(wx.Panel):
         self.radar_cb = wx.CheckBox(self, label="Use Radar Filter")
         self.radar_cb.SetForegroundColour(LIGHT_TEXT)
         self.radar_cb.SetBackgroundColour(DARK_PANEL)
+        self.radar_cb.SetToolTip("Show only cards that appear in the loaded radar archetype")
         self.radar_cb.Bind(wx.EVT_CHECKBOX, self._on_radar_toggle)
         controls.Add(self.radar_cb, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, PADDING_MD)
 
@@ -422,6 +454,7 @@ class DeckBuilderPanel(wx.Panel):
         self.radar_zone_choice = wx.Choice(self, choices=["Both", "Mainboard", "Sideboard"])
         self.radar_zone_choice.SetSelection(0)
         stylize_choice(self.radar_zone_choice)
+        self.radar_zone_choice.SetToolTip("Limit radar filtering to mainboard, sideboard, or both")
         self.radar_zone_choice.Enable(False)
         self.radar_zone_choice.Bind(wx.EVT_CHOICE, self._on_radar_zone_changed)
         controls.Add(self.radar_zone_choice, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, PADDING_MD)
@@ -429,6 +462,7 @@ class DeckBuilderPanel(wx.Panel):
         # Open Radar button
         self.open_radar_btn = wx.Button(self, label="Open Radar...")
         stylize_button(self.open_radar_btn)
+        self.open_radar_btn.SetToolTip("Open a radar to filter cards by archetype frequency")
         self.open_radar_btn.Bind(wx.EVT_BUTTON, self._on_open_radar)
         controls.Add(self.open_radar_btn, 0)
 
@@ -458,6 +492,7 @@ class DeckBuilderPanel(wx.Panel):
         add_btns_row = wx.BoxSizer(wx.HORIZONTAL)
         add_main_btn = wx.Button(self, label="+ Mainboard")
         stylize_button(add_main_btn)
+        add_main_btn.SetToolTip("Add the selected card to the mainboard")
         add_main_btn.Enable(False)
         add_main_btn.Bind(wx.EVT_BUTTON, lambda _evt: self._on_add_to_zone("main"))
         add_btns_row.Add(add_main_btn, 1, wx.RIGHT, PADDING_SM)
@@ -465,6 +500,7 @@ class DeckBuilderPanel(wx.Panel):
 
         add_side_btn = wx.Button(self, label="+ Sideboard")
         stylize_button(add_side_btn)
+        add_side_btn.SetToolTip("Add the selected card to the sideboard")
         add_side_btn.Enable(False)
         add_side_btn.Bind(wx.EVT_BUTTON, lambda _evt: self._on_add_to_zone("side"))
         add_btns_row.Add(add_side_btn, 1)

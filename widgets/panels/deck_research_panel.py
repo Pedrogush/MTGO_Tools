@@ -58,6 +58,8 @@ class DeckResearchPanel(wx.Panel):
         self.format_choice = wx.Choice(self, choices=self.format_options)
         self.format_choice.SetStringSelection(self.initial_format)
         stylize_choice(self.format_choice)
+        if tip := self._labels.get("format_tooltip"):
+            self.format_choice.SetToolTip(tip)
         self.format_choice.Bind(wx.EVT_CHOICE, lambda _evt: self._on_format_changed())
         sizer.Add(self.format_choice, 0, wx.EXPAND | wx.ALL, PADDING_MD)
 
@@ -65,6 +67,8 @@ class DeckResearchPanel(wx.Panel):
         self.search_ctrl = wx.SearchCtrl(self, style=wx.TE_PROCESS_ENTER)
         self.search_ctrl.ShowSearchButton(True)
         self.search_ctrl.SetHint(self._labels.get("search_hint", "Search archetypes..."))
+        if tip := self._labels.get("search_tooltip"):
+            self.search_ctrl.SetToolTip(tip)
         self.search_ctrl.Bind(wx.EVT_TEXT, lambda _evt: self._on_archetype_filter())
         stylize_textctrl(self.search_ctrl)
         sizer.Add(self.search_ctrl, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_MD)
@@ -72,6 +76,8 @@ class DeckResearchPanel(wx.Panel):
         # Archetype list
         self.archetype_list = wx.ListBox(self, style=wx.LB_SINGLE)
         stylize_listbox(self.archetype_list)
+        if tip := self._labels.get("archetypes_tooltip"):
+            self.archetype_list.SetToolTip(tip)
         self.archetype_list.Bind(wx.EVT_LISTBOX, lambda _evt: self._on_archetype_selected())
         sizer.Add(self.archetype_list, 1, wx.EXPAND | wx.ALL, PADDING_MD)
 
@@ -80,6 +86,8 @@ class DeckResearchPanel(wx.Panel):
             self, label=self._labels.get("reload_archetypes", "Reload Archetypes")
         )
         stylize_button(refresh_button)
+        if tip := self._labels.get("reload_tooltip"):
+            refresh_button.SetToolTip(tip)
         refresh_button.Bind(wx.EVT_BUTTON, lambda _evt: self._on_reload_archetypes())
         sizer.Add(refresh_button, 0, wx.EXPAND | wx.ALL, PADDING_MD)
 
