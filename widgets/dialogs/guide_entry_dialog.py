@@ -20,6 +20,7 @@ class GuideEntryDialog(wx.Dialog):
         mainboard_cards: list[dict[str, Any]],
         sideboard_cards: list[dict[str, Any]],
         data: dict[str, Any] | None = None,
+        flex_slots: list[str] | None = None,
     ) -> None:
         """
         Initialize the guide entry dialog.
@@ -30,6 +31,7 @@ class GuideEntryDialog(wx.Dialog):
             mainboard_cards: List of mainboard cards available to take out
             sideboard_cards: List of sideboard cards available to bring in
             data: Existing entry data to edit (optional)
+            flex_slots: Card names marked as flex slots (highlighted in Out selectors)
         """
         super().__init__(parent, title="Sideboard Guide Entry", size=(1100, 750))
 
@@ -71,7 +73,7 @@ class GuideEntryDialog(wx.Dialog):
 
         # Play: Out (from mainboard)
         self.play_out_selector = SideboardCardSelector(
-            panel, "Out (from Mainboard)", mainboard_cards
+            panel, "Out (from Mainboard)", mainboard_cards, flex_slots=flex_slots
         )
         play_sizer.Add(self.play_out_selector, 1, wx.EXPAND | wx.RIGHT, 4)
 
@@ -90,7 +92,7 @@ class GuideEntryDialog(wx.Dialog):
 
         # Draw: Out (from mainboard)
         self.draw_out_selector = SideboardCardSelector(
-            panel, "Out (from Mainboard)", mainboard_cards
+            panel, "Out (from Mainboard)", mainboard_cards, flex_slots=flex_slots
         )
         draw_sizer.Add(self.draw_out_selector, 1, wx.EXPAND | wx.RIGHT, 4)
 

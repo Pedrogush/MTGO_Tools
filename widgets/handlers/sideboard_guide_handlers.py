@@ -93,6 +93,7 @@ class SideboardGuideHandlers:
 
         self.sideboard_guide_entries = migrated_entries
         self.sideboard_exclusions = payload.get("exclusions", [])
+        self.sideboard_flex_slots = payload.get("flex_slots", [])
         self.sideboard_guide_panel.set_entries(
             self.sideboard_guide_entries, self.sideboard_exclusions
         )
@@ -103,6 +104,7 @@ class SideboardGuideHandlers:
         self.controller.guide_store[key] = {
             "entries": self.sideboard_guide_entries,
             "exclusions": self.sideboard_exclusions,
+            "flex_slots": self.sideboard_flex_slots,
         }
         self.controller.store_service.save_store(
             self.controller.guide_store_path, self.controller.guide_store
@@ -118,7 +120,13 @@ class SideboardGuideHandlers:
         mainboard = self.zone_cards.get("main", [])
         sideboard = self.zone_cards.get("side", [])
 
-        dlg = GuideEntryDialog(self, names, mainboard_cards=mainboard, sideboard_cards=sideboard)
+        dlg = GuideEntryDialog(
+            self,
+            names,
+            mainboard_cards=mainboard,
+            sideboard_cards=sideboard,
+            flex_slots=self.sideboard_flex_slots,
+        )
 
         while True:
             result = dlg.ShowModal()
@@ -169,6 +177,7 @@ class SideboardGuideHandlers:
             mainboard_cards=self.zone_cards.get("main", []),
             sideboard_cards=self.zone_cards.get("side", []),
             data=data,
+            flex_slots=self.sideboard_flex_slots,
         )
         if dlg.ShowModal() == wx.ID_OK:
             updated = dlg.get_data()
@@ -208,6 +217,31 @@ class SideboardGuideHandlers:
             self.sideboard_exclusions = [archetype_names[idx] for idx in selections]
             self._persist_guide_for_current()
             self._refresh_guide_view()
+        dlg.Destroy()
+
+    def _on_edit_flex_slots(self: AppFrame) -> None:
+        """Allow the user to mark which mainboard cards are flex slots."""
+        mainboard_cards = self.zone_cards.get("main", [])
+        if not mainboard_cards:
+            wx.MessageBox("No mainboard cards loaded.", "Flex Slots", wx.OK | wx.ICON_INFORMATION)
+            return
+
+        card_names = [card["name"] for card in mainboard_cards]
+        dlg = wx.MultiChoiceDialog(
+            self,
+            "Select mainboard cards that can be taken out during sideboarding (flex slots).\n"
+            "These will be highlighted in the Out selectors when adding guide entries.",
+            "Flex Slots",
+            card_names,
+        )
+        selected_indices = [
+            card_names.index(name) for name in self.sideboard_flex_slots if name in card_names
+        ]
+        dlg.SetSelections(selected_indices)
+        if dlg.ShowModal() == wx.ID_OK:
+            selections = dlg.GetSelections()
+            self.sideboard_flex_slots = [card_names[idx] for idx in selections]
+            self._persist_guide_for_current()
         dlg.Destroy()
 
     def _on_export_guide(self: AppFrame) -> None:

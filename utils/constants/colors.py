@@ -17,3 +17,5 @@ CALC_BUTTON_GREEN = "#2a6b2a"
 # Sideboard Guide Panel — button and label colors
 PIN_BUTTON_COLOR = (140, 90, 210)  # purple accent for the "Pin for Tracker" button
 WARNING_LABEL_COLOR = (255, 165, 0)  # orange for inline warning messages
+FLEX_SLOT_BUTTON_COLOR = (60, 130, 80)  # green accent for "Flex Slots" button
+FLEX_SLOT_HIGHLIGHT_COLOR = (55, 70, 45)  # subtle green tint for flex slot card rows
