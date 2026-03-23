@@ -65,6 +65,7 @@ class SideboardGuidePanel(wx.Panel):
         self.exclusions: list[str] = []
 
         self._build_ui()
+        self._refresh_view()
 
     def _build_ui(self) -> None:
         """Build the panel UI."""
@@ -82,6 +83,23 @@ class SideboardGuidePanel(wx.Panel):
         self.guide_view.SetBackgroundColour(DARK_ALT)
         self.guide_view.SetForegroundColour(LIGHT_TEXT)
         sizer.Add(self.guide_view, 1, wx.EXPAND | wx.ALL, PADDING_MD)
+
+        # Empty state panel (shown when there are no entries)
+        self.empty_state_panel = wx.Panel(self)
+        self.empty_state_panel.SetBackgroundColour(DARK_ALT)
+        empty_sizer = wx.BoxSizer(wx.VERTICAL)
+        self.empty_state_panel.SetSizer(empty_sizer)
+        empty_sizer.AddStretchSpacer(1)
+        empty_label = wx.StaticText(
+            self.empty_state_panel,
+            label='No matchup notes yet.\nClick "Add" to create a sideboard guide entry.',
+            style=wx.ALIGN_CENTRE_HORIZONTAL,
+        )
+        empty_label.SetForegroundColour(SUBDUED_TEXT)
+        empty_sizer.Add(empty_label, 0, wx.ALIGN_CENTER | wx.ALL, PADDING_MD)
+        empty_sizer.AddStretchSpacer(1)
+        self.empty_state_panel.Hide()
+        sizer.Add(self.empty_state_panel, 1, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_MD)
 
         # Button row
         buttons = wx.BoxSizer(wx.HORIZONTAL)
@@ -204,6 +222,7 @@ class SideboardGuidePanel(wx.Panel):
         self.guide_view.DeleteAllItems()
 
         # Add entries (skip excluded archetypes)
+        visible_entries = 0
         for entry in self.entries:
             if entry.get("archetype") in self.exclusions:
                 continue
@@ -217,6 +236,13 @@ class SideboardGuidePanel(wx.Panel):
                     entry.get("notes", ""),
                 ]
             )
+            visible_entries += 1
+
+        # Toggle empty state visibility
+        is_empty = visible_entries == 0
+        self.guide_view.Show(not is_empty)
+        self.empty_state_panel.Show(is_empty)
+        self.Layout()
 
         # Update exclusions label
         if self.exclusions:

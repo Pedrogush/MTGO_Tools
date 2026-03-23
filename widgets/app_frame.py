@@ -575,6 +575,8 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
             self._update_stats(state["deck_text"])
             self.copy_button.Enable(True)
             self.save_button.Enable(True)
+            self.deck_notes_panel.load_notes_for_current()
+            self._load_guide_for_current()
 
     def _set_status(self, message: str) -> None:
         if self.status_bar:
@@ -680,6 +682,8 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
             self._update_stats(deck_text)
             self.copy_button.Enable(True)
             self.save_button.Enable(True)
+        self.deck_notes_panel.load_notes_for_current()
+        self._load_guide_for_current()
         self._pending_deck_restore = False
 
     def _render_pending_deck(self) -> None:

@@ -46,6 +46,7 @@ from automation.e2e_tests.test_golden import ALL_TESTS as GOLDEN_TESTS
 from automation.e2e_tests.test_images import ALL_TESTS as IMAGE_TESTS
 from automation.e2e_tests.test_launch import ALL_TESTS as LAUNCH_TESTS
 from automation.e2e_tests.test_mana import ALL_TESTS as MANA_TESTS
+from automation.e2e_tests.test_notes import ALL_TESTS as NOTES_TESTS
 from automation.e2e_tests.test_scrollbar import ALL_TESTS as SCROLLBAR_TESTS
 from automation.e2e_tests.test_widgets import ALL_TESTS as WIDGET_TESTS
 
@@ -54,13 +55,14 @@ ALL_TESTS = (
     + BUILDER_TESTS
     + SCROLLBAR_TESTS
     + MANA_TESTS
+    + NOTES_TESTS
     + BUTTON_TESTS
     + WIDGET_TESTS
     + IMAGE_TESTS
     + GOLDEN_TESTS
 )
 
-_AVAILABLE_GROUPS = "launch, builder, scrollbar, mana, buttons, widgets, images, golden"
+_AVAILABLE_GROUPS = "launch, builder, scrollbar, mana, notes, buttons, widgets, images, golden"
 
 
 def run_all_tests(only: str | None = None) -> int:

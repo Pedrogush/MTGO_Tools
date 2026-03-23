@@ -95,19 +95,21 @@ _TYPE_COLOURS: dict[str, str] = {
 }
 
 # Opening-hand land count bar colours (0-7 lands)
+# Accent blue for "good" outcomes (2-3 lands), muted gray-blue for bad outcomes.
 _HAND_COLOURS = [
-    "#D23C3C",  # 0 – bad
-    "#D23C3C",  # 1 – bad
-    "#3CBE50",  # 2 – good
-    "#3CBE50",  # 3 – good
-    "#D23C3C",  # 4 – bad
-    "#D23C3C",  # 5 – bad
-    "#D23C3C",  # 6 – bad
-    "#D23C3C",  # 7 – bad
+    "#4A5568",  # 0 – bad (muted gray-blue)
+    "#4A5568",  # 1 – bad
+    "#3B82F6",  # 2 – good (accent blue)
+    "#3B82F6",  # 3 – good
+    "#4A5568",  # 4 – bad
+    "#4A5568",  # 5 – bad
+    "#4A5568",  # 6 – bad
+    "#4A5568",  # 7 – bad
 ]
 
-_CURVE_WARM = (255, 220, 40)
-_CURVE_COLD = (30, 50, 180)
+# Mana curve gradient: light sky-blue (low CMC) → deep accent blue (high CMC).
+_CURVE_WARM = (147, 197, 253)
+_CURVE_COLD = (30, 64, 175)
 
 # Color key → mana SVG filename stem
 _COLOR_SVG_FILENAMES: dict[str, str] = {

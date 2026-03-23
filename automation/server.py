@@ -64,6 +64,8 @@ class AutomationServer:
             "scroll_builder_results": self._handle_scroll_builder_results,
             "open_widget": self._handle_open_widget,
             "get_card_images_loaded": self._handle_get_card_images_loaded,
+            "get_deck_notes": self._handle_get_deck_notes,
+            "set_current_deck": self._handle_set_current_deck,
         }
 
     def register_handler(self, command: str, handler: Callable[..., Any]) -> None:
@@ -189,11 +191,18 @@ class AutomationServer:
     def _handle_screenshot(self, path: str | None = None) -> dict[str, Any]:
         """Take a screenshot of the application window."""
         import os
+        import tempfile
         from datetime import datetime
 
         if path is None:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             path = f"screenshot_{timestamp}.png"
+
+        # If the requested directory doesn't exist (e.g. /tmp/ passed from WSL),
+        # fall back to the system temp directory so SaveFile never shows a dialog.
+        save_dir = os.path.dirname(os.path.abspath(path))
+        if save_dir and not os.path.isdir(save_dir):
+            path = os.path.join(tempfile.gettempdir(), os.path.basename(path))
 
         # Get the frame's screen position and size
         rect = self.frame.GetScreenRect()
@@ -206,9 +215,13 @@ class AutomationServer:
         mem_dc.Blit(0, 0, width, height, screen_dc, x, y)
         mem_dc.SelectObject(wx.NullBitmap)
 
-        # Save to file
+        # Save to file — use wx.LogNull to suppress any wx error dialogs on failure
         image = bmp.ConvertToImage()
-        image.SaveFile(path, wx.BITMAP_TYPE_PNG)
+        log_null = wx.LogNull()
+        ok = image.SaveFile(path, wx.BITMAP_TYPE_PNG)
+        del log_null
+        if not ok:
+            raise RuntimeError(f"Failed to save screenshot to {path!r}")
 
         return {"path": os.path.abspath(path), "width": width, "height": height}
 
@@ -474,6 +487,23 @@ class AutomationServer:
             "cards": [{"name": c["name"], "qty": c["qty"]} for c in cards],
             "total_qty": sum(c["qty"] for c in cards),
             "unique_cards": len(cards),
+        }
+
+    def _handle_get_deck_notes(self) -> dict[str, Any]:
+        """Get the current deck notes cards and resolved deck key."""
+        deck_repo = self.frame.controller.deck_repo
+        notes_panel = self.frame.deck_notes_panel
+        return {
+            "deck_key": deck_repo.get_current_deck_key(),
+            "notes": notes_panel.get_notes(),
+        }
+
+    def _handle_set_current_deck(self, deck: dict[str, Any] | None = None) -> dict[str, Any]:
+        """Set the current deck identity used for deck-scoped stores."""
+        deck_repo = self.frame.controller.deck_repo
+        deck_repo.set_current_deck(deck)
+        return {
+            "deck_key": deck_repo.get_current_deck_key(),
         }
 
     def _handle_add_card_to_zone(self, zone: str, card_name: str, qty: int = 1) -> dict[str, Any]:
