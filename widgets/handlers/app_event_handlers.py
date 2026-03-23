@@ -174,6 +174,7 @@ class AppEventHandlers:
             return
         deck = self.controller.deck_repo.get_decks_list()[idx]
         self.controller.deck_repo.set_current_deck(deck)
+        self.deck_notes_panel.load_notes_for_current()
         self.copy_button.Disable()
         self.save_button.Disable()
         self._set_status(f"Loading deck {self.format_deck_name(deck)}…")

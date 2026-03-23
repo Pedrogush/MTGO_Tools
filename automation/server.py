@@ -189,11 +189,18 @@ class AutomationServer:
     def _handle_screenshot(self, path: str | None = None) -> dict[str, Any]:
         """Take a screenshot of the application window."""
         import os
+        import tempfile
         from datetime import datetime
 
         if path is None:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             path = f"screenshot_{timestamp}.png"
+
+        # If the requested directory doesn't exist (e.g. /tmp/ passed from WSL),
+        # fall back to the system temp directory so SaveFile never shows a dialog.
+        save_dir = os.path.dirname(os.path.abspath(path))
+        if save_dir and not os.path.isdir(save_dir):
+            path = os.path.join(tempfile.gettempdir(), os.path.basename(path))
 
         # Get the frame's screen position and size
         rect = self.frame.GetScreenRect()
@@ -206,9 +213,13 @@ class AutomationServer:
         mem_dc.Blit(0, 0, width, height, screen_dc, x, y)
         mem_dc.SelectObject(wx.NullBitmap)
 
-        # Save to file
+        # Save to file — use wx.LogNull to suppress any wx error dialogs on failure
         image = bmp.ConvertToImage()
-        image.SaveFile(path, wx.BITMAP_TYPE_PNG)
+        log_null = wx.LogNull()
+        ok = image.SaveFile(path, wx.BITMAP_TYPE_PNG)
+        del log_null
+        if not ok:
+            raise RuntimeError(f"Failed to save screenshot to {path!r}")
 
         return {"path": os.path.abspath(path), "width": width, "height": height}
 

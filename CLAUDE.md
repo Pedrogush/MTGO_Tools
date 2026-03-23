@@ -1,50 +1,44 @@
-# MTG Metagame Analysis Tools
+# MTGO Metagame Tools
 
-A Python tool for Magic: The Gathering Online that combines web scraping, log file parsing, and OCR for opponent tracking and metagame research.
+Windows-first wxPython desktop tooling for Magic: The Gathering Online. The repo now centers on a single main application with supporting widgets, an automation interface for UI testing, optional MongoDB-backed deck persistence, and a .NET bridge for MTGO collection and client-adjacent data.
 
-**Purpose:** Provides real-time opponent deck tracking during MTGO matches and comprehensive metagame analysis through MTGGoldfish data scraping and MTGO GameLog parsing.
+## What The App Does
 
-**Tech Stack:** Python 3.11+, BeautifulSoup, MongoDB, wxPython GUI, PyGetWindow (window detection), MTGOSDK (C# bridge).
+- Metagame research via MTGGoldfish scraping and local cacheing
+- Deck browsing, import, editing, averaging, and export
+- Deck statistics, notes, sideboard guides, and radar/frequency views
+- Opponent tracking from MTGO window titles with an embedded hypergeometric calculator
+- Match history parsing from MTGO GameLog files
+- Collection loading and ownership analysis, with MTGO bridge refresh support
+- Challenge timer alerts
+- Automation server + CLI used for local UI regression coverage
 
-**Key Features:**
-- **Opponent Tracking Widget:** Real-time window-title-based opponent identification with automatic deck lookup from tournament results
-- **Hypergeometric Calculator:** Built-in probability calculator for draw odds (e.g., "chance to draw a 4-of in opening hand")
-- **Metagame Research:** Browse and analyze MTGGoldfish archetype data, deck lists, and tournament results
-- **Match History:** Parse MTGO GameLog files to extract historical match data, opponent names, and results
-- **Deck Editor:** Interactive deck list editor with card adjustment, averaging, export, and MongoDB storage
-- **Challenge Timer Alerts:** Monitor and alert on MTGO challenge timer countdowns
+## Current Entry Points
 
-**Key Modules:**
-- `widgets/identify_opponent.py` - Real-time opponent tracking overlay with hypergeometric calculator
-- `widgets/deck_selector_wx.py` - Deck browser and editor GUI
-- `navigators/mtggoldfish.py` - MTGGoldfish web scraping
-- `utils/find_opponent_names.py` - Opponent detection via MTGO window titles ("vs." pattern)
-- `utils/math_utils.py` - Hypergeometric probability calculations for draw odds
-- `utils/metagame.py` - Player lookup and metagame data processing
-- `utils/gamelog_parser.py` - MTGO GameLog parsing for match history
-- `utils/dbq.py` - MongoDB deck storage (save/load/delete/update)
-- `utils/deck.py` - Deck parsing and analysis (`analyze_deck()`)
-- `dotnet/MTGOBridge/Program.cs` - C# bridge to MTGOSDK for MTGO client interaction
-- `scripts/mtgosdk_repl.py` - PythonNET scratchpad for exploring MTGOSDK API surface
-
-**Use Case:** Helps competitive MTGO players by providing intelligence on opponents' recent decks and facilitating metagame research, all through passive observation and web scraping (no gameplay automation).
+Main desktop app:
 
 ```bash
-python main.py
+python3 main.py
 ```
 
-# Standalone Widget Entry Points
-
-Each widget can be executed directly as a Python module:
+Main app with automation enabled:
 
 ```bash
-python -m widgets.identify_opponent   # Opponent Tracker
-python -m widgets.match_history       # Match History viewer
-python -m widgets.timer_alert         # Challenge timer alerts
-python -m widgets.metagame_analysis   # Metagame analysis
+python3 main.py --automation
+python3 -m automation ping
 ```
 
-Console scripts (after `pip install -e .`):
+Standalone widget entry points:
+
+```bash
+python3 -m widgets.identify_opponent
+python3 -m widgets.match_history
+python3 -m widgets.timer_alert
+python3 -m widgets.metagame_analysis
+```
+
+Installed console scripts from `pyproject.toml`:
+
 ```bash
 mtgo-opponent-tracker
 mtgo-match-history
@@ -52,192 +46,197 @@ mtgo-timer-alert
 mtgo-metagame
 ```
 
-**Requirements by widget:**
-- `mtgo-opponent-tracker`: MTGO running with an active match window
-- `mtgo-match-history`: GameLog files (MTGO creates these automatically)
-- `mtgo-timer-alert`: MTGO running + MTGOBridge.exe compiled
-- `mtgo-metagame`: No MTGO required (web scraping only)
+## Architecture Snapshot
 
-Each widget has a `main()` function that initializes base dirs, configures logging, creates a wxPython app, and runs the event loop.
+The old Tk/deck-selector-era documentation is no longer accurate. The current codebase is structured around:
 
-# CI/PR Workflow
+- `main.py`
+  - Bootstraps `MetagameWxApp`, splash screen, logging, base dirs, and optional automation server.
+- `controllers/`
+  - `app_controller.py` is the orchestration layer between UI, services, repositories, background work, and persisted session state.
+  - `session_manager.py` persists format, deck source, locale, window state, current deck text, and zone contents.
+  - `bulk_data_helpers.py` and `mtgo_background_helpers.py` coordinate background refresh flows.
+- `widgets/`
+  - `app_frame.py` is the main window.
+  - `widgets/panels/` contains the research, builder, stats, notes, radar, card inspector, and sideboard guide panels.
+  - `widgets/handlers/` keeps UI event wiring out of the view constructors.
+  - Top-level widgets include opponent tracker, match history, metagame analysis, timer alerts, splash frame, and mana keyboard.
+- `services/`
+  - Business logic for decks, deck workflows, search, images, collection handling, radar analysis, persistence stores, MTGO background fetch, parsing, and export.
+- `repositories/`
+  - `card_repository.py` for bulk card data, printings, and collection file access.
+  - `deck_repository.py` for current deck state, file save/load helpers, MongoDB deck CRUD, notes/outboard/guide JSON stores, and averaging support.
+  - `metagame_repository.py` for archetype/deck caching and source merging.
+- `navigators/`
+  - `mtggoldfish.py` is the active scraper path.
+  - `mtgo_decklists.py` exists, but MTGO decklist ingestion is feature-flagged off by default.
+- `automation/`
+  - Socket server/client/CLI for driving a running app instance from tests or WSL.
+- `dotnet/MTGOBridge/`
+  - .NET 9 bridge used for collection snapshots and other MTGO-facing operations.
 
-When creating a PR:
-1. After `gh pr create`, poll `gh pr checks <PR#>` every **1 minute**
-2. If checks fail, fix locally, commit, push, and continue polling
-3. **Stop polling** when either all checks pass OR 3 consecutive polls show no status changes
-4. Common CI checks: Linting & Formatting (ruff/black), Type Checking, Compilation, Security Scanning, .NET Build
-5. Run `black <file>` and `ruff check <file> --fix` locally before pushing
+## Important Current Behavior
 
-# Architecture
+### MTGO decklists are disabled by default
 
-## Opponent Detection
+`utils.constants.MTGO_DECKLISTS_ENABLED` is controlled by the `MTGO_DECKLISTS_ENABLED` environment variable and defaults to `false`.
 
-Opponent names are detected by scanning MTGO window titles for the "vs." pattern using `pygetwindow.getAllTitles()`. The widget polls every 2 seconds. No MTGOSDK bridge is required for opponent tracking.
+Effect:
 
-Example: `"MTGO - Match vs. PlayerName"` → extracts `"PlayerName"`
+- Background MTGO deck fetch is skipped unless explicitly enabled.
+- Archetype/deck browsing still works through MTGGoldfish.
+- Repository/service code still supports MTGO deck sources when the feature flag is turned on again.
 
-## GameLog Parsing (Hybrid Architecture)
+### Persistence is split across files and optional MongoDB
 
-Historical match data is extracted by parsing MTGO's GameLog files directly (bypassing MTGOSDK, which has a broken `HistoricalMatch.Opponents` API).
+- Deck/session/UI state is stored in JSON/text files under paths defined in `utils/constants/`.
+- Deck saves still attempt MongoDB persistence through `repositories/deck_repository.py`.
+- MongoDB is optional in practice for many workflows, but database save/load support is still implemented against `mongodb://localhost:27017/`, database `lm_scraper`, collection `decks`.
 
-- **MTGOSDK / C# MTGOBridge**: challenge timer, collection export, log file location
-- **GameLog parsing (Python)**: match history, opponent names, match results
+### Opponent tracking no longer depends on MTGOSDK for detection
 
-GameLog files use pipe-delimited format with `@PPlayerName@` markers. `MTGOBridge.exe logfiles` returns JSON with file paths; filesystem search is used as a fallback.
+`widgets/identify_opponent.py` detects opponents from MTGO window titles via `utils.find_opponent_names`, then enriches the result with scraped/cached deck data and optional radar/guide information.
 
-See `docs/GAMELOG_PARSING.md` for full format details.
+### Match history is file-driven
 
-## Deck Research Browser
+`widgets/match_history.py` and `utils/gamelog_parser.py` operate on MTGO GameLog files instead of relying on MTGOSDK historical match objects.
 
-All network operations (MTGGoldfish scraping, database queries) are async via background threads. UI updates use `wx.CallAfter` / `root.after(0, callback)` to stay thread-safe. The window opens instantly; data loads in the background.
+## Main UI Surface
 
-Two browsing modes:
-- **Browse MTGGoldfish**: scrape tournament decks by archetype
-- **Saved Decks**: browse your local MongoDB collection
+The main application window in `widgets/app_frame.py` currently provides:
 
-# Database (MongoDB)
+- Left stack:
+  - `DeckResearchPanel`
+  - `DeckBuilderPanel`
+- Right-side tools:
+  - toolbar buttons for opponent tracker, timer alerts, match history, metagame analysis, collection load, image download, card database refresh, and diagnostics export
+- Deck workspace tabs/panels:
+  - deck tables
+  - stats
+  - sideboard guide
+  - notes
+  - card inspector
+  - deck results summary/list
 
-MongoDB database: `lm_scraper`, collection: `decks`.
+Session state includes:
 
-```javascript
-{
-  _id: ObjectId,
-  name: "2025-01-15 PlayerName MTGO Challenge 5-0",
-  content: "4 Lightning Bolt\n...",
-  format: "Modern",
-  archetype: "UR Murktide",
-  player: "PlayerName",
-  source: "mtggoldfish" | "manual" | "averaged",
-  date_saved: ISODate,
-  date_modified: ISODate,
-  metadata: { date, event, result, deck_number }
-}
-```
+- current format
+- left-side mode
+- deck data source: `both`, `mtggoldfish`, or `mtgo`
+- language/locale
+- event logging toggle
+- saved deck text and zone contents
+- window size and screen position
 
-**API (`utils/dbq.py`):**
-- `save_deck_to_db(name, content, format, archetype, player, source, metadata)` → ObjectId
-- `get_saved_decks(format_type, archetype, sort_by)` → list of docs
-- `load_deck_from_db(deck_id)` → doc or None
-- `delete_saved_deck(deck_id)` → bool
-- `update_deck_in_db(deck_id, content, name, metadata)` → bool
+## Automation And UI Testing
 
-**Troubleshooting:**
-- "Connection refused": verify MongoDB is running on port 27017
-- "No module named 'pymongo'": `pip install -r requirements.txt`
+The app can expose a local socket automation server when launched with `--automation`.
 
-# Hypergeometric Calculator
-
-Built into the Opponent Tracker widget (collapsible panel). Calculates draw probabilities using the hypergeometric distribution (`math.comb()`).
-
-Inputs: Deck Size, Copies in Deck, Cards Drawn, Target Copies. Presets for opening hand (60-card, 40-card) and turn 3 (play/draw).
-
-- `utils/math_utils.py` - calculation functions
-- `tests/test_math_utils.py` - unit tests
-- `widgets/identify_opponent.py` - UI integration
-
-# UI Automation (WSL Testing)
-
-The app runs in Windows but can be launched and controlled entirely from WSL. The `automation` package exposes a socket server (port 19847); WSL2 localhost forwarding (on by default) makes `127.0.0.1` in WSL reach the Windows-side server transparently.
-
-## Launching the app from WSL
-
-Use `cmd.exe` to start the Windows Python process in the background:
+Typical flow:
 
 ```bash
-cmd.exe /c "start python C:\Users\Pedro\Documents\GitHub\mtgo_tools\main.py --automation"
+python3 main.py --automation
+python3 -m automation ping
+python3 -m automation status
+python3 -m automation list-archetypes
+python3 -m automation builder-search "Lightning Bolt"
 ```
 
-Then wait for the server to come up before sending commands:
+Key files:
+
+- `automation/server.py` - embedded server in the running app
+- `automation/client.py` - Python client API
+- `automation/cli.py` - `python3 -m automation ...`
+- `automation/e2e_tests/` - local end-to-end UI regression suite
+
+The e2e automation suite is for local verification and is not the same as the standard `pytest` test suite under `tests/`.
+
+## Development Commands
+
+Run the app:
 
 ```bash
-python -m automation ping   # retry until this succeeds (takes a few seconds)
+python3 main.py
 ```
 
-The `AutomationClient.wait_for_server(timeout=30)` method can be used in scripts to poll automatically.
-
-## CLI commands
+Run tests:
 
 ```bash
-# Verify connection
-python -m automation ping
-
-# Take a screenshot and view the result
-python -m automation screenshot --path /tmp/screen.png
-
-# Typical workflow: set format → load archetypes → select one → inspect decks
-python -m automation set-format Modern
-python -m automation list-archetypes
-python -m automation select-archetype --name "UR Murktide"
-python -m automation list-decks
-python -m automation select-deck 0
-python -m automation get-deck
-
-# Other useful commands
-python -m automation status          # Read the status bar
-python -m automation window-info     # Window geometry and visibility
-python -m automation list-widgets    # Enumerate registered widgets
-python -m automation click <widget> --label <button>
-python -m automation switch-tab "Stats"
-python -m automation wait 500        # Wait 500ms (e.g. after triggering async load)
-python -m automation builder-search "Lightning Bolt"
-
-# Zone editing commands (deck builder tests)
-python -m automation load-deck --file deck.txt           # Load a deck from file
-python -m automation load-deck --text "4 Lightning Bolt\nSideboard\n2 Negate"
-python -m automation get-zone-cards --zone main          # List mainboard cards
-python -m automation get-zone-cards --zone side          # List sideboard cards
-python -m automation add-card --zone main --name "Lightning Bolt"
-python -m automation add-card --zone side --name "Rest in Peace" --qty 2
-python -m automation remove-card --zone main --name "Goblin Guide"
-python -m automation get-scroll-pos --zone main          # Check scroll position
-python -m automation get-builder-results                 # Count of search results + mana symbols
-python -m automation open-widget opponent_tracker        # Open a widget window
+python3 -m pytest
+python3 -m pytest tests/test_deck_service.py
+python3 -m pytest tests/ui/
 ```
 
-All commands accept `--json` for machine-readable output and `--timeout <seconds>` (default 30).
-
-**Key files:**
-- `automation/server.py` — socket server embedded in the app (`AutomationServer`, default port 19847)
-- `automation/client.py` — Python client (`AutomationClient`, `wait_for_server()`)
-- `automation/cli.py` — CLI entry point (`python -m automation`)
-- `automation/test_runner.py` — basic connectivity test suite
-- `automation/e2e_tests/` — **UI regression test suite** (run locally, not in CI)
-
-## UI Regression Tests
-
-The `automation/e2e_tests/` package covers add/subtract cards, scrollbar persistence,
-mana symbol rendering, buttons, widget opening, and card face loading.  It is
-**not wired into GitHub Actions** and is meant for local verification only.
-
-Test modules by area:
-- `test_launch.py` — app connectivity
-- `test_builder.py` — deck workspace (add/subtract cards, roundtrip)
-- `test_scrollbar.py` — scrollbar persistence in zones and builder results
-- `test_mana.py` — mana symbol rendering
-- `test_buttons.py` — button enablement
-- `test_widgets.py` — sub-widget window opening
-- `test_images.py` — card face image loading
-- `test_golden.py` — golden screenshot capture
-- `common.py` — shared infrastructure (runner, helpers, dummy deck)
+Lint/format checks:
 
 ```bash
-# Run all e2e tests (app must be running with --automation)
-python -m automation.e2e_tests
-
-# Run a specific group
-python -m automation.e2e_tests --only builder
-python -m automation.e2e_tests --only scrollbar
-python -m automation.e2e_tests --only mana
+python3 -m ruff check .
+python3 -m black --check .
 ```
 
-Golden screenshots (for visual review) are saved to `automation/golden/`.
+Repo helper scripts:
 
-**Convention:** When using the automation CLI to diagnose and fix a UI bug,
-add a test to the relevant module in `automation/e2e_tests/` that reproduces
-the exact command sequence used.  This ensures the fix is verifiable and
-prevents regressions.
+```bash
+./lint_test_commit.sh
+./scripts/lint_test_commit_codex.sh
+./run_pytest_on_host.sh
+```
 
-# Notes
+Architecture helpers:
 
-- MTGGoldfish scraping uses `/deck/{deck_num}` (robots.txt compliant); the `/deck/download/` endpoint is disallowed and must not be used.
+```bash
+python3 scripts/generate_architecture_diagram.py
+python3 scripts/generate_dependency_diagram.py
+```
+
+Packaging helpers:
+
+```bash
+./packaging/build_installer.sh
+./packaging/test_installer.sh
+```
+
+## Tests And Coverage Areas
+
+The current test suite covers substantially more than the older docs implied. Major areas include:
+
+- services: deck, search, collection, workflow, radar, store
+- repositories: deck, metagame, card
+- utilities: deck parsing, aliases, card data/image caches, background worker, i18n, diagnostics, math utils, gamelog parser
+- widgets/UI logic: deck selector behavior, card box/panel logic
+- automation: separate local e2e package for UI command flows and screenshot/golden workflows
+
+Fixtures live under `tests/fixtures/`. UI tests under `tests/ui/` require a display-capable environment.
+
+## Data And External Dependencies
+
+- Python 3.11+
+- wxPython on Windows
+- MTGGoldfish scraping via `curl_cffi`/BeautifulSoup/lxml
+- Scryfall and MTGJSON-style bulk/card data flows for metadata and images
+- Optional MongoDB for deck persistence
+- Optional MTGOBridge (.NET 9 + MTGOSDK) for MTGO-facing integration
+
+Important dependency files:
+
+- `requirements.txt`
+- `requirements-dev.txt`
+- `pyproject.toml`
+
+## Useful Files To Start With
+
+- `main.py`
+- `controllers/app_controller.py`
+- `widgets/app_frame.py`
+- `services/deck_workflow_service.py`
+- `repositories/metagame_repository.py`
+- `repositories/deck_repository.py`
+- `repositories/card_repository.py`
+- `widgets/identify_opponent.py`
+- `widgets/match_history.py`
+- `automation/cli.py`
+- `utils/constants/__init__.py`
+
+## Notes On Stale Historical References
+
+Older references to modules such as `widgets/deck_selector_wx.py`, `utils/dbq.py`, or a Tkinter-based UI are stale and should not be used as guidance for new work. The active codebase is the wxPython app/controller/services/repositories structure described above.

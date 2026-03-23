@@ -58,17 +58,28 @@ def test_notes_replaced_on_deck_switch(
     """Notes for deck A must be cleared/replaced when switching to deck B."""
     frame = deck_selector_factory()
     try:
-        # Load deck A with notes
-        frame.deck_repo.set_current_deck({"href": "deck-a", "name": "Deck A"})
+        # Seed the deck list with two entries
+        deck_a = {"name": "deck-a", "number": "1", "href": "deck-a"}
+        deck_b = {"name": "deck-b", "number": "2", "href": "deck-b"}
+        frame.deck_repo.set_decks_list([deck_a, deck_b])
+        frame.deck_list.Append("Deck A")
+        frame.deck_list.Append("Deck B")
+
+        # Persist notes for deck A
         frame.controller.deck_notes_store["deck-a"] = [
             {"id": "a1", "title": "Note A", "body": "Deck A note", "type": "General"}
         ]
-        frame.deck_notes_panel.load_notes_for_current()
+
+        # Select deck A via the full on_deck_selected flow
+        frame.deck_list.SetSelection(0)
+        frame.on_deck_selected(None)
+        pump_ui_events(wx.GetApp())
         assert frame.deck_notes_panel.get_notes()[0]["body"] == "Deck A note"
 
-        # Switch to deck B (no saved notes)
-        frame.deck_repo.set_current_deck({"href": "deck-b", "name": "Deck B"})
-        frame.deck_notes_panel.load_notes_for_current()
+        # Switch to deck B (no saved notes) — notes must be replaced immediately
+        frame.deck_list.SetSelection(1)
+        frame.on_deck_selected(None)
+        pump_ui_events(wx.GetApp())
         assert frame.deck_notes_panel.get_notes() == []
     finally:
         frame.Destroy()
