@@ -253,6 +253,14 @@ class AutomationClient:
         """
         return self._send_command("get_card_images_loaded", zone=zone)
 
+    def get_deck_notes(self) -> dict[str, Any]:
+        """Get the current deck notes and the deck key used to resolve them."""
+        return self._send_command("get_deck_notes")
+
+    def set_current_deck(self, deck: dict[str, Any] | None) -> dict[str, Any]:
+        """Set the current deck identity used for deck-scoped data."""
+        return self._send_command("set_current_deck", deck=deck)
+
 
 def connect(
     host: str = "127.0.0.1", port: int = DEFAULT_PORT, timeout: float = 30.0

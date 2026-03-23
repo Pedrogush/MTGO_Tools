@@ -10,6 +10,7 @@ from loguru import logger
 
 from utils.card_data import CardDataManager
 from utils.constants import LOGS_DIR
+from utils.deck import sanitize_filename
 from utils.ui_helpers import open_child_window, widget_exists
 from widgets.dialogs.feedback_dialog import show_feedback_dialog
 from widgets.identify_opponent import MTGOpponentDeckSpy
@@ -193,6 +194,7 @@ class AppEventHandlers:
     def on_load_deck_clicked(self: AppFrame) -> None:
         save_dir = self.controller.deck_save_dir
         default_dir = str(save_dir) if save_dir.exists() else str(Path.home())
+        logger.info("Load Deck button clicked")
         with wx.FileDialog(
             self,
             "Load Deck",
@@ -201,12 +203,26 @@ class AppEventHandlers:
             style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST,
         ) as dlg:
             if dlg.ShowModal() != wx.ID_OK:
+                logger.info("Load Deck cancelled")
                 return
             file_path = dlg.GetPath()
+
+        file_ref = Path(file_path)
+        deck_key = sanitize_filename(file_ref.stem, fallback="manual").lower()
+        self.controller.deck_repo.set_current_deck(
+            {
+                "href": deck_key,
+                "name": file_ref.stem,
+                "path": str(file_ref),
+                "source": "file",
+            }
+        )
+        logger.info(f"Load Deck selected: {file_path} (deck_key={deck_key})")
 
         try:
             deck_text = Path(file_path).read_text(encoding="utf-8")
         except OSError as exc:
+            logger.error(f"Failed to read deck file '{file_path}': {exc}")
             wx.MessageBox(f"Failed to read deck file:\n{exc}", "Load Deck", wx.OK | wx.ICON_ERROR)
             return
 
@@ -336,6 +352,14 @@ class AppEventHandlers:
         wx.MessageBox(f"Failed to download deck:\n{error}", "Deck Download", wx.OK | wx.ICON_ERROR)
 
     def _on_deck_content_ready(self: AppFrame, deck_text: str, source: str = "manual") -> None:
+        if source in {"manual", "automation", "average"}:
+            self.controller.deck_repo.set_current_deck(None)
+        logger.info(
+            "Deck content ready: source={} current_deck={} deck_key={}",
+            source,
+            self.controller.deck_repo.get_current_deck(),
+            self.controller.deck_repo.get_current_deck_key(),
+        )
         self.controller.deck_repo.set_current_deck_text(deck_text)
         stats = self.controller.deck_service.analyze_deck(deck_text)
         self.zone_cards["main"] = sorted(
@@ -354,6 +378,7 @@ class AppEventHandlers:
         self._update_stats(deck_text)
         self.copy_button.Enable(True)
         self.save_button.Enable(True)
+        logger.info("Triggering deck notes reload for source={}", source)
         self.deck_notes_panel.load_notes_for_current()
         self._load_guide_for_current()
         self._set_status(f"Deck ready ({source}).")

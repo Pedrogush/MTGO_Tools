@@ -58,28 +58,19 @@ def test_notes_replaced_on_deck_switch(
     """Notes for deck A must be cleared/replaced when switching to deck B."""
     frame = deck_selector_factory()
     try:
-        # Seed the deck list with two entries
+        frame.controller.deck_notes_store.clear()
         deck_a = {"name": "deck-a", "number": "1", "href": "deck-a"}
         deck_b = {"name": "deck-b", "number": "2", "href": "deck-b"}
-        frame.deck_repo.set_decks_list([deck_a, deck_b])
-        frame.deck_list.Append("Deck A")
-        frame.deck_list.Append("Deck B")
-
-        # Persist notes for deck A
         frame.controller.deck_notes_store["deck-a"] = [
             {"id": "a1", "title": "Note A", "body": "Deck A note", "type": "General"}
         ]
 
-        # Select deck A via the full on_deck_selected flow
-        frame.deck_list.SetSelection(0)
-        frame.on_deck_selected(None)
-        pump_ui_events(wx.GetApp())
+        frame.deck_repo.set_current_deck(deck_a)
+        frame.deck_notes_panel.load_notes_for_current()
         assert frame.deck_notes_panel.get_notes()[0]["body"] == "Deck A note"
 
-        # Switch to deck B (no saved notes) — notes must be replaced immediately
-        frame.deck_list.SetSelection(1)
-        frame.on_deck_selected(None)
-        pump_ui_events(wx.GetApp())
+        frame.deck_repo.set_current_deck(deck_b)
+        frame.deck_notes_panel.load_notes_for_current()
         assert frame.deck_notes_panel.get_notes() == []
     finally:
         frame.Destroy()
@@ -92,6 +83,7 @@ def test_notes_loaded_on_session_restore(
     """_render_current_deck() must load notes so they appear after app restart."""
     frame = deck_selector_factory()
     try:
+        frame.controller.deck_notes_store.clear()
         frame.deck_repo.set_current_deck({"href": "restore-deck", "name": "Restore Deck"})
         frame.controller.deck_notes_store["restore-deck"] = [
             {"id": "r1", "title": "Restored", "body": "Session note", "type": "General"}
@@ -116,6 +108,7 @@ def test_notes_persist_across_frames(
 ):
     first_frame = deck_selector_factory()
     try:
+        first_frame.controller.deck_notes_store.clear()
         first_frame.deck_repo.set_current_deck({"href": "manual", "name": "Manual Deck"})
         first_frame.deck_notes_panel.set_notes(
             [{"id": "test-id", "title": "General", "body": "Important note", "type": "General"}]
@@ -133,3 +126,30 @@ def test_notes_persist_across_frames(
         assert cards[0]["body"] == "Important note"
     finally:
         second_frame.Destroy()
+
+
+@pytest.mark.usefixtures("wx_app")
+def test_file_deck_load_uses_file_deck_key_for_notes(
+    deck_selector_factory,
+):
+    frame = deck_selector_factory()
+    try:
+        frame.controller.deck_notes_store.clear()
+        frame.deck_repo.set_current_deck(
+            {"href": "my-deck", "name": "My Deck", "path": "C:/decks/My Deck.txt", "source": "file"}
+        )
+        frame.controller.deck_notes_store["my-deck"] = [
+            {"id": "file-1", "title": "File", "body": "File note", "type": "General"}
+        ]
+
+        frame.deck_notes_panel.load_notes_for_current()
+        assert frame.deck_notes_panel.get_notes()[0]["body"] == "File note"
+
+        frame._on_deck_content_ready(
+            "4 Lightning Bolt\n4 Mountain\nSideboard\n1 Abrade\n",
+            source="file",
+        )
+        assert frame.deck_repo.get_current_deck_key() == "my-deck"
+        assert frame.deck_notes_panel.get_notes()[0]["body"] == "File note"
+    finally:
+        frame.Destroy()

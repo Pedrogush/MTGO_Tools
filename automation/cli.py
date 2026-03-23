@@ -264,6 +264,13 @@ def cmd_open_widget(client: AutomationClient, args: argparse.Namespace) -> int:
     return 0 if result.get("opened") else 1
 
 
+def cmd_get_deck_notes(client: AutomationClient, args: argparse.Namespace) -> int:
+    """Get the current deck notes cards."""
+    result = client.get_deck_notes()
+    print(format_output(result, args.json))
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Control the MTGO Tools application from the command line.",
@@ -382,6 +389,9 @@ Examples:
         help="Widget to open",
     )
 
+    # get-deck-notes
+    subparsers.add_parser("get-deck-notes", help="Get the current deck notes")
+
     args = parser.parse_args()
 
     if not args.command:
@@ -413,6 +423,7 @@ Examples:
         "get-builder-results": cmd_get_builder_results,
         "get-builder-top-item": cmd_get_builder_top_item,
         "open-widget": cmd_open_widget,
+        "get-deck-notes": cmd_get_deck_notes,
     }
 
     handler = handlers.get(args.command)

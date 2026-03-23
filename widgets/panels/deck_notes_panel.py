@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import wx
+from loguru import logger
 
 from utils.constants import (
     DARK_ALT,
@@ -218,6 +219,12 @@ class DeckNotesPanel(wx.Panel):
         """Load notes for the currently selected deck."""
         deck_key = self.deck_repo.get_current_deck_key()
         raw = self.notes_store.get(deck_key, [])
+        logger.info(
+            "Loading deck notes: deck_key={} found={} note_count={}",
+            deck_key,
+            deck_key in self.notes_store,
+            len(raw) if isinstance(raw, list) else int(bool(raw)),
+        )
         self.set_notes(raw)
 
     def save_current_notes(self) -> None:

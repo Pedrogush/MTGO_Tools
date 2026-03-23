@@ -64,6 +64,8 @@ class AutomationServer:
             "scroll_builder_results": self._handle_scroll_builder_results,
             "open_widget": self._handle_open_widget,
             "get_card_images_loaded": self._handle_get_card_images_loaded,
+            "get_deck_notes": self._handle_get_deck_notes,
+            "set_current_deck": self._handle_set_current_deck,
         }
 
     def register_handler(self, command: str, handler: Callable[..., Any]) -> None:
@@ -485,6 +487,23 @@ class AutomationServer:
             "cards": [{"name": c["name"], "qty": c["qty"]} for c in cards],
             "total_qty": sum(c["qty"] for c in cards),
             "unique_cards": len(cards),
+        }
+
+    def _handle_get_deck_notes(self) -> dict[str, Any]:
+        """Get the current deck notes cards and resolved deck key."""
+        deck_repo = self.frame.controller.deck_repo
+        notes_panel = self.frame.deck_notes_panel
+        return {
+            "deck_key": deck_repo.get_current_deck_key(),
+            "notes": notes_panel.get_notes(),
+        }
+
+    def _handle_set_current_deck(self, deck: dict[str, Any] | None = None) -> dict[str, Any]:
+        """Set the current deck identity used for deck-scoped stores."""
+        deck_repo = self.frame.controller.deck_repo
+        deck_repo.set_current_deck(deck)
+        return {
+            "deck_key": deck_repo.get_current_deck_key(),
         }
 
     def _handle_add_card_to_zone(self, zone: str, card_name: str, qty: int = 1) -> dict[str, Any]:
