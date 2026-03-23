@@ -81,6 +81,18 @@ class DeckSelectorSessionManager:
     def update_event_logging_enabled(self, enabled: bool) -> None:
         self.settings["event_logging_enabled"] = bool(enabled)
 
+    def is_tutorial_shown(self) -> bool:
+        """Return True if the user has already seen the first-run tutorial."""
+        return bool(self.settings.get("tutorial_shown", False))
+
+    def mark_tutorial_shown(self) -> None:
+        """Persist that the tutorial has been shown so it won't auto-open again."""
+        self.settings["tutorial_shown"] = True
+        try:
+            atomic_write_json(self.settings_file, self.settings, indent=2)
+        except OSError as exc:
+            logger.warning(f"Unable to persist tutorial_shown flag: {exc}")
+
     def ensure_deck_save_dir(self) -> Path:
         """Resolve the deck save directory from config, creating it if needed."""
         raw_path = self.config.get("deck_selector_save_path") or self.default_deck_dir
