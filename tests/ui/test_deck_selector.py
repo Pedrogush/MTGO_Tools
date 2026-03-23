@@ -52,6 +52,22 @@ def test_builder_search_populates_results(
 
 
 @pytest.mark.usefixtures("wx_app")
+def test_toolbar_settings_apply_preferences(
+    deck_selector_factory,
+):
+    frame = deck_selector_factory()
+    try:
+        frame._apply_deck_source("mtgo")
+        assert frame.controller.get_deck_data_source() == "mtgo"
+
+        frame._apply_language("pt-BR")
+        assert frame.locale == "pt-BR"
+        assert frame.controller.get_language() == "pt-BR"
+    finally:
+        frame.Destroy()
+
+
+@pytest.mark.usefixtures("wx_app")
 def test_notes_persist_across_frames(
     deck_selector_factory,
 ):

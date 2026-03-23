@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 import wx
@@ -71,6 +72,8 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
         self.locale = self.controller.get_language()
         self._deck_source_values = ["both", "mtggoldfish", "mtgo"]
         self._language_values = list(SUPPORTED_LOCALES)
+        self.deck_source_choice: wx.Choice | None = None
+        self.language_choice: wx.Choice | None = None
 
         self.sideboard_guide_entries: list[dict[str, str]] = []
         self.sideboard_exclusions: list[str] = []
@@ -184,9 +187,6 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
         self.toolbar = self._build_toolbar(right_panel)
         right_sizer.Add(self.toolbar, 0, wx.EXPAND | wx.BOTTOM, PADDING_MD)
 
-        card_data_controls = self._build_card_data_controls(right_panel)
-        right_sizer.Add(card_data_controls, 0, wx.EXPAND | wx.BOTTOM, PADDING_LG)
-
         content_split = wx.BoxSizer(wx.HORIZONTAL)
         right_sizer.Add(content_split, 1, wx.EXPAND | wx.BOTTOM, PADDING_LG)
 
@@ -240,62 +240,95 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
             on_open_timer_alert=self.open_timer_alert,
             on_open_match_history=self.open_match_history,
             on_open_metagame_analysis=self.open_metagame_analysis,
-            on_load_collection=lambda: self.controller.refresh_collection_from_bridge(force=True),
-            on_download_card_images=lambda: show_image_download_dialog(
-                self, self.image_cache, self.image_downloader, self._set_status
-            ),
-            on_update_card_database=lambda: self.controller.force_bulk_data_update(),
-            on_export_diagnostics=self._open_feedback_dialog,
+            on_open_settings_menu=self._open_toolbar_settings_menu,
             labels={
                 "opponent_tracker": self._t("toolbar.opponent_tracker"),
                 "timer_alert": self._t("toolbar.timer_alert"),
                 "match_history": self._t("toolbar.match_history"),
                 "metagame_analysis": self._t("toolbar.metagame_analysis"),
-                "load_collection": self._t("toolbar.load_collection"),
-                "download_card_images": self._t("toolbar.download_card_images"),
-                "update_card_database": self._t("toolbar.update_card_database"),
-                "export_diagnostics": self._t("toolbar.export_diagnostics"),
+                "settings": "\u2699",
+                "settings_tooltip": self._t("toolbar.settings"),
             },
         )
 
-    def _build_card_data_controls(self, parent: wx.Window) -> wx.Panel:
-        panel = wx.Panel(parent)
-        panel.SetBackgroundColour(DARK_BG)
-        sizer = wx.BoxSizer(wx.HORIZONTAL)
-        panel.SetSizer(sizer)
-
-        source_label = wx.StaticText(panel, label=self._t("app.label.deck_data_source"))
-        source_label.SetForegroundColour(LIGHT_TEXT)
-        sizer.Add(source_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, PADDING_SM)
-
-        source_choices = [
-            self._t("app.choice.source.both"),
-            self._t("app.choice.source.mtggoldfish"),
-            self._t("app.choice.source.mtgo"),
-        ]
-        self.deck_source_choice = wx.Choice(panel, choices=source_choices)
-        current_source = self.controller.get_deck_data_source()
-        source_map = {value: idx for idx, value in enumerate(self._deck_source_values)}
-        self.deck_source_choice.SetSelection(source_map.get(current_source, 0))
-        self.deck_source_choice.Bind(wx.EVT_CHOICE, self._on_deck_source_changed)
-        sizer.Add(self.deck_source_choice, 0, wx.ALIGN_CENTER_VERTICAL)
-
-        sizer.AddSpacer(PADDING_LG)
-        language_label = wx.StaticText(panel, label=self._t("app.label.language"))
-        language_label.SetForegroundColour(LIGHT_TEXT)
-        sizer.Add(language_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, PADDING_SM)
-
-        language_choices = [LOCALE_LABELS[locale] for locale in self._language_values]
-        self.language_choice = wx.Choice(panel, choices=language_choices)
-        language_index = (
-            self._language_values.index(self.locale) if self.locale in self._language_values else 0
+    def _open_toolbar_settings_menu(self, anchor: wx.Window) -> None:
+        menu = wx.Menu()
+        self._append_menu_item(
+            menu,
+            self._t("toolbar.load_collection"),
+            lambda: self.controller.refresh_collection_from_bridge(force=True),
         )
-        self.language_choice.SetSelection(language_index)
-        self.language_choice.Bind(wx.EVT_CHOICE, self._on_language_changed)
-        sizer.Add(self.language_choice, 0, wx.ALIGN_CENTER_VERTICAL)
+        self._append_menu_item(
+            menu,
+            self._t("toolbar.download_card_images"),
+            lambda: show_image_download_dialog(
+                self, self.image_cache, self.image_downloader, self._set_status
+            ),
+        )
+        self._append_menu_item(
+            menu,
+            self._t("toolbar.update_card_database"),
+            lambda: self.controller.force_bulk_data_update(),
+        )
+        self._append_menu_item(
+            menu,
+            self._t("toolbar.export_diagnostics"),
+            self._open_feedback_dialog,
+        )
+        menu.AppendSeparator()
+        self._append_radio_submenu(
+            menu,
+            self._t("app.menu.deck_data_source"),
+            (
+                ("both", self._t("app.choice.source.both")),
+                ("mtggoldfish", self._t("app.choice.source.mtggoldfish")),
+                ("mtgo", self._t("app.choice.source.mtgo")),
+            ),
+            current_value=self.controller.get_deck_data_source(),
+            on_select=self._apply_deck_source,
+        )
+        self._append_radio_submenu(
+            menu,
+            self._t("app.menu.language"),
+            tuple((locale, LOCALE_LABELS[locale]) for locale in self._language_values),
+            current_value=self.locale,
+            on_select=self._apply_language,
+        )
+        anchor.PopupMenu(menu)
+        menu.Destroy()
 
-        sizer.AddStretchSpacer(1)
-        return panel
+    def _append_menu_item(
+        self, menu: wx.Menu, label: str, handler: Callable[[], None]
+    ) -> wx.MenuItem:
+        item = menu.Append(wx.ID_ANY, label)
+        menu.Bind(wx.EVT_MENU, lambda _evt, cb=handler: cb(), item)
+        return item
+
+    def _append_radio_submenu(
+        self,
+        menu: wx.Menu,
+        label: str,
+        options: tuple[tuple[str, str], ...],
+        *,
+        current_value: str,
+        on_select: Callable[[str], None],
+    ) -> None:
+        submenu = wx.Menu()
+        for value, item_label in options:
+            item = submenu.AppendRadioItem(wx.ID_ANY, item_label)
+            item.Check(value == current_value)
+            submenu.Bind(wx.EVT_MENU, lambda _evt, selected=value, cb=on_select: cb(selected), item)
+        menu.AppendSubMenu(submenu, label)
+
+    def _apply_deck_source(self, source: str) -> None:
+        self.controller.set_deck_data_source(source)
+        self._schedule_settings_save()
+
+    def _apply_language(self, locale: str) -> None:
+        self.locale = locale
+        self.controller.set_language(locale)
+        self._set_status(self._t("app.status.language_changed"))
+        self._schedule_settings_save()
 
     def _build_deck_results(self, parent: wx.Window) -> wx.StaticBoxSizer:
         deck_box = wx.StaticBox(parent, label="Deck Results")

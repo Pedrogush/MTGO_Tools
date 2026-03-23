@@ -1,16 +1,12 @@
 """
 Toolbar Buttons - Shared utility buttons for the deck selector toolbar.
 
-Provides quick-access buttons for opponent tracking, timers, history, and data tasks.
-Navigation actions and maintenance/utility actions are visually separated by a divider,
-with utility buttons rendered at lower visual weight.
+Provides quick-access buttons for opponent tracking, timers, history, and settings.
 """
 
 from collections.abc import Callable
 
 import wx
-
-from utils.constants import SUBDUED_TEXT
 
 
 class ToolbarButtons(wx.Panel):
@@ -23,10 +19,7 @@ class ToolbarButtons(wx.Panel):
         on_open_timer_alert: Callable[[], None] | None = None,
         on_open_match_history: Callable[[], None] | None = None,
         on_open_metagame_analysis: Callable[[], None] | None = None,
-        on_load_collection: Callable[[], None] | None = None,
-        on_download_card_images: Callable[[], None] | None = None,
-        on_update_card_database: Callable[[], None] | None = None,
-        on_export_diagnostics: Callable[[], None] | None = None,
+        on_open_settings_menu: Callable[[wx.Window], None] | None = None,
         labels: dict[str, str] | None = None,
     ):
         """
@@ -38,10 +31,7 @@ class ToolbarButtons(wx.Panel):
             on_open_timer_alert: Callback for "Timer Alert"
             on_open_match_history: Callback for "Match History"
             on_open_metagame_analysis: Callback for "Metagame Analysis"
-            on_load_collection: Callback for "Load Collection"
-            on_download_card_images: Callback for "Download Card Images"
-            on_update_card_database: Callback for "Update Card Database"
-            on_export_diagnostics: Callback for "Export Diagnostics"
+            on_open_settings_menu: Callback that opens the settings dropdown
         """
         super().__init__(parent)
         labels = labels or {}
@@ -63,32 +53,18 @@ class ToolbarButtons(wx.Panel):
             labels.get("metagame_analysis", "Metagame Analysis"), on_open_metagame_analysis
         )
 
-        # Divider between navigation and utility groups
-        self._add_divider()
-
-        # Utility group — maintenance/data actions, rendered at lower visual weight
-        self.load_collection_button = self._add_button(
-            labels.get("load_collection", "Load Collection"),
-            on_load_collection,
-            subdued=True,
-        )
-        self.download_images_button = self._add_button(
-            labels.get("download_card_images", "Download Card Images"),
-            on_download_card_images,
-            subdued=True,
-        )
-        self.update_database_button = self._add_button(
-            labels.get("update_card_database", "Update Card Database"),
-            on_update_card_database,
-            subdued=True,
-        )
-        self.export_diagnostics_button = self._add_button(
-            labels.get("export_diagnostics", "Export Diagnostics"),
-            on_export_diagnostics,
-            subdued=True,
-        )
-
         self._button_row.AddStretchSpacer(1)
+        self._add_divider(gap=10)
+        self.settings_button = wx.Button(self, label=labels.get("settings", "\u2699"))
+        self.settings_button.SetToolTip(labels.get("settings_tooltip", "Settings"))
+        if on_open_settings_menu:
+            self.settings_button.Bind(
+                wx.EVT_BUTTON,
+                lambda _evt, btn=self.settings_button, cb=on_open_settings_menu: cb(btn),
+            )
+        else:  # pragma: no cover - defensive fallback
+            self.settings_button.Disable()
+        self._button_row.Add(self.settings_button, 0)
 
     # ============= Helpers =============
 
@@ -98,12 +74,9 @@ class ToolbarButtons(wx.Panel):
         handler: Callable[[], None] | None,
         *,
         margin: int = 6,
-        subdued: bool = False,
     ) -> wx.Button:
         """Create a toolbar button and bind its handler if provided."""
         button = wx.Button(self, label=label)
-        if subdued:
-            button.SetForegroundColour(wx.Colour(*SUBDUED_TEXT))
         if handler:
             button.Bind(wx.EVT_BUTTON, lambda _evt, cb=handler: cb())
         else:  # pragma: no cover - defensive fallback

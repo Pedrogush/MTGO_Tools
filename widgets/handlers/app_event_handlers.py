@@ -479,8 +479,7 @@ class AppEventHandlers:
             if 0 <= selection < len(self._deck_source_values)
             else "both"
         )
-        self.controller.set_deck_data_source(source)
-        self._schedule_settings_save()
+        self._apply_deck_source(source)
 
     def _on_language_changed(self: AppFrame, _event: wx.CommandEvent | None) -> None:
         if not self.language_choice:
@@ -491,10 +490,7 @@ class AppEventHandlers:
             if 0 <= selection < len(self._language_values)
             else "en-US"
         )
-        self.locale = locale
-        self.controller.set_language(locale)
-        self._set_status(self._t("app.status.language_changed"))
-        self._schedule_settings_save()
+        self._apply_language(locale)
 
     def _on_daily_average_success(
         self, buffer: dict[str, float], deck_count: int, progress_dialog: wx.ProgressDialog
