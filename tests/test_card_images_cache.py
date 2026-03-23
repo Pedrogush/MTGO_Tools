@@ -401,3 +401,52 @@ def test_get_image_path_concurrent_add_and_get_is_race_free(tmp_path):
         t.join()
 
     assert not errors, f"Race errors: {errors}"
+
+
+def test_get_image_path_accent_normalized_fallback(tmp_path):
+    """get_image_path() should find a card stored as 'Lórien Revealed' when queried as 'Lorien Revealed'."""
+    cache = card_images.CardImageCache(
+        cache_dir=tmp_path / "cache", db_path=tmp_path / "cache" / "images.db"
+    )
+    image_file = cache.cache_dir / "normal" / "uuid-lorien.jpg"
+    image_file.parent.mkdir(parents=True, exist_ok=True)
+    image_file.write_bytes(b"fake")
+
+    # Store the image under the accented Scryfall name
+    cache.add_image(
+        uuid="uuid-lorien",
+        name="Lórien Revealed",
+        set_code="LTR",
+        collector_number="057",
+        image_size="normal",
+        file_path=image_file,
+    )
+    cache._path_cache.clear()
+
+    # Querying without the accent should still find the image
+    result = cache.get_image_path("Lorien Revealed", "normal")
+    assert result == image_file
+
+
+def test_get_image_path_no_accent_no_extra_query(tmp_path):
+    """When both the stored and requested name have no accents, the fallback query is skipped."""
+    cache = card_images.CardImageCache(
+        cache_dir=tmp_path / "cache", db_path=tmp_path / "cache" / "images.db"
+    )
+    image_file = cache.cache_dir / "normal" / "uuid-bolt.jpg"
+    image_file.parent.mkdir(parents=True, exist_ok=True)
+    image_file.write_bytes(b"fake")
+
+    cache.add_image(
+        uuid="uuid-bolt",
+        name="Lightning Bolt",
+        set_code="LEA",
+        collector_number="161",
+        image_size="normal",
+        file_path=image_file,
+    )
+    cache._path_cache.clear()
+
+    # A plain ASCII name must still resolve correctly
+    result = cache.get_image_path("Lightning Bolt", "normal")
+    assert result == image_file

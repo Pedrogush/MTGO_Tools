@@ -19,6 +19,7 @@ from __future__ import annotations
 import os
 import sqlite3
 import threading
+import unicodedata
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -182,6 +183,13 @@ class CardImageRequest:
     def can_fetch(self) -> bool:
         """Return True when there is enough data to fetch from Scryfall."""
         return bool((self.card_name or "").strip())
+
+
+def _strip_accents(text: str) -> str:
+    """Return *text* with combining diacritical marks removed (e.g. ó → o)."""
+    return "".join(
+        c for c in unicodedata.normalize("NFKD", text) if not unicodedata.combining(c)
+    ).lower()
 
 
 class CardImageCache:
@@ -419,6 +427,27 @@ class CardImageCache:
             alias_path = self._lookup_double_faced_alias(conn, card_name, size)
             if alias_path:
                 return alias_path
+
+            # Fallback: accent-insensitive lookup for cards like "Lórien Revealed"
+            # stored under their accented Scryfall name but requested without accents
+            # (or vice-versa).  SQLite's LOWER() does not strip combining characters,
+            # so we register a custom scalar and compare normalised forms.
+            conn.create_function("strip_accents", 1, _strip_accents)
+            cursor = conn.execute(
+                """
+                SELECT file_path
+                FROM card_images
+                WHERE strip_accents(name) = ? AND image_size = ?
+                ORDER BY face_index
+                LIMIT 1
+                """,
+                (_strip_accents(card_name), size),
+            )
+            row = cursor.fetchone()
+            if row:
+                path = self._resolve_path(row[0])
+                if path.exists():
+                    return path
         return None
 
     def _lookup_double_faced_alias(
