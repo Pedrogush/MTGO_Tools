@@ -13,7 +13,7 @@ import wx
 import wx.dataview as dv
 
 from utils.constants import DARK_ALT, DARK_PANEL, LIGHT_TEXT, SUBDUED_TEXT
-from utils.constants.colors import PIN_BUTTON_COLOR, WARNING_LABEL_COLOR
+from utils.constants.colors import FLEX_SLOT_BUTTON_COLOR, PIN_BUTTON_COLOR, WARNING_LABEL_COLOR
 from utils.constants.ui_layout import (
     GUIDE_COL_ARCHETYPE_WIDTH,
     GUIDE_COL_CARDS_WIDTH,
@@ -36,6 +36,7 @@ class SideboardGuidePanel(wx.Panel):
         on_export_csv: Callable[[], None],
         on_import_csv: Callable[[], None],
         on_pin_guide: Callable[[], None] | None = None,
+        on_edit_flex_slots: Callable[[], None] | None = None,
     ):
         """
         Initialize the sideboard guide panel.
@@ -49,6 +50,7 @@ class SideboardGuidePanel(wx.Panel):
             on_export_csv: Callback for exporting guide to CSV
             on_import_csv: Callback for importing guide from CSV
             on_pin_guide: Callback for pinning the current deck's guide for the opponent tracker
+            on_edit_flex_slots: Callback for editing the deck's flex slot cards
         """
         super().__init__(parent)
         self.SetBackgroundColour(DARK_PANEL)
@@ -60,6 +62,7 @@ class SideboardGuidePanel(wx.Panel):
         self.on_export_csv = on_export_csv
         self.on_import_csv = on_import_csv
         self.on_pin_guide = on_pin_guide
+        self.on_edit_flex_slots = on_edit_flex_slots
 
         self.entries: list[dict[str, str]] = []
         self.exclusions: list[str] = []
@@ -134,6 +137,18 @@ class SideboardGuidePanel(wx.Panel):
         stylize_button(self.import_btn)
         self.import_btn.Bind(wx.EVT_BUTTON, self._on_import_clicked)
         buttons.Add(self.import_btn, 0, wx.RIGHT, PADDING_MD)
+
+        self.flex_slots_btn = wx.Button(self, label="Flex Slots")
+        stylize_button(self.flex_slots_btn)
+        self.flex_slots_btn.SetBackgroundColour(wx.Colour(*FLEX_SLOT_BUTTON_COLOR))
+        self.flex_slots_btn.SetToolTip(
+            "Mark mainboard cards as flex slots. Flex slots are highlighted in the Out selectors "
+            "when creating guide entries, making it easier to identify cards to side out."
+        )
+        self.flex_slots_btn.Bind(wx.EVT_BUTTON, self._on_flex_slots_clicked)
+        if self.on_edit_flex_slots is None:
+            self.flex_slots_btn.Disable()
+        buttons.Add(self.flex_slots_btn, 0, wx.RIGHT, PADDING_MD)
 
         buttons.AddStretchSpacer(1)
 
@@ -302,6 +317,11 @@ class SideboardGuidePanel(wx.Panel):
         """Handle Pin for Tracker button click."""
         if self.on_pin_guide:
             self.on_pin_guide()
+
+    def _on_flex_slots_clicked(self, _event: wx.Event) -> None:
+        """Handle Flex Slots button click."""
+        if self.on_edit_flex_slots:
+            self.on_edit_flex_slots()
 
     def set_pinned(self, pinned: bool) -> None:
         """

@@ -8,6 +8,7 @@ import wx
 import wx.lib.scrolledpanel as scrolled
 
 from utils.constants import DARK_ALT, DARK_PANEL, LIGHT_TEXT, SUBDUED_TEXT
+from utils.constants.colors import FLEX_SLOT_HIGHLIGHT_COLOR
 
 
 class SideboardCardSelector(wx.Panel):
@@ -18,6 +19,7 @@ class SideboardCardSelector(wx.Panel):
         parent: wx.Window,
         title: str,
         available_cards: list[dict[str, Any]],
+        flex_slots: list[str] | None = None,
     ):
         """
         Initialize the card selector.
@@ -26,9 +28,11 @@ class SideboardCardSelector(wx.Panel):
             parent: Parent window
             title: Title for this selector (e.g., "Play: Out")
             available_cards: List of cards available to select from (from mainboard or sideboard)
+            flex_slots: Optional list of card names that are marked as flex slots (highlighted)
         """
         super().__init__(parent)
         self.SetBackgroundColour(DARK_PANEL)
+        self.flex_slots: set[str] = set(flex_slots) if flex_slots else set()
 
         self.available_cards = available_cards
         self.selected_cards: dict[str, int] = {}  # name -> quantity
@@ -66,10 +70,12 @@ class SideboardCardSelector(wx.Panel):
         for card in self.available_cards:
             card_name = card["name"]
             max_qty = card["qty"]
+            is_flex = card_name in self.flex_slots
 
             # Card row panel
             row_panel = wx.Panel(self.scroll_panel)
-            row_panel.SetBackgroundColour(DARK_ALT)
+            row_bg = wx.Colour(*FLEX_SLOT_HIGHLIGHT_COLOR) if is_flex else DARK_ALT
+            row_panel.SetBackgroundColour(row_bg)
             row_sizer = wx.BoxSizer(wx.HORIZONTAL)
             row_panel.SetSizer(row_sizer)
 
@@ -80,7 +86,7 @@ class SideboardCardSelector(wx.Panel):
 
             # Buttons panel
             btn_panel = wx.Panel(row_panel)
-            btn_panel.SetBackgroundColour(DARK_ALT)
+            btn_panel.SetBackgroundColour(row_bg)
             btn_sizer = wx.BoxSizer(wx.HORIZONTAL)
             btn_panel.SetSizer(btn_sizer)
 
@@ -114,7 +120,8 @@ class SideboardCardSelector(wx.Panel):
             row_sizer.Add(btn_panel, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 8)
 
             # Card name
-            name_label = wx.StaticText(row_panel, label=f"{card_name} (max {max_qty})")
+            flex_tag = " [flex]" if is_flex else ""
+            name_label = wx.StaticText(row_panel, label=f"{card_name} (max {max_qty}){flex_tag}")
             name_label.SetForegroundColour(LIGHT_TEXT)
             row_sizer.Add(name_label, 1, wx.ALIGN_CENTER_VERTICAL)
 

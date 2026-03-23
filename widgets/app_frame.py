@@ -77,6 +77,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
 
         self.sideboard_guide_entries: list[dict[str, str]] = []
         self.sideboard_exclusions: list[str] = []
+        self.sideboard_flex_slots: list[str] = []
         self.active_inspector_zone: str | None = None
         self.left_stack: wx.Simplebook | None = None
         self.research_panel: DeckResearchPanel | None = None
@@ -457,6 +458,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
             on_export_csv=self._on_export_guide,
             on_import_csv=self._on_import_guide,
             on_pin_guide=self._on_pin_guide,
+            on_edit_flex_slots=self._on_edit_flex_slots,
         )
         self.deck_tabs.AddPage(self.sideboard_guide_panel, "Sideboard Guide")
 
