@@ -376,7 +376,9 @@ class DeckBuilderPanel(wx.Panel):
             if bmp and bmp.IsOk():
                 grey_bmp = wx.Bitmap(bmp.ConvertToImage().ConvertToGreyscale())
                 btn_size = (bmp.GetWidth() + 8, bmp.GetHeight() + 8)
-                btn: wx.ToggleButton = wx.BitmapToggleButton(self, wx.ID_ANY, grey_bmp, size=btn_size)
+                btn: wx.ToggleButton = wx.BitmapToggleButton(
+                    self, wx.ID_ANY, grey_bmp, size=btn_size
+                )
                 btn.SetBitmapPressed(bmp)
             else:
                 btn = wx.ToggleButton(self, label=code, size=(28, 28))
