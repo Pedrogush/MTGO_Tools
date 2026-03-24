@@ -387,6 +387,15 @@ class DeckBuilderPanel(wx.Panel):
         self.color_mode_choice = color_mode
         color_mode.Bind(wx.EVT_CHOICE, self._on_filters_changed)
         color_controls.Add(color_mode, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, PADDING_SM)
+        _color_names = {
+            "W": "White",
+            "U": "Blue",
+            "B": "Black",
+            "R": "Red",
+            "G": "Green",
+            "C": "Colorless",
+        }
+        _FILTER_ICON_SIZE = 32
         for code in ["W", "U", "B", "R", "G", "C"]:
             bmp: wx.Bitmap | None = None
             try:
@@ -394,26 +403,36 @@ class DeckBuilderPanel(wx.Panel):
             except Exception:
                 bmp = None
             if bmp and bmp.IsOk():
-                grey_bmp = wx.Bitmap(bmp.ConvertToImage().ConvertToGreyscale())
-                btn_size = (bmp.GetWidth() + 8, bmp.GetHeight() + 8)
+                scaled = wx.Bitmap(
+                    bmp.ConvertToImage().Scale(
+                        _FILTER_ICON_SIZE, _FILTER_ICON_SIZE, wx.IMAGE_QUALITY_HIGH
+                    )
+                )
+                grey_bmp = wx.Bitmap(scaled.ConvertToImage().ConvertToGreyscale())
+                btn_size = (_FILTER_ICON_SIZE + 10, _FILTER_ICON_SIZE + 10)
                 btn: wx.ToggleButton = wx.BitmapToggleButton(
                     self, wx.ID_ANY, grey_bmp, size=btn_size
                 )
-                btn.SetBitmapPressed(bmp)
+                btn.SetBitmapPressed(scaled)
             else:
-                btn = wx.ToggleButton(self, label=code, size=(28, 28))
+                btn = wx.ToggleButton(self, label=code, size=(34, 34))
                 btn.SetForegroundColour(LIGHT_TEXT)
             btn.SetBackgroundColour(DARK_ALT)
-            color_names = {
-                "W": "White",
-                "U": "Blue",
-                "B": "Black",
-                "R": "Red",
-                "G": "Green",
-                "C": "Colorless",
-            }
-            btn.SetToolTip(f"Toggle {color_names.get(code, code)} color filter")
+            btn.SetToolTip(f"Toggle {_color_names.get(code, code)} color filter")
             btn.Bind(wx.EVT_TOGGLEBUTTON, self._on_filters_changed)
+            _btn_ref = btn
+            btn.Bind(
+                wx.EVT_ENTER_WINDOW,
+                lambda evt, b=_btn_ref: (
+                    b.SetBackgroundColour((60, 68, 80)),
+                    b.Refresh(),
+                    evt.Skip(),
+                ),
+            )
+            btn.Bind(
+                wx.EVT_LEAVE_WINDOW,
+                lambda evt, b=_btn_ref: (b.SetBackgroundColour(DARK_ALT), b.Refresh(), evt.Skip()),
+            )
             color_controls.Add(btn, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, PADDING_XS)
             self.color_checks[code] = btn
         color_col.Add(color_controls, 0)

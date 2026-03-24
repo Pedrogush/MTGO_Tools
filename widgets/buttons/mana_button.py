@@ -80,8 +80,17 @@ def create_mana_button(
         btn = wx.Button(parent, label=token, size=(44, 28))
         btn.SetFont(get_mana_font(font_size))
 
+    _TOKEN_LABELS = {
+        "W": "White",
+        "U": "Blue",
+        "B": "Black",
+        "R": "Red",
+        "G": "Green",
+        "C": "Colorless",
+        "X": "X (variable)",
+    }
     btn.SetBackgroundColour(DARK_ALT)
     btn.SetForegroundColour(LIGHT_TEXT)
-    btn.SetToolTip(token)
+    btn.SetToolTip(_TOKEN_LABELS.get(token, token))
     btn.Bind(wx.EVT_BUTTON, lambda _evt, sym=token: handler(sym))
     return btn
