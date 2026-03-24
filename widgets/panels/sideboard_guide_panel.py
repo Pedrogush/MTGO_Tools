@@ -95,50 +95,57 @@ class SideboardGuidePanel(wx.Panel):
         empty_sizer.AddStretchSpacer(1)
         empty_label = wx.StaticText(
             self.empty_state_panel,
-            label='No matchup notes yet.\nClick "Add" to create a sideboard guide entry.',
+            label="No matchup notes yet.",
             style=wx.ALIGN_CENTRE_HORIZONTAL,
         )
         empty_label.SetForegroundColour(SUBDUED_TEXT)
         empty_sizer.Add(empty_label, 0, wx.ALIGN_CENTER | wx.ALL, PADDING_MD)
+        self.empty_cta_btn = wx.Button(self.empty_state_panel, label="Add your first matchup")
+        stylize_button(self.empty_cta_btn)
+        self.empty_cta_btn.Bind(wx.EVT_BUTTON, self._on_add_clicked)
+        empty_sizer.Add(self.empty_cta_btn, 0, wx.ALIGN_CENTER | wx.ALL, PADDING_MD)
         empty_sizer.AddStretchSpacer(1)
         self.empty_state_panel.Hide()
         sizer.Add(self.empty_state_panel, 1, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_MD)
 
-        # Button row
+        # Button row (hidden in empty state)
+        self.button_row = wx.Panel(self)
+        self.button_row.SetBackgroundColour(DARK_PANEL)
         buttons = wx.BoxSizer(wx.HORIZONTAL)
-        sizer.Add(buttons, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_MD)
+        self.button_row.SetSizer(buttons)
+        sizer.Add(self.button_row, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_MD)
 
-        self.add_btn = wx.Button(self, label="Add")
+        self.add_btn = wx.Button(self.button_row, label="Add")
         stylize_button(self.add_btn)
         self.add_btn.Bind(wx.EVT_BUTTON, self._on_add_clicked)
         buttons.Add(self.add_btn, 0, wx.RIGHT, PADDING_MD)
 
-        self.edit_btn = wx.Button(self, label="Edit")
+        self.edit_btn = wx.Button(self.button_row, label="Edit")
         stylize_button(self.edit_btn)
         self.edit_btn.Bind(wx.EVT_BUTTON, self._on_edit_clicked)
         buttons.Add(self.edit_btn, 0, wx.RIGHT, PADDING_MD)
 
-        self.remove_btn = wx.Button(self, label="Delete")
+        self.remove_btn = wx.Button(self.button_row, label="Delete")
         stylize_button(self.remove_btn)
         self.remove_btn.Bind(wx.EVT_BUTTON, self._on_remove_clicked)
         buttons.Add(self.remove_btn, 0, wx.RIGHT, PADDING_MD)
 
-        self.exclusions_btn = wx.Button(self, label="Exclusions")
+        self.exclusions_btn = wx.Button(self.button_row, label="Exclusions")
         stylize_button(self.exclusions_btn)
         self.exclusions_btn.Bind(wx.EVT_BUTTON, self._on_exclusions_clicked)
         buttons.Add(self.exclusions_btn, 0, wx.RIGHT, PADDING_MD)
 
-        self.export_btn = wx.Button(self, label="Export")
+        self.export_btn = wx.Button(self.button_row, label="Export")
         stylize_button(self.export_btn)
         self.export_btn.Bind(wx.EVT_BUTTON, self._on_export_clicked)
         buttons.Add(self.export_btn, 0, wx.RIGHT, PADDING_MD)
 
-        self.import_btn = wx.Button(self, label="Import")
+        self.import_btn = wx.Button(self.button_row, label="Import")
         stylize_button(self.import_btn)
         self.import_btn.Bind(wx.EVT_BUTTON, self._on_import_clicked)
         buttons.Add(self.import_btn, 0, wx.RIGHT, PADDING_MD)
 
-        self.flex_slots_btn = wx.Button(self, label="Flex Slots")
+        self.flex_slots_btn = wx.Button(self.button_row, label="Flex Slots")
         stylize_button(self.flex_slots_btn)
         self.flex_slots_btn.SetBackgroundColour(wx.Colour(*FLEX_SLOT_BUTTON_COLOR))
         self.flex_slots_btn.SetToolTip(
@@ -152,7 +159,7 @@ class SideboardGuidePanel(wx.Panel):
 
         buttons.AddStretchSpacer(1)
 
-        self.pin_btn = wx.Button(self, label="Pin for Tracker")
+        self.pin_btn = wx.Button(self.button_row, label="Pin for Tracker")
         stylize_button(self.pin_btn)
         self.pin_btn.SetBackgroundColour(wx.Colour(*PIN_BUTTON_COLOR))
         self.pin_btn.SetToolTip(
@@ -257,6 +264,7 @@ class SideboardGuidePanel(wx.Panel):
         is_empty = visible_entries == 0
         self.guide_view.Show(not is_empty)
         self.empty_state_panel.Show(is_empty)
+        self.button_row.Show(not is_empty)
         self.Layout()
 
         # Update exclusions label
