@@ -149,6 +149,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
             on_archetype_filter=self.on_archetype_filter,
             on_archetype_selected=self.on_archetype_selected,
             on_reload_archetypes=lambda: self.fetch_archetypes(force=True),
+            on_switch_to_builder=lambda: self._show_left_panel("builder"),
             labels={
                 "format": self._t("research.format"),
                 "search_hint": self._t("research.search_hint"),
@@ -156,6 +157,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
                 "loading_archetypes": self._t("research.loading_archetypes"),
                 "failed_archetypes": self._t("research.failed_archetypes"),
                 "no_archetypes": self._t("research.no_archetypes"),
+                "switch_to_builder": self._t("research.switch_to_builder"),
             },
         )
         self.left_stack.AddPage(self.research_panel, "Research")
