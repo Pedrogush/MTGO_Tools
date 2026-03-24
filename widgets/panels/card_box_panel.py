@@ -336,20 +336,22 @@ class CardBoxPanel(wx.Panel):
         base_name = card.get("name")
         if base_name:
             candidates.append(base_name)
-        aliases = meta.get("aliases") if isinstance(meta, dict) else None
+        aliases = meta.get("aliases") if meta is not None else None
         if isinstance(aliases, list):
             for alias in aliases:
                 if alias and alias not in candidates:
                     candidates.append(alias)
-        # Mirror card_inspector_panel._resolve_image_request_name: put the
-        # combined DFC name (containing "//") at position 0 so it is tried
-        # before any individual face name.  This matches how Card Inspector
-        # resolves images for double-faced cards.
-        for alias in list(candidates):
-            if "//" in alias and alias != candidates[0]:
-                candidates.remove(alias)
-                candidates.insert(0, alias)
-                break
+        # Promote the combined DFC name (from meta.name) to position 0 when
+        # base_name is a single face name (no "//").  The image DB stores
+        # face-0 entries under the combined name reliably; individual face names
+        # can collide with same-named back faces of other printings (e.g.
+        # "Witch Enchanter" also appears as face_index=1 of a different card).
+        # When base_name already contains "//" it is already the canonical key.
+        if base_name and "//" not in base_name and meta is not None:
+            meta_name = meta.get("name")
+            if meta_name and "//" in meta_name and meta_name in candidates:
+                candidates.remove(meta_name)
+                candidates.insert(0, meta_name)
         return candidates
 
     @timed

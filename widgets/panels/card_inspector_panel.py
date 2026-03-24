@@ -588,7 +588,7 @@ class CardInspectorPanel(wx.Panel):
         base_name = (card.get("name") or "").strip()
         if not meta:
             return base_name or None
-        aliases = meta.get("aliases") if isinstance(meta, dict) else None
+        aliases = meta.get("aliases") if meta is not None else None
         if isinstance(aliases, list):
             for alias in aliases:
                 if isinstance(alias, str) and "//" in alias:
