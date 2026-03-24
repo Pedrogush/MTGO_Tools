@@ -41,16 +41,24 @@ class ToolbarButtons(wx.Panel):
 
         # Navigation group — primary actions
         self.opponent_tracker_button = self._add_button(
-            labels.get("opponent_tracker", "Opponent Tracker"), on_open_opponent_tracker
+            labels.get("opponent_tracker", "Opponent Tracker"),
+            on_open_opponent_tracker,
+            tooltip=labels.get("opponent_tracker_tooltip", ""),
         )
         self.timer_alert_button = self._add_button(
-            labels.get("timer_alert", "Timer Alert"), on_open_timer_alert
+            labels.get("timer_alert", "Timer Alert"),
+            on_open_timer_alert,
+            tooltip=labels.get("timer_alert_tooltip", ""),
         )
         self.match_history_button = self._add_button(
-            labels.get("match_history", "Match History"), on_open_match_history
+            labels.get("match_history", "Match History"),
+            on_open_match_history,
+            tooltip=labels.get("match_history_tooltip", ""),
         )
         self.metagame_analysis_button = self._add_button(
-            labels.get("metagame_analysis", "Metagame Analysis"), on_open_metagame_analysis
+            labels.get("metagame_analysis", "Metagame Analysis"),
+            on_open_metagame_analysis,
+            tooltip=labels.get("metagame_analysis_tooltip", ""),
         )
 
         self._button_row.AddStretchSpacer(1)
@@ -74,9 +82,12 @@ class ToolbarButtons(wx.Panel):
         handler: Callable[[], None] | None,
         *,
         margin: int = 6,
+        tooltip: str = "",
     ) -> wx.Button:
         """Create a toolbar button and bind its handler if provided."""
         button = wx.Button(self, label=label)
+        if tooltip:
+            button.SetToolTip(tooltip)
         if handler:
             button.Bind(wx.EVT_BUTTON, lambda _evt, cb=handler: cb())
         else:  # pragma: no cover - defensive fallback
