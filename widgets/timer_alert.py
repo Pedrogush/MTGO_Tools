@@ -44,6 +44,7 @@ from utils.constants import (
     TIMER_ALERT_THRESHOLD_INPUT_SIZE,
     TIMER_ALERT_WATCH_INTERVAL_MS,
 )
+from utils.i18n import translate
 from utils.mtgo_bridge_client import BridgeWatcher
 
 try:
@@ -124,9 +125,10 @@ class TimerAlertFrame(wx.Frame):
     WATCH_INTERVAL_MS = TIMER_ALERT_WATCH_INTERVAL_MS
     POLL_INTERVAL_MS = TIMER_ALERT_POLL_INTERVAL_MS
 
-    def __init__(self, parent: wx.Window | None = None) -> None:
+    def __init__(self, parent: wx.Window | None = None, locale: str | None = None) -> None:
         style = wx.CAPTION | wx.CLOSE_BOX | wx.MINIMIZE_BOX | wx.STAY_ON_TOP | wx.RESIZE_BORDER
         super().__init__(parent, title="MTGO Timer Alert", size=TIMER_ALERT_FRAME_SIZE, style=style)
+        self._locale = locale
 
         self._watcher: BridgeWatcher | None = None
         self._watch_timer = wx.Timer(self)
@@ -153,6 +155,9 @@ class TimerAlertFrame(wx.Frame):
 
         wx.CallAfter(self._start_watch_loop)
 
+    def _t(self, key: str, **kwargs: object) -> str:
+        return translate(self._locale, key, **kwargs)
+
     # ------------------------------------------------------------------ UI ------------------------------------------------------------------
     def _build_ui(self) -> None:
         self.SetBackgroundColour(DARK_BG)
@@ -163,7 +168,7 @@ class TimerAlertFrame(wx.Frame):
         panel.SetSizer(sizer)
 
         # Thresholds section
-        threshold_box = wx.StaticBox(panel, label="Alert Thresholds")
+        threshold_box = wx.StaticBox(panel, label=self._t("timer.section.thresholds"))
         threshold_box.SetForegroundColour(LIGHT_TEXT)
         threshold_box.SetBackgroundColour(DARK_PANEL)
         threshold_sizer = wx.StaticBoxSizer(threshold_box, wx.VERTICAL)
@@ -199,7 +204,9 @@ class TimerAlertFrame(wx.Frame):
         options_grid.AddGrowableCol(1, 1)
 
         # Sound selection
-        options_grid.Add(self._static_text(panel, "Alert Sound:"), 0, wx.ALIGN_CENTER_VERTICAL)
+        options_grid.Add(
+            self._static_text(panel, self._t("timer.label.sound")), 0, wx.ALIGN_CENTER_VERTICAL
+        )
         self.sound_choice = wx.Choice(panel, choices=list(SOUND_OPTIONS.keys()))
         self._stylize_choice(self.sound_choice)
         self.sound_choice.SetSelection(0)
@@ -207,7 +214,9 @@ class TimerAlertFrame(wx.Frame):
 
         # Poll interval
         options_grid.Add(
-            self._static_text(panel, "Check interval (ms):"), 0, wx.ALIGN_CENTER_VERTICAL
+            self._static_text(panel, self._t("timer.label.check_interval")),
+            0,
+            wx.ALIGN_CENTER_VERTICAL,
         )
         self.poll_interval_ctrl = wx.SpinCtrl(
             panel,
@@ -220,7 +229,9 @@ class TimerAlertFrame(wx.Frame):
 
         # Repeat interval
         options_grid.Add(
-            self._static_text(panel, "Repeat interval (seconds):"), 0, wx.ALIGN_CENTER_VERTICAL
+            self._static_text(panel, self._t("timer.label.repeat_interval")),
+            0,
+            wx.ALIGN_CENTER_VERTICAL,
         )
         self.repeat_interval_ctrl = wx.SpinCtrl(
             panel,
@@ -234,15 +245,13 @@ class TimerAlertFrame(wx.Frame):
         sizer.Add(options_grid, 0, wx.LEFT | wx.RIGHT | wx.EXPAND, PADDING_XL)
 
         # Checkboxes
-        self.start_alert_checkbox = wx.CheckBox(
-            panel, label="Alert when timer starts counting down"
-        )
+        self.start_alert_checkbox = wx.CheckBox(panel, label=self._t("timer.check.start_alert"))
         self.start_alert_checkbox.SetValue(True)
         self.start_alert_checkbox.SetForegroundColour(LIGHT_TEXT)
         self.start_alert_checkbox.SetBackgroundColour(DARK_BG)
         sizer.Add(self.start_alert_checkbox, 0, wx.LEFT | wx.RIGHT | wx.TOP, PADDING_XL)
 
-        self.repeat_alarm_checkbox = wx.CheckBox(panel, label="Repeat alarm at interval")
+        self.repeat_alarm_checkbox = wx.CheckBox(panel, label=self._t("timer.check.repeat_alarm"))
         self.repeat_alarm_checkbox.SetValue(False)
         self.repeat_alarm_checkbox.SetForegroundColour(LIGHT_TEXT)
         self.repeat_alarm_checkbox.SetBackgroundColour(DARK_BG)
@@ -252,17 +261,17 @@ class TimerAlertFrame(wx.Frame):
         button_row = wx.BoxSizer(wx.HORIZONTAL)
         sizer.Add(button_row, 0, wx.ALL | wx.EXPAND, PADDING_XL)
 
-        start_btn = wx.Button(panel, label="Start Monitoring")
+        start_btn = wx.Button(panel, label=self._t("timer.btn.start"))
         self._stylize_primary_button(start_btn)
         start_btn.Bind(wx.EVT_BUTTON, lambda _evt: self.start_monitoring())
         button_row.Add(start_btn, 0, wx.RIGHT, PADDING_MD)
 
-        stop_btn = wx.Button(panel, label="Stop")
+        stop_btn = wx.Button(panel, label=self._t("timer.btn.stop"))
         self._stylize_secondary_button(stop_btn)
         stop_btn.Bind(wx.EVT_BUTTON, lambda _evt: self.stop_monitoring())
         button_row.Add(stop_btn, 0, wx.RIGHT, PADDING_MD)
 
-        test_btn = wx.Button(panel, label="Test Alert")
+        test_btn = wx.Button(panel, label=self._t("timer.btn.test"))
         self._stylize_secondary_button(test_btn)
         test_btn.Bind(wx.EVT_BUTTON, lambda _evt: self.test_alert())
         button_row.Add(test_btn, 0)
@@ -278,20 +287,18 @@ class TimerAlertFrame(wx.Frame):
         sizer.Add(self.status_text, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, PADDING_XL)
 
         # Challenge timer display
-        challenge_box = wx.StaticBox(panel, label="Active Challenge Timer")
+        challenge_box = wx.StaticBox(panel, label=self._t("timer.section.challenge"))
         challenge_box.SetForegroundColour(LIGHT_TEXT)
         challenge_box.SetBackgroundColour(DARK_PANEL)
         challenge_sizer = wx.StaticBoxSizer(challenge_box, wx.VERTICAL)
-        self.challenge_text = wx.StaticText(
-            challenge_box, label="No active challenge timer detected."
-        )
+        self.challenge_text = wx.StaticText(challenge_box, label=self._t("timer.no_challenge"))
         self.challenge_text.SetForegroundColour(LIGHT_TEXT)
         self.challenge_text.SetBackgroundColour(DARK_PANEL)
         self.challenge_text.Wrap(TIMER_ALERT_CHALLENGE_WRAP_WIDTH)
         challenge_sizer.Add(self.challenge_text, 0, wx.ALL | wx.EXPAND, PADDING_BASE)
         sizer.Add(challenge_sizer, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, PADDING_XL)
 
-        self._set_status("Configure thresholds and click Start to begin monitoring.")
+        self._set_status(self._t("timer.configure"))
         self.Bind(wx.EVT_SIZE, self._on_resize)
 
     def _add_threshold_panel(self) -> None:
@@ -529,7 +536,7 @@ class TimerAlertFrame(wx.Frame):
             return
         timers = snapshot.get("challengeTimers") or []
         if not timers:
-            self.challenge_text.SetLabel("No active challenge timer detected.")
+            self.challenge_text.SetLabel(self._t("timer.no_challenge"))
             self.challenge_text.Wrap(self._challenge_wrap_width())
             return
         lines: list[str] = []

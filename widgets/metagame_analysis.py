@@ -21,14 +21,16 @@ from matplotlib.figure import Figure
 
 from repositories.metagame_repository import get_metagame_repository
 from utils.constants import DARK_ALT, DARK_BG, DARK_PANEL, LIGHT_TEXT, SUBDUED_TEXT
+from utils.i18n import translate
 
 
 class MetagameAnalysisFrame(wx.Frame):
     """Widget for displaying metagame archetype distribution and changes over time."""
 
-    def __init__(self, parent: wx.Window | None = None) -> None:
+    def __init__(self, parent: wx.Window | None = None, locale: str | None = None) -> None:
         style = wx.DEFAULT_FRAME_STYLE | wx.STAY_ON_TOP
         super().__init__(parent, title="Metagame Analysis", size=(1100, 750), style=style)
+        self._locale = locale
 
         self.current_format: str = "modern"
         self.current_days: int = 1
@@ -43,6 +45,9 @@ class MetagameAnalysisFrame(wx.Frame):
         self.Bind(wx.EVT_CLOSE, self.on_close)
         wx.CallAfter(self.refresh_data)
 
+    def _t(self, key: str, **kwargs: object) -> str:
+        return translate(self._locale, key, **kwargs)
+
     def _build_ui(self) -> None:
         panel = wx.Panel(self)
         panel.SetBackgroundColour(DARK_BG)
@@ -53,7 +58,10 @@ class MetagameAnalysisFrame(wx.Frame):
         main_sizer.Add(toolbar, 0, wx.ALL | wx.EXPAND, 10)
 
         toolbar.Add(
-            wx.StaticText(panel, label="Format:"), 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 5
+            wx.StaticText(panel, label=self._t("metagame.label.format")),
+            0,
+            wx.ALIGN_CENTER_VERTICAL | wx.RIGHT,
+            5,
         )
         self.format_choice = wx.Choice(
             panel,
@@ -73,7 +81,7 @@ class MetagameAnalysisFrame(wx.Frame):
         toolbar.Add(self.format_choice, 0, wx.RIGHT, 15)
 
         toolbar.Add(
-            wx.StaticText(panel, label="Time Window (days):"),
+            wx.StaticText(panel, label=self._t("metagame.label.time_window")),
             0,
             wx.ALIGN_CENTER_VERTICAL | wx.RIGHT,
             5,
@@ -85,7 +93,7 @@ class MetagameAnalysisFrame(wx.Frame):
         toolbar.Add(self.days_spin, 0, wx.RIGHT, 15)
 
         toolbar.Add(
-            wx.StaticText(panel, label="Starting from day:"),
+            wx.StaticText(panel, label=self._t("metagame.label.starting_from")),
             0,
             wx.ALIGN_CENTER_VERTICAL | wx.RIGHT,
             5,
@@ -96,14 +104,14 @@ class MetagameAnalysisFrame(wx.Frame):
         self.offset_spin.Bind(wx.EVT_SPINCTRL, self.on_offset_change)
         toolbar.Add(self.offset_spin, 0, wx.RIGHT, 15)
 
-        self.refresh_button = wx.Button(panel, label="Refresh Data")
+        self.refresh_button = wx.Button(panel, label=self._t("metagame.btn.refresh"))
         self._stylize_button(self.refresh_button)
         self.refresh_button.Bind(wx.EVT_BUTTON, lambda _evt: self.refresh_data())
         toolbar.Add(self.refresh_button, 0, wx.RIGHT, 10)
 
         toolbar.AddStretchSpacer(1)
 
-        self.status_label = wx.StaticText(panel, label="Ready")
+        self.status_label = wx.StaticText(panel, label=self._t("app.status.ready"))
         self.status_label.SetForegroundColour(SUBDUED_TEXT)
         toolbar.Add(self.status_label, 0, wx.ALIGN_CENTER_VERTICAL)
 
@@ -196,7 +204,7 @@ class MetagameAnalysisFrame(wx.Frame):
             format_stats = stats.get(self.current_format, {})
             archetype_count = len([k for k in format_stats.keys() if k != "timestamp"])
             logger.info(f"Found {archetype_count} archetypes in data")
-            self._set_busy(False, f"Loaded {archetype_count} archetypes")
+            self._set_busy(False, self._t("metagame.loaded", count=archetype_count))
             self.update_visualization()
         except Exception as exc:
             logger.exception(f"Error processing metagame data:\n{exc}")
@@ -369,9 +377,9 @@ class MetagameAnalysisFrame(wx.Frame):
         if message:
             self.status_label.SetLabel(message)
         elif busy:
-            self.status_label.SetLabel("Loading...")
+            self.status_label.SetLabel(self._t("research.loading_archetypes"))
         else:
-            self.status_label.SetLabel("Ready")
+            self.status_label.SetLabel(self._t("app.status.ready"))
 
     def on_close(self, event: wx.CloseEvent) -> None:
         event.Skip()

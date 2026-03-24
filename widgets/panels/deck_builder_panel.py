@@ -283,25 +283,25 @@ class DeckBuilderPanel(wx.Panel):
             (
                 "name",
                 self._l("field.card_name", "Card Name"),
-                "e.g. Ragavan",
+                self._l("hint.card_name", "e.g. Ragavan"),
                 "Filter cards by name",
             ),
             (
                 "type",
                 self._l("field.type_line", "Type Line"),
-                "Artifact Creature",
+                self._l("hint.type_line", "Artifact Creature"),
                 "Filter cards by type line (e.g. Creature, Instant)",
             ),
             (
                 "mana",
                 self._l("field.mana_cost", "Mana Cost"),
-                "Curly braces like {1}{G} or shorthand (e.g. GGG)",
+                self._l("hint.mana_cost", "e.g. {1}{G}"),
                 "Filter cards by mana cost",
             ),
             (
                 "text",
                 self._l("field.oracle_text", "Oracle Text"),
-                "Keywords or abilities",
+                self._l("hint.oracle_text", "Keywords or abilities"),
                 "Filter cards by oracle text",
             ),
         ]
@@ -376,7 +376,7 @@ class DeckBuilderPanel(wx.Panel):
         mv_row = wx.BoxSizer(wx.HORIZONTAL)
         mv_value = wx.TextCtrl(self)
         stylize_textctrl(mv_value)
-        mv_value.SetHint("e.g. 3")
+        mv_value.SetHint(self._l("hint.mana_value", "e.g. 3"))
         mv_value.SetToolTip("Enter a mana value (converted mana cost) to filter by")
         self.mv_value = mv_value
         mv_value.Bind(wx.EVT_TEXT, self._on_filters_changed)
@@ -443,7 +443,9 @@ class DeckBuilderPanel(wx.Panel):
         format_label = wx.StaticText(self, label=self._l("filter.format", "Format"))
         stylize_label(format_label, True)
         format_col.Add(format_label, 0, wx.BOTTOM, PADDING_XS)
-        format_choice = wx.Choice(self, choices=["Any"] + list(FORMAT_OPTIONS))
+        format_choice = wx.Choice(
+            self, choices=[self._l("format.any", "Any")] + list(FORMAT_OPTIONS)
+        )
         format_choice.SetSelection(0)
         stylize_choice(format_choice)
         format_choice.SetToolTip("Filter results to cards legal in the selected format")
@@ -496,9 +498,14 @@ class DeckBuilderPanel(wx.Panel):
         # and are never indented by LVSIL_SMALL, so the Name cell is unindented.
         results.InsertColumn(0, "", width=0)
         results.InsertColumn(
-            1, "Name", format=wx.LIST_FORMAT_LEFT, width=BUILDER_NAME_COL_DEFAULT_WIDTH
+            1,
+            self._l("col.name", "Name"),
+            format=wx.LIST_FORMAT_LEFT,
+            width=BUILDER_NAME_COL_DEFAULT_WIDTH,
         )
-        results.InsertColumn(2, "Mana Cost", width=BUILDER_MANA_CANVAS_WIDTH)
+        results.InsertColumn(
+            2, self._l("col.mana_cost", "Mana Cost"), width=BUILDER_MANA_CANVAS_WIDTH
+        )
         results.SetBackgroundColour(DARK_ALT)
         results.SetForegroundColour(LIGHT_TEXT)
         results.Bind(wx.EVT_LIST_ITEM_SELECTED, self._on_result_item_selected)

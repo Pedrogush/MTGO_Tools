@@ -572,6 +572,7 @@ class AppEventHandlers:
             MTGOpponentDeckSpy,
             "Opponent Tracker",
             self._handle_child_close,
+            locale=self.locale,
         )
 
     def open_timer_alert(self) -> None:
@@ -581,6 +582,7 @@ class AppEventHandlers:
             TimerAlertFrame,
             "Timer Alert",
             self._handle_child_close,
+            locale=self.locale,
         )
 
     def open_match_history(self) -> None:
@@ -590,6 +592,7 @@ class AppEventHandlers:
             MatchHistoryFrame,
             "Match History",
             self._handle_child_close,
+            locale=self.locale,
         )
 
     def open_metagame_analysis(self) -> None:
@@ -599,6 +602,7 @@ class AppEventHandlers:
             MetagameAnalysisFrame,
             "Metagame Analysis",
             self._handle_child_close,
+            locale=self.locale,
         )
 
     def _open_feedback_dialog(self) -> None:

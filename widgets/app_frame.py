@@ -197,6 +197,14 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
                 "add_to_main": self._t("builder.add_to_main"),
                 "add_to_side": self._t("builder.add_to_side"),
                 "status.results": self._t("builder.status.results"),
+                "col.name": self._t("builder.col.name"),
+                "col.mana_cost": self._t("builder.col.mana_cost"),
+                "hint.card_name": self._t("builder.hint.card_name"),
+                "hint.type_line": self._t("builder.hint.type_line"),
+                "hint.mana_cost": self._t("builder.hint.mana_cost"),
+                "hint.oracle_text": self._t("builder.hint.oracle_text"),
+                "hint.mana_value": self._t("builder.hint.mana_value"),
+                "format.any": self._t("builder.format.any"),
             },
         )
         self.left_stack.AddPage(self.builder_panel, self._t("app.label.left_panel.builder"))
@@ -503,6 +511,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
             on_import_csv=self._on_import_guide,
             on_pin_guide=self._on_pin_guide,
             on_edit_flex_slots=self._on_edit_flex_slots,
+            locale=self.locale,
         )
         self.sideboard_guide_panel.SetToolTip(self._t("tabs.tooltip.sideboard_guide"))
         self.deck_tabs.AddPage(self.sideboard_guide_panel, self._t("tabs.sideboard_guide"))
@@ -514,6 +523,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
             notes_store=self.controller.deck_notes_store,
             notes_store_path=self.controller.notes_store_path,
             on_status_update=self._set_status,
+            locale=self.locale,
         )
         self.deck_notes_panel.SetToolTip(self._t("tabs.tooltip.deck_notes"))
         self.deck_tabs.AddPage(self.deck_notes_panel, self._t("tabs.deck_notes"))

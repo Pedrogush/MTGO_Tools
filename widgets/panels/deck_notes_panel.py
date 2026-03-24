@@ -22,6 +22,7 @@ from utils.constants import (
     LIGHT_TEXT,
     SUBDUED_TEXT,
 )
+from utils.i18n import translate
 from utils.stylize import stylize_button, stylize_textctrl
 
 if TYPE_CHECKING:
@@ -153,9 +154,11 @@ class DeckNotesPanel(wx.Panel):
         notes_store: dict,
         notes_store_path: Path,
         on_status_update: Callable[[str], None],
+        locale: str | None = None,
     ):
         super().__init__(parent)
         self.SetBackgroundColour(DARK_PANEL)
+        self._locale = locale
 
         self.deck_repo = deck_repo
         self.store_service = store_service
@@ -168,6 +171,9 @@ class DeckNotesPanel(wx.Panel):
 
         self._build_ui()
 
+    def _t(self, key: str, **kwargs: object) -> str:
+        return translate(self._locale, key, **kwargs)
+
     def _build_ui(self) -> None:
         outer = wx.BoxSizer(wx.VERTICAL)
         self.SetSizer(outer)
@@ -176,14 +182,14 @@ class DeckNotesPanel(wx.Panel):
         toolbar = wx.BoxSizer(wx.HORIZONTAL)
         outer.Add(toolbar, 0, wx.EXPAND | wx.ALL, 6)
 
-        add_btn = wx.Button(self, label="+ Add Note")
+        add_btn = wx.Button(self, label=self._t("notes.btn.add"))
         stylize_button(add_btn)
         add_btn.Bind(wx.EVT_BUTTON, self._on_add_note)
         toolbar.Add(add_btn, 0, wx.RIGHT, 6)
 
         toolbar.AddStretchSpacer(1)
 
-        self.save_btn = wx.Button(self, label="Save Notes")
+        self.save_btn = wx.Button(self, label=self._t("notes.btn.save"))
         stylize_button(self.save_btn)
         self.save_btn.Bind(wx.EVT_BUTTON, self._on_save_clicked)
         toolbar.Add(self.save_btn, 0)
@@ -204,7 +210,7 @@ class DeckNotesPanel(wx.Panel):
         empty_sizer.AddStretchSpacer(1)
         empty_label = wx.StaticText(
             self.empty_state_panel,
-            label='No deck notes yet, click "Add" to create a deck note entry.',
+            label=self._t("notes.empty"),
             style=wx.ALIGN_CENTRE_HORIZONTAL,
         )
         empty_label.SetForegroundColour(SUBDUED_TEXT)
