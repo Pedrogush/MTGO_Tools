@@ -31,6 +31,7 @@ from utils.stylize import stylize_textctrl
 from widgets.buttons.deck_action_buttons import DeckActionButtons
 from widgets.buttons.toolbar_buttons import ToolbarButtons
 from widgets.deck_results_list import DeckResultsList
+from widgets.dialogs.help_dialog import show_help
 from widgets.dialogs.image_download_dialog import show_image_download_dialog
 from widgets.dialogs.tutorial_dialog import show_tutorial
 from widgets.handlers.app_event_handlers import AppEventHandlers
@@ -149,6 +150,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
             on_archetype_filter=self.on_archetype_filter,
             on_archetype_selected=self.on_archetype_selected,
             on_reload_archetypes=lambda: self.fetch_archetypes(force=True),
+            on_switch_to_builder=lambda: self._show_left_panel("builder"),
             labels={
                 "format": self._t("research.format"),
                 "search_hint": self._t("research.search_hint"),
@@ -156,6 +158,11 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
                 "loading_archetypes": self._t("research.loading_archetypes"),
                 "failed_archetypes": self._t("research.failed_archetypes"),
                 "no_archetypes": self._t("research.no_archetypes"),
+                "switch_to_builder": self._t("research.switch_to_builder"),
+                "format_tooltip": self._t("research.tooltip.format"),
+                "search_tooltip": self._t("research.tooltip.search"),
+                "archetypes_tooltip": self._t("research.tooltip.archetypes"),
+                "reload_tooltip": self._t("research.tooltip.reload"),
             },
         )
         self.left_stack.AddPage(self.research_panel, "Research")
@@ -250,6 +257,10 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
                 "metagame_analysis": self._t("toolbar.metagame_analysis"),
                 "settings": "\u2699",
                 "settings_tooltip": self._t("toolbar.settings"),
+                "opponent_tracker_tooltip": self._t("toolbar.tooltip.opponent_tracker"),
+                "timer_alert_tooltip": self._t("toolbar.tooltip.timer_alert"),
+                "match_history_tooltip": self._t("toolbar.tooltip.match_history"),
+                "metagame_analysis_tooltip": self._t("toolbar.tooltip.metagame_analysis"),
             },
         )
 
@@ -281,6 +292,11 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
             menu,
             self._t("toolbar.show_tutorial"),
             self._open_tutorial,
+        )
+        self._append_menu_item(
+            menu,
+            self._t("toolbar.help"),
+            self._open_help,
         )
         menu.AppendSeparator()
         self._append_radio_submenu(
@@ -367,6 +383,10 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
                 "copy": self._t("deck_actions.copy"),
                 "load_deck": self._t("deck_actions.load_deck"),
                 "save_deck": self._t("deck_actions.save_deck"),
+                "daily_average_tooltip": self._t("deck_actions.tooltip.daily_average"),
+                "copy_tooltip": self._t("deck_actions.tooltip.copy"),
+                "load_deck_tooltip": self._t("deck_actions.tooltip.load_deck"),
+                "save_deck_tooltip": self._t("deck_actions.tooltip.save_deck"),
             },
         )
         deck_sizer.Add(
@@ -466,6 +486,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
             on_pin_guide=self._on_pin_guide,
             on_edit_flex_slots=self._on_edit_flex_slots,
         )
+        self.sideboard_guide_panel.SetToolTip(self._t("tabs.tooltip.sideboard_guide"))
         self.deck_tabs.AddPage(self.sideboard_guide_panel, "Sideboard Guide")
 
         self.deck_notes_panel = DeckNotesPanel(
@@ -476,6 +497,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
             notes_store_path=self.controller.notes_store_path,
             on_status_update=self._set_status,
         )
+        self.deck_notes_panel.SetToolTip(self._t("tabs.tooltip.deck_notes"))
         self.deck_tabs.AddPage(self.deck_notes_panel, "Deck Notes")
 
         # Stats panel kept hidden; stats_summary preserved for callers.
@@ -491,7 +513,9 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
     def _build_deck_tables_tab(self) -> None:
         self.zone_notebook = None
         self.main_table = self._create_zone_table("main", "Mainboard")
+        self.main_table.SetToolTip(self._t("tabs.tooltip.mainboard"))
         self.side_table = self._create_zone_table("side", "Sideboard")
+        self.side_table.SetToolTip(self._t("tabs.tooltip.sideboard"))
         self.out_table = None
 
     def _create_zone_table(
@@ -552,6 +576,9 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
     def _open_tutorial(self) -> None:
         show_tutorial(self, locale=self.locale)
         self.controller.session_manager.mark_tutorial_shown()
+
+    def _open_help(self, topic: str | None = None) -> None:
+        show_help(self, topic=topic)
 
     def _restore_session_state(self) -> None:
         state = self.controller.session_manager.restore_session_state(self.controller.zone_cards)

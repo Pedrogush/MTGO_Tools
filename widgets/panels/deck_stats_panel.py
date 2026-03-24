@@ -715,9 +715,11 @@ class DeckStatsPanel(wx.Panel):
         return items
 
     def _hand_items(
-        self, deck_size: int, land_count: int
+        self, deck_size: int | float, land_count: int | float
     ) -> list[tuple[str, str, float, str, str]]:
         """Build opening-hand land probability data items."""
+        deck_size = round(deck_size)
+        land_count = round(land_count)
         if deck_size <= 0:
             return []
 

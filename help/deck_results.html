@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Deck Results &amp; Actions</title>
+<style>
+body { font-family: Arial, sans-serif; margin: 20px; color: #222; }
+h1 { color: #1a3a5c; border-bottom: 2px solid #1a3a5c; padding-bottom: 6px; }
+h2 { color: #2a5a8c; }
+table { border-collapse: collapse; width: 100%; }
+th { background: #1a3a5c; color: #fff; padding: 6px 10px; text-align: left; }
+td { padding: 5px 10px; border-bottom: 1px solid #ddd; vertical-align: top; }
+a { color: #1a5fa0; }
+</style>
+</head>
+<body>
+<h1>Deck Results &amp; Actions</h1>
+<p>The <strong>Deck Results</strong> panel is at the bottom-right of the main window. After you
+click an archetype in the <a href="metagame_research.html">Metagame Research</a> panel, this area
+lists the individual decklists available for that archetype.</p>
+
+<h2>Summary text</h2>
+<p>A brief summary line above the list shows the archetype name, win rate, and meta share where
+available.</p>
+
+<h2>Deck list</h2>
+<p>Each item in the list represents a specific tournament deck for the selected archetype. Click
+a deck to load it into the <a href="deck_workspace.html">Deck Workspace</a>.</p>
+
+<h2>Action buttons</h2>
+<table>
+  <tr><th>Button</th><th>Description</th></tr>
+  <tr><td><strong>Today&rsquo;s Average</strong></td>
+      <td>Computes a card-by-card average across all available decklists for the current archetype
+          and loads the resulting averaged deck into the workspace. Useful for seeing the typical
+          build of an archetype.</td></tr>
+  <tr><td><strong>Copy</strong></td>
+      <td>Copies the current deck list to the clipboard in MTGO-compatible plain-text format
+          (e.g. <code>4 Lightning Bolt</code>). You can paste this directly into MTGO.</td></tr>
+  <tr><td><strong>Load Deck</strong></td>
+      <td>Opens a file browser to load a deck from a local <code>.dek</code> or plain-text file.</td></tr>
+  <tr><td><strong>Save Deck</strong></td>
+      <td>Saves the current deck to a file and optionally to the local MongoDB database (if configured).
+          The saved deck persists across sessions.</td></tr>
+</table>
+
+<h2>See also</h2>
+<ul>
+  <li><a href="metagame_research.html">Metagame Research Panel</a></li>
+  <li><a href="deck_workspace.html">Deck Workspace</a></li>
+</ul>
+</body>
+</html>
