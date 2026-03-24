@@ -31,6 +31,7 @@ from utils.stylize import stylize_textctrl
 from widgets.buttons.deck_action_buttons import DeckActionButtons
 from widgets.buttons.toolbar_buttons import ToolbarButtons
 from widgets.deck_results_list import DeckResultsList
+from widgets.dialogs.help_dialog import show_help
 from widgets.dialogs.image_download_dialog import show_image_download_dialog
 from widgets.dialogs.tutorial_dialog import show_tutorial
 from widgets.handlers.app_event_handlers import AppEventHandlers
@@ -283,6 +284,11 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
             menu,
             self._t("toolbar.show_tutorial"),
             self._open_tutorial,
+        )
+        self._append_menu_item(
+            menu,
+            self._t("toolbar.help"),
+            self._open_help,
         )
         menu.AppendSeparator()
         self._append_radio_submenu(
@@ -554,6 +560,9 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
     def _open_tutorial(self) -> None:
         show_tutorial(self, locale=self.locale)
         self.controller.session_manager.mark_tutorial_shown()
+
+    def _open_help(self, topic: str | None = None) -> None:
+        show_help(self, topic=topic)
 
     def _restore_session_state(self) -> None:
         state = self.controller.session_manager.restore_session_state(self.controller.zone_cards)
