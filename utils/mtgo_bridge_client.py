@@ -28,9 +28,7 @@ from loguru import logger
 from utils.constants import BRIDGE_PROCESS_TERMINATE_TIMEOUT_SECONDS
 
 # Manual download URL shown to users when the bridge is missing.
-BRIDGE_MANUAL_DOWNLOAD_URL = (
-    "https://github.com/Pedrogush/MTGOBridge/releases/latest"
-)
+BRIDGE_MANUAL_DOWNLOAD_URL = "https://github.com/Pedrogush/MTGOBridge/releases/latest"
 
 
 def _installed_app_dir() -> Path | None:
