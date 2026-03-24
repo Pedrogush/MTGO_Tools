@@ -43,3 +43,7 @@ DECK_TEXT_CACHE_FILE = CACHE_DIR / "deck_text_cache.json"  # Individual deck con
 ARCHETYPE_DECKS_CACHE_FILE = CACHE_DIR / "archetype_decks_cache.json"  # Deck lists per archetype
 DECK_CACHE_FILE = DECK_TEXT_CACHE_FILE
 CURR_DECK_FILE = DECKS_DIR / "curr_deck.txt"
+
+# Remote snapshot staging — downloaded artifacts live here before hydrating local caches
+REMOTE_SNAPSHOT_CACHE_DIR = CACHE_DIR / "remote_snapshots"
+REMOTE_SNAPSHOT_MANIFEST_FILE = REMOTE_SNAPSHOT_CACHE_DIR / "manifest.json"
