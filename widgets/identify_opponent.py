@@ -69,8 +69,10 @@ from utils.constants import (
     MTGGOLDFISH_REQUEST_TIMEOUT_SECONDS,
     OPPONENT_TRACKER_CACHE_TTL_SECONDS,
     OPPONENT_TRACKER_CONFIG_SAVE_DELAY_MS,
+    OPPONENT_TRACKER_DEFAULT_X_GAP,
     OPPONENT_TRACKER_FRAME_SIZE,
     OPPONENT_TRACKER_LABEL_WRAP_WIDTH,
+    OPPONENT_TRACKER_MIN_SIZE,
     OPPONENT_TRACKER_POLL_INTERVAL_MS,
     OPPONENT_TRACKER_RADAR_THREAD_JOIN_TIMEOUT_SECONDS,
     OPPONENT_TRACKER_SECTION_PADDING,
@@ -952,14 +954,42 @@ class MTGOpponentDeckSpy(wx.Frame):
                     logger.debug(f"Unable to remove legacy cache {candidate}")
             break
 
+    def _place_beside_parent(self) -> None:
+        """Position the tracker to the right of the parent window, clamped to the display."""
+        parent = self.GetParent()
+        if parent is None:
+            return
+        try:
+            pr = parent.GetRect()
+            my_size = self.GetSize()
+            display_idx = wx.Display.GetFromWindow(parent)
+            if display_idx == wx.NOT_FOUND:
+                display_idx = 0
+            client_area = wx.Display(display_idx).GetClientArea()
+            x = pr.GetRight() + OPPONENT_TRACKER_DEFAULT_X_GAP
+            y = pr.GetTop()
+            # If it doesn't fit to the right, try the left side of the parent
+            if x + my_size.width > client_area.GetRight():
+                x = pr.GetLeft() - my_size.width - OPPONENT_TRACKER_DEFAULT_X_GAP
+            # Clamp to client area
+            x = max(client_area.GetLeft(), min(x, client_area.GetRight() - my_size.width))
+            y = max(client_area.GetTop(), min(y, client_area.GetBottom() - my_size.height))
+            self.SetPosition(wx.Point(x, y))
+        except (RuntimeError, AttributeError):
+            logger.debug("Could not compute default tracker position from parent")
+
     def _apply_window_preferences(self) -> None:
         self.SetBackgroundColour(DARK_BG)
+        self.SetMinSize(wx.Size(*OPPONENT_TRACKER_MIN_SIZE))
         if getattr(self, "_saved_position", None):
             try:
                 x, y = self._saved_position
                 self.SetPosition(wx.Point(int(x), int(y)))
             except (TypeError, ValueError, RuntimeError):
                 logger.debug("Ignoring invalid saved window position")
+                self._place_beside_parent()
+        else:
+            self._place_beside_parent()
         # Restore calculator panel visibility
         if getattr(self, "_calculator_visible", False):
             self.calc_panel.Show()
