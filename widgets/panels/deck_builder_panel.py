@@ -211,8 +211,10 @@ class DeckBuilderPanel(wx.Panel):
         on_add_to_main: Callable[[str], None] | None = None,
         on_add_to_side: Callable[[str], None] | None = None,
         on_add_to_active_zone: Callable[[str], None] | None = None,
+        labels: dict[str, str] | None = None,
     ) -> None:
         super().__init__(parent)
+        self._labels: dict[str, str] = labels or {}
 
         # Store dependencies
         self.mana_icons = mana_icons
@@ -240,8 +242,6 @@ class DeckBuilderPanel(wx.Panel):
         self.status_label: wx.StaticText | None = None
         self._add_main_btn: wx.Button | None = None
         self._add_side_btn: wx.Button | None = None
-        self._adv_panel: wx.Panel | None = None
-        self._adv_toggle_btn: wx.Button | None = None
         self.results_cache: list[dict[str, Any]] = []
         self._search_timer = wx.Timer(self)
         self.Bind(wx.EVT_TIMER, self._on_search_timer, self._search_timer)
@@ -254,6 +254,10 @@ class DeckBuilderPanel(wx.Panel):
         # Build the UI
         self._build_ui()
 
+    def _l(self, key: str, default: str) -> str:
+        """Return a label from the labels dict, falling back to the English default."""
+        return self._labels.get(key, default)
+
     def _build_ui(self) -> None:
         """Build the complete UI for the deck builder panel."""
         self.SetBackgroundColour(DARK_PANEL)
@@ -261,239 +265,205 @@ class DeckBuilderPanel(wx.Panel):
         self.SetSizer(sizer)
 
         # Back button
-        back_btn = wx.Button(self, label="Deck Research")
+        back_btn = wx.Button(self, label=self._l("back_button", "Deck Research"))
         stylize_button(back_btn)
-        back_btn.SetToolTip("Switch back to Deck Research mode")
+        back_btn.SetToolTip(self._l("back_button_tooltip", "Switch back to Deck Research mode"))
         back_btn.Bind(wx.EVT_BUTTON, lambda _evt: self._on_back_clicked())
         sizer.Add(back_btn, 0, wx.EXPAND | wx.ALL, PADDING_MD)
 
         # Info label
-        info = wx.StaticText(self, label="Deck Builder: search MTG cards by property.")
+        info = wx.StaticText(
+            self, label=self._l("info", "Deck Builder: search MTG cards by property.")
+        )
         stylize_label(info, True)
         sizer.Add(info, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_MD)
 
-        # --- Card Name (always visible) ---
-        lbl = wx.StaticText(self, label="Card Name")
-        stylize_label(lbl, True)
-        sizer.Add(lbl, 0, wx.LEFT | wx.RIGHT, PADDING_MD)
-        name_ctrl = wx.TextCtrl(self)
-        stylize_textctrl(name_ctrl)
-        name_ctrl.SetHint("e.g. Ragavan")
-        name_ctrl.SetToolTip("Filter cards by name")
-        name_ctrl.Bind(wx.EVT_TEXT, self._on_filters_changed)
-        self.inputs["name"] = name_ctrl
-        sizer.Add(name_ctrl, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_SM)
+        # Search fields
+        field_specs = [
+            (
+                "name",
+                self._l("field.card_name", "Card Name"),
+                "e.g. Ragavan",
+                "Filter cards by name",
+            ),
+            (
+                "type",
+                self._l("field.type_line", "Type Line"),
+                "Artifact Creature",
+                "Filter cards by type line (e.g. Creature, Instant)",
+            ),
+            (
+                "mana",
+                self._l("field.mana_cost", "Mana Cost"),
+                "Curly braces like {1}{G} or shorthand (e.g. GGG)",
+                "Filter cards by mana cost",
+            ),
+            (
+                "text",
+                self._l("field.oracle_text", "Oracle Text"),
+                "Keywords or abilities",
+                "Filter cards by oracle text",
+            ),
+        ]
+        for key, label_text, hint, tooltip in field_specs:
+            lbl = wx.StaticText(self, label=label_text)
+            stylize_label(lbl, True)
+            sizer.Add(lbl, 0, wx.LEFT | wx.RIGHT, PADDING_MD)
+            ctrl = wx.TextCtrl(self)
+            stylize_textctrl(ctrl)
+            ctrl.SetHint(hint)
+            ctrl.SetToolTip(tooltip)
+            ctrl.Bind(wx.EVT_TEXT, self._on_filters_changed)
+            self.inputs[key] = ctrl
 
-        # --- Mana Cost (always visible) ---
-        lbl = wx.StaticText(self, label="Mana Cost")
-        stylize_label(lbl, True)
-        sizer.Add(lbl, 0, wx.LEFT | wx.RIGHT, PADDING_MD)
-        mana_ctrl = wx.TextCtrl(self)
-        stylize_textctrl(mana_ctrl)
-        mana_ctrl.SetHint("Curly braces like {1}{G} or shorthand (e.g. GGG)")
-        mana_ctrl.SetToolTip("Filter cards by mana cost")
-        mana_ctrl.Bind(wx.EVT_TEXT, self._on_filters_changed)
-        self.inputs["mana"] = mana_ctrl
-        sizer.Add(mana_ctrl, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_SM)
+            # Oracle Text field gets match-mode selector on same row as input
+            if key == "text":
+                text_row = wx.BoxSizer(wx.HORIZONTAL)
+                text_row.Add(ctrl, 1, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, PADDING_SM)
+                text_mode_choice = wx.Choice(self, choices=["=", "≈"])
+                text_mode_choice.SetSelection(0)
+                stylize_choice(text_mode_choice)
+                text_mode_choice.SetToolTip("= matches all words; ≈ matches any word")
+                self.text_mode_choice = text_mode_choice
+                text_mode_choice.Bind(wx.EVT_CHOICE, self._on_filters_changed)
+                text_row.Add(text_mode_choice, 0, wx.ALIGN_CENTER_VERTICAL)
+                sizer.Add(text_row, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_SM)
+            else:
+                sizer.Add(ctrl, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_SM)
 
-        # Exact match checkbox
-        match_row = wx.BoxSizer(wx.HORIZONTAL)
-        match_label = wx.StaticText(self, label="Match")
-        stylize_label(match_label, True)
-        match_row.Add(match_label, 0, wx.RIGHT, PADDING_MD)
-        exact_cb = wx.CheckBox(self, label="Exact symbols")
-        exact_cb.SetForegroundColour(LIGHT_TEXT)
-        exact_cb.SetBackgroundColour(DARK_PANEL)
-        exact_cb.SetToolTip("When checked, match the exact mana symbols (no extras allowed)")
-        match_row.Add(exact_cb, 0)
-        self.mana_exact_cb = exact_cb
-        exact_cb.Bind(wx.EVT_CHECKBOX, self._on_filters_changed)
-        match_row.AddStretchSpacer(1)
-        sizer.Add(match_row, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_XS)
+            # Mana cost field gets extra controls
+            if key == "mana":
+                # Exact match checkbox
+                match_row = wx.BoxSizer(wx.HORIZONTAL)
+                match_label = wx.StaticText(self, label="Match")
+                stylize_label(match_label, True)
+                match_row.Add(match_label, 0, wx.RIGHT, PADDING_MD)
+                exact_cb = wx.CheckBox(self, label="Exact symbols")
+                exact_cb.SetForegroundColour(LIGHT_TEXT)
+                exact_cb.SetBackgroundColour(DARK_PANEL)
+                exact_cb.SetToolTip(
+                    "When checked, match the exact mana symbols (no extras allowed)"
+                )
+                match_row.Add(exact_cb, 0)
+                self.mana_exact_cb = exact_cb
+                exact_cb.Bind(wx.EVT_CHECKBOX, self._on_filters_changed)
+                match_row.AddStretchSpacer(1)
+                sizer.Add(match_row, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_XS)
 
-        # Mana symbol keyboard
-        keyboard_row = wx.BoxSizer(wx.HORIZONTAL)
-        keyboard_row.AddStretchSpacer(1)
-        for token in ["W", "U", "B", "R", "G", "C", "X"]:
-            btn = create_mana_button(self, token, self._append_mana_symbol, self.mana_icons)
-            keyboard_row.Add(btn, 0, wx.ALL, PADDING_XS)
-        all_btn = wx.Button(self, label="All", size=BUILDER_MANA_ALL_BTN_SIZE)
-        stylize_button(all_btn)
-        all_btn.SetToolTip("Open the full mana symbol keyboard")
-        all_btn.Bind(wx.EVT_BUTTON, lambda _evt: self._open_mana_keyboard())
-        keyboard_row.Add(all_btn, 0, wx.ALL, PADDING_XS)
-        keyboard_row.AddStretchSpacer(1)
-        sizer.Add(
-            keyboard_row,
-            0,
-            wx.ALIGN_CENTER_HORIZONTAL | wx.LEFT | wx.RIGHT | wx.BOTTOM,
-            PADDING_XS,
-        )
+                # Mana symbol keyboard
+                keyboard_row = wx.BoxSizer(wx.HORIZONTAL)
+                keyboard_row.AddStretchSpacer(1)
+                for token in ["W", "U", "B", "R", "G", "C", "X"]:
+                    btn = create_mana_button(self, token, self._append_mana_symbol, self.mana_icons)
+                    keyboard_row.Add(btn, 0, wx.ALL, PADDING_XS)
+                all_btn = wx.Button(self, label="All", size=BUILDER_MANA_ALL_BTN_SIZE)
+                stylize_button(all_btn)
+                all_btn.SetToolTip("Open the full mana symbol keyboard")
+                all_btn.Bind(wx.EVT_BUTTON, lambda _evt: self._open_mana_keyboard())
+                keyboard_row.Add(all_btn, 0, wx.ALL, PADDING_XS)
+                keyboard_row.AddStretchSpacer(1)
+                sizer.Add(
+                    keyboard_row,
+                    0,
+                    wx.ALIGN_CENTER_HORIZONTAL | wx.LEFT | wx.RIGHT | wx.BOTTOM,
+                    PADDING_XS,
+                )
 
-        # --- Advanced Filters (collapsible, collapsed by default) ---
-        adv_toggle_btn = wx.Button(self, label="+ Advanced Filters")
-        stylize_button(adv_toggle_btn)
-        adv_toggle_btn.Bind(wx.EVT_BUTTON, self._on_adv_toggle)
-        sizer.Add(adv_toggle_btn, 0, wx.ALIGN_CENTER_HORIZONTAL | wx.BOTTOM, PADDING_MD)
-        self._adv_toggle_btn = adv_toggle_btn
-
-        adv_panel = wx.Panel(self)
-        adv_panel.SetBackgroundColour(DARK_PANEL)
-        adv_sizer = wx.BoxSizer(wx.VERTICAL)
-        adv_panel.SetSizer(adv_sizer)
-        adv_panel.Hide()
-        sizer.Add(adv_panel, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, PADDING_MD)
-        self._adv_panel = adv_panel
-
-        pwin = adv_panel
-
-        # Type Line
-        lbl = wx.StaticText(pwin, label="Type Line")
-        stylize_label(lbl, True)
-        adv_sizer.Add(lbl, 0, wx.ALIGN_CENTER_HORIZONTAL | wx.TOP, PADDING_MD)
-        type_ctrl = wx.TextCtrl(pwin)
-        stylize_textctrl(type_ctrl)
-        type_ctrl.SetHint("Artifact Creature")
-        type_ctrl.SetToolTip("Filter cards by type line (e.g. Creature, Instant)")
-        type_ctrl.Bind(wx.EVT_TEXT, self._on_filters_changed)
-        self.inputs["type"] = type_ctrl
-        adv_sizer.Add(type_ctrl, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_SM)
-
-        # Oracle Text
-        lbl = wx.StaticText(pwin, label="Oracle Text")
-        stylize_label(lbl, True)
-        adv_sizer.Add(lbl, 0, wx.ALIGN_CENTER_HORIZONTAL, PADDING_MD)
-        text_ctrl = wx.TextCtrl(pwin)
-        stylize_textctrl(text_ctrl)
-        text_ctrl.SetHint("Keywords or abilities")
-        text_ctrl.SetToolTip("Filter cards by oracle text")
-        text_ctrl.Bind(wx.EVT_TEXT, self._on_filters_changed)
-        self.inputs["text"] = text_ctrl
-        text_row = wx.BoxSizer(wx.HORIZONTAL)
-        text_row.Add(text_ctrl, 1, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, PADDING_SM)
-        text_mode_choice = wx.Choice(pwin, choices=["=", "≈"])
-        text_mode_choice.SetSelection(0)
-        stylize_choice(text_mode_choice)
-        text_mode_choice.SetToolTip("= matches all words; ≈ matches any word")
-        self.text_mode_choice = text_mode_choice
-        text_mode_choice.Bind(wx.EVT_CHOICE, self._on_filters_changed)
-        text_row.Add(text_mode_choice, 0, wx.ALIGN_CENTER_VERTICAL)
-        adv_sizer.Add(text_row, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_SM)
-
-        # Mana Value Filter
-        mv_label = wx.StaticText(pwin, label="Mana Value Filter")
+        # Mana value filter
+        mv_label = wx.StaticText(self, label=self._l("field.mana_value", "Mana Value Filter"))
         stylize_label(mv_label, True)
-        adv_sizer.Add(mv_label, 0, wx.ALIGN_CENTER_HORIZONTAL, PADDING_MD)
+        sizer.Add(mv_label, 0, wx.LEFT | wx.RIGHT, PADDING_MD)
         mv_row = wx.BoxSizer(wx.HORIZONTAL)
-        mv_value = wx.TextCtrl(pwin)
+        mv_value = wx.TextCtrl(self)
         stylize_textctrl(mv_value)
         mv_value.SetHint("e.g. 3")
         mv_value.SetToolTip("Enter a mana value (converted mana cost) to filter by")
         self.mv_value = mv_value
         mv_value.Bind(wx.EVT_TEXT, self._on_filters_changed)
         mv_row.Add(mv_value, 1, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, PADDING_SM)
-        mv_choice = wx.Choice(pwin, choices=["-", "<", "≤", "=", "≥", ">"])
+        mv_choice = wx.Choice(self, choices=["-", "<", "≤", "=", "≥", ">"])
         mv_choice.SetSelection(0)
         stylize_choice(mv_choice)
         mv_choice.SetToolTip("Comparison operator for the mana value filter")
         self.mv_comparator = mv_choice
         mv_choice.Bind(wx.EVT_CHOICE, self._on_filters_changed)
         mv_row.Add(mv_choice, 0, wx.ALIGN_CENTER_VERTICAL)
-        adv_sizer.Add(mv_row, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_SM)
+        sizer.Add(mv_row, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_SM)
 
-        # Color Identity Filter + Format (side by side)
+        # Color identity filter (left) + Format filter (right) on same line
         color_format_row = wx.BoxSizer(wx.HORIZONTAL)
 
-        # Left: color identity label + controls
         color_col = wx.BoxSizer(wx.VERTICAL)
-        color_label = wx.StaticText(pwin, label="Color Identity Filter")
+        color_label = wx.StaticText(
+            self, label=self._l("filter.color_identity", "Color Identity Filter")
+        )
         stylize_label(color_label, True)
-        color_col.Add(color_label, 0, wx.ALIGN_CENTER_HORIZONTAL | wx.BOTTOM, PADDING_XS)
+        color_col.Add(color_label, 0, wx.BOTTOM, PADDING_XS)
         color_controls = wx.BoxSizer(wx.HORIZONTAL)
-        color_mode = wx.Choice(pwin, choices=["-", "≥", "=", "≠"])
+        color_mode = wx.Choice(self, choices=["-", "≥", "=", "≠"])
         color_mode.SetSelection(0)
         stylize_choice(color_mode)
         color_mode.SetToolTip("≥ includes, = exactly, ≠ excludes the selected colors")
         self.color_mode_choice = color_mode
         color_mode.Bind(wx.EVT_CHOICE, self._on_filters_changed)
         color_controls.Add(color_mode, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, PADDING_SM)
-        _color_names = {
-            "W": "White",
-            "U": "Blue",
-            "B": "Black",
-            "R": "Red",
-            "G": "Green",
-            "C": "Colorless",
-        }
-        _FILTER_ICON_SIZE = 32
         for code in ["W", "U", "B", "R", "G", "C"]:
             bmp: wx.Bitmap | None = None
             try:
-                bmp = self.mana_icons.bitmap_for_symbol_hires(code)
+                bmp = self.mana_icons.bitmap_for_symbol(code)
             except Exception:
                 bmp = None
             if bmp and bmp.IsOk():
-                scaled = wx.Bitmap(
-                    bmp.ConvertToImage().Scale(
-                        _FILTER_ICON_SIZE, _FILTER_ICON_SIZE, wx.IMAGE_QUALITY_HIGH
-                    )
-                )
-                grey_bmp = wx.Bitmap(scaled.ConvertToImage().ConvertToGreyscale())
-                btn_size = (_FILTER_ICON_SIZE + 10, _FILTER_ICON_SIZE + 10)
+                grey_bmp = wx.Bitmap(bmp.ConvertToImage().ConvertToGreyscale())
+                btn_size = (bmp.GetWidth() + 8, bmp.GetHeight() + 8)
                 btn: wx.ToggleButton = wx.BitmapToggleButton(
-                    pwin, wx.ID_ANY, grey_bmp, size=btn_size
+                    self, wx.ID_ANY, grey_bmp, size=btn_size
                 )
-                btn.SetBitmapPressed(scaled)
+                btn.SetBitmapPressed(bmp)
             else:
-                btn = wx.ToggleButton(pwin, label=code, size=(34, 34))
+                btn = wx.ToggleButton(self, label=code, size=(28, 28))
                 btn.SetForegroundColour(LIGHT_TEXT)
             btn.SetBackgroundColour(DARK_ALT)
-            btn.SetToolTip(f"Toggle {_color_names.get(code, code)} color filter")
+            color_names = {
+                "W": "White",
+                "U": "Blue",
+                "B": "Black",
+                "R": "Red",
+                "G": "Green",
+                "C": "Colorless",
+            }
+            btn.SetToolTip(f"Toggle {color_names.get(code, code)} color filter")
             btn.Bind(wx.EVT_TOGGLEBUTTON, self._on_filters_changed)
-            _btn_ref = btn
-            btn.Bind(
-                wx.EVT_ENTER_WINDOW,
-                lambda evt, b=_btn_ref: (
-                    b.SetBackgroundColour((60, 68, 80)),
-                    b.Refresh(),
-                    evt.Skip(),
-                ),
-            )
-            btn.Bind(
-                wx.EVT_LEAVE_WINDOW,
-                lambda evt, b=_btn_ref: (b.SetBackgroundColour(DARK_ALT), b.Refresh(), evt.Skip()),
-            )
             color_controls.Add(btn, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, PADDING_XS)
             self.color_checks[code] = btn
         color_col.Add(color_controls, 0)
-        color_format_row.Add(color_col, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, PADDING_MD)
+        color_format_row.Add(color_col, 1, wx.RIGHT, PADDING_MD)
 
-        # Right: format label + choice
         format_col = wx.BoxSizer(wx.VERTICAL)
-        format_label = wx.StaticText(pwin, label="Format")
+        format_label = wx.StaticText(self, label=self._l("filter.format", "Format"))
         stylize_label(format_label, True)
-        format_col.Add(format_label, 0, wx.ALIGN_CENTER_HORIZONTAL | wx.BOTTOM, PADDING_XS)
-        format_choice = wx.Choice(pwin, choices=["Any"] + list(FORMAT_OPTIONS))
+        format_col.Add(format_label, 0, wx.BOTTOM, PADDING_XS)
+        format_choice = wx.Choice(self, choices=["Any"] + list(FORMAT_OPTIONS))
         format_choice.SetSelection(0)
         stylize_choice(format_choice)
         format_choice.SetToolTip("Filter results to cards legal in the selected format")
         self.format_choice = format_choice
         format_choice.Bind(wx.EVT_CHOICE, self._on_filters_changed)
-        format_col.Add(format_choice, 0, wx.ALIGN_CENTER_HORIZONTAL)
-        color_format_row.Add(format_col, 0, wx.ALIGN_CENTER_VERTICAL)
+        format_col.Add(format_choice, 0, wx.EXPAND)
+        color_format_row.Add(format_col, 0)
 
-        adv_sizer.Add(color_format_row, 0, wx.ALIGN_CENTER_HORIZONTAL | wx.BOTTOM, PADDING_SM)
+        sizer.Add(color_format_row, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_SM)
 
         # Clear button
         controls = wx.BoxSizer(wx.HORIZONTAL)
-        clear_btn = wx.Button(self, label="Clear Filters")
+        clear_btn = wx.Button(self, label=self._l("clear_filters", "Clear Filters"))
         stylize_button(clear_btn)
         clear_btn.SetToolTip("Reset all search filters")
         clear_btn.Bind(wx.EVT_BUTTON, lambda _evt: self._on_clear())
         controls.Add(clear_btn, 0, wx.RIGHT, PADDING_MD)
 
         # Radar toggle checkbox
-        self.radar_cb = wx.CheckBox(self, label="Use Radar Filter")
+        self.radar_cb = wx.CheckBox(self, label=self._l("radar.use_filter", "Use Radar Filter"))
         self.radar_cb.SetForegroundColour(LIGHT_TEXT)
         self.radar_cb.SetBackgroundColour(DARK_PANEL)
         self.radar_cb.SetToolTip("Show only cards that appear in the loaded radar archetype")
@@ -510,7 +480,7 @@ class DeckBuilderPanel(wx.Panel):
         controls.Add(self.radar_zone_choice, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, PADDING_MD)
 
         # Open Radar button
-        self.open_radar_btn = wx.Button(self, label="Open Radar...")
+        self.open_radar_btn = wx.Button(self, label=self._l("radar.open", "Open Radar..."))
         stylize_button(self.open_radar_btn)
         self.open_radar_btn.SetToolTip("Open a radar to filter cards by archetype frequency")
         self.open_radar_btn.Bind(wx.EVT_BUTTON, self._on_open_radar)
@@ -540,7 +510,7 @@ class DeckBuilderPanel(wx.Panel):
 
         # Add to zone buttons
         add_btns_row = wx.BoxSizer(wx.HORIZONTAL)
-        add_main_btn = wx.Button(self, label="+ Mainboard")
+        add_main_btn = wx.Button(self, label=self._l("add_to_main", "+ Mainboard"))
         stylize_button(add_main_btn)
         add_main_btn.SetToolTip("Add the selected card to the mainboard")
         add_main_btn.Enable(False)
@@ -548,7 +518,7 @@ class DeckBuilderPanel(wx.Panel):
         add_btns_row.Add(add_main_btn, 1, wx.RIGHT, PADDING_SM)
         self._add_main_btn = add_main_btn
 
-        add_side_btn = wx.Button(self, label="+ Sideboard")
+        add_side_btn = wx.Button(self, label=self._l("add_to_side", "+ Sideboard"))
         stylize_button(add_side_btn)
         add_side_btn.SetToolTip("Add the selected card to the sideboard")
         add_side_btn.Enable(False)
@@ -559,7 +529,9 @@ class DeckBuilderPanel(wx.Panel):
         sizer.Add(add_btns_row, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, PADDING_MD)
 
         # Status label
-        status = wx.StaticText(self, label="Results update automatically as you type.")
+        status = wx.StaticText(
+            self, label=self._l("status.results", "Results update automatically as you type.")
+        )
         status.SetForegroundColour(SUBDUED_TEXT)
         sizer.Add(status, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_MD)
         self.status_label = status
@@ -567,16 +539,6 @@ class DeckBuilderPanel(wx.Panel):
     def _on_back_clicked(self) -> None:
         """Handle back button click."""
         self._on_switch_to_research()
-
-    def _on_adv_toggle(self, _event: wx.Event) -> None:
-        """Toggle the advanced filters panel visibility."""
-        if self._adv_panel is None or self._adv_toggle_btn is None:
-            return
-        shown = self._adv_panel.IsShown()
-        self._adv_panel.Show(not shown)
-        self._adv_toggle_btn.SetLabel("- Advanced Filters" if not shown else "+ Advanced Filters")
-        self._adv_panel.Layout()
-        self.Layout()
 
     def _on_result_item_selected(self, event: wx.ListEvent) -> None:
         """Handle result list item selection."""

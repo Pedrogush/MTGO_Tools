@@ -165,7 +165,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
                 "reload_tooltip": self._t("research.tooltip.reload"),
             },
         )
-        self.left_stack.AddPage(self.research_panel, "Research")
+        self.left_stack.AddPage(self.research_panel, self._t("app.label.left_panel.research"))
 
         self.builder_panel = DeckBuilderPanel(
             parent=self.left_stack,
@@ -180,8 +180,26 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
             on_add_to_main=lambda name: self._handle_zone_delta("main", name, 1),
             on_add_to_side=lambda name: self._handle_zone_delta("side", name, 1),
             on_add_to_active_zone=self._add_search_card_to_active_zone,
+            labels={
+                "back_button": self._t("builder.back_button"),
+                "back_button_tooltip": self._t("builder.back_button.tooltip"),
+                "info": self._t("builder.info"),
+                "field.card_name": self._t("builder.field.card_name"),
+                "field.type_line": self._t("builder.field.type_line"),
+                "field.mana_cost": self._t("builder.field.mana_cost"),
+                "field.oracle_text": self._t("builder.field.oracle_text"),
+                "field.mana_value": self._t("builder.field.mana_value"),
+                "filter.color_identity": self._t("builder.filter.color_identity"),
+                "filter.format": self._t("builder.filter.format"),
+                "clear_filters": self._t("builder.clear_filters"),
+                "radar.use_filter": self._t("builder.radar.use_filter"),
+                "radar.open": self._t("builder.radar.open"),
+                "add_to_main": self._t("builder.add_to_main"),
+                "add_to_side": self._t("builder.add_to_side"),
+                "status.results": self._t("builder.status.results"),
+            },
         )
-        self.left_stack.AddPage(self.builder_panel, "Builder")
+        self.left_stack.AddPage(self.builder_panel, self._t("app.label.left_panel.builder"))
         self._show_left_panel(self.left_mode, force=True)
 
         return left_panel
@@ -354,7 +372,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
         self._schedule_settings_save()
 
     def _build_deck_results(self, parent: wx.Window) -> wx.StaticBoxSizer:
-        deck_box = wx.StaticBox(parent, label="Deck Results")
+        deck_box = wx.StaticBox(parent, label=self._t("app.label.deck_results"))
         deck_box.SetForegroundColour(LIGHT_TEXT)
         deck_box.SetBackgroundColour(DARK_PANEL)
         deck_sizer = wx.StaticBoxSizer(deck_box, wx.VERTICAL)
@@ -405,7 +423,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
         return deck_sizer
 
     def _build_card_inspector(self, parent: wx.Window) -> wx.StaticBoxSizer:
-        inspector_box = wx.StaticBox(parent, label="Card Inspector")
+        inspector_box = wx.StaticBox(parent, label=self._t("app.label.card_inspector"))
         inspector_box.SetForegroundColour(LIGHT_TEXT)
         inspector_box.SetBackgroundColour(DARK_PANEL)
         inspector_sizer = wx.StaticBoxSizer(inspector_box, wx.VERTICAL)
@@ -448,7 +466,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
             self.out_table.refresh_card_image(request.card_name)
 
     def _build_deck_workspace(self, parent: wx.Window) -> wx.StaticBoxSizer:
-        detail_box = wx.StaticBox(parent, label="Deck Workspace")
+        detail_box = wx.StaticBox(parent, label=self._t("app.label.deck_workspace"))
         detail_box.SetForegroundColour(LIGHT_TEXT)
         detail_box.SetBackgroundColour(DARK_PANEL)
         detail_sizer = wx.StaticBoxSizer(detail_box, wx.VERTICAL)
@@ -467,7 +485,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
 
         # Collection status label below the tabs
         self.collection_status_label = wx.StaticText(
-            detail_box, label="Collection inventory not loaded."
+            detail_box, label=self._t("app.status.collection_not_loaded")
         )
         self.collection_status_label.SetForegroundColour(SUBDUED_TEXT)
         detail_sizer.Add(
@@ -487,7 +505,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
             on_edit_flex_slots=self._on_edit_flex_slots,
         )
         self.sideboard_guide_panel.SetToolTip(self._t("tabs.tooltip.sideboard_guide"))
-        self.deck_tabs.AddPage(self.sideboard_guide_panel, "Sideboard Guide")
+        self.deck_tabs.AddPage(self.sideboard_guide_panel, self._t("tabs.sideboard_guide"))
 
         self.deck_notes_panel = DeckNotesPanel(
             self.deck_tabs,
@@ -498,7 +516,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
             on_status_update=self._set_status,
         )
         self.deck_notes_panel.SetToolTip(self._t("tabs.tooltip.deck_notes"))
-        self.deck_tabs.AddPage(self.deck_notes_panel, "Deck Notes")
+        self.deck_tabs.AddPage(self.deck_notes_panel, self._t("tabs.deck_notes"))
 
         # Stats panel kept hidden; stats_summary preserved for callers.
         self.deck_stats_panel = DeckStatsPanel(
@@ -512,9 +530,9 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
 
     def _build_deck_tables_tab(self) -> None:
         self.zone_notebook = None
-        self.main_table = self._create_zone_table("main", "Mainboard")
+        self.main_table = self._create_zone_table("main", self._t("tabs.mainboard"))
         self.main_table.SetToolTip(self._t("tabs.tooltip.mainboard"))
-        self.side_table = self._create_zone_table("side", "Sideboard")
+        self.side_table = self._create_zone_table("side", self._t("tabs.sideboard"))
         self.side_table.SetToolTip(self._t("tabs.tooltip.sideboard"))
         self.out_table = None
 
@@ -692,7 +710,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
 
     def _clear_deck_display(self) -> None:
         self.controller.deck_repo.set_current_deck(None)
-        self.summary_text.ChangeValue("Select an archetype to view decks.")
+        self.summary_text.ChangeValue(self._t("app.status.select_archetype"))
         self.zone_cards = {"main": [], "side": [], "out": []}
         self.main_table.set_cards([])
         self.side_table.set_cards([])
