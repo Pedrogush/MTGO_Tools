@@ -44,6 +44,20 @@ _cbp_mod = _load_card_box_panel_module()
 CardBoxPanel = _cbp_mod.CardBoxPanel
 
 
+class _CardEntryStub:
+    """Minimal stand-in for utils.card_data.CardEntry (a msgspec.Struct).
+
+    isinstance(stub, dict) is False, but stub.get(key) works — mirroring the
+    real CardEntry behaviour.
+    """
+
+    def __init__(self, **kwargs: Any) -> None:
+        self._data = kwargs
+
+    def get(self, key: str, default: Any = None) -> Any:
+        return self._data.get(key, default)
+
+
 # ---------------------------------------------------------------------------
 # _build_image_name_candidates
 # ---------------------------------------------------------------------------
@@ -53,22 +67,44 @@ CardBoxPanel = _cbp_mod.CardBoxPanel
         ({"name": "Island"}, {}, ["Island"]),
         ({"name": "A // B"}, {}, ["A // B"]),
         ({"name": "A"}, {"aliases": ["Alias1"]}, ["A", "Alias1"]),
-        ({"name": "A"}, {"aliases": ["A // B", "Other"]}, ["A // B", "A", "Other"]),
+        # When base_name is a single face name the combined DFC alias must NOT
+        # be promoted to position 0 — the face-specific name should remain
+        # first so the image lookup returns the correct face image.
+        ({"name": "A"}, {"aliases": ["A // B", "Other"]}, ["A", "A // B", "Other"]),
+        # When base_name is itself the combined name, any duplicate combined
+        # alias is a no-op (it is already candidates[0]).
+        ({"name": "A // B"}, {"aliases": ["A // B", "A", "B"]}, ["A // B", "A", "B"]),
         ({"name": "A"}, {"aliases": "bad"}, ["A"]),
         ({"name": ""}, {}, []),
+        # CardEntry-like object: isinstance(meta, dict) is False but .get() works.
+        # Aliases must still be extracted — regression guard for the msgspec fix.
+        (
+            {"name": "Witch Enchanter"},
+            _CardEntryStub(
+                aliases=["Eriette's Temptation // Witch Enchanter", "Eriette's Temptation"]
+            ),
+            ["Witch Enchanter", "Eriette's Temptation // Witch Enchanter", "Eriette's Temptation"],
+        ),
+        # CardEntry with combined base name: combined alias stays at position 0.
+        (
+            {"name": "Eriette's Temptation // Witch Enchanter"},
+            _CardEntryStub(aliases=["Eriette's Temptation", "Witch Enchanter"]),
+            ["Eriette's Temptation // Witch Enchanter", "Eriette's Temptation", "Witch Enchanter"],
+        ),
     ],
     ids=[
         "simple-card",
         "dfc-combined-name",
         "non-dfc-alias",
-        "dfc-alias-promoted",
+        "dfc-alias-not-promoted-for-face-name",
+        "dfc-combined-base-with-face-aliases",
         "non-list-aliases",
         "empty-name",
+        "cardentry-back-face-aliases-extracted",
+        "cardentry-combined-base-aliases-extracted",
     ],
 )
-def test_build_image_name_candidates(
-    card: dict[str, Any], meta: dict[str, Any], expected: list[str]
-) -> None:
+def test_build_image_name_candidates(card: dict[str, Any], meta: Any, expected: list[str]) -> None:
     """_build_image_name_candidates must return the correct candidate list for each input."""
     result = CardBoxPanel._build_image_name_candidates(None, card, meta)
     assert result == expected
