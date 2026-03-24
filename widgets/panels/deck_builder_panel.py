@@ -399,7 +399,7 @@ class DeckBuilderPanel(wx.Panel):
         for code in ["W", "U", "B", "R", "G", "C"]:
             bmp: wx.Bitmap | None = None
             try:
-                bmp = self.mana_icons.bitmap_for_symbol(code)
+                bmp = self.mana_icons.bitmap_for_symbol_hires(code)
             except Exception:
                 bmp = None
             if bmp and bmp.IsOk():
