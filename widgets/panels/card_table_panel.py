@@ -96,6 +96,12 @@ class CardTablePanel(wx.Panel):
         self.cards = cards
         self._update_panels(cards, preserve_scroll)
 
+    def refresh_layout(self) -> None:
+        """Re-run scroller layout — call when this tab becomes visible after a hidden set_cards."""
+        self.scroller.Layout()
+        self.scroller.FitInside()
+        self.scroller.SetupScrolling(scroll_x=False, scroll_y=True, rate_x=5, rate_y=5)
+
     @timed
     def _update_panels(self, cards: list[dict[str, Any]], preserve_scroll: bool = False) -> None:
         """Update the fixed pool of panels in-place; no widgets are created or destroyed."""

@@ -455,6 +455,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
 
         self.deck_tabs = self._create_notebook(detail_box)
         detail_sizer.Add(self.deck_tabs, 1, wx.EXPAND | wx.ALL, PADDING_MD)
+        self.deck_tabs.Bind(fnb.EVT_FLATNOTEBOOK_PAGE_CHANGED, self._on_deck_tab_changed)
 
         # Mainboard and Sideboard as top-level tabs
         self._build_deck_tables_tab()
@@ -538,6 +539,16 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
         )
         self.deck_tabs.AddPage(table, tab_name)
         return table
+
+    def _on_deck_tab_changed(self, event: wx.Event) -> None:
+        """Refresh layout of CardTablePanel tabs that were updated while hidden."""
+        event.Skip()
+        idx = self.deck_tabs.GetSelection()
+        if idx == wx.NOT_FOUND:
+            return
+        page = self.deck_tabs.GetPage(idx)
+        if isinstance(page, CardTablePanel):
+            page.refresh_layout()
 
     # ------------------------------------------------------------------ Left panel helpers -------------------------------------------------
     def _show_left_panel(self, mode: str, force: bool = False) -> None:
