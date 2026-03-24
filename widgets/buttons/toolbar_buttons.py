@@ -8,6 +8,8 @@ from collections.abc import Callable
 
 import wx
 
+from utils.stylize import stylize_button
+
 
 class ToolbarButtons(wx.Panel):
     """Panel containing the deck selector toolbar buttons."""
@@ -64,6 +66,7 @@ class ToolbarButtons(wx.Panel):
         self._button_row.AddStretchSpacer(1)
         self._add_divider(gap=10)
         self.settings_button = wx.Button(self, label=labels.get("settings", "\u2699"))
+        stylize_button(self.settings_button)
         self.settings_button.SetToolTip(labels.get("settings_tooltip", "Settings"))
         if on_open_settings_menu:
             self.settings_button.Bind(
@@ -86,6 +89,7 @@ class ToolbarButtons(wx.Panel):
     ) -> wx.Button:
         """Create a toolbar button and bind its handler if provided."""
         button = wx.Button(self, label=label)
+        stylize_button(button)
         if tooltip:
             button.SetToolTip(tooltip)
         if handler:
