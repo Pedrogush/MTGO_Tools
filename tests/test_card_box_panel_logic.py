@@ -51,8 +51,8 @@ class _CardEntryStub:
     real CardEntry behaviour.
     """
 
-    def __init__(self, **kwargs: Any) -> None:
-        self._data = kwargs
+    def __init__(self, name: str = "", **kwargs: Any) -> None:
+        self._data = {"name": name, **kwargs}
 
     def get(self, key: str, default: Any = None) -> Any:
         return self._data.get(key, default)
@@ -67,41 +67,55 @@ class _CardEntryStub:
         ({"name": "Island"}, {}, ["Island"]),
         ({"name": "A // B"}, {}, ["A // B"]),
         ({"name": "A"}, {"aliases": ["Alias1"]}, ["A", "Alias1"]),
-        # When base_name is a single face name the combined DFC alias must NOT
-        # be promoted to position 0 — the face-specific name should remain
-        # first so the image lookup returns the correct face image.
+        # When meta has no "name" key (plain dict), no DFC promotion happens even
+        # if there is a "//" alias — only meta.name drives the promotion.
         ({"name": "A"}, {"aliases": ["A // B", "Other"]}, ["A", "A // B", "Other"]),
-        # When base_name is itself the combined name, any duplicate combined
-        # alias is a no-op (it is already candidates[0]).
+        # When base_name is itself the combined name, the new promotion branch is
+        # not entered (requires no "//" in base_name).
         ({"name": "A // B"}, {"aliases": ["A // B", "A", "B"]}, ["A // B", "A", "B"]),
         ({"name": "A"}, {"aliases": "bad"}, ["A"]),
         ({"name": ""}, {}, []),
         # CardEntry-like object: isinstance(meta, dict) is False but .get() works.
-        # Aliases must still be extracted — regression guard for the msgspec fix.
+        # When meta.name is a combined DFC name, it is promoted to position 0 so
+        # the reliable combined-name → front-face DB entry is tried first.
+        # Regression guard for the msgspec fix + promotion logic.
         (
             {"name": "Witch Enchanter"},
             _CardEntryStub(
-                aliases=["Eriette's Temptation // Witch Enchanter", "Eriette's Temptation"]
+                name="Witch Enchanter // Witch-Blessed Meadow",
+                aliases=[
+                    "Witch Enchanter",
+                    "Witch Enchanter // Witch-Blessed Meadow",
+                    "Witch-Blessed Meadow",
+                ],
             ),
-            ["Witch Enchanter", "Eriette's Temptation // Witch Enchanter", "Eriette's Temptation"],
+            [
+                "Witch Enchanter // Witch-Blessed Meadow",
+                "Witch Enchanter",
+                "Witch-Blessed Meadow",
+            ],
         ),
-        # CardEntry with combined base name: combined alias stays at position 0.
+        # CardEntry with combined base name: new promotion branch not entered
+        # (base_name already contains "//"); aliases stay in insertion order.
         (
-            {"name": "Eriette's Temptation // Witch Enchanter"},
-            _CardEntryStub(aliases=["Eriette's Temptation", "Witch Enchanter"]),
-            ["Eriette's Temptation // Witch Enchanter", "Eriette's Temptation", "Witch Enchanter"],
+            {"name": "Witch Enchanter // Witch-Blessed Meadow"},
+            _CardEntryStub(
+                name="Witch Enchanter // Witch-Blessed Meadow",
+                aliases=["Witch Enchanter", "Witch-Blessed Meadow"],
+            ),
+            ["Witch Enchanter // Witch-Blessed Meadow", "Witch Enchanter", "Witch-Blessed Meadow"],
         ),
     ],
     ids=[
         "simple-card",
         "dfc-combined-name",
         "non-dfc-alias",
-        "dfc-alias-not-promoted-for-face-name",
+        "dfc-alias-no-promotion-without-meta-name",
         "dfc-combined-base-with-face-aliases",
         "non-list-aliases",
         "empty-name",
-        "cardentry-back-face-aliases-extracted",
-        "cardentry-combined-base-aliases-extracted",
+        "cardentry-face-name-promotes-combined-to-front",
+        "cardentry-combined-base-no-promotion",
     ],
 )
 def test_build_image_name_candidates(card: dict[str, Any], meta: Any, expected: list[str]) -> None:

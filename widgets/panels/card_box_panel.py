@@ -341,16 +341,17 @@ class CardBoxPanel(wx.Panel):
             for alias in aliases:
                 if alias and alias not in candidates:
                     candidates.append(alias)
-        # Put the combined DFC name first only when base_name itself already
-        # contains "//" (i.e. the card was stored under the combined name).
-        # When base_name is a single face name (e.g. "Witch Enchanter"), keep
-        # it first so the image lookup returns the correct face, not the front.
-        if base_name and "//" in base_name:
-            for alias in list(candidates):
-                if "//" in alias and alias != candidates[0]:
-                    candidates.remove(alias)
-                    candidates.insert(0, alias)
-                    break
+        # Promote the combined DFC name (from meta.name) to position 0 when
+        # base_name is a single face name (no "//").  The image DB stores
+        # face-0 entries under the combined name reliably; individual face names
+        # can collide with same-named back faces of other printings (e.g.
+        # "Witch Enchanter" also appears as face_index=1 of a different card).
+        # When base_name already contains "//" it is already the canonical key.
+        if base_name and "//" not in base_name and meta is not None:
+            meta_name = meta.get("name")
+            if meta_name and "//" in meta_name and meta_name in candidates:
+                candidates.remove(meta_name)
+                candidates.insert(0, meta_name)
         return candidates
 
     @timed
