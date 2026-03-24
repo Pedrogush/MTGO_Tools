@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Opponent Tracker</title>
+<style>
+body { font-family: Arial, sans-serif; margin: 20px; color: #222; }
+h1 { color: #1a3a5c; border-bottom: 2px solid #1a3a5c; padding-bottom: 6px; }
+h2 { color: #2a5a8c; }
+a { color: #1a5fa0; }
+</style>
+</head>
+<body>
+<h1>Opponent Tracker</h1>
+<p>The <strong>Opponent Tracker</strong> is a floating window opened from the toolbar. It detects
+your current opponent&rsquo;s username from the MTGO window title and looks up which archetypes
+they most commonly play.</p>
+
+<h2>Opening the tracker</h2>
+<p>Click <strong>Opponent Tracker</strong> in the toolbar. The window can remain open throughout
+your MTGO session.</p>
+
+<h2>How detection works</h2>
+<p>The tracker reads the active MTGO window title, which MTGO updates to include the opponent&rsquo;s
+username during a match. No MTGO SDK or API key is required &mdash; only the window title is read.</p>
+
+<h2>Results</h2>
+<p>Once an opponent is detected, the tracker shows:</p>
+<ul>
+  <li>The opponent&rsquo;s username.</li>
+  <li>A list of archetypes associated with that player, based on scraped tournament results.</li>
+  <li>A compact sideboard guide preview if you have a guide entry for any of their likely archetypes.</li>
+  <li>A radar chart summarising the most common cards across their known archetypes.</li>
+</ul>
+
+<h2>Limitations</h2>
+<ul>
+  <li>Detection only works while MTGO is running and a game is active.</li>
+  <li>Results depend on public tournament data; players who rarely enter events may show no data.</li>
+</ul>
+
+<h2>See also</h2>
+<ul>
+  <li><a href="sideboard_guide.html">Sideboard Guide</a></li>
+  <li><a href="metagame_analysis.html">Metagame Analysis</a></li>
+</ul>
+</body>
+</html>

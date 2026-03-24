@@ -1,0 +1,21 @@
+[OPTIONS]
+Contents file=contents.hhc
+Index file=index.hhk
+Default topic=index.html
+Title=MTGO Tools Help
+Charset=UTF-8
+
+[FILES]
+index.html
+metagame_research.html
+deck_workspace.html
+deck_builder.html
+card_inspector.html
+deck_results.html
+sideboard_guide.html
+deck_notes.html
+opponent_tracker.html
+timer_alert.html
+match_history.html
+metagame_analysis.html
+settings.html

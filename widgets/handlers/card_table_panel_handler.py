@@ -108,11 +108,15 @@ class CardTablePanelHandler:
 
     # ------------------------------------------------------------------ Keyboard shortcuts -------------------------------------------------
     def _on_hotkey(self: AppFrame, event: wx.KeyEvent) -> None:
+        key_code = event.GetKeyCode()
+
+        if key_code == wx.WXK_F1 and not event.ControlDown():
+            self._open_help()
+            return
+
         if not event.ControlDown():
             event.Skip()
             return
-
-        key_code = event.GetKeyCode()
         handled = False
 
         if key_code in (ord("D"), ord("d")):

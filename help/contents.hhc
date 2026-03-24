@@ -1,0 +1,62 @@
+<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML//EN">
+<HTML>
+<HEAD>
+<meta name="GENERATOR" content="MTGO Tools Help">
+</HEAD>
+<BODY>
+<UL>
+  <LI><OBJECT type="text/sitemap">
+    <param name="Name" value="Introduction">
+    <param name="Local" value="index.html">
+    </OBJECT>
+  <LI><OBJECT type="text/sitemap">
+    <param name="Name" value="Metagame Research Panel">
+    <param name="Local" value="metagame_research.html">
+    </OBJECT>
+  <LI><OBJECT type="text/sitemap">
+    <param name="Name" value="Deck Workspace">
+    <param name="Local" value="deck_workspace.html">
+    </OBJECT>
+  <LI><OBJECT type="text/sitemap">
+    <param name="Name" value="Deck Builder">
+    <param name="Local" value="deck_builder.html">
+    </OBJECT>
+  <LI><OBJECT type="text/sitemap">
+    <param name="Name" value="Card Inspector">
+    <param name="Local" value="card_inspector.html">
+    </OBJECT>
+  <LI><OBJECT type="text/sitemap">
+    <param name="Name" value="Deck Results and Actions">
+    <param name="Local" value="deck_results.html">
+    </OBJECT>
+  <LI><OBJECT type="text/sitemap">
+    <param name="Name" value="Sideboard Guide">
+    <param name="Local" value="sideboard_guide.html">
+    </OBJECT>
+  <LI><OBJECT type="text/sitemap">
+    <param name="Name" value="Deck Notes">
+    <param name="Local" value="deck_notes.html">
+    </OBJECT>
+  <LI><OBJECT type="text/sitemap">
+    <param name="Name" value="Opponent Tracker">
+    <param name="Local" value="opponent_tracker.html">
+    </OBJECT>
+  <LI><OBJECT type="text/sitemap">
+    <param name="Name" value="Timer Alert">
+    <param name="Local" value="timer_alert.html">
+    </OBJECT>
+  <LI><OBJECT type="text/sitemap">
+    <param name="Name" value="Match History">
+    <param name="Local" value="match_history.html">
+    </OBJECT>
+  <LI><OBJECT type="text/sitemap">
+    <param name="Name" value="Metagame Analysis">
+    <param name="Local" value="metagame_analysis.html">
+    </OBJECT>
+  <LI><OBJECT type="text/sitemap">
+    <param name="Name" value="Settings">
+    <param name="Local" value="settings.html">
+    </OBJECT>
+</UL>
+</BODY>
+</HTML>

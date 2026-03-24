@@ -26,6 +26,7 @@ class DeckResearchPanel(wx.Panel):
         on_archetype_filter: Callable[[], None],
         on_archetype_selected: Callable[[], None],
         on_reload_archetypes: Callable[[], None],
+        on_switch_to_builder: Callable[[], None] | None = None,
         labels: dict[str, str] | None = None,
     ) -> None:
         super().__init__(parent)
@@ -35,6 +36,7 @@ class DeckResearchPanel(wx.Panel):
         self._on_archetype_filter = on_archetype_filter
         self._on_archetype_selected = on_archetype_selected
         self._on_reload_archetypes = on_reload_archetypes
+        self._on_switch_to_builder = on_switch_to_builder
 
         # Store initial format
         self.initial_format = initial_format
@@ -49,6 +51,15 @@ class DeckResearchPanel(wx.Panel):
         self.SetBackgroundColour(DARK_PANEL)
         sizer = wx.BoxSizer(wx.VERTICAL)
         self.SetSizer(sizer)
+
+        # Deck Builder navigation button
+        if self._on_switch_to_builder is not None:
+            builder_btn = wx.Button(
+                self, label=self._labels.get("switch_to_builder", "Deck Builder")
+            )
+            stylize_button(builder_btn)
+            builder_btn.Bind(wx.EVT_BUTTON, lambda _evt: self._on_switch_to_builder())  # type: ignore[misc]
+            sizer.Add(builder_btn, 0, wx.EXPAND | wx.ALL, PADDING_MD)
 
         # Format selection
         format_label = wx.StaticText(self, label=self._labels.get("format", "Format"))
