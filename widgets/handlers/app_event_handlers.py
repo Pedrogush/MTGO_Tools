@@ -303,9 +303,9 @@ class AppEventHandlers:
         self._populate_archetype_list()
         self.research_panel.enable_controls()
         count = len(self.archetypes)
-        self._set_status(f"Loaded {count} archetypes for {self.current_format}.")
+        self._set_status(self._t("app.research.archetypes_loaded", count=count, format=self.current_format))
         self.summary_text.ChangeValue(
-            f"Select an archetype to view decks.\nLoaded {count} archetypes."
+            self._t("app.research.select_archetype_loaded", count=count)
         )
 
     def _on_archetypes_error(self: AppFrame, error: Exception) -> None:
@@ -561,7 +561,12 @@ class AppEventHandlers:
 
         # Delegate business logic to controller
         self.controller.ensure_card_data_loaded(
-            on_success=on_success, on_error=on_error, on_status=on_status
+            on_success=on_success,
+            on_error=on_error,
+            on_status=on_status,
+            msg_loading=self._t("app.status.card_db_loading"),
+            msg_loaded=self._t("app.status.card_db_loaded"),
+            msg_failed=self._t("app.status.card_db_failed"),
         )
 
     # ------------------------------------------------------------------ Helpers --------------------------------------------------------------

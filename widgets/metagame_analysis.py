@@ -272,7 +272,7 @@ class MetagameAnalysisFrame(wx.Frame):
             self.ax.text(
                 0.5,
                 0.5,
-                "No data available for selected period",
+                self._t("metagame.chart.no_data"),
                 ha="center",
                 va="center",
                 color="#b9bfca",

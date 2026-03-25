@@ -126,6 +126,7 @@ class SideboardGuideHandlers:
             mainboard_cards=mainboard,
             sideboard_cards=sideboard,
             flex_slots=self.sideboard_flex_slots,
+            locale=self.locale,
         )
 
         while True:
@@ -178,6 +179,7 @@ class SideboardGuideHandlers:
             sideboard_cards=self.zone_cards.get("side", []),
             data=data,
             flex_slots=self.sideboard_flex_slots,
+            locale=self.locale,
         )
         if dlg.ShowModal() == wx.ID_OK:
             updated = dlg.get_data()

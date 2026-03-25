@@ -9,6 +9,7 @@ import wx.lib.scrolledpanel as scrolled
 
 from utils.constants import DARK_ALT, DARK_PANEL, LIGHT_TEXT, SUBDUED_TEXT
 from utils.constants.colors import FLEX_SLOT_HIGHLIGHT_COLOR
+from utils.i18n import translate
 
 
 class SideboardCardSelector(wx.Panel):
@@ -20,6 +21,7 @@ class SideboardCardSelector(wx.Panel):
         title: str,
         available_cards: list[dict[str, Any]],
         flex_slots: list[str] | None = None,
+        locale: str | None = None,
     ):
         """
         Initialize the card selector.
@@ -29,9 +31,11 @@ class SideboardCardSelector(wx.Panel):
             title: Title for this selector (e.g., "Play: Out")
             available_cards: List of cards available to select from (from mainboard or sideboard)
             flex_slots: Optional list of card names that are marked as flex slots (highlighted)
+            locale: Locale code for i18n
         """
         super().__init__(parent)
         self.SetBackgroundColour(DARK_PANEL)
+        self._locale = locale
         self.flex_slots: set[str] = set(flex_slots) if flex_slots else set()
 
         self.available_cards = available_cards
@@ -47,7 +51,9 @@ class SideboardCardSelector(wx.Panel):
         sizer.Add(title_label, 0, wx.ALL, 4)
 
         # Card count
-        self.count_label = wx.StaticText(self, label="0 cards selected")
+        self.count_label = wx.StaticText(
+            self, label=translate(self._locale, "guide.selector.cards_selected", count=0)
+        )
         self.count_label.SetForegroundColour(SUBDUED_TEXT)
         sizer.Add(self.count_label, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 4)
 
@@ -173,7 +179,9 @@ class SideboardCardSelector(wx.Panel):
     def _update_count(self) -> None:
         """Update the card count label."""
         total = sum(self.selected_cards.values())
-        self.count_label.SetLabel(f"{total} card{'s' if total != 1 else ''} selected")
+        self.count_label.SetLabel(
+            translate(self._locale, "guide.selector.cards_selected", count=total)
+        )
 
     def set_selected_cards(self, cards: dict[str, int]) -> None:
         """

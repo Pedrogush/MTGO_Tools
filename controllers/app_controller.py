@@ -150,12 +150,15 @@ class AppController:
         on_success: Callable[[CardDataManager], None],
         on_error: Callable[[Exception], None],
         on_status: Callable[[str], None],
+        msg_loading: str = "Loading card database...",
+        msg_loaded: str = "Card database loaded",
+        msg_failed: str = "Card database load failed",
     ) -> None:
         if self.card_repo.is_card_data_loaded() or self.card_repo.is_card_data_loading():
             return
 
         self.card_repo.set_card_data_loading(True)
-        on_status("Loading card database...")
+        on_status(msg_loading)
 
         def worker():
             return self.card_repo.ensure_card_data_loaded()
@@ -164,13 +167,13 @@ class AppController:
             self.card_repo.set_card_manager(manager)
             self.card_repo.set_card_data_loading(False)
             self.card_repo.set_card_data_ready(True)
-            on_status("Card database loaded")
+            on_status(msg_loaded)
             on_success(manager)
 
         def error_handler(error: Exception):
             self.card_repo.set_card_data_loading(False)
             logger.error(f"Failed to load card data: {error}")
-            on_status(f"Card database load failed: {error}")
+            on_status(f"{msg_failed}: {error}")
             on_error(error)
 
         self._worker.submit(worker, on_success=success_handler, on_error=error_handler)

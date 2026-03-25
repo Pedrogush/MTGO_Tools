@@ -156,10 +156,7 @@ class SideboardGuidePanel(wx.Panel):
         self.flex_slots_btn = wx.Button(self.button_row, label=self._t("guide.btn.flex_slots"))
         stylize_button(self.flex_slots_btn)
         self.flex_slots_btn.SetBackgroundColour(wx.Colour(*FLEX_SLOT_BUTTON_COLOR))
-        self.flex_slots_btn.SetToolTip(
-            "Mark mainboard cards as flex slots. Flex slots are highlighted in the Out selectors "
-            "when creating guide entries, making it easier to identify cards to side out."
-        )
+        self.flex_slots_btn.SetToolTip(self._t("guide.tooltip.flex_slots"))
         self.flex_slots_btn.Bind(wx.EVT_BUTTON, self._on_flex_slots_clicked)
         if self.on_edit_flex_slots is None:
             self.flex_slots_btn.Disable()

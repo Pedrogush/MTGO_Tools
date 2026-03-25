@@ -60,7 +60,7 @@ class AppControllerUIHelpers:
             on_collection_loaded=_on_collection_loaded,
             on_collection_not_found=lambda: wx.CallAfter(
                 frame.collection_status_label.SetLabel,
-                "No collection found. Click 'Refresh Collection' to fetch from MTGO.",
+                frame._t("app.collection.not_found"),
             ),
             on_collection_refresh_success=lambda filepath, cards: wx.CallAfter(
                 frame._on_collection_fetched, filepath, cards
