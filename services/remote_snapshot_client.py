@@ -327,9 +327,13 @@ class RemoteSnapshotClient:
 
         # Fallback to stdlib urllib when curl_cffi is unavailable (e.g. Linux CI)
         try:
+            from urllib.parse import urlparse
             from urllib.request import urlopen
 
-            with urlopen(url, timeout=self.request_timeout) as resp:  # noqa: S310
+            parsed = urlparse(url)
+            if parsed.scheme not in ("https", "http"):
+                raise ValueError(f"Disallowed URL scheme: {parsed.scheme!r}")
+            with urlopen(url, timeout=self.request_timeout) as resp:  # nosec B310 - scheme validated above
                 return json.loads(resp.read().decode("utf-8"))
         except Exception as exc:
             logger.debug(f"Remote snapshot fetch (urllib) failed for {url!r}: {exc}")
