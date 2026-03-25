@@ -31,6 +31,13 @@ if TYPE_CHECKING:
 
 NOTE_TYPES = ["General", "Matchup", "Sideboard Plan", "Custom"]
 
+_NOTE_TYPE_I18N_KEYS: dict[str, str] = {
+    "General": "notes.type.general",
+    "Matchup": "notes.type.matchup",
+    "Sideboard Plan": "notes.type.sideboard_plan",
+    "Custom": "notes.type.custom",
+}
+
 # Per-type accent colors (foreground on the type label badge)
 _TYPE_FG: dict[str, tuple[int, int, int]] = {
     "General": (59, 130, 246),
@@ -67,10 +74,12 @@ class _NoteCardWidget(wx.Panel):
         on_move_up: Callable[[_NoteCardWidget], None],
         on_move_down: Callable[[_NoteCardWidget], None],
         on_delete: Callable[[_NoteCardWidget], None],
+        locale: str | None = None,
     ) -> None:
         super().__init__(parent)
         self.SetBackgroundColour(DARK_BG)
         self.card_id = card["id"]
+        self._locale = locale
         self._on_move_up = on_move_up
         self._on_move_down = on_move_down
         self._on_delete = on_delete
@@ -90,12 +99,13 @@ class _NoteCardWidget(wx.Panel):
         self.title_ctrl.SetFont(font)
         header.Add(self.title_ctrl, 1, wx.EXPAND | wx.RIGHT, 6)
 
-        self.type_choice = wx.Choice(self, choices=NOTE_TYPES)
+        translated_types = [translate(locale, _NOTE_TYPE_I18N_KEYS.get(k, k)) for k in NOTE_TYPES]
+        self.type_choice = wx.Choice(self, choices=translated_types)
         self.type_choice.SetBackgroundColour(DARK_ALT)
         self.type_choice.SetForegroundColour(LIGHT_TEXT)
         note_type = card.get("type", "General")
-        idx = self.type_choice.FindString(note_type)
-        self.type_choice.SetSelection(max(idx, 0))
+        idx = NOTE_TYPES.index(note_type) if note_type in NOTE_TYPES else 0
+        self.type_choice.SetSelection(idx)
         self._update_type_color()
         self.type_choice.Bind(wx.EVT_CHOICE, self._on_type_changed)
         header.Add(self.type_choice, 0, wx.RIGHT, 6)
@@ -130,14 +140,14 @@ class _NoteCardWidget(wx.Panel):
             "id": self.card_id,
             "title": self.title_ctrl.GetValue(),
             "body": self.body_ctrl.GetValue(),
-            "type": self.type_choice.GetString(self.type_choice.GetSelection()),
+            "type": NOTE_TYPES[self.type_choice.GetSelection()],
         }
 
     def _on_type_changed(self, _event: wx.Event) -> None:
         self._update_type_color()
 
     def _update_type_color(self) -> None:
-        note_type = self.type_choice.GetString(self.type_choice.GetSelection())
+        note_type = NOTE_TYPES[self.type_choice.GetSelection()]
         color = _TYPE_FG.get(note_type, LIGHT_TEXT)
         self.type_choice.SetForegroundColour(color)
         self.type_choice.Refresh()
@@ -254,7 +264,7 @@ class DeckNotesPanel(wx.Panel):
         deck_key = self.deck_repo.get_current_deck_key()
         self.notes_store[deck_key] = self.get_notes()
         self.store_service.save_store(self.notes_store_path, self.notes_store)
-        self.on_status_update("Deck notes saved.")
+        self.on_status_update(self._t("notes.saved"))
 
     # ═══════════════════════════════════════════════════════════════════════
     # Private helpers
@@ -289,6 +299,7 @@ class DeckNotesPanel(wx.Panel):
             on_move_up=self._on_card_move_up,
             on_move_down=self._on_card_move_down,
             on_delete=self._on_card_delete,
+            locale=self._locale,
         )
 
     def _flush_widgets_to_cards(self) -> None:

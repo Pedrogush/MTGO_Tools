@@ -338,7 +338,7 @@ class RadarDialog(wx.Dialog):
         self.generate_btn.Bind(wx.EVT_BUTTON, self._on_generate_clicked)
         selection_sizer.Add(self.generate_btn, 0, wx.RIGHT, 6)
 
-        self.cancel_btn = wx.Button(self, label="Cancel")
+        self.cancel_btn = wx.Button(self, label=self._t("radar.btn.cancel"))
         self.cancel_btn.Bind(wx.EVT_BUTTON, self._on_cancel_clicked)
         self.cancel_btn.Enable(False)
         selection_sizer.Add(self.cancel_btn, 0)
@@ -362,7 +362,7 @@ class RadarDialog(wx.Dialog):
         sizer.Add(self.radar_panel, 1, wx.EXPAND | wx.ALL, 10)
 
         # Close button
-        close_btn = wx.Button(self, wx.ID_CLOSE, "Close")
+        close_btn = wx.Button(self, wx.ID_CLOSE, self._t("radar.btn.close"))
         close_btn.Bind(wx.EVT_BUTTON, self._on_close)
         sizer.Add(close_btn, 0, wx.ALIGN_RIGHT | wx.ALL, 10)
 

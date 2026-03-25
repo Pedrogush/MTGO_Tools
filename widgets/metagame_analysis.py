@@ -132,7 +132,7 @@ class MetagameAnalysisFrame(wx.Frame):
         right_panel.SetSizer(right_sizer)
         content_sizer.Add(right_panel, 0, wx.EXPAND)
 
-        changes_label = wx.StaticText(right_panel, label="Metagame Changes")
+        changes_label = wx.StaticText(right_panel, label=self._t("metagame.label.changes"))
         changes_label.SetForegroundColour(LIGHT_TEXT)
         font = changes_label.GetFont()
         font.MakeBold()
@@ -170,7 +170,7 @@ class MetagameAnalysisFrame(wx.Frame):
     def refresh_data(self) -> None:
         if not self or not self.IsShown():
             return
-        self._set_busy(True, "Fetching metagame data...")
+        self._set_busy(True, self._t("metagame.status.fetching"))
         logger.info(f"Starting metagame data fetch for format: {self.current_format}")
 
         def worker() -> None:
@@ -191,7 +191,7 @@ class MetagameAnalysisFrame(wx.Frame):
         if not self or not self.IsShown():
             logger.warning("Widget not shown, skipping error display")
             return
-        self._set_busy(False, f"Unable to load metagame data:\n{message}")
+        self._set_busy(False, self._t("metagame.status.error", message=message))
 
     def _populate_data(self, stats: dict[str, Any]) -> None:
         logger.info(f"_populate_data called with stats for format: {self.current_format}")
@@ -318,14 +318,16 @@ class MetagameAnalysisFrame(wx.Frame):
 
         self.ax.axis("equal")
         if self.base_day_offset == 0:
-            period_desc = f"Last {self.current_days} day{'s' if self.current_days > 1 else ''}"
+            period_desc = self._t("metagame.period.last_days", count=self.current_days)
         else:
             end_day = self.base_day_offset
             start_day = self.base_day_offset + self.current_days - 1
             if start_day == end_day:
-                period_desc = f"{end_day} day{'s' if end_day > 1 else ''} ago"
+                period_desc = self._t("metagame.period.days_ago", count=end_day)
             else:
-                period_desc = f"{start_day}-{end_day} days ago"
+                period_desc = self._t(
+                    "metagame.period.range_days_ago", start=start_day, end=end_day
+                )
         title = f"{self.current_format.title()} Metagame ({period_desc})"
         self.ax.set_title(title, color="#ecececec", fontsize=12, pad=20)
 
@@ -333,7 +335,7 @@ class MetagameAnalysisFrame(wx.Frame):
 
     def _update_changes_display(self) -> None:
         if not self.current_data or not self.previous_data:
-            self.changes_text.SetValue("No comparison data available")
+            self.changes_text.SetValue(self._t("metagame.changes.no_data"))
             return
 
         current_pct = self._calculate_percentages(self.current_data)
@@ -352,11 +354,11 @@ class MetagameAnalysisFrame(wx.Frame):
         prev_start = self.base_day_offset + self.current_days
         prev_end = self.base_day_offset + self.current_days * 2 - 1
         if prev_start == prev_end:
-            prev_desc = f"{prev_start} day{'s' if prev_start > 1 else ''} ago"
+            prev_desc = self._t("metagame.period.days_ago", count=prev_start)
         else:
-            prev_desc = f"days {prev_end}-{prev_start} ago"
+            prev_desc = self._t("metagame.period.range_days_ago", start=prev_end, end=prev_start)
 
-        lines = [f"Changes vs {prev_desc}:\n"]
+        lines = [self._t("metagame.changes.vs_period", period=prev_desc) + ":\n"]
         for archetype, change in sorted_changes[:15]:
             if abs(change) < 0.1:
                 continue
@@ -365,7 +367,7 @@ class MetagameAnalysisFrame(wx.Frame):
             lines.append(f"{symbol}{change:+.1f}% {archetype} (now {current_val:.1f}%)")
 
         if len(lines) == 1:
-            lines.append("No significant changes")
+            lines.append(self._t("metagame.changes.none"))
 
         self.changes_text.SetValue("\n".join(lines))
 

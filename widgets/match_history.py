@@ -92,7 +92,7 @@ class MatchHistoryFrame(wx.Frame):
         toolbar = wx.BoxSizer(wx.HORIZONTAL)
         sizer.Add(toolbar, 0, wx.ALL | wx.EXPAND, 10)
 
-        self.refresh_button = wx.Button(panel, label="Refresh")
+        self.refresh_button = wx.Button(panel, label=self._t("match.btn.refresh"))
         self._stylize_button(self.refresh_button)
         self.refresh_button.Bind(wx.EVT_BUTTON, lambda _evt: self.refresh_history())
         toolbar.Add(self.refresh_button, 0)
@@ -233,10 +233,12 @@ class MatchHistoryFrame(wx.Frame):
     def refresh_history(self) -> None:
         if not self or not self.IsShown():
             return
-        self._set_busy(True, "Loading all match history...")
+        self._set_busy(True, self._t("match.status.loading"))
 
         def progress_callback(current: int, total: int) -> None:
-            wx.CallAfter(self._set_busy, True, f"Parsing {current}/{total} matches...")
+            wx.CallAfter(
+                self._set_busy, True, self._t("match.status.parsing", current=current, total=total)
+            )
 
         def worker() -> None:
             try:
@@ -255,7 +257,7 @@ class MatchHistoryFrame(wx.Frame):
     def _handle_history_error(self, message: str) -> None:
         if not self or not self.IsShown():
             return
-        self._set_busy(False, "Failed to load match history.")
+        self._set_busy(False, self._t("match.status.failed"))
 
     def _populate_history(self, matches: list[dict[str, Any]]) -> None:
         if not self or not self.IsShown():
@@ -265,7 +267,7 @@ class MatchHistoryFrame(wx.Frame):
         root = self.tree.GetRootItem()
 
         if not matches:
-            self._set_busy(False, "No match data available.")
+            self._set_busy(False, self._t("match.status.no_data"))
             return
 
         self.history_items = matches
@@ -338,7 +340,7 @@ class MatchHistoryFrame(wx.Frame):
             mull_detail = ", ".join(str(m) for m in our_mulligans) if our_mulligans else "0"
 
             # Format result - score from OUR perspective (our score - opponent score)
-            result_text = "Won" if we_won else "Lost"
+            result_text = self._t("match.result.won") if we_won else self._t("match.result.lost")
             result_display = f"{result_text} {our_score}-{opp_score}"
 
             # Format player display
@@ -358,7 +360,7 @@ class MatchHistoryFrame(wx.Frame):
             # Store full match data in item
             self.tree.SetItemData(item, match)
 
-        self._set_busy(False, f"Loaded {len(matches)} matches")
+        self._set_busy(False, self._t("match.status.loaded", count=len(matches)))
         self._update_metrics()
         self._clear_opp_stats()
 
@@ -613,7 +615,7 @@ class MatchHistoryFrame(wx.Frame):
         try:
             return datetime.strptime(value, "%Y-%m-%d").date()
         except ValueError:
-            self._set_busy(False, "Invalid date format")
+            self._set_busy(False, self._t("match.status.invalid_date"))
             return None
 
     def _within_range(self, date_obj, start, end) -> bool:

@@ -159,7 +159,7 @@ class GuideEntryDialog(wx.Dialog):
         button_sizer.Add(ok_btn, 0, wx.RIGHT, 8)
 
         # Cancel button
-        cancel_btn = wx.Button(panel, label="Cancel", id=wx.ID_CANCEL)
+        cancel_btn = wx.Button(panel, label=self._t("guide.dialog.cancel"), id=wx.ID_CANCEL)
         cancel_btn.Bind(wx.EVT_BUTTON, lambda evt: self.EndModal(wx.ID_CANCEL))
         button_sizer.Add(cancel_btn, 0)
 

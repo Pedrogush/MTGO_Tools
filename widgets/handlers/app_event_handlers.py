@@ -323,9 +323,9 @@ class AppEventHandlers:
         self.controller.deck_repo.set_decks_list(decks)
         self.deck_list.Clear()
         if not decks:
-            self.deck_list.Append("No decks found.")
+            self.deck_list.Append(self._t("deck_results.no_decks"))
             self.deck_list.Disable()
-            self._set_status(f"No decks for {archetype_name}.")
+            self._set_status(self._t("deck_results.no_decks_for", archetype=archetype_name))
             self.summary_text.ChangeValue(f"{archetype_name}\n\nNo deck data available.")
             return
         for deck in decks:
@@ -334,14 +334,14 @@ class AppEventHandlers:
         self.daily_average_button.Enable()
         self._present_archetype_summary(archetype_name, decks)
         self._set_status(
-            f"Loaded {len(decks)} decks for {archetype_name}. Click a deck to load it."
+            self._t("deck_results.status.loaded_decks", count=len(decks), archetype=archetype_name)
         )
 
     def _on_decks_error(self: AppFrame, error: Exception) -> None:
         with self._loading_lock:
             self.loading_decks = False
         self.deck_list.Clear()
-        self.deck_list.Append("Failed to load decks.")
+        self.deck_list.Append(self._t("deck_results.failed_load"))
         self._set_status(f"Error loading decks: {error}")
         wx.MessageBox(f"Failed to load deck lists:\n{error}", "Deck Error", wx.OK | wx.ICON_ERROR)
 
@@ -665,13 +665,13 @@ class AppEventHandlers:
             date = deck.get("date", "").lower()
             by_date[date] = by_date.get(date, 0) + 1
         latest_dates = sorted(by_date.items(), reverse=True)[:7]
-        lines = [archetype_name, "", f"Total decks loaded: {len(decks)}", ""]
+        lines = [archetype_name, "", self._t("deck_results.total_loaded", count=len(decks)), ""]
         if latest_dates:
-            lines.append("Recent activity:")
+            lines.append(self._t("deck_results.recent_activity"))
             for day, count in latest_dates:
                 lines.append(f"  {day}: {count} deck(s)")
         else:
-            lines.append("No recent deck activity.")
+            lines.append(self._t("deck_results.no_activity"))
         self.summary_text.ChangeValue("\n".join(lines))
 
     def _load_decks_for_archetype(self, archetype: dict[str, Any]) -> None:
