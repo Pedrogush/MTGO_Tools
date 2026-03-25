@@ -19,7 +19,7 @@ from loguru import logger
 from matplotlib.backends.backend_wxagg import FigureCanvasWxAgg as FigureCanvas
 from matplotlib.figure import Figure
 
-from navigators.mtggoldfish import get_archetype_stats
+from repositories.metagame_repository import get_metagame_repository
 from utils.constants import DARK_ALT, DARK_BG, DARK_PANEL, LIGHT_TEXT, SUBDUED_TEXT
 
 
@@ -162,13 +162,13 @@ class MetagameAnalysisFrame(wx.Frame):
     def refresh_data(self) -> None:
         if not self or not self.IsShown():
             return
-        self._set_busy(True, "Fetching metagame data from MTGGoldfish...")
+        self._set_busy(True, "Fetching metagame data...")
         logger.info(f"Starting metagame data fetch for format: {self.current_format}")
 
         def worker() -> None:
             try:
                 logger.debug(f"Worker thread started for {self.current_format}")
-                stats = get_archetype_stats(self.current_format)
+                stats = get_metagame_repository().get_stats_for_format(self.current_format)
                 logger.info(f"Successfully loaded archetype stats for {self.current_format}")
                 logger.debug(f"Stats keys: {list(stats.keys())}")
                 wx.CallAfter(self._populate_data, stats)

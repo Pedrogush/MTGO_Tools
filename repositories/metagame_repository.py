@@ -11,7 +11,7 @@ import json
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Final
+from typing import TYPE_CHECKING, Any, Final
 
 from loguru import logger
 
@@ -26,7 +26,11 @@ from utils.constants import (
     ARCHETYPE_LIST_CACHE_FILE,
     METAGAME_CACHE_TTL_SECONDS,
     MTGO_DECKLISTS_ENABLED,
+    REMOTE_SNAPSHOTS_ENABLED,
 )
+
+if TYPE_CHECKING:
+    from services.remote_snapshot_client import RemoteSnapshotClient
 
 _USE_DEFAULT_MAX_AGE: Final = object()
 
@@ -61,6 +65,7 @@ class MetagameRepository:
         *,
         archetype_list_cache_file: Path = ARCHETYPE_LIST_CACHE_FILE,
         archetype_decks_cache_file: Path = ARCHETYPE_DECKS_CACHE_FILE,
+        remote_snapshot_client: "RemoteSnapshotClient | None" = None,
     ):
         """
         Initialize the metagame repository.
@@ -69,10 +74,14 @@ class MetagameRepository:
             cache_ttl: Time-to-live for cached data in seconds (default: 1 hour)
             archetype_list_cache_file: Path to archetype list cache (overridable for testing)
             archetype_decks_cache_file: Path to archetype deck cache (overridable for testing)
+            remote_snapshot_client: Optional remote snapshot client; injected for testing.
+                When ``None`` the default singleton is used if ``REMOTE_SNAPSHOTS_ENABLED``
+                is set, otherwise remote snapshots are skipped entirely.
         """
         self.cache_ttl = cache_ttl
         self.archetype_list_cache_file = Path(archetype_list_cache_file)
         self.archetype_decks_cache_file = Path(archetype_decks_cache_file)
+        self._remote_client = remote_snapshot_client
 
     # ============= Archetype Operations =============
 
@@ -82,35 +91,92 @@ class MetagameRepository:
         """
         Get list of archetypes for a specific format.
 
+        Resolution order (unless force_refresh):
+        1. Local cache (if still fresh)
+        2. Remote snapshot (if REMOTE_SNAPSHOTS_ENABLED)
+        3. Live MTGGoldfish scrape
+        4. Stale local cache (last-resort fallback on live-scrape failure)
+
         Args:
             mtg_format: MTG format (e.g., "Modern", "Standard")
-            force_refresh: If True, bypass cache and fetch fresh data
+            force_refresh: If True, bypass local cache and fetch fresh data
 
         Returns:
             List of archetype dictionaries with keys: name, url, share, etc.
         """
-        # Try cache first unless forced refresh
+        # 1. Local cache
         if not force_refresh:
             cached = self._load_cached_archetypes(mtg_format)
             if cached is not None:
-                logger.debug(f"Using cached archetypes for {mtg_format}")
+                logger.debug(f"[local-cache] archetypes for {mtg_format}")
                 return cached
 
-        # Fetch fresh data
-        logger.info(f"Fetching fresh archetypes for {mtg_format}")
+        # 2. Remote snapshot
+        remote = self._remote_client_or_default()
+        if remote is not None:
+            try:
+                remote_archetypes = remote.get_archetypes_for_format(mtg_format)
+                if remote_archetypes is not None:
+                    logger.info(f"[remote-snapshot] archetypes for {mtg_format}")
+                    self._save_cached_archetypes(mtg_format, remote_archetypes)
+                    return remote_archetypes
+            except Exception as exc:
+                logger.warning(f"Remote snapshot archetypes failed for {mtg_format}: {exc}")
+
+        # 3. Live scrape
+        logger.info(f"[live-scrape] archetypes for {mtg_format}")
         try:
             archetypes = get_archetypes(mtg_format)
-            # Cache the results
             self._save_cached_archetypes(mtg_format, archetypes)
             return archetypes
         except Exception as exc:
             logger.error(f"Failed to fetch archetypes: {exc}")
-            # Try to return stale cache if available
+            # 4. Stale cache as last resort
             cached = self._load_cached_archetypes(mtg_format, max_age=None)
             if cached:
-                logger.warning(f"Returning stale cached data for {mtg_format}")
+                logger.warning(f"[stale-cache] archetypes for {mtg_format}")
                 return cached
             raise
+
+    def get_stats_for_format(self, mtg_format: str, force_refresh: bool = False) -> dict[str, Any]:
+        """Return per-day deck-count stats for *mtg_format*.
+
+        Resolution order:
+        1. Remote snapshot  (if REMOTE_SNAPSHOTS_ENABLED and not force_refresh)
+        2. Live ``get_archetype_stats`` scrape (also populates the archetype
+           stats cache used by the navigator module)
+
+        The returned dict matches the shape produced by
+        ``navigators.mtggoldfish.get_archetype_stats``:
+
+        .. code-block:: python
+
+            {
+                "<format>": {
+                    "timestamp": <float>,
+                    "<archetype name>": {
+                        "results": {"<YYYY-MM-DD>": <int>, ...}
+                    },
+                }
+            }
+        """
+        # 1. Remote snapshot
+        if not force_refresh:
+            remote = self._remote_client_or_default()
+            if remote is not None:
+                try:
+                    remote_stats = remote.get_metagame_stats_for_format(mtg_format)
+                    if remote_stats is not None:
+                        logger.info(f"[remote-snapshot] metagame stats for {mtg_format}")
+                        return remote_stats
+                except Exception as exc:
+                    logger.warning(f"Remote snapshot stats failed for {mtg_format}: {exc}")
+
+        # 2. Live scrape via existing navigator function
+        from navigators.mtggoldfish import get_archetype_stats
+
+        logger.info(f"[live-scrape] metagame stats for {mtg_format}")
+        return get_archetype_stats(mtg_format)
 
     def get_decks_for_archetype(
         self,
@@ -192,6 +258,22 @@ class MetagameRepository:
         except Exception as exc:
             logger.error(f"Failed to download deck {deck_name}: {exc}")
             raise
+
+    # ============= Remote snapshot helpers =============
+
+    def _remote_client_or_default(self) -> "RemoteSnapshotClient | None":
+        """Return the remote snapshot client when remote snapshots are enabled.
+
+        Uses the injected client (for testing) when present; otherwise falls
+        back to the module-level singleton, gated on ``REMOTE_SNAPSHOTS_ENABLED``.
+        """
+        if self._remote_client is not None:
+            return self._remote_client
+        if not REMOTE_SNAPSHOTS_ENABLED:
+            return None
+        from services.remote_snapshot_client import get_remote_snapshot_client
+
+        return get_remote_snapshot_client()
 
     # ============= Cache Management =============
 
