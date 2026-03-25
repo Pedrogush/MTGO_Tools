@@ -240,6 +240,8 @@ class DeckBuilderPanel(wx.Panel):
         self.status_label: wx.StaticText | None = None
         self._add_main_btn: wx.Button | None = None
         self._add_side_btn: wx.Button | None = None
+        self._adv_panel: wx.Panel | None = None
+        self._adv_toggle_btn: wx.Button | None = None
         self.results_cache: list[dict[str, Any]] = []
         self._search_timer = wx.Timer(self)
         self.Bind(wx.EVT_TIMER, self._on_search_timer, self._search_timer)
@@ -338,23 +340,24 @@ class DeckBuilderPanel(wx.Panel):
         format_choice.SetToolTip("Filter results to cards legal in the selected format")
         self.format_choice = format_choice
         format_choice.Bind(wx.EVT_CHOICE, self._on_filters_changed)
-        sizer.Add(format_choice, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_SM)
+        sizer.Add(format_choice, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_SM)
 
         # --- Advanced Filters (collapsible, collapsed by default) ---
-        adv_pane = wx.CollapsiblePane(
-            self,
-            label=" Advanced Filters",
-            style=wx.CP_DEFAULT_STYLE | wx.CP_NO_TLW_RESIZE,
-        )
-        adv_pane.SetBackgroundColour(DARK_PANEL)
-        adv_pane.Collapse(True)
-        self.Bind(wx.EVT_COLLAPSIBLEPANE_CHANGED, self._on_adv_pane_changed, adv_pane)
-        sizer.Add(adv_pane, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, PADDING_MD)
+        adv_toggle_btn = wx.Button(self, label="+ Advanced Filters")
+        stylize_button(adv_toggle_btn)
+        adv_toggle_btn.Bind(wx.EVT_BUTTON, self._on_adv_toggle)
+        sizer.Add(adv_toggle_btn, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_MD)
+        self._adv_toggle_btn = adv_toggle_btn
 
-        pwin = adv_pane.GetPane()
-        pwin.SetBackgroundColour(DARK_PANEL)
+        adv_panel = wx.Panel(self)
+        adv_panel.SetBackgroundColour(DARK_PANEL)
         adv_sizer = wx.BoxSizer(wx.VERTICAL)
-        pwin.SetSizer(adv_sizer)
+        adv_panel.SetSizer(adv_sizer)
+        adv_panel.Hide()
+        sizer.Add(adv_panel, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, PADDING_MD)
+        self._adv_panel = adv_panel
+
+        pwin = adv_panel
 
         # Type Line
         lbl = wx.StaticText(pwin, label="Type Line")
@@ -556,12 +559,14 @@ class DeckBuilderPanel(wx.Panel):
         """Handle back button click."""
         self._on_switch_to_research()
 
-    def _on_adv_pane_changed(self, _event: wx.CollapsiblePaneEvent) -> None:
-        """Relayout the panel when the Advanced Filters pane is expanded or collapsed."""
+    def _on_adv_toggle(self, _event: wx.Event) -> None:
+        """Toggle the advanced filters panel visibility."""
+        if self._adv_panel is None or self._adv_toggle_btn is None:
+            return
+        shown = self._adv_panel.IsShown()
+        self._adv_panel.Show(not shown)
+        self._adv_toggle_btn.SetLabel("- Advanced Filters" if not shown else "+ Advanced Filters")
         self.Layout()
-        parent = self.GetParent()
-        if parent:
-            parent.Layout()
 
     def _on_result_item_selected(self, event: wx.ListEvent) -> None:
         """Handle result list item selection."""
