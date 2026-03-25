@@ -330,23 +330,11 @@ class DeckBuilderPanel(wx.Panel):
             PADDING_XS,
         )
 
-        # --- Format (always visible) ---
-        format_label = wx.StaticText(self, label="Format")
-        stylize_label(format_label, True)
-        sizer.Add(format_label, 0, wx.LEFT | wx.RIGHT, PADDING_MD)
-        format_choice = wx.Choice(self, choices=["Any"] + list(FORMAT_OPTIONS))
-        format_choice.SetSelection(0)
-        stylize_choice(format_choice)
-        format_choice.SetToolTip("Filter results to cards legal in the selected format")
-        self.format_choice = format_choice
-        format_choice.Bind(wx.EVT_CHOICE, self._on_filters_changed)
-        sizer.Add(format_choice, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_SM)
-
         # --- Advanced Filters (collapsible, collapsed by default) ---
         adv_toggle_btn = wx.Button(self, label="+ Advanced Filters")
         stylize_button(adv_toggle_btn)
         adv_toggle_btn.Bind(wx.EVT_BUTTON, self._on_adv_toggle)
-        sizer.Add(adv_toggle_btn, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_MD)
+        sizer.Add(adv_toggle_btn, 0, wx.ALIGN_CENTER_HORIZONTAL | wx.BOTTOM, PADDING_MD)
         self._adv_toggle_btn = adv_toggle_btn
 
         adv_panel = wx.Panel(self)
@@ -362,7 +350,7 @@ class DeckBuilderPanel(wx.Panel):
         # Type Line
         lbl = wx.StaticText(pwin, label="Type Line")
         stylize_label(lbl, True)
-        adv_sizer.Add(lbl, 0, wx.LEFT | wx.RIGHT | wx.TOP, PADDING_MD)
+        adv_sizer.Add(lbl, 0, wx.ALIGN_CENTER_HORIZONTAL | wx.TOP, PADDING_MD)
         type_ctrl = wx.TextCtrl(pwin)
         stylize_textctrl(type_ctrl)
         type_ctrl.SetHint("Artifact Creature")
@@ -374,7 +362,7 @@ class DeckBuilderPanel(wx.Panel):
         # Oracle Text
         lbl = wx.StaticText(pwin, label="Oracle Text")
         stylize_label(lbl, True)
-        adv_sizer.Add(lbl, 0, wx.LEFT | wx.RIGHT, PADDING_MD)
+        adv_sizer.Add(lbl, 0, wx.ALIGN_CENTER_HORIZONTAL, PADDING_MD)
         text_ctrl = wx.TextCtrl(pwin)
         stylize_textctrl(text_ctrl)
         text_ctrl.SetHint("Keywords or abilities")
@@ -395,7 +383,7 @@ class DeckBuilderPanel(wx.Panel):
         # Mana Value Filter
         mv_label = wx.StaticText(pwin, label="Mana Value Filter")
         stylize_label(mv_label, True)
-        adv_sizer.Add(mv_label, 0, wx.LEFT | wx.RIGHT, PADDING_MD)
+        adv_sizer.Add(mv_label, 0, wx.ALIGN_CENTER_HORIZONTAL, PADDING_MD)
         mv_row = wx.BoxSizer(wx.HORIZONTAL)
         mv_value = wx.TextCtrl(pwin)
         stylize_textctrl(mv_value)
@@ -413,10 +401,14 @@ class DeckBuilderPanel(wx.Panel):
         mv_row.Add(mv_choice, 0, wx.ALIGN_CENTER_VERTICAL)
         adv_sizer.Add(mv_row, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_SM)
 
-        # Color Identity Filter
+        # Color Identity Filter + Format (side by side)
+        color_format_row = wx.BoxSizer(wx.HORIZONTAL)
+
+        # Left: color identity label + controls
+        color_col = wx.BoxSizer(wx.VERTICAL)
         color_label = wx.StaticText(pwin, label="Color Identity Filter")
         stylize_label(color_label, True)
-        adv_sizer.Add(color_label, 0, wx.LEFT | wx.RIGHT, PADDING_MD)
+        color_col.Add(color_label, 0, wx.ALIGN_CENTER_HORIZONTAL | wx.BOTTOM, PADDING_XS)
         color_controls = wx.BoxSizer(wx.HORIZONTAL)
         color_mode = wx.Choice(pwin, choices=["-", "≥", "=", "≠"])
         color_mode.SetSelection(0)
@@ -473,7 +465,24 @@ class DeckBuilderPanel(wx.Panel):
             )
             color_controls.Add(btn, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, PADDING_XS)
             self.color_checks[code] = btn
-        adv_sizer.Add(color_controls, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_SM)
+        color_col.Add(color_controls, 0)
+        color_format_row.Add(color_col, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, PADDING_MD)
+
+        # Right: format label + choice
+        format_col = wx.BoxSizer(wx.VERTICAL)
+        format_label = wx.StaticText(pwin, label="Format")
+        stylize_label(format_label, True)
+        format_col.Add(format_label, 0, wx.ALIGN_CENTER_HORIZONTAL | wx.BOTTOM, PADDING_XS)
+        format_choice = wx.Choice(pwin, choices=["Any"] + list(FORMAT_OPTIONS))
+        format_choice.SetSelection(0)
+        stylize_choice(format_choice)
+        format_choice.SetToolTip("Filter results to cards legal in the selected format")
+        self.format_choice = format_choice
+        format_choice.Bind(wx.EVT_CHOICE, self._on_filters_changed)
+        format_col.Add(format_choice, 0, wx.ALIGN_CENTER_HORIZONTAL)
+        color_format_row.Add(format_col, 0, wx.ALIGN_CENTER_VERTICAL)
+
+        adv_sizer.Add(color_format_row, 0, wx.ALIGN_CENTER_HORIZONTAL | wx.BOTTOM, PADDING_SM)
 
         # Clear button
         controls = wx.BoxSizer(wx.HORIZONTAL)
