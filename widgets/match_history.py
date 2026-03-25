@@ -447,6 +447,8 @@ class MatchHistoryFrame(wx.Frame):
         self.opp_mull_rate_label.SetLabel(f"{self._t('match.metrics.opp_mull_rate')}: \u2014")
 
     def _set_busy(self, busy: bool, message: str | None = None) -> None:
+        if not self:
+            return
         if self.refresh_button:
             self.refresh_button.Enable(not busy)
         if message:
