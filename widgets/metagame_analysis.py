@@ -29,7 +29,12 @@ class MetagameAnalysisFrame(wx.Frame):
 
     def __init__(self, parent: wx.Window | None = None, locale: str | None = None) -> None:
         style = wx.DEFAULT_FRAME_STYLE | wx.STAY_ON_TOP
-        super().__init__(parent, title="Metagame Analysis", size=(1100, 750), style=style)
+        super().__init__(
+            parent,
+            title=translate(locale, "window.title.metagame_analysis"),
+            size=(1100, 750),
+            style=style,
+        )
         self._locale = locale
 
         self.current_format: str = "modern"
@@ -364,7 +369,9 @@ class MetagameAnalysisFrame(wx.Frame):
                 continue
             symbol = "+" if change > 0 else ""
             current_val = current_pct.get(archetype, 0.0)
-            lines.append(f"{symbol}{change:+.1f}% {archetype} (now {current_val:.1f}%)")
+            lines.append(
+                f"{symbol}{change:+.1f}% {archetype} ({self._t('metagame.changes.now')} {current_val:.1f}%)"
+            )
 
         if len(lines) == 1:
             lines.append(self._t("metagame.changes.none"))

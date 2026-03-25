@@ -127,7 +127,12 @@ class TimerAlertFrame(wx.Frame):
 
     def __init__(self, parent: wx.Window | None = None, locale: str | None = None) -> None:
         style = wx.CAPTION | wx.CLOSE_BOX | wx.MINIMIZE_BOX | wx.STAY_ON_TOP | wx.RESIZE_BORDER
-        super().__init__(parent, title="MTGO Timer Alert", size=TIMER_ALERT_FRAME_SIZE, style=style)
+        super().__init__(
+            parent,
+            title=translate(locale, "window.title.timer_alert"),
+            size=TIMER_ALERT_FRAME_SIZE,
+            style=style,
+        )
         self._locale = locale
 
         self._watcher: BridgeWatcher | None = None

@@ -162,7 +162,10 @@ class MTGOpponentDeckSpy(wx.Frame):
             wx.CAPTION | wx.CLOSE_BOX | wx.STAY_ON_TOP | wx.FRAME_FLOAT_ON_PARENT | wx.MINIMIZE_BOX
         )
         super().__init__(
-            parent, title="MTGO Opponent Tracker", size=OPPONENT_TRACKER_FRAME_SIZE, style=style
+            parent,
+            title=translate(locale, "window.title.opponent_tracker"),
+            size=OPPONENT_TRACKER_FRAME_SIZE,
+            style=style,
         )
 
         self._locale = locale

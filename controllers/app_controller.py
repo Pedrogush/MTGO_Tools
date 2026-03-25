@@ -47,7 +47,7 @@ from utils.constants import (
     ensure_base_dirs,
 )
 from utils.diagnostics import EventLogger
-from utils.i18n import normalize_locale
+from utils.i18n import normalize_locale, translate
 
 
 class AppController:
@@ -230,7 +230,7 @@ class AppController:
             self.loading_decks = True
 
         name = archetype.get("name", "Unknown")
-        on_status(f"Loading decks for {name}…")
+        on_status(translate(self.current_language, "app.status.loading_decks", name=name))
 
         source_filter = self.get_deck_data_source()
 
