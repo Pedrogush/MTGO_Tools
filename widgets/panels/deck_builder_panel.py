@@ -575,6 +575,7 @@ class DeckBuilderPanel(wx.Panel):
         shown = self._adv_panel.IsShown()
         self._adv_panel.Show(not shown)
         self._adv_toggle_btn.SetLabel("- Advanced Filters" if not shown else "+ Advanced Filters")
+        self._adv_panel.Layout()
         self.Layout()
 
     def _on_result_item_selected(self, event: wx.ListEvent) -> None:

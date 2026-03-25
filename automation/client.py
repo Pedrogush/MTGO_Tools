@@ -179,6 +179,10 @@ class AutomationClient:
         """
         return self._send_command("builder_search", card_name=card_name)
 
+    def toggle_adv_filters(self) -> dict[str, Any]:
+        """Switch to builder panel and toggle the advanced filters section."""
+        return self._send_command("toggle_adv_filters")
+
     def load_deck_text(self, deck_text: str) -> dict[str, Any]:
         """Load a deck directly from text into the mainboard/sideboard zones.
 
