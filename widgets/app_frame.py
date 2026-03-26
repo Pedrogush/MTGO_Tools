@@ -130,7 +130,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
         self.status_bar = self.CreateStatusBar()
         self.status_bar.SetBackgroundColour(DARK_PANEL)
         self.status_bar.SetForegroundColour(LIGHT_TEXT)
-        self._set_status(self._t("app.status.ready"))
+        self._set_status("app.status.ready")
 
     def _build_left_panel(self, parent: wx.Window) -> wx.Panel:
         left_panel = wx.Panel(parent)
@@ -351,7 +351,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
     def _apply_language(self, locale: str) -> None:
         self.locale = locale
         self.controller.set_language(locale)
-        self._set_status(self._t("app.status.language_changed"))
+        self._set_status("app.status.language_changed")
         self._schedule_settings_save()
 
     def _build_deck_results(self, parent: wx.Window) -> wx.StaticBoxSizer:
@@ -600,7 +600,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
                 self._render_current_deck()
             else:
                 self._pending_deck_restore = True
-                self._set_status("Loading card database to restore saved deck...")
+                self._set_status("app.status.restoring_deck")
                 self.ensure_card_data_loaded()
 
         # Restore deck text
@@ -615,10 +615,10 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
             self.deck_notes_panel.load_notes_for_current()
             self._load_guide_for_current()
 
-    def _set_status(self, message: str) -> None:
+    def _set_status(self, key: str, **kwargs: object) -> None:
         if self.status_bar:
-            self.status_bar.SetStatusText(message)
-        logger.info(message)
+            self.status_bar.SetStatusText(self._t(key, **kwargs))
+        logger.info(translate("en", key, **kwargs))
 
     def _t(self, key: str, **kwargs: object) -> str:
         return translate(self.locale, key, **kwargs)
@@ -690,7 +690,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
         self.controller.fetch_archetypes(
             on_success=lambda archetypes: wx.CallAfter(self._on_archetypes_loaded, archetypes),
             on_error=lambda error: wx.CallAfter(self._on_archetypes_error, error),
-            on_status=lambda msg: wx.CallAfter(self._set_status, msg),
+            on_status=lambda *a, **kw: wx.CallAfter(self._set_status, *a, **kw),
             force=force,
         )
 

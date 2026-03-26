@@ -303,7 +303,7 @@ class TimerAlertFrame(wx.Frame):
         challenge_sizer.Add(self.challenge_text, 0, wx.ALL | wx.EXPAND, PADDING_BASE)
         sizer.Add(challenge_sizer, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, PADDING_XL)
 
-        self._set_status(self._t("timer.configure"))
+        self._set_status("timer.configure")
         self.Bind(wx.EVT_SIZE, self._on_resize)
 
     def _add_threshold_panel(self) -> None:
@@ -317,7 +317,7 @@ class TimerAlertFrame(wx.Frame):
     def _remove_threshold_panel(self, panel: ThresholdPanel) -> None:
         """Remove a threshold input panel."""
         if len(self.threshold_panels) <= 1:
-            self._set_status("At least one timer threshold is required.")
+            self._set_status("timer.status.one_threshold_required")
             return
         self.threshold_panels.remove(panel)
         self.threshold_container_sizer.Detach(panel)
@@ -356,18 +356,18 @@ class TimerAlertFrame(wx.Frame):
     # ------------------------------------------------------------------ Monitoring ------------------------------------------------------------
     def start_monitoring(self) -> None:
         if self.monitor_job_active:
-            self._set_status("Already monitoring the timer.")
+            self._set_status("timer.status.already_monitoring")
             return
 
         thresholds = self._parse_thresholds()
         if not thresholds:
-            self._set_status("No valid thresholds configured.")
+            self._set_status("timer.status.no_thresholds")
             return
 
         try:
             poll_interval = max(250, int(self.poll_interval_ctrl.GetValue()))
         except (TypeError, ValueError):
-            self._set_status("Invalid poll interval.")
+            self._set_status("timer.status.invalid_poll_interval")
             return
 
         self._current_thresholds = thresholds
@@ -382,7 +382,7 @@ class TimerAlertFrame(wx.Frame):
             panel.set_enabled(False)
 
         self._monitor_timer.Start(self._monitor_interval_ms)
-        self._set_status("Monitoring MTGO challenge timer…")
+        self._set_status("timer.status.monitoring")
         self._monitor_timer_step()
 
     def stop_monitoring(self) -> None:
@@ -396,7 +396,7 @@ class TimerAlertFrame(wx.Frame):
         for panel in self.threshold_panels:
             panel.set_enabled(True)
 
-        self._set_status("Monitoring stopped.")
+        self._set_status("timer.status.stopped")
 
     def test_alert(self) -> None:
         """Test the selected alert sound."""
@@ -417,11 +417,11 @@ class TimerAlertFrame(wx.Frame):
     def _monitor_timer_step(self) -> None:
         snapshot = self._last_snapshot
         if snapshot is None:
-            self._set_status("Waiting for MTGO data…")
+            self._set_status("timer.status.waiting_data")
             return
 
         if snapshot.get("error"):
-            self._set_status(f"Bridge error: {snapshot['error']}")
+            self._set_status("timer.status.bridge_error", error=snapshot["error"])
             return
 
         self._update_challenge_display(snapshot)
@@ -429,7 +429,7 @@ class TimerAlertFrame(wx.Frame):
         # Get challenge timer info
         timers = snapshot.get("challengeTimers") or []
         if not timers:
-            self._set_status("No active challenge timer detected. Join an event to monitor.")
+            self._set_status("timer.status.no_timer")
             self.triggered_thresholds.clear()
             self.start_alert_sent = False
             if self._repeat_timer.IsRunning():
@@ -439,11 +439,11 @@ class TimerAlertFrame(wx.Frame):
         timer = timers[0]
         remaining = timer.get("remainingSeconds")
         if not isinstance(remaining, (int, float)):
-            self._set_status("Unable to read challenge timer value.")
+            self._set_status("timer.status.invalid_value")
             return
 
         current_seconds = max(0, int(remaining))
-        self._set_status(f"Challenge timer: {self._format_seconds(current_seconds)}")
+        self._set_status("timer.status.challenge_timer", value=self._format_seconds(current_seconds))
 
         # Start alert (countdown began)
         if self.start_alert_checkbox.GetValue() and not self.start_alert_sent:
@@ -503,16 +503,13 @@ class TimerAlertFrame(wx.Frame):
             try:
                 watcher = mtgo_bridge.start_watch(interval_ms=self.WATCH_INTERVAL_MS)
             except FileNotFoundError as exc:
-                wx.CallAfter(
-                    self._set_status,
-                    "Bridge missing. Build the MTGO bridge executable.",
-                )
+                wx.CallAfter(self._set_status, "timer.status.bridge_missing")
                 logger.error("Bridge executable not found: %s", exc)
                 wx.CallLater(5000, self._start_watch_loop)
                 return
             except Exception as exc:  # noqa: BLE001
                 logger.exception("Unable to start bridge watcher")
-                wx.CallAfter(self._set_status, f"Bridge error: {exc}")
+                wx.CallAfter(self._set_status, "timer.status.bridge_error", error=exc)
                 wx.CallLater(5000, self._start_watch_loop)
                 return
             self._watcher = watcher
@@ -533,8 +530,8 @@ class TimerAlertFrame(wx.Frame):
         self._monitor_timer_step()
 
     # ------------------------------------------------------------------ Helpers --------------------------------------------------------------
-    def _set_status(self, message: str) -> None:
-        self.status_text.ChangeValue(message)
+    def _set_status(self, key: str, **kwargs: object) -> None:
+        self.status_text.ChangeValue(self._t(key, **kwargs))
 
     def _update_challenge_display(self, snapshot: dict[str, Any]) -> None:
         if not self.challenge_text:

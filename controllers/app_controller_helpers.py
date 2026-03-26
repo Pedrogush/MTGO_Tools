@@ -66,7 +66,7 @@ class AppControllerUIHelpers:
                 frame._on_collection_fetched, filepath, cards
             ),
             on_collection_failed=lambda msg: wx.CallAfter(frame._on_collection_fetch_failed, msg),
-            on_status=lambda message: wx.CallAfter(frame._set_status, message),
+            on_status=lambda *a, **kw: wx.CallAfter(frame._set_status, *a, **kw),
             on_bulk_download_needed=lambda reason: logger.info(f"Bulk data needs update: {reason}"),
             on_bulk_download_complete=lambda msg: wx.CallAfter(frame._on_bulk_data_downloaded, msg),
             on_bulk_download_failed=lambda msg: wx.CallAfter(frame._on_bulk_data_failed, msg),

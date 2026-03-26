@@ -264,7 +264,7 @@ class DeckNotesPanel(wx.Panel):
         deck_key = self.deck_repo.get_current_deck_key()
         self.notes_store[deck_key] = self.get_notes()
         self.store_service.save_store(self.notes_store_path, self.notes_store)
-        self.on_status_update(self._t("notes.saved"))
+        self.on_status_update("notes.saved")
 
     # ═══════════════════════════════════════════════════════════════════════
     # Private helpers

@@ -47,7 +47,7 @@ from utils.constants import (
     ensure_base_dirs,
 )
 from utils.diagnostics import EventLogger
-from utils.i18n import normalize_locale, translate
+from utils.i18n import normalize_locale
 
 
 class AppController:
@@ -132,7 +132,6 @@ class AppController:
             image_service=self.image_service,
             worker=self._worker,
             frame_provider=lambda: self.frame,
-            locale_provider=lambda: self.current_language,
         )
         self._mtgo_background_helpers = MtgoBackgroundHelpers(worker=self._worker)
 
@@ -150,16 +149,13 @@ class AppController:
         self,
         on_success: Callable[[CardDataManager], None],
         on_error: Callable[[Exception], None],
-        on_status: Callable[[str], None],
-        msg_loading: str = "Loading card database...",
-        msg_loaded: str = "Card database loaded",
-        msg_failed: str = "Card database load failed",
+        on_status: Callable[..., None],
     ) -> None:
         if self.card_repo.is_card_data_loaded() or self.card_repo.is_card_data_loading():
             return
 
         self.card_repo.set_card_data_loading(True)
-        on_status(msg_loading)
+        on_status("app.status.card_db_loading")
 
         def worker():
             return self.card_repo.ensure_card_data_loaded()
@@ -168,13 +164,13 @@ class AppController:
             self.card_repo.set_card_manager(manager)
             self.card_repo.set_card_data_loading(False)
             self.card_repo.set_card_data_ready(True)
-            on_status(msg_loaded)
+            on_status("app.status.card_db_loaded")
             on_success(manager)
 
         def error_handler(error: Exception):
             self.card_repo.set_card_data_loading(False)
             logger.error(f"Failed to load card data: {error}")
-            on_status(f"{msg_failed}: {error}")
+            on_status("app.status.card_db_failed", error=error)
             on_error(error)
 
         self._worker.submit(worker, on_success=success_handler, on_error=error_handler)
@@ -193,7 +189,7 @@ class AppController:
                 return
             self.loading_archetypes = True
 
-        on_status(f"Loading archetypes for {self.current_format}…")
+        on_status("app.status.loading_archetypes_for", format=self.current_format)
 
         def loader(fmt: str):
             return self.workflow_service.fetch_archetypes(fmt, force=force)
@@ -231,7 +227,7 @@ class AppController:
             self.loading_decks = True
 
         name = archetype.get("name", "Unknown")
-        on_status(translate(self.current_language, "app.status.loading_decks", name=name))
+        on_status("app.status.loading_decks", name=name)
 
         source_filter = self.get_deck_data_source()
 
@@ -271,7 +267,7 @@ class AppController:
             on_error(ValueError("Deck identifier missing"))
             return
 
-        on_status("Downloading deck…")
+        on_status("app.status.downloading_deck")
 
         source_filter = self.get_deck_data_source()
 
@@ -319,7 +315,7 @@ class AppController:
         with self._loading_lock:
             self.loading_daily_average = True
 
-        on_status("Building daily average deck…")
+        on_status("app.status.building_daily_average")
 
         source_filter = self.get_deck_data_source()
 
@@ -369,7 +365,7 @@ class AppController:
         on_error = callbacks.on_collection_failed if callbacks else None
         directory = directory or self.deck_save_dir
 
-        on_status("Fetching collection from MTGO...")
+        on_status("app.status.fetching_collection")
         logger.info("Fetching collection from MTGO Bridge")
 
         self.collection_service.refresh_from_bridge_async(
@@ -444,7 +440,7 @@ class AppController:
         on_error: Callable[[Exception], None],
         on_status: Callable[[str], None],
     ) -> None:
-        on_status("Downloading deck…")
+        on_status("app.status.downloading_deck")
         source_filter = self.get_deck_data_source()
 
         def worker(number: str):
