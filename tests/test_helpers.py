@@ -32,6 +32,9 @@ reset_deck_repository = _optional_reset("repositories.deck_repository", "reset_d
 reset_metagame_repository = _optional_reset(
     "repositories.metagame_repository", "reset_metagame_repository"
 )
+reset_bundle_snapshot_client = _optional_reset(
+    "services.bundle_snapshot_client", "reset_bundle_snapshot_client"
+)
 reset_deck_service = _optional_reset("services.deck_service", "reset_deck_service")
 reset_image_service = _optional_reset("services.image_service", "reset_image_service")
 reset_search_service = _optional_reset("services.search_service", "reset_search_service")
@@ -42,6 +45,7 @@ reset_collection_service = _optional_reset(
 
 def reset_all_services() -> None:
     """Reset all global service instances."""
+    reset_bundle_snapshot_client()
     reset_collection_service()
     reset_deck_service()
     reset_search_service()

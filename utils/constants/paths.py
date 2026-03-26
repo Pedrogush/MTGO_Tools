@@ -47,3 +47,4 @@ CURR_DECK_FILE = DECKS_DIR / "curr_deck.txt"
 # Remote snapshot staging — downloaded artifacts live here before hydrating local caches
 REMOTE_SNAPSHOT_CACHE_DIR = CACHE_DIR / "remote_snapshots"
 REMOTE_SNAPSHOT_MANIFEST_FILE = REMOTE_SNAPSHOT_CACHE_DIR / "manifest.json"
+REMOTE_SNAPSHOT_BUNDLE_STAMP_FILE = REMOTE_SNAPSHOT_CACHE_DIR / "bundle_stamp.json"

@@ -19,6 +19,12 @@ except Exception:  # pragma: no cover - collection service not available without
         raise RuntimeError("CollectionService is unavailable (wxPython not installed)")
 
 
+from services.bundle_snapshot_client import (
+    BundleSnapshotClient,
+    BundleSnapshotError,
+    get_bundle_snapshot_client,
+    reset_bundle_snapshot_client,
+)
 from services.deck_research_service import DeckResearchService
 from services.deck_service import DeckService, ZoneUpdateResult, get_deck_service
 from services.image_service import ImageService, get_image_service
@@ -27,6 +33,8 @@ from services.state_service import StateService
 from services.store_service import StoreService, get_store_service
 
 __all__ = [
+    "BundleSnapshotClient",
+    "BundleSnapshotError",
     "CollectionService",
     "CollectionStatus",
     "DeckResearchService",
@@ -36,6 +44,7 @@ __all__ = [
     "StateService",
     "StoreService",
     "ZoneUpdateResult",
+    "get_bundle_snapshot_client",
     "get_collection_service",
     "get_deck_research_service",
     "get_deck_service",
@@ -43,6 +52,7 @@ __all__ = [
     "get_search_service",
     "get_state_service",
     "get_store_service",
+    "reset_bundle_snapshot_client",
 ]
 
 
