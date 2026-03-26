@@ -123,6 +123,7 @@ class TimerAlertFrame(wx.Frame):
     """Polls MTGO challenge timers via the bridge and plays audible alerts."""
 
     WATCH_INTERVAL_MS = TIMER_ALERT_WATCH_INTERVAL_MS
+    WATCH_RETRY_DELAY_MS = 5000
     POLL_INTERVAL_MS = TIMER_ALERT_POLL_INTERVAL_MS
 
     def __init__(self, parent: wx.Window | None = None, locale: str | None = None) -> None:
@@ -136,6 +137,8 @@ class TimerAlertFrame(wx.Frame):
         self._locale = locale
 
         self._watcher: BridgeWatcher | None = None
+        self._watch_start_pending = False
+        self._closed = False
         self._watch_timer = wx.Timer(self)
         self._monitor_timer = wx.Timer(self)
         self._repeat_timer = wx.Timer(self)
@@ -498,26 +501,68 @@ class TimerAlertFrame(wx.Frame):
 
     # ------------------------------------------------------------------ Watch loop -----------------------------------------------------------
     def _start_watch_loop(self) -> None:
-        if self._watcher:
+        if self._closed or self._watcher or self._watch_start_pending:
+            return
+        self._watch_start_pending = True
+        threading.Thread(target=self._watch_start_worker, daemon=True).start()
+
+    def _watch_start_worker(self) -> None:
+        try:
+            watcher = mtgo_bridge.start_watch(interval_ms=self.WATCH_INTERVAL_MS)
+        except FileNotFoundError as exc:
+            logger.error("Bridge executable not found: {}", exc)
+            if not self._closed:
+                wx.CallAfter(self._handle_watch_start_failure, "timer.status.bridge_missing", exc)
+            return
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Unable to start bridge watcher")
+            if not self._closed:
+                wx.CallAfter(self._handle_watch_start_failure, "timer.status.bridge_error", exc)
             return
 
-        def starter():
-            try:
-                watcher = mtgo_bridge.start_watch(interval_ms=self.WATCH_INTERVAL_MS)
-            except FileNotFoundError as exc:
-                wx.CallAfter(self._set_status, "timer.status.bridge_missing")
-                logger.error("Bridge executable not found: %s", exc)
-                wx.CallLater(5000, self._start_watch_loop)
-                return
-            except Exception as exc:  # noqa: BLE001
-                logger.exception("Unable to start bridge watcher")
-                wx.CallAfter(self._set_status, "timer.status.bridge_error", error=exc)
-                wx.CallLater(5000, self._start_watch_loop)
-                return
-            self._watcher = watcher
-            wx.CallAfter(self._watch_timer.Start, self.WATCH_INTERVAL_MS)
+        if self._closed:
+            self._stop_watcher_worker(watcher)
+            return
+        wx.CallAfter(self._complete_watch_start, watcher)
 
-        threading.Thread(target=starter, daemon=True).start()
+    def _handle_watch_start_failure(self, status_key: str, error: Exception) -> None:
+        self._watch_start_pending = False
+        if self._closed:
+            return
+        if status_key == "timer.status.bridge_missing":
+            self._set_status(status_key)
+        else:
+            self._set_status(status_key, error=error)
+        wx.CallLater(self.WATCH_RETRY_DELAY_MS, self._start_watch_loop)
+
+    def _complete_watch_start(self, watcher: BridgeWatcher) -> None:
+        self._watch_start_pending = False
+        if self._closed:
+            self._stop_watcher_async(watcher)
+            return
+        if self._watcher is not None and self._watcher is not watcher:
+            self._stop_watcher_async(watcher)
+            return
+        self._watcher = watcher
+        self._watch_timer.Start(self.WATCH_INTERVAL_MS)
+
+    def _stop_watcher_async(self, watcher: BridgeWatcher | None = None) -> None:
+        watcher_to_stop = watcher or self._watcher
+        if watcher is None:
+            self._watcher = None
+        if watcher_to_stop is None:
+            return
+        threading.Thread(
+            target=self._stop_watcher_worker,
+            args=(watcher_to_stop,),
+            daemon=True,
+        ).start()
+
+    def _stop_watcher_worker(self, watcher: BridgeWatcher) -> None:
+        try:
+            watcher.stop()
+        except Exception as exc:  # noqa: BLE001
+            logger.debug(f"Failed to stop bridge watcher: {exc}")
 
     def _on_watch_timer(self, _event: wx.TimerEvent) -> None:
         if not self._watcher:
@@ -572,18 +617,15 @@ class TimerAlertFrame(wx.Frame):
 
     # ------------------------------------------------------------------ Lifecycle -------------------------------------------------------------
     def on_close(self, event: wx.CloseEvent) -> None:
+        self._closed = True
+        self._watch_start_pending = False
         if self._watch_timer.IsRunning():
             self._watch_timer.Stop()
         if self._monitor_timer.IsRunning():
             self._monitor_timer.Stop()
         if self._repeat_timer.IsRunning():
             self._repeat_timer.Stop()
-        if self._watcher:
-            try:
-                self._watcher.stop()
-            except Exception as exc:  # noqa: BLE001
-                logger.debug(f"Failed to stop bridge watcher: {exc}")
-            self._watcher = None
+        self._stop_watcher_async()
         event.Skip()
 
 
