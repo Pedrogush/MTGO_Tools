@@ -77,9 +77,7 @@ class RadarRepository:
                 if not isinstance(distribution, dict):
                     distribution = {}
                 normalized_distribution = {
-                    int(key): int(value)
-                    for key, value in distribution.items()
-                    if str(key).strip()
+                    int(key): int(value) for key, value in distribution.items() if str(key).strip()
                 }
                 card_rows.append(
                     (
@@ -241,8 +239,7 @@ class RadarRepository:
 
     def _initialize(self) -> None:
         with self._connect() as conn:
-            conn.executescript(
-                """
+            conn.executescript("""
                 CREATE TABLE IF NOT EXISTS radars (
                     format_name TEXT NOT NULL,
                     archetype_href TEXT NOT NULL,
@@ -280,8 +277,7 @@ class RadarRepository:
                         expected_copies DESC,
                         inclusion_rate DESC
                     );
-                """
-            )
+                """)
 
     def _connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self.db_path, timeout=SQLITE_CONNECTION_TIMEOUT_SECONDS)

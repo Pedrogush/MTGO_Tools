@@ -92,7 +92,10 @@ class FormatCardPoolRepository:
                 INSERT INTO format_card_pool_cards (format_name, card_name, copies_played)
                 VALUES (?, ?, ?)
                 """,
-                [(format_name, card_name, copies_played) for card_name, copies_played in rows.items()],
+                [
+                    (format_name, card_name, copies_played)
+                    for card_name, copies_played in rows.items()
+                ],
             )
             conn.commit()
         return True
@@ -152,7 +155,9 @@ class FormatCardPoolRepository:
                 """,
                 (fmt, limit),
             ).fetchall()
-        return [FormatCardPoolCardTotal(card_name=row[0], copies_played=int(row[1])) for row in rows]
+        return [
+            FormatCardPoolCardTotal(card_name=row[0], copies_played=int(row[1])) for row in rows
+        ]
 
     def get_summary(self, format_name: str) -> FormatCardPoolSummary | None:
         """Return summary metadata for *format_name*."""
@@ -203,8 +208,7 @@ class FormatCardPoolRepository:
 
     def _initialize(self) -> None:
         with self._connect() as conn:
-            conn.executescript(
-                """
+            conn.executescript("""
                 CREATE TABLE IF NOT EXISTS format_card_pools (
                     format_name TEXT PRIMARY KEY,
                     generated_at TEXT NOT NULL DEFAULT '',
@@ -225,8 +229,7 @@ class FormatCardPoolRepository:
 
                 CREATE INDEX IF NOT EXISTS idx_format_card_pool_cards_top
                     ON format_card_pool_cards (format_name, copies_played DESC, card_name ASC);
-                """
-            )
+                """)
 
     def _connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self.db_path, timeout=SQLITE_CONNECTION_TIMEOUT_SECONDS)
