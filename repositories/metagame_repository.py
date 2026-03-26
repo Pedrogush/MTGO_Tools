@@ -296,6 +296,35 @@ class MetagameRepository:
             logger.error(f"Failed to download deck {deck_name}: {exc}")
             raise
 
+    def prefetch_deck_artifacts_for_format(
+        self, mtg_format: str, archetypes: list[dict[str, Any]]
+    ) -> None:
+        """Eagerly cache remote deck artifacts for every archetype in *archetypes*.
+
+        Extracts the ``href`` slug from each archetype dict and delegates to
+        ``RemoteSnapshotClient.prefetch_deck_artifacts``.  Does nothing when
+        remote snapshots are disabled or the client is unavailable.
+
+        Intended to be called in a background thread immediately after the
+        archetype list is loaded so that subsequent deck-list lookups hit the
+        local cache instead of the network.
+
+        Args:
+            mtg_format: MTG format name (e.g. ``"modern"``).
+            archetypes: List of archetype dicts as returned by
+                ``get_archetypes_for_format``.
+        """
+        remote = self._remote_client_or_default()
+        if remote is None:
+            return
+        slugs = [
+            a.get("href") or a.get("url", "") for a in archetypes if a.get("href") or a.get("url")
+        ]
+        if not slugs:
+            return
+        logger.info(f"Prefetching deck artifacts for {len(slugs)} archetypes in '{mtg_format}'")
+        remote.prefetch_deck_artifacts(mtg_format, slugs)
+
     # ============= Remote snapshot helpers =============
 
     def _remote_client_or_default(self) -> "RemoteSnapshotClient | None":

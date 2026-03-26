@@ -762,3 +762,55 @@ def test_download_deck_content_empty_deck_text_falls_back_to_fetch(tmp_path, mon
 
     assert result == "4 Lightning Bolt\n"
     assert fetched == ["99999"]
+
+
+# ============= prefetch_deck_artifacts_for_format =============
+
+
+def test_prefetch_calls_remote_client_with_slugs(tmp_path):
+    """prefetch_deck_artifacts_for_format should extract hrefs and call the remote client."""
+    prefetch_calls: list[tuple[str, list[str]]] = []
+
+    class _PrefetchClient(_FakeRemoteClientWithDecks):
+        def prefetch_deck_artifacts(self, fmt, slugs):
+            prefetch_calls.append((fmt, slugs))
+
+    remote = _PrefetchClient()
+    repo = _make_repo(tmp_path, remote_client=remote)
+
+    archetypes = [
+        {"name": "UR Murktide", "href": "modern-ur-murktide"},
+        {"name": "Amulet Titan", "href": "modern-amulet-titan"},
+    ]
+    repo.prefetch_deck_artifacts_for_format("modern", archetypes)
+
+    assert prefetch_calls == [("modern", ["modern-ur-murktide", "modern-amulet-titan"])]
+
+
+def test_prefetch_skips_archetypes_with_no_href(tmp_path):
+    """Archetypes without href or url should be silently skipped."""
+    prefetch_calls: list[tuple[str, list[str]]] = []
+
+    class _PrefetchClient(_FakeRemoteClientWithDecks):
+        def prefetch_deck_artifacts(self, fmt, slugs):
+            prefetch_calls.append((fmt, slugs))
+
+    remote = _PrefetchClient()
+    repo = _make_repo(tmp_path, remote_client=remote)
+
+    archetypes = [
+        {"name": "UR Murktide", "href": "modern-ur-murktide"},
+        {"name": "No Href"},
+    ]
+    repo.prefetch_deck_artifacts_for_format("modern", archetypes)
+
+    assert prefetch_calls == [("modern", ["modern-ur-murktide"])]
+
+
+def test_prefetch_does_nothing_when_no_remote_client(tmp_path, monkeypatch):
+    """prefetch_deck_artifacts_for_format should be a no-op when remote is disabled."""
+    monkeypatch.setattr("repositories.metagame_repository.REMOTE_SNAPSHOTS_ENABLED", False)
+    repo = _make_repo(tmp_path, remote_client=None)
+
+    # Should not raise
+    repo.prefetch_deck_artifacts_for_format("modern", [{"href": "modern-ur-murktide"}])

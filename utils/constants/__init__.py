@@ -235,7 +235,7 @@ from utils.constants.ui_windows import (
 MTGO_DECKLISTS_ENABLED = os.getenv("MTGO_DECKLISTS_ENABLED", "false").lower() == "true"
 
 # Remote snapshot feature flag and configuration
-REMOTE_SNAPSHOTS_ENABLED = os.getenv("REMOTE_SNAPSHOTS_ENABLED", "false").lower() == "true"
+REMOTE_SNAPSHOTS_ENABLED = os.getenv("REMOTE_SNAPSHOTS_ENABLED", "true").lower() == "true"
 REMOTE_SNAPSHOT_BASE_URL = os.getenv(
     "REMOTE_SNAPSHOT_BASE_URL",
     "https://raw.githubusercontent.com/Pedrogush/MTGO_Scrapes_Repository/main",

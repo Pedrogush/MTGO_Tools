@@ -264,6 +264,54 @@ class RemoteSnapshotClient:
         logger.info(f"Loaded {len(decks)} decks for '{fmt}/{archetype_slug}' from remote snapshot")
         return decks
 
+    def prefetch_deck_artifacts(self, mtg_format: str, archetype_slugs: list[str]) -> None:
+        """Eagerly download and cache deck artifacts for all given archetype slugs.
+
+        Intended to be called in a background thread after the archetype list is
+        loaded so that subsequent ``get_decks_for_archetype`` calls hit the local
+        cache instead of the network.  Already-fresh artifacts are skipped (the
+        ``_get_artifact`` staleness check prevents redundant downloads).
+
+        Failures for individual artifacts are logged and swallowed so that a
+        single unavailable slug does not abort the rest of the prefetch.
+
+        Parameters
+        ----------
+        mtg_format:
+            Format name, case-insensitive (e.g. ``"modern"``).
+        archetype_slugs:
+            List of archetype identifiers (the ``href`` values from the
+            archetypes artifact).
+        """
+        fmt = mtg_format.lower()
+        skipped = 0
+        downloaded = 0
+        failed = 0
+        for slug in archetype_slugs:
+            artifact_path = f"data/latest/{fmt}/decks/{slug}.json"
+            local_path = self._local_artifact_path(artifact_path)
+            if local_path.exists():
+                try:
+                    age = time.time() - local_path.stat().st_mtime
+                    if age < self.max_age:
+                        skipped += 1
+                        continue
+                except OSError:
+                    pass
+            try:
+                result = self._get_artifact(artifact_path)
+                if result is not None:
+                    downloaded += 1
+                else:
+                    failed += 1
+            except Exception as exc:
+                logger.debug(f"Prefetch failed for '{fmt}/{slug}': {exc}")
+                failed += 1
+        logger.info(
+            f"Deck artifact prefetch for '{fmt}': "
+            f"{downloaded} downloaded, {skipped} already fresh, {failed} failed"
+        )
+
     def is_available(self) -> bool:
         """Return True if the remote manifest can be fetched successfully."""
         return self._get_manifest() is not None

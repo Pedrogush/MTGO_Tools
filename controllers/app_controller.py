@@ -200,6 +200,12 @@ class AppController:
             self.archetypes = archetypes
             self.filtered_archetypes = archetypes
             on_success(archetypes)
+            # Eagerly cache deck artifacts in the background so the first
+            # archetype selection hits local disk instead of the network.
+            fmt = self.current_format
+            self._worker.submit(
+                lambda: self.metagame_repo.prefetch_deck_artifacts_for_format(fmt, archetypes)
+            )
 
         def error_handler(error: Exception):
             with self._loading_lock:

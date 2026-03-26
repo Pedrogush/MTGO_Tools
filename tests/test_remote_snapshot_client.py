@@ -350,3 +350,65 @@ def test_get_decks_artifact_is_cached_on_disk(client, monkeypatch):
 
     assert result == _SAMPLE_DECKS
     assert download_calls == [], "should serve from disk cache without re-downloading"
+
+
+# ---------------------------------------------------------------------------
+# prefetch_deck_artifacts
+# ---------------------------------------------------------------------------
+
+
+def test_prefetch_downloads_missing_artifacts(client, monkeypatch):
+    downloaded = []
+
+    def fake_get_artifact(path):
+        downloaded.append(path)
+        return _decks_artifact(_SAMPLE_DECKS)
+
+    monkeypatch.setattr(client, "_get_artifact", fake_get_artifact)
+
+    client.prefetch_deck_artifacts("modern", ["modern-murktide", "modern-living-end"])
+
+    assert "data/latest/modern/decks/modern-murktide.json" in downloaded
+    assert "data/latest/modern/decks/modern-living-end.json" in downloaded
+
+
+def test_prefetch_skips_fresh_cached_artifacts(client, monkeypatch):
+    # Write a fresh artifact to disk so prefetch should skip it
+    artifact = _decks_artifact(_SAMPLE_DECKS)
+    _write_artifact(client, "data/latest/modern/decks/modern-murktide.json", artifact)
+
+    download_calls = []
+    monkeypatch.setattr(client, "_download_artifact", lambda *_: download_calls.append(1) or None)
+
+    client.prefetch_deck_artifacts("modern", ["modern-murktide"])
+
+    assert download_calls == [], "fresh artifact should not be re-downloaded"
+
+
+def test_prefetch_swallows_individual_failures(client, monkeypatch):
+    calls = []
+
+    def boom(path):
+        calls.append(path)
+        raise RuntimeError("network error")
+
+    monkeypatch.setattr(client, "_get_artifact", boom)
+
+    # Should not raise even when every artifact fetch fails
+    client.prefetch_deck_artifacts("modern", ["modern-murktide", "modern-living-end"])
+
+    assert len(calls) == 2
+
+
+def test_prefetch_uses_lowercase_format(client, monkeypatch):
+    captured = []
+
+    def capture(path):
+        captured.append(path)
+        return _decks_artifact(_SAMPLE_DECKS)
+
+    monkeypatch.setattr(client, "_get_artifact", capture)
+
+    client.prefetch_deck_artifacts("Modern", ["modern-murktide"])
+
+    assert captured[0].startswith("data/latest/modern/")
