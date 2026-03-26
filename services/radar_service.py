@@ -15,6 +15,7 @@ from typing import Any
 from loguru import logger
 
 from repositories.metagame_repository import MetagameRepository, get_metagame_repository
+from repositories.radar_repository import RadarRepository, StoredRadar, get_radar_repository
 from services.deck_service import DeckService, get_deck_service
 from utils.constants import (
     RADAR_AVG_COPIES_ROUND_DIGITS,
@@ -58,6 +59,7 @@ class RadarService:
         self,
         metagame_repository: MetagameRepository | None = None,
         deck_service: DeckService | None = None,
+        radar_repository: RadarRepository | None = None,
     ):
         """
         Initialize the radar service.
@@ -65,9 +67,11 @@ class RadarService:
         Args:
             metagame_repository: MetagameRepository instance
             deck_service: DeckService instance
+            radar_repository: Repository containing precomputed radar snapshots
         """
         self.metagame_repo = metagame_repository or get_metagame_repository()
         self.deck_service = deck_service or get_deck_service()
+        self.radar_repo = radar_repository or get_radar_repository()
 
     def calculate_radar(
         self,
@@ -90,6 +94,12 @@ class RadarService:
         """
         archetype_name = archetype.get("name", "Unknown")
         logger.info(f"Calculating radar for {archetype_name} in {format_name}")
+
+        archetype_href = str(archetype.get("href") or archetype.get("url", "")).strip()
+        precomputed = self._get_precomputed_radar(format_name, archetype_href, max_decks=max_decks)
+        if precomputed is not None:
+            logger.info(f"Using precomputed radar for {archetype_name} in {format_name}")
+            return precomputed
 
         try:
             # Fetch all decks for this archetype
@@ -188,6 +198,58 @@ class RadarService:
         except Exception as exc:
             logger.error(f"Failed to calculate radar for {archetype_name}: {exc}")
             raise
+
+    def _get_precomputed_radar(
+        self,
+        format_name: str,
+        archetype_href: str,
+        *,
+        max_decks: int | None,
+    ) -> RadarData | None:
+        """Return a locally cached precomputed radar when it satisfies the request."""
+        if not archetype_href:
+            return None
+        snapshot = self.radar_repo.get_radar(format_name, archetype_href)
+        if snapshot is None:
+            return None
+        if max_decks is not None and snapshot.total_decks_analyzed > max_decks:
+            return None
+        return self._snapshot_to_radar_data(snapshot)
+
+    def _snapshot_to_radar_data(self, snapshot: StoredRadar) -> RadarData:
+        """Convert a stored radar snapshot into the public RadarData shape."""
+        return RadarData(
+            archetype_name=snapshot.archetype_name,
+            format_name=snapshot.format_name.title(),
+            mainboard_cards=[
+                CardFrequency(
+                    card_name=card.card_name,
+                    appearances=card.appearances,
+                    total_copies=card.total_copies,
+                    max_copies=card.max_copies,
+                    avg_copies=card.avg_copies,
+                    inclusion_rate=card.inclusion_rate,
+                    expected_copies=card.expected_copies,
+                    copy_distribution=card.copy_distribution,
+                )
+                for card in snapshot.mainboard_cards
+            ],
+            sideboard_cards=[
+                CardFrequency(
+                    card_name=card.card_name,
+                    appearances=card.appearances,
+                    total_copies=card.total_copies,
+                    max_copies=card.max_copies,
+                    avg_copies=card.avg_copies,
+                    inclusion_rate=card.inclusion_rate,
+                    expected_copies=card.expected_copies,
+                    copy_distribution=card.copy_distribution,
+                )
+                for card in snapshot.sideboard_cards
+            ],
+            total_decks_analyzed=snapshot.total_decks_analyzed,
+            decks_failed=snapshot.decks_failed,
+        )
 
     def _calculate_frequencies(
         self, card_stats: dict[str, list[int]], total_decks: int

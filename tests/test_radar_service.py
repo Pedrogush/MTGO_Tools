@@ -4,6 +4,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from repositories.radar_repository import RadarRepository
 from services.radar_service import CardFrequency, RadarData, RadarService
 
 
@@ -161,6 +162,49 @@ def test_calculate_radar_success(
     assert len(radar.sideboard_cards) == 1
     counter = radar.sideboard_cards[0]
     assert counter.card_name == "Counterspell"
+
+
+def test_calculate_radar_uses_precomputed_snapshot(tmp_path, mock_metagame_repo, mock_deck_service):
+    """Test that locally cached precomputed radars short-circuit live calculation."""
+    repo = RadarRepository(tmp_path / "radar_cache.db")
+    repo.replace_radar(
+        {
+            "format": "modern",
+            "generated_at": "2026-03-26T12:00:00Z",
+            "source": "published-deck-texts",
+            "archetype": {"name": "Azorius Control", "href": "modern-azorius-control"},
+            "total_decks_analyzed": 50,
+            "decks_failed": 0,
+            "mainboard_cards": [
+                {
+                    "card_name": "Counterspell",
+                    "appearances": 50,
+                    "total_copies": 200,
+                    "max_copies": 4,
+                    "avg_copies": 4.0,
+                    "inclusion_rate": 100.0,
+                    "expected_copies": 4.0,
+                    "copy_distribution": {4: 50},
+                }
+            ],
+            "sideboard_cards": [],
+        }
+    )
+    service = RadarService(
+        metagame_repository=mock_metagame_repo,
+        deck_service=mock_deck_service,
+        radar_repository=repo,
+    )
+
+    radar = service.calculate_radar(
+        {"name": "Azorius Control", "href": "modern-azorius-control"},
+        "Modern",
+        max_decks=50,
+    )
+
+    assert radar.total_decks_analyzed == 50
+    assert radar.mainboard_cards[0].card_name == "Counterspell"
+    mock_metagame_repo.get_decks_for_archetype.assert_not_called()
 
 
 def test_calculate_radar_handles_failures(

@@ -11,11 +11,13 @@ from __future__ import annotations
 
 from enum import Enum
 
-import wx
 from loguru import logger
 
 from services.radar_service import RadarData
 from utils.constants import DARK_BG, DARK_PANEL, LIGHT_TEXT, SUBDUED_TEXT
+from utils.wx_compat import get_wx
+
+wx = get_wx()
 
 
 class RadarViewMode(Enum):

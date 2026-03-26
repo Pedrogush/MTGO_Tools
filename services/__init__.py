@@ -27,6 +27,10 @@ from services.bundle_snapshot_client import (
 )
 from services.deck_research_service import DeckResearchService
 from services.deck_service import DeckService, ZoneUpdateResult, get_deck_service
+from services.format_card_pool_service import (
+    FormatCardPoolService,
+    get_format_card_pool_service,
+)
 from services.image_service import ImageService, get_image_service
 from services.search_service import SearchService, get_search_service
 from services.state_service import StateService
@@ -39,6 +43,7 @@ __all__ = [
     "CollectionStatus",
     "DeckResearchService",
     "DeckService",
+    "FormatCardPoolService",
     "ImageService",
     "SearchService",
     "StateService",
@@ -48,6 +53,7 @@ __all__ = [
     "get_collection_service",
     "get_deck_research_service",
     "get_deck_service",
+    "get_format_card_pool_service",
     "get_image_service",
     "get_search_service",
     "get_state_service",

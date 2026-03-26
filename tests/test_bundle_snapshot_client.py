@@ -12,6 +12,8 @@ from unittest.mock import patch
 
 import pytest
 
+from repositories.format_card_pool_repository import FormatCardPoolRepository
+from repositories.radar_repository import RadarRepository
 from services.bundle_snapshot_client import (
     BundleSnapshotClient,
     BundleSnapshotError,
@@ -31,6 +33,8 @@ def _make_bundle(
     archetypes: list[dict[str, Any]] | None = None,
     decks: list[dict[str, Any]] | None = None,
     deck_texts: list[dict[str, Any]] | None = None,
+    card_pools: list[dict[str, Any]] | None = None,
+    radars: list[dict[str, Any]] | None = None,
 ) -> bytes:
     """Build an in-memory client-bundle.tar.gz for testing."""
     if manifest is None:
@@ -79,6 +83,60 @@ def _make_bundle(
                 "deck_text": "4 Lightning Bolt\n\nSideboard\n2 Smash to Smithereens\n",
             }
         ]
+    if card_pools is None:
+        card_pools = [
+            {
+                "schema_version": "1",
+                "kind": "format_card_pool",
+                "format": _FORMAT,
+                "generated_at": "2026-03-26T12:00:00Z",
+                "source": "published-deck-texts",
+                "total_decks_analyzed": 50,
+                "decks_failed": 0,
+                "cards": ["Lightning Bolt", "Counterspell"],
+                "copy_totals": [
+                    {"card_name": "Lightning Bolt", "copies_played": 200},
+                    {"card_name": "Counterspell", "copies_played": 75},
+                ],
+            }
+        ]
+    if radars is None:
+        radars = [
+            {
+                "schema_version": "1",
+                "kind": "archetype_radar",
+                "format": _FORMAT,
+                "generated_at": "2026-03-26T12:00:00Z",
+                "source": "published-deck-texts",
+                "archetype": {"name": "Boros Energy", "href": _SLUG},
+                "total_decks_analyzed": 50,
+                "decks_failed": 0,
+                "mainboard_cards": [
+                    {
+                        "card_name": "Lightning Bolt",
+                        "appearances": 50,
+                        "total_copies": 200,
+                        "max_copies": 4,
+                        "avg_copies": 4.0,
+                        "inclusion_rate": 100.0,
+                        "expected_copies": 4.0,
+                        "copy_distribution": {"4": 50},
+                    }
+                ],
+                "sideboard_cards": [
+                    {
+                        "card_name": "Counterspell",
+                        "appearances": 25,
+                        "total_copies": 50,
+                        "max_copies": 2,
+                        "avg_copies": 2.0,
+                        "inclusion_rate": 50.0,
+                        "expected_copies": 1.0,
+                        "copy_distribution": {"2": 25, "0": 25},
+                    }
+                ],
+            }
+        ]
 
     buf = io.BytesIO()
     with tarfile.open(fileobj=buf, mode="w:gz") as tf:
@@ -101,6 +159,13 @@ def _make_bundle(
             fmt = dt.get("format", "modern")
             deck_id = dt.get("deck_id", "0")
             _add(f"archive/deck-texts/{fmt}/{deck_id}.json", dt)
+        for card_pool in card_pools:
+            fmt = card_pool.get("format", "modern")
+            _add(f"latest/card-pools/{fmt}.json", card_pool)
+        for radar in radars:
+            fmt = radar.get("format", "modern")
+            href = radar.get("archetype", {}).get("href", "unknown")
+            _add(f"latest/radars/{fmt}/{href}.json", radar)
 
     return buf.getvalue()
 
@@ -113,6 +178,8 @@ def tmp_client(tmp_path: Path) -> BundleSnapshotClient:
         bundle_path="data/latest/client-bundle.tar.gz",
         archetype_list_cache_file=tmp_path / "archetype_list.json",
         archetype_decks_cache_file=tmp_path / "archetype_decks.json",
+        format_card_pool_db_file=tmp_path / "format_card_pool.db",
+        radar_db_file=tmp_path / "radar_cache.db",
         stamp_file=tmp_path / "bundle_stamp.json",
         max_age=3600,
         request_timeout=30,
@@ -192,6 +259,32 @@ def test_apply_writes_stamp_file(tmp_client: BundleSnapshotClient) -> None:
     stamp = json.loads(tmp_client.stamp_file.read_text())
     assert stamp["generated_at"] == "2026-03-26T12:00:00Z"
     assert "applied_at" in stamp
+
+
+def test_apply_writes_format_card_pool_db(tmp_client: BundleSnapshotClient) -> None:
+    bundle = _make_bundle()
+    with patch.object(tmp_client, "_http_get_bytes", return_value=bundle):
+        tmp_client.apply()
+
+    repo = FormatCardPoolRepository(tmp_client.format_card_pool_db_file)
+    summary = repo.get_summary(_FORMAT)
+    assert summary is not None
+    assert summary.total_decks_analyzed == 50
+    assert "Lightning Bolt" in repo.get_card_names(_FORMAT)
+    assert repo.get_top_cards(_FORMAT, limit=1)[0].copies_played == 200
+
+
+def test_apply_writes_radar_db(tmp_client: BundleSnapshotClient) -> None:
+    bundle = _make_bundle()
+    with patch.object(tmp_client, "_http_get_bytes", return_value=bundle):
+        tmp_client.apply()
+
+    repo = RadarRepository(tmp_client.radar_db_file)
+    radar = repo.get_radar(_FORMAT, _SLUG)
+    assert radar is not None
+    assert radar.archetype_name == "Boros Energy"
+    assert radar.mainboard_cards[0].card_name == "Lightning Bolt"
+    assert radar.sideboard_cards[0].card_name == "Counterspell"
 
 
 def test_apply_merges_with_existing_archetype_list_cache(tmp_client: BundleSnapshotClient) -> None:

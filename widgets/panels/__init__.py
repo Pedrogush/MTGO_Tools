@@ -1,21 +1,27 @@
 """Reusable UI panels for the MTG deck selector application."""
 
-from widgets.panels.card_box_panel import CardBoxPanel
-from widgets.panels.card_inspector_panel import CardInspectorPanel
-from widgets.panels.card_table_panel import CardTablePanel
-from widgets.panels.deck_builder_panel import DeckBuilderPanel
-from widgets.panels.deck_notes_panel import DeckNotesPanel
-from widgets.panels.deck_research_panel import DeckResearchPanel
-from widgets.panels.deck_stats_panel import DeckStatsPanel
-from widgets.panels.sideboard_guide_panel import SideboardGuidePanel
+from __future__ import annotations
 
-__all__ = [
-    "CardBoxPanel",
-    "CardInspectorPanel",
-    "CardTablePanel",
-    "DeckBuilderPanel",
-    "DeckNotesPanel",
-    "DeckResearchPanel",
-    "DeckStatsPanel",
-    "SideboardGuidePanel",
-]
+from importlib import import_module
+
+_EXPORTS = {
+    "CardBoxPanel": "widgets.panels.card_box_panel",
+    "CardInspectorPanel": "widgets.panels.card_inspector_panel",
+    "CardTablePanel": "widgets.panels.card_table_panel",
+    "DeckBuilderPanel": "widgets.panels.deck_builder_panel",
+    "DeckNotesPanel": "widgets.panels.deck_notes_panel",
+    "DeckResearchPanel": "widgets.panels.deck_research_panel",
+    "DeckStatsPanel": "widgets.panels.deck_stats_panel",
+    "SideboardGuidePanel": "widgets.panels.sideboard_guide_panel",
+}
+
+__all__ = list(_EXPORTS)
+
+
+def __getattr__(name: str):
+    """Lazily import panel modules so headless tests avoid unrelated wx deps."""
+    module_name = _EXPORTS.get(name)
+    if module_name is None:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    module = import_module(module_name)
+    return getattr(module, name)

@@ -7,11 +7,13 @@ sourced from the pinned deck's sideboard guide.
 
 from __future__ import annotations
 
-import wx
 from loguru import logger
 
 from utils.constants import DARK_BG, DARK_PANEL, LIGHT_TEXT, PADDING_SM, SUBDUED_TEXT
 from utils.constants.ui_layout import COMPACT_SIDEBOARD_TOGGLE_BTN_SIZE
+from utils.wx_compat import get_wx
+
+wx = get_wx()
 
 
 class CompactSideboardPanel(wx.Panel):

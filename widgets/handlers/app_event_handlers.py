@@ -17,6 +17,7 @@ from widgets.identify_opponent import MTGOpponentDeckSpy
 from widgets.match_history import MatchHistoryFrame
 from widgets.metagame_analysis import MetagameAnalysisFrame
 from widgets.timer_alert import TimerAlertFrame
+from widgets.top_cards import TopCardsFrame
 
 if TYPE_CHECKING:
     from widgets.app_frame import AppFrame
@@ -613,6 +614,16 @@ class AppEventHandlers:
             "metagame_window",
             MetagameAnalysisFrame,
             "Metagame Analysis",
+            self._handle_child_close,
+            locale=self.locale,
+        )
+
+    def open_top_cards(self) -> None:
+        open_child_window(
+            self,
+            "top_cards_window",
+            TopCardsFrame,
+            "Top Cards",
             self._handle_child_close,
             locale=self.locale,
         )
