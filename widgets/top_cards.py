@@ -20,6 +20,11 @@ from services.format_card_pool_service import (
 from utils.constants import DARK_ALT, DARK_BG, DARK_PANEL, FORMAT_OPTIONS, LIGHT_TEXT, SUBDUED_TEXT
 from utils.i18n import translate
 
+TOP_CARDS_EXCLUDED_FORMATS = {"Commander", "Brawl", "Historic"}
+TOP_CARDS_FORMAT_OPTIONS = [
+    option for option in FORMAT_OPTIONS if option not in TOP_CARDS_EXCLUDED_FORMATS
+]
+
 
 class TopCardsFrame(wx.Frame):
     """Widget for browsing the most-played cards in each format."""
@@ -62,8 +67,8 @@ class TopCardsFrame(wx.Frame):
         label.SetForegroundColour(LIGHT_TEXT)
         toolbar.Add(label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 5)
 
-        self.format_choice = wx.Choice(panel, choices=list(FORMAT_OPTIONS))
-        self.format_choice.SetSelection(list(FORMAT_OPTIONS).index("Modern"))
+        self.format_choice = wx.Choice(panel, choices=TOP_CARDS_FORMAT_OPTIONS)
+        self.format_choice.SetSelection(TOP_CARDS_FORMAT_OPTIONS.index("Modern"))
         self.format_choice.SetBackgroundColour(DARK_ALT)
         self.format_choice.SetForegroundColour(LIGHT_TEXT)
         self.format_choice.Bind(wx.EVT_CHOICE, self.on_format_change)
