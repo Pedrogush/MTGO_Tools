@@ -212,6 +212,8 @@ class RadarService:
         snapshot = self.radar_repo.get_radar(format_name, archetype_href)
         if snapshot is None:
             return None
+        if not snapshot.mainboard_cards and not snapshot.sideboard_cards:
+            return None
         if max_decks is not None and snapshot.total_decks_analyzed > max_decks:
             return None
         return self._snapshot_to_radar_data(snapshot)
