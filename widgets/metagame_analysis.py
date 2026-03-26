@@ -100,11 +100,16 @@ class MetagameAnalysisFrame(wx.Frame):
         self.days_prev_button.SetToolTip(time_window_tooltip)
         toolbar.Add(self.days_prev_button, 0, wx.RIGHT, 3)
 
-        self.days_value_label = wx.StaticText(panel, label=str(self.current_days))
-        self.days_value_label.SetForegroundColour(SUBDUED_TEXT)
-        self.days_value_label.SetMinSize((22, -1))
-        self.days_value_label.SetToolTip(time_window_tooltip)
-        toolbar.Add(self.days_value_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 3)
+        self.days_value_ctrl = wx.TextCtrl(
+            panel,
+            value=str(self.current_days),
+            size=(34, 24),
+            style=wx.TE_READONLY | wx.TE_CENTRE,
+        )
+        self.days_value_ctrl.SetBackgroundColour(DARK_ALT)
+        self.days_value_ctrl.SetForegroundColour(SUBDUED_TEXT)
+        self.days_value_ctrl.SetToolTip(time_window_tooltip)
+        toolbar.Add(self.days_value_ctrl, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 3)
 
         self.days_next_button = wx.Button(panel, label="→", size=(28, 26))
         self._stylize_button(self.days_next_button)
@@ -121,10 +126,15 @@ class MetagameAnalysisFrame(wx.Frame):
         self.offset_prev_button.Bind(wx.EVT_BUTTON, self.on_offset_decrease)
         toolbar.Add(self.offset_prev_button, 0, wx.RIGHT, 3)
 
-        self.offset_value_label = wx.StaticText(panel, label=str(self.base_day_offset))
-        self.offset_value_label.SetForegroundColour(SUBDUED_TEXT)
-        self.offset_value_label.SetMinSize((22, -1))
-        toolbar.Add(self.offset_value_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 3)
+        self.offset_value_ctrl = wx.TextCtrl(
+            panel,
+            value=str(self.base_day_offset),
+            size=(34, 24),
+            style=wx.TE_READONLY | wx.TE_CENTRE,
+        )
+        self.offset_value_ctrl.SetBackgroundColour(DARK_ALT)
+        self.offset_value_ctrl.SetForegroundColour(SUBDUED_TEXT)
+        toolbar.Add(self.offset_value_ctrl, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 3)
 
         self.offset_next_button = wx.Button(panel, label="→", size=(28, 26))
         self._stylize_button(self.offset_next_button)
@@ -155,7 +165,7 @@ class MetagameAnalysisFrame(wx.Frame):
 
         right_panel = wx.Panel(panel)
         right_panel.SetBackgroundColour(DARK_PANEL)
-        right_panel.SetMinSize((270, -1))
+        right_panel.SetMinSize((250, -1))
         right_sizer = wx.BoxSizer(wx.VERTICAL)
         right_panel.SetSizer(right_sizer)
         content_sizer.Add(right_panel, 0, wx.EXPAND)
@@ -386,12 +396,21 @@ class MetagameAnalysisFrame(wx.Frame):
             "#D5DBDB",
         ]
 
+        short_labels = [
+            arch if len(arch) <= 16 else f"{arch[:13]}..." for arch, _ in top_archetypes
+        ]
+        if other_pct > 0:
+            short_labels.append("Other")
+
         self.ax.pie(
             sizes,
-            labels=labels,
+            labels=short_labels,
             colors=colors[: len(sizes)],
             startangle=90,
-            textprops={"color": "#ecececec", "fontsize": 9},
+            autopct="%1.1f%%",
+            pctdistance=0.72,
+            labeldistance=1.03,
+            textprops={"color": "#ecececec", "fontsize": 8},
         )
 
         self.ax.axis("equal")
@@ -481,87 +500,54 @@ class MetagameAnalysisFrame(wx.Frame):
             arrow = "▼"
             direction_class = "down"
 
-        return (
-            "<div class='card'>"
-            f"<div class='row'><span class='arrow {direction_class}'>{arrow}</span>"
-            f"<span class='name'>{escape(archetype)}</span>"
-            f"<span class='delta {direction_class}'>{change:+.1f}%</span></div>"
-            f"<div class='meta'>{escape(self._t('metagame.changes.now'))} {current_val:.1f}%"
-            f" | {escape(self._t('metagame.changes.previous'))} {previous_val:.1f}%</div>"
-            "</div>"
-        )
-
-    def _build_changes_html(self, title: str, cards: list[str]) -> str:
-        cards_html = "".join(cards)
-        dark_alt = self._rgb_to_hex(DARK_ALT)
+        arrow_color = "#43d17b" if direction_class == "up" else "#ff6464"
         dark_panel = self._rgb_to_hex(DARK_PANEL)
         dark_accent = self._rgb_to_hex(DARK_ACCENT)
         light_text = self._rgb_to_hex(LIGHT_TEXT)
         subdued_text = self._rgb_to_hex(SUBDUED_TEXT)
+
+        return f"""
+<table cellspacing='0' cellpadding='0'>
+  <tr>
+    <td>
+      <table cellspacing='1' cellpadding='0' bgcolor='{dark_accent}'>
+        <tr>
+          <td bgcolor='{dark_panel}'>
+            <table cellspacing='0' cellpadding='4'>
+              <tr>
+                <td><font color='{arrow_color}'><b>{arrow}</b></font></td>
+                <td><font color='{light_text}'><b>{escape(archetype)}</b></font></td>
+                <td><font color='{arrow_color}'><b>{change:+.1f}%</b></font></td>
+              </tr>
+              <tr>
+                <td colspan='3'>
+                  <font color='{subdued_text}' size='2'>
+                    {escape(self._t('metagame.changes.now'))} {current_val:.1f}% | {escape(self._t('metagame.changes.previous'))} {previous_val:.1f}%
+                  </font>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
+"""
+
+    def _build_changes_html(self, title: str, cards: list[str]) -> str:
+        cards_html = "<br/>".join(cards)
+        dark_alt = self._rgb_to_hex(DARK_ALT)
+        subdued_text = self._rgb_to_hex(SUBDUED_TEXT)
+        light_text = self._rgb_to_hex(LIGHT_TEXT)
         return f"""
 <html>
-<head>
-<style>
-body {{
-    background: {dark_alt};
-    color: {light_text};
-    font-family: Segoe UI, Arial, sans-serif;
-    margin: 6px;
-}}
-.title {{
-    font-size: 13px;
-    color: {subdued_text};
-    margin-bottom: 6px;
-}}
-.card {{
-    display: inline-block;
-    max-width: 96%;
-    background: {dark_panel};
-    border: 1px solid {dark_accent};
-    border-radius: 8px;
-    margin-bottom: 5px;
-    padding: 6px 8px;
-}}
-.row {{
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-}}
-.arrow {{
-    font-weight: 700;
-}}
-.name {{
-    color: {light_text};
-    font-weight: 600;
-}}
-.delta {{
-    font-weight: 700;
-}}
-.meta {{
-    color: {subdued_text};
-    font-size: 11px;
-    margin-top: 3px;
-}}
-.up {{
-    color: #43d17b;
-}}
-.down {{
-    color: #ff6464;
-}}
-.empty {{
-    color: {subdued_text};
-    padding: 8px;
-    background: {dark_panel};
-    border: 1px solid {dark_accent};
-    border-radius: 8px;
-    display: inline-block;
-    max-width: 96%;
-}}
-</style>
-</head>
-<body>
-<div class='title'>{escape(title)}</div>
+<body bgcolor='{dark_alt}'>
+<font face='Segoe UI, Arial, sans-serif' color='{subdued_text}'><b>{escape(title)}</b></font>
+<br/><br/>
+<font face='Segoe UI, Arial, sans-serif' color='{light_text}'>
 {cards_html}
+</font>
 </body>
 </html>
 """
@@ -573,8 +559,8 @@ body {{
         self.changes_html.SetPage(html_content)
 
     def _sync_navigation_controls(self) -> None:
-        self.days_value_label.SetLabel(str(self.current_days))
-        self.offset_value_label.SetLabel(str(self.base_day_offset))
+        self.days_value_ctrl.ChangeValue(str(self.current_days))
+        self.offset_value_ctrl.ChangeValue(str(self.base_day_offset))
         self.days_prev_button.Enable(self.current_days > self.min_days)
         self.days_next_button.Enable(self.current_days < self.max_days)
         self.offset_prev_button.Enable(self.base_day_offset > 0)
