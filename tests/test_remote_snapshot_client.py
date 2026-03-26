@@ -268,3 +268,85 @@ def test_download_artifact_writes_to_disk(client, monkeypatch):
     assert result is not None
     assert local.exists()
     assert json.loads(local.read_text())["archetypes"][0]["name"] == "UR Murktide"
+
+
+# ---------------------------------------------------------------------------
+# get_decks_for_archetype
+# ---------------------------------------------------------------------------
+
+_SAMPLE_DECKS = [
+    {
+        "date": "2025-03-24",
+        "number": "123456",
+        "player": "SomePlayer",
+        "event": "Modern Challenge",
+        "result": "4-0",
+        "name": "modern-ur-murktide",
+        "source": "mtggoldfish",
+        "deck_text": "4 Murktide Regent\n",
+    }
+]
+
+
+def _decks_artifact(decks: list, slug: str = "modern-ur-murktide") -> dict:
+    return {
+        "schema_version": _SCHEMA,
+        "format": "modern",
+        "archetype": slug,
+        "generated_at": "2025-03-24T00:00:00Z",
+        "decks": decks,
+    }
+
+
+def test_get_decks_returns_list_from_artifact(client, monkeypatch):
+    monkeypatch.setattr(client, "_get_artifact", lambda _path: _decks_artifact(_SAMPLE_DECKS))
+
+    result = client.get_decks_for_archetype("modern", "modern-ur-murktide")
+
+    assert result == _SAMPLE_DECKS
+
+
+def test_get_decks_is_case_insensitive(client, monkeypatch):
+    monkeypatch.setattr(client, "_get_artifact", lambda _path: _decks_artifact(_SAMPLE_DECKS))
+
+    assert client.get_decks_for_archetype("Modern", "modern-ur-murktide") == _SAMPLE_DECKS
+    assert client.get_decks_for_archetype("MODERN", "modern-ur-murktide") == _SAMPLE_DECKS
+
+
+def test_get_decks_returns_none_when_artifact_unavailable(client, monkeypatch):
+    monkeypatch.setattr(client, "_get_artifact", lambda _path: None)
+
+    assert client.get_decks_for_archetype("modern", "modern-ur-murktide") is None
+
+
+def test_get_decks_returns_none_on_unexpected_shape(client, monkeypatch):
+    bad_artifact = {"schema_version": _SCHEMA, "format": "modern", "decks": "not-a-list"}
+    monkeypatch.setattr(client, "_get_artifact", lambda _path: bad_artifact)
+
+    assert client.get_decks_for_archetype("modern", "modern-ur-murktide") is None
+
+
+def test_get_decks_constructs_path_from_format_and_slug(client, monkeypatch):
+    captured = []
+
+    def capture_path(path):
+        captured.append(path)
+        return _decks_artifact(_SAMPLE_DECKS)
+
+    monkeypatch.setattr(client, "_get_artifact", capture_path)
+    client.get_decks_for_archetype("legacy", "legacy-eldrazi-post")
+
+    assert captured == ["data/latest/legacy/decks/legacy-eldrazi-post.json"]
+
+
+def test_get_decks_artifact_is_cached_on_disk(client, monkeypatch):
+    artifact = _decks_artifact(_SAMPLE_DECKS)
+    _write_artifact(client, "data/latest/modern/decks/modern-ur-murktide.json", artifact)
+
+    download_calls = []
+    monkeypatch.setattr(client, "_download_artifact", lambda *_: download_calls.append(1) or None)
+
+    result = client.get_decks_for_archetype("modern", "modern-ur-murktide")
+
+    assert result == _SAMPLE_DECKS
+    assert download_calls == [], "should serve from disk cache without re-downloading"

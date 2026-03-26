@@ -231,8 +231,12 @@ class AppController:
 
         source_filter = self.get_deck_data_source()
 
+        current_format = self.current_format
+
         def loader(arch: dict[str, Any]):
-            return self.workflow_service.load_decks_for_archetype(arch, source_filter=source_filter)
+            return self.workflow_service.load_decks_for_archetype(
+                arch, source_filter=source_filter, mtg_format=current_format
+            )
 
         def success_handler(decks: list[dict[str, Any]]):
             with self._loading_lock:

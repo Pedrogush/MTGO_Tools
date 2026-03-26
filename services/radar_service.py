@@ -93,7 +93,7 @@ class RadarService:
 
         try:
             # Fetch all decks for this archetype
-            decks = self.metagame_repo.get_decks_for_archetype(archetype)
+            decks = self.metagame_repo.get_decks_for_archetype(archetype, mtg_format=format_name)
 
             if not decks:
                 logger.warning(f"No decks found for {archetype_name}")

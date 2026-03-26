@@ -40,9 +40,15 @@ class DeckWorkflowService:
 
     # ------------------------------------------------------------------ decks ------------------------------------------------------------------
     def load_decks_for_archetype(
-        self, archetype: dict[str, Any], *, source_filter: str
+        self,
+        archetype: dict[str, Any],
+        *,
+        source_filter: str,
+        mtg_format: str | None = None,
     ) -> list[dict[str, Any]]:
-        return self.metagame_repo.get_decks_for_archetype(archetype, source_filter=source_filter)
+        return self.metagame_repo.get_decks_for_archetype(
+            archetype, source_filter=source_filter, mtg_format=mtg_format
+        )
 
     @staticmethod
     def _default_deck_downloader(deck_number: str, source_filter: str | None = None) -> None:

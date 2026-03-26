@@ -43,6 +43,26 @@ Metagame stats artifact schema:
             }
         }
     }
+
+Deck list artifact schema (data/latest/{format}/decks/{slug}.json):
+    {
+        "schema_version": "1",
+        "format": "<format>",
+        "archetype": "<slug>",
+        "generated_at": "<ISO-8601 timestamp>",
+        "decks": [
+            {
+                "date": "<YYYY-MM-DD>",
+                "number": "<deck-id>",
+                "player": "<player>",
+                "event": "<event>",
+                "result": "<result>",
+                "name": "<archetype>",
+                "source": "mtggoldfish",
+                "deck_text": "<optional full deck text>"
+            }
+        ]
+    }
 """
 
 from __future__ import annotations
@@ -203,6 +223,46 @@ class RemoteSnapshotClient:
 
         logger.info(f"Loaded metagame stats for '{fmt}' from remote snapshot")
         return result
+
+    def get_decks_for_archetype(
+        self, mtg_format: str, archetype_slug: str
+    ) -> list[dict[str, Any]] | None:
+        """Return the deck list for *archetype_slug* in *mtg_format* from the remote snapshot.
+
+        The artifact is accessed by convention at
+        ``data/latest/{format}/decks/{slug}.json`` without requiring a manifest
+        entry.  Each deck entry may contain an optional ``deck_text`` field with
+        the full card-list text, which callers can use to avoid a second network
+        round-trip when downloading individual decks.
+
+        Returns ``None`` when unavailable (network failure, missing artifact,
+        schema mismatch).  Callers should treat ``None`` as a cache miss and
+        fall back to live scraping.
+
+        Parameters
+        ----------
+        mtg_format:
+            Format name, case-insensitive (e.g. ``"modern"``, ``"Standard"``).
+        archetype_slug:
+            Archetype identifier as used in the MTGGoldfish URL, e.g.
+            ``"modern-ur-murktide"``.
+        """
+        fmt = mtg_format.lower()
+        artifact_path = f"data/latest/{fmt}/decks/{archetype_slug}.json"
+
+        data = self._get_artifact(artifact_path)
+        if data is None:
+            return None
+
+        decks = data.get("decks")
+        if not isinstance(decks, list):
+            logger.warning(
+                f"Remote decks artifact for '{fmt}/{archetype_slug}' has unexpected shape"
+            )
+            return None
+
+        logger.info(f"Loaded {len(decks)} decks for '{fmt}/{archetype_slug}' from remote snapshot")
+        return decks
 
     def is_available(self) -> bool:
         """Return True if the remote manifest can be fetched successfully."""

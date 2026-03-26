@@ -183,14 +183,23 @@ class MetagameRepository:
         archetype: dict[str, Any],
         force_refresh: bool = False,
         source_filter: str | None = None,
+        mtg_format: str | None = None,
     ) -> list[dict[str, Any]]:
         """
         Get deck lists for a specific archetype.
 
+        Resolution order (unless force_refresh):
+        1. Local cache (if still fresh)
+        2. Remote snapshot (if REMOTE_SNAPSHOTS_ENABLED and mtg_format provided)
+        3. Live MTGGoldfish scrape
+        4. Stale local cache (last-resort fallback on live-scrape failure)
+
         Args:
             archetype: Archetype dictionary with 'href' or 'url' key
-            force_refresh: If True, bypass cache and fetch fresh data
+            force_refresh: If True, bypass local cache and remote snapshot
             source_filter: Optional source filter ('mtggoldfish', 'mtgo', or 'both')
+            mtg_format: MTG format name used to locate the remote snapshot artifact.
+                When ``None`` the remote snapshot step is skipped for deck lists.
 
         Returns:
             List of deck dictionaries
@@ -199,17 +208,34 @@ class MetagameRepository:
         archetype_href = archetype.get("href") or archetype.get("url", "")
         archetype_name = archetype.get("name", "Unknown")
 
-        # Try cache first unless forced refresh
+        # 1. Local cache
         if not force_refresh:
             cached = self._load_cached_decks(archetype_href)
             if cached is not None:
-                logger.debug(f"Using cached decks for {archetype_name}")
+                logger.debug(f"[local-cache] decks for {archetype_name}")
                 mtggoldfish_decks = self._filter_decks_by_source(cached, source_filter)
                 mtgo_decks = self._get_mtgo_decks_from_db(archetype_name, source_filter)
                 return self._merge_and_sort_decks(mtggoldfish_decks, mtgo_decks)
 
-        # Fetch fresh data
-        logger.info(f"Fetching fresh decks for {archetype_name}")
+        # 2. Remote snapshot
+        if not force_refresh and mtg_format and archetype_href:
+            remote = self._remote_client_or_default()
+            if remote is not None:
+                try:
+                    remote_decks = remote.get_decks_for_archetype(mtg_format, archetype_href)
+                    if remote_decks is not None:
+                        logger.info(f"[remote-snapshot] decks for {archetype_name}")
+                        self._save_cached_decks(archetype_href, remote_decks)
+                        mtggoldfish_decks = self._filter_decks_by_source(
+                            remote_decks, source_filter
+                        )
+                        mtgo_decks = self._get_mtgo_decks_from_db(archetype_name, source_filter)
+                        return self._merge_and_sort_decks(mtggoldfish_decks, mtgo_decks)
+                except Exception as exc:
+                    logger.warning(f"Remote snapshot decks failed for {archetype_name}: {exc}")
+
+        # 3. Live scrape
+        logger.info(f"[live-scrape] decks for {archetype_name}")
         try:
             # get_archetype_decks expects just the href string, not the dict
             decks = get_archetype_decks(archetype_href)
@@ -220,10 +246,10 @@ class MetagameRepository:
             return self._merge_and_sort_decks(mtggoldfish_decks, mtgo_decks)
         except Exception as exc:
             logger.error(f"Failed to fetch decks for {archetype_name}: {exc}")
-            # Try to return stale cache if available
+            # 4. Stale cache as last resort
             cached = self._load_cached_decks(archetype_href, max_age=None)
             if cached:
-                logger.warning(f"Returning stale cached decks for {archetype_name}")
+                logger.warning(f"[stale-cache] decks for {archetype_name}")
                 mtggoldfish_decks = self._filter_decks_by_source(cached, source_filter)
                 mtgo_decks = self._get_mtgo_decks_from_db(archetype_name, source_filter)
                 return self._merge_and_sort_decks(mtggoldfish_decks, mtgo_decks)
@@ -233,8 +259,13 @@ class MetagameRepository:
         """
         Download the actual deck list content.
 
+        If the deck dictionary contains a ``deck_text`` field (e.g. populated
+        by a remote snapshot artifact), that value is returned immediately
+        without any network access.
+
         Args:
-            deck: Deck dictionary with 'number' key (deck ID)
+            deck: Deck dictionary with 'number' key (deck ID) and optional
+                'deck_text' key (pre-fetched content from a snapshot)
             source_filter: Optional source filter ('mtggoldfish', 'mtgo', or 'both')
 
         Returns:
@@ -245,6 +276,12 @@ class MetagameRepository:
         """
         deck_name = deck.get("name", "Unknown")
         deck_number = deck.get("number", "")
+
+        # Fast path: deck text already embedded (e.g. from a remote snapshot artifact)
+        deck_text = deck.get("deck_text", "")
+        if deck_text:
+            logger.debug(f"[snapshot-text] deck content for {deck_name} ({deck_number})")
+            return deck_text
 
         if not deck_number:
             raise ValueError(f"Deck {deck_name} has no 'number' field")

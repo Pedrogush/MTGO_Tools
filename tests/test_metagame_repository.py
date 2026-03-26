@@ -566,3 +566,199 @@ def test_remote_client_not_used_when_disabled(tmp_path, monkeypatch):
 
     result = repo.get_archetypes_for_format("modern")
     assert result == live_archetypes
+
+
+# ============= Remote-First Resolution Tests: Deck Lists =============
+
+
+class _FakeRemoteClientWithDecks(_FakeRemoteClient):
+    """Extends the fake remote client with deck-list support."""
+
+    def __init__(self, archetypes=None, stats=None, decks=None):
+        super().__init__(archetypes=archetypes, stats=stats)
+        self._decks = decks
+        self.decks_calls: list[tuple[str, str]] = []
+
+    def get_decks_for_archetype(self, fmt, slug):
+        self.decks_calls.append((fmt, slug))
+        return self._decks
+
+
+def test_decks_prefer_remote_snapshot_over_live_scrape(tmp_path, monkeypatch):
+    """Remote snapshot decks should be returned without calling the live scraper."""
+    remote_decks = [{"name": "modern-ur-murktide", "number": "123", "source": "mtggoldfish"}]
+    remote = _FakeRemoteClientWithDecks(decks=remote_decks)
+    repo = _make_repo(tmp_path, remote_client=remote)
+
+    live_calls = []
+    monkeypatch.setattr(
+        "repositories.metagame_repository.get_archetype_decks",
+        lambda _href: live_calls.append(1) or [],
+    )
+    monkeypatch.setattr(repo, "_get_mtgo_decks_from_db", lambda *_: [])
+
+    archetype = {"href": "modern-ur-murktide", "name": "UR Murktide"}
+    result = repo.get_decks_for_archetype(archetype, mtg_format="modern")
+
+    assert result == remote_decks
+    assert live_calls == [], "live scraper should not be called when remote snapshot succeeds"
+    assert remote.decks_calls == [("modern", "modern-ur-murktide")]
+
+
+def test_decks_fall_through_to_live_when_remote_returns_none(tmp_path, monkeypatch):
+    """When the remote client returns None for decks the live scraper should be tried."""
+    remote = _FakeRemoteClientWithDecks(decks=None)
+    repo = _make_repo(tmp_path, remote_client=remote)
+
+    live_decks = [{"name": "modern-ur-murktide", "number": "456", "source": "mtggoldfish"}]
+    monkeypatch.setattr(
+        "repositories.metagame_repository.get_archetype_decks",
+        lambda _href: live_decks,
+    )
+    monkeypatch.setattr(repo, "_get_mtgo_decks_from_db", lambda *_: [])
+
+    archetype = {"href": "modern-ur-murktide", "name": "UR Murktide"}
+    result = repo.get_decks_for_archetype(archetype, mtg_format="modern")
+
+    assert result == live_decks
+
+
+def test_decks_fall_through_to_live_when_remote_raises(tmp_path, monkeypatch):
+    """A remote client exception for decks should be swallowed and live scrape used."""
+
+    class _BoomDeckClient(_FakeRemoteClientWithDecks):
+        def get_decks_for_archetype(self, _fmt, _slug):
+            raise RuntimeError("network error")
+
+    repo = _make_repo(tmp_path, remote_client=_BoomDeckClient())
+
+    live_decks = [{"name": "modern-ur-murktide", "number": "789", "source": "mtggoldfish"}]
+    monkeypatch.setattr(
+        "repositories.metagame_repository.get_archetype_decks",
+        lambda _href: live_decks,
+    )
+    monkeypatch.setattr(repo, "_get_mtgo_decks_from_db", lambda *_: [])
+
+    archetype = {"href": "modern-ur-murktide", "name": "UR Murktide"}
+    result = repo.get_decks_for_archetype(archetype, mtg_format="modern")
+    assert result == live_decks
+
+
+def test_decks_skip_remote_when_no_format_provided(tmp_path, monkeypatch):
+    """Remote snapshot step should be skipped when mtg_format is not supplied."""
+    remote = _FakeRemoteClientWithDecks(decks=[{"name": "some-deck"}])
+    repo = _make_repo(tmp_path, remote_client=remote)
+
+    live_decks = [{"name": "modern-ur-murktide", "number": "1", "source": "mtggoldfish"}]
+    monkeypatch.setattr(
+        "repositories.metagame_repository.get_archetype_decks",
+        lambda _href: live_decks,
+    )
+    monkeypatch.setattr(repo, "_get_mtgo_decks_from_db", lambda *_: [])
+
+    archetype = {"href": "modern-ur-murktide", "name": "UR Murktide"}
+    result = repo.get_decks_for_archetype(archetype)  # no mtg_format
+
+    assert result == live_decks
+    assert remote.decks_calls == [], "remote client must not be consulted without a format"
+
+
+def test_decks_local_cache_preferred_over_remote(tmp_path, monkeypatch):
+    """A fresh local cache entry should be returned without consulting remote."""
+    cache_file = tmp_path / "decks.json"
+    cached_decks = [{"name": "modern-ur-murktide", "number": "cached", "source": "mtggoldfish"}]
+    cache_file.write_text(
+        json.dumps(
+            {
+                "modern-ur-murktide": {
+                    "timestamp": time.time(),
+                    "items": cached_decks,
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    remote = _FakeRemoteClientWithDecks(decks=[{"name": "remote-deck"}])
+    repo = MetagameRepository(
+        cache_ttl=3600,
+        archetype_list_cache_file=tmp_path / "archetypes.json",
+        archetype_decks_cache_file=cache_file,
+        remote_snapshot_client=remote,
+    )
+    monkeypatch.setattr(repo, "_get_mtgo_decks_from_db", lambda *_: [])
+
+    archetype = {"href": "modern-ur-murktide", "name": "UR Murktide"}
+    result = repo.get_decks_for_archetype(archetype, mtg_format="modern")
+
+    assert result == cached_decks
+    assert remote.decks_calls == [], "remote client should not be called for fresh cache"
+
+
+def test_decks_remote_snapshot_saves_to_local_cache(tmp_path, monkeypatch):
+    """Decks fetched from the remote snapshot should be written to the local cache."""
+    remote_decks = [{"name": "modern-ur-murktide", "number": "snap", "source": "mtggoldfish"}]
+    remote = _FakeRemoteClientWithDecks(decks=remote_decks)
+    repo = _make_repo(tmp_path, remote_client=remote)
+
+    monkeypatch.setattr(repo, "_get_mtgo_decks_from_db", lambda *_: [])
+
+    archetype = {"href": "modern-ur-murktide", "name": "UR Murktide"}
+    repo.get_decks_for_archetype(archetype, mtg_format="modern")
+
+    cache = json.loads((tmp_path / "decks.json").read_text(encoding="utf-8"))
+    assert cache["modern-ur-murktide"]["items"] == remote_decks
+
+
+# ============= download_deck_content: embedded deck_text fast path =============
+
+
+def test_download_deck_content_uses_embedded_deck_text(tmp_path):
+    """download_deck_content should return deck_text without network access."""
+    repo = _make_repo(tmp_path)
+    deck = {
+        "name": "UR Murktide",
+        "number": "123456",
+        "source": "mtggoldfish",
+        "deck_text": "4 Murktide Regent\n\nSideboard\n2 Flusterstorm\n",
+    }
+
+    result = repo.download_deck_content(deck)
+
+    assert result == deck["deck_text"]
+
+
+def test_download_deck_content_falls_back_to_fetch_when_no_deck_text(tmp_path, monkeypatch):
+    """download_deck_content should call fetch_deck_text when deck_text is absent."""
+    repo = _make_repo(tmp_path)
+    fetched = []
+
+    def fake_fetch(number, source_filter=None):
+        fetched.append(number)
+        return "4 Lightning Bolt\n"
+
+    monkeypatch.setattr("repositories.metagame_repository.fetch_deck_text", fake_fetch)
+
+    deck = {"name": "Burn", "number": "99999", "source": "mtggoldfish"}
+    result = repo.download_deck_content(deck)
+
+    assert result == "4 Lightning Bolt\n"
+    assert fetched == ["99999"]
+
+
+def test_download_deck_content_empty_deck_text_falls_back_to_fetch(tmp_path, monkeypatch):
+    """An empty deck_text string should not be used; fetch_deck_text should be called."""
+    repo = _make_repo(tmp_path)
+    fetched = []
+
+    def fake_fetch(number, source_filter=None):
+        fetched.append(number)
+        return "4 Lightning Bolt\n"
+
+    monkeypatch.setattr("repositories.metagame_repository.fetch_deck_text", fake_fetch)
+
+    deck = {"name": "Burn", "number": "99999", "source": "mtggoldfish", "deck_text": ""}
+    result = repo.download_deck_content(deck)
+
+    assert result == "4 Lightning Bolt\n"
+    assert fetched == ["99999"]
