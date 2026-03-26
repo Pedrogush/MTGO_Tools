@@ -132,6 +132,7 @@ class AppController:
             image_service=self.image_service,
             worker=self._worker,
             frame_provider=lambda: self.frame,
+            locale_provider=lambda: self.current_language,
         )
         self._mtgo_background_helpers = MtgoBackgroundHelpers(worker=self._worker)
 

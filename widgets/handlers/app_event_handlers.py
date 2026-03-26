@@ -411,7 +411,7 @@ class AppEventHandlers:
         self.controller.image_service.clear_printing_index_loading()
         self.controller.image_service.set_bulk_data(by_name)
         self.card_inspector_panel.set_bulk_data(by_name)
-        self._set_status("Ready")
+        self._set_status(self._t("app.status.ready"))
         logger.info(
             "Printings index ready: {unique} names / {total} printings",
             unique=stats.get("unique_names"),
@@ -423,11 +423,11 @@ class AppEventHandlers:
 
     def _on_bulk_data_load_failed(self: AppFrame, error_msg: str) -> None:
         self.controller.image_service.clear_printing_index_loading()
-        self._set_status("Ready")
+        self._set_status(self._t("app.status.ready"))
         logger.warning(f"Card printings index load failed: {error_msg}")
 
     def _on_bulk_data_downloaded(self: AppFrame, msg: str) -> None:
-        self._set_status("Card image database downloaded, indexing printings…")
+        self._set_status(self._t("bulk.status.downloaded_indexing"))
         logger.info(f"Bulk data downloaded: {msg}")
         self.controller.load_bulk_data_into_memory(
             on_status=lambda status: wx.CallAfter(self._set_status, status),
@@ -435,7 +435,7 @@ class AppEventHandlers:
         )
 
     def _on_bulk_data_failed(self: AppFrame, error_msg: str) -> None:
-        self._set_status("Ready")
+        self._set_status(self._t("app.status.ready"))
         logger.warning(f"Bulk data download failed: {error_msg}")
 
     def _on_mana_keyboard_closed(self: AppFrame, event: wx.CloseEvent) -> None:

@@ -7,6 +7,8 @@ from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
+from utils.i18n import translate
+
 if TYPE_CHECKING:
     from controllers.app_controller_helpers import UICallbacks
     from utils.background_worker import BackgroundWorker
@@ -20,11 +22,16 @@ class BulkDataHelpers:
         image_service: Any,
         worker: BackgroundWorker,
         frame_provider: Callable[[], AppFrame | None],
+        locale_provider: Callable[[], str | None] | None = None,
     ) -> None:
         self._image_service = image_service
         self._worker = worker
         self._frame_provider = frame_provider
+        self._locale_provider = locale_provider or (lambda: None)
         self._bulk_check_worker_active = False
+
+    def _t(self, key: str) -> str:
+        return translate(self._locale_provider(), key)
 
     def check_and_download_bulk_data(self, callbacks: UICallbacks | None) -> None:
         if self._bulk_check_worker_active:
@@ -38,7 +45,7 @@ class BulkDataHelpers:
         )
         on_download_failed = callbacks.on_bulk_download_failed if callbacks else lambda msg: None
 
-        on_status("Checking card image database…")
+        on_status(self._t("bulk.status.checking"))
         self._bulk_check_worker_active = True
 
         def worker():
@@ -50,12 +57,12 @@ class BulkDataHelpers:
 
             if exists:
                 self.load_bulk_data_into_memory(on_status)
-                on_status("Card image database ready")
+                on_status(self._t("bulk.status.ready"))
                 return
 
             logger.info(f"Bulk data needs download: {reason}")
             on_download_needed(reason)
-            on_status("Downloading card image database...")
+            on_status(self._t("bulk.status.downloading"))
 
             def _on_download_complete(msg: str) -> None:
                 on_download_complete(msg)
@@ -63,7 +70,7 @@ class BulkDataHelpers:
 
             def _on_download_failed(msg: str) -> None:
                 on_download_failed(msg)
-                on_status("Ready")
+                on_status(self._t("app.status.ready"))
 
             self._image_service.download_bulk_metadata_async(
                 on_success=_on_download_complete,
@@ -76,14 +83,14 @@ class BulkDataHelpers:
             if not self._image_service.get_bulk_data():
                 self.load_bulk_data_into_memory(on_status)
             else:
-                on_status("Ready")
+                on_status(self._t("app.status.ready"))
 
         self._worker.submit(worker, on_success=success_handler, on_error=error_handler)
 
     def load_bulk_data_into_memory(
         self, on_status: Callable[[str], None], force: bool = False
     ) -> None:
-        on_status("Preparing card printings cache…")
+        on_status(self._t("bulk.status.preparing_cache"))
 
         def success_callback(data, stats):
             import wx
@@ -109,7 +116,7 @@ class BulkDataHelpers:
         )
 
         if not started:
-            on_status("Ready")
+            on_status(self._t("app.status.ready"))
 
     def force_bulk_data_update(self, callbacks: UICallbacks | None) -> None:
         """Force download of bulk data regardless of current state."""
@@ -123,7 +130,7 @@ class BulkDataHelpers:
         )
         on_download_failed = callbacks.on_bulk_download_failed if callbacks else lambda msg: None
 
-        on_status("Downloading card image database...")
+        on_status(self._t("bulk.status.downloading"))
         self._bulk_check_worker_active = True
 
         def _on_download_complete(msg: str) -> None:
@@ -134,7 +141,7 @@ class BulkDataHelpers:
         def _on_download_failed(msg: str) -> None:
             self._bulk_check_worker_active = False
             on_download_failed(msg)
-            on_status("Ready")
+            on_status(self._t("app.status.ready"))
 
         self._image_service.download_bulk_metadata_async(
             on_success=_on_download_complete,
