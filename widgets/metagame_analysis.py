@@ -22,7 +22,7 @@ from matplotlib.backends.backend_wxagg import FigureCanvasWxAgg as FigureCanvas
 from matplotlib.figure import Figure
 
 from repositories.metagame_repository import get_metagame_repository
-from utils.constants import DARK_ALT, DARK_BG, DARK_PANEL, LIGHT_TEXT, SUBDUED_TEXT
+from utils.constants import DARK_ACCENT, DARK_ALT, DARK_BG, DARK_PANEL, LIGHT_TEXT, SUBDUED_TEXT
 from utils.i18n import translate
 
 
@@ -155,7 +155,7 @@ class MetagameAnalysisFrame(wx.Frame):
 
         right_panel = wx.Panel(panel)
         right_panel.SetBackgroundColour(DARK_PANEL)
-        right_panel.SetMinSize((350, -1))
+        right_panel.SetMinSize((270, -1))
         right_sizer = wx.BoxSizer(wx.VERTICAL)
         right_panel.SetSizer(right_sizer)
         content_sizer.Add(right_panel, 0, wx.EXPAND)
@@ -493,48 +493,52 @@ class MetagameAnalysisFrame(wx.Frame):
 
     def _build_changes_html(self, title: str, cards: list[str]) -> str:
         cards_html = "".join(cards)
+        dark_alt = self._rgb_to_hex(DARK_ALT)
+        dark_panel = self._rgb_to_hex(DARK_PANEL)
+        dark_accent = self._rgb_to_hex(DARK_ACCENT)
+        light_text = self._rgb_to_hex(LIGHT_TEXT)
+        subdued_text = self._rgb_to_hex(SUBDUED_TEXT)
         return f"""
 <html>
 <head>
 <style>
 body {{
-    background: #1c1f26;
-    color: #d7dce5;
+    background: {dark_alt};
+    color: {light_text};
     font-family: Segoe UI, Arial, sans-serif;
-    margin: 8px;
+    margin: 6px;
 }}
 .title {{
     font-size: 13px;
-    color: #b9bfca;
-    margin-bottom: 8px;
+    color: {subdued_text};
+    margin-bottom: 6px;
 }}
 .card {{
-    background: #14161b;
-    border: 1px solid #272c36;
-    border-radius: 6px;
-    margin-bottom: 6px;
+    display: inline-block;
+    max-width: 96%;
+    background: {dark_panel};
+    border: 1px solid {dark_accent};
+    border-radius: 8px;
+    margin-bottom: 5px;
     padding: 6px 8px;
 }}
 .row {{
-    display: flex;
+    display: inline-flex;
     align-items: center;
-    justify-content: space-between;
+    gap: 6px;
 }}
 .arrow {{
-    display: inline-block;
-    min-width: 24px;
     font-weight: 700;
 }}
 .name {{
-    flex: 1;
-    color: #f0f3f8;
+    color: {light_text};
     font-weight: 600;
 }}
 .delta {{
     font-weight: 700;
 }}
 .meta {{
-    color: #a9b1bd;
+    color: {subdued_text};
     font-size: 11px;
     margin-top: 3px;
 }}
@@ -545,11 +549,13 @@ body {{
     color: #ff6464;
 }}
 .empty {{
-    color: #b9bfca;
+    color: {subdued_text};
     padding: 8px;
-    background: #14161b;
-    border: 1px solid #272c36;
-    border-radius: 6px;
+    background: {dark_panel};
+    border: 1px solid {dark_accent};
+    border-radius: 8px;
+    display: inline-block;
+    max-width: 96%;
 }}
 </style>
 </head>
@@ -559,6 +565,9 @@ body {{
 </body>
 </html>
 """
+
+    def _rgb_to_hex(self, rgb: tuple[int, int, int]) -> str:
+        return f"#{rgb[0]:02x}{rgb[1]:02x}{rgb[2]:02x}"
 
     def _set_changes_html(self, html_content: str) -> None:
         self.changes_html.SetPage(html_content)
