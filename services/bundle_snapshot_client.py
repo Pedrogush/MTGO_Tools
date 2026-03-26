@@ -108,18 +108,20 @@ class BundleSnapshotClient:
 
         logger.info("Downloading remote client bundle…")
         bundle_bytes = self._download_bundle()
-        manifest, archetype_entries, deck_entries = self._parse_bundle(bundle_bytes)
+        manifest, archetype_entries, deck_entries, deck_texts = self._parse_bundle(bundle_bytes)
 
         generated_at = manifest.get("generated_at", "")
         now = time.time()
 
         self._hydrate_archetype_lists(archetype_entries, now)
         self._hydrate_archetype_decks(deck_entries, now)
+        inserted = self._hydrate_deck_texts(deck_texts)
         self._write_stamp(generated_at, now)
 
         logger.info(
             f"Bundle applied: {len(archetype_entries)} archetype lists, "
-            f"{len(deck_entries)} deck lists (generated_at={generated_at})"
+            f"{len(deck_entries)} deck lists, "
+            f"{inserted}/{len(deck_texts)} deck texts inserted (generated_at={generated_at})"
         )
         return True
 
@@ -163,18 +165,24 @@ class BundleSnapshotClient:
     # Parse                                                                 #
     # ------------------------------------------------------------------ #
 
-    def _parse_bundle(
-        self, bundle_bytes: bytes
-    ) -> tuple[dict[str, Any], list[dict[str, Any]], list[dict[str, Any]]]:
-        """Extract the bundle and return (manifest, archetype_entries, deck_entries).
+    def _parse_bundle(self, bundle_bytes: bytes) -> tuple[
+        dict[str, Any],
+        list[dict[str, Any]],
+        list[dict[str, Any]],
+        list[tuple[str, str, str]],
+    ]:
+        """Extract the bundle and return (manifest, archetype_entries, deck_entries, deck_texts).
 
         Each archetype entry is the full parsed JSON from
         ``latest/archetypes/{format}.json``.  Each deck entry is the full parsed
-        JSON from ``latest/decks/{format}/{slug}.json``.
+        JSON from ``latest/decks/{format}/{slug}.json``.  Each deck_texts element
+        is a ``(deck_id, deck_text, source)`` tuple ready for ``DeckTextCache.bulk_set``,
+        extracted from ``archive/deck-texts/{format}/{id}.json``.
         """
         manifest: dict[str, Any] = {}
         archetype_entries: list[dict[str, Any]] = []
         deck_entries: list[dict[str, Any]] = []
+        deck_texts: list[tuple[str, str, str]] = []
 
         with tarfile.open(fileobj=io.BytesIO(bundle_bytes), mode="r:gz") as tf:
             for member in tf.getmembers():
@@ -196,10 +204,16 @@ class BundleSnapshotClient:
                     manifest = data
                 elif "/archetypes/" in name and name.endswith(".json"):
                     archetype_entries.append(data)
+                elif name.startswith("archive/deck-texts/") and name.endswith(".json"):
+                    deck_id = data.get("deck_id", "")
+                    text = data.get("deck_text", "")
+                    source = data.get("source", "mtggoldfish")
+                    if deck_id and text:
+                        deck_texts.append((deck_id, text, source))
                 elif "/decks/" in name and name.endswith(".json"):
                     deck_entries.append(data)
 
-        return manifest, archetype_entries, deck_entries
+        return manifest, archetype_entries, deck_entries, deck_texts
 
     # ------------------------------------------------------------------ #
     # Cache hydration                                                       #
@@ -261,6 +275,25 @@ class BundleSnapshotClient:
                 logger.debug(f"Hydrated deck lists for {len(deck_entries)} archetype(s)")
             except OSError as exc:
                 logger.warning(f"Failed to write archetype decks cache: {exc}")
+
+    def _hydrate_deck_texts(self, deck_texts: list[tuple[str, str, str]]) -> int:
+        """Insert deck texts into the SQLite deck text cache.
+
+        Uses INSERT OR IGNORE so already-cached entries are preserved.
+
+        Returns the number of rows inserted.
+        """
+        if not deck_texts:
+            return 0
+        try:
+            from utils.deck_text_cache import get_deck_cache
+
+            inserted = get_deck_cache().bulk_set(deck_texts, skip_existing=True)
+            logger.debug(f"Hydrated {inserted}/{len(deck_texts)} deck texts into SQLite cache")
+            return inserted
+        except Exception as exc:
+            logger.warning(f"Failed to hydrate deck texts: {exc}")
+            return 0
 
     # ------------------------------------------------------------------ #
     # HTTP helpers                                                          #

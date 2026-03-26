@@ -30,6 +30,7 @@ def _make_bundle(
     manifest: dict[str, Any] | None = None,
     archetypes: list[dict[str, Any]] | None = None,
     decks: list[dict[str, Any]] | None = None,
+    deck_texts: list[dict[str, Any]] | None = None,
 ) -> bytes:
     """Build an in-memory client-bundle.tar.gz for testing."""
     if manifest is None:
@@ -67,6 +68,17 @@ def _make_bundle(
                 ],
             }
         ]
+    if deck_texts is None:
+        deck_texts = [
+            {
+                "schema_version": "1",
+                "kind": "deck_text_blob",
+                "format": _FORMAT,
+                "source": "mtggoldfish",
+                "deck_id": "1234",
+                "deck_text": "4 Lightning Bolt\n\nSideboard\n2 Smash to Smithereens\n",
+            }
+        ]
 
     buf = io.BytesIO()
     with tarfile.open(fileobj=buf, mode="w:gz") as tf:
@@ -85,6 +97,10 @@ def _make_bundle(
             fmt = deck_entry.get("format", "modern")
             href = deck_entry.get("archetype", {}).get("href", "unknown")
             _add(f"latest/decks/{fmt}/{href}.json", deck_entry)
+        for dt in deck_texts:
+            fmt = dt.get("format", "modern")
+            deck_id = dt.get("deck_id", "0")
+            _add(f"archive/deck-texts/{fmt}/{deck_id}.json", dt)
 
     return buf.getvalue()
 
@@ -268,6 +284,65 @@ def test_deck_entry_missing_href_skipped(tmp_client: BundleSnapshotClient) -> No
         }
     ]
     bundle = _make_bundle(decks=decks)
+    with patch.object(tmp_client, "_http_get_bytes", return_value=bundle):
+        tmp_client.apply()  # should not raise
+
+
+# ---------------------------------------------------------------------------
+# Deck text hydration
+# ---------------------------------------------------------------------------
+
+
+def test_apply_hydrates_deck_text_cache(tmp_client: BundleSnapshotClient, tmp_path: Path) -> None:
+    from utils.deck_text_cache import DeckTextCache
+
+    db_path = tmp_path / "deck_cache.db"
+    cache = DeckTextCache(db_path=db_path)
+
+    bundle = _make_bundle()
+    with (
+        patch.object(tmp_client, "_http_get_bytes", return_value=bundle),
+        patch("utils.deck_text_cache.get_deck_cache", return_value=cache),
+    ):
+        tmp_client.apply()
+
+    result = cache.get("1234")
+    assert result is not None
+    assert "Lightning Bolt" in result
+
+
+def test_deck_text_hydration_skips_existing(
+    tmp_client: BundleSnapshotClient, tmp_path: Path
+) -> None:
+    from utils.deck_text_cache import DeckTextCache
+
+    db_path = tmp_path / "deck_cache.db"
+    cache = DeckTextCache(db_path=db_path)
+    cache.set("1234", "4 Existing Card\n", source="mtggoldfish")
+
+    bundle = _make_bundle()
+    with (
+        patch.object(tmp_client, "_http_get_bytes", return_value=bundle),
+        patch("utils.deck_text_cache.get_deck_cache", return_value=cache),
+    ):
+        tmp_client._hydrate_deck_texts([("1234", "4 Lightning Bolt\n", "mtggoldfish")])
+
+    # Original entry preserved (INSERT OR IGNORE)
+    assert cache.get("1234") == "4 Existing Card\n"
+
+
+def test_deck_text_entry_missing_deck_id_skipped(tmp_client: BundleSnapshotClient) -> None:
+    deck_texts = [
+        {
+            "schema_version": "1",
+            "kind": "deck_text_blob",
+            "format": "modern",
+            "source": "mtggoldfish",
+            "deck_id": "",  # empty
+            "deck_text": "4 Lightning Bolt\n",
+        }
+    ]
+    bundle = _make_bundle(deck_texts=deck_texts)
     with patch.object(tmp_client, "_http_get_bytes", return_value=bundle):
         tmp_client.apply()  # should not raise
 

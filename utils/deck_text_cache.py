@@ -199,6 +199,43 @@ class DeckTextCache:
 
         return False
 
+    def bulk_set(self, entries: list[tuple[str, str, str]], *, skip_existing: bool = True) -> int:
+        """Insert multiple deck texts in a single transaction.
+
+        Args:
+            entries: List of (deck_number, deck_text, source) tuples.
+            skip_existing: When True uses INSERT OR IGNORE so already-cached
+                decks are not overwritten; False uses INSERT OR REPLACE.
+
+        Returns:
+            Number of rows actually inserted.
+        """
+        if not entries:
+            return 0
+
+        sql = (
+            "INSERT OR IGNORE INTO deck_cache "
+            "(deck_number, deck_text, source, cached_at, access_count, last_accessed) "
+            "VALUES (?, ?, ?, ?, 0, ?)"
+            if skip_existing
+            else "INSERT OR REPLACE INTO deck_cache "
+            "(deck_number, deck_text, source, cached_at, access_count, last_accessed) "
+            "VALUES (?, ?, ?, ?, 0, ?)"
+        )
+
+        now = time.time()
+        rows = [(dn, dt, src, now, now) for dn, dt, src in entries]
+
+        try:
+            with sqlite3.connect(self.db_path, timeout=SQLITE_CONNECTION_TIMEOUT_SECONDS) as conn:
+                conn.execute(f"PRAGMA busy_timeout={SQLITE_BUSY_TIMEOUT_MS}")
+                cursor = conn.executemany(sql, rows)
+                conn.commit()
+                return cursor.rowcount
+        except sqlite3.Error as exc:
+            logger.error(f"bulk_set failed: {exc}")
+            return 0
+
     def get_stats(self) -> dict:
         """
         Get cache statistics.
