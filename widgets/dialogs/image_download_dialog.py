@@ -238,7 +238,7 @@ class ImageDownloadDialog(wx.Dialog):
         except RuntimeError:
             pass
         if self.on_status_update:
-            self.on_status_update("Card image download complete")
+            self.on_status_update("app.status.image_download_complete")
 
     def _on_download_failed(self, dialog: wx.ProgressDialog, error_msg: str):
         """Handle image download failure."""
@@ -250,7 +250,7 @@ class ImageDownloadDialog(wx.Dialog):
         wx.MessageBox(f"Download failed: {error_msg}", "Download Error", wx.OK | wx.ICON_ERROR)
 
         if self.on_status_update:
-            self.on_status_update("Ready")
+            self.on_status_update("app.status.ready")
 
     def _on_download_cancelled(self, dialog: wx.ProgressDialog):
         """Handle image download cancellation."""
@@ -260,7 +260,7 @@ class ImageDownloadDialog(wx.Dialog):
             pass
 
         if self.on_status_update:
-            self.on_status_update("Card image download cancelled")
+            self.on_status_update("app.status.image_download_cancelled")
 
 
 def show_image_download_dialog(

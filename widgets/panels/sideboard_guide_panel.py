@@ -20,6 +20,7 @@ from utils.constants.ui_layout import (
     GUIDE_COL_NOTES_WIDTH,
     PADDING_MD,
 )
+from utils.i18n import translate
 from utils.stylize import stylize_button
 
 
@@ -37,6 +38,7 @@ class SideboardGuidePanel(wx.Panel):
         on_import_csv: Callable[[], None],
         on_pin_guide: Callable[[], None] | None = None,
         on_edit_flex_slots: Callable[[], None] | None = None,
+        locale: str | None = None,
     ):
         """
         Initialize the sideboard guide panel.
@@ -54,6 +56,7 @@ class SideboardGuidePanel(wx.Panel):
         """
         super().__init__(parent)
         self.SetBackgroundColour(DARK_PANEL)
+        self._locale = locale
 
         self.on_add_entry = on_add_entry
         self.on_edit_entry = on_edit_entry
@@ -70,6 +73,9 @@ class SideboardGuidePanel(wx.Panel):
         self._build_ui()
         self._refresh_view()
 
+    def _t(self, key: str, **kwargs: object) -> str:
+        return translate(self._locale, key, **kwargs)
+
     def _build_ui(self) -> None:
         """Build the panel UI."""
         sizer = wx.BoxSizer(wx.VERTICAL)
@@ -77,12 +83,14 @@ class SideboardGuidePanel(wx.Panel):
 
         # Guide entries list
         self.guide_view = dv.DataViewListCtrl(self, style=dv.DV_ROW_LINES)
-        self.guide_view.AppendTextColumn("Archetype", width=GUIDE_COL_ARCHETYPE_WIDTH)
-        self.guide_view.AppendTextColumn("Play: Out", width=GUIDE_COL_CARDS_WIDTH)
-        self.guide_view.AppendTextColumn("Play: In", width=GUIDE_COL_CARDS_WIDTH)
-        self.guide_view.AppendTextColumn("Draw: Out", width=GUIDE_COL_CARDS_WIDTH)
-        self.guide_view.AppendTextColumn("Draw: In", width=GUIDE_COL_CARDS_WIDTH)
-        self.guide_view.AppendTextColumn("Notes", width=GUIDE_COL_NOTES_WIDTH)
+        self.guide_view.AppendTextColumn(
+            self._t("guide.col.archetype"), width=GUIDE_COL_ARCHETYPE_WIDTH
+        )
+        self.guide_view.AppendTextColumn(self._t("guide.col.play_out"), width=GUIDE_COL_CARDS_WIDTH)
+        self.guide_view.AppendTextColumn(self._t("guide.col.play_in"), width=GUIDE_COL_CARDS_WIDTH)
+        self.guide_view.AppendTextColumn(self._t("guide.col.draw_out"), width=GUIDE_COL_CARDS_WIDTH)
+        self.guide_view.AppendTextColumn(self._t("guide.col.draw_in"), width=GUIDE_COL_CARDS_WIDTH)
+        self.guide_view.AppendTextColumn(self._t("guide.col.notes"), width=GUIDE_COL_NOTES_WIDTH)
         self.guide_view.SetBackgroundColour(DARK_ALT)
         self.guide_view.SetForegroundColour(LIGHT_TEXT)
         sizer.Add(self.guide_view, 1, wx.EXPAND | wx.ALL, PADDING_MD)
@@ -95,12 +103,12 @@ class SideboardGuidePanel(wx.Panel):
         empty_sizer.AddStretchSpacer(1)
         empty_label = wx.StaticText(
             self.empty_state_panel,
-            label="No matchup notes yet.",
+            label=self._t("guide.empty"),
             style=wx.ALIGN_CENTRE_HORIZONTAL,
         )
         empty_label.SetForegroundColour(SUBDUED_TEXT)
         empty_sizer.Add(empty_label, 0, wx.ALIGN_CENTER | wx.ALL, PADDING_MD)
-        self.empty_cta_btn = wx.Button(self.empty_state_panel, label="Add your first matchup")
+        self.empty_cta_btn = wx.Button(self.empty_state_panel, label=self._t("guide.btn.cta"))
         stylize_button(self.empty_cta_btn)
         self.empty_cta_btn.Bind(wx.EVT_BUTTON, self._on_add_clicked)
         empty_sizer.Add(self.empty_cta_btn, 0, wx.ALIGN_CENTER | wx.ALL, PADDING_MD)
@@ -115,43 +123,40 @@ class SideboardGuidePanel(wx.Panel):
         self.button_row.SetSizer(buttons)
         sizer.Add(self.button_row, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_MD)
 
-        self.add_btn = wx.Button(self.button_row, label="Add")
+        self.add_btn = wx.Button(self.button_row, label=self._t("guide.btn.add"))
         stylize_button(self.add_btn)
         self.add_btn.Bind(wx.EVT_BUTTON, self._on_add_clicked)
         buttons.Add(self.add_btn, 0, wx.RIGHT, PADDING_MD)
 
-        self.edit_btn = wx.Button(self.button_row, label="Edit")
+        self.edit_btn = wx.Button(self.button_row, label=self._t("guide.btn.edit"))
         stylize_button(self.edit_btn)
         self.edit_btn.Bind(wx.EVT_BUTTON, self._on_edit_clicked)
         buttons.Add(self.edit_btn, 0, wx.RIGHT, PADDING_MD)
 
-        self.remove_btn = wx.Button(self.button_row, label="Delete")
+        self.remove_btn = wx.Button(self.button_row, label=self._t("guide.btn.delete"))
         stylize_button(self.remove_btn)
         self.remove_btn.Bind(wx.EVT_BUTTON, self._on_remove_clicked)
         buttons.Add(self.remove_btn, 0, wx.RIGHT, PADDING_MD)
 
-        self.exclusions_btn = wx.Button(self.button_row, label="Exclusions")
+        self.exclusions_btn = wx.Button(self.button_row, label=self._t("guide.btn.exclusions"))
         stylize_button(self.exclusions_btn)
         self.exclusions_btn.Bind(wx.EVT_BUTTON, self._on_exclusions_clicked)
         buttons.Add(self.exclusions_btn, 0, wx.RIGHT, PADDING_MD)
 
-        self.export_btn = wx.Button(self.button_row, label="Export")
+        self.export_btn = wx.Button(self.button_row, label=self._t("guide.btn.export"))
         stylize_button(self.export_btn)
         self.export_btn.Bind(wx.EVT_BUTTON, self._on_export_clicked)
         buttons.Add(self.export_btn, 0, wx.RIGHT, PADDING_MD)
 
-        self.import_btn = wx.Button(self.button_row, label="Import")
+        self.import_btn = wx.Button(self.button_row, label=self._t("guide.btn.import"))
         stylize_button(self.import_btn)
         self.import_btn.Bind(wx.EVT_BUTTON, self._on_import_clicked)
         buttons.Add(self.import_btn, 0, wx.RIGHT, PADDING_MD)
 
-        self.flex_slots_btn = wx.Button(self.button_row, label="Flex Slots")
+        self.flex_slots_btn = wx.Button(self.button_row, label=self._t("guide.btn.flex_slots"))
         stylize_button(self.flex_slots_btn)
         self.flex_slots_btn.SetBackgroundColour(wx.Colour(*FLEX_SLOT_BUTTON_COLOR))
-        self.flex_slots_btn.SetToolTip(
-            "Mark mainboard cards as flex slots. Flex slots are highlighted in the Out selectors "
-            "when creating guide entries, making it easier to identify cards to side out."
-        )
+        self.flex_slots_btn.SetToolTip(self._t("guide.tooltip.flex_slots"))
         self.flex_slots_btn.Bind(wx.EVT_BUTTON, self._on_flex_slots_clicked)
         if self.on_edit_flex_slots is None:
             self.flex_slots_btn.Disable()
@@ -159,7 +164,7 @@ class SideboardGuidePanel(wx.Panel):
 
         buttons.AddStretchSpacer(1)
 
-        self.pin_btn = wx.Button(self.button_row, label="Pin for Tracker")
+        self.pin_btn = wx.Button(self.button_row, label=self._t("guide.btn.pin"))
         stylize_button(self.pin_btn)
         self.pin_btn.SetBackgroundColour(wx.Colour(*PIN_BUTTON_COLOR))
         self.pin_btn.SetToolTip(
@@ -171,7 +176,9 @@ class SideboardGuidePanel(wx.Panel):
         buttons.Add(self.pin_btn, 0)
 
         # Exclusions label
-        self.exclusions_label = wx.StaticText(self, label="Exclusions: —")
+        self.exclusions_label = wx.StaticText(
+            self, label=f"{self._t('guide.label.exclusions')}: \u2014"
+        )
         self.exclusions_label.SetForegroundColour(SUBDUED_TEXT)
         sizer.Add(self.exclusions_label, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_MD)
 
@@ -268,11 +275,8 @@ class SideboardGuidePanel(wx.Panel):
         self.Layout()
 
         # Update exclusions label
-        if self.exclusions:
-            text = ", ".join(self.exclusions)
-        else:
-            text = "—"
-        self.exclusions_label.SetLabel(f"Exclusions: {text}")
+        text = ", ".join(self.exclusions) if self.exclusions else "\u2014"
+        self.exclusions_label.SetLabel(f"{self._t('guide.label.exclusions')}: {text}")
 
     def _format_card_list(self, cards: dict[str, int] | str) -> str:
         """
@@ -339,6 +343,6 @@ class SideboardGuidePanel(wx.Panel):
             pinned: True if this deck's guide is currently pinned
         """
         if pinned:
-            self.pin_btn.SetLabel("Pinned \u2713")
+            self.pin_btn.SetLabel(self._t("guide.btn.pinned"))
         else:
-            self.pin_btn.SetLabel("Pin for Tracker")
+            self.pin_btn.SetLabel(self._t("guide.btn.pin"))

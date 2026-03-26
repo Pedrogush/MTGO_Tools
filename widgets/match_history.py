@@ -18,6 +18,7 @@ import wx.dataview as dv
 from loguru import logger
 
 from utils.gamelog_parser import infer_username_from_matches, parse_all_gamelogs
+from utils.i18n import translate
 
 DARK_BG = wx.Colour(20, 22, 27)
 DARK_PANEL = wx.Colour(34, 39, 46)
@@ -32,11 +33,15 @@ class MatchHistoryFrame(wx.Frame):
     _FIXED_WIDTH = 850
     _COL_WIDTHS = [100, 90, 140]  # Result, Mulligans, Date (pixels)
 
-    def __init__(self, parent: wx.Window | None = None) -> None:
+    def __init__(self, parent: wx.Window | None = None, locale: str | None = None) -> None:
         style = wx.DEFAULT_FRAME_STYLE | wx.STAY_ON_TOP
         super().__init__(
-            parent, title="MTGO Match History (wx)", size=(self._FIXED_WIDTH, 460), style=style
+            parent,
+            title=translate(locale, "window.title.match_history"),
+            size=(self._FIXED_WIDTH, 460),
+            style=style,
         )
+        self._locale = locale
         # Lock horizontal size; allow vertical resize only
         self.SetSizeHints(self._FIXED_WIDTH, 300, self._FIXED_WIDTH, -1)
 
@@ -77,6 +82,9 @@ class MatchHistoryFrame(wx.Frame):
             self.current_username = username
             logger.debug(f"Set current username: {username}")
 
+    def _t(self, key: str, **kwargs: object) -> str:
+        return translate(self._locale, key, **kwargs)
+
     # ------------------------------------------------------------------ UI ------------------------------------------------------------------
     def _build_ui(self) -> None:
         panel = wx.Panel(self)
@@ -87,18 +95,18 @@ class MatchHistoryFrame(wx.Frame):
         toolbar = wx.BoxSizer(wx.HORIZONTAL)
         sizer.Add(toolbar, 0, wx.ALL | wx.EXPAND, 10)
 
-        self.refresh_button = wx.Button(panel, label="Refresh")
+        self.refresh_button = wx.Button(panel, label=self._t("match.btn.refresh"))
         self._stylize_button(self.refresh_button)
         self.refresh_button.Bind(wx.EVT_BUTTON, lambda _evt: self.refresh_history())
         toolbar.Add(self.refresh_button, 0)
 
         toolbar.AddStretchSpacer(1)
 
-        self.status_label = wx.StaticText(panel, label="Ready")
+        self.status_label = wx.StaticText(panel, label=self._t("app.status.ready"))
         self.status_label.SetForegroundColour(SUBDUED_TEXT)
         toolbar.Add(self.status_label, 0, wx.ALIGN_CENTER_VERTICAL)
 
-        metrics_box = wx.StaticBox(panel, label="Win-Rate Metrics")
+        metrics_box = wx.StaticBox(panel, label=self._t("match.metrics.title"))
         metrics_box.SetForegroundColour(LIGHT_TEXT)
         metrics_box.SetBackgroundColour(DARK_PANEL)
         metrics_sizer = wx.StaticBoxSizer(metrics_box, wx.VERTICAL)
@@ -109,32 +117,40 @@ class MatchHistoryFrame(wx.Frame):
         metrics_sizer.Add(metrics_inner, 0, wx.EXPAND | wx.ALL, 8)
 
         row1 = wx.BoxSizer(wx.HORIZONTAL)
-        self.match_rate_label = wx.StaticText(box_parent, label="Absolute Match Win Rate: —")
+        self.match_rate_label = wx.StaticText(
+            box_parent, label=f"{self._t('match.metrics.abs_match_rate')}: \u2014"
+        )
         self.match_rate_label.SetForegroundColour(LIGHT_TEXT)
         row1.Add(self.match_rate_label, 1, wx.ALIGN_CENTER_VERTICAL)
-        self.game_rate_label = wx.StaticText(box_parent, label="Absolute Game Win Rate: —")
+        self.game_rate_label = wx.StaticText(
+            box_parent, label=f"{self._t('match.metrics.abs_game_rate')}: \u2014"
+        )
         self.game_rate_label.SetForegroundColour(LIGHT_TEXT)
         row1.Add(self.game_rate_label, 1, wx.ALIGN_CENTER_VERTICAL)
         metrics_inner.Add(row1, 0, wx.EXPAND | wx.BOTTOM, 4)
 
         row2 = wx.BoxSizer(wx.HORIZONTAL)
         self.filtered_match_rate_label = wx.StaticText(
-            box_parent, label="Match Win Rate (filtered): —"
+            box_parent, label=f"{self._t('match.metrics.filtered_match_rate')}: \u2014"
         )
         self.filtered_match_rate_label.SetForegroundColour(LIGHT_TEXT)
         row2.Add(self.filtered_match_rate_label, 1, wx.ALIGN_CENTER_VERTICAL)
         self.filtered_game_rate_label = wx.StaticText(
-            box_parent, label="Game Win Rate (filtered): —"
+            box_parent, label=f"{self._t('match.metrics.filtered_game_rate')}: \u2014"
         )
         self.filtered_game_rate_label.SetForegroundColour(LIGHT_TEXT)
         row2.Add(self.filtered_game_rate_label, 1, wx.ALIGN_CENTER_VERTICAL)
         metrics_inner.Add(row2, 0, wx.EXPAND | wx.BOTTOM, 4)
 
         row3 = wx.BoxSizer(wx.HORIZONTAL)
-        self.mulligan_rate_label = wx.StaticText(box_parent, label="Mulligan Rate: —")
+        self.mulligan_rate_label = wx.StaticText(
+            box_parent, label=f"{self._t('match.metrics.mulligan_rate')}: \u2014"
+        )
         self.mulligan_rate_label.SetForegroundColour(LIGHT_TEXT)
         row3.Add(self.mulligan_rate_label, 1, wx.ALIGN_CENTER_VERTICAL)
-        self.avg_mulligans_label = wx.StaticText(box_parent, label="Avg Mulligans/Match: —")
+        self.avg_mulligans_label = wx.StaticText(
+            box_parent, label=f"{self._t('match.metrics.avg_mulligans')}: \u2014"
+        )
         self.avg_mulligans_label.SetForegroundColour(LIGHT_TEXT)
         row3.Add(self.avg_mulligans_label, 1, wx.ALIGN_CENTER_VERTICAL)
         metrics_inner.Add(row3, 0, wx.EXPAND)
@@ -143,11 +159,13 @@ class MatchHistoryFrame(wx.Frame):
 
         row_opp = wx.BoxSizer(wx.HORIZONTAL)
         self.opp_match_rate_label = wx.StaticText(
-            box_parent, label="Vs. Opponent Match Win Rate: —"
+            box_parent, label=f"{self._t('match.metrics.opp_match_rate')}: \u2014"
         )
         self.opp_match_rate_label.SetForegroundColour(SUBDUED_TEXT)
         row_opp.Add(self.opp_match_rate_label, 1, wx.ALIGN_CENTER_VERTICAL)
-        self.opp_mull_rate_label = wx.StaticText(box_parent, label="Vs. Opponent Mull Rate: —")
+        self.opp_mull_rate_label = wx.StaticText(
+            box_parent, label=f"{self._t('match.metrics.opp_mull_rate')}: \u2014"
+        )
         self.opp_mull_rate_label.SetForegroundColour(SUBDUED_TEXT)
         row_opp.Add(self.opp_mull_rate_label, 1, wx.ALIGN_CENTER_VERTICAL)
         metrics_inner.Add(row_opp, 0, wx.EXPAND)
@@ -155,7 +173,7 @@ class MatchHistoryFrame(wx.Frame):
         filter_row = wx.BoxSizer(wx.HORIZONTAL)
         metrics_sizer.Add(filter_row, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 6)
         filter_row.Add(
-            wx.StaticText(box_parent, label="Start (YYYY-MM-DD):"),
+            wx.StaticText(box_parent, label=self._t("match.filter.start")),
             0,
             wx.ALIGN_CENTER_VERTICAL | wx.RIGHT,
             4,
@@ -165,7 +183,7 @@ class MatchHistoryFrame(wx.Frame):
         self.start_date_ctrl.SetForegroundColour(LIGHT_TEXT)
         filter_row.Add(self.start_date_ctrl, 0, wx.RIGHT, 10)
         filter_row.Add(
-            wx.StaticText(box_parent, label="End (YYYY-MM-DD):"),
+            wx.StaticText(box_parent, label=self._t("match.filter.end")),
             0,
             wx.ALIGN_CENTER_VERTICAL | wx.RIGHT,
             4,
@@ -174,17 +192,17 @@ class MatchHistoryFrame(wx.Frame):
         self.end_date_ctrl.SetBackgroundColour(DARK_ALT)
         self.end_date_ctrl.SetForegroundColour(LIGHT_TEXT)
         filter_row.Add(self.end_date_ctrl, 0, wx.RIGHT, 10)
-        apply_btn = wx.Button(box_parent, label="Apply Date Filter")
+        apply_btn = wx.Button(box_parent, label=self._t("match.filter.apply"))
         apply_btn.Bind(wx.EVT_BUTTON, lambda _evt: self._update_metrics())
         filter_row.Add(apply_btn, 0)
         filter_row.AddStretchSpacer(1)
 
         self.tree = dv.TreeListCtrl(panel, style=dv.TL_DEFAULT_STYLE | dv.TL_SINGLE)
         self.tree.SetBackgroundColour(DARK_ALT)
-        self.tree.AppendColumn("Players (Archetypes)", width=380)
-        self.tree.AppendColumn("Result", width=100)
-        self.tree.AppendColumn("Mulligans", width=90)
-        self.tree.AppendColumn("Date", width=140)
+        self.tree.AppendColumn(self._t("match.col.players"), width=380)
+        self.tree.AppendColumn(self._t("match.col.result"), width=100)
+        self.tree.AppendColumn(self._t("match.col.mulligans"), width=90)
+        self.tree.AppendColumn(self._t("match.col.date"), width=140)
         self.tree.Bind(dv.EVT_TREELIST_ITEM_ACTIVATED, self.on_item_activated)
         self.tree.Bind(dv.EVT_TREELIST_SELECTION_CHANGED, self.on_item_selected)
         sizer.Add(self.tree, 1, wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, 10)
@@ -218,10 +236,12 @@ class MatchHistoryFrame(wx.Frame):
     def refresh_history(self) -> None:
         if not self or not self.IsShown():
             return
-        self._set_busy(True, "Loading all match history...")
+        self._set_busy(True, self._t("match.status.loading"))
 
         def progress_callback(current: int, total: int) -> None:
-            wx.CallAfter(self._set_busy, True, f"Parsing {current}/{total} matches...")
+            wx.CallAfter(
+                self._set_busy, True, self._t("match.status.parsing", current=current, total=total)
+            )
 
         def worker() -> None:
             try:
@@ -240,7 +260,7 @@ class MatchHistoryFrame(wx.Frame):
     def _handle_history_error(self, message: str) -> None:
         if not self or not self.IsShown():
             return
-        self._set_busy(False, "Failed to load match history.")
+        self._set_busy(False, self._t("match.status.failed"))
 
     def _populate_history(self, matches: list[dict[str, Any]]) -> None:
         if not self or not self.IsShown():
@@ -250,7 +270,7 @@ class MatchHistoryFrame(wx.Frame):
         root = self.tree.GetRootItem()
 
         if not matches:
-            self._set_busy(False, "No match data available.")
+            self._set_busy(False, self._t("match.status.no_data"))
             return
 
         self.history_items = matches
@@ -323,7 +343,7 @@ class MatchHistoryFrame(wx.Frame):
             mull_detail = ", ".join(str(m) for m in our_mulligans) if our_mulligans else "0"
 
             # Format result - score from OUR perspective (our score - opponent score)
-            result_text = "Won" if we_won else "Lost"
+            result_text = self._t("match.result.won") if we_won else self._t("match.result.lost")
             result_display = f"{result_text} {our_score}-{opp_score}"
 
             # Format player display
@@ -343,7 +363,7 @@ class MatchHistoryFrame(wx.Frame):
             # Store full match data in item
             self.tree.SetItemData(item, match)
 
-        self._set_busy(False, f"Loaded {len(matches)} matches")
+        self._set_busy(False, self._t("match.status.loaded", count=len(matches)))
         self._update_metrics()
         self._clear_opp_stats()
 
@@ -428,29 +448,35 @@ class MatchHistoryFrame(wx.Frame):
         )
 
     def _clear_opp_stats(self) -> None:
-        self.opp_match_rate_label.SetLabel("Vs. Opponent Match Win Rate: —")
-        self.opp_mull_rate_label.SetLabel("Vs. Opponent Mull Rate: —")
+        self.opp_match_rate_label.SetLabel(f"{self._t('match.metrics.opp_match_rate')}: \u2014")
+        self.opp_mull_rate_label.SetLabel(f"{self._t('match.metrics.opp_mull_rate')}: \u2014")
 
     def _set_busy(self, busy: bool, message: str | None = None) -> None:
+        if not self:
+            return
         if self.refresh_button:
             self.refresh_button.Enable(not busy)
         if message:
             self.status_label.SetLabel(message)
         elif busy:
-            self.status_label.SetLabel("Loading…")
+            self.status_label.SetLabel(self._t("research.loading_archetypes"))
         else:
-            self.status_label.SetLabel("Ready")
+            self.status_label.SetLabel(self._t("app.status.ready"))
 
     # ------------------------------------------------------------------ Metrics ---------------------------------------------------------------
     def _update_metrics(self) -> None:
         matches = self._iter_matches(self.history_items)
         if not matches:
-            self.match_rate_label.SetLabel("Absolute Match Win Rate: —")
-            self.game_rate_label.SetLabel("Absolute Game Win Rate: —")
-            self.filtered_match_rate_label.SetLabel("Match Win Rate (filtered): —")
-            self.filtered_game_rate_label.SetLabel("Game Win Rate (filtered): —")
-            self.mulligan_rate_label.SetLabel("Mulligan Rate: —")
-            self.avg_mulligans_label.SetLabel("Avg Mulligans/Match: —")
+            self.match_rate_label.SetLabel(f"{self._t('match.metrics.abs_match_rate')}: \u2014")
+            self.game_rate_label.SetLabel(f"{self._t('match.metrics.abs_game_rate')}: \u2014")
+            self.filtered_match_rate_label.SetLabel(
+                f"{self._t('match.metrics.filtered_match_rate')}: \u2014"
+            )
+            self.filtered_game_rate_label.SetLabel(
+                f"{self._t('match.metrics.filtered_game_rate')}: \u2014"
+            )
+            self.mulligan_rate_label.SetLabel(f"{self._t('match.metrics.mulligan_rate')}: \u2014")
+            self.avg_mulligans_label.SetLabel(f"{self._t('match.metrics.avg_mulligans')}: \u2014")
             return
 
         total_matches = len(matches)
@@ -468,15 +494,17 @@ class MatchHistoryFrame(wx.Frame):
         game_rate = (games_won / games_played) * 100 if games_played else 0.0
 
         self.match_rate_label.SetLabel(
-            f"Absolute Match Win Rate: {match_rate:.1f}% ({match_wins}/{total_matches})"
+            f"{self._t('match.metrics.abs_match_rate')}: {match_rate:.1f}% ({match_wins}/{total_matches})"
         )
         self.game_rate_label.SetLabel(
-            f"Absolute Game Win Rate: {game_rate:.1f}% ({games_won}/{games_played or 1})"
+            f"{self._t('match.metrics.abs_game_rate')}: {game_rate:.1f}% ({games_won}/{games_played or 1})"
         )
         self.mulligan_rate_label.SetLabel(
-            f"Mulligan Rate: {mulligan_rate:.1f}% ({total_mulligans}/{games_with_data} games)"
+            f"{self._t('match.metrics.mulligan_rate')}: {mulligan_rate:.1f}% ({total_mulligans}/{games_with_data} games)"
         )
-        self.avg_mulligans_label.SetLabel(f"Avg Mulligans/Match: {avg_mulligans_per_match:.2f}")
+        self.avg_mulligans_label.SetLabel(
+            f"{self._t('match.metrics.avg_mulligans')}: {avg_mulligans_per_match:.2f}"
+        )
 
         start = self._parse_date_input(self.start_date_ctrl.GetValue())
         end = self._parse_date_input(self.end_date_ctrl.GetValue())
@@ -494,14 +522,18 @@ class MatchHistoryFrame(wx.Frame):
                 (filtered_games_won / filtered_games_total) * 100 if filtered_games_total else 0.0
             )
             self.filtered_match_rate_label.SetLabel(
-                f"Match Win Rate (filtered): {filtered_match_rate:.1f}% ({filtered_match_wins}/{len(filtered)})"
+                f"{self._t('match.metrics.filtered_match_rate')}: {filtered_match_rate:.1f}% ({filtered_match_wins}/{len(filtered)})"
             )
             self.filtered_game_rate_label.SetLabel(
-                f"Game Win Rate (filtered): {filtered_game_rate:.1f}% ({filtered_games_won}/{filtered_games_total})"
+                f"{self._t('match.metrics.filtered_game_rate')}: {filtered_game_rate:.1f}% ({filtered_games_won}/{filtered_games_total})"
             )
         else:
-            self.filtered_match_rate_label.SetLabel("Match Win Rate (filtered): —")
-            self.filtered_game_rate_label.SetLabel("Game Win Rate (filtered): —")
+            self.filtered_match_rate_label.SetLabel(
+                f"{self._t('match.metrics.filtered_match_rate')}: \u2014"
+            )
+            self.filtered_game_rate_label.SetLabel(
+                f"{self._t('match.metrics.filtered_game_rate')}: \u2014"
+            )
 
     def _iter_matches(self, items: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Convert match data to metrics format."""
@@ -586,7 +618,7 @@ class MatchHistoryFrame(wx.Frame):
         try:
             return datetime.strptime(value, "%Y-%m-%d").date()
         except ValueError:
-            self._set_busy(False, "Invalid date format")
+            self._set_busy(False, self._t("match.status.invalid_date"))
             return None
 
     def _within_range(self, date_obj, start, end) -> bool:
