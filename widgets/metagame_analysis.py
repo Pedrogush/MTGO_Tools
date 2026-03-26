@@ -100,16 +100,10 @@ class MetagameAnalysisFrame(wx.Frame):
         self.days_prev_button.SetToolTip(time_window_tooltip)
         toolbar.Add(self.days_prev_button, 0, wx.RIGHT, 3)
 
-        self.days_value_ctrl = wx.TextCtrl(
-            panel,
-            value=str(self.current_days),
-            size=(34, 24),
-            style=wx.TE_READONLY | wx.TE_CENTRE,
+        self.days_value_box, self.days_value_label = self._create_value_badge(
+            panel, str(self.current_days), tooltip=time_window_tooltip
         )
-        self.days_value_ctrl.SetBackgroundColour(DARK_ALT)
-        self.days_value_ctrl.SetForegroundColour(SUBDUED_TEXT)
-        self.days_value_ctrl.SetToolTip(time_window_tooltip)
-        toolbar.Add(self.days_value_ctrl, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 3)
+        toolbar.Add(self.days_value_box, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 3)
 
         self.days_next_button = wx.Button(panel, label="→", size=(28, 26))
         self._stylize_button(self.days_next_button)
@@ -126,15 +120,10 @@ class MetagameAnalysisFrame(wx.Frame):
         self.offset_prev_button.Bind(wx.EVT_BUTTON, self.on_offset_decrease)
         toolbar.Add(self.offset_prev_button, 0, wx.RIGHT, 3)
 
-        self.offset_value_ctrl = wx.TextCtrl(
-            panel,
-            value=str(self.base_day_offset),
-            size=(34, 24),
-            style=wx.TE_READONLY | wx.TE_CENTRE,
+        self.offset_value_box, self.offset_value_label = self._create_value_badge(
+            panel, str(self.base_day_offset)
         )
-        self.offset_value_ctrl.SetBackgroundColour(DARK_ALT)
-        self.offset_value_ctrl.SetForegroundColour(SUBDUED_TEXT)
-        toolbar.Add(self.offset_value_ctrl, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 3)
+        toolbar.Add(self.offset_value_box, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 3)
 
         self.offset_next_button = wx.Button(panel, label="→", size=(28, 26))
         self._stylize_button(self.offset_next_button)
@@ -190,6 +179,25 @@ class MetagameAnalysisFrame(wx.Frame):
         font = button.GetFont()
         font.MakeBold()
         button.SetFont(font)
+
+    def _create_value_badge(
+        self, parent: wx.Window, value: str, *, tooltip: str | None = None
+    ) -> tuple[wx.Panel, wx.StaticText]:
+        badge = wx.Panel(parent, size=(34, 24))
+        badge.SetBackgroundColour(DARK_ALT)
+        sizer = wx.BoxSizer(wx.VERTICAL)
+        badge.SetSizer(sizer)
+
+        sizer.AddStretchSpacer(1)
+        label = wx.StaticText(badge, label=value, style=wx.ALIGN_CENTER_HORIZONTAL)
+        label.SetForegroundColour(SUBDUED_TEXT)
+        sizer.Add(label, 0, wx.ALIGN_CENTER_HORIZONTAL)
+        sizer.AddStretchSpacer(1)
+
+        if tooltip:
+            badge.SetToolTip(tooltip)
+            label.SetToolTip(tooltip)
+        return badge, label
 
     def on_format_change(self, event: wx.CommandEvent) -> None:
         self.current_format = self.format_choice.GetStringSelection().lower()
@@ -396,21 +404,15 @@ class MetagameAnalysisFrame(wx.Frame):
             "#D5DBDB",
         ]
 
-        short_labels = [
-            arch if len(arch) <= 16 else f"{arch[:13]}..." for arch, _ in top_archetypes
-        ]
-        if other_pct > 0:
-            short_labels.append("Other")
-
         self.ax.pie(
             sizes,
-            labels=short_labels,
+            labels=labels,
             colors=colors[: len(sizes)],
             startangle=90,
             autopct="%1.1f%%",
             pctdistance=0.72,
-            labeldistance=1.03,
-            textprops={"color": "#ecececec", "fontsize": 8},
+            labeldistance=1.02,
+            textprops={"color": "#ecececec", "fontsize": 7},
         )
 
         self.ax.axis("equal")
@@ -507,17 +509,17 @@ class MetagameAnalysisFrame(wx.Frame):
         subdued_text = self._rgb_to_hex(SUBDUED_TEXT)
 
         return f"""
-<table cellspacing='0' cellpadding='0'>
+<table cellspacing='0' cellpadding='0' width='100%'>
   <tr>
-    <td>
-      <table cellspacing='1' cellpadding='0' bgcolor='{dark_accent}'>
+    <td align='center'>
+      <table cellspacing='1' cellpadding='0' bgcolor='{dark_accent}' width='96%'>
         <tr>
           <td bgcolor='{dark_panel}'>
-            <table cellspacing='0' cellpadding='4'>
+            <table cellspacing='0' cellpadding='4' width='100%'>
               <tr>
                 <td><font color='{arrow_color}'><b>{arrow}</b></font></td>
                 <td><font color='{light_text}'><b>{escape(archetype)}</b></font></td>
-                <td><font color='{arrow_color}'><b>{change:+.1f}%</b></font></td>
+                <td align='right'><font color='{arrow_color}'><b>{change:+.1f}%</b></font></td>
               </tr>
               <tr>
                 <td colspan='3'>
@@ -559,8 +561,10 @@ class MetagameAnalysisFrame(wx.Frame):
         self.changes_html.SetPage(html_content)
 
     def _sync_navigation_controls(self) -> None:
-        self.days_value_ctrl.ChangeValue(str(self.current_days))
-        self.offset_value_ctrl.ChangeValue(str(self.base_day_offset))
+        self.days_value_label.SetLabel(str(self.current_days))
+        self.offset_value_label.SetLabel(str(self.base_day_offset))
+        self.days_value_box.Layout()
+        self.offset_value_box.Layout()
         self.days_prev_button.Enable(self.current_days > self.min_days)
         self.days_next_button.Enable(self.current_days < self.max_days)
         self.offset_prev_button.Enable(self.base_day_offset > 0)
