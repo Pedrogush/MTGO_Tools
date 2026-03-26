@@ -10,7 +10,7 @@ TimerAlertFrame = timer_alert.TimerAlertFrame
 
 
 def _make_frame() -> TimerAlertFrame:
-    frame = object.__new__(TimerAlertFrame)
+    frame = TimerAlertFrame.__new__(TimerAlertFrame)
     frame.WATCH_INTERVAL_MS = 750
     frame.WATCH_RETRY_DELAY_MS = 5000
     frame._watcher = None
