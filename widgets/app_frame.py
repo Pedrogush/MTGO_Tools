@@ -50,6 +50,7 @@ from widgets.panels.deck_stats_panel import DeckStatsPanel
 from widgets.panels.radar_panel import RadarDialog
 from widgets.panels.sideboard_guide_panel import SideboardGuidePanel
 from widgets.timer_alert import TimerAlertFrame
+from widgets.top_cards import TopCardsFrame
 
 
 class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, wx.Frame):
@@ -93,6 +94,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
         self.timer_window: TimerAlertFrame | None = None
         self.history_window: MatchHistoryFrame | None = None
         self.metagame_window: MetagameAnalysisFrame | None = None
+        self.top_cards_window: TopCardsFrame | None = None
         self.mana_keyboard_window: ManaKeyboardFrame | None = None
         self._inspector_hover_timer: wx.Timer | None = None
         self._pending_hover: tuple[str, dict[str, Any]] | None = None
@@ -250,18 +252,21 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
             on_open_timer_alert=self.open_timer_alert,
             on_open_match_history=self.open_match_history,
             on_open_metagame_analysis=self.open_metagame_analysis,
+            on_open_top_cards=self.open_top_cards,
             on_open_settings_menu=self._open_toolbar_settings_menu,
             labels={
                 "opponent_tracker": self._t("toolbar.opponent_tracker"),
                 "timer_alert": self._t("toolbar.timer_alert"),
                 "match_history": self._t("toolbar.match_history"),
                 "metagame_analysis": self._t("toolbar.metagame_analysis"),
+                "top_cards": self._t("toolbar.top_cards"),
                 "settings": "\u2699",
                 "settings_tooltip": self._t("toolbar.settings"),
                 "opponent_tracker_tooltip": self._t("toolbar.tooltip.opponent_tracker"),
                 "timer_alert_tooltip": self._t("toolbar.tooltip.timer_alert"),
                 "match_history_tooltip": self._t("toolbar.tooltip.match_history"),
                 "metagame_analysis_tooltip": self._t("toolbar.tooltip.metagame_analysis"),
+                "top_cards_tooltip": self._t("toolbar.tooltip.top_cards"),
             },
         )
 

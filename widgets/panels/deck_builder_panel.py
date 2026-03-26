@@ -254,6 +254,7 @@ class DeckBuilderPanel(wx.Panel):
         self.active_radar: RadarData | None = None
         self.radar_enabled: bool = False
         self.radar_zone: str = "both"  # "mainboard", "sideboard", or "both"
+        self.format_pool_cb: wx.CheckBox | None = None
 
         # Build the UI
         self._build_ui()
@@ -501,6 +502,16 @@ class DeckBuilderPanel(wx.Panel):
         clear_btn.Bind(wx.EVT_BUTTON, lambda _evt: self._on_clear())
         controls.Add(clear_btn, 0, wx.RIGHT, PADDING_MD)
 
+        self.format_pool_cb = wx.CheckBox(self, label=self._t("builder.format_pool.use_filter"))
+        self.format_pool_cb.SetForegroundColour(LIGHT_TEXT)
+        self.format_pool_cb.SetBackgroundColour(DARK_PANEL)
+        self.format_pool_cb.SetToolTip(
+            "Show only cards that appear in the selected format's local card pool"
+        )
+        self.format_pool_cb.Enable(False)
+        self.format_pool_cb.Bind(wx.EVT_CHECKBOX, self._on_filters_changed)
+        controls.Add(self.format_pool_cb, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, PADDING_MD)
+
         # Radar toggle checkbox
         self.radar_cb = wx.CheckBox(self, label=self._t("builder.radar.use_filter"))
         self.radar_cb.SetForegroundColour(LIGHT_TEXT)
@@ -689,6 +700,12 @@ class DeckBuilderPanel(wx.Panel):
             if self.format_choice and self.format_choice.GetSelection() > 0
             else []
         )
+        filters["format_pool_enabled"] = bool(
+            self.format_pool_cb
+            and self.format_pool_cb.IsChecked()
+            and self.format_choice
+            and self.format_choice.GetSelection() > 0
+        )
         filters["color_mode"] = (
             self.color_mode_choice.GetStringSelection() if self.color_mode_choice else "Any"
         )
@@ -730,6 +747,9 @@ class DeckBuilderPanel(wx.Panel):
             self.mv_value.ChangeValue("")
         if self.format_choice:
             self.format_choice.SetSelection(0)
+        if self.format_pool_cb:
+            self.format_pool_cb.SetValue(False)
+            self.format_pool_cb.Enable(False)
         if self.color_mode_choice:
             self.color_mode_choice.SetSelection(0)
         for cb in self.color_checks.values():
@@ -780,6 +800,7 @@ class DeckBuilderPanel(wx.Panel):
 
     def _on_filters_changed(self, event: wx.Event | None = None) -> None:
         """Handle any filter change by scheduling a search."""
+        self._sync_format_pool_state()
         self._schedule_search()
         if event:
             event.Skip()
@@ -803,6 +824,15 @@ class DeckBuilderPanel(wx.Panel):
     def _on_search_timer(self, _event: wx.TimerEvent) -> None:
         """Run the search after the debounce timer fires."""
         self._on_search()
+
+    def _sync_format_pool_state(self) -> None:
+        """Enable the format-pool toggle only when a specific format is selected."""
+        if self.format_choice is None or self.format_pool_cb is None:
+            return
+        has_selected_format = self.format_choice.GetSelection() > 0
+        self.format_pool_cb.Enable(has_selected_format)
+        if not has_selected_format and self.format_pool_cb.IsChecked():
+            self.format_pool_cb.SetValue(False)
 
     # ============= Radar Integration =============
 

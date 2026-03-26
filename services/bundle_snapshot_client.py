@@ -9,11 +9,15 @@ radar analysis, and metagame analysis all start with warm caches.
 Bundle layout inside the archive (paths relative to the tar root):
     latest/latest.json                     — manifest: generated_at, lists all entries
     latest/archetypes/{format}.json        — archetype list for one format
+    latest/card-pools/{format}.json        — format card pool + copy totals
     latest/decks/{format}/{slug}.json      — deck list for one archetype slug
+    latest/radars/{format}/{slug}.json     — precomputed radar for one archetype
 
 The client writes into:
     ARCHETYPE_LIST_CACHE_FILE   — ``{format: {timestamp, items: [...]}}``
     ARCHETYPE_DECKS_CACHE_FILE  — ``{archetype_href: {timestamp, items: [...]}}``
+    FORMAT_CARD_POOL_DB_FILE    — SQLite store for per-format card pools
+    RADAR_CACHE_DB_FILE         — SQLite store for precomputed archetype radars
 
 Staleness is tracked via a stamp file (``REMOTE_SNAPSHOT_BUNDLE_STAMP_FILE``).
 If the stamp is fresher than ``REMOTE_SNAPSHOT_BUNDLE_MAX_AGE_SECONDS``, the
@@ -31,10 +35,14 @@ from typing import Any
 
 from loguru import logger
 
+from repositories.format_card_pool_repository import FormatCardPoolRepository
+from repositories.radar_repository import RadarRepository
 from utils.atomic_io import atomic_write_json, locked_path
 from utils.constants import (
     ARCHETYPE_DECKS_CACHE_FILE,
     ARCHETYPE_LIST_CACHE_FILE,
+    FORMAT_CARD_POOL_DB_FILE,
+    RADAR_CACHE_DB_FILE,
     REMOTE_SNAPSHOT_BASE_URL,
     REMOTE_SNAPSHOT_BUNDLE_MAX_AGE_SECONDS,
     REMOTE_SNAPSHOT_BUNDLE_PATH,
@@ -77,6 +85,8 @@ class BundleSnapshotClient:
         bundle_path: str = REMOTE_SNAPSHOT_BUNDLE_PATH,
         archetype_list_cache_file: Path = ARCHETYPE_LIST_CACHE_FILE,
         archetype_decks_cache_file: Path = ARCHETYPE_DECKS_CACHE_FILE,
+        format_card_pool_db_file: Path = FORMAT_CARD_POOL_DB_FILE,
+        radar_db_file: Path = RADAR_CACHE_DB_FILE,
         stamp_file: Path = REMOTE_SNAPSHOT_BUNDLE_STAMP_FILE,
         max_age: int = REMOTE_SNAPSHOT_BUNDLE_MAX_AGE_SECONDS,
         request_timeout: int = REMOTE_SNAPSHOT_REQUEST_TIMEOUT_SECONDS,
@@ -85,6 +95,8 @@ class BundleSnapshotClient:
         self.bundle_path = bundle_path
         self.archetype_list_cache_file = Path(archetype_list_cache_file)
         self.archetype_decks_cache_file = Path(archetype_decks_cache_file)
+        self.format_card_pool_db_file = Path(format_card_pool_db_file)
+        self.radar_db_file = Path(radar_db_file)
         self.stamp_file = Path(stamp_file)
         self.max_age = max_age
         self.request_timeout = request_timeout
@@ -108,19 +120,30 @@ class BundleSnapshotClient:
 
         logger.info("Downloading remote client bundle…")
         bundle_bytes = self._download_bundle()
-        manifest, archetype_entries, deck_entries, deck_texts = self._parse_bundle(bundle_bytes)
+        (
+            manifest,
+            archetype_entries,
+            deck_entries,
+            deck_texts,
+            card_pool_entries,
+            radar_entries,
+        ) = self._parse_bundle(bundle_bytes)
 
         generated_at = manifest.get("generated_at", "")
         now = time.time()
 
         self._hydrate_archetype_lists(archetype_entries, now)
         self._hydrate_archetype_decks(deck_entries, now)
+        card_pools = self._hydrate_format_card_pools(card_pool_entries)
+        radars = self._hydrate_radars(radar_entries)
         inserted = self._hydrate_deck_texts(deck_texts)
         self._write_stamp(generated_at, now)
 
         logger.info(
             f"Bundle applied: {len(archetype_entries)} archetype lists, "
             f"{len(deck_entries)} deck lists, "
+            f"{card_pools}/{len(card_pool_entries)} card pools, "
+            f"{radars}/{len(radar_entries)} radars, "
             f"{inserted}/{len(deck_texts)} deck texts inserted (generated_at={generated_at})"
         )
         return True
@@ -170,8 +193,10 @@ class BundleSnapshotClient:
         list[dict[str, Any]],
         list[dict[str, Any]],
         list[tuple[str, str, str]],
+        list[dict[str, Any]],
+        list[dict[str, Any]],
     ]:
-        """Extract the bundle and return (manifest, archetype_entries, deck_entries, deck_texts).
+        """Extract the bundle and return bundle entries grouped by artifact type.
 
         Each archetype entry is the full parsed JSON from
         ``latest/archetypes/{format}.json``.  Each deck entry is the full parsed
@@ -183,6 +208,8 @@ class BundleSnapshotClient:
         archetype_entries: list[dict[str, Any]] = []
         deck_entries: list[dict[str, Any]] = []
         deck_texts: list[tuple[str, str, str]] = []
+        card_pool_entries: list[dict[str, Any]] = []
+        radar_entries: list[dict[str, Any]] = []
 
         with tarfile.open(fileobj=io.BytesIO(bundle_bytes), mode="r:gz") as tf:
             for member in tf.getmembers():
@@ -204,16 +231,27 @@ class BundleSnapshotClient:
                     manifest = data
                 elif "/archetypes/" in name and name.endswith(".json"):
                     archetype_entries.append(data)
+                elif "/card-pools/" in name and name.endswith(".json"):
+                    card_pool_entries.append(data)
                 elif name.startswith("archive/deck-texts/") and name.endswith(".json"):
                     deck_id = data.get("deck_id", "")
                     text = data.get("deck_text", "")
                     source = data.get("source", "mtggoldfish")
                     if deck_id and text:
                         deck_texts.append((deck_id, text, source))
+                elif "/radars/" in name and name.endswith(".json"):
+                    radar_entries.append(data)
                 elif "/decks/" in name and name.endswith(".json"):
                     deck_entries.append(data)
 
-        return manifest, archetype_entries, deck_entries, deck_texts
+        return (
+            manifest,
+            archetype_entries,
+            deck_entries,
+            deck_texts,
+            card_pool_entries,
+            radar_entries,
+        )
 
     # ------------------------------------------------------------------ #
     # Cache hydration                                                       #
@@ -293,6 +331,32 @@ class BundleSnapshotClient:
             return inserted
         except Exception as exc:
             logger.warning(f"Failed to hydrate deck texts: {exc}")
+            return 0
+
+    def _hydrate_format_card_pools(self, card_pool_entries: list[dict[str, Any]]) -> int:
+        """Insert or replace precomputed format card pools into SQLite."""
+        if not card_pool_entries:
+            return 0
+        try:
+            repo = FormatCardPoolRepository(self.format_card_pool_db_file)
+            replaced = repo.bulk_replace(card_pool_entries)
+            logger.debug(f"Hydrated {replaced}/{len(card_pool_entries)} format card pool snapshots")
+            return replaced
+        except Exception as exc:
+            logger.warning(f"Failed to hydrate format card pools: {exc}")
+            return 0
+
+    def _hydrate_radars(self, radar_entries: list[dict[str, Any]]) -> int:
+        """Insert or replace precomputed archetype radars into SQLite."""
+        if not radar_entries:
+            return 0
+        try:
+            repo = RadarRepository(self.radar_db_file)
+            replaced = repo.bulk_replace(radar_entries)
+            logger.debug(f"Hydrated {replaced}/{len(radar_entries)} precomputed radars")
+            return replaced
+        except Exception as exc:
+            logger.warning(f"Failed to hydrate radars: {exc}")
             return 0
 
     # ------------------------------------------------------------------ #

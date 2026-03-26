@@ -13,6 +13,7 @@ def create_mock_card(
     mana_cost="{2}{G}",
     mana_value=3,
     oracle_text="Draw a card.",
+    legalities=None,
 ):
     """Helper to create mock card data."""
     return {
@@ -25,7 +26,7 @@ def create_mock_card(
         "mana_value": mana_value,
         "cmc": mana_value,
         "oracle_text": oracle_text,
-        "legalities": {},
+        "legalities": legalities or {},
     }
 
 
@@ -232,6 +233,46 @@ def test_filter_cards_multiple_criteria():
     )
 
     assert len(filtered) == 2
+
+
+def test_search_with_builder_filters_uses_format_pool():
+    """Test that the format-pool toggle narrows results to the local pool."""
+
+    class FakeCardManager:
+        def search_cards(self, query="", format_filter=None):
+            return [
+                create_mock_card(name="Counterspell", legalities={"modern": "Legal"}),
+                create_mock_card(name="Goblin Guide", legalities={"modern": "Legal"}),
+            ]
+
+    format_pool_service = SimpleNamespace(
+        get_card_pool_names=Mock(return_value={"Counterspell"}),
+    )
+    service = SearchService(
+        card_repository=SimpleNamespace(),
+        format_card_pool_service=format_pool_service,
+    )
+
+    results = service.search_with_builder_filters(
+        {
+            "name": "",
+            "type": "",
+            "text": "",
+            "mana": "",
+            "mana_exact": False,
+            "mv_value": "",
+            "mv_comparator": "-",
+            "formats": ["modern"],
+            "format_pool_enabled": True,
+            "color_mode": "-",
+            "selected_colors": [],
+            "radar_enabled": False,
+            "radar_cards": set(),
+        },
+        FakeCardManager(),
+    )
+
+    assert [card["name"] for card in results] == ["Counterspell"]
 
 
 # ============= Suggestion Tests =============

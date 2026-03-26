@@ -14,16 +14,21 @@ from typing import Any
 from loguru import logger
 
 from repositories.card_repository import CardRepository, get_card_repository
+from services.format_card_pool_service import FormatCardPoolService, get_format_card_pool_service
 from utils.card_data import CardDataManager
 from utils.constants import DEFAULT_SEARCH_LIMIT, DEFAULT_SUGGESTION_LIMIT, MIN_PARTIAL_NAME_LENGTH
-from utils.mana_icon_factory import normalize_mana_query
+from utils.mana_query import normalize_mana_query
 from utils.search_filters import matches_color_filter, matches_mana_cost, matches_mana_value
 
 
 class SearchService:
     """Service for card search and filtering logic."""
 
-    def __init__(self, card_repository: CardRepository | None = None):
+    def __init__(
+        self,
+        card_repository: CardRepository | None = None,
+        format_card_pool_service: FormatCardPoolService | None = None,
+    ):
         """
         Initialize the search service.
 
@@ -31,6 +36,7 @@ class SearchService:
             card_repository: CardRepository instance
         """
         self.card_repo = card_repository or get_card_repository()
+        self.format_card_pool_service = format_card_pool_service or get_format_card_pool_service()
 
     # ============= Basic Search =============
 
@@ -173,6 +179,7 @@ class SearchService:
             - selected_colors: list[str] - Colors to filter by
             - radar_enabled: bool - Whether radar filtering is enabled
             - radar_cards: set[str] - Set of card names to filter by (from radar)
+            - format_pool_enabled: bool - Whether the selected format's local pool should filter
         """
         # Parse and normalize filters
         mana_query = normalize_mana_query(filters.get("mana", ""))
@@ -192,6 +199,11 @@ class SearchService:
         selected_formats = filters.get("formats", [])
         color_mode = filters.get("color_mode", "Any")
         selected_colors = filters.get("selected_colors", [])
+        format_pool_cards: set[str] = set()
+        if filters.get("format_pool_enabled") and selected_formats:
+            format_pool_cards = self.format_card_pool_service.get_card_pool_names(
+                selected_formats[0]
+            )
 
         # Perform initial search — only use name for pre-filtering;
         # oracle text filtering is handled per-card below.
@@ -230,6 +242,12 @@ class SearchService:
             if selected_formats:
                 legalities = card.get("legalities", {}) or {}
                 if not all(legalities.get(fmt) == "Legal" for fmt in selected_formats):
+                    continue
+
+            # Format card-pool filter
+            if filters.get("format_pool_enabled") and format_pool_cards:
+                card_name = card.get("name", "")
+                if card_name not in format_pool_cards:
                     continue
 
             # Mana value filter

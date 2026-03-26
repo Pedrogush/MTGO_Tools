@@ -1,7 +1,7 @@
 from collections import Counter
 from typing import Any
 
-from utils.mana_icon_factory import tokenize_mana_symbols
+from utils.mana_query import tokenize_mana_symbols
 
 
 def matches_mana_cost(card_cost: str, query: str, mode: str) -> bool:
