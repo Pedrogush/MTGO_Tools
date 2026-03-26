@@ -237,13 +237,27 @@ class AutomationServer:
         """Get window information."""
         pos = self.frame.GetPosition()
         size = self.frame.GetSize()
-        return {
+        info: dict[str, Any] = {
             "title": self.frame.GetTitle(),
             "position": {"x": pos.x, "y": pos.y},
             "size": {"width": size.width, "height": size.height},
             "visible": self.frame.IsShown(),
             "active": self.frame.IsActive(),
         }
+        tracker = getattr(self.frame, "tracker_window", None)
+        if tracker is not None:
+            try:
+                if tracker.IsShown():
+                    t_pos = tracker.GetPosition()
+                    t_size = tracker.GetSize()
+                    info["tracker_window"] = {
+                        "position": {"x": t_pos.x, "y": t_pos.y},
+                        "size": {"width": t_size.width, "height": t_size.height},
+                        "visible": True,
+                    }
+            except Exception:
+                pass
+        return info
 
     def _handle_list_widgets(self) -> dict[str, Any]:
         """List available widgets and their states."""
