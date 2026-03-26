@@ -553,7 +553,9 @@ class SideboardGuideHandlers:
         try:
             atomic_write_json(ACTIVE_GUIDE_FILE, payload, indent=2)
             self.sideboard_guide_panel.set_pinned(True)
-            self._set_status("guide.status.pinned", name=deck_name or deck_hash[:DECK_HASH_DISPLAY_LENGTH])
+            self._set_status(
+                "guide.status.pinned", name=deck_name or deck_hash[:DECK_HASH_DISPLAY_LENGTH]
+            )
             logger.info(f"Pinned guide: hash={deck_hash}, name={deck_name!r}")
         except OSError as exc:
             logger.error(f"Failed to save active guide: {exc}")

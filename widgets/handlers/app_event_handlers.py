@@ -331,7 +331,9 @@ class AppEventHandlers:
         self.deck_list.Enable()
         self.daily_average_button.Enable()
         self._present_archetype_summary(archetype_name, decks)
-        self._set_status("deck_results.status.loaded_decks", count=len(decks), archetype=archetype_name)
+        self._set_status(
+            "deck_results.status.loaded_decks", count=len(decks), archetype=archetype_name
+        )
 
     def _on_decks_error(self: AppFrame, error: Exception) -> None:
         with self._loading_lock:

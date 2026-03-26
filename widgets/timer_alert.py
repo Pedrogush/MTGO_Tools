@@ -443,7 +443,9 @@ class TimerAlertFrame(wx.Frame):
             return
 
         current_seconds = max(0, int(remaining))
-        self._set_status("timer.status.challenge_timer", value=self._format_seconds(current_seconds))
+        self._set_status(
+            "timer.status.challenge_timer", value=self._format_seconds(current_seconds)
+        )
 
         # Start alert (countdown began)
         if self.start_alert_checkbox.GetValue() and not self.start_alert_sent:
