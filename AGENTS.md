@@ -10,22 +10,20 @@
 
 ## Build, Test, and Development Commands
 - `python3 main.py` – run the desktop app (Windows primary target).
-- `python3 -m pytest` or `python3 -m pytest tests/<file>.py` – run unit tests; UI tests require a display/Windows.
-- `./lint_test_commit.sh` – black + ruff + pytest on host (uses `run_pytest_on_host.sh` to execute on configured Windows box).
+- `python3 -m pytest` or `python3 -m pytest tests/<file>.py` – run unit tests; 
 - `python3 -m ruff check .` and `python3 -m black --check .` – lint/format checks individually.
-- CI: GitHub Actions workflows `ci.yml` (PR/main) and `pre-commit.yml` (non-main pushes).
+- CI: GitHub Actions workflows `ci.yml` (PR/main).
 
 ## Coding Style & Naming Conventions
-- Python 3.11+, black (line length 100) and ruff enforced in CI; prefer type hints where practical.
+- Python 3.10+, black (line length 100) and ruff enforced in CI; prefer type hints where practical.
 - Use snake_case for functions/vars, PascalCase for classes, UPPER_SNAKE_CASE for constants.
 - Keep UI logic thin; push business rules into services/controllers per `ARCHITECTURE.md`.
 - Avoid import-time side effects; call `utils.constants.ensure_base_dirs()` from bootstrap if paths are needed.
 
 ## Testing Guidelines
-- Framework: pytest. Add fixtures under `tests/fixtures/`; mock network/bridge I/O.
+- Framework: pytest. Add fixtures under `tests/fixtures/`;
 - Name tests `test_*.py`; include regression cases for scrapers and card data refresh (see `tests/test_card_data_refresh.py`).
 - For UI tests, use helpers in `tests/ui/conftest.py` (`pump_ui_events`, `deck_selector_factory`).
-- Keep tests offline-safe; record or stub network responses.
 
 ## Commit & Pull Request Guidelines
 - Commit messages are concise, present-tense summaries (e.g., “Simplify CI triggers and harden card data refresh”).
@@ -36,9 +34,8 @@
 ## Agent Workflow
 - Start new tasks by checking out `main`, pulling from remote, then creating a new branch for the work.
 - Each turn in a conversation should either commit work to the remote branch or ask clarifying follow-up questions to improve instructions.
-- Always run `python3 -m ruff check .` and `python3 -m black --check .` before opening pull requests.
 - Completing a task should culminate in raising a pull request targeting `main`.
-- Agents operate with Full Approval settings and run from a Linux VM inside a host machine.
+- Agents operate with Full Approval settings.
 
 ## Security & Configuration Tips
 - Secrets live outside the repo; do not commit host-specific configs (`pytest_host.conf.example` documents required vars).
