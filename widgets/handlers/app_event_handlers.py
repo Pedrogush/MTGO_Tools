@@ -566,13 +566,25 @@ class AppEventHandlers:
 
     # ------------------------------------------------------------------ Helpers --------------------------------------------------------------
     def open_opponent_tracker(self) -> None:
-        open_child_window(
+        existing = getattr(self, "tracker_window", None)
+        if widget_exists(existing):
+            existing.Raise()
+            return
+
+        def on_tracker_close(evt: wx.CloseEvent, attr: str) -> None:
+            self._handle_child_close(evt, attr)
+            self.Show()
+            self.Raise()
+
+        window = open_child_window(
             self,
             "tracker_window",
             MTGOpponentDeckSpy,
             "Opponent Tracker",
-            self._handle_child_close,
+            on_tracker_close,
         )
+        if window is not None:
+            self.Hide()
 
     def open_timer_alert(self) -> None:
         open_child_window(

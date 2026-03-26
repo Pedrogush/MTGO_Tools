@@ -12,12 +12,18 @@ from automation.client import AutomationClient
 
 
 def test_widgets_open_opponent_tracker(client: AutomationClient) -> None:
-    """The Opponent Tracker widget should open without crashing."""
+    """Opening Opponent Tracker hides the main window and shows the tracker at a usable size."""
     result = client.open_widget("opponent_tracker")
-    # May succeed or fail depending on MTGO not running; just verify no server crash
-    assert (
-        "opened" in result or "error" in result
-    ), f"open_widget response missing 'opened'/'error' keys: {result}"
+    assert result.get("opened"), f"Expected tracker to open: {result}"
+
+    info = client.get_window_info()
+    assert not info.get("visible", True), "Main window should be hidden while tracker is active"
+
+    tracker = info.get("tracker_window")
+    assert tracker is not None, "Tracker window info missing from get_window_info response"
+    w = tracker["size"]["width"]
+    h = tracker["size"]["height"]
+    assert w >= 360 and h >= 180, f"Tracker window too small: {w}x{h}"
 
 
 def test_widgets_open_match_history(client: AutomationClient) -> None:
