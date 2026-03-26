@@ -2,41 +2,9 @@
 
 from __future__ import annotations
 
-import importlib.util
-import sys
-from pathlib import Path
 from unittest.mock import MagicMock
 
-
-def _build_wx_stub() -> MagicMock:
-    stub = MagicMock()
-    stub.Frame = type("_WxFrame", (object,), {})
-    stub.Panel = type("_WxPanel", (object,), {})
-    stub.Window = type("_WxWindow", (object,), {})
-    stub.CommandEvent = type("_WxCommandEvent", (object,), {})
-    stub.TimerEvent = type("_WxTimerEvent", (object,), {})
-    stub.CloseEvent = type("_WxCloseEvent", (object,), {})
-    return stub
-
-
-def _load_timer_alert_module():
-    source = Path(__file__).resolve().parent.parent / "widgets" / "timer_alert.py"
-    spec = importlib.util.spec_from_file_location("_timer_alert_under_test", source)
-    module = importlib.util.module_from_spec(spec)
-    assert spec.loader is not None
-    spec.loader.exec_module(module)
-    return module
-
-
-_original_wx = sys.modules.get("wx")
-sys.modules["wx"] = _build_wx_stub()
-try:
-    timer_alert = _load_timer_alert_module()
-finally:
-    if _original_wx is None:
-        sys.modules.pop("wx", None)
-    else:
-        sys.modules["wx"] = _original_wx
+import widgets.timer_alert as timer_alert
 
 TimerAlertFrame = timer_alert.TimerAlertFrame
 

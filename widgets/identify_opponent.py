@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any
 
 import bs4
+import wx
 from curl_cffi import requests
 from loguru import logger
 
@@ -82,11 +83,8 @@ from utils.constants import (
 from utils.find_opponent_names import find_opponent_names
 from utils.i18n import translate
 from utils.math_utils import hypergeometric_at_least, hypergeometric_probability
-from utils.wx_compat import get_wx
 from widgets.panels.compact_radar_panel import CompactRadarPanel
 from widgets.panels.compact_sideboard_panel import CompactSideboardPanel
-
-wx = get_wx()
 
 LEGACY_DECK_MONITOR_CONFIG = Path("deck_monitor_config.json")
 LEGACY_DECK_MONITOR_CACHE = Path("deck_monitor_cache.json")

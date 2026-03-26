@@ -1,9 +1,4 @@
-"""Tests for wx-independent methods of CardBoxPanel.
-
-These tests cover pure-Python logic that does not require a wx display or
-event loop. wx is stubbed out via sys.modules so the tests run in headless
-CI environments without wxPython installed.
-"""
+"""Tests for wx-independent methods of CardBoxPanel."""
 
 from __future__ import annotations
 
@@ -11,21 +6,8 @@ import importlib.util
 import sys
 import types
 from typing import Any
-from unittest.mock import MagicMock
 
 import pytest
-
-# ---------------------------------------------------------------------------
-# Stub wx BEFORE importing any wx-dependent module.
-# card_box_panel.py is loaded directly (bypassing widgets/panels/__init__.py)
-# to avoid pulling in unrelated panel modules that have additional
-# transitive dependencies (bs4, services, etc.).
-# ---------------------------------------------------------------------------
-if "wx" not in sys.modules:
-    _wx_stub = MagicMock()
-    # wx.Panel must be a real Python class so CardBoxPanel can inherit from it.
-    _wx_stub.Panel = type("_WxPanel", (object,), {})
-    sys.modules["wx"] = _wx_stub
 
 
 def _load_card_box_panel_module():
