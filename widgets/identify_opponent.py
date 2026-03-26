@@ -81,6 +81,7 @@ from utils.constants import (
     SUBDUED_TEXT,
 )
 from utils.find_opponent_names import find_opponent_names
+from utils.i18n import translate
 from utils.math_utils import hypergeometric_at_least, hypergeometric_probability
 from widgets.panels.compact_radar_panel import CompactRadarPanel
 from widgets.panels.compact_sideboard_panel import CompactSideboardPanel
@@ -157,14 +158,19 @@ class MTGOpponentDeckSpy(wx.Frame):
         parent: wx.Window | None = None,
         radar_service: RadarService | None = None,
         metagame_repository: MetagameRepository | None = None,
+        locale: str | None = None,
     ) -> None:
         style = (
             wx.CAPTION | wx.CLOSE_BOX | wx.STAY_ON_TOP | wx.FRAME_FLOAT_ON_PARENT | wx.MINIMIZE_BOX
         )
         super().__init__(
-            parent, title="MTGO Opponent Tracker", size=OPPONENT_TRACKER_FRAME_SIZE, style=style
+            parent,
+            title=translate(locale, "window.title.opponent_tracker"),
+            size=OPPONENT_TRACKER_FRAME_SIZE,
+            style=style,
         )
 
+        self._locale = locale
         self._poll_timer = wx.Timer(self)
 
         self.cache: dict[str, dict[str, Any]] = {}
@@ -203,6 +209,9 @@ class MTGOpponentDeckSpy(wx.Frame):
 
         wx.CallAfter(self._start_polling)
 
+    def _t(self, key: str, **kwargs: object) -> str:
+        return translate(self._locale, key, **kwargs)
+
     # ------------------------------------------------------------------ UI ------------------------------------------------------------------
     def _build_ui(self) -> None:
         self.SetBackgroundColour(DARK_BG)
@@ -212,12 +221,12 @@ class MTGOpponentDeckSpy(wx.Frame):
         sizer = wx.BoxSizer(wx.VERTICAL)
         panel.SetSizer(sizer)
 
-        self.deck_label = wx.StaticText(panel, label="Opponent not detected")
+        self.deck_label = wx.StaticText(panel, label=self._t("tracker.label.not_detected"))
         self._stylize_label(self.deck_label)
         self.deck_label.Wrap(OPPONENT_TRACKER_LABEL_WRAP_WIDTH)
         sizer.Add(self.deck_label, 0, wx.ALL | wx.EXPAND, OPPONENT_TRACKER_SECTION_PADDING)
 
-        self.status_label = wx.StaticText(panel, label="Watching for MTGO match windows…")
+        self.status_label = wx.StaticText(panel, label=self._t("tracker.label.watching"))
         self._stylize_label(self.status_label, subtle=True)
         self.status_label.Wrap(OPPONENT_TRACKER_LABEL_WRAP_WIDTH)
         sizer.Add(
@@ -237,12 +246,12 @@ class MTGOpponentDeckSpy(wx.Frame):
 
         controls.AddStretchSpacer(1)
 
-        refresh_button = wx.Button(panel, label="Refresh")
+        refresh_button = wx.Button(panel, label=self._t("tracker.btn.refresh"))
         self._stylize_secondary_button(refresh_button)
         refresh_button.Bind(wx.EVT_BUTTON, lambda _evt: self._manual_refresh(force=True))
         controls.Add(refresh_button, 0, wx.RIGHT, OPPONENT_TRACKER_SECTION_PADDING)
 
-        self.calc_toggle_btn = wx.Button(panel, label="Calculator")
+        self.calc_toggle_btn = wx.Button(panel, label=self._t("tracker.btn.calculator"))
         self._stylize_secondary_button(self.calc_toggle_btn)
         self.calc_toggle_btn.Bind(wx.EVT_BUTTON, self._toggle_calculator_panel)
         controls.Add(self.calc_toggle_btn, 0, wx.RIGHT, OPPONENT_TRACKER_SECTION_PADDING)
@@ -252,12 +261,12 @@ class MTGOpponentDeckSpy(wx.Frame):
         self.radar_toggle_btn.Bind(wx.EVT_BUTTON, self._toggle_radar_panel)
         controls.Add(self.radar_toggle_btn, 0, wx.RIGHT, OPPONENT_TRACKER_SECTION_PADDING)
 
-        self.guide_toggle_btn = wx.Button(panel, label="Guide")
+        self.guide_toggle_btn = wx.Button(panel, label=self._t("tracker.btn.guide"))
         self._stylize_secondary_button(self.guide_toggle_btn)
         self.guide_toggle_btn.Bind(wx.EVT_BUTTON, self._toggle_guide_panel)
         controls.Add(self.guide_toggle_btn, 0, wx.RIGHT, OPPONENT_TRACKER_SECTION_PADDING)
 
-        close_button = wx.Button(panel, label="Close")
+        close_button = wx.Button(panel, label=self._t("tracker.btn.close"))
         self._stylize_secondary_button(close_button)
         close_button.Bind(wx.EVT_BUTTON, lambda _evt: self.Close())
         controls.Add(close_button, 0)
@@ -453,7 +462,7 @@ class MTGOpponentDeckSpy(wx.Frame):
             self.calc_toggle_btn.SetLabel("Hide Calc")
         else:
             self.calc_panel.Hide()
-            self.calc_toggle_btn.SetLabel("Calculator")
+            self.calc_toggle_btn.SetLabel(self._t("tracker.btn.calculator"))
         self.Layout()
         self.Fit()
 
@@ -747,7 +756,7 @@ class MTGOpponentDeckSpy(wx.Frame):
 
     # ------------------------------------------------------------------ Opponent detection ---------------------------------------------------
     def _start_polling(self) -> None:
-        self.status_label.SetLabel("Watching for MTGO match windows…")
+        self.status_label.SetLabel(self._t("tracker.label.watching"))
         self._poll_timer.Start(self.POLL_INTERVAL_MS)
         self._submit_poll()
 
@@ -801,7 +810,9 @@ class MTGOpponentDeckSpy(wx.Frame):
 
         if kind in ("error", "no_match"):
             label = (
-                "Waiting for MTGO match window…" if kind == "error" else "No active match detected"
+                self._t("tracker.status.waiting")
+                if kind == "error"
+                else self._t("tracker.status.no_active_match")
             )
             self.status_label.SetLabel(label)
             self.player_name = ""
@@ -853,7 +864,7 @@ class MTGOpponentDeckSpy(wx.Frame):
 
     def _refresh_opponent_display(self) -> None:
         if not self.player_name:
-            text = "Opponent not detected"
+            text = self._t("tracker.label.not_detected")
         elif not self.last_seen_decks:
             text = f"{self.player_name}: no recent decks found"
         elif len(self.last_seen_decks) == 1:

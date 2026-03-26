@@ -18,6 +18,7 @@ from loguru import logger
 from services.radar_service import CardFrequency, RadarData, RadarService, get_radar_service
 from utils.atomic_io import atomic_write_text
 from utils.constants import DARK_ALT, DARK_PANEL, LIGHT_TEXT
+from utils.i18n import translate
 
 
 class RadarPanel(wx.Panel):
@@ -29,6 +30,7 @@ class RadarPanel(wx.Panel):
         radar_service: RadarService | None = None,
         on_export: Callable[[RadarData], None] | None = None,
         on_use_for_search: Callable[[RadarData], None] | None = None,
+        locale: str | None = None,
     ):
         """
         Initialize the radar panel.
@@ -38,9 +40,11 @@ class RadarPanel(wx.Panel):
             radar_service: Radar service for calculations
             on_export: Callback when export button clicked (radar_data)
             on_use_for_search: Callback when "Use for Search" clicked (radar_data)
+            locale: Locale code for i18n
         """
         super().__init__(parent)
         self.SetBackgroundColour(DARK_PANEL)
+        self._locale = locale
 
         self.radar_service = radar_service or get_radar_service()
         self.on_export = on_export
@@ -48,6 +52,9 @@ class RadarPanel(wx.Panel):
         self.current_radar: RadarData | None = None
 
         self._build_ui()
+
+    def _t(self, key: str, **kwargs: object) -> str:
+        return translate(self._locale, key, **kwargs)
 
     def _build_ui(self) -> None:
         """Build the panel UI."""
@@ -59,7 +66,7 @@ class RadarPanel(wx.Panel):
         sizer.Add(header_sizer, 0, wx.EXPAND | wx.ALL, 6)
 
         # Archetype name label
-        self.archetype_label = wx.StaticText(self, label="No radar loaded.")
+        self.archetype_label = wx.StaticText(self, label=self._t("radar.label.no_radar"))
         self.archetype_label.SetForegroundColour(LIGHT_TEXT)
         font = self.archetype_label.GetFont()
         font.PointSize += 2
@@ -68,13 +75,13 @@ class RadarPanel(wx.Panel):
         header_sizer.Add(self.archetype_label, 1, wx.ALIGN_CENTER_VERTICAL)
 
         # Export button
-        self.export_btn = wx.Button(self, label="Export as Decklist")
+        self.export_btn = wx.Button(self, label=self._t("radar.btn.export"))
         self.export_btn.Enable(False)
         self.export_btn.Bind(wx.EVT_BUTTON, self._on_export_clicked)
         header_sizer.Add(self.export_btn, 0, wx.LEFT, 6)
 
         # Use for search button
-        self.use_search_btn = wx.Button(self, label="Use for Search")
+        self.use_search_btn = wx.Button(self, label=self._t("radar.btn.use_search"))
         self.use_search_btn.Enable(False)
         self.use_search_btn.Bind(wx.EVT_BUTTON, self._on_use_search_clicked)
         header_sizer.Add(self.use_search_btn, 0, wx.LEFT, 6)
@@ -89,34 +96,34 @@ class RadarPanel(wx.Panel):
         sizer.Add(split_sizer, 1, wx.EXPAND | wx.ALL, 6)
 
         # Mainboard section
-        mainboard_box = wx.StaticBox(self, label="Mainboard Radar")
+        mainboard_box = wx.StaticBox(self, label=self._t("radar.box.mainboard"))
         mainboard_box.SetForegroundColour(LIGHT_TEXT)
         mainboard_box_sizer = wx.StaticBoxSizer(mainboard_box, wx.VERTICAL)
         split_sizer.Add(mainboard_box_sizer, 1, wx.EXPAND | wx.RIGHT, 6)
 
         self.mainboard_list = dv.DataViewListCtrl(self)
-        self.mainboard_list.AppendTextColumn("Card", width=200)
-        self.mainboard_list.AppendTextColumn("Inclusion %", width=90)
-        self.mainboard_list.AppendTextColumn("Expected Copies", width=120)
-        self.mainboard_list.AppendTextColumn("Avg Copies", width=90)
-        self.mainboard_list.AppendTextColumn("Max", width=60)
+        self.mainboard_list.AppendTextColumn(self._t("radar.col.card"), width=200)
+        self.mainboard_list.AppendTextColumn(self._t("radar.col.inclusion"), width=90)
+        self.mainboard_list.AppendTextColumn(self._t("radar.col.expected"), width=120)
+        self.mainboard_list.AppendTextColumn(self._t("radar.col.avg"), width=90)
+        self.mainboard_list.AppendTextColumn(self._t("radar.col.max"), width=60)
         self.mainboard_list.SetBackgroundColour(DARK_ALT)
         self.mainboard_list.SetForegroundColour(LIGHT_TEXT)
         self._bind_tooltip_handlers(self.mainboard_list)
         mainboard_box_sizer.Add(self.mainboard_list, 1, wx.EXPAND | wx.ALL, 6)
 
         # Sideboard section
-        sideboard_box = wx.StaticBox(self, label="Sideboard Radar")
+        sideboard_box = wx.StaticBox(self, label=self._t("radar.box.sideboard"))
         sideboard_box.SetForegroundColour(LIGHT_TEXT)
         sideboard_box_sizer = wx.StaticBoxSizer(sideboard_box, wx.VERTICAL)
         split_sizer.Add(sideboard_box_sizer, 1, wx.EXPAND)
 
         self.sideboard_list = dv.DataViewListCtrl(self)
-        self.sideboard_list.AppendTextColumn("Card", width=200)
-        self.sideboard_list.AppendTextColumn("Inclusion %", width=90)
-        self.sideboard_list.AppendTextColumn("Expected Copies", width=120)
-        self.sideboard_list.AppendTextColumn("Avg Copies", width=90)
-        self.sideboard_list.AppendTextColumn("Max", width=60)
+        self.sideboard_list.AppendTextColumn(self._t("radar.col.card"), width=200)
+        self.sideboard_list.AppendTextColumn(self._t("radar.col.inclusion"), width=90)
+        self.sideboard_list.AppendTextColumn(self._t("radar.col.expected"), width=120)
+        self.sideboard_list.AppendTextColumn(self._t("radar.col.avg"), width=90)
+        self.sideboard_list.AppendTextColumn(self._t("radar.col.max"), width=60)
         self.sideboard_list.SetBackgroundColour(DARK_ALT)
         self.sideboard_list.SetForegroundColour(LIGHT_TEXT)
         self._bind_tooltip_handlers(self.sideboard_list)
@@ -157,7 +164,7 @@ class RadarPanel(wx.Panel):
     def clear(self) -> None:
         """Clear the radar display."""
         self.current_radar = None
-        self.archetype_label.SetLabel("No radar loaded.")
+        self.archetype_label.SetLabel(self._t("radar.label.no_radar"))
         self.summary_label.SetLabel("")
         self.mainboard_list.DeleteAllItems()
         self.sideboard_list.DeleteAllItems()
@@ -275,6 +282,7 @@ class RadarDialog(wx.Dialog):
         metagame_repo,
         format_name: str,
         radar_service: RadarService | None = None,
+        locale: str | None = None,
     ):
         """
         Initialize the radar dialog.
@@ -284,6 +292,7 @@ class RadarDialog(wx.Dialog):
             metagame_repo: Metagame repository for fetching archetypes
             format_name: MTG format (e.g., "Modern", "Standard")
             radar_service: Radar service for calculations
+            locale: Locale code for i18n
         """
         super().__init__(
             parent,
@@ -291,6 +300,7 @@ class RadarDialog(wx.Dialog):
             size=(900, 700),
         )
         self.SetBackgroundColour(DARK_PANEL)
+        self._locale = locale
 
         self.metagame_repo = metagame_repo
         self.format_name = format_name
@@ -303,6 +313,9 @@ class RadarDialog(wx.Dialog):
         self._build_ui()
         self._load_archetypes()
 
+    def _t(self, key: str, **kwargs: object) -> str:
+        return translate(self._locale, key, **kwargs)
+
     def _build_ui(self) -> None:
         """Build the dialog UI."""
         sizer = wx.BoxSizer(wx.VERTICAL)
@@ -312,7 +325,7 @@ class RadarDialog(wx.Dialog):
         selection_sizer = wx.BoxSizer(wx.HORIZONTAL)
         sizer.Add(selection_sizer, 0, wx.EXPAND | wx.ALL, 10)
 
-        label = wx.StaticText(self, label="Select Archetype:")
+        label = wx.StaticText(self, label=self._t("radar.dialog.select_archetype"))
         label.SetForegroundColour(LIGHT_TEXT)
         selection_sizer.Add(label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 6)
 
@@ -321,11 +334,11 @@ class RadarDialog(wx.Dialog):
         self.archetype_choice.SetForegroundColour(LIGHT_TEXT)
         selection_sizer.Add(self.archetype_choice, 1, wx.RIGHT, 6)
 
-        self.generate_btn = wx.Button(self, label="Generate Radar")
+        self.generate_btn = wx.Button(self, label=self._t("radar.dialog.generate"))
         self.generate_btn.Bind(wx.EVT_BUTTON, self._on_generate_clicked)
         selection_sizer.Add(self.generate_btn, 0, wx.RIGHT, 6)
 
-        self.cancel_btn = wx.Button(self, label="Cancel")
+        self.cancel_btn = wx.Button(self, label=self._t("radar.btn.cancel"))
         self.cancel_btn.Bind(wx.EVT_BUTTON, self._on_cancel_clicked)
         self.cancel_btn.Enable(False)
         selection_sizer.Add(self.cancel_btn, 0)
@@ -344,11 +357,12 @@ class RadarDialog(wx.Dialog):
             radar_service=self.radar_service,
             on_export=self._export_radar,
             on_use_for_search=self._use_radar_for_search,
+            locale=self._locale,
         )
         sizer.Add(self.radar_panel, 1, wx.EXPAND | wx.ALL, 10)
 
         # Close button
-        close_btn = wx.Button(self, wx.ID_CLOSE, "Close")
+        close_btn = wx.Button(self, wx.ID_CLOSE, self._t("radar.btn.close"))
         close_btn.Bind(wx.EVT_BUTTON, self._on_close)
         sizer.Add(close_btn, 0, wx.ALIGN_RIGHT | wx.ALL, 10)
 

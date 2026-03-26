@@ -9,6 +9,19 @@ from utils.mana_icon_factory import ManaIconFactory
 from utils.perf import timed
 from widgets.panels.card_box_panel import CardBoxPanel
 
+_EMPTY_STATE_HEADING_SIZE = 13
+_EMPTY_STATE_HINT_SIZE = 10
+_EMPTY_STATE_HEADING_GAP = 6
+
+_ZONE_EMPTY_HEADING = {
+    "main": "No deck loaded",
+    "side": "Sideboard is empty",
+    "out": "No cards out",
+}
+_ZONE_EMPTY_HINT = {
+    "main": "Select a deck from the list, or load one from file",
+}
+
 
 class CardTablePanel(wx.Panel):
     GRID_COLUMNS = 4
@@ -55,7 +68,14 @@ class CardTablePanel(wx.Panel):
         header.AddStretchSpacer(1)
         outer.Add(header, 0, wx.EXPAND | wx.BOTTOM, 4)
 
-        self.scroller = scrolled.ScrolledPanel(self, style=wx.VSCROLL)
+        # Content area switches between an empty-state hint and the card grid.
+        self._content_book = wx.Simplebook(self)
+        self._content_book.SetBackgroundColour(DARK_PANEL)
+
+        self._empty_state = self._build_empty_state(self._content_book, zone)
+        self._content_book.AddPage(self._empty_state, "empty")
+
+        self.scroller = scrolled.ScrolledPanel(self._content_book, style=wx.VSCROLL)
         self.scroller.SetBackgroundColour(DARK_PANEL)
         self.grid_sizer = wx.WrapSizer(wx.HORIZONTAL)
 
@@ -80,7 +100,53 @@ class CardTablePanel(wx.Panel):
 
         self.scroller.SetSizer(self.grid_sizer)
         self.scroller.SetupScrolling(scroll_x=False, scroll_y=True, rate_x=5, rate_y=5)
-        outer.Add(self.scroller, 1, wx.EXPAND)
+        self._content_book.AddPage(self.scroller, "cards")
+
+        outer.Add(self._content_book, 1, wx.EXPAND)
+
+    @staticmethod
+    def _build_empty_state(parent: wx.Window, zone: str) -> wx.Panel:
+        panel = wx.Panel(parent)
+        panel.SetBackgroundColour(DARK_PANEL)
+        sizer = wx.BoxSizer(wx.VERTICAL)
+        panel.SetSizer(sizer)
+
+        heading_text = _ZONE_EMPTY_HEADING.get(zone, "")
+        hint_text = _ZONE_EMPTY_HINT.get(zone, "")
+
+        sizer.AddStretchSpacer(2)
+
+        if heading_text:
+            heading = wx.StaticText(panel, label=heading_text)
+            heading.SetForegroundColour(wx.Colour(*SUBDUED_TEXT))
+            heading_font = wx.Font(
+                _EMPTY_STATE_HEADING_SIZE,
+                wx.FONTFAMILY_SWISS,
+                wx.FONTSTYLE_NORMAL,
+                wx.FONTWEIGHT_NORMAL,
+            )
+            heading.SetFont(heading_font)
+            sizer.Add(
+                heading,
+                0,
+                wx.ALIGN_CENTER_HORIZONTAL | wx.BOTTOM,
+                _EMPTY_STATE_HEADING_GAP,
+            )
+
+        if hint_text:
+            hint = wx.StaticText(panel, label=hint_text)
+            hint.SetForegroundColour(wx.Colour(*(max(c - 40, 0) for c in SUBDUED_TEXT)))
+            hint_font = wx.Font(
+                _EMPTY_STATE_HINT_SIZE,
+                wx.FONTFAMILY_SWISS,
+                wx.FONTSTYLE_NORMAL,
+                wx.FONTWEIGHT_NORMAL,
+            )
+            hint.SetFont(hint_font)
+            sizer.Add(hint, 0, wx.ALIGN_CENTER_HORIZONTAL)
+
+        sizer.AddStretchSpacer(3)
+        return panel
 
     @classmethod
     def grid_width(cls) -> int:
@@ -155,6 +221,13 @@ class CardTablePanel(wx.Panel):
                     rate_y=5,
                     scrollToTop=not preserve_scroll,
                 )
+
+                # Switch between the empty-state hint (page 0) and the card
+                # grid (page 1) so the workspace always shows something
+                # intentional rather than a blank area.
+                target_page = 1 if cards else 0
+                if self._content_book.GetSelection() != target_page:
+                    self._content_book.ChangeSelection(target_page)
 
                 self._restore_selection()
             finally:

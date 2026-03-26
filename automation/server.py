@@ -66,6 +66,7 @@ class AutomationServer:
             "get_card_images_loaded": self._handle_get_card_images_loaded,
             "get_deck_notes": self._handle_get_deck_notes,
             "set_current_deck": self._handle_set_current_deck,
+            "toggle_adv_filters": self._handle_toggle_adv_filters,
         }
 
     def register_handler(self, command: str, handler: Callable[..., Any]) -> None:
@@ -479,6 +480,23 @@ class AutomationServer:
         if hasattr(self.frame, "_on_builder_search"):
             self.frame._on_builder_search()
         return {"searched": True, "card_name": card_name}
+
+    def _handle_toggle_adv_filters(self) -> dict[str, Any]:
+        """Switch to builder panel and toggle the advanced filters section."""
+        if not self.frame.builder_panel:
+            return {"toggled": False, "error": "Builder panel not available"}
+        if hasattr(self.frame, "_show_left_panel"):
+            self.frame._show_left_panel("builder", force=True)
+        panel = self.frame.builder_panel
+        btn = getattr(panel, "_adv_toggle_btn", None)
+        if btn is None:
+            return {"toggled": False, "error": "Advanced filters toggle button not found"}
+        event = wx.CommandEvent(wx.wxEVT_BUTTON, btn.GetId())
+        event.SetEventObject(btn)
+        btn.ProcessEvent(event)
+        adv_panel = getattr(panel, "_adv_panel", None)
+        shown = adv_panel.IsShown() if adv_panel else None
+        return {"toggled": True, "expanded": shown}
 
     def _handle_load_deck_text(self, deck_text: str) -> dict[str, Any]:
         """Load a deck from text into the mainboard/sideboard zones."""

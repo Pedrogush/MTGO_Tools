@@ -19,16 +19,23 @@ from loguru import logger
 from matplotlib.backends.backend_wxagg import FigureCanvasWxAgg as FigureCanvas
 from matplotlib.figure import Figure
 
-from navigators.mtggoldfish import get_archetype_stats
+from repositories.metagame_repository import get_metagame_repository
 from utils.constants import DARK_ALT, DARK_BG, DARK_PANEL, LIGHT_TEXT, SUBDUED_TEXT
+from utils.i18n import translate
 
 
 class MetagameAnalysisFrame(wx.Frame):
     """Widget for displaying metagame archetype distribution and changes over time."""
 
-    def __init__(self, parent: wx.Window | None = None) -> None:
+    def __init__(self, parent: wx.Window | None = None, locale: str | None = None) -> None:
         style = wx.DEFAULT_FRAME_STYLE | wx.STAY_ON_TOP
-        super().__init__(parent, title="Metagame Analysis", size=(1100, 750), style=style)
+        super().__init__(
+            parent,
+            title=translate(locale, "window.title.metagame_analysis"),
+            size=(1100, 750),
+            style=style,
+        )
+        self._locale = locale
 
         self.current_format: str = "modern"
         self.current_days: int = 1
@@ -43,6 +50,9 @@ class MetagameAnalysisFrame(wx.Frame):
         self.Bind(wx.EVT_CLOSE, self.on_close)
         wx.CallAfter(self.refresh_data)
 
+    def _t(self, key: str, **kwargs: object) -> str:
+        return translate(self._locale, key, **kwargs)
+
     def _build_ui(self) -> None:
         panel = wx.Panel(self)
         panel.SetBackgroundColour(DARK_BG)
@@ -53,7 +63,10 @@ class MetagameAnalysisFrame(wx.Frame):
         main_sizer.Add(toolbar, 0, wx.ALL | wx.EXPAND, 10)
 
         toolbar.Add(
-            wx.StaticText(panel, label="Format:"), 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 5
+            wx.StaticText(panel, label=self._t("metagame.label.format")),
+            0,
+            wx.ALIGN_CENTER_VERTICAL | wx.RIGHT,
+            5,
         )
         self.format_choice = wx.Choice(
             panel,
@@ -73,7 +86,7 @@ class MetagameAnalysisFrame(wx.Frame):
         toolbar.Add(self.format_choice, 0, wx.RIGHT, 15)
 
         toolbar.Add(
-            wx.StaticText(panel, label="Time Window (days):"),
+            wx.StaticText(panel, label=self._t("metagame.label.time_window")),
             0,
             wx.ALIGN_CENTER_VERTICAL | wx.RIGHT,
             5,
@@ -85,7 +98,7 @@ class MetagameAnalysisFrame(wx.Frame):
         toolbar.Add(self.days_spin, 0, wx.RIGHT, 15)
 
         toolbar.Add(
-            wx.StaticText(panel, label="Starting from day:"),
+            wx.StaticText(panel, label=self._t("metagame.label.starting_from")),
             0,
             wx.ALIGN_CENTER_VERTICAL | wx.RIGHT,
             5,
@@ -96,14 +109,14 @@ class MetagameAnalysisFrame(wx.Frame):
         self.offset_spin.Bind(wx.EVT_SPINCTRL, self.on_offset_change)
         toolbar.Add(self.offset_spin, 0, wx.RIGHT, 15)
 
-        self.refresh_button = wx.Button(panel, label="Refresh Data")
+        self.refresh_button = wx.Button(panel, label=self._t("metagame.btn.refresh"))
         self._stylize_button(self.refresh_button)
         self.refresh_button.Bind(wx.EVT_BUTTON, lambda _evt: self.refresh_data())
         toolbar.Add(self.refresh_button, 0, wx.RIGHT, 10)
 
         toolbar.AddStretchSpacer(1)
 
-        self.status_label = wx.StaticText(panel, label="Ready")
+        self.status_label = wx.StaticText(panel, label=self._t("app.status.ready"))
         self.status_label.SetForegroundColour(SUBDUED_TEXT)
         toolbar.Add(self.status_label, 0, wx.ALIGN_CENTER_VERTICAL)
 
@@ -124,7 +137,7 @@ class MetagameAnalysisFrame(wx.Frame):
         right_panel.SetSizer(right_sizer)
         content_sizer.Add(right_panel, 0, wx.EXPAND)
 
-        changes_label = wx.StaticText(right_panel, label="Metagame Changes")
+        changes_label = wx.StaticText(right_panel, label=self._t("metagame.label.changes"))
         changes_label.SetForegroundColour(LIGHT_TEXT)
         font = changes_label.GetFont()
         font.MakeBold()
@@ -162,13 +175,13 @@ class MetagameAnalysisFrame(wx.Frame):
     def refresh_data(self) -> None:
         if not self or not self.IsShown():
             return
-        self._set_busy(True, "Fetching metagame data from MTGGoldfish...")
+        self._set_busy(True, self._t("metagame.status.fetching"))
         logger.info(f"Starting metagame data fetch for format: {self.current_format}")
 
         def worker() -> None:
             try:
                 logger.debug(f"Worker thread started for {self.current_format}")
-                stats = get_archetype_stats(self.current_format)
+                stats = get_metagame_repository().get_stats_for_format(self.current_format)
                 logger.info(f"Successfully loaded archetype stats for {self.current_format}")
                 logger.debug(f"Stats keys: {list(stats.keys())}")
                 wx.CallAfter(self._populate_data, stats)
@@ -183,7 +196,7 @@ class MetagameAnalysisFrame(wx.Frame):
         if not self or not self.IsShown():
             logger.warning("Widget not shown, skipping error display")
             return
-        self._set_busy(False, f"Unable to load metagame data:\n{message}")
+        self._set_busy(False, self._t("metagame.status.error", message=message))
 
     def _populate_data(self, stats: dict[str, Any]) -> None:
         logger.info(f"_populate_data called with stats for format: {self.current_format}")
@@ -196,7 +209,7 @@ class MetagameAnalysisFrame(wx.Frame):
             format_stats = stats.get(self.current_format, {})
             archetype_count = len([k for k in format_stats.keys() if k != "timestamp"])
             logger.info(f"Found {archetype_count} archetypes in data")
-            self._set_busy(False, f"Loaded {archetype_count} archetypes")
+            self._set_busy(False, self._t("metagame.loaded", count=archetype_count))
             self.update_visualization()
         except Exception as exc:
             logger.exception(f"Error processing metagame data:\n{exc}")
@@ -264,7 +277,7 @@ class MetagameAnalysisFrame(wx.Frame):
             self.ax.text(
                 0.5,
                 0.5,
-                "No data available for selected period",
+                self._t("metagame.chart.no_data"),
                 ha="center",
                 va="center",
                 color="#b9bfca",
@@ -310,14 +323,16 @@ class MetagameAnalysisFrame(wx.Frame):
 
         self.ax.axis("equal")
         if self.base_day_offset == 0:
-            period_desc = f"Last {self.current_days} day{'s' if self.current_days > 1 else ''}"
+            period_desc = self._t("metagame.period.last_days", count=self.current_days)
         else:
             end_day = self.base_day_offset
             start_day = self.base_day_offset + self.current_days - 1
             if start_day == end_day:
-                period_desc = f"{end_day} day{'s' if end_day > 1 else ''} ago"
+                period_desc = self._t("metagame.period.days_ago", count=end_day)
             else:
-                period_desc = f"{start_day}-{end_day} days ago"
+                period_desc = self._t(
+                    "metagame.period.range_days_ago", start=start_day, end=end_day
+                )
         title = f"{self.current_format.title()} Metagame ({period_desc})"
         self.ax.set_title(title, color="#ecececec", fontsize=12, pad=20)
 
@@ -325,7 +340,7 @@ class MetagameAnalysisFrame(wx.Frame):
 
     def _update_changes_display(self) -> None:
         if not self.current_data or not self.previous_data:
-            self.changes_text.SetValue("No comparison data available")
+            self.changes_text.SetValue(self._t("metagame.changes.no_data"))
             return
 
         current_pct = self._calculate_percentages(self.current_data)
@@ -344,20 +359,22 @@ class MetagameAnalysisFrame(wx.Frame):
         prev_start = self.base_day_offset + self.current_days
         prev_end = self.base_day_offset + self.current_days * 2 - 1
         if prev_start == prev_end:
-            prev_desc = f"{prev_start} day{'s' if prev_start > 1 else ''} ago"
+            prev_desc = self._t("metagame.period.days_ago", count=prev_start)
         else:
-            prev_desc = f"days {prev_end}-{prev_start} ago"
+            prev_desc = self._t("metagame.period.range_days_ago", start=prev_end, end=prev_start)
 
-        lines = [f"Changes vs {prev_desc}:\n"]
+        lines = [self._t("metagame.changes.vs_period", period=prev_desc) + ":\n"]
         for archetype, change in sorted_changes[:15]:
             if abs(change) < 0.1:
                 continue
             symbol = "+" if change > 0 else ""
             current_val = current_pct.get(archetype, 0.0)
-            lines.append(f"{symbol}{change:+.1f}% {archetype} (now {current_val:.1f}%)")
+            lines.append(
+                f"{symbol}{change:+.1f}% {archetype} ({self._t('metagame.changes.now')} {current_val:.1f}%)"
+            )
 
         if len(lines) == 1:
-            lines.append("No significant changes")
+            lines.append(self._t("metagame.changes.none"))
 
         self.changes_text.SetValue("\n".join(lines))
 
@@ -369,9 +386,9 @@ class MetagameAnalysisFrame(wx.Frame):
         if message:
             self.status_label.SetLabel(message)
         elif busy:
-            self.status_label.SetLabel("Loading...")
+            self.status_label.SetLabel(self._t("research.loading_archetypes"))
         else:
-            self.status_label.SetLabel("Ready")
+            self.status_label.SetLabel(self._t("app.status.ready"))
 
     def on_close(self, event: wx.CloseEvent) -> None:
         event.Skip()

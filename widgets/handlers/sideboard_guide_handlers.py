@@ -126,6 +126,7 @@ class SideboardGuideHandlers:
             mainboard_cards=mainboard,
             sideboard_cards=sideboard,
             flex_slots=self.sideboard_flex_slots,
+            locale=self.locale,
         )
 
         while True:
@@ -178,6 +179,7 @@ class SideboardGuideHandlers:
             sideboard_cards=self.zone_cards.get("side", []),
             data=data,
             flex_slots=self.sideboard_flex_slots,
+            locale=self.locale,
         )
         if dlg.ShowModal() == wx.ID_OK:
             updated = dlg.get_data()
@@ -247,7 +249,7 @@ class SideboardGuideHandlers:
     def _on_export_guide(self: AppFrame) -> None:
         """Export sideboard guide to CSV format."""
         if not self.sideboard_guide_entries:
-            self._set_status("No guide entries to export.")
+            self._set_status("guide.status.no_entries_to_export")
             return
 
         dlg = wx.FileDialog(
@@ -264,14 +266,14 @@ class SideboardGuideHandlers:
         file_path = dlg.GetPath()
         dlg.Destroy()
 
-        self._set_status("Exporting…")
+        self._set_status("guide.status.exporting")
 
         def worker() -> None:
             try:
                 self._export_guide_to_csv(file_path)
-                wx.CallAfter(self._set_status, "Sideboard guide exported successfully.")
+                wx.CallAfter(self._set_status, "guide.status.exported")
             except Exception as exc:
-                wx.CallAfter(self._set_status, "Error exporting sideboard guide to CSV.")
+                wx.CallAfter(self._set_status, "guide.status.export_error")
                 logger.exception(f"Error exporting sideboard guide to CSV: {exc}")
 
         threading.Thread(target=worker, daemon=True).start()
@@ -328,19 +330,19 @@ class SideboardGuideHandlers:
         enable_double_entries = enable_double_checkbox.GetValue()
         options_dlg.Destroy()
 
-        self._set_status("Importing…")
+        self._set_status("guide.status.importing")
 
         def worker() -> None:
             try:
                 imported_entries, warnings = self._import_guide_from_csv(file_path)
             except Exception as exc:
-                wx.CallAfter(self._set_status, "Error importing sideboard guide from CSV.")
+                wx.CallAfter(self._set_status, "guide.status.import_error")
                 logger.exception(f"Error importing sideboard guide from CSV: {exc}")
                 return
 
             def apply() -> None:
                 if not imported_entries:
-                    self._set_status("No valid guide entries found in CSV.")
+                    self._set_status("guide.status.no_valid_entries")
                     return
 
                 if not enable_double_entries:
@@ -366,9 +368,7 @@ class SideboardGuideHandlers:
                     warning_msg = f"Imported {len(imported_entries)} entries with warnings: {'; '.join(warnings)}"
                     self.sideboard_guide_panel.set_warning(warning_msg)
                 else:
-                    self._set_status(
-                        f"Successfully imported {len(imported_entries)} guide entries."
-                    )
+                    self._set_status("guide.status.imported", count=len(imported_entries))
 
             wx.CallAfter(apply)
 
@@ -554,12 +554,12 @@ class SideboardGuideHandlers:
             atomic_write_json(ACTIVE_GUIDE_FILE, payload, indent=2)
             self.sideboard_guide_panel.set_pinned(True)
             self._set_status(
-                f"Pinned guide for '{deck_name or deck_hash[:DECK_HASH_DISPLAY_LENGTH]}' to Opponent Tracker."
+                "guide.status.pinned", name=deck_name or deck_hash[:DECK_HASH_DISPLAY_LENGTH]
             )
             logger.info(f"Pinned guide: hash={deck_hash}, name={deck_name!r}")
         except OSError as exc:
             logger.error(f"Failed to save active guide: {exc}")
-            self._set_status("Error: could not pin guide.")
+            self._set_status("guide.status.pin_error")
 
     def _parse_card_text(self: AppFrame, text: str) -> dict[str, int]:
         """Parse text like '2x Lightning Bolt, 1x Mountain' into a dict."""

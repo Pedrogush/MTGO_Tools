@@ -271,6 +271,13 @@ def cmd_get_deck_notes(client: AutomationClient, args: argparse.Namespace) -> in
     return 0
 
 
+def cmd_toggle_adv_filters(client: AutomationClient, args: argparse.Namespace) -> int:
+    """Toggle the advanced filters panel in the deck builder."""
+    result = client.toggle_adv_filters()
+    print(format_output(result, args.json))
+    return 0 if result.get("toggled") else 1
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Control the MTGO Tools application from the command line.",
@@ -392,6 +399,9 @@ Examples:
     # get-deck-notes
     subparsers.add_parser("get-deck-notes", help="Get the current deck notes")
 
+    # toggle-adv-filters
+    subparsers.add_parser("toggle-adv-filters", help="Toggle advanced filters in builder panel")
+
     args = parser.parse_args()
 
     if not args.command:
@@ -424,6 +434,7 @@ Examples:
         "get-builder-top-item": cmd_get_builder_top_item,
         "open-widget": cmd_open_widget,
         "get-deck-notes": cmd_get_deck_notes,
+        "toggle-adv-filters": cmd_toggle_adv_filters,
     }
 
     handler = handlers.get(args.command)

@@ -412,3 +412,157 @@ def test_repository_custom_ttl():
     """Test repository with custom TTL."""
     repo = MetagameRepository(cache_ttl=7200)
     assert repo.cache_ttl == 7200
+
+
+# ============= Remote-First Resolution Tests =============
+
+
+class _FakeRemoteClient:
+    """Minimal stub for RemoteSnapshotClient."""
+
+    def __init__(self, archetypes=None, stats=None):
+        self._archetypes = archetypes
+        self._stats = stats
+        self.archetypes_calls: list[str] = []
+        self.stats_calls: list[str] = []
+
+    def get_archetypes_for_format(self, fmt):
+        self.archetypes_calls.append(fmt)
+        return self._archetypes
+
+    def get_metagame_stats_for_format(self, fmt):
+        self.stats_calls.append(fmt)
+        return self._stats
+
+
+def _make_repo(tmp_path, remote_client=None):
+    return MetagameRepository(
+        cache_ttl=3600,
+        archetype_list_cache_file=tmp_path / "archetypes.json",
+        archetype_decks_cache_file=tmp_path / "decks.json",
+        remote_snapshot_client=remote_client,
+    )
+
+
+def test_archetypes_prefer_remote_snapshot_over_live_scrape(tmp_path, monkeypatch):
+    """Remote snapshot data should be returned without calling the live scraper."""
+    remote_archetypes = [{"name": "UR Murktide", "href": "/archetype/modern-ur-murktide"}]
+    remote = _FakeRemoteClient(archetypes=remote_archetypes)
+    repo = _make_repo(tmp_path, remote_client=remote)
+
+    live_calls = []
+    monkeypatch.setattr(
+        "repositories.metagame_repository.get_archetypes",
+        lambda _fmt: live_calls.append(1) or [],
+    )
+
+    result = repo.get_archetypes_for_format("modern")
+
+    assert result == remote_archetypes
+    assert live_calls == [], "live scraper should not be called when remote snapshot succeeds"
+    assert remote.archetypes_calls == ["modern"]
+
+
+def test_archetypes_fall_through_to_live_when_remote_returns_none(tmp_path, monkeypatch):
+    """When the remote client returns None the live scraper should be tried."""
+    remote = _FakeRemoteClient(archetypes=None)
+    repo = _make_repo(tmp_path, remote_client=remote)
+
+    live_archetypes = [{"name": "Amulet Titan"}]
+    monkeypatch.setattr(
+        "repositories.metagame_repository.get_archetypes",
+        lambda _fmt: live_archetypes,
+    )
+
+    result = repo.get_archetypes_for_format("modern")
+
+    assert result == live_archetypes
+
+
+def test_archetypes_fall_through_to_live_when_remote_raises(tmp_path, monkeypatch):
+    """A remote client exception should be swallowed and live scrape used."""
+
+    class _BoomClient:
+        def get_archetypes_for_format(self, _fmt):
+            raise RuntimeError("network error")
+
+    repo = _make_repo(tmp_path, remote_client=_BoomClient())
+
+    live_archetypes = [{"name": "Living End"}]
+    monkeypatch.setattr(
+        "repositories.metagame_repository.get_archetypes",
+        lambda _fmt: live_archetypes,
+    )
+
+    result = repo.get_archetypes_for_format("modern")
+    assert result == live_archetypes
+
+
+def test_archetypes_local_cache_preferred_over_remote(tmp_path, monkeypatch):
+    """A fresh local cache entry should be returned without consulting remote."""
+    import time
+
+    cache_file = tmp_path / "archetypes.json"
+    cached_archetypes = [{"name": "Cascade Crasher"}]
+    cache_file.write_text(
+        json.dumps({"modern": {"timestamp": time.time(), "items": cached_archetypes}}),
+        encoding="utf-8",
+    )
+
+    remote = _FakeRemoteClient(archetypes=[{"name": "Something Else"}])
+    repo = _make_repo(tmp_path, remote_client=remote)
+
+    result = repo.get_archetypes_for_format("modern")
+
+    assert result == cached_archetypes
+    assert remote.archetypes_calls == [], "remote client should not be called for fresh cache"
+
+
+def test_get_stats_returns_remote_snapshot_data(tmp_path):
+    """get_stats_for_format should return remote snapshot data when available."""
+    remote_stats = {
+        "modern": {
+            "timestamp": 1711234567.0,
+            "UR Murktide": {"results": {"2025-03-24": 5}},
+        }
+    }
+    remote = _FakeRemoteClient(stats=remote_stats)
+    repo = _make_repo(tmp_path, remote_client=remote)
+
+    result = repo.get_stats_for_format("modern")
+
+    assert result == remote_stats
+    assert remote.stats_calls == ["modern"]
+
+
+def test_get_stats_falls_back_to_live_when_remote_returns_none(tmp_path, monkeypatch):
+    """When remote stats are unavailable the live navigator is called."""
+    live_stats = {"modern": {"timestamp": 0.0, "UR Murktide": {"results": {}}}}
+    called = []
+
+    def fake_live_stats(fmt):
+        called.append(fmt)
+        return live_stats
+
+    monkeypatch.setattr("navigators.mtggoldfish.get_archetype_stats", fake_live_stats)
+
+    repo = _make_repo(tmp_path, remote_client=_FakeRemoteClient(stats=None))
+    result = repo.get_stats_for_format("modern")
+
+    assert result == live_stats
+    assert called == ["modern"]
+
+
+def test_remote_client_not_used_when_disabled(tmp_path, monkeypatch):
+    """Without an injected client and REMOTE_SNAPSHOTS_ENABLED=False, no remote calls."""
+    monkeypatch.setattr("repositories.metagame_repository.REMOTE_SNAPSHOTS_ENABLED", False)
+    repo = _make_repo(tmp_path, remote_client=None)
+
+    live_archetypes = [{"name": "Cascade Crasher"}]
+    monkeypatch.setattr(
+        "repositories.metagame_repository.get_archetypes",
+        lambda _fmt: live_archetypes,
+    )
+
+    result = repo.get_archetypes_for_format("modern")
+    assert result == live_archetypes
