@@ -380,6 +380,150 @@ def test_get_decks_respects_source_filters_and_sorting(
     assert all(deck["source"] == "mtgo" for deck in mtgo_only)
 
 
+# ============= Bundle MTGO Preservation Tests =============
+
+
+def test_live_scrape_preserves_bundle_mtgo_decks(
+    archetype_cache_file, archetype_deck_cache_file, monkeypatch
+):
+    """A live MTGGoldfish scrape must not evict MTGO decks hydrated from the bundle."""
+    repo = MetagameRepository(
+        archetype_list_cache_file=archetype_cache_file,
+        archetype_decks_cache_file=archetype_deck_cache_file,
+    )
+    bundle_mtgo = {"name": "Bundle MTGO", "date": "2026-03-25", "source": "mtgo", "number": "m1"}
+    fresh_gf = {"name": "GF Fresh", "date": "2026-03-26", "source": "mtggoldfish", "number": "g1"}
+    archetype = {"href": "test-arch", "name": "Test"}
+
+    # Seed the cache with a bundle-provided MTGO entry
+    _write_cache(
+        archetype_deck_cache_file,
+        {"test-arch": {"timestamp": time.time(), "items": [bundle_mtgo]}},
+    )
+
+    monkeypatch.setattr(
+        "repositories.metagame_repository.get_archetype_decks",
+        lambda _href: [fresh_gf],
+    )
+    monkeypatch.setattr(repo, "_get_mtgo_decks_from_db", lambda *_: [])
+
+    result = repo.get_decks_for_archetype(archetype, force_refresh=True)
+
+    names = [d["name"] for d in result]
+    assert "Bundle MTGO" in names
+    assert "GF Fresh" in names
+
+
+def test_live_scrape_preserves_only_mtgo_source(
+    archetype_cache_file, archetype_deck_cache_file, monkeypatch
+):
+    """Only entries with source='mtgo' are preserved; old MTGGoldfish entries are replaced."""
+    repo = MetagameRepository(
+        archetype_list_cache_file=archetype_cache_file,
+        archetype_decks_cache_file=archetype_deck_cache_file,
+    )
+    old_gf = {"name": "Old GF", "date": "2026-01-01", "source": "mtggoldfish", "number": "g0"}
+    bundle_mtgo = {"name": "Bundle MTGO", "date": "2026-03-25", "source": "mtgo", "number": "m1"}
+    fresh_gf = {"name": "GF Fresh", "date": "2026-03-26", "source": "mtggoldfish", "number": "g1"}
+    archetype = {"href": "test-arch", "name": "Test"}
+
+    _write_cache(
+        archetype_deck_cache_file,
+        {"test-arch": {"timestamp": time.time(), "items": [old_gf, bundle_mtgo]}},
+    )
+
+    monkeypatch.setattr(
+        "repositories.metagame_repository.get_archetype_decks",
+        lambda _href: [fresh_gf],
+    )
+    monkeypatch.setattr(repo, "_get_mtgo_decks_from_db", lambda *_: [])
+
+    result = repo.get_decks_for_archetype(archetype, force_refresh=True)
+
+    names = [d["name"] for d in result]
+    assert "Old GF" not in names  # replaced by fresh scrape
+    assert "GF Fresh" in names
+    assert "Bundle MTGO" in names  # preserved
+
+
+def test_live_scrape_no_prior_bundle_entries(
+    archetype_cache_file, archetype_deck_cache_file, monkeypatch
+):
+    """Live scrape with no prior bundle MTGO entries behaves the same as before."""
+    repo = MetagameRepository(
+        archetype_list_cache_file=archetype_cache_file,
+        archetype_decks_cache_file=archetype_deck_cache_file,
+    )
+    fresh_gf = {"name": "GF Fresh", "date": "2026-03-26", "source": "mtggoldfish", "number": "g1"}
+    archetype = {"href": "test-arch", "name": "Test"}
+
+    monkeypatch.setattr(
+        "repositories.metagame_repository.get_archetype_decks",
+        lambda _href: [fresh_gf],
+    )
+    monkeypatch.setattr(repo, "_get_mtgo_decks_from_db", lambda *_: [])
+
+    result = repo.get_decks_for_archetype(archetype, force_refresh=True)
+
+    assert len(result) == 1
+    assert result[0]["name"] == "GF Fresh"
+
+
+def test_cached_path_returns_bundle_mtgo_decks(
+    archetype_cache_file, archetype_deck_cache_file, monkeypatch
+):
+    """Bundle MTGO decks in the archetype cache are returned on the cache hit path."""
+    repo = MetagameRepository(
+        archetype_list_cache_file=archetype_cache_file,
+        archetype_decks_cache_file=archetype_deck_cache_file,
+    )
+    bundle_mtgo = {"name": "Bundle MTGO", "date": "2026-03-25", "source": "mtgo", "number": "m1"}
+    gf_deck = {"name": "GF Deck", "date": "2026-03-24", "source": "mtggoldfish", "number": "g1"}
+    archetype = {"href": "test-arch", "name": "Test"}
+
+    _write_cache(
+        archetype_deck_cache_file,
+        {"test-arch": {"timestamp": time.time(), "items": [gf_deck, bundle_mtgo]}},
+    )
+    monkeypatch.setattr(repo, "_get_mtgo_decks_from_db", lambda *_: [])
+
+    result = repo.get_decks_for_archetype(archetype)
+
+    names = [d["name"] for d in result]
+    assert "Bundle MTGO" in names
+    assert "GF Deck" in names
+
+
+def test_saved_cache_after_live_scrape_contains_bundle_mtgo(
+    archetype_cache_file, archetype_deck_cache_file, monkeypatch
+):
+    """After a live scrape, persisted cache contains both fresh GF and bundle MTGO entries."""
+    repo = MetagameRepository(
+        archetype_list_cache_file=archetype_cache_file,
+        archetype_decks_cache_file=archetype_deck_cache_file,
+    )
+    bundle_mtgo = {"name": "Bundle MTGO", "date": "2026-03-25", "source": "mtgo", "number": "m1"}
+    fresh_gf = {"name": "GF Fresh", "date": "2026-03-26", "source": "mtggoldfish", "number": "g1"}
+    archetype = {"href": "test-arch", "name": "Test"}
+
+    _write_cache(
+        archetype_deck_cache_file,
+        {"test-arch": {"timestamp": time.time(), "items": [bundle_mtgo]}},
+    )
+    monkeypatch.setattr(
+        "repositories.metagame_repository.get_archetype_decks",
+        lambda _href: [fresh_gf],
+    )
+    monkeypatch.setattr(repo, "_get_mtgo_decks_from_db", lambda *_: [])
+
+    repo.get_decks_for_archetype(archetype, force_refresh=True)
+
+    saved = json.loads(archetype_deck_cache_file.read_text())
+    saved_names = [d["name"] for d in saved["test-arch"]["items"]]
+    assert "Bundle MTGO" in saved_names
+    assert "GF Fresh" in saved_names
+
+
 # ============= Clear Cache Tests =============
 
 

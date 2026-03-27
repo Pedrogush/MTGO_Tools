@@ -213,11 +213,15 @@ class MetagameRepository:
         try:
             # get_archetype_decks expects just the href string, not the dict
             decks = get_archetype_decks(archetype_href)
-            # Cache the results
-            self._save_cached_decks(archetype_href, decks)
-            mtggoldfish_decks = self._filter_decks_by_source(decks, source_filter)
+            # Preserve any MTGO-sourced entries hydrated from the remote bundle so
+            # a live MTGGoldfish refresh does not evict them from the cache.
+            existing = self._load_cached_decks(archetype_href, max_age=None) or []
+            bundle_mtgo = [d for d in existing if d.get("source") == "mtgo"]
+            merged = decks + bundle_mtgo
+            self._save_cached_decks(archetype_href, merged)
+            filtered = self._filter_decks_by_source(merged, source_filter)
             mtgo_decks = self._get_mtgo_decks_from_db(archetype_name, source_filter)
-            return self._merge_and_sort_decks(mtggoldfish_decks, mtgo_decks)
+            return self._merge_and_sort_decks(filtered, mtgo_decks)
         except Exception as exc:
             logger.error(f"Failed to fetch decks for {archetype_name}: {exc}")
             # Try to return stale cache if available
