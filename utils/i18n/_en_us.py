@@ -226,6 +226,7 @@ MESSAGES: dict[str, str] = {
     "metagame.period.days_ago": "{count} day(s) ago",
     "metagame.period.range_days_ago": "{start}-{end} days ago",
     "metagame.changes.no_data": "No comparison data available",
+    "metagame.changes.previous_missing": "No data from the previous period to compare",
     "metagame.changes.vs_period": "Changes vs {period}",
     "metagame.changes.now": "now",
     "metagame.changes.previous": "previous",
