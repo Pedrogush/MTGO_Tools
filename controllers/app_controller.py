@@ -479,29 +479,33 @@ class AppController:
     def run_initial_loads(self, deck_save_dir: Path, force_archetypes: bool = False) -> None:
         callbacks = self._ui_callbacks
 
-        # Step 1: Apply remote bundle to warm caches, then fetch archetypes.
-        # On failure the fetch still proceeds so the live scraper path handles it.
-        def _apply_bundle():
+        # Step 1: Start archetype fetch immediately from local cache (optimistic load),
+        # and run the bundle download in parallel.  If apply() returns True the caches
+        # were updated, so trigger a silent background re-fetch to refresh the list.
+        self.fetch_archetypes(
+            on_success=callbacks.on_archetypes_success if callbacks else None,
+            on_error=callbacks.on_archetypes_error if callbacks else None,
+            on_status=callbacks.on_status if callbacks else None,
+            force=force_archetypes,
+        )
+
+        def _apply_bundle() -> bool:
             from services.bundle_snapshot_client import get_bundle_snapshot_client
 
-            get_bundle_snapshot_client().apply()
+            return get_bundle_snapshot_client().apply()
 
-        def _on_bundle_done(_: Any) -> None:
-            self.fetch_archetypes(
-                on_success=callbacks.on_archetypes_success if callbacks else None,
-                on_error=callbacks.on_archetypes_error if callbacks else None,
-                on_status=callbacks.on_status if callbacks else None,
-                force=force_archetypes,
-            )
+        def _on_bundle_done(updated: bool) -> None:
+            if updated:
+                # Caches were refreshed — silently re-fetch so the UI reflects new data.
+                self.fetch_archetypes(
+                    on_success=callbacks.on_archetypes_success if callbacks else None,
+                    on_error=callbacks.on_archetypes_error if callbacks else None,
+                    on_status=callbacks.on_status if callbacks else None,
+                    force=True,
+                )
 
         def _on_bundle_error(exc: Exception) -> None:
-            logger.warning(f"Remote bundle apply failed, proceeding with live fetch: {exc}")
-            self.fetch_archetypes(
-                on_success=callbacks.on_archetypes_success if callbacks else None,
-                on_error=callbacks.on_archetypes_error if callbacks else None,
-                on_status=callbacks.on_status if callbacks else None,
-                force=force_archetypes,
-            )
+            logger.warning(f"Remote bundle apply failed: {exc}")
 
         self._worker.submit(_apply_bundle, on_success=_on_bundle_done, on_error=_on_bundle_error)
 
