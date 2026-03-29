@@ -484,9 +484,19 @@ class AppController:
         def _apply_bundle():
             from services.bundle_snapshot_client import get_bundle_snapshot_client
 
-            get_bundle_snapshot_client().apply()
+            return get_bundle_snapshot_client().apply()
 
-        def _on_bundle_done(_: Any) -> None:
+        def _on_bundle_done(result: tuple[bool, dict[str, list[dict[str, Any]]] | None]) -> None:
+            updated, archetypes_by_format = result
+            if updated and archetypes_by_format:
+                fmt_archetypes = archetypes_by_format.get(self.current_format.lower())
+                if fmt_archetypes is not None:
+                    # Archetypes already in memory from bundle — skip the disk read.
+                    self.archetypes = fmt_archetypes
+                    self.filtered_archetypes = fmt_archetypes
+                    if callbacks:
+                        callbacks.on_archetypes_success(fmt_archetypes)
+                    return
             self.fetch_archetypes(
                 on_success=callbacks.on_archetypes_success if callbacks else None,
                 on_error=callbacks.on_archetypes_error if callbacks else None,

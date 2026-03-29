@@ -200,7 +200,9 @@ def test_stamp_fresh_skips_download(tmp_client: BundleSnapshotClient) -> None:
     with patch.object(tmp_client, "_download_bundle") as mock_dl:
         result = tmp_client.apply()
     mock_dl.assert_not_called()
-    assert result is False
+    updated, archetypes_by_format = result
+    assert updated is False
+    assert archetypes_by_format is None
 
 
 def test_stale_stamp_triggers_download(tmp_client: BundleSnapshotClient) -> None:
@@ -212,14 +214,16 @@ def test_stale_stamp_triggers_download(tmp_client: BundleSnapshotClient) -> None
     bundle = _make_bundle()
     with patch.object(tmp_client, "_http_get_bytes", return_value=bundle):
         result = tmp_client.apply()
-    assert result is True
+    updated, _ = result
+    assert updated is True
 
 
 def test_missing_stamp_triggers_download(tmp_client: BundleSnapshotClient) -> None:
     bundle = _make_bundle()
     with patch.object(tmp_client, "_http_get_bytes", return_value=bundle):
         result = tmp_client.apply()
-    assert result is True
+    updated, _ = result
+    assert updated is True
 
 
 # ---------------------------------------------------------------------------
@@ -438,6 +442,62 @@ def test_deck_text_entry_missing_deck_id_skipped(tmp_client: BundleSnapshotClien
     bundle = _make_bundle(deck_texts=deck_texts)
     with patch.object(tmp_client, "_http_get_bytes", return_value=bundle):
         tmp_client.apply()  # should not raise
+
+
+# ---------------------------------------------------------------------------
+# apply() return value — archetypes_by_format
+# ---------------------------------------------------------------------------
+
+
+def test_apply_returns_archetypes_by_format(tmp_client: BundleSnapshotClient) -> None:
+    bundle = _make_bundle()
+    with patch.object(tmp_client, "_http_get_bytes", return_value=bundle):
+        updated, archetypes_by_format = tmp_client.apply()
+
+    assert updated is True
+    assert archetypes_by_format is not None
+    assert _FORMAT in archetypes_by_format
+    items = archetypes_by_format[_FORMAT]
+    assert len(items) == 1
+    assert items[0]["href"] == _SLUG
+
+
+def test_apply_returns_archetypes_for_all_formats(tmp_client: BundleSnapshotClient) -> None:
+    archetypes = [
+        {
+            "schema_version": "1",
+            "kind": "archetype_list",
+            "format": "modern",
+            "archetypes": [{"name": "X", "href": "x"}],
+        },
+        {
+            "schema_version": "1",
+            "kind": "archetype_list",
+            "format": "legacy",
+            "archetypes": [{"name": "Y", "href": "y"}],
+        },
+    ]
+    bundle = _make_bundle(archetypes=archetypes, decks=[])
+    with patch.object(tmp_client, "_http_get_bytes", return_value=bundle):
+        updated, archetypes_by_format = tmp_client.apply()
+
+    assert updated is True
+    assert archetypes_by_format is not None
+    assert "modern" in archetypes_by_format
+    assert "legacy" in archetypes_by_format
+    assert archetypes_by_format["modern"][0]["href"] == "x"
+    assert archetypes_by_format["legacy"][0]["href"] == "y"
+
+
+def test_apply_returns_none_archetypes_when_stamp_fresh(tmp_client: BundleSnapshotClient) -> None:
+    tmp_client.stamp_file.parent.mkdir(parents=True, exist_ok=True)
+    tmp_client.stamp_file.write_text(
+        json.dumps({"applied_at": time.time(), "generated_at": "2026-03-26T12:00:00Z"}),
+        encoding="utf-8",
+    )
+    updated, archetypes_by_format = tmp_client.apply()
+    assert updated is False
+    assert archetypes_by_format is None
 
 
 # ---------------------------------------------------------------------------

@@ -105,18 +105,25 @@ class BundleSnapshotClient:
     # Public API                                                            #
     # ------------------------------------------------------------------ #
 
-    def apply(self) -> bool:
+    def apply(self) -> tuple[bool, dict[str, list[dict[str, Any]]] | None]:
         """Download the bundle (if stale) and hydrate local caches.
 
-        Returns ``True`` if the caches were updated, ``False`` if the local
-        stamp was still fresh (no network activity).
+        Returns a ``(updated, archetypes_by_format)`` tuple:
+
+        - ``updated`` is ``True`` if caches were written, ``False`` if the local
+          stamp was still fresh (no network activity).
+        - ``archetypes_by_format`` maps lowercase format name to the archetype list
+          parsed from the bundle, or ``None`` when the bundle was not applied.
+
+        The caller can use ``archetypes_by_format`` to skip a redundant disk read
+        immediately after hydration.
 
         Raises ``BundleSnapshotError`` only when the download itself fails
         unrecoverably; individual parse errors are logged and skipped.
         """
         if self._is_stamp_fresh():
             logger.debug("Bundle stamp is fresh — skipping download")
-            return False
+            return False, None
 
         logger.info("Downloading remote client bundle…")
         bundle_bytes = self._download_bundle()
@@ -146,7 +153,15 @@ class BundleSnapshotClient:
             f"{radars}/{len(radar_entries)} radars, "
             f"{inserted}/{len(deck_texts)} deck texts inserted (generated_at={generated_at})"
         )
-        return True
+
+        archetypes_by_format: dict[str, list[dict[str, Any]]] = {}
+        for entry in archetype_entries:
+            fmt = entry.get("format", "").lower()
+            archetypes = entry.get("archetypes")
+            if fmt and isinstance(archetypes, list):
+                archetypes_by_format[fmt] = archetypes
+
+        return True, archetypes_by_format or None
 
     # ------------------------------------------------------------------ #
     # Stamp management                                                      #
