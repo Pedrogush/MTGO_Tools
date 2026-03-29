@@ -305,7 +305,12 @@ class AppEventHandlers:
         self.research_panel.enable_controls()
         count = len(self.archetypes)
         self._set_status("app.research.archetypes_loaded", count=count, format=self.current_format)
-        self.summary_text.ChangeValue(self._t("app.research.select_archetype_loaded", count=count))
+        # Skip overwriting the deck summary if a deck is already displayed — this handler
+        # may be called a second time by the background stale-while-revalidate refresh.
+        if not self._has_deck_loaded():
+            self.summary_text.ChangeValue(
+                self._t("app.research.select_archetype_loaded", count=count)
+            )
 
     def _on_archetypes_error(self: AppFrame, error: Exception) -> None:
         with self._loading_lock:

@@ -8,7 +8,9 @@ This module handles all metagame-related data fetching including:
 """
 
 import json
+import threading
 import time
+from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final
@@ -86,32 +88,48 @@ class MetagameRepository:
     # ============= Archetype Operations =============
 
     def get_archetypes_for_format(
-        self, mtg_format: str, force_refresh: bool = False
+        self,
+        mtg_format: str,
+        force_refresh: bool = False,
+        on_background_refresh: Callable[[list[dict[str, Any]]], None] | None = None,
     ) -> list[dict[str, Any]]:
         """
         Get list of archetypes for a specific format.
 
         Resolution order (unless force_refresh):
         1. Local cache (if still fresh)
-        2. Remote snapshot (if REMOTE_SNAPSHOTS_ENABLED)
-        3. Live MTGGoldfish scrape
-        4. Stale local cache (last-resort fallback on live-scrape failure)
+        2. Stale local cache — returned immediately while a background re-fetch is
+           triggered via ``on_background_refresh`` (stale-while-revalidate)
+        3. Remote snapshot (if REMOTE_SNAPSHOTS_ENABLED)
+        4. Live MTGGoldfish scrape
+        5. Stale local cache (last-resort fallback on live-scrape failure)
 
         Args:
             mtg_format: MTG format (e.g., "Modern", "Standard")
             force_refresh: If True, bypass local cache and fetch fresh data
+            on_background_refresh: Optional callback invoked with fresh archetypes
+                once the background re-fetch completes (only used when stale cache
+                is returned via the stale-while-revalidate path).
 
         Returns:
             List of archetype dictionaries with keys: name, url, share, etc.
         """
-        # 1. Local cache
+        # 1. Fresh local cache
         if not force_refresh:
             cached = self._load_cached_archetypes(mtg_format)
             if cached is not None:
                 logger.debug(f"[local-cache] archetypes for {mtg_format}")
                 return cached
 
-        # 2. Remote snapshot
+            # 2. Stale-while-revalidate: return stale immediately and refresh in background
+            stale = self._load_cached_archetypes(mtg_format, max_age=None)
+            if stale is not None:
+                logger.info(f"[stale-while-revalidate] archetypes for {mtg_format}")
+                if on_background_refresh is not None:
+                    self._trigger_background_refresh(mtg_format, on_background_refresh)
+                return stale
+
+        # 3. Remote snapshot
         remote = self._remote_client_or_default()
         if remote is not None:
             try:
@@ -123,7 +141,7 @@ class MetagameRepository:
             except Exception as exc:
                 logger.warning(f"Remote snapshot archetypes failed for {mtg_format}: {exc}")
 
-        # 3. Live scrape
+        # 4. Live scrape
         logger.info(f"[live-scrape] archetypes for {mtg_format}")
         try:
             archetypes = get_archetypes(mtg_format)
@@ -131,7 +149,7 @@ class MetagameRepository:
             return archetypes
         except Exception as exc:
             logger.error(f"Failed to fetch archetypes: {exc}")
-            # 4. Stale cache as last resort
+            # 5. Stale cache as last resort
             cached = self._load_cached_archetypes(mtg_format, max_age=None)
             if cached:
                 logger.warning(f"[stale-cache] archetypes for {mtg_format}")
@@ -278,6 +296,35 @@ class MetagameRepository:
         from services.remote_snapshot_client import get_remote_snapshot_client
 
         return get_remote_snapshot_client()
+
+    def _trigger_background_refresh(
+        self, mtg_format: str, callback: Callable[[list[dict[str, Any]]], None]
+    ) -> None:
+        """Spawn a daemon thread to fetch fresh archetypes and call *callback* on success.
+
+        Resolution order mirrors the main fetch (remote snapshot → live scrape).
+        On failure the exception is logged and *callback* is not invoked.
+        """
+
+        def _do_refresh() -> None:
+            try:
+                remote = self._remote_client_or_default()
+                if remote is not None:
+                    try:
+                        fresh = remote.get_archetypes_for_format(mtg_format)
+                        if fresh is not None:
+                            self._save_cached_archetypes(mtg_format, fresh)
+                            callback(fresh)
+                            return
+                    except Exception:
+                        pass
+                fresh = get_archetypes(mtg_format)
+                self._save_cached_archetypes(mtg_format, fresh)
+                callback(fresh)
+            except Exception as exc:
+                logger.warning(f"[background-refresh] archetypes for {mtg_format} failed: {exc}")
+
+        threading.Thread(target=_do_refresh, daemon=True, name=f"archetype-bg-{mtg_format}").start()
 
     # ============= Cache Management =============
 
