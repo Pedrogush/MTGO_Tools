@@ -442,6 +442,20 @@ class MetagameAnalysisFrame(wx.Frame):
             )
             return
 
+        previous_total = sum(self.previous_data.values())
+        if previous_total == 0:
+            self._set_changes_html(
+                self._build_changes_html(
+                    self._t("metagame.label.changes"),
+                    [
+                        "<div class='empty'>"
+                        f"{escape(self._t('metagame.changes.previous_missing'))}"
+                        "</div>"
+                    ],
+                )
+            )
+            return
+
         current_pct = self._calculate_percentages(self.current_data)
         previous_pct = self._calculate_percentages(self.previous_data)
 
