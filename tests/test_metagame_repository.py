@@ -233,6 +233,175 @@ def test_get_decks_returns_stale_cache_when_fetch_fails(
     assert result == stale_items
 
 
+# ============= Stale-While-Revalidate Tests =============
+
+
+def test_stale_while_revalidate_returns_stale_immediately(
+    archetype_cache_file, archetype_deck_cache_file
+):
+    """When cache is stale, get_archetypes_for_format returns it right away."""
+    repo = MetagameRepository(
+        cache_ttl=1,
+        archetype_list_cache_file=archetype_cache_file,
+        archetype_decks_cache_file=archetype_deck_cache_file,
+    )
+    stale_items = [{"name": "UR Murktide"}]
+    _write_cache(
+        archetype_cache_file,
+        {"Modern": {"timestamp": time.time() - 3600, "items": stale_items}},
+    )
+
+    result = repo.get_archetypes_for_format("Modern")
+
+    assert result == stale_items
+
+
+def test_stale_while_revalidate_triggers_background_refresh(
+    archetype_cache_file, archetype_deck_cache_file, monkeypatch
+):
+    """Background refresh callback is invoked with fresh data when cache is stale."""
+    import threading
+
+    repo = MetagameRepository(
+        cache_ttl=1,
+        archetype_list_cache_file=archetype_cache_file,
+        archetype_decks_cache_file=archetype_deck_cache_file,
+    )
+    stale_items = [{"name": "UR Murktide"}]
+    fresh_items = [{"name": "UR Murktide"}, {"name": "Amulet Titan"}]
+    _write_cache(
+        archetype_cache_file,
+        {"Modern": {"timestamp": time.time() - 3600, "items": stale_items}},
+    )
+
+    monkeypatch.setattr(
+        "repositories.metagame_repository.get_archetypes",
+        lambda _fmt: fresh_items,
+    )
+
+    refresh_received: list[list] = []
+    done = threading.Event()
+
+    def on_refresh(items):
+        refresh_received.append(items)
+        done.set()
+
+    result = repo.get_archetypes_for_format("Modern", on_background_refresh=on_refresh)
+
+    assert result == stale_items
+    assert done.wait(timeout=5), "background refresh did not complete in time"
+    assert refresh_received == [fresh_items]
+
+
+def test_stale_while_revalidate_no_callback_no_background_thread(
+    archetype_cache_file, archetype_deck_cache_file, monkeypatch
+):
+    """No background thread is started when on_background_refresh is not provided."""
+    repo = MetagameRepository(
+        cache_ttl=1,
+        archetype_list_cache_file=archetype_cache_file,
+        archetype_decks_cache_file=archetype_deck_cache_file,
+    )
+    stale_items = [{"name": "UR Murktide"}]
+    _write_cache(
+        archetype_cache_file,
+        {"Modern": {"timestamp": time.time() - 3600, "items": stale_items}},
+    )
+
+    triggered = []
+    monkeypatch.setattr(repo, "_trigger_background_refresh", lambda *a: triggered.append(a))
+
+    repo.get_archetypes_for_format("Modern")
+
+    assert triggered == [], "background refresh should not be triggered without a callback"
+
+
+def test_stale_while_revalidate_updates_cache_on_refresh(
+    archetype_cache_file, archetype_deck_cache_file, monkeypatch
+):
+    """Background refresh persists fresh data to the cache."""
+    import threading
+
+    repo = MetagameRepository(
+        cache_ttl=1,
+        archetype_list_cache_file=archetype_cache_file,
+        archetype_decks_cache_file=archetype_deck_cache_file,
+    )
+    stale_items = [{"name": "UR Murktide"}]
+    fresh_items = [{"name": "UR Murktide"}, {"name": "Amulet Titan"}]
+    _write_cache(
+        archetype_cache_file,
+        {"Modern": {"timestamp": time.time() - 3600, "items": stale_items}},
+    )
+
+    monkeypatch.setattr(
+        "repositories.metagame_repository.get_archetypes",
+        lambda _fmt: fresh_items,
+    )
+
+    done = threading.Event()
+    repo.get_archetypes_for_format("Modern", on_background_refresh=lambda _: done.set())
+    done.wait(timeout=5)
+
+    # After background refresh the cache should be fresh
+    cached = repo._load_cached_archetypes("Modern")
+    assert cached == fresh_items
+
+
+def test_stale_while_revalidate_background_failure_is_silent(
+    archetype_cache_file, archetype_deck_cache_file, monkeypatch
+):
+    """A failed background refresh does not invoke the callback and does not raise."""
+    import threading
+
+    repo = MetagameRepository(
+        cache_ttl=1,
+        archetype_list_cache_file=archetype_cache_file,
+        archetype_decks_cache_file=archetype_deck_cache_file,
+    )
+    stale_items = [{"name": "UR Murktide"}]
+    _write_cache(
+        archetype_cache_file,
+        {"Modern": {"timestamp": time.time() - 3600, "items": stale_items}},
+    )
+
+    monkeypatch.setattr(
+        "repositories.metagame_repository.get_archetypes",
+        lambda _fmt: (_ for _ in ()).throw(RuntimeError("network down")),
+    )
+
+    callback_called = threading.Event()
+    repo.get_archetypes_for_format("Modern", on_background_refresh=lambda _: callback_called.set())
+
+    # Give thread a moment to fail
+    callback_called.wait(timeout=1)
+    assert not callback_called.is_set(), "callback must not be called on refresh failure"
+
+
+def test_fresh_cache_does_not_trigger_background_refresh(
+    archetype_cache_file, archetype_deck_cache_file, monkeypatch
+):
+    """When cache is fresh, no background refresh is triggered."""
+    repo = MetagameRepository(
+        cache_ttl=3600,
+        archetype_list_cache_file=archetype_cache_file,
+        archetype_decks_cache_file=archetype_deck_cache_file,
+    )
+    fresh_items = [{"name": "Cascade Crasher"}]
+    _write_cache(
+        archetype_cache_file,
+        {"Modern": {"timestamp": time.time(), "items": fresh_items}},
+    )
+
+    triggered = []
+    monkeypatch.setattr(repo, "_trigger_background_refresh", lambda *a: triggered.append(a))
+
+    result = repo.get_archetypes_for_format("Modern", on_background_refresh=lambda _: None)
+
+    assert result == fresh_items
+    assert triggered == [], "background refresh must not fire on a fresh cache hit"
+
+
 # ============= Stale Fallback Tests =============
 
 

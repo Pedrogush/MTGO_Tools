@@ -191,8 +191,14 @@ class AppController:
 
         on_status("app.status.loading_archetypes_for", format=self.current_format)
 
+        def _on_bg_refresh(fresh_archetypes: list[dict[str, Any]]) -> None:
+            """Called from the repository's background thread with fresh archetype data."""
+            on_success(fresh_archetypes)
+
         def loader(fmt: str):
-            return self.workflow_service.fetch_archetypes(fmt, force=force)
+            return self.metagame_repo.get_archetypes_for_format(
+                fmt, force_refresh=force, on_background_refresh=_on_bg_refresh
+            )
 
         def success_handler(archetypes: list[dict[str, Any]]):
             with self._loading_lock:
@@ -479,9 +485,17 @@ class AppController:
     def run_initial_loads(self, deck_save_dir: Path, force_archetypes: bool = False) -> None:
         callbacks = self._ui_callbacks
 
-        # Step 1: Apply remote bundle to warm caches, then fetch archetypes.
-        # On failure the fetch still proceeds so the live scraper path handles it.
-        def _apply_bundle():
+        # Step 1: Start archetype fetch immediately from local cache (optimistic load),
+        # and run the bundle download in parallel.  If apply() returns True the caches
+        # were updated, so trigger a silent background re-fetch to refresh the list.
+        self.fetch_archetypes(
+            on_success=callbacks.on_archetypes_success if callbacks else None,
+            on_error=callbacks.on_archetypes_error if callbacks else None,
+            on_status=callbacks.on_status if callbacks else None,
+            force=force_archetypes,
+        )
+
+        def _apply_bundle() -> bool:
             from services.bundle_snapshot_client import get_bundle_snapshot_client
 
             return get_bundle_snapshot_client().apply()
@@ -505,13 +519,7 @@ class AppController:
             )
 
         def _on_bundle_error(exc: Exception) -> None:
-            logger.warning(f"Remote bundle apply failed, proceeding with live fetch: {exc}")
-            self.fetch_archetypes(
-                on_success=callbacks.on_archetypes_success if callbacks else None,
-                on_error=callbacks.on_archetypes_error if callbacks else None,
-                on_status=callbacks.on_status if callbacks else None,
-                force=force_archetypes,
-            )
+            logger.warning(f"Remote bundle apply failed: {exc}")
 
         self._worker.submit(_apply_bundle, on_success=_on_bundle_done, on_error=_on_bundle_error)
 
@@ -532,6 +540,14 @@ class AppController:
 
         # Step 4: Check and download bulk data if needed (non-blocking)
         self.check_and_download_bulk_data()
+
+        # Step 5: Pre-load 59 MB card index in the background so it is ready
+        # before the user first types in the builder search box.
+        self.ensure_card_data_loaded(
+            on_success=lambda _: None,
+            on_error=lambda exc: logger.warning(f"Background card data pre-load failed: {exc}"),
+            on_status=callbacks.on_status if callbacks else lambda *a, **kw: None,
+        )
 
     # ============= Frame Factory =============
 
