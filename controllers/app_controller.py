@@ -523,6 +523,14 @@ class AppController:
         # Step 4: Check and download bulk data if needed (non-blocking)
         self.check_and_download_bulk_data()
 
+        # Step 5: Pre-load 59 MB card index in the background so it is ready
+        # before the user first types in the builder search box.
+        self.ensure_card_data_loaded(
+            on_success=lambda _: None,
+            on_error=lambda exc: logger.warning(f"Background card data pre-load failed: {exc}"),
+            on_status=callbacks.on_status if callbacks else lambda *a, **kw: None,
+        )
+
     # ============= Frame Factory =============
 
     def create_frame(self, parent: wx.Window | None = None) -> AppFrame:
