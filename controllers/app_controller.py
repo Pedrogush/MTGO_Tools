@@ -191,8 +191,14 @@ class AppController:
 
         on_status("app.status.loading_archetypes_for", format=self.current_format)
 
+        def _on_bg_refresh(fresh_archetypes: list[dict[str, Any]]) -> None:
+            """Called from the repository's background thread with fresh archetype data."""
+            on_success(fresh_archetypes)
+
         def loader(fmt: str):
-            return self.workflow_service.fetch_archetypes(fmt, force=force)
+            return self.metagame_repo.get_archetypes_for_format(
+                fmt, force_refresh=force, on_background_refresh=_on_bg_refresh
+            )
 
         def success_handler(archetypes: list[dict[str, Any]]):
             with self._loading_lock:
