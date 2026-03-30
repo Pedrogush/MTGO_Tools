@@ -102,7 +102,39 @@ class CardTablePanel(wx.Panel):
         self.scroller.SetupScrolling(scroll_x=False, scroll_y=True, rate_x=5, rate_y=5)
         self._content_book.AddPage(self.scroller, "cards")
 
+        self._loading_state = self._build_loading_state(self._content_book)
+        self._content_book.AddPage(self._loading_state, "loading")
+
         outer.Add(self._content_book, 1, wx.EXPAND)
+
+    @staticmethod
+    def _build_loading_state(parent: wx.Window) -> wx.Panel:
+        panel = wx.Panel(parent)
+        panel.SetBackgroundColour(DARK_PANEL)
+        sizer = wx.BoxSizer(wx.VERTICAL)
+        panel.SetSizer(sizer)
+
+        sizer.AddStretchSpacer(2)
+        label = wx.StaticText(panel, label="")
+        label.SetForegroundColour(wx.Colour(*SUBDUED_TEXT))
+        label.SetFont(
+            wx.Font(
+                _EMPTY_STATE_HEADING_SIZE,
+                wx.FONTFAMILY_SWISS,
+                wx.FONTSTYLE_NORMAL,
+                wx.FONTWEIGHT_NORMAL,
+            )
+        )
+        sizer.Add(label, 0, wx.ALIGN_CENTER_HORIZONTAL)
+        sizer.AddStretchSpacer(3)
+        panel._label = label  # type: ignore[attr-defined]
+        return panel
+
+    def show_loading(self, label: str) -> None:
+        """Display a loading message in place of the card grid."""
+        self._loading_state._label.SetLabel(label)  # type: ignore[attr-defined]
+        if self._content_book.GetSelection() != 2:
+            self._content_book.ChangeSelection(2)
 
     @staticmethod
     def _build_empty_state(parent: wx.Window, zone: str) -> wx.Panel:

@@ -212,6 +212,7 @@ MESSAGES: dict[str, str] = {
     "top_cards.col.card": "Card",
     "top_cards.col.copies": "Copies",
     "app.status.loading_decks": "Loading decks for {name}\u2026",
+    "deck.loading": "Loading deck\u2026",
     "tracker.status.no_active_match": "No active match detected",
     "tracker.status.waiting": "Waiting for MTGO match window\u2026",
     "metagame.chart.no_data": "No data available for selected period",
