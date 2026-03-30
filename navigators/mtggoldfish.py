@@ -224,59 +224,6 @@ def get_archetype_stats(mtg_format: str):
     return stats
 
 
-def get_daily_decks(mtg_format: str):
-    try:
-        page = requests.get(
-            f"https://www.mtggoldfish.com/metagame/{mtg_format}",
-            impersonate="chrome",
-            timeout=MTGGOLDFISH_REQUEST_TIMEOUT_SECONDS,
-        )
-        page.raise_for_status()
-    except Exception as exc:
-        logger.error(f"Failed to fetch daily decks for {mtg_format}: {exc}")
-        return {}
-
-    soup = bs4.BeautifulSoup(page.text, "lxml")
-    table_container = soup.select_one("div.similar-events-container")
-    if not table_container:
-        logger.warning(f"Daily decks container missing for format {mtg_format}")
-        return {}
-    h4s: list[bs4.Tag] = table_container.find_all("h4")
-    decks = {}
-    for h4 in h4s:
-        date = h4.find("nobr").text.strip().replace("on ", "")
-        tournament_type = h4.find("a").text.strip()
-        has_placement = "challenge" in tournament_type.lower()
-        if date not in decks:
-            decks[date] = []
-        tbody: bs4.Tag = h4.find_next_sibling()
-        cells = tbody.select("tr.striped")
-        for cell in cells:
-            deck_name = (
-                cell.select_one("td.column-deck").select_one("span.deck-price-paper").text.strip()
-            )
-            deck_number = (
-                cell.select_one("td.column-deck")
-                .select_one("a")["href"]
-                .replace("#online", "")
-                .replace("/deck/", "")
-            )
-            player_name = cell.select_one("td.column-player").text.strip()
-            placement = None
-            if has_placement:
-                placement = cell.select_one("td.column-place").text.strip()
-            decks[date].append(
-                {
-                    "deck_name": deck_name,
-                    "player_name": player_name,
-                    "tournament_type": tournament_type,
-                    "deck_number": deck_number,
-                    "placement": placement,
-                }
-            )
-    return decks
-
-
 # Flag to track if migration has been attempted
 _migration_attempted = False
 

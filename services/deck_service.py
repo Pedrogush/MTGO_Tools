@@ -20,12 +20,7 @@ from repositories.metagame_repository import MetagameRepository, get_metagame_re
 from services.deck_averager import DeckAverager
 from services.deck_parser import DeckParser
 from services.deck_text_builder import DeckTextBuilder
-from utils.constants import (
-    DEFAULT_MAX_DECKS,
-    MAINBOARD_MIN_CARDS,
-    MAINBOARD_TARGET_CARDS,
-    SIDEBOARD_MAX_CARDS,
-)
+from utils.constants import DEFAULT_MAX_DECKS
 
 
 @dataclass(frozen=True)
@@ -152,66 +147,6 @@ class DeckService:
             logger.error(f"Failed to build daily average: {exc}")
             return "", 0
 
-    # ============= Deck Validation =============
-
-    def validate_deck_format(self, deck_content: str, format_name: str) -> dict[str, Any]:
-        """
-        Validate a deck against format rules.
-
-        Args:
-            deck_content: Deck list as text
-            format_name: Format to validate against (e.g., "Modern", "Standard")
-
-        Returns:
-            Dictionary with validation results:
-                - valid: bool
-                - errors: list of error messages
-                - warnings: list of warning messages
-        """
-        analysis = self.analyze_deck(deck_content)
-        errors = []
-        warnings = []
-
-        # Check mainboard size
-        mainboard_count = analysis["mainboard_count"]
-        if mainboard_count < MAINBOARD_MIN_CARDS:
-            errors.append(f"Mainboard has {mainboard_count} cards (minimum {MAINBOARD_MIN_CARDS})")
-        elif mainboard_count > MAINBOARD_TARGET_CARDS:
-            warnings.append(
-                f"Mainboard has {mainboard_count} cards (more than minimum {MAINBOARD_TARGET_CARDS})"
-            )
-
-        # Check sideboard size
-        sideboard_count = analysis["sideboard_count"]
-        if sideboard_count > SIDEBOARD_MAX_CARDS:
-            errors.append(f"Sideboard has {sideboard_count} cards (maximum {SIDEBOARD_MAX_CARDS})")
-
-        # Format-specific validations could be added here
-        # For example, checking banned cards, card limits, etc.
-
-        return {
-            "valid": len(errors) == 0,
-            "errors": errors,
-            "warnings": warnings,
-            "analysis": analysis,
-        }
-
-    def is_valid_deck_size(self, deck_content: str) -> bool:
-        """
-        Quick check if deck has valid size (60+ mainboard, 0-15 sideboard).
-
-        Args:
-            deck_content: Deck list as text
-
-        Returns:
-            True if valid size, False otherwise
-        """
-        analysis = self.analyze_deck(deck_content)
-        return (
-            analysis["mainboard_count"] >= MAINBOARD_MIN_CARDS
-            and analysis["sideboard_count"] <= SIDEBOARD_MAX_CARDS
-        )
-
     # ============= Deck Building Helpers =============
 
     def build_deck_text_from_zones(self, zone_cards: dict[str, list[dict[str, Any]]]) -> str:
@@ -239,23 +174,6 @@ class DeckService:
             Formatted deck list text
         """
         return self.deck_text_builder.build_deck_text(zones)
-
-    # ============= Zone Management =============
-
-    def handle_zone_change(self, zone_cards: dict[str, list[dict[str, Any]]]) -> ZoneUpdateResult:
-        """
-        Handle changes to zone cards (mainboard/sideboard).
-
-        Args:
-            zone_cards: Dictionary with 'main' and 'side' keys mapping to card lists
-
-        Returns:
-            ZoneUpdateResult with updated deck text and loaded state
-        """
-        deck_text = self.build_deck_text_from_zones(zone_cards)
-        self.deck_repo.set_current_deck_text(deck_text)
-        has_loaded_deck = bool(zone_cards.get("main") or zone_cards.get("side"))
-        return ZoneUpdateResult(deck_text=deck_text, has_loaded_deck=has_loaded_deck)
 
     # ============= Daily Average Building =============
 

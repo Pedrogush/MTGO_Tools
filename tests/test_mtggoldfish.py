@@ -14,7 +14,6 @@ from navigators.mtggoldfish import (
     download_deck,
     get_archetype_decks,
     get_archetypes,
-    get_daily_decks,
 )
 
 # Sample HTML for testing
@@ -57,50 +56,6 @@ SAMPLE_ARCHETYPE_DECKS_HTML = """
         <td>5-0</td>
     </tr>
 </table>
-</body>
-</html>
-"""
-
-SAMPLE_DAILY_DECKS_HTML = """
-<html>
-<body>
-<div class="similar-events-container">
-    <h4>
-        <nobr>on Jan 15, 2025</nobr>
-        <a>MTGO Challenge</a>
-    </h4>
-    <tbody>
-        <tr class="striped">
-            <td class="column-deck">
-                <span class="deck-price-paper">Rakdos Midrange</span>
-                <a href="/deck/123456#online">View</a>
-            </td>
-            <td class="column-player">PlayerOne</td>
-            <td class="column-place">1st</td>
-        </tr>
-        <tr class="striped">
-            <td class="column-deck">
-                <span class="deck-price-paper">Amulet Titan</span>
-                <a href="/deck/789012#online">View</a>
-            </td>
-            <td class="column-player">PlayerTwo</td>
-            <td class="column-place">2nd</td>
-        </tr>
-    </tbody>
-    <h4>
-        <nobr>on Jan 14, 2025</nobr>
-        <a>MTGO League</a>
-    </h4>
-    <tbody>
-        <tr class="striped">
-            <td class="column-deck">
-                <span class="deck-price-paper">Tron</span>
-                <a href="/deck/345678#online">View</a>
-            </td>
-            <td class="column-player">PlayerThree</td>
-        </tr>
-    </tbody>
-</div>
 </body>
 </html>
 """
@@ -378,55 +333,6 @@ class TestGetArchetypeDecks:
         result = get_archetype_decks("modern-rakdos-midrange")
         assert len(result) == 2  # Returns cached data as fallback
         assert result[0]["number"] == "123456"
-
-
-class TestGetDailyDecks:
-    """Test get_daily_decks function."""
-
-    @patch("navigators.mtggoldfish.requests.get")
-    def test_get_daily_decks_success(self, mock_get):
-        """Test successfully fetching daily decks."""
-        mock_response = Mock()
-        mock_response.text = SAMPLE_DAILY_DECKS_HTML
-        mock_response.raise_for_status = Mock()
-        mock_get.return_value = mock_response
-
-        result = get_daily_decks("modern")
-
-        assert "Jan 15, 2025" in result
-        assert "Jan 14, 2025" in result
-
-        jan_15_decks = result["Jan 15, 2025"]
-        assert len(jan_15_decks) == 2
-        assert jan_15_decks[0]["deck_name"] == "Rakdos Midrange"
-        assert jan_15_decks[0]["player_name"] == "PlayerOne"
-        assert jan_15_decks[0]["tournament_type"] == "MTGO Challenge"
-        assert jan_15_decks[0]["deck_number"] == "123456"
-        assert jan_15_decks[0]["placement"] == "1st"
-
-        jan_14_decks = result["Jan 14, 2025"]
-        assert len(jan_14_decks) == 1
-        assert jan_14_decks[0]["deck_name"] == "Tron"
-        assert jan_14_decks[0]["placement"] is None  # League doesn't have placement
-
-    @patch("navigators.mtggoldfish.requests.get")
-    def test_get_daily_decks_request_failure(self, mock_get):
-        """Test handling request failure."""
-        mock_get.side_effect = Exception("Network error")
-
-        result = get_daily_decks("modern")
-        assert result == {}
-
-    @patch("navigators.mtggoldfish.requests.get")
-    def test_get_daily_decks_missing_container(self, mock_get):
-        """Test handling missing container."""
-        mock_response = Mock()
-        mock_response.text = "<html><body>No container here</body></html>"
-        mock_response.raise_for_status = Mock()
-        mock_get.return_value = mock_response
-
-        result = get_daily_decks("modern")
-        assert result == {}
 
 
 # NOTE: TestFetchDeckText tests were removed because they tested the old JSON-based

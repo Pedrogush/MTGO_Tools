@@ -41,17 +41,6 @@ def stylize_listbox(ctrl: wx.ListBox) -> None:
         ctrl.SetSelectionForeground(wx.Colour(15, 17, 22))
 
 
-def stylize_listctrl(ctrl: wx.ListCtrl) -> None:
-    ctrl.SetBackgroundColour(DARK_ALT)
-    ctrl.SetTextColour(LIGHT_TEXT)
-    if hasattr(ctrl, "SetHighlightColour"):
-        ctrl.SetHighlightColour(DARK_ACCENT)
-    if hasattr(ctrl, "SetSelectionBackground"):
-        ctrl.SetSelectionBackground(DARK_ACCENT)
-    if hasattr(ctrl, "SetSelectionForeground"):
-        ctrl.SetSelectionForeground(wx.Colour(10, 12, 16))
-
-
 def stylize_button(button: wx.Button) -> None:
     button.SetBackgroundColour(DARK_ACCENT)
     button.SetForegroundColour(wx.Colour(12, 14, 18))

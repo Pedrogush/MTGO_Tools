@@ -8,7 +8,6 @@ This module handles all card-related data access including:
 - Printing information
 """
 
-from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -17,12 +16,6 @@ import msgspec.json
 from loguru import logger
 
 from utils.card_data import CardDataManager
-from utils.card_images import (
-    BULK_DATA_CACHE,
-    BulkImageDownloader,
-    ensure_printing_index_cache,
-    get_card_image,
-)
 
 # ---------------------------------------------------------------------------
 # msgspec schema for collection files
@@ -127,131 +120,6 @@ class CardRepository:
     def is_card_data_loaded(self) -> bool:
         """Check if card data has been loaded."""
         return self._card_data_manager is not None and self._card_data_manager.is_loaded
-
-    def load_card_data(self, force: bool = False) -> bool:
-        """
-        Load card data into memory.
-
-        Args:
-            force: If True, reload even if already loaded
-
-        Returns:
-            True if loaded successfully, False otherwise
-        """
-        try:
-            if not force and self.card_data_manager._cards is not None:
-                return True
-
-            self.card_data_manager.ensure_latest(force=force)
-            return True
-        except Exception as exc:
-            logger.error(f"Failed to load card data: {exc}")
-            return False
-
-    # ============= Card Image Operations =============
-
-    def get_card_image_path(self, card_name: str, set_code: str | None = None) -> Path | None:
-        """
-        Get the file path for a card image.
-
-        Args:
-            card_name: Name of the card
-            set_code: Specific set code (optional)
-
-        Returns:
-            Path to the image file or None if not found
-        """
-        try:
-            image_path = get_card_image(card_name, set_code=set_code)
-            return image_path
-        except Exception as exc:
-            logger.warning(f"Failed to get image for {card_name}: {exc}")
-            return None
-
-    def get_card_printings(self, card_name: str) -> list[dict[str, Any]]:
-        """
-        Get all printings for a specific card.
-
-        Args:
-            card_name: Name of the card
-
-        Returns:
-            List of printing dictionaries with set info
-        """
-        try:
-            # Use the card data manager to get printings
-            printings = self.card_data_manager.get_printings(card_name)
-            return printings or []
-        except Exception as exc:
-            logger.warning(f"Failed to get printings for {card_name}: {exc}")
-            return []
-
-    def ensure_printing_cache(self) -> bool:
-        """
-        Ensure the printing index cache is available.
-
-        Returns:
-            True if cache is ready, False otherwise
-        """
-        try:
-            ensure_printing_index_cache()
-            return True
-        except Exception as exc:
-            logger.error(f"Failed to ensure printing cache: {exc}")
-            return False
-
-    # ============= Bulk Data Operations =============
-
-    def is_bulk_data_cached(self) -> bool:
-        """
-        Check if bulk card data is cached locally.
-
-        Returns:
-            True if bulk data cache exists
-        """
-        return BULK_DATA_CACHE.exists()
-
-    def download_bulk_data(self, callback: Callable | None = None) -> bool:
-        """
-        Download bulk card data.
-
-        Args:
-            callback: Optional callback function for progress updates
-
-        Returns:
-            True if successful, False otherwise
-        """
-        try:
-            downloader = BulkImageDownloader()
-            # This would need to be adapted based on actual BulkImageDownloader API
-            # For now, just attempt the download
-            success = downloader.download_bulk_data(callback=callback)
-            return success
-        except Exception as exc:
-            logger.error(f"Failed to download bulk data: {exc}")
-            return False
-
-    def get_bulk_cache_info(self) -> dict[str, Any]:
-        """
-        Get information about the bulk data cache.
-
-        Returns:
-            Dictionary with cache information (size, last_modified, etc.)
-        """
-        if not BULK_DATA_CACHE.exists():
-            return {"exists": False}
-
-        try:
-            stat = BULK_DATA_CACHE.stat()
-            return {
-                "exists": True,
-                "size_bytes": stat.st_size,
-                "size_mb": stat.st_size / (1024 * 1024),
-                "last_modified": stat.st_mtime,
-            }
-        except OSError as exc:
-            logger.warning(f"Failed to get cache info: {exc}")
-            return {"exists": True, "error": str(exc)}
 
     # ============= Collection/Inventory Operations =============
 
