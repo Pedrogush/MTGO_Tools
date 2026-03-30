@@ -234,6 +234,50 @@ def test_calculate_radar_handles_failures(
     assert radar.decks_failed == 1
 
 
+def test_calculate_radar_falls_back_to_live_when_precomputed_snapshot_is_empty(
+    tmp_path, mock_metagame_repo, mock_deck_service
+):
+    """Empty precomputed snapshots should not block live radar scraping."""
+    repo = RadarRepository(tmp_path / "radar_cache.db")
+    repo.replace_radar(
+        {
+            "format": "modern",
+            "generated_at": "2026-03-26T12:00:00Z",
+            "source": "published-deck-texts",
+            "archetype": {"name": "Azorius Control", "href": "modern-azorius-control"},
+            "total_decks_analyzed": 0,
+            "decks_failed": 0,
+            "mainboard_cards": [],
+            "sideboard_cards": [],
+        }
+    )
+    mock_metagame_repo.get_decks_for_archetype.return_value = [
+        {"name": "Deck 1", "url": "https://example.com/deck1"}
+    ]
+    mock_metagame_repo.download_deck_content.return_value = (
+        "4 Lightning Bolt\n\nSideboard\n2 Counterspell"
+    )
+    mock_deck_service.analyze_deck.return_value = {
+        "mainboard_cards": [("Lightning Bolt", 4)],
+        "sideboard_cards": [("Counterspell", 2)],
+    }
+
+    service = RadarService(
+        metagame_repository=mock_metagame_repo,
+        deck_service=mock_deck_service,
+        radar_repository=repo,
+    )
+
+    radar = service.calculate_radar(
+        {"name": "Azorius Control", "href": "modern-azorius-control"},
+        "Modern",
+    )
+
+    assert radar.total_decks_analyzed == 1
+    assert radar.mainboard_cards[0].card_name == "Lightning Bolt"
+    mock_metagame_repo.get_decks_for_archetype.assert_called_once()
+
+
 def test_export_radar_as_decklist():
     """Test exporting radar as a deck list."""
     service = RadarService()
