@@ -199,6 +199,7 @@ MESSAGES: dict[str, str] = {
     "window.title.timer_alert": "Alerta de Tempo MTGO",
     "window.title.metagame_analysis": "Análise de Metagame",
     "app.status.loading_decks": "Carregando decks para {name}\u2026",
+    "deck.loading": "Carregando deck\u2026",
     "tracker.status.no_active_match": "Nenhuma partida ativa detectada",
     "tracker.status.waiting": "Aguardando janela de partida MTGO\u2026",
     "metagame.chart.no_data": "Sem dados disponíveis para o período selecionado",
