@@ -26,6 +26,7 @@ from utils.constants import (
     ONE_DAY_SECONDS,
 )
 from utils.deck_text_cache import get_deck_cache
+from utils.atomic_io import atomic_write_json, locked_path
 from utils.json_io import fast_load
 
 
@@ -116,11 +117,12 @@ def _load_cached_archetype_decks(archetype: str, max_age: int = METAGAME_CACHE_T
     """Load cached deck list for an archetype."""
     if not ARCHETYPE_DECKS_CACHE_FILE.exists():
         return None
-    try:
-        data = fast_load(ARCHETYPE_DECKS_CACHE_FILE)
-    except Exception as exc:
-        logger.warning(f"Cached archetype decks invalid: {exc}")
-        return None
+    with locked_path(ARCHETYPE_DECKS_CACHE_FILE):
+        try:
+            data = fast_load(ARCHETYPE_DECKS_CACHE_FILE)
+        except Exception as exc:
+            logger.warning(f"Cached archetype decks invalid: {exc}")
+            return None
     entry = data.get(archetype)
     if not entry:
         return None
@@ -131,14 +133,14 @@ def _load_cached_archetype_decks(archetype: str, max_age: int = METAGAME_CACHE_T
 
 def _save_cached_archetype_decks(archetype: str, items: list[dict]):
     """Save archetype deck list to cache."""
-    try:
-        data = fast_load(ARCHETYPE_DECKS_CACHE_FILE) if ARCHETYPE_DECKS_CACHE_FILE.exists() else {}
-    except Exception:
-        data = {}
-    data[archetype] = {"timestamp": time.time(), "items": items}
     ARCHETYPE_DECKS_CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
-    with ARCHETYPE_DECKS_CACHE_FILE.open("w", encoding="utf-8") as fh:
-        json.dump(data, fh, indent=2)
+    with locked_path(ARCHETYPE_DECKS_CACHE_FILE):
+        try:
+            data = fast_load(ARCHETYPE_DECKS_CACHE_FILE) if ARCHETYPE_DECKS_CACHE_FILE.exists() else {}
+        except Exception:
+            data = {}
+        data[archetype] = {"timestamp": time.time(), "items": items}
+        atomic_write_json(ARCHETYPE_DECKS_CACHE_FILE, data, indent=2)
 
 
 def get_archetype_decks(archetype: str):
