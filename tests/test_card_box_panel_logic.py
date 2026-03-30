@@ -103,4 +103,3 @@ def test_build_image_name_candidates(card: dict[str, Any], meta: Any, expected: 
     """_build_image_name_candidates must return the correct candidate list for each input."""
     result = CardBoxPanel._build_image_name_candidates(None, card, meta)
     assert result == expected
-

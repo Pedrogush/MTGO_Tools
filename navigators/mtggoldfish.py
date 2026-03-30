@@ -136,7 +136,9 @@ def _save_cached_archetype_decks(archetype: str, items: list[dict]):
     ARCHETYPE_DECKS_CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
     with locked_path(ARCHETYPE_DECKS_CACHE_FILE):
         try:
-            data = fast_load(ARCHETYPE_DECKS_CACHE_FILE) if ARCHETYPE_DECKS_CACHE_FILE.exists() else {}
+            data = (
+                fast_load(ARCHETYPE_DECKS_CACHE_FILE) if ARCHETYPE_DECKS_CACHE_FILE.exists() else {}
+            )
         except Exception:
             data = {}
         data[archetype] = {"timestamp": time.time(), "items": items}
