@@ -410,59 +410,6 @@ class CollectionService:
             is_loaded=self._collection_loaded,
         )
 
-    # ============= Collection Updates =============
-
-    def add_cards(self, card_name: str, count: int) -> None:
-        """
-        Add cards to the collection.
-
-        Args:
-            card_name: Name of the card
-            count: Number to add
-        """
-        if count <= 0:
-            return
-
-        current = self._collection.get(card_name, 0)
-        self._collection[card_name] = current + count
-        logger.debug(f"Added {count}x {card_name} to collection (now {current + count})")
-
-    def remove_cards(self, card_name: str, count: int) -> None:
-        """
-        Remove cards from the collection.
-
-        Args:
-            card_name: Name of the card
-            count: Number to remove
-        """
-        if count <= 0:
-            return
-
-        current = self._collection.get(card_name, 0)
-        new_count = max(0, current - count)
-
-        if new_count == 0:
-            self._collection.pop(card_name, None)
-        else:
-            self._collection[card_name] = new_count
-
-        logger.debug(f"Removed {count}x {card_name} from collection (now {new_count})")
-
-    def set_card_count(self, card_name: str, count: int) -> None:
-        """
-        Set the count for a specific card.
-
-        Args:
-            card_name: Name of the card
-            count: New count
-        """
-        if count <= 0:
-            self._collection.pop(card_name, None)
-        else:
-            self._collection[card_name] = count
-
-        logger.debug(f"Set {card_name} count to {count}")
-
     # ============= State Access Methods =============
 
     def get_inventory(self) -> dict[str, int]:

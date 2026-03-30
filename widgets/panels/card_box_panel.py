@@ -119,17 +119,6 @@ class CardBoxPanel(wx.Panel):
         self._bind_click_targets([self, self.qty_label])
         self._bind_hover_targets([self, self.qty_label, self.button_panel])
 
-    def update_quantity(
-        self, qty: int | float, owned_text: str, owned_colour: tuple[int, int, int]
-    ) -> None:
-        self.qty_label.SetLabel(str(qty))
-        self.qty_label.SetForegroundColour(wx.Colour(*owned_colour))
-        self.Layout()
-        self.Refresh()
-
-    def preload_image(self) -> None:
-        """No-op: image loading is now asynchronous via load_image_async()."""
-
     def refresh_image(self) -> None:
         self._image_attempted = False
         self._image_available = False

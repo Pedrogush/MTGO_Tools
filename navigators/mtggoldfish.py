@@ -8,6 +8,7 @@ import bs4
 from curl_cffi import requests
 from loguru import logger
 
+from utils.atomic_io import atomic_write_json, locked_path
 from utils.constants import (
     ARCHETYPE_CACHE_FILE,
     ARCHETYPE_DECKS_CACHE_FILE,
@@ -116,11 +117,12 @@ def _load_cached_archetype_decks(archetype: str, max_age: int = METAGAME_CACHE_T
     """Load cached deck list for an archetype."""
     if not ARCHETYPE_DECKS_CACHE_FILE.exists():
         return None
-    try:
-        data = fast_load(ARCHETYPE_DECKS_CACHE_FILE)
-    except Exception as exc:
-        logger.warning(f"Cached archetype decks invalid: {exc}")
-        return None
+    with locked_path(ARCHETYPE_DECKS_CACHE_FILE):
+        try:
+            data = fast_load(ARCHETYPE_DECKS_CACHE_FILE)
+        except Exception as exc:
+            logger.warning(f"Cached archetype decks invalid: {exc}")
+            return None
     entry = data.get(archetype)
     if not entry:
         return None
@@ -131,14 +133,16 @@ def _load_cached_archetype_decks(archetype: str, max_age: int = METAGAME_CACHE_T
 
 def _save_cached_archetype_decks(archetype: str, items: list[dict]):
     """Save archetype deck list to cache."""
-    try:
-        data = fast_load(ARCHETYPE_DECKS_CACHE_FILE) if ARCHETYPE_DECKS_CACHE_FILE.exists() else {}
-    except Exception:
-        data = {}
-    data[archetype] = {"timestamp": time.time(), "items": items}
     ARCHETYPE_DECKS_CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
-    with ARCHETYPE_DECKS_CACHE_FILE.open("w", encoding="utf-8") as fh:
-        json.dump(data, fh, indent=2)
+    with locked_path(ARCHETYPE_DECKS_CACHE_FILE):
+        try:
+            data = (
+                fast_load(ARCHETYPE_DECKS_CACHE_FILE) if ARCHETYPE_DECKS_CACHE_FILE.exists() else {}
+            )
+        except Exception:
+            data = {}
+        data[archetype] = {"timestamp": time.time(), "items": items}
+        atomic_write_json(ARCHETYPE_DECKS_CACHE_FILE, data, indent=2)
 
 
 def get_archetype_decks(archetype: str):
@@ -222,59 +226,6 @@ def get_archetype_stats(mtg_format: str):
     with ARCHETYPE_CACHE_FILE.open("w", encoding="utf-8") as f:
         json.dump(stats, f, indent=4)
     return stats
-
-
-def get_daily_decks(mtg_format: str):
-    try:
-        page = requests.get(
-            f"https://www.mtggoldfish.com/metagame/{mtg_format}",
-            impersonate="chrome",
-            timeout=MTGGOLDFISH_REQUEST_TIMEOUT_SECONDS,
-        )
-        page.raise_for_status()
-    except Exception as exc:
-        logger.error(f"Failed to fetch daily decks for {mtg_format}: {exc}")
-        return {}
-
-    soup = bs4.BeautifulSoup(page.text, "lxml")
-    table_container = soup.select_one("div.similar-events-container")
-    if not table_container:
-        logger.warning(f"Daily decks container missing for format {mtg_format}")
-        return {}
-    h4s: list[bs4.Tag] = table_container.find_all("h4")
-    decks = {}
-    for h4 in h4s:
-        date = h4.find("nobr").text.strip().replace("on ", "")
-        tournament_type = h4.find("a").text.strip()
-        has_placement = "challenge" in tournament_type.lower()
-        if date not in decks:
-            decks[date] = []
-        tbody: bs4.Tag = h4.find_next_sibling()
-        cells = tbody.select("tr.striped")
-        for cell in cells:
-            deck_name = (
-                cell.select_one("td.column-deck").select_one("span.deck-price-paper").text.strip()
-            )
-            deck_number = (
-                cell.select_one("td.column-deck")
-                .select_one("a")["href"]
-                .replace("#online", "")
-                .replace("/deck/", "")
-            )
-            player_name = cell.select_one("td.column-player").text.strip()
-            placement = None
-            if has_placement:
-                placement = cell.select_one("td.column-place").text.strip()
-            decks[date].append(
-                {
-                    "deck_name": deck_name,
-                    "player_name": player_name,
-                    "tournament_type": tournament_type,
-                    "deck_number": deck_number,
-                    "placement": placement,
-                }
-            )
-    return decks
 
 
 # Flag to track if migration has been attempted

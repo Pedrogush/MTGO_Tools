@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import importlib.util
 import sys
-import types
 from typing import Any
 
 import pytest
@@ -104,29 +103,3 @@ def test_build_image_name_candidates(card: dict[str, Any], meta: Any, expected: 
     """_build_image_name_candidates must return the correct candidate list for each input."""
     result = CardBoxPanel._build_image_name_candidates(None, card, meta)
     assert result == expected
-
-
-# ---------------------------------------------------------------------------
-# preload_image
-# ---------------------------------------------------------------------------
-def test_preload_image_is_no_op() -> None:
-    """preload_image() is now a no-op; it must not crash or call _refresh_card_bitmap."""
-    call_count = 0
-
-    def fake_refresh() -> None:
-        nonlocal call_count
-        call_count += 1
-
-    stub = types.SimpleNamespace(_image_attempted=False, _refresh_card_bitmap=fake_refresh)
-
-    CardBoxPanel.preload_image(stub)
-    CardBoxPanel.preload_image(stub)
-
-    assert call_count == 0
-
-
-def test_preload_image_does_not_raise_regardless_of_state() -> None:
-    """preload_image() must be safe to call whether or not _image_attempted is set."""
-    for attempted in (True, False):
-        stub = types.SimpleNamespace(_image_attempted=attempted)
-        CardBoxPanel.preload_image(stub)  # must not raise

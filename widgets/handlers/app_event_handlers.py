@@ -500,28 +500,6 @@ class AppEventHandlers:
         faux_card = {"name": meta.get("name", "Unknown"), "qty": 1}
         self.card_inspector_panel.update_card(faux_card, zone=None, meta=meta)
 
-    def _on_deck_source_changed(self: AppFrame, _event: wx.CommandEvent | None) -> None:
-        if not self.deck_source_choice:
-            return
-        selection = self.deck_source_choice.GetSelection()
-        source = (
-            self._deck_source_values[selection]
-            if 0 <= selection < len(self._deck_source_values)
-            else "both"
-        )
-        self._apply_deck_source(source)
-
-    def _on_language_changed(self: AppFrame, _event: wx.CommandEvent | None) -> None:
-        if not self.language_choice:
-            return
-        selection = self.language_choice.GetSelection()
-        locale = (
-            self._language_values[selection]
-            if 0 <= selection < len(self._language_values)
-            else "en-US"
-        )
-        self._apply_language(locale)
-
     def _on_daily_average_success(self, buffer: dict[str, float], deck_count: int) -> None:
         self.daily_average_button.Enable()
         deck_text = self.controller.deck_service.render_average_deck(buffer, deck_count)
