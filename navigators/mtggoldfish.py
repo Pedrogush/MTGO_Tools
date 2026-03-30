@@ -8,6 +8,7 @@ import bs4
 from curl_cffi import requests
 from loguru import logger
 
+from utils.atomic_io import atomic_write_json, locked_path
 from utils.constants import (
     ARCHETYPE_CACHE_FILE,
     ARCHETYPE_DECKS_CACHE_FILE,
@@ -26,7 +27,6 @@ from utils.constants import (
     ONE_DAY_SECONDS,
 )
 from utils.deck_text_cache import get_deck_cache
-from utils.atomic_io import atomic_write_json, locked_path
 from utils.json_io import fast_load
 
 
