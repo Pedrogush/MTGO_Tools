@@ -503,9 +503,8 @@ class AppEventHandlers:
         faux_card = {"name": meta.get("name", "Unknown"), "qty": 1}
         self.card_inspector_panel.update_card(faux_card, zone=None, meta=meta)
 
-    def _on_daily_average_success(self, buffer: dict[str, float], deck_count: int) -> None:
+    def _on_daily_average_success(self, deck_text: str) -> None:
         self.daily_average_button.Enable()
-        deck_text = self.controller.deck_service.render_average_deck(buffer, deck_count)
         self._on_deck_content_ready(deck_text, source="average")
 
     def _on_daily_average_error(self, error: Exception) -> None:
@@ -630,9 +629,7 @@ class AppEventHandlers:
         self.daily_average_button.Disable()
 
         can_proceed, message = self.controller.build_daily_average_deck(
-            on_success=lambda buffer, deck_count: wx.CallAfter(
-                self._on_daily_average_success, buffer, deck_count
-            ),
+            on_success=lambda deck_text: wx.CallAfter(self._on_daily_average_success, deck_text),
             on_error=lambda error: wx.CallAfter(self._on_daily_average_error, error),
             on_status=lambda *a, **kw: wx.CallAfter(self._set_status, *a, **kw),
             on_progress=lambda current, total: wx.CallAfter(

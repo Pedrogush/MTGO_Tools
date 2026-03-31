@@ -92,6 +92,9 @@ class AppController:
         # Deck data source preference
         self._deck_data_source = self.session_manager.get_deck_data_source()
 
+        # Average method preference
+        self._average_method = self.session_manager.get_average_method()
+
         # Event logger (opt-in, local-only)
         self.event_logger = EventLogger(
             LOGS_DIR,
@@ -303,7 +306,7 @@ class AppController:
 
     def build_daily_average_deck(
         self,
-        on_success: Callable[[dict[str, float], int], None],
+        on_success: Callable[[str], None],
         on_error: Callable[[Exception], None],
         on_status: Callable[[str], None],
         on_progress: Callable[[int, int], None] | None = None,
@@ -324,18 +327,25 @@ class AppController:
         on_status("app.status.building_daily_average")
 
         source_filter = self.get_deck_data_source()
+        method = self._average_method
+        deck_count = len(todays_decks)
 
         def worker(rows: list[dict[str, Any]]):
             return self.workflow_service.build_daily_average_buffer(
                 rows,
                 source_filter=source_filter,
+                method=method,
                 on_progress=on_progress,
             )
 
-        def success_handler(buffer: dict[str, float]):
+        def success_handler(buffer):
             with self._loading_lock:
                 self.loading_daily_average = False
-            on_success(buffer, len(todays_decks))
+            if method == "karsten":
+                deck_text = self.deck_service.render_karsten_deck(buffer)
+            else:
+                deck_text = self.deck_service.render_average_deck(buffer, deck_count)
+            on_success(deck_text)
 
         def error_handler(error: Exception):
             with self._loading_lock:
@@ -350,7 +360,7 @@ class AppController:
             on_error=error_handler,
         )
 
-        return True, f"Processing {len(todays_decks)} decks"
+        return True, f"Processing {deck_count} decks"
 
     # ============= Collection Management =============
 
@@ -419,6 +429,16 @@ class AppController:
             return
         self._deck_data_source = source
         self.session_manager.update_deck_data_source(source)
+
+    def get_average_method(self) -> str:
+        return self._average_method
+
+    def set_average_method(self, method: str) -> None:
+        valid = method if method in {"karsten", "arithmetic"} else "karsten"
+        if self._average_method == valid:
+            return
+        self._average_method = valid
+        self.session_manager.update_average_method(valid)
 
     def get_language(self) -> str:
         return self.current_language

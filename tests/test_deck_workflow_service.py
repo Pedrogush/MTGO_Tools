@@ -74,6 +74,9 @@ class FakeDeckService:
     def add_deck_to_buffer(self, *_args, **_kwargs):
         self.buffer_calls += 1
 
+    def add_deck_to_karsten_buffer(self, *_args, **_kwargs):
+        self.buffer_calls += 1
+
 
 def build_service(
     *,
