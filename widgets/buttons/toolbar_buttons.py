@@ -22,6 +22,7 @@ class ToolbarButtons(wx.Panel):
         on_open_match_history: Callable[[], None] | None = None,
         on_open_metagame_analysis: Callable[[], None] | None = None,
         on_open_top_cards: Callable[[], None] | None = None,
+        on_open_radar: Callable[[], None] | None = None,
         on_open_settings_menu: Callable[[wx.Window], None] | None = None,
         labels: dict[str, str] | None = None,
     ):
@@ -35,6 +36,7 @@ class ToolbarButtons(wx.Panel):
             on_open_match_history: Callback for "Match History"
             on_open_metagame_analysis: Callback for "Metagame Analysis"
             on_open_top_cards: Callback for "Top Cards"
+            on_open_radar: Callback for "Radar"
             on_open_settings_menu: Callback that opens the settings dropdown
         """
         super().__init__(parent)
@@ -68,6 +70,11 @@ class ToolbarButtons(wx.Panel):
             labels.get("top_cards", "Top Cards"),
             on_open_top_cards,
             tooltip=labels.get("top_cards_tooltip", ""),
+        )
+        self.radar_button = self._add_button(
+            labels.get("radar", "Radar"),
+            on_open_radar,
+            tooltip=labels.get("radar_tooltip", ""),
         )
 
         self._button_row.AddStretchSpacer(1)

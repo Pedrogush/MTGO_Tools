@@ -166,6 +166,7 @@ class AppEventHandlers:
             return
         archetype = self.filtered_archetypes[idx]
         self._load_decks_for_archetype(archetype)
+        self._preload_radar_for_archetype(archetype)
 
     def on_deck_selected(self: AppFrame, _event: wx.CommandEvent) -> None:
         with self._loading_lock:

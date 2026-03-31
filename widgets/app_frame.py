@@ -99,6 +99,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
         self._inspector_hover_timer: wx.Timer | None = None
         self._pending_hover: tuple[str, dict[str, Any]] | None = None
         self._pending_deck_restore: bool = False
+        self._preloaded_radar: Any = None
 
         self._build_ui()
         self._apply_window_preferences()
@@ -178,7 +179,6 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
             on_search=self._on_builder_search,
             on_clear=self._on_builder_clear,
             on_result_selected=self._on_builder_result_selected,
-            on_open_radar_dialog=self._open_radar_dialog,
             on_add_to_main=lambda name: self._handle_zone_delta("main", name, 1),
             on_add_to_side=lambda name: self._handle_zone_delta("side", name, 1),
             on_add_to_active_zone=self._add_search_card_to_active_zone,
@@ -253,6 +253,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
             on_open_match_history=self.open_match_history,
             on_open_metagame_analysis=self.open_metagame_analysis,
             on_open_top_cards=self.open_top_cards,
+            on_open_radar=self._open_radar_from_toolbar,
             on_open_settings_menu=self._open_toolbar_settings_menu,
             labels={
                 "opponent_tracker": self._t("toolbar.opponent_tracker"),
@@ -260,6 +261,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
                 "match_history": self._t("toolbar.match_history"),
                 "metagame_analysis": self._t("toolbar.metagame_analysis"),
                 "top_cards": self._t("toolbar.top_cards"),
+                "radar": self._t("toolbar.radar"),
                 "settings": "\u2699",
                 "settings_tooltip": self._t("toolbar.settings"),
                 "opponent_tracker_tooltip": self._t("toolbar.tooltip.opponent_tracker"),
@@ -267,6 +269,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
                 "match_history_tooltip": self._t("toolbar.tooltip.match_history"),
                 "metagame_analysis_tooltip": self._t("toolbar.tooltip.metagame_analysis"),
                 "top_cards_tooltip": self._t("toolbar.tooltip.top_cards"),
+                "radar_tooltip": self._t("toolbar.tooltip.radar"),
             },
         )
 
@@ -579,22 +582,43 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
             self, self.mana_icons, self.mana_keyboard_window, self._on_mana_keyboard_closed
         )
 
-    def _open_radar_dialog(self):
-        """Open the Radar dialog for archetype card frequency analysis."""
+    def _open_radar_from_toolbar(self) -> None:
+        """Open the Radar for the builder — use preloaded data if available, else show dialog."""
+        if self._preloaded_radar is not None:
+            if self.builder_panel:
+                self.builder_panel.set_active_radar(self._preloaded_radar)
+            return
+
         dialog = RadarDialog(
             parent=self,
             metagame_repo=self.controller.metagame_repo,
             format_name=self.current_format,
             locale=self.locale,
         )
-
         if dialog.ShowModal() == wx.ID_OK:
             radar = dialog.get_current_radar()
             dialog.Destroy()
-            return radar
-
+            if radar and self.builder_panel:
+                self.builder_panel.set_active_radar(radar)
+            return
         dialog.Destroy()
-        return None
+
+    def _preload_radar_for_archetype(self, archetype: dict) -> None:
+        """Kick off background radar computation for the selected archetype."""
+        from services.radar_service import RadarService
+
+        self._preloaded_radar = None
+        format_name = self.current_format
+        metagame_repo = self.controller.metagame_repo
+
+        def _compute():
+            svc = RadarService(metagame_repository=metagame_repo)
+            return svc.calculate_radar(archetype, format_name)
+
+        def _on_done(radar):
+            self._preloaded_radar = radar
+
+        self.controller._worker.submit(_compute, on_success=_on_done)
 
     def _open_tutorial(self) -> None:
         show_tutorial(self, locale=self.locale)
