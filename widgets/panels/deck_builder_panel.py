@@ -252,8 +252,7 @@ class DeckBuilderPanel(wx.Panel):
 
         # Radar state
         self.active_radar: RadarData | None = None
-        self.radar_enabled: bool = False
-        self.radar_zone: str = "both"  # "mainboard", "sideboard", or "both"
+        self.radar_filter: str = "off"  # "off", "main", or "side"
         self.format_pool_cb: wx.CheckBox | None = None
 
         # Build the UI
@@ -512,22 +511,20 @@ class DeckBuilderPanel(wx.Panel):
         self.format_pool_cb.Bind(wx.EVT_CHECKBOX, self._on_filters_changed)
         controls.Add(self.format_pool_cb, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, PADDING_MD)
 
-        # Radar toggle checkbox
-        self.radar_cb = wx.CheckBox(self, label=self._t("builder.radar.use_filter"))
-        self.radar_cb.SetForegroundColour(LIGHT_TEXT)
-        self.radar_cb.SetBackgroundColour(DARK_PANEL)
-        self.radar_cb.SetToolTip("Show only cards that appear in the loaded radar archetype")
-        self.radar_cb.Bind(wx.EVT_CHECKBOX, self._on_radar_toggle)
-        controls.Add(self.radar_cb, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, PADDING_MD)
+        # Radar filter dropdown: [-, Main, Side]
+        radar_filter_label = wx.StaticText(self, label=self._t("builder.radar.use_filter"))
+        radar_filter_label.SetForegroundColour(LIGHT_TEXT)
+        radar_filter_label.SetBackgroundColour(DARK_PANEL)
+        controls.Add(radar_filter_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 4)
 
-        # Radar zone choice
-        self.radar_zone_choice = wx.Choice(self, choices=["Both", "Mainboard", "Sideboard"])
-        self.radar_zone_choice.SetSelection(0)
-        stylize_choice(self.radar_zone_choice)
-        self.radar_zone_choice.SetToolTip("Limit radar filtering to mainboard, sideboard, or both")
-        self.radar_zone_choice.Enable(False)
-        self.radar_zone_choice.Bind(wx.EVT_CHOICE, self._on_radar_zone_changed)
-        controls.Add(self.radar_zone_choice, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, PADDING_MD)
+        self.radar_filter_choice = wx.Choice(self, choices=["-", "Main", "Side"])
+        self.radar_filter_choice.SetSelection(0)
+        stylize_choice(self.radar_filter_choice)
+        self.radar_filter_choice.SetToolTip(
+            "Filter cards by archetype radar zone: Main, Side, or off (-)"
+        )
+        self.radar_filter_choice.Bind(wx.EVT_CHOICE, self._on_radar_filter_changed)
+        controls.Add(self.radar_filter_choice, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, PADDING_MD)
 
         # Open Radar button
         self.open_radar_btn = wx.Button(self, label=self._t("builder.radar.open"))
@@ -714,14 +711,15 @@ class DeckBuilderPanel(wx.Panel):
         ]
 
         # Add radar filter if enabled
-        filters["radar_enabled"] = self.radar_enabled
-        if self.radar_enabled and self.active_radar:
+        filters["radar_enabled"] = self.radar_filter != "off"
+        if self.radar_filter != "off" and self.active_radar:
             from services.radar_service import get_radar_service
 
             radar_service = get_radar_service()
-            filters["radar_cards"] = radar_service.get_radar_card_names(
-                self.active_radar, self.radar_zone
-            )
+            if self.radar_filter == "main":
+                filters["radar_cards"] = radar_service.get_mainboard_radar_filter(self.active_radar)
+            else:
+                filters["radar_cards"] = radar_service.get_sideboard_radar_filter(self.active_radar)
         else:
             filters["radar_cards"] = set()
 
@@ -756,11 +754,10 @@ class DeckBuilderPanel(wx.Panel):
             cb.SetValue(False)
 
         # Clear radar filter
-        self.radar_enabled = False
+        self.radar_filter = "off"
         self.active_radar = None
-        if hasattr(self, "radar_cb"):
-            self.radar_cb.SetValue(False)
-            self.radar_zone_choice.Enable(False)
+        if hasattr(self, "radar_filter_choice"):
+            self.radar_filter_choice.SetSelection(0)
         self._schedule_search()
 
     def update_results(self, results: list[dict[str, Any]]) -> None:
@@ -836,27 +833,22 @@ class DeckBuilderPanel(wx.Panel):
 
     # ============= Radar Integration =============
 
-    def _on_radar_toggle(self, event: wx.Event) -> None:
-        """Handle radar filter checkbox toggle."""
-        self.radar_enabled = self.radar_cb.IsChecked()
-        self.radar_zone_choice.Enable(self.radar_enabled)
+    def _on_radar_filter_changed(self, event: wx.Event) -> None:
+        """Handle radar filter dropdown selection change."""
+        selection = self.radar_filter_choice.GetSelection()
+        filter_map = {0: "off", 1: "main", 2: "side"}
+        chosen = filter_map.get(selection, "off")
 
-        if self.radar_enabled and not self.active_radar:
+        if chosen != "off" and not self.active_radar:
             wx.MessageBox(
                 "Please open a radar using the 'Open Radar...' button.",
                 "No Radar Loaded",
                 wx.OK | wx.ICON_INFORMATION,
             )
-            self.radar_cb.SetValue(False)
-            self.radar_enabled = False
-            self.radar_zone_choice.Enable(False)
-        self._schedule_search()
-
-    def _on_radar_zone_changed(self, event: wx.Event) -> None:
-        """Handle radar zone selection change."""
-        selection = self.radar_zone_choice.GetSelection()
-        zone_map = {0: "both", 1: "mainboard", 2: "sideboard"}
-        self.radar_zone = zone_map.get(selection, "both")
+            self.radar_filter_choice.SetSelection(0)
+            self.radar_filter = "off"
+        else:
+            self.radar_filter = chosen
         self._schedule_search()
 
     def _on_open_radar(self, event: wx.Event) -> None:
@@ -874,9 +866,9 @@ class DeckBuilderPanel(wx.Panel):
             radar: RadarData to use for filtering
         """
         self.active_radar = radar
-        self.radar_enabled = True
-        self.radar_cb.SetValue(True)
-        self.radar_zone_choice.Enable(True)
+        if self.radar_filter == "off":
+            self.radar_filter = "main"
+            self.radar_filter_choice.SetSelection(1)
 
         if self.status_label:
             self.status_label.SetLabel(

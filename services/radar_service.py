@@ -374,6 +374,30 @@ class RadarService:
 
         return cards
 
+    def get_mainboard_radar_filter(self, radar: RadarData) -> set[str]:
+        """
+        Return the set of card names seen in the mainboard of this archetype's radar.
+
+        Args:
+            radar: RadarData to extract from
+
+        Returns:
+            Set of card names appearing in the mainboard
+        """
+        return {card.card_name for card in radar.mainboard_cards}
+
+    def get_sideboard_radar_filter(self, radar: RadarData) -> set[str]:
+        """
+        Return the set of card names seen in the sideboard of this archetype's radar.
+
+        Args:
+            radar: RadarData to extract from
+
+        Returns:
+            Set of card names appearing in the sideboard
+        """
+        return {card.card_name for card in radar.sideboard_cards}
+
 
 # Global instance for backward compatibility
 _default_service = None

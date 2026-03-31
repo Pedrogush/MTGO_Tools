@@ -394,6 +394,88 @@ def test_get_radar_card_names():
     assert sideboard == {"Card C", "Card D"}
 
 
+def test_get_mainboard_radar_filter():
+    """Test that get_mainboard_radar_filter returns only mainboard card names."""
+    service = RadarService()
+
+    radar = RadarData(
+        archetype_name="Test",
+        format_name="Modern",
+        mainboard_cards=[
+            CardFrequency("Lightning Bolt", 1, 4, 4, 4.0, 100.0, 4.0, {4: 1}),
+            CardFrequency("Island", 1, 3, 3, 3.0, 100.0, 3.0, {3: 1}),
+        ],
+        sideboard_cards=[
+            CardFrequency("Abrade", 1, 2, 2, 2.0, 100.0, 2.0, {2: 1}),
+        ],
+        total_decks_analyzed=1,
+        decks_failed=0,
+    )
+
+    result = service.get_mainboard_radar_filter(radar)
+    assert result == {"Lightning Bolt", "Island"}
+    assert "Abrade" not in result
+
+
+def test_get_sideboard_radar_filter():
+    """Test that get_sideboard_radar_filter returns only sideboard card names."""
+    service = RadarService()
+
+    radar = RadarData(
+        archetype_name="Test",
+        format_name="Modern",
+        mainboard_cards=[
+            CardFrequency("Lightning Bolt", 1, 4, 4, 4.0, 100.0, 4.0, {4: 1}),
+        ],
+        sideboard_cards=[
+            CardFrequency("Abrade", 1, 2, 2, 2.0, 100.0, 2.0, {2: 1}),
+            CardFrequency("Negate", 1, 1, 1, 1.0, 100.0, 1.0, {1: 1}),
+        ],
+        total_decks_analyzed=1,
+        decks_failed=0,
+    )
+
+    result = service.get_sideboard_radar_filter(radar)
+    assert result == {"Abrade", "Negate"}
+    assert "Lightning Bolt" not in result
+
+
+def test_get_mainboard_radar_filter_empty():
+    """Test get_mainboard_radar_filter with no mainboard cards."""
+    service = RadarService()
+
+    radar = RadarData(
+        archetype_name="Test",
+        format_name="Modern",
+        mainboard_cards=[],
+        sideboard_cards=[
+            CardFrequency("Abrade", 1, 2, 2, 2.0, 100.0, 2.0, {2: 1}),
+        ],
+        total_decks_analyzed=1,
+        decks_failed=0,
+    )
+
+    assert service.get_mainboard_radar_filter(radar) == set()
+
+
+def test_get_sideboard_radar_filter_empty():
+    """Test get_sideboard_radar_filter with no sideboard cards."""
+    service = RadarService()
+
+    radar = RadarData(
+        archetype_name="Test",
+        format_name="Modern",
+        mainboard_cards=[
+            CardFrequency("Lightning Bolt", 1, 4, 4, 4.0, 100.0, 4.0, {4: 1}),
+        ],
+        sideboard_cards=[],
+        total_decks_analyzed=1,
+        decks_failed=0,
+    )
+
+    assert service.get_sideboard_radar_filter(radar) == set()
+
+
 def test_calculate_radar_with_max_decks(
     radar_service, mock_metagame_repo, mock_deck_service, sample_archetype
 ):

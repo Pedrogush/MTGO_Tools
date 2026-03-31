@@ -109,7 +109,7 @@ MESSAGES: dict[str, str] = {
     "builder.filter.format": "Format",
     "builder.format_pool.use_filter": "Use Format Pool",
     "builder.clear_filters": "Clear Filters",
-    "builder.radar.use_filter": "Use Radar Filter",
+    "builder.radar.use_filter": "Radar Filter",
     "builder.radar.open": "Open Radar...",
     "builder.add_to_main": "+ Mainboard",
     "builder.add_to_side": "+ Sideboard",

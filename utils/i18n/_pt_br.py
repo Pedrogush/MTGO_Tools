@@ -106,7 +106,7 @@ MESSAGES: dict[str, str] = {
     "builder.filter.color_identity": "Identidade de Cor",
     "builder.filter.format": "Formato",
     "builder.clear_filters": "Limpar Filtros",
-    "builder.radar.use_filter": "Usar Filtro de Radar",
+    "builder.radar.use_filter": "Filtro de Radar",
     "builder.radar.open": "Abrir Radar...",
     "builder.add_to_main": "+ Principal",
     "builder.add_to_side": "+ Sideboard",
