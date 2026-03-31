@@ -114,8 +114,9 @@ class DeckWorkflowService:
         rows: list[dict[str, Any]],
         *,
         source_filter: str,
+        method: str = "karsten",
         on_progress: Callable[[int, int], None] | None = None,
-    ) -> dict[str, float]:
+    ) -> dict[str, float] | dict[str, int]:
         def progress_callback(index: int, total: int) -> None:
             if on_progress:
                 on_progress(index, total)
@@ -123,10 +124,16 @@ class DeckWorkflowService:
         def download_with_filter(deck_num: str) -> None:
             self._deck_downloader(deck_num, source_filter=source_filter)
 
+        add_func = (
+            self.deck_service.add_deck_to_karsten_buffer
+            if method == "karsten"
+            else self.deck_service.add_deck_to_buffer
+        )
+
         return self.deck_repo.build_daily_average_deck(
             rows,
             download_with_filter,
             self._deck_reader,
-            self.deck_service.add_deck_to_buffer,
+            add_func,
             progress_callback=progress_callback,
         )

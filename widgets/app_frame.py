@@ -323,6 +323,16 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
             current_value=self.locale,
             on_select=self._apply_language,
         )
+        self._append_radio_submenu(
+            menu,
+            self._t("app.menu.average_method"),
+            (
+                ("karsten", self._t("app.choice.average_method.karsten")),
+                ("arithmetic", self._t("app.choice.average_method.arithmetic")),
+            ),
+            current_value=self.controller.get_average_method(),
+            on_select=self._apply_average_method,
+        )
         anchor.PopupMenu(menu)
         menu.Destroy()
 
@@ -357,6 +367,10 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
         self.locale = locale
         self.controller.set_language(locale)
         self._set_status("app.status.language_changed")
+        self._schedule_settings_save()
+
+    def _apply_average_method(self, method: str) -> None:
+        self.controller.set_average_method(method)
         self._schedule_settings_save()
 
     def _build_deck_results(self, parent: wx.Window) -> wx.StaticBoxSizer:

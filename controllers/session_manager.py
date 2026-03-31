@@ -74,6 +74,14 @@ class DeckSelectorSessionManager:
         valid_language = language if language in SUPPORTED_LOCALES else DEFAULT_LOCALE
         self.settings["language"] = valid_language
 
+    def get_average_method(self, default: str = "karsten") -> str:
+        method = self.settings.get("average_method", default)
+        return method if method in {"karsten", "arithmetic"} else default
+
+    def update_average_method(self, method: str) -> None:
+        valid = method if method in {"karsten", "arithmetic"} else "karsten"
+        self.settings["average_method"] = valid
+
     def get_event_logging_enabled(self, default: bool = False) -> bool:
         value = self.settings.get("event_logging_enabled", default)
         return bool(value)
@@ -134,6 +142,7 @@ class DeckSelectorSessionManager:
                 "left_mode": left_mode,
                 "deck_data_source": deck_data_source,
                 "language": self.get_language(),
+                "average_method": self.get_average_method(),
                 "saved_deck_text": self.deck_repo.get_current_deck_text(),
                 "saved_zone_cards": self._serialize_zone_cards(zone_cards),
             }
