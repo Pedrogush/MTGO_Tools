@@ -337,8 +337,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
             menu,
             self._t("app.menu.average_hours"),
             tuple(
-                (str(h), self._t(f"app.choice.average_hours.{h}"))
-                for h in (12, 24, 36, 48, 60, 72)
+                (str(h), self._t(f"app.choice.average_hours.{h}")) for h in (12, 24, 36, 48, 60, 72)
             ),
             current_value=str(self.controller.get_average_hours()),
             on_select=lambda v: self._apply_average_hours(int(v)),
