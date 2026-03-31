@@ -132,13 +132,17 @@ class AppEventHandlers:
         return f"{line_one} | {line_two}".strip(" |")
 
     @staticmethod
-    def format_deck_list_entry(deck: dict[str, Any]) -> str:
+    def format_deck_list_entry(deck: dict[str, Any], show_source: bool = False) -> str:
         date = AppEventHandlers._normalize_date(deck.get("date", ""))
         player = deck.get("player", "")
         event = AppEventHandlers._strip_extra_dates(deck.get("event", ""))
         result = deck.get("result", "")
         line_parts = [part for part in (player, result, date) if part]
         line_one = ", ".join(line_parts) if line_parts else "Unknown"
+        if show_source:
+            source = deck.get("source", "")
+            emoji = "🐠" if source == "mtggoldfish" else "🧙🏾‍♂️"
+            line_one = f"{emoji} {line_one}"
         line_two = event
         return f"{line_one}\n{line_two}".strip()
 
@@ -335,8 +339,9 @@ class AppEventHandlers:
             self._set_status("deck_results.no_decks_for", archetype=archetype_name)
             self.summary_text.ChangeValue(f"{archetype_name}\n\nNo deck data available.")
             return
+        show_source = self.controller.get_deck_data_source() == "both"
         for deck in decks:
-            self.deck_list.Append(self.format_deck_list_entry(deck))
+            self.deck_list.Append(self.format_deck_list_entry(deck, show_source=show_source))
         self.deck_list.Enable()
         self.daily_average_button.Enable()
         self._present_archetype_summary(archetype_name, decks)
