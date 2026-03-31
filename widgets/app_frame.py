@@ -333,6 +333,16 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
             current_value=self.controller.get_average_method(),
             on_select=self._apply_average_method,
         )
+        self._append_radio_submenu(
+            menu,
+            self._t("app.menu.average_hours"),
+            tuple(
+                (str(h), self._t(f"app.choice.average_hours.{h}"))
+                for h in (12, 24, 36, 48, 60, 72)
+            ),
+            current_value=str(self.controller.get_average_hours()),
+            on_select=lambda v: self._apply_average_hours(int(v)),
+        )
         anchor.PopupMenu(menu)
         menu.Destroy()
 
@@ -371,6 +381,10 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
 
     def _apply_average_method(self, method: str) -> None:
         self.controller.set_average_method(method)
+        self._schedule_settings_save()
+
+    def _apply_average_hours(self, hours: int) -> None:
+        self.controller.set_average_hours(hours)
         self._schedule_settings_save()
 
     def _build_deck_results(self, parent: wx.Window) -> wx.StaticBoxSizer:

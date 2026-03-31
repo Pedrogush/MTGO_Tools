@@ -82,6 +82,20 @@ class DeckSelectorSessionManager:
         valid = method if method in {"karsten", "arithmetic"} else "karsten"
         self.settings["average_method"] = valid
 
+    _VALID_AVERAGE_HOURS = {12, 24, 36, 48, 60, 72}
+
+    def get_average_hours(self, default: int = 24) -> int:
+        value = self.settings.get("average_hours", default)
+        try:
+            hours = int(value)
+        except (TypeError, ValueError):
+            return default
+        return hours if hours in self._VALID_AVERAGE_HOURS else default
+
+    def update_average_hours(self, hours: int) -> None:
+        valid = hours if hours in self._VALID_AVERAGE_HOURS else 24
+        self.settings["average_hours"] = valid
+
     def get_event_logging_enabled(self, default: bool = False) -> bool:
         value = self.settings.get("event_logging_enabled", default)
         return bool(value)
@@ -143,6 +157,7 @@ class DeckSelectorSessionManager:
                 "deck_data_source": deck_data_source,
                 "language": self.get_language(),
                 "average_method": self.get_average_method(),
+                "average_hours": self.get_average_hours(),
                 "saved_deck_text": self.deck_repo.get_current_deck_text(),
                 "saved_zone_cards": self._serialize_zone_cards(zone_cards),
             }
