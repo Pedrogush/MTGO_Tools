@@ -521,7 +521,14 @@ class DeckBuilderPanel(wx.Panel):
         controls.Add(self.radar_cb, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, PADDING_MD)
 
         # Radar zone choice
-        self.radar_zone_choice = wx.Choice(self, choices=["Both", "Mainboard", "Sideboard"])
+        self.radar_zone_choice = wx.Choice(
+            self,
+            choices=[
+                self._t("app.choice.source.both"),
+                self._t("tabs.mainboard"),
+                self._t("tabs.sideboard"),
+            ],
+        )
         self.radar_zone_choice.SetSelection(0)
         stylize_choice(self.radar_zone_choice)
         self.radar_zone_choice.SetToolTip("Limit radar filtering to mainboard, sideboard, or both")
@@ -757,10 +764,12 @@ class DeckBuilderPanel(wx.Panel):
 
         # Clear radar filter
         self.radar_enabled = False
+        self.radar_zone = "both"
         self.active_radar = None
         if hasattr(self, "radar_cb"):
             self.radar_cb.SetValue(False)
             self.radar_zone_choice.Enable(False)
+            self.radar_zone_choice.SetSelection(0)
         self._schedule_search()
 
     def update_results(self, results: list[dict[str, Any]]) -> None:

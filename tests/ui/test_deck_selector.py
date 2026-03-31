@@ -2,6 +2,7 @@ import pytest
 import wx
 
 from tests.ui.conftest import prepare_card_manager, pump_ui_events
+from widgets.panels.deck_builder_panel import DeckBuilderPanel
 
 
 @pytest.mark.usefixtures("wx_app")
@@ -48,6 +49,34 @@ def test_builder_search_populates_results(
         assert frame.builder_panel.results_ctrl.GetItemCount() >= 1
         assert "Mountain" in frame.builder_panel.results_ctrl.GetItemText(0)
     finally:
+        frame.Destroy()
+
+
+@pytest.mark.usefixtures("wx_app")
+def test_builder_radar_zone_choices_are_localized_for_pt_br(
+    deck_selector_factory,
+):
+    frame = deck_selector_factory()
+    panel = None
+    try:
+        panel = DeckBuilderPanel(
+            parent=frame,
+            mana_icons=frame.mana_icons,
+            on_switch_to_research=lambda: None,
+            on_ensure_card_data=lambda: None,
+            open_mana_keyboard=lambda: None,
+            on_search=lambda: None,
+            on_clear=lambda: None,
+            on_result_selected=lambda _idx: None,
+            locale="pt-BR",
+        )
+
+        assert panel.radar_zone_choice.GetString(0) == "Ambos"
+        assert panel.radar_zone_choice.GetString(1) == "Principal"
+        assert panel.radar_zone_choice.GetString(2) == "Sideboard"
+    finally:
+        if panel is not None:
+            panel.Destroy()
         frame.Destroy()
 
 
