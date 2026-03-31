@@ -9,7 +9,6 @@ for the UI layer to interact with application logic.
 from __future__ import annotations
 
 import threading
-import time
 from collections.abc import Callable
 from datetime import datetime, timedelta
 from pathlib import Path
