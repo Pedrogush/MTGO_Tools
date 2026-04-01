@@ -9,8 +9,8 @@ for the UI layer to interact with application logic.
 from __future__ import annotations
 
 import threading
-import time
 from collections.abc import Callable
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -94,6 +94,9 @@ class AppController:
 
         # Average method preference
         self._average_method = self.session_manager.get_average_method()
+
+        # Average time window preference (hours)
+        self._average_hours = self.session_manager.get_average_hours()
 
         # Event logger (opt-in, local-only)
         self.event_logger = EventLogger(
@@ -311,15 +314,13 @@ class AppController:
         on_status: Callable[[str], None],
         on_progress: Callable[[int, int], None] | None = None,
     ) -> tuple[bool, str]:
-        today = time.strftime("%Y-%m-%d").lower()
+        cutoff_date = (datetime.now() - timedelta(hours=self._average_hours)).strftime("%Y-%m-%d")
         todays_decks = [
-            deck
-            for deck in self.deck_repo.get_decks_list()
-            if today in deck.get("date", "").lower()
+            deck for deck in self.deck_repo.get_decks_list() if deck.get("date", "") >= cutoff_date
         ]
 
         if not todays_decks:
-            return False, "No decks from today found for this archetype."
+            return False, "No decks from the selected time window found for this archetype."
 
         with self._loading_lock:
             self.loading_daily_average = True
@@ -439,6 +440,16 @@ class AppController:
             return
         self._average_method = valid
         self.session_manager.update_average_method(valid)
+
+    def get_average_hours(self) -> int:
+        return self._average_hours
+
+    def set_average_hours(self, hours: int) -> None:
+        valid = hours if hours in {12, 24, 36, 48, 60, 72} else 24
+        if self._average_hours == valid:
+            return
+        self._average_hours = valid
+        self.session_manager.update_average_hours(valid)
 
     def get_language(self) -> str:
         return self.current_language
