@@ -14,7 +14,6 @@ from utils.card_images import CardImageRequest
 from utils.constants import (
     APP_FRAME_MIN_SIZE,
     APP_FRAME_SIZE,
-    APP_FRAME_SUMMARY_MIN_HEIGHT,
     DARK_ACCENT,
     DARK_BG,
     DARK_PANEL,
@@ -27,10 +26,7 @@ from utils.constants import (
 )
 from utils.i18n import LOCALE_LABELS, SUPPORTED_LOCALES, translate
 from utils.mana_icon_factory import ManaIconFactory
-from utils.stylize import stylize_textctrl
-from widgets.buttons.deck_action_buttons import DeckActionButtons
 from widgets.buttons.toolbar_buttons import ToolbarButtons
-from widgets.deck_results_list import DeckResultsList
 from widgets.dialogs.help_dialog import show_help
 from widgets.dialogs.image_download_dialog import show_image_download_dialog
 from widgets.dialogs.tutorial_dialog import show_tutorial
@@ -153,6 +149,11 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
             on_archetype_selected=self.on_archetype_selected,
             on_reload_archetypes=lambda: self.fetch_archetypes(force=True),
             on_switch_to_builder=lambda: self._show_left_panel("builder"),
+            on_deck_selected=self.on_deck_selected,
+            on_copy=lambda: self.on_copy_clicked(None),
+            on_save=lambda: self.on_save_clicked(None),
+            on_daily_average=lambda: self.on_daily_average_clicked(None),
+            on_load=self.on_load_deck_clicked,
             labels={
                 "format": self._t("research.format"),
                 "search_hint": self._t("research.search_hint"),
@@ -165,6 +166,14 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
                 "search_tooltip": self._t("research.tooltip.search"),
                 "archetypes_tooltip": self._t("research.tooltip.archetypes"),
                 "reload_tooltip": self._t("research.tooltip.reload"),
+                "daily_average": self._t("deck_actions.daily_average"),
+                "copy": self._t("deck_actions.copy"),
+                "load_deck": self._t("deck_actions.load_deck"),
+                "save_deck": self._t("deck_actions.save_deck"),
+                "daily_average_tooltip": self._t("deck_actions.tooltip.daily_average"),
+                "copy_tooltip": self._t("deck_actions.tooltip.copy"),
+                "load_deck_tooltip": self._t("deck_actions.tooltip.load_deck"),
+                "save_deck_tooltip": self._t("deck_actions.tooltip.save_deck"),
             },
         )
         self.left_stack.AddPage(self.research_panel, self._t("app.label.left_panel.research"))
@@ -212,18 +221,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
         content_split.Add(inspector_column, 0, wx.EXPAND)
 
         inspector_box = self._build_card_inspector(right_panel)
-        inspector_static = inspector_box.GetStaticBox()
-        inspector_min_width = inspector_static.GetMinSize().GetWidth()
-        inspector_column.Add(inspector_box, 0, wx.BOTTOM, PADDING_LG)
-
-        deck_results = self._build_deck_results(right_panel)
-        deck_results_box = deck_results.GetStaticBox()
-        deck_results_box.SetMinSize((inspector_min_width, -1))
-        deck_results_box.SetMaxSize((inspector_min_width, -1))
-        list_min_width = max(inspector_min_width - (PADDING_MD * 2), 0)
-        self.summary_text.SetMinSize((list_min_width, APP_FRAME_SUMMARY_MIN_HEIGHT))
-        self.deck_list.SetMinSize((list_min_width, -1))
-        inspector_column.Add(deck_results, 1, wx.EXPAND)
+        inspector_column.Add(inspector_box, 1, wx.EXPAND)
 
         return right_panel
 
@@ -386,56 +384,34 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
         self.controller.set_average_hours(hours)
         self._schedule_settings_save()
 
-    def _build_deck_results(self, parent: wx.Window) -> wx.StaticBoxSizer:
-        deck_box = wx.StaticBox(parent, label=self._t("app.label.deck_results"))
-        deck_box.SetForegroundColour(LIGHT_TEXT)
-        deck_box.SetBackgroundColour(DARK_PANEL)
-        deck_sizer = wx.StaticBoxSizer(deck_box, wx.VERTICAL)
+    # ------------------------------------------------------------------ Delegation properties for deck results widgets --------------------------
+    @property
+    def deck_list(self):  # type: ignore[override]
+        return self.research_panel.deck_list
 
-        self.summary_text = wx.TextCtrl(
-            deck_box,
-            style=wx.TE_MULTILINE | wx.TE_READONLY | wx.TE_WORDWRAP | wx.NO_BORDER,
-        )
-        stylize_textctrl(self.summary_text, multiline=True)
-        self.summary_text.SetMinSize((-1, APP_FRAME_SUMMARY_MIN_HEIGHT))
-        deck_sizer.Add(self.summary_text, 0, wx.EXPAND | wx.ALL, PADDING_MD)
+    @property
+    def summary_text(self):  # type: ignore[override]
+        return self.research_panel.summary_text
 
-        self.deck_list = DeckResultsList(deck_box)
-        self.deck_list.Bind(wx.EVT_LISTBOX, self.on_deck_selected)
-        deck_sizer.Add(self.deck_list, 1, wx.EXPAND | wx.ALL, PADDING_MD)
+    @property
+    def deck_action_buttons(self):  # type: ignore[override]
+        return self.research_panel.deck_action_buttons
 
-        # Deck action buttons
-        self.deck_action_buttons = DeckActionButtons(
-            deck_box,
-            on_copy=lambda: self.on_copy_clicked(None),
-            on_save=lambda: self.on_save_clicked(None),
-            on_daily_average=lambda: self.on_daily_average_clicked(None),
-            on_load=self.on_load_deck_clicked,
-            labels={
-                "daily_average": self._t("deck_actions.daily_average"),
-                "copy": self._t("deck_actions.copy"),
-                "load_deck": self._t("deck_actions.load_deck"),
-                "save_deck": self._t("deck_actions.save_deck"),
-                "daily_average_tooltip": self._t("deck_actions.tooltip.daily_average"),
-                "copy_tooltip": self._t("deck_actions.tooltip.copy"),
-                "load_deck_tooltip": self._t("deck_actions.tooltip.load_deck"),
-                "save_deck_tooltip": self._t("deck_actions.tooltip.save_deck"),
-            },
-        )
-        deck_sizer.Add(
-            self.deck_action_buttons,
-            0,
-            wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM,
-            PADDING_MD,
-        )
+    @property
+    def daily_average_button(self):  # type: ignore[override]
+        return self.research_panel.daily_average_button
 
-        # Keep references for backward compatibility
-        self.daily_average_button = self.deck_action_buttons.daily_average_button
-        self.copy_button = self.deck_action_buttons.copy_button
-        self.load_button = self.deck_action_buttons.load_button
-        self.save_button = self.deck_action_buttons.save_button
+    @property
+    def copy_button(self):  # type: ignore[override]
+        return self.research_panel.copy_button
 
-        return deck_sizer
+    @property
+    def load_button(self):  # type: ignore[override]
+        return self.research_panel.load_button
+
+    @property
+    def save_button(self):  # type: ignore[override]
+        return self.research_panel.save_button
 
     def _build_card_inspector(self, parent: wx.Window) -> wx.StaticBoxSizer:
         inspector_box = wx.StaticBox(parent, label=self._t("app.label.card_inspector"))

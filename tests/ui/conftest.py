@@ -282,8 +282,6 @@ def deck_selector_factory(wx_app) -> AppFrame:
         frame.card_repo = controller.card_repo
         frame.deck_repo = controller.deck_repo
         frame.metagame_repo = controller.metagame_repo
-        frame.deck_action_buttons = getattr(frame, "deck_action_buttons", None)
-
         # Prevent the first-run tutorial dialog from hanging tests.
         # Introduced in PR #301 (commit 273ae4d): _restore_session_state queues
         # wx.CallAfter(self._open_tutorial) when is_tutorial_shown() returns False.
