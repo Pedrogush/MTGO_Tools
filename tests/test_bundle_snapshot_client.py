@@ -35,6 +35,7 @@ def _make_bundle(
     deck_texts: list[dict[str, Any]] | None = None,
     card_pools: list[dict[str, Any]] | None = None,
     radars: list[dict[str, Any]] | None = None,
+    mtgo_decklists: list[dict[str, Any]] | None = None,
 ) -> bytes:
     """Build an in-memory client-bundle.tar.gz for testing."""
     if manifest is None:
@@ -166,6 +167,10 @@ def _make_bundle(
             fmt = radar.get("format", "modern")
             href = radar.get("archetype", {}).get("href", "unknown")
             _add(f"latest/radars/{fmt}/{href}.json", radar)
+        if mtgo_decklists:
+            for mtgo_entry in mtgo_decklists:
+                fmt = mtgo_entry.get("format", "modern")
+                _add(f"latest/mtgo-decklists/{fmt}.json", mtgo_entry)
 
     return buf.getvalue()
 
@@ -513,3 +518,161 @@ def test_singleton_reset() -> None:
     c2 = get_bundle_snapshot_client()
     assert c1 is c2
     reset_bundle_snapshot_client()
+
+
+# ---------------------------------------------------------------------------
+# MTGO decklist hydration
+# ---------------------------------------------------------------------------
+
+_MTGO_DECKLIST_ENTRY = {
+    "schema_version": 1,
+    "kind": "mtgo_decklists",
+    "format": _FORMAT,
+    "source": "mtgo.com",
+    "days": 7,
+    "events": [
+        {
+            "id": "modern-challenge-64-2026-03-31",
+            "url": "https://www.mtgo.com/decklist/modern-challenge-64-2026-03-31",
+            "title": "Modern Challenge 64",
+            "publish_date": "2026-03-31T20:00:00Z",
+            "event_type": "challenge",
+            "decks_total": 2,
+            "decks_cached": 2,
+            "path": f"archive/mtgo-decklists/{_FORMAT}/modern-challenge-64-2026-03-31.json",
+            "decks": [
+                {
+                    "number": "9001",
+                    "date": "2026-03-31T20:00:00Z",
+                    "event": "Modern Challenge 64",
+                    "result": "7-0",
+                    "player": "heroic_player",
+                    "archetype": "Boros Energy",
+                    "name": "Boros Energy",
+                    "source": "mtgo",
+                    "format": _FORMAT,
+                    "deck_text": "4 Lightning Bolt\n\nSideboard\n2 Path to Exile\n",
+                },
+                {
+                    "number": "9002",
+                    "date": "2026-03-31T20:00:00Z",
+                    "event": "Modern Challenge 64",
+                    "result": "6-1",
+                    "player": "another_player",
+                    "archetype": "Unknown Archetype",  # should be skipped
+                    "name": "Something Weird",
+                    "source": "mtgo",
+                    "format": _FORMAT,
+                    "deck_text": "4 Dark Ritual\n",
+                },
+            ],
+        }
+    ],
+}
+
+
+def test_apply_merges_mtgo_decklists_into_archetype_cache(
+    tmp_client: BundleSnapshotClient, tmp_path: Path
+) -> None:
+    """MTGO decks with matching archetype names are merged into the deck cache."""
+    from utils.deck_text_cache import DeckTextCache
+
+    db_path = tmp_path / "deck_cache.db"
+    cache = DeckTextCache(db_path=db_path)
+    bundle = _make_bundle(mtgo_decklists=[_MTGO_DECKLIST_ENTRY])
+
+    with patch.object(tmp_client, "_http_get_bytes", return_value=bundle):
+        with patch("utils.deck_text_cache.get_deck_cache", return_value=cache):
+            tmp_client.apply()
+
+    data = json.loads(tmp_client.archetype_decks_cache_file.read_text())
+    assert _SLUG in data
+    items = data[_SLUG]["items"]
+    mtgo_items = [d for d in items if d.get("source") == "mtgo"]
+    assert len(mtgo_items) == 1
+    assert mtgo_items[0]["player"] == "heroic_player"
+    assert mtgo_items[0]["result"] == "7-0"
+    assert mtgo_items[0]["date"] == "2026-03-31"
+    assert mtgo_items[0]["number"] == "9001"
+
+
+def test_apply_mtgo_deck_text_stored_in_cache(
+    tmp_client: BundleSnapshotClient, tmp_path: Path
+) -> None:
+    """Inline deck_text from MTGO bundle entries is stored in the deck text cache."""
+    from utils.deck_text_cache import DeckTextCache
+
+    db_path = tmp_path / "deck_cache.db"
+    cache = DeckTextCache(db_path=db_path)
+    bundle = _make_bundle(mtgo_decklists=[_MTGO_DECKLIST_ENTRY])
+
+    with patch.object(tmp_client, "_http_get_bytes", return_value=bundle):
+        with patch("utils.deck_text_cache.get_deck_cache", return_value=cache):
+            tmp_client.apply()
+
+    text = cache.get("9001")
+    assert text is not None
+    assert "Lightning Bolt" in text
+
+
+def test_apply_mtgo_unmatched_archetype_skipped(
+    tmp_client: BundleSnapshotClient, tmp_path: Path
+) -> None:
+    """MTGO decks whose archetype name has no match in the archetype list are skipped."""
+    from utils.deck_text_cache import DeckTextCache
+
+    db_path = tmp_path / "deck_cache.db"
+    cache = DeckTextCache(db_path=db_path)
+    bundle = _make_bundle(mtgo_decklists=[_MTGO_DECKLIST_ENTRY])
+
+    with patch.object(tmp_client, "_http_get_bytes", return_value=bundle):
+        with patch("utils.deck_text_cache.get_deck_cache", return_value=cache):
+            tmp_client.apply()
+
+    # "Unknown Archetype" (deck 9002) should not be stored
+    text = cache.get("9002")
+    assert text is None
+
+
+def test_apply_mtgo_preserves_goldfish_decks(
+    tmp_client: BundleSnapshotClient, tmp_path: Path
+) -> None:
+    """MTGGoldfish decks in the cache are preserved alongside merged MTGO decks."""
+    from utils.deck_text_cache import DeckTextCache
+
+    db_path = tmp_path / "deck_cache.db"
+    cache = DeckTextCache(db_path=db_path)
+    bundle = _make_bundle(mtgo_decklists=[_MTGO_DECKLIST_ENTRY])
+
+    with patch.object(tmp_client, "_http_get_bytes", return_value=bundle):
+        with patch("utils.deck_text_cache.get_deck_cache", return_value=cache):
+            tmp_client.apply()
+
+    data = json.loads(tmp_client.archetype_decks_cache_file.read_text())
+    items = data[_SLUG]["items"]
+    goldfish_items = [d for d in items if d.get("source") == "mtggoldfish"]
+    mtgo_items = [d for d in items if d.get("source") == "mtgo"]
+    assert len(goldfish_items) == 1  # from default _make_bundle decks
+    assert len(mtgo_items) == 1
+
+
+def test_apply_mtgo_deduplicates_on_re_hydration(
+    tmp_client: BundleSnapshotClient, tmp_path: Path
+) -> None:
+    """Re-applying the bundle replaces previous MTGO entries rather than duplicating them."""
+    from utils.deck_text_cache import DeckTextCache
+
+    db_path = tmp_path / "deck_cache.db"
+    cache = DeckTextCache(db_path=db_path)
+    bundle = _make_bundle(mtgo_decklists=[_MTGO_DECKLIST_ENTRY])
+
+    with patch.object(tmp_client, "_http_get_bytes", return_value=bundle):
+        with patch("utils.deck_text_cache.get_deck_cache", return_value=cache):
+            tmp_client.apply()
+            # Force a second apply by clearing the stamp
+            tmp_client.stamp_file.unlink()
+            tmp_client.apply()
+
+    data = json.loads(tmp_client.archetype_decks_cache_file.read_text())
+    mtgo_items = [d for d in data[_SLUG]["items"] if d.get("source") == "mtgo"]
+    assert len(mtgo_items) == 1  # not doubled
