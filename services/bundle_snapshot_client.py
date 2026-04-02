@@ -134,6 +134,7 @@ class BundleSnapshotClient:
             deck_texts,
             card_pool_entries,
             radar_entries,
+            mtgo_decklist_entries,
         ) = self._parse_bundle(bundle_bytes)
 
         generated_at = manifest.get("generated_at", "")
@@ -141,6 +142,7 @@ class BundleSnapshotClient:
 
         self._hydrate_archetype_lists(archetype_entries, now)
         self._hydrate_archetype_decks(deck_entries, now)
+        mtgo_merged = self._hydrate_mtgo_decklists(mtgo_decklist_entries, archetype_entries, now)
         card_pools = self._hydrate_format_card_pools(card_pool_entries)
         radars = self._hydrate_radars(radar_entries)
         inserted = self._hydrate_deck_texts(deck_texts)
@@ -149,6 +151,7 @@ class BundleSnapshotClient:
         logger.info(
             f"Bundle applied: {len(archetype_entries)} archetype lists, "
             f"{len(deck_entries)} deck lists, "
+            f"{mtgo_merged} MTGO decks merged, "
             f"{card_pools}/{len(card_pool_entries)} card pools, "
             f"{radars}/{len(radar_entries)} radars, "
             f"{inserted}/{len(deck_texts)} deck texts inserted (generated_at={generated_at})"
@@ -210,6 +213,7 @@ class BundleSnapshotClient:
         list[tuple[str, str, str]],
         list[dict[str, Any]],
         list[dict[str, Any]],
+        list[dict[str, Any]],
     ]:
         """Extract the bundle and return bundle entries grouped by artifact type.
 
@@ -218,6 +222,8 @@ class BundleSnapshotClient:
         JSON from ``latest/decks/{format}/{slug}.json``.  Each deck_texts element
         is a ``(deck_id, deck_text, source)`` tuple ready for ``DeckTextCache.bulk_set``,
         extracted from ``archive/deck-texts/{format}/{id}.json``.
+        Each mtgo_decklist entry is the full parsed JSON from
+        ``latest/mtgo-decklists/{format}.json``.
         """
         manifest: dict[str, Any] = {}
         archetype_entries: list[dict[str, Any]] = []
@@ -225,6 +231,7 @@ class BundleSnapshotClient:
         deck_texts: list[tuple[str, str, str]] = []
         card_pool_entries: list[dict[str, Any]] = []
         radar_entries: list[dict[str, Any]] = []
+        mtgo_decklist_entries: list[dict[str, Any]] = []
 
         with tarfile.open(fileobj=io.BytesIO(bundle_bytes), mode="r:gz") as tf:
             for member in tf.getmembers():
@@ -244,6 +251,8 @@ class BundleSnapshotClient:
 
                 if name.endswith("latest.json"):
                     manifest = data
+                elif name.startswith("latest/mtgo-decklists/") and name.endswith(".json"):
+                    mtgo_decklist_entries.append(data)
                 elif "/archetypes/" in name and name.endswith(".json"):
                     archetype_entries.append(data)
                 elif "/card-pools/" in name and name.endswith(".json"):
@@ -266,6 +275,7 @@ class BundleSnapshotClient:
             deck_texts,
             card_pool_entries,
             radar_entries,
+            mtgo_decklist_entries,
         )
 
     # ------------------------------------------------------------------ #
@@ -347,6 +357,109 @@ class BundleSnapshotClient:
         except Exception as exc:
             logger.warning(f"Failed to hydrate deck texts: {exc}")
             return 0
+
+    def _hydrate_mtgo_decklists(
+        self,
+        mtgo_decklist_entries: list[dict[str, Any]],
+        archetype_entries: list[dict[str, Any]],
+        now: float,
+    ) -> int:
+        """Merge MTGO event decklists from bundle into the archetype deck cache.
+
+        Builds a name→href lookup from ``archetype_entries``, then for each MTGO
+        deck whose ``archetype`` field matches a known archetype name, injects the
+        deck metadata into the archetype deck cache and stores the inline deck text
+        in the SQLite deck text cache.
+
+        Returns the number of MTGO decks merged.
+        """
+        if not mtgo_decklist_entries:
+            return 0
+
+        # Build {format: {archetype_name: href}} from the archetype list entries
+        name_to_href: dict[str, dict[str, str]] = {}
+        for entry in archetype_entries:
+            fmt = entry.get("format", "").lower()
+            for arch in entry.get("archetypes", []):
+                name = arch.get("name", "")
+                href = arch.get("href", "")
+                if name and href:
+                    name_to_href.setdefault(fmt, {})[name] = href
+
+        # Collect deck texts and per-href metadata from all MTGO events
+        deck_texts: list[tuple[str, str, str]] = []
+        decks_by_href: dict[str, list[dict[str, Any]]] = {}
+
+        for entry in mtgo_decklist_entries:
+            fmt = entry.get("format", "").lower()
+            fmt_lookup = name_to_href.get(fmt, {})
+            for event in entry.get("events", []):
+                for deck in event.get("decks", []):
+                    arch_name = deck.get("archetype", "")
+                    href = fmt_lookup.get(arch_name)
+                    if not href:
+                        continue
+                    deck_id = deck.get("number", "")
+                    deck_text = deck.get("deck_text", "")
+                    if deck_id and deck_text:
+                        deck_texts.append((deck_id, deck_text, "mtgo"))
+                    date_raw = deck.get("date", "")
+                    metadata: dict[str, Any] = {
+                        "date": date_raw[:10] if date_raw else "",
+                        "number": deck_id,
+                        "player": deck.get("player", ""),
+                        "event": deck.get("event", ""),
+                        "result": deck.get("result", ""),
+                        "name": deck.get("name", ""),
+                        "source": "mtgo",
+                    }
+                    decks_by_href.setdefault(href, []).append(metadata)
+
+        if not decks_by_href:
+            logger.debug("No MTGO decks could be matched to known archetypes")
+            return 0
+
+        # Store deck texts
+        if deck_texts:
+            try:
+                from utils.deck_text_cache import get_deck_cache
+
+                get_deck_cache().bulk_set(deck_texts, skip_existing=True)
+            except Exception as exc:
+                logger.warning(f"Failed to insert MTGO deck texts: {exc}")
+
+        # Merge into archetype decks cache
+        total = 0
+        with locked_path(self.archetype_decks_cache_file):
+            existing: dict[str, Any] = {}
+            if self.archetype_decks_cache_file.exists():
+                try:
+                    existing = json.loads(
+                        self.archetype_decks_cache_file.read_text(encoding="utf-8")
+                    )
+                except (OSError, json.JSONDecodeError):
+                    pass
+
+            for href, mtgo_decks in decks_by_href.items():
+                existing_entry = existing.get(href, {})
+                existing_items = existing_entry.get("items", [])
+                # Replace any previously merged MTGO entries to avoid duplicates
+                goldfish_items = [d for d in existing_items if d.get("source") != "mtgo"]
+                existing[href] = {
+                    "timestamp": existing_entry.get("timestamp", now),
+                    "items": goldfish_items + mtgo_decks,
+                }
+                total += len(mtgo_decks)
+
+            try:
+                atomic_write_json(self.archetype_decks_cache_file, existing, indent=2)
+                logger.debug(
+                    f"Merged {total} MTGO decks into {len(decks_by_href)} archetype cache entries"
+                )
+            except OSError as exc:
+                logger.warning(f"Failed to write archetype decks cache with MTGO decks: {exc}")
+
+        return total
 
     def _hydrate_format_card_pools(self, card_pool_entries: list[dict[str, Any]]) -> int:
         """Insert or replace precomputed format card pools into SQLite."""
