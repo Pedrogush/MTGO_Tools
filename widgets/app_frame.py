@@ -223,6 +223,9 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
         inspector_box = self._build_card_inspector(right_panel)
         inspector_column.Add(inspector_box, 1, wx.EXPAND)
 
+        oracle_box = self._build_oracle_text_panel(right_panel)
+        inspector_column.Add(oracle_box, 0, wx.EXPAND | wx.TOP, PADDING_MD)
+
         return right_panel
 
     def _create_notebook(self, parent: wx.Window) -> fnb.FlatNotebook:
@@ -447,6 +450,23 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
         self.image_downloader = self.controller.image_service.image_downloader
 
         return inspector_sizer
+
+    def _build_oracle_text_panel(self, parent: wx.Window) -> wx.StaticBoxSizer:
+        oracle_box = wx.StaticBox(parent, label=self._t("app.label.oracle_text"))
+        oracle_box.SetForegroundColour(LIGHT_TEXT)
+        oracle_box.SetBackgroundColour(DARK_PANEL)
+        oracle_sizer = wx.StaticBoxSizer(oracle_box, wx.VERTICAL)
+
+        self.oracle_text_ctrl = wx.TextCtrl(
+            oracle_box,
+            style=wx.TE_MULTILINE | wx.TE_READONLY | wx.TE_WORDWRAP | wx.BORDER_NONE,
+        )
+        self.oracle_text_ctrl.SetBackgroundColour(DARK_PANEL)
+        self.oracle_text_ctrl.SetForegroundColour(LIGHT_TEXT)
+        self.oracle_text_ctrl.SetMinSize((-1, 100))
+
+        oracle_sizer.Add(self.oracle_text_ctrl, 1, wx.EXPAND | wx.ALL, PADDING_SM)
+        return oracle_sizer
 
     def _handle_image_downloaded(self, request: CardImageRequest) -> None:
         self.card_inspector_panel.handle_image_downloaded(request)

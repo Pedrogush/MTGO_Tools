@@ -85,6 +85,7 @@ MESSAGES: dict[str, str] = {
     "app.label.deck_workspace": "Deck Workspace",
     "app.label.deck_results": "Deck Results",
     "app.label.card_inspector": "Card Inspector",
+    "app.label.oracle_text": "Oracle Text",
     "app.label.left_panel.research": "Research",
     "app.label.left_panel.builder": "Builder",
     "app.status.collection_not_loaded": "Collection inventory not loaded.",

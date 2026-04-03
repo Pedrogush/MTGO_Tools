@@ -243,12 +243,15 @@ class CardTablePanelHandler:
         if card is None:
             if self.card_inspector_panel.active_zone == zone:
                 self.card_inspector_panel.reset()
+                self.oracle_text_ctrl.ChangeValue("")
             return
         if self.builder_panel:
             self.builder_panel.clear_result_selection()
         self._collapse_other_zone_tables(zone)
         meta = self.controller.card_repo.get_card_metadata(card["name"])
         self.card_inspector_panel.update_card(card, zone=zone, meta=meta)
+        oracle_text = meta.oracle_text if meta is not None else None
+        self.oracle_text_ctrl.ChangeValue(oracle_text or "")
 
     def _handle_card_hover(self: AppFrame, zone: str, card: dict[str, Any]) -> None:
         if self._has_selected_card():
@@ -272,3 +275,5 @@ class CardTablePanelHandler:
         self._pending_hover = None
         meta = self.controller.card_repo.get_card_metadata(card["name"])
         self.card_inspector_panel.update_card(card, zone=zone, meta=meta)
+        oracle_text = meta.oracle_text if meta is not None else None
+        self.oracle_text_ctrl.ChangeValue(oracle_text or "")
