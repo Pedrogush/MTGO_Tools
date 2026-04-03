@@ -64,7 +64,7 @@ class DeckResearchPanel(wx.Panel):
         sizer = wx.BoxSizer(wx.VERTICAL)
         self.SetSizer(sizer)
 
-        # Deck Builder navigation button
+        # Row 1: Deck Builder navigation button (full width)
         if self._on_switch_to_builder is not None:
             builder_btn = wx.Button(
                 self, label=self._labels.get("switch_to_builder", "Deck Builder")
@@ -73,7 +73,7 @@ class DeckResearchPanel(wx.Panel):
             builder_btn.Bind(wx.EVT_BUTTON, lambda _evt: self._on_switch_to_builder())  # type: ignore[misc]
             sizer.Add(builder_btn, 0, wx.EXPAND | wx.ALL, PADDING_MD)
 
-        # Format selection
+        # Format selector (above archetype row)
         format_label = wx.StaticText(self, label=self._labels.get("format", "Format"))
         stylize_label(format_label)
         sizer.Add(format_label, 0, wx.TOP | wx.LEFT | wx.RIGHT, PADDING_MD)
@@ -86,7 +86,9 @@ class DeckResearchPanel(wx.Panel):
         self.format_choice.Bind(wx.EVT_CHOICE, lambda _evt: self._on_format_changed())
         sizer.Add(self.format_choice, 0, wx.EXPAND | wx.ALL, PADDING_MD)
 
-        # Search control
+        # Row 2: Archetype selector (left) + Event Type placeholder (right)
+        row2 = wx.BoxSizer(wx.HORIZONTAL)
+
         self.search_ctrl = wx.SearchCtrl(self, style=wx.TE_PROCESS_ENTER)
         self.search_ctrl.ShowSearchButton(True)
         self.search_ctrl.SetHint(self._labels.get("search_hint", "Search archetypes..."))
@@ -94,7 +96,15 @@ class DeckResearchPanel(wx.Panel):
             self.search_ctrl.SetToolTip(tip)
         self.search_ctrl.Bind(wx.EVT_TEXT, lambda _evt: self._on_archetype_filter())
         stylize_textctrl(self.search_ctrl)
-        sizer.Add(self.search_ctrl, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_MD)
+        row2.Add(self.search_ctrl, 1, wx.EXPAND | wx.RIGHT, PADDING_MD)
+
+        # Event Type filter placeholder (implemented in Step 5)
+        self.event_type_choice = wx.Choice(self, choices=[])
+        self.event_type_choice.Disable()
+        stylize_choice(self.event_type_choice)
+        row2.Add(self.event_type_choice, 1, wx.EXPAND)
+
+        sizer.Add(row2, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_MD)
 
         # Archetype list
         self.archetype_list = wx.ListBox(self, style=wx.LB_SINGLE)
@@ -114,27 +124,36 @@ class DeckResearchPanel(wx.Panel):
         refresh_button.Bind(wx.EVT_BUTTON, lambda _evt: self._on_reload_archetypes())
         sizer.Add(refresh_button, 0, wx.EXPAND | wx.ALL, PADDING_MD)
 
+        # Row 3: Result filter placeholder (left) + Player Name filter placeholder (right)
+        row3 = wx.BoxSizer(wx.HORIZONTAL)
+
+        self.result_filter = wx.TextCtrl(self, style=wx.TE_PROCESS_ENTER)
+        self.result_filter.SetHint(self._labels.get("result_hint", "Result..."))
+        self.result_filter.Disable()
+        stylize_textctrl(self.result_filter)
+        row3.Add(self.result_filter, 1, wx.EXPAND | wx.RIGHT, PADDING_MD)
+
+        self.player_name_filter = wx.TextCtrl(self, style=wx.TE_PROCESS_ENTER)
+        self.player_name_filter.SetHint(self._labels.get("player_name_hint", "Player name..."))
+        self.player_name_filter.Disable()
+        stylize_textctrl(self.player_name_filter)
+        row3.Add(self.player_name_filter, 1, wx.EXPAND)
+
+        sizer.Add(row3, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_MD)
+
+        # Row 4: Date filter placeholder (full width)
+        self.date_filter = wx.TextCtrl(self, style=wx.TE_PROCESS_ENTER)
+        self.date_filter.SetHint(self._labels.get("date_hint", "Date..."))
+        self.date_filter.Disable()
+        stylize_textctrl(self.date_filter)
+        sizer.Add(self.date_filter, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_MD)
+
         # --- Deck results bottom section ---
         self._build_deck_results_section(sizer)
 
     def _build_deck_results_section(self, sizer: wx.Sizer) -> None:
-        """Build the deck results list and action buttons at the bottom of the panel."""
-        # Summary text
-        self.summary_text = wx.TextCtrl(
-            self,
-            style=wx.TE_MULTILINE | wx.TE_READONLY | wx.TE_WORDWRAP | wx.NO_BORDER,
-        )
-        stylize_textctrl(self.summary_text, multiline=True)
-        self.summary_text.SetMinSize((-1, APP_FRAME_SUMMARY_MIN_HEIGHT))
-        sizer.Add(self.summary_text, 0, wx.EXPAND | wx.ALL, PADDING_MD)
-
-        # Deck results list
-        self.deck_list = DeckResultsList(self)
-        if self._on_deck_selected is not None:
-            self.deck_list.Bind(wx.EVT_LISTBOX, lambda _evt: self._on_deck_selected())  # type: ignore[misc]
-        sizer.Add(self.deck_list, 1, wx.EXPAND | wx.ALL, PADDING_MD)
-
-        # Deck action buttons
+        """Build the action buttons, summary text, and deck results list at the bottom."""
+        # Row 5: Deck action buttons (above deck results)
         self.deck_action_buttons = DeckActionButtons(
             self,
             on_copy=self._on_copy,
@@ -153,11 +172,23 @@ class DeckResearchPanel(wx.Panel):
             },
         )
         sizer.Add(
-            self.deck_action_buttons,
-            0,
-            wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM,
-            PADDING_MD,
+            self.deck_action_buttons, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_MD
         )
+
+        # Summary text
+        self.summary_text = wx.TextCtrl(
+            self,
+            style=wx.TE_MULTILINE | wx.TE_READONLY | wx.TE_WORDWRAP | wx.NO_BORDER,
+        )
+        stylize_textctrl(self.summary_text, multiline=True)
+        self.summary_text.SetMinSize((-1, APP_FRAME_SUMMARY_MIN_HEIGHT))
+        sizer.Add(self.summary_text, 0, wx.EXPAND | wx.ALL, PADDING_MD)
+
+        # Row 6: Deck results list (fills remaining space)
+        self.deck_list = DeckResultsList(self)
+        if self._on_deck_selected is not None:
+            self.deck_list.Bind(wx.EVT_LISTBOX, lambda _evt: self._on_deck_selected())  # type: ignore[misc]
+        sizer.Add(self.deck_list, 1, wx.EXPAND | wx.ALL, PADDING_MD)
 
         # Expose button references for backward compatibility
         self.daily_average_button = self.deck_action_buttons.daily_average_button
