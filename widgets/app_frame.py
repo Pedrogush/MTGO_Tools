@@ -441,7 +441,6 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
         inspector_sizer.Layout()
         inspector_min_size = inspector_sizer.GetMinSize()
         inspector_box.SetMinSize(inspector_min_size)
-        inspector_box.SetMaxSize(inspector_min_size)
 
         # Keep backward compatibility references (delegate to image service via controller)
         self.image_cache = self.controller.image_service.image_cache
