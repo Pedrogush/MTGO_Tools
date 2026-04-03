@@ -11,6 +11,7 @@ from loguru import logger
 from utils.card_data import CardDataManager
 from utils.constants import LOGS_DIR
 from utils.deck import sanitize_filename
+from utils.deck_results_filter import _classify_event_type, _normalize_date, filter_decks
 from utils.ui_helpers import open_child_window, widget_exists
 from widgets.dialogs.feedback_dialog import show_feedback_dialog
 from widgets.identify_opponent import MTGOpponentDeckSpy
@@ -96,10 +97,7 @@ class AppEventHandlers:
 
     @staticmethod
     def _normalize_date(value: str) -> str:
-        if not value:
-            return ""
-        match = re.search(r"\d{4}-\d{2}-\d{2}", value)
-        return match.group(0) if match else value
+        return _normalize_date(value)
 
     @staticmethod
     def _strip_extra_dates(value: str) -> str:
@@ -170,6 +168,50 @@ class AppEventHandlers:
             return
         archetype = self.filtered_archetypes[idx]
         self._load_decks_for_archetype(archetype)
+
+    def on_event_type_filter_changed(self: AppFrame) -> None:
+        self._apply_deck_filters()
+
+    def on_result_filter_changed(self: AppFrame) -> None:
+        self._apply_deck_filters()
+
+    def on_player_name_filter_changed(self: AppFrame) -> None:
+        self._apply_deck_filters()
+
+    def on_date_filter_changed(self: AppFrame) -> None:
+        self._apply_deck_filters()
+
+    @staticmethod
+    def _classify_event_type(event_str: str) -> str | None:
+        """Return a canonical event type label for the given event string, or None."""
+        return _classify_event_type(event_str)
+
+    def _apply_deck_filters(self: AppFrame) -> None:
+        """Filter the displayed deck list based on all active filters (AND logic)."""
+        event_type = self.research_panel.get_event_type_filter()
+        result_query = self.research_panel.get_result_filter()
+        player_query = self.research_panel.get_player_name_filter()
+        date_query = self.research_panel.get_date_filter()
+
+        self.controller.session_manager.update_deck_event_type_filter(event_type)
+        self.controller.session_manager.update_deck_result_filter(result_query)
+        self.controller.session_manager.update_deck_player_filter(player_query)
+        self.controller.session_manager.update_deck_date_filter(date_query)
+        self._schedule_settings_save()
+
+        filtered = filter_decks(
+            list(self._all_loaded_decks), event_type, result_query, player_query, date_query
+        )
+        self.controller.deck_repo.set_decks_list(filtered)
+        self.deck_list.Clear()
+        if not filtered:
+            self.deck_list.Append(self._t("deck_results.no_decks"))
+            self.deck_list.Disable()
+            return
+        show_source = self.controller.get_deck_data_source() == "both"
+        for deck in filtered:
+            self.deck_list.Append(self.format_deck_list_entry(deck, show_source=show_source))
+        self.deck_list.Enable()
 
     def on_deck_selected(self: AppFrame, _event: wx.CommandEvent) -> None:
         with self._loading_lock:
@@ -331,18 +373,28 @@ class AppEventHandlers:
     def _on_decks_loaded(self: AppFrame, archetype_name: str, decks: list[dict[str, Any]]) -> None:
         with self._loading_lock:
             self.loading_decks = False
-        self.controller.deck_repo.set_decks_list(decks)
-        self.deck_list.Clear()
+        self._all_loaded_decks = decks
+        if self._is_first_deck_load:
+            self._is_first_deck_load = False
+            sm = self.controller.session_manager
+            self.research_panel.set_event_type_filter(sm.get_deck_event_type_filter())
+            self.research_panel.set_result_filter(sm.get_deck_result_filter())
+            self.research_panel.set_player_name_filter(sm.get_deck_player_filter())
+            self.research_panel.set_date_filter(sm.get_deck_date_filter())
+        else:
+            self.research_panel.reset_event_type_filter()
+            self.research_panel.reset_result_filter()
+            self.research_panel.reset_player_name_filter()
+            self.research_panel.reset_date_filter()
         if not decks:
+            self.controller.deck_repo.set_decks_list([])
+            self.deck_list.Clear()
             self.deck_list.Append(self._t("deck_results.no_decks"))
             self.deck_list.Disable()
             self._set_status("deck_results.no_decks_for", archetype=archetype_name)
             self.summary_text.ChangeValue(f"{archetype_name}\n\nNo deck data available.")
             return
-        show_source = self.controller.get_deck_data_source() == "both"
-        for deck in decks:
-            self.deck_list.Append(self.format_deck_list_entry(deck, show_source=show_source))
-        self.deck_list.Enable()
+        self._apply_deck_filters()
         self.daily_average_button.Enable()
         self._present_archetype_summary(archetype_name, decks)
         self._set_status(
@@ -682,6 +734,12 @@ class AppEventHandlers:
 
     def _load_decks_for_archetype(self, archetype: dict[str, Any]) -> None:
         name = archetype.get("name", "Unknown")
+        self._all_loaded_decks = []
+        if not self._is_first_deck_load:
+            self.research_panel.reset_event_type_filter()
+            self.research_panel.reset_result_filter()
+            self.research_panel.reset_player_name_filter()
+            self.research_panel.reset_date_filter()
 
         # Update UI state immediately
         self.deck_list.Clear()
