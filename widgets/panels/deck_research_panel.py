@@ -1,5 +1,6 @@
 """Panel for browsing MTG deck archetypes and filtering by format."""
 
+import math
 from collections.abc import Callable
 
 import wx
@@ -19,6 +20,121 @@ from utils.stylize import (
 )
 from widgets.buttons.deck_action_buttons import DeckActionButtons
 from widgets.deck_results_list import DeckResultsList
+
+_NUM_ARCHETYPE_COLS = 3
+
+
+class ArchetypeMultiColumnList(wx.Panel):
+    """Archetype list displayed in 3 equal columns for better space utilization."""
+
+    def __init__(self, parent: wx.Window) -> None:
+        super().__init__(parent)
+        self._items: list[str] = []
+        self._selected_index: int = wx.NOT_FOUND
+        self._on_select_callback: Callable[[], None] | None = None
+
+        self._boxes: list[wx.ListBox] = []
+        sizer = wx.BoxSizer(wx.HORIZONTAL)
+        for i in range(_NUM_ARCHETYPE_COLS):
+            box = wx.ListBox(self, style=wx.LB_SINGLE)
+            stylize_listbox(box)
+            box.Bind(wx.EVT_LISTBOX, self._on_box_select)
+            padding = PADDING_MD if i < _NUM_ARCHETYPE_COLS - 1 else 0
+            sizer.Add(box, 1, wx.EXPAND | wx.RIGHT, padding)
+            self._boxes.append(box)
+        self.SetSizer(sizer)
+
+    def _num_rows(self) -> int:
+        n = len(self._items)
+        return math.ceil(n / _NUM_ARCHETYPE_COLS) if n > 0 else 0
+
+    def _on_box_select(self, event: wx.CommandEvent) -> None:
+        src_box = event.GetEventObject()
+        col = self._boxes.index(src_box)
+        row = src_box.GetSelection()
+        if row == wx.NOT_FOUND:
+            return
+        num_rows = self._num_rows()
+        if num_rows == 0:
+            return
+        global_idx = col * num_rows + row
+        if global_idx >= len(self._items):
+            return
+        for i, box in enumerate(self._boxes):
+            if i != col:
+                box.SetSelection(wx.NOT_FOUND)
+        self._selected_index = global_idx
+        if self._on_select_callback is not None:
+            self._on_select_callback()
+
+    def _rebuild_columns(self) -> None:
+        for box in self._boxes:
+            box.Freeze()
+        try:
+            n = len(self._items)
+            num_rows = math.ceil(n / _NUM_ARCHETYPE_COLS) if n > 0 else 0
+            for col, box in enumerate(self._boxes):
+                box.Clear()
+                start = col * num_rows
+                end = min(start + num_rows, n)
+                for i in range(start, end):
+                    box.Append(self._items[i])
+        finally:
+            for box in self._boxes:
+                box.Thaw()
+
+    def Bind(self, event, handler=None, source=None, id=wx.ID_ANY, id2=wx.ID_ANY) -> None:  # type: ignore[override]
+        if event is wx.EVT_LISTBOX:
+            self._on_select_callback = handler
+        else:
+            super().Bind(event, handler, source, id, id2)
+
+    def Clear(self) -> None:  # type: ignore[override]
+        self._items.clear()
+        self._selected_index = wx.NOT_FOUND
+        for box in self._boxes:
+            box.Clear()
+
+    def Append(self, item: str) -> int:  # type: ignore[override]
+        self._items.append(item)
+        self._rebuild_columns()
+        return len(self._items) - 1
+
+    def GetCount(self) -> int:
+        return len(self._items)
+
+    def GetSelection(self) -> int:
+        return self._selected_index
+
+    def SetSelection(self, n: int) -> None:  # type: ignore[override]
+        if n < 0:
+            self._selected_index = wx.NOT_FOUND
+            for box in self._boxes:
+                box.SetSelection(wx.NOT_FOUND)
+            return
+        if n >= len(self._items):
+            return
+        self._selected_index = n
+        num_rows = self._num_rows()
+        if num_rows == 0:
+            return
+        col = n // num_rows
+        row = n % num_rows
+        for i, box in enumerate(self._boxes):
+            box.SetSelection(row if i == col else wx.NOT_FOUND)
+
+    def Enable(self, enable: bool = True) -> bool:  # type: ignore[override]
+        for box in self._boxes:
+            box.Enable(enable)
+        return True
+
+    def Disable(self) -> bool:  # type: ignore[override]
+        return self.Enable(False)
+
+    def SetToolTip(self, tip: str | wx.ToolTip) -> None:  # type: ignore[override]
+        tooltip = tip if isinstance(tip, wx.ToolTip) else wx.ToolTip(tip)
+        for box in self._boxes:
+            box.SetToolTip(tooltip)
 
 
 class DeckResearchPanel(wx.Panel):
@@ -126,9 +242,8 @@ class DeckResearchPanel(wx.Panel):
 
         sizer.Add(row2, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_MD)
 
-        # Archetype list
-        self.archetype_list = wx.ListBox(self, style=wx.LB_SINGLE)
-        stylize_listbox(self.archetype_list)
+        # Archetype list (3-column layout)
+        self.archetype_list = ArchetypeMultiColumnList(self)
         self.archetype_list.SetMinSize((-1, ARCHETYPE_LIST_HEIGHT))
         self.archetype_list.SetMaxSize((-1, ARCHETYPE_LIST_HEIGHT))
         if tip := self._labels.get("archetypes_tooltip"):
