@@ -103,6 +103,35 @@ class DeckSelectorSessionManager:
     def update_event_logging_enabled(self, enabled: bool) -> None:
         self.settings["event_logging_enabled"] = bool(enabled)
 
+    _VALID_EVENT_TYPE_FILTERS = {"All", "Challenge", "League", "Showcase", "Last Chance"}
+
+    def get_deck_event_type_filter(self, default: str = "All") -> str:
+        value = self.settings.get("deck_event_type_filter", default)
+        return value if value in self._VALID_EVENT_TYPE_FILTERS else default
+
+    def update_deck_event_type_filter(self, value: str) -> None:
+        self.settings["deck_event_type_filter"] = (
+            value if value in self._VALID_EVENT_TYPE_FILTERS else "All"
+        )
+
+    def get_deck_result_filter(self, default: str = "") -> str:
+        return str(self.settings.get("deck_result_filter", default))
+
+    def update_deck_result_filter(self, value: str) -> None:
+        self.settings["deck_result_filter"] = value
+
+    def get_deck_player_filter(self, default: str = "") -> str:
+        return str(self.settings.get("deck_player_filter", default))
+
+    def update_deck_player_filter(self, value: str) -> None:
+        self.settings["deck_player_filter"] = value
+
+    def get_deck_date_filter(self, default: str = "") -> str:
+        return str(self.settings.get("deck_date_filter", default))
+
+    def update_deck_date_filter(self, value: str) -> None:
+        self.settings["deck_date_filter"] = value
+
     def is_tutorial_shown(self) -> bool:
         """Return True if the user has already seen the first-run tutorial."""
         return bool(self.settings.get("tutorial_shown", False))

@@ -95,6 +95,8 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
         self._inspector_hover_timer: wx.Timer | None = None
         self._pending_hover: tuple[str, dict[str, Any]] | None = None
         self._pending_deck_restore: bool = False
+        self._is_first_deck_load: bool = True
+        self._all_loaded_decks: list[dict[str, Any]] = []
 
         self._build_ui()
         self._apply_window_preferences()
@@ -154,6 +156,10 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
             on_save=lambda: self.on_save_clicked(None),
             on_daily_average=lambda: self.on_daily_average_clicked(None),
             on_load=self.on_load_deck_clicked,
+            on_event_type_filter=self.on_event_type_filter_changed,
+            on_result_filter=self.on_result_filter_changed,
+            on_player_name_filter=self.on_player_name_filter_changed,
+            on_date_filter=self.on_date_filter_changed,
             labels={
                 "format": self._t("research.format"),
                 "search_hint": self._t("research.search_hint"),
@@ -221,10 +227,10 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
         content_split.Add(inspector_column, 0, wx.EXPAND)
 
         inspector_box = self._build_card_inspector(right_panel)
-        inspector_column.Add(inspector_box, 1, wx.EXPAND)
+        inspector_column.Add(inspector_box, 0, wx.EXPAND)
 
         oracle_box = self._build_oracle_text_panel(right_panel)
-        inspector_column.Add(oracle_box, 0, wx.EXPAND | wx.TOP, PADDING_MD)
+        inspector_column.Add(oracle_box, 1, wx.EXPAND | wx.TOP, PADDING_MD)
 
         return right_panel
 
@@ -463,7 +469,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
         )
         self.oracle_text_ctrl.SetBackgroundColour(DARK_PANEL)
         self.oracle_text_ctrl.SetForegroundColour(LIGHT_TEXT)
-        self.oracle_text_ctrl.SetMinSize((-1, 100))
+        self.oracle_text_ctrl.SetMinSize((-1, 200))
 
         oracle_sizer.Add(self.oracle_text_ctrl, 1, wx.EXPAND | wx.ALL, PADDING_SM)
         return oracle_sizer

@@ -4,7 +4,12 @@ from collections.abc import Callable
 
 import wx
 
-from utils.constants import APP_FRAME_SUMMARY_MIN_HEIGHT, DARK_PANEL, PADDING_MD
+from utils.constants import (
+    APP_FRAME_SUMMARY_MIN_HEIGHT,
+    ARCHETYPE_LIST_HEIGHT,
+    DARK_PANEL,
+    PADDING_MD,
+)
 from utils.stylize import (
     stylize_button,
     stylize_choice,
@@ -34,6 +39,10 @@ class DeckResearchPanel(wx.Panel):
         on_save: Callable[[], None] | None = None,
         on_daily_average: Callable[[], None] | None = None,
         on_load: Callable[[], None] | None = None,
+        on_event_type_filter: Callable[[], None] | None = None,
+        on_result_filter: Callable[[], None] | None = None,
+        on_player_name_filter: Callable[[], None] | None = None,
+        on_date_filter: Callable[[], None] | None = None,
         labels: dict[str, str] | None = None,
     ) -> None:
         super().__init__(parent)
@@ -49,6 +58,10 @@ class DeckResearchPanel(wx.Panel):
         self._on_save = on_save
         self._on_daily_average = on_daily_average
         self._on_load = on_load
+        self._on_event_type_filter = on_event_type_filter
+        self._on_result_filter = on_result_filter
+        self._on_player_name_filter = on_player_name_filter
+        self._on_date_filter = on_date_filter
 
         # Store initial format
         self.initial_format = initial_format
@@ -98,10 +111,17 @@ class DeckResearchPanel(wx.Panel):
         stylize_textctrl(self.search_ctrl)
         row2.Add(self.search_ctrl, 1, wx.EXPAND | wx.RIGHT, PADDING_MD)
 
-        # Event Type filter placeholder (implemented in Step 5)
-        self.event_type_choice = wx.Choice(self, choices=[])
-        self.event_type_choice.Disable()
+        # Event Type filter
+        self.event_type_choice = wx.Choice(
+            self,
+            choices=["All", "Challenge", "League", "Showcase", "Last Chance"],
+        )
+        self.event_type_choice.SetSelection(0)
         stylize_choice(self.event_type_choice)
+        if self._on_event_type_filter is not None:
+            self.event_type_choice.Bind(
+                wx.EVT_CHOICE, lambda _evt: self._on_event_type_filter()  # type: ignore[misc]
+            )
         row2.Add(self.event_type_choice, 1, wx.EXPAND)
 
         sizer.Add(row2, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_MD)
@@ -109,10 +129,12 @@ class DeckResearchPanel(wx.Panel):
         # Archetype list
         self.archetype_list = wx.ListBox(self, style=wx.LB_SINGLE)
         stylize_listbox(self.archetype_list)
+        self.archetype_list.SetMinSize((-1, ARCHETYPE_LIST_HEIGHT))
+        self.archetype_list.SetMaxSize((-1, ARCHETYPE_LIST_HEIGHT))
         if tip := self._labels.get("archetypes_tooltip"):
             self.archetype_list.SetToolTip(tip)
         self.archetype_list.Bind(wx.EVT_LISTBOX, lambda _evt: self._on_archetype_selected())
-        sizer.Add(self.archetype_list, 1, wx.EXPAND | wx.ALL, PADDING_MD)
+        sizer.Add(self.archetype_list, 0, wx.EXPAND | wx.ALL, PADDING_MD)
 
         # Reload button
         refresh_button = wx.Button(
@@ -129,23 +151,26 @@ class DeckResearchPanel(wx.Panel):
 
         self.result_filter = wx.TextCtrl(self, style=wx.TE_PROCESS_ENTER)
         self.result_filter.SetHint(self._labels.get("result_hint", "Result..."))
-        self.result_filter.Disable()
         stylize_textctrl(self.result_filter)
+        if self._on_result_filter is not None:
+            self.result_filter.Bind(wx.EVT_TEXT, lambda _evt: self._on_result_filter())  # type: ignore[misc]
         row3.Add(self.result_filter, 1, wx.EXPAND | wx.RIGHT, PADDING_MD)
 
         self.player_name_filter = wx.TextCtrl(self, style=wx.TE_PROCESS_ENTER)
         self.player_name_filter.SetHint(self._labels.get("player_name_hint", "Player name..."))
-        self.player_name_filter.Disable()
         stylize_textctrl(self.player_name_filter)
+        if self._on_player_name_filter is not None:
+            self.player_name_filter.Bind(wx.EVT_TEXT, lambda _evt: self._on_player_name_filter())  # type: ignore[misc]
         row3.Add(self.player_name_filter, 1, wx.EXPAND)
 
         sizer.Add(row3, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_MD)
 
-        # Row 4: Date filter placeholder (full width)
+        # Row 4: Date filter (full width)
         self.date_filter = wx.TextCtrl(self, style=wx.TE_PROCESS_ENTER)
-        self.date_filter.SetHint(self._labels.get("date_hint", "Date..."))
-        self.date_filter.Disable()
+        self.date_filter.SetHint(self._labels.get("date_hint", "YYYY-MM-DD"))
         stylize_textctrl(self.date_filter)
+        if self._on_date_filter is not None:
+            self.date_filter.Bind(wx.EVT_TEXT, lambda _evt: self._on_date_filter())  # type: ignore[misc]
         sizer.Add(self.date_filter, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_MD)
 
         # --- Deck results bottom section ---
@@ -195,6 +220,55 @@ class DeckResearchPanel(wx.Panel):
         self.copy_button = self.deck_action_buttons.copy_button
         self.load_button = self.deck_action_buttons.load_button
         self.save_button = self.deck_action_buttons.save_button
+
+    def get_event_type_filter(self) -> str:
+        """Get the selected event type filter ('All' means no filter)."""
+        return self.event_type_choice.GetStringSelection()
+
+    def set_event_type_filter(self, value: str) -> None:
+        """Set the event type filter without triggering a change event."""
+        if not self.event_type_choice.SetStringSelection(value):
+            self.event_type_choice.SetSelection(0)
+
+    def reset_event_type_filter(self) -> None:
+        """Reset the event type filter to 'All'."""
+        self.event_type_choice.SetSelection(0)
+
+    def get_result_filter(self) -> str:
+        """Get the current result filter text (partial match against deck result field)."""
+        return self.result_filter.GetValue().strip().lower()
+
+    def set_result_filter(self, value: str) -> None:
+        """Set the result filter text without triggering a change event."""
+        self.result_filter.ChangeValue(value)
+
+    def reset_result_filter(self) -> None:
+        """Clear the result filter input."""
+        self.result_filter.ChangeValue("")
+
+    def get_player_name_filter(self) -> str:
+        """Get the current player name filter text (partial, case-insensitive)."""
+        return self.player_name_filter.GetValue().strip().lower()
+
+    def set_player_name_filter(self, value: str) -> None:
+        """Set the player name filter text without triggering a change event."""
+        self.player_name_filter.ChangeValue(value)
+
+    def reset_player_name_filter(self) -> None:
+        """Clear the player name filter input."""
+        self.player_name_filter.ChangeValue("")
+
+    def get_date_filter(self) -> str:
+        """Get the current date filter text (prefix match against deck date field)."""
+        return self.date_filter.GetValue().strip()
+
+    def set_date_filter(self, value: str) -> None:
+        """Set the date filter text without triggering a change event."""
+        self.date_filter.ChangeValue(value)
+
+    def reset_date_filter(self) -> None:
+        """Clear the date filter input."""
+        self.date_filter.ChangeValue("")
 
     def get_selected_format(self) -> str:
         """Get the currently selected format."""
