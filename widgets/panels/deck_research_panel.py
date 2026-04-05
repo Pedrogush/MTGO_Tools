@@ -5,9 +5,9 @@ from __future__ import annotations
 from collections.abc import Callable
 
 import wx
+import wx.html
 
 from utils.constants import (
-    APP_FRAME_SUMMARY_MIN_HEIGHT,
     DARK_ACCENT,
     DARK_ALT,
     DARK_PANEL,
@@ -86,6 +86,13 @@ class _ArchetypePopup(wx.ComboPopup):
     def GetAdjustedSize(self, min_w: int, pref_h: int, max_h: int) -> wx.Size:
         return wx.Size(max(min_w, self._POPUP_MIN_W), min(self._POPUP_MAX_H, max(max_h, 80)))
 
+    def GetStringValue(self) -> str:
+        if self._listbox is not None:
+            sel = self._listbox.GetSelection()
+            if sel != wx.NOT_FOUND:
+                return self._listbox.GetString(sel)
+        return ""
+
     # ------------------------------------------------------------------ event handlers
 
     def _on_search_text(self, _evt: wx.Event) -> None:
@@ -162,11 +169,9 @@ class _SearchableArchetypeCombo(wx.ComboCtrl):
         hint: str = "",
         tooltip: str = "",
     ) -> None:
-        super().__init__(parent, style=wx.CB_READONLY | wx.BORDER_NONE)
+        super().__init__(parent, style=wx.BORDER_NONE)
         self.SetBackgroundColour(wx.Colour(*DARK_ALT))
         self.SetForegroundColour(wx.Colour(*LIGHT_TEXT))
-        if hint:
-            self.SetHint(hint)
         if tooltip:
             self.SetToolTip(tooltip)
 
@@ -178,14 +183,32 @@ class _SearchableArchetypeCombo(wx.ComboCtrl):
         self._item_names: list[str] = []
         self._selected_idx: int = -1
 
+        # Apply colors to inner TextCtrl (created lazily) and set default display.
+        wx.CallAfter(self._init_text_ctrl)
+
         self.Bind(wx.EVT_CHOICE, lambda _e: on_archetype_selected())
+
+    def _init_text_ctrl(self) -> None:
+        tc = self.GetTextCtrl()
+        if tc:
+            tc.SetWindowStyleFlag(tc.GetWindowStyleFlag() | wx.TE_CENTRE)
+            tc.ChangeValue("-")
+            tc.Refresh()
+
+    def SetValue(self, value: str) -> None:
+        """Override to write directly to the inner TextCtrl, bypassing CB_READONLY validation."""
+        tc = self.GetTextCtrl()
+        if tc is not None:
+            tc.ChangeValue(value)
+        else:
+            super().SetValue(value)
 
     # ------------------------------------------------------------------ list API
 
     def Clear(self) -> None:
         self._item_names = []
         self._selected_idx = -1
-        self.SetValue("")
+        self.SetValue("-")
         self._popup.clear()
 
     def Append(self, name: str) -> None:
@@ -215,7 +238,7 @@ class _SearchableArchetypeCombo(wx.ComboCtrl):
     def populate(self, names: list[str]) -> None:
         self._item_names = list(names)
         self._selected_idx = -1
-        self.SetValue("")
+        self.SetValue("-")
         self._popup.set_items(names)
 
 
@@ -334,11 +357,17 @@ class DeckResearchPanel(wx.Panel):
         # just need .GetValue() / .Enable() / .Disable()
         self.search_ctrl = self.archetype_combo
 
-        # Row 2: Event type filter
+        # Row 2: Event | Date (side by side)
+        event_date_labels = wx.BoxSizer(wx.HORIZONTAL)
         event_label = wx.StaticText(self, label=self._labels.get("event", "Event"))
         stylize_label(event_label, subtle=True)
-        sizer.Add(event_label, 0, wx.TOP | wx.LEFT | wx.RIGHT, PADDING_MD)
+        date_label = wx.StaticText(self, label=self._labels.get("date", "Date"))
+        stylize_label(date_label, subtle=True)
+        event_date_labels.Add(event_label, 1, wx.RIGHT, PADDING_MD)
+        event_date_labels.Add(date_label, 1)
+        sizer.Add(event_date_labels, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, PADDING_MD)
 
+        event_date_row = wx.BoxSizer(wx.HORIZONTAL)
         self.event_type_choice = wx.Choice(
             self,
             choices=["All", "Challenge", "League", "Showcase", "Last Chance"],
@@ -349,7 +378,15 @@ class DeckResearchPanel(wx.Panel):
             self.event_type_choice.Bind(
                 wx.EVT_CHOICE, lambda _evt: self._on_event_type_filter()  # type: ignore[misc]
             )
-        sizer.Add(self.event_type_choice, 0, wx.EXPAND | wx.ALL, PADDING_MD)
+        event_date_row.Add(self.event_type_choice, 1, wx.EXPAND | wx.RIGHT, PADDING_MD)
+
+        self.date_filter = wx.TextCtrl(self, style=wx.TE_PROCESS_ENTER)
+        self.date_filter.SetHint(self._labels.get("date_hint", "YYYY-MM-DD"))
+        stylize_textctrl(self.date_filter)
+        if self._on_date_filter is not None:
+            self.date_filter.Bind(wx.EVT_TEXT, lambda _evt: self._on_date_filter())  # type: ignore[misc]
+        event_date_row.Add(self.date_filter, 1, wx.EXPAND)
+        sizer.Add(event_date_row, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_MD)
 
         # Row 3: Result | Player name
         row3_labels = wx.BoxSizer(wx.HORIZONTAL)
@@ -381,18 +418,6 @@ class DeckResearchPanel(wx.Panel):
         row3.Add(self.player_name_filter, 1, wx.EXPAND)
         sizer.Add(row3, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_MD)
 
-        # Row 4: Date filter
-        date_label = wx.StaticText(self, label=self._labels.get("date", "Date"))
-        stylize_label(date_label, subtle=True)
-        sizer.Add(date_label, 0, wx.TOP | wx.LEFT | wx.RIGHT, PADDING_MD)
-
-        self.date_filter = wx.TextCtrl(self, style=wx.TE_PROCESS_ENTER)
-        self.date_filter.SetHint(self._labels.get("date_hint", "YYYY-MM-DD"))
-        stylize_textctrl(self.date_filter)
-        if self._on_date_filter is not None:
-            self.date_filter.Bind(wx.EVT_TEXT, lambda _evt: self._on_date_filter())  # type: ignore[misc]
-        sizer.Add(self.date_filter, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_MD)
-
         self._build_deck_results_section(sizer)
 
     def _build_deck_results_section(self, sizer: wx.Sizer) -> None:
@@ -417,13 +442,14 @@ class DeckResearchPanel(wx.Panel):
             self.deck_action_buttons, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_MD
         )
 
-        self.summary_text = wx.TextCtrl(
+        self.summary_text = wx.html.HtmlWindow(
             self,
-            style=wx.TE_MULTILINE | wx.TE_READONLY | wx.TE_WORDWRAP | wx.NO_BORDER,
+            style=wx.html.HW_SCROLLBAR_NEVER | wx.NO_BORDER,
         )
-        stylize_textctrl(self.summary_text, multiline=True)
-        self.summary_text.SetMinSize((-1, APP_FRAME_SUMMARY_MIN_HEIGHT))
-        sizer.Add(self.summary_text, 0, wx.EXPAND | wx.ALL, PADDING_MD)
+        self.summary_text.SetBackgroundColour(wx.Colour(34, 39, 46))
+        self.summary_text.SetBorders(0)
+        self.summary_text.SetMinSize((-1, 62))
+        sizer.Add(self.summary_text, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_MD)
 
         self.deck_list = DeckResultsList(self)
         if self._on_deck_selected is not None:

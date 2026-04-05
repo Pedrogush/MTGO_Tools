@@ -30,7 +30,7 @@ from widgets.buttons.toolbar_buttons import ToolbarButtons
 from widgets.dialogs.help_dialog import show_help
 from widgets.dialogs.image_download_dialog import show_image_download_dialog
 from widgets.dialogs.tutorial_dialog import show_tutorial
-from widgets.handlers.app_event_handlers import AppEventHandlers
+from widgets.handlers.app_event_handlers import AppEventHandlers, _simple_summary_html
 from widgets.handlers.card_table_panel_handler import CardTablePanelHandler
 from widgets.handlers.sideboard_guide_handlers import SideboardGuideHandlers
 from widgets.identify_opponent import MTGOpponentDeckSpy
@@ -733,7 +733,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
 
     def _clear_deck_display(self) -> None:
         self.controller.deck_repo.set_current_deck(None)
-        self.summary_text.ChangeValue(self._t("app.status.select_archetype"))
+        self.summary_text.SetPage(_simple_summary_html(self._t("app.status.select_archetype")))
         self.zone_cards = {"main": [], "side": [], "out": []}
         self.main_table.set_cards([])
         self.side_table.set_cards([])

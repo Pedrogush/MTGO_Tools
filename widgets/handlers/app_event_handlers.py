@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 import threading
+from datetime import date, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -22,6 +23,16 @@ from widgets.top_cards import TopCardsFrame
 
 if TYPE_CHECKING:
     from widgets.app_frame import AppFrame
+
+
+def _simple_summary_html(text: str) -> str:
+    escaped = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    escaped = escaped.replace("\n", "<br>")
+    return (
+        '<html><body bgcolor="#22272E" text="#ECECEC">'
+        f'<font size="2">{escaped}</font>'
+        "</body></html>"
+    )
 
 
 class AppEventHandlers:
@@ -367,8 +378,8 @@ class AppEventHandlers:
         # Skip overwriting the deck summary if a deck is already displayed — this handler
         # may be called a second time by the background stale-while-revalidate refresh.
         if not self._has_deck_loaded():
-            self.summary_text.ChangeValue(
-                self._t("app.research.select_archetype_loaded", count=count)
+            self.summary_text.SetPage(
+                _simple_summary_html(self._t("app.research.select_archetype_loaded", count=count))
             )
 
     def _on_archetypes_error(self: AppFrame, error: Exception) -> None:
@@ -402,7 +413,7 @@ class AppEventHandlers:
             self.deck_list.Append(self._t("deck_results.no_decks"))
             self.deck_list.Disable()
             self._set_status("deck_results.no_decks_for", archetype=archetype_name)
-            self.summary_text.ChangeValue(f"{archetype_name}\n\nNo deck data available.")
+            self.summary_text.SetPage(_simple_summary_html(f"{archetype_name}\n\nNo deck data available."))
             return
         self._apply_deck_filters()
         self.daily_average_button.Enable()
@@ -728,19 +739,27 @@ class AppEventHandlers:
         )
 
     def _present_archetype_summary(self, archetype_name: str, decks: list[dict[str, Any]]) -> None:
-        by_date: dict[str, int] = {}
-        for deck in decks:
-            date = deck.get("date", "").lower()
-            by_date[date] = by_date.get(date, 0) + 1
-        latest_dates = sorted(by_date.items(), reverse=True)[:7]
-        lines = [archetype_name, "", self._t("deck_results.total_loaded", count=len(decks)), ""]
-        if latest_dates:
-            lines.append(self._t("deck_results.recent_activity"))
-            for day, count in latest_dates:
-                lines.append(f"  {day}: {count} deck(s)")
-        else:
-            lines.append(self._t("deck_results.no_activity"))
-        self.summary_text.ChangeValue("\n".join(lines))
+        total = len(decks)
+        cutoff = (date.today() - timedelta(days=7)).strftime("%Y-%m-%d")
+        recent = sum(1 for d in decks if d.get("date", "") >= cutoff)
+        name_escaped = archetype_name.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+        html = (
+            '<html><body bgcolor="#22272E" text="#ECECEC">'
+            '<table width="100%" cellpadding="5" cellspacing="0" bgcolor="#282E36">'
+            "<tr>"
+            "<td valign=middle>"
+            f'<font size="4"><b>{name_escaped}</b></font><br>'
+            f'<font size="2" color="#B9BFCA">{total} decks</font>'
+            "</td>"
+            '<td align="right" valign="middle">'
+            f'<font size="5" color="#3B82F6"><b>{recent}</b></font><br>'
+            '<font size="2" color="#B9BFCA">last 7 days</font>'
+            "</td>"
+            "</tr>"
+            "</table>"
+            "</body></html>"
+        )
+        self.summary_text.SetPage(html)
 
     def _load_decks_for_archetype(self, archetype: dict[str, Any]) -> None:
         name = archetype.get("name", "Unknown")
@@ -755,7 +774,7 @@ class AppEventHandlers:
         self.deck_list.Clear()
         self.deck_list.Append("Loading…")
         self.deck_list.Disable()
-        self.summary_text.ChangeValue(f"{name}\n\nFetching deck results…")
+        self.summary_text.SetPage(_simple_summary_html(f"{name}\n\nFetching deck results\u2026"))
 
         # Delegate to controller
         self.controller.load_decks_for_archetype(
