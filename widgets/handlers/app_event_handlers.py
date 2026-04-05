@@ -213,7 +213,7 @@ class AppEventHandlers:
             self.deck_list.Append(self.format_deck_list_entry(deck, show_source=show_source))
         self.deck_list.Enable()
 
-    def on_deck_selected(self: AppFrame, _event: wx.CommandEvent) -> None:
+    def on_deck_selected(self: AppFrame, _event: wx.CommandEvent | None = None) -> None:
         with self._loading_lock:
             if self.loading_decks:
                 return
