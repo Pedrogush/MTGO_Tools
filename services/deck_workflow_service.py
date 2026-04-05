@@ -44,6 +44,9 @@ class DeckWorkflowService:
     ) -> list[dict[str, Any]]:
         return self.metagame_repo.get_decks_for_archetype(archetype, source_filter=source_filter)
 
+    def load_all_decks(self, *, source_filter: str) -> list[dict[str, Any]]:
+        return self.metagame_repo.get_all_cached_decks(source_filter=source_filter)
+
     @staticmethod
     def _default_deck_downloader(deck_number: str, source_filter: str | None = None) -> None:
         download_deck(deck_number, source_filter=source_filter)

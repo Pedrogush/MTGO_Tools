@@ -251,6 +251,35 @@ class MetagameRepository:
                 return self._merge_and_sort_decks(mtggoldfish_decks, mtgo_decks)
             raise
 
+    def get_all_cached_decks(self, source_filter: str | None = None) -> list[dict[str, Any]]:
+        """Return all locally cached decks across all archetypes, sorted by date descending."""
+        if not self.archetype_decks_cache_file.exists():
+            return []
+        try:
+            with locked_path(self.archetype_decks_cache_file):
+                with self.archetype_decks_cache_file.open("r", encoding="utf-8") as fh:
+                    data = json.load(fh)
+        except json.JSONDecodeError as exc:
+            logger.warning(f"Cached deck list invalid: {exc}")
+            return []
+        all_decks: list[dict[str, Any]] = []
+        for entry in data.values():
+            items = entry.get("items", [])
+            filtered = self._filter_decks_by_source(items, source_filter)
+            all_decks.extend(filtered)
+        # Deduplicate by deck number
+        seen: set[str] = set()
+        unique: list[dict[str, Any]] = []
+        for deck in all_decks:
+            key = deck.get("number") or deck.get("href", "")
+            if key and key not in seen:
+                seen.add(key)
+                unique.append(deck)
+            elif not key:
+                unique.append(deck)
+        unique.sort(key=lambda d: _parse_deck_date(d.get("date", "")), reverse=True)
+        return unique
+
     def download_deck_content(self, deck: dict[str, Any], source_filter: str | None = None) -> str:
         """
         Download the actual deck list content.

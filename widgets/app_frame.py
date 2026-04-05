@@ -96,6 +96,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
         self._pending_hover: tuple[str, dict[str, Any]] | None = None
         self._pending_deck_restore: bool = False
         self._is_first_deck_load: bool = True
+        self._initial_any_load_triggered: bool = False
         self._all_loaded_decks: list[dict[str, Any]] = []
 
         self._build_ui()
@@ -768,7 +769,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
             self._render_current_deck()
 
     def _populate_archetype_list(self) -> None:
-        archetype_names = [item.get("name", "Unknown") for item in self.filtered_archetypes]
+        archetype_names = ["Any"] + [item.get("name", "Unknown") for item in self.filtered_archetypes]
         self.research_panel.populate_archetypes(archetype_names)
 
     def _on_deck_download_success(self, content: str) -> None:

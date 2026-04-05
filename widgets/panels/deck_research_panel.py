@@ -192,7 +192,7 @@ class _SearchableArchetypeCombo(wx.ComboCtrl):
         tc = self.GetTextCtrl()
         if tc:
             tc.SetWindowStyleFlag(tc.GetWindowStyleFlag() | wx.TE_CENTRE)
-            tc.ChangeValue("-")
+            tc.ChangeValue("Any")
             tc.Refresh()
 
     def SetValue(self, value: str) -> None:
@@ -208,7 +208,7 @@ class _SearchableArchetypeCombo(wx.ComboCtrl):
     def Clear(self) -> None:
         self._item_names = []
         self._selected_idx = -1
-        self.SetValue("-")
+        self.SetValue("Any")
         self._popup.clear()
 
     def Append(self, name: str) -> None:
@@ -238,7 +238,7 @@ class _SearchableArchetypeCombo(wx.ComboCtrl):
     def populate(self, names: list[str]) -> None:
         self._item_names = list(names)
         self._selected_idx = -1
-        self.SetValue("-")
+        self.SetValue("Any")
         self._popup.set_items(names)
 
 
