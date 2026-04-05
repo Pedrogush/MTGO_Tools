@@ -226,6 +226,7 @@ class AppEventHandlers:
         for deck in filtered:
             self.deck_list.AppendDeck(
                 player=deck.get("player", "Unknown"),
+                archetype=deck.get("name", ""),
                 event=AppEventHandlers._strip_extra_dates(deck.get("event", "")),
                 result=deck.get("result", ""),
                 date=AppEventHandlers._normalize_date(deck.get("date", "")),
@@ -377,14 +378,10 @@ class AppEventHandlers:
         self.research_panel.enable_controls()
         count = len(self.archetypes)
         self._set_status("app.research.archetypes_loaded", count=count, format=self.current_format)
-        # Auto-load all recent decks on first archetype list arrival (unless a deck is already shown)
-        if not self._has_deck_loaded() and not self._initial_any_load_triggered:
+        # Auto-load all recent decks on first archetype list arrival
+        if not self._initial_any_load_triggered:
             self._initial_any_load_triggered = True
             self._load_all_decks()
-        elif not self._has_deck_loaded():
-            self.summary_text.SetPage(
-                _simple_summary_html(self._t("app.research.select_archetype_loaded", count=count))
-            )
 
     def _on_archetypes_error(self: AppFrame, error: Exception) -> None:
         with self._loading_lock:
@@ -398,6 +395,8 @@ class AppEventHandlers:
     def _on_decks_loaded(self: AppFrame, archetype_name: str, decks: list[dict[str, Any]]) -> None:
         with self._loading_lock:
             self.loading_decks = False
+        if archetype_name == "Any":
+            decks = decks[:100]
         self._all_loaded_decks = decks
         if self._is_first_deck_load:
             self._is_first_deck_load = False
@@ -751,6 +750,15 @@ class AppEventHandlers:
             day_counts.append(str(count))
         per_day_str = "/".join(day_counts)
         name_escaped = archetype_name.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+        if archetype_name == "Any":
+            right_cell = ""
+        else:
+            right_cell = (
+                '<td align="right" valign="middle">'
+                f'<font size="3" color="#3B82F6"><b>{per_day_str}</b></font><br>'
+                '<font size="2" color="#B9BFCA">last 7 days</font>'
+                "</td>"
+            )
         html = (
             '<html><body bgcolor="#22272E" text="#ECECEC">'
             '<table width="100%" cellpadding="5" cellspacing="0" bgcolor="#282E36">'
@@ -759,10 +767,7 @@ class AppEventHandlers:
             f'<font size="4"><b>{name_escaped}</b></font><br>'
             f'<font size="2" color="#B9BFCA">{total} decks</font>'
             "</td>"
-            '<td align="right" valign="middle">'
-            f'<font size="3" color="#3B82F6"><b>{per_day_str}</b></font><br>'
-            '<font size="2" color="#B9BFCA">last 7 days</font>'
-            "</td>"
+            f"{right_cell}"
             "</tr>"
             "</table>"
             "</body></html>"

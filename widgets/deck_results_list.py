@@ -16,7 +16,7 @@ class DeckResultsList(wx.VListBox):
         super().__init__(parent, style=wx.BORDER_NONE)
         # Each item is (is_structured, data).
         # Plain:  data = (emoji, line_one, line_two)
-        # Deck:   data = (emoji, player, event, result, date)
+        # Deck:   data = (emoji, player, archetype, event, result, date)
         self._items: list[tuple[bool, tuple]] = []
         self._line_one_color = wx.Colour(*LIGHT_TEXT)
         self._line_two_color = wx.Colour(*SUBDUED_TEXT)
@@ -46,9 +46,10 @@ class DeckResultsList(wx.VListBox):
         result: str,
         date: str,
         emoji: str = "",
+        archetype: str = "",
     ) -> None:
         """Append a structured deck entry rendered with left/right card layout."""
-        self._items.append((True, (emoji, player, event, result, date)))
+        self._items.append((True, (emoji, player, archetype, event, result, date)))
         self.SetItemCount(len(self._items))
         self.Refresh()
 
@@ -66,8 +67,9 @@ class DeckResultsList(wx.VListBox):
             return ""
         is_structured, data = self._items[n]
         if is_structured:
-            emoji, player, event, result, date = data
-            parts = [p for p in (player, result, date) if p]
+            emoji, player, archetype, event, result, date = data
+            player_arch = f"{player}, {archetype}" if archetype else player
+            parts = [p for p in (player_arch, result, date) if p]
             line_one = f"{emoji} {', '.join(parts)}".strip() if emoji else ", ".join(parts)
             return f"{line_one}\n{event}" if event else line_one
         else:
@@ -206,7 +208,7 @@ class DeckResultsList(wx.VListBox):
         Left column:  emoji + player name (bold), event (small/subdued below)
         Right column: date (bold, right-aligned), result (small/subdued, right-aligned)
         """
-        emoji, player, event, result, date = data
+        emoji, player, archetype, event, result, date = data
         is_selected = self.IsSelected(n)
         card_bg = self._card_border if is_selected else self._card_bg
         primary_fg = self._selection_fg if is_selected else self._line_one_color
@@ -254,7 +256,8 @@ class DeckResultsList(wx.VListBox):
         # Top: emoji + player name
         dc.SetFont(bold_font)
         dc.SetTextForeground(primary_fg)
-        player_text = f"{emoji} {player}".strip() if emoji else player
+        player_arch = f"{player}, {archetype}" if archetype else player
+        player_text = f"{emoji} {player_arch}".strip() if emoji else player_arch
         player_truncated = self._truncate_to_width(dc, player_text, left_col_w)
         dc.DrawText(player_truncated, inner_left, top_y)
 
