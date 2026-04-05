@@ -7,12 +7,7 @@ from typing import Any
 from loguru import logger
 
 from utils.atomic_io import atomic_write_json, locked_path
-from utils.constants import (
-    CONFIG_FILE,
-    DECK_SELECTOR_SETTINGS_FILE,
-    DECKS_DIR,
-    FORMAT_OPTIONS,
-)
+from utils.constants import FORMAT_OPTIONS
 from utils.deck import sanitize_zone_cards
 from utils.i18n import DEFAULT_LOCALE, SUPPORTED_LOCALES, normalize_locale
 
@@ -23,14 +18,25 @@ class DeckSelectorSessionManager:
     def __init__(
         self,
         deck_repo,
-        settings_file: Path = DECK_SELECTOR_SETTINGS_FILE,
-        config_file: Path = CONFIG_FILE,
-        default_deck_dir: Path = DECKS_DIR,
+        settings_file: Path | None = None,
+        config_file: Path | None = None,
+        default_deck_dir: Path | None = None,
     ) -> None:
+        # Lazy lookup so that monkeypatching utils.constants in tests takes effect.
+        from utils.constants import (  # noqa: PLC0415
+            CONFIG_FILE as _CF,
+        )
+        from utils.constants import (
+            DECK_SELECTOR_SETTINGS_FILE as _SF,
+        )
+        from utils.constants import (
+            DECKS_DIR as _DD,
+        )
+
         self.deck_repo = deck_repo
-        self.settings_file = settings_file
-        self.config_file = config_file
-        self.default_deck_dir = default_deck_dir
+        self.settings_file = settings_file if settings_file is not None else _SF
+        self.config_file = config_file if config_file is not None else _CF
+        self.default_deck_dir = default_deck_dir if default_deck_dir is not None else _DD
 
         self.settings: dict[str, Any] = self._load_json_file(self.settings_file)
         self.config: dict[str, Any] = self._load_json_file(self.config_file)
