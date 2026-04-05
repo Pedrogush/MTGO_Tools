@@ -210,7 +210,17 @@ class AppEventHandlers:
             return
         show_source = self.controller.get_deck_data_source() == "both"
         for deck in filtered:
-            self.deck_list.Append(self.format_deck_list_entry(deck, show_source=show_source))
+            self.deck_list.AppendDeck(
+                player=deck.get("player", "Unknown"),
+                event=AppEventHandlers._strip_extra_dates(deck.get("event", "")),
+                result=deck.get("result", ""),
+                date=AppEventHandlers._normalize_date(deck.get("date", "")),
+                emoji=(
+                    ("🐠" if deck.get("source") == "mtggoldfish" else "🧙🏾‍♂️")
+                    if show_source
+                    else ""
+                ),
+            )
         self.deck_list.Enable()
 
     def on_deck_selected(self: AppFrame, _event: wx.CommandEvent | None = None) -> None:
