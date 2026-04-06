@@ -222,11 +222,13 @@ class AppEventHandlers:
             self.deck_list.Append(self._t("deck_results.no_decks"))
             self.deck_list.Disable()
             return
+        slug_to_name = {a.get("href", ""): a.get("name", "") for a in self.archetypes}
         show_source = self.controller.get_deck_data_source() == "both"
         for deck in filtered:
+            slug = deck.get("name", "")
             self.deck_list.AppendDeck(
                 player=deck.get("player", "Unknown"),
-                archetype=deck.get("name", ""),
+                archetype=slug_to_name.get(slug, slug),
                 event=AppEventHandlers._strip_extra_dates(deck.get("event", "")),
                 result=deck.get("result", ""),
                 date=AppEventHandlers._normalize_date(deck.get("date", "")),

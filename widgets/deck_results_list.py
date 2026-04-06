@@ -221,9 +221,10 @@ class DeckResultsList(wx.VListBox):
         dc.SetPen(wx.Pen(self._card_border))
         dc.DrawRoundedRectangle(card_rect, self._CARD_RADIUS)
 
-        # Column boundaries
-        right_col_w = int(card_rect.width * self._RIGHT_COL_RATIO)
-        left_col_w = card_rect.width - right_col_w - (self._CARD_PADDING * 2) - 4
+        # Column boundaries — split the inner content area 70/30
+        inner_w = card_rect.width - (self._CARD_PADDING * 2)
+        right_col_w = int(inner_w * self._RIGHT_COL_RATIO)
+        left_col_w = inner_w - right_col_w - 4
 
         inner_left = card_rect.x + self._CARD_PADDING
         inner_right = card_rect.x + card_rect.width - self._CARD_PADDING
