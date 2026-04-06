@@ -1,4 +1,6 @@
 .claude/
+CLAUDE.md
+AGENTS.md
 env/
 magic_online_metagame_crawler.egg-info/
 config/
