@@ -8,7 +8,6 @@ import wx
 import wx.html
 
 from utils.constants import (
-    DARK_ACCENT,
     DARK_PANEL,
     PADDING_MD,
 )
@@ -16,233 +15,10 @@ from utils.stylize import (
     stylize_button,
     stylize_choice,
     stylize_label,
-    stylize_listbox,
     stylize_textctrl,
 )
 from widgets.buttons.deck_action_buttons import DeckActionButtons
 from widgets.deck_results_list import DeckResultsList
-
-# ---------------------------------------------------------------------------
-# Searchable combo helpers
-# ---------------------------------------------------------------------------
-
-
-class _ArchetypePopup(wx.ComboPopup):
-    """Custom popup for the searchable archetype combo: search box + list."""
-
-    _POPUP_MIN_W = 200
-    _POPUP_MAX_H = 300
-
-    def __init__(self, on_search: Callable[[], None]) -> None:
-        super().__init__()
-        self._on_search = on_search
-        self._panel: wx.Panel | None = None
-        self._search: wx.TextCtrl | None = None
-        self._listbox: wx.ListBox | None = None
-        self._buffered_items: list[str] = []
-
-    # ------------------------------------------------------------------ wx interface
-
-    def Create(self, parent: wx.Window) -> bool:
-        self._panel = wx.Panel(parent, style=wx.BORDER_NONE)
-        self._panel.SetBackgroundColour(wx.SystemSettings.GetColour(wx.SYS_COLOUR_BTNFACE))
-
-        sizer = wx.BoxSizer(wx.VERTICAL)
-
-        self._search = wx.TextCtrl(self._panel, style=wx.TE_PROCESS_ENTER | wx.BORDER_SIMPLE)
-        self._search.SetHint("Search…")
-        sizer.Add(self._search, 0, wx.EXPAND | wx.ALL, 4)
-
-        sep = wx.StaticLine(self._panel)
-        sep.SetBackgroundColour(wx.Colour(*DARK_ACCENT))
-        sizer.Add(sep, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 4)
-
-        self._listbox = wx.ListBox(self._panel, style=wx.LB_SINGLE | wx.BORDER_NONE)
-        stylize_listbox(self._listbox)
-        sizer.Add(self._listbox, 1, wx.EXPAND | wx.ALL, 4)
-
-        self._panel.SetSizer(sizer)
-
-        # Populate from buffer (items set before popup was created)
-        for item in self._buffered_items:
-            self._listbox.Append(item)
-        self._buffered_items = []
-
-        self._search.Bind(wx.EVT_TEXT, self._on_search_text)
-        self._listbox.Bind(wx.EVT_LISTBOX, self._on_item_clicked)
-        return True
-
-    def GetControl(self) -> wx.Window:
-        return self._panel  # type: ignore[return-value]
-
-    def OnPopup(self) -> None:
-        if self._search:
-            self._search.SetFocus()
-
-    def GetAdjustedSize(self, min_w: int, pref_h: int, max_h: int) -> wx.Size:
-        return wx.Size(max(min_w, self._POPUP_MIN_W), min(self._POPUP_MAX_H, max(max_h, 80)))
-
-    def GetStringValue(self) -> str:
-        if self._listbox is not None:
-            sel = self._listbox.GetSelection()
-            if sel != wx.NOT_FOUND:
-                return self._listbox.GetString(sel)
-        return ""
-
-    # ------------------------------------------------------------------ event handlers
-
-    def _on_search_text(self, _evt: wx.Event) -> None:
-        self._on_search()
-
-    def _on_item_clicked(self, _evt: wx.Event) -> None:
-        if self._listbox is None:
-            return
-        sel = self._listbox.GetStringSelection()
-        combo = self.GetComboCtrl()
-        if combo:
-            combo.SetValue(sel)
-        self.Dismiss()
-        # Propagate as EVT_CHOICE so the panel's on_archetype_selected fires
-        combo_ctrl = self.GetComboCtrl()
-        if combo_ctrl:
-            evt = wx.CommandEvent(wx.wxEVT_CHOICE, combo_ctrl.GetId())
-            wx.PostEvent(combo_ctrl, evt)
-
-    # ------------------------------------------------------------------ data API
-
-    def get_search_text(self) -> str:
-        return self._search.GetValue().strip().lower() if self._search else ""
-
-    def get_item_count(self) -> int:
-        if self._listbox is not None:
-            return self._listbox.GetCount()
-        return len(self._buffered_items)
-
-    def get_selection(self) -> int:
-        if self._listbox is None:
-            return -1
-        idx = self._listbox.GetSelection()
-        return -1 if idx == wx.NOT_FOUND else idx
-
-    def set_selection(self, idx: int) -> None:
-        if self._listbox is None:
-            return
-        if 0 <= idx < self._listbox.GetCount():
-            self._listbox.SetSelection(idx)
-            combo = self.GetComboCtrl()
-            if combo:
-                combo.SetValue(self._listbox.GetString(idx))
-
-    def set_items(self, names: list[str]) -> None:
-        if self._listbox is not None:
-            self._listbox.Clear()
-            for name in names:
-                self._listbox.Append(name)
-        else:
-            self._buffered_items = list(names)
-
-    def clear(self) -> None:
-        self._buffered_items = []
-        if self._listbox is not None:
-            self._listbox.Clear()
-        if self._search is not None:
-            self._search.ChangeValue("")
-
-
-class _SearchableArchetypeCombo(wx.ComboCtrl):
-    """A ComboCtrl whose popup contains a search box followed by a list.
-
-    Exposes a subset of the wx.Choice/wx.ListBox API used by the rest of the
-    app (GetCount, GetSelection, SetSelection, Clear, Append, Enable, Disable)
-    so callers do not need to know about the internal popup.
-    """
-
-    def __init__(
-        self,
-        parent: wx.Window,
-        on_archetype_filter: Callable[[], None],
-        on_archetype_selected: Callable[[], None],
-        hint: str = "",
-        tooltip: str = "",
-    ) -> None:
-        super().__init__(parent, style=wx.BORDER_NONE)
-        self.SetBackgroundColour(wx.SystemSettings.GetColour(wx.SYS_COLOUR_BTNFACE))
-        self.SetForegroundColour(wx.Colour(0, 0, 0))
-        if tooltip:
-            self.SetToolTip(tooltip)
-
-        self._popup = _ArchetypePopup(on_archetype_filter)
-        self.SetPopupControl(self._popup)
-
-        # Track item names and selection index independently of whether the
-        # popup widget has been realised yet (Create() is called lazily).
-        self._item_names: list[str] = []
-        self._selected_idx: int = -1
-
-        # Apply colors to inner TextCtrl (created lazily) and set default display.
-        wx.CallAfter(self._init_text_ctrl)
-
-        self.Bind(wx.EVT_CHOICE, lambda _e: on_archetype_selected())
-
-    def _init_text_ctrl(self) -> None:
-        tc = self.GetTextCtrl()
-        if tc:
-            tc.SetWindowStyleFlag(tc.GetWindowStyleFlag() | wx.TE_CENTRE)
-            tc.SetBackgroundColour(wx.SystemSettings.GetColour(wx.SYS_COLOUR_BTNFACE))
-            tc.SetForegroundColour(wx.Colour(0, 0, 0))
-            tc.ChangeValue("Any")
-            tc.Refresh()
-
-    def SetValue(self, value: str) -> None:
-        """Override to write directly to the inner TextCtrl, bypassing CB_READONLY validation."""
-        tc = self.GetTextCtrl()
-        if tc is not None:
-            tc.ChangeValue(value)
-        else:
-            super().SetValue(value)
-
-    # ------------------------------------------------------------------ list API
-
-    def Clear(self) -> None:
-        self._item_names = []
-        self._selected_idx = -1
-        self.SetValue("Any")
-        self._popup.clear()
-
-    def Append(self, name: str) -> None:
-        self._item_names.append(name)
-        if self._popup._listbox is not None:
-            self._popup._listbox.Append(name)
-        else:
-            self._popup._buffered_items.append(name)
-
-    def GetCount(self) -> int:
-        return len(self._item_names)
-
-    def GetSelection(self) -> int:
-        # Prefer the live popup selection if the popup has been shown
-        live = self._popup.get_selection()
-        return live if live >= 0 else self._selected_idx
-
-    def SetSelection(self, idx: int) -> None:
-        self._selected_idx = idx
-        if 0 <= idx < len(self._item_names):
-            self.SetValue(self._item_names[idx])
-        self._popup.set_selection(idx)
-
-    def get_search_text(self) -> str:
-        return self._popup.get_search_text()
-
-    def populate(self, names: list[str]) -> None:
-        self._item_names = list(names)
-        self._selected_idx = -1
-        self.SetValue("Any")
-        self._popup.set_items(names)
-
-
-# ---------------------------------------------------------------------------
-# Main panel
-# ---------------------------------------------------------------------------
 
 
 class DeckResearchPanel(wx.Panel):
@@ -272,7 +48,6 @@ class DeckResearchPanel(wx.Panel):
         super().__init__(parent)
 
         self._on_format_changed = on_format_changed
-        self._on_archetype_filter = on_archetype_filter
         self._on_archetype_selected = on_archetype_selected
         self._on_switch_to_builder = on_switch_to_builder
         self._on_deck_selected = on_deck_selected
@@ -330,19 +105,16 @@ class DeckResearchPanel(wx.Panel):
         format_col.Add(self.format_choice, 0, wx.EXPAND | wx.TOP, PADDING_MD)
         format_arch_row.Add(format_col, 1, wx.EXPAND | wx.RIGHT, PADDING_MD)
 
-        # Archetype column: label + searchable combo
+        # Archetype column
         archetype_col = wx.BoxSizer(wx.VERTICAL)
         archetype_label = wx.StaticText(self, label=self._labels.get("archetype", "Archetype"))
         stylize_label(archetype_label, subtle=True)
         archetype_col.Add(archetype_label, 0)
 
-        self.archetype_combo = _SearchableArchetypeCombo(
-            self,
-            on_archetype_filter=self._on_archetype_filter,
-            on_archetype_selected=self._on_archetype_selected,
-            hint=self._labels.get("search_hint", "Select archetype…"),
-            tooltip=self._labels.get("archetypes_tooltip", ""),
-        )
+        self.archetype_combo = wx.ComboBox(self, style=wx.CB_READONLY)
+        if tip := self._labels.get("archetypes_tooltip", ""):
+            self.archetype_combo.SetToolTip(tip)
+        self.archetype_combo.Bind(wx.EVT_COMBOBOX, lambda _evt: self._on_archetype_selected())
         archetype_col.Add(self.archetype_combo, 0, wx.EXPAND | wx.TOP, PADDING_MD)
 
         format_arch_row.Add(archetype_col, 1, wx.EXPAND)
@@ -351,8 +123,6 @@ class DeckResearchPanel(wx.Panel):
         # Backward-compat aliases
         self.archetype_list = self.archetype_combo
         self.archetype_dropdown = self.archetype_combo
-        # search_ctrl kept as alias pointing at the combo for any callers that
-        # just need .GetValue() / .Enable() / .Disable()
         self.search_ctrl = self.archetype_combo
 
         # Row 2: Event | Date (side by side)
@@ -504,32 +274,35 @@ class DeckResearchPanel(wx.Panel):
         return self.format_choice.GetStringSelection()
 
     def get_search_query(self) -> str:
-        """Return the current archetype search text (typed inside the combo popup)."""
-        return self.archetype_combo.get_search_text()
+        return ""
 
     def get_selected_archetype_index(self) -> int:
         idx = self.archetype_combo.GetSelection()
-        return idx if idx >= 0 else -1
+        return idx if idx != wx.NOT_FOUND else -1
 
     def set_loading_state(self) -> None:
         self.archetype_combo.Clear()
-        self.archetype_combo.SetValue(self._labels.get("loading_archetypes", "Loading..."))
+        self.archetype_combo.Append(self._labels.get("loading_archetypes", "Loading..."))
+        self.archetype_combo.SetSelection(0)
         self.archetype_combo.Disable()
 
     def set_error_state(self) -> None:
         self.archetype_combo.Clear()
-        self.archetype_combo.SetValue(
+        self.archetype_combo.Append(
             self._labels.get("failed_archetypes", "Failed to load archetypes.")
         )
+        self.archetype_combo.SetSelection(0)
 
     def populate_archetypes(self, archetype_names: list[str]) -> None:
-        self.archetype_combo.populate(archetype_names)
+        self.archetype_combo.Clear()
         if not archetype_names:
-            self.archetype_combo.SetValue(
-                self._labels.get("no_archetypes", "No archetypes found.")
-            )
+            self.archetype_combo.Append(self._labels.get("no_archetypes", "No archetypes found."))
+            self.archetype_combo.SetSelection(0)
             self.archetype_combo.Disable()
         else:
+            for name in archetype_names:
+                self.archetype_combo.Append(name)
+            self.archetype_combo.SetSelection(0)
             self.archetype_combo.Enable()
 
     def enable_controls(self) -> None:
