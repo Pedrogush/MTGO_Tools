@@ -29,16 +29,16 @@ def stylize_textctrl(ctrl: wx.TextCtrl, multiline: bool = False) -> None:
 
 
 def stylize_choice(ctrl: wx.Choice) -> None:
-    ctrl.SetBackgroundColour(DARK_ALT)
-    ctrl.SetForegroundColour(LIGHT_TEXT)
+    ctrl.SetBackgroundColour(wx.SystemSettings.GetColour(wx.SYS_COLOUR_BTNFACE))
+    ctrl.SetForegroundColour(wx.Colour(0, 0, 0))
 
 
 def stylize_listbox(ctrl: wx.ListBox) -> None:
-    ctrl.SetBackgroundColour(DARK_ALT)
-    ctrl.SetForegroundColour(LIGHT_TEXT)
+    ctrl.SetBackgroundColour(wx.SystemSettings.GetColour(wx.SYS_COLOUR_BTNFACE))
+    ctrl.SetForegroundColour(wx.Colour(0, 0, 0))
     if hasattr(ctrl, "SetSelectionBackground"):
-        ctrl.SetSelectionBackground(DARK_ACCENT)
-        ctrl.SetSelectionForeground(wx.Colour(15, 17, 22))
+        ctrl.SetSelectionBackground(wx.SystemSettings.GetColour(wx.SYS_COLOUR_HIGHLIGHT))
+        ctrl.SetSelectionForeground(wx.SystemSettings.GetColour(wx.SYS_COLOUR_HIGHLIGHTTEXT))
 
 
 def stylize_button(button: wx.Button) -> None:

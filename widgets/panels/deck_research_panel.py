@@ -9,9 +9,7 @@ import wx.html
 
 from utils.constants import (
     DARK_ACCENT,
-    DARK_ALT,
     DARK_PANEL,
-    LIGHT_TEXT,
     PADDING_MD,
 )
 from utils.stylize import (
@@ -47,13 +45,11 @@ class _ArchetypePopup(wx.ComboPopup):
 
     def Create(self, parent: wx.Window) -> bool:
         self._panel = wx.Panel(parent, style=wx.BORDER_NONE)
-        self._panel.SetBackgroundColour(wx.Colour(*DARK_ALT))
+        self._panel.SetBackgroundColour(wx.SystemSettings.GetColour(wx.SYS_COLOUR_BTNFACE))
 
         sizer = wx.BoxSizer(wx.VERTICAL)
 
         self._search = wx.TextCtrl(self._panel, style=wx.TE_PROCESS_ENTER | wx.BORDER_SIMPLE)
-        self._search.SetBackgroundColour(wx.Colour(*DARK_PANEL))
-        self._search.SetForegroundColour(wx.Colour(*LIGHT_TEXT))
         self._search.SetHint("Search…")
         sizer.Add(self._search, 0, wx.EXPAND | wx.ALL, 4)
 
@@ -170,8 +166,8 @@ class _SearchableArchetypeCombo(wx.ComboCtrl):
         tooltip: str = "",
     ) -> None:
         super().__init__(parent, style=wx.BORDER_NONE)
-        self.SetBackgroundColour(wx.Colour(*DARK_ALT))
-        self.SetForegroundColour(wx.Colour(*LIGHT_TEXT))
+        self.SetBackgroundColour(wx.SystemSettings.GetColour(wx.SYS_COLOUR_BTNFACE))
+        self.SetForegroundColour(wx.Colour(0, 0, 0))
         if tooltip:
             self.SetToolTip(tooltip)
 
@@ -192,6 +188,8 @@ class _SearchableArchetypeCombo(wx.ComboCtrl):
         tc = self.GetTextCtrl()
         if tc:
             tc.SetWindowStyleFlag(tc.GetWindowStyleFlag() | wx.TE_CENTRE)
+            tc.SetBackgroundColour(wx.SystemSettings.GetColour(wx.SYS_COLOUR_BTNFACE))
+            tc.SetForegroundColour(wx.Colour(0, 0, 0))
             tc.ChangeValue("Any")
             tc.Refresh()
 
