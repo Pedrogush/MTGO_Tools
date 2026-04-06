@@ -228,9 +228,7 @@ class DeckResearchPanel(wx.Panel):
         summary_sizer.Add(self.summary_text, 1, wx.EXPAND)
         sizer.Add(summary_sizer, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_MD)
 
-        results_box = wx.StaticBox(
-            self, label=self._labels.get("deck_results", "Deck Results")
-        )
+        results_box = wx.StaticBox(self, label=self._labels.get("deck_results", "Deck Results"))
         results_box.SetForegroundColour(LIGHT_TEXT)
         results_box.SetBackgroundColour(DARK_PANEL)
         results_sizer = wx.StaticBoxSizer(results_box, wx.VERTICAL)

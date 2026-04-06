@@ -769,7 +769,9 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
             self._render_current_deck()
 
     def _populate_archetype_list(self) -> None:
-        archetype_names = ["Any"] + [item.get("name", "Unknown") for item in self.filtered_archetypes]
+        archetype_names = ["Any"] + [
+            item.get("name", "Unknown") for item in self.filtered_archetypes
+        ]
         self.research_panel.populate_archetypes(archetype_names)
 
     def _on_deck_download_success(self, content: str) -> None:

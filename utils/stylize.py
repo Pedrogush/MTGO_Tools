@@ -33,7 +33,6 @@ def stylize_choice(ctrl: wx.Choice) -> None:
     ctrl.SetForegroundColour(wx.Colour(0, 0, 0))
 
 
-
 def stylize_button(button: wx.Button) -> None:
     button.SetBackgroundColour(DARK_ACCENT)
     button.SetForegroundColour(wx.Colour(12, 14, 18))

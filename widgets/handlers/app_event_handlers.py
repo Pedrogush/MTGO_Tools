@@ -418,7 +418,9 @@ class AppEventHandlers:
             self.deck_list.Append(self._t("deck_results.no_decks"))
             self.deck_list.Disable()
             self._set_status("deck_results.no_decks_for", archetype=archetype_name)
-            self.summary_text.SetPage(_simple_summary_html(f"{archetype_name}\n\nNo deck data available."))
+            self.summary_text.SetPage(
+                _simple_summary_html(f"{archetype_name}\n\nNo deck data available.")
+            )
             return
         self._apply_deck_filters()
         self.daily_average_button.Enable()
@@ -751,7 +753,9 @@ class AppEventHandlers:
             count = sum(1 for d in decks if d.get("date", "")[:10] == target)
             day_counts.append(str(count))
         per_day_str = "/".join(day_counts)
-        name_escaped = archetype_name.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+        name_escaped = (
+            archetype_name.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+        )
         if archetype_name == "Any":
             right_cell = ""
         else:
