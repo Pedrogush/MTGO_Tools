@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 import threading
+from datetime import date, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -11,6 +12,7 @@ from loguru import logger
 from utils.card_data import CardDataManager
 from utils.constants import LOGS_DIR
 from utils.deck import sanitize_filename
+from utils.deck_results_filter import _classify_event_type, _normalize_date, filter_decks
 from utils.ui_helpers import open_child_window, widget_exists
 from widgets.dialogs.feedback_dialog import show_feedback_dialog
 from widgets.identify_opponent import MTGOpponentDeckSpy
@@ -21,6 +23,16 @@ from widgets.top_cards import TopCardsFrame
 
 if TYPE_CHECKING:
     from widgets.app_frame import AppFrame
+
+
+def _simple_summary_html(text: str) -> str:
+    escaped = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    escaped = escaped.replace("\n", "<br>")
+    return (
+        '<html><body bgcolor="#22272E" text="#ECECEC">'
+        f'<font size="2">{escaped}</font>'
+        "</body></html>"
+    )
 
 
 class AppEventHandlers:
@@ -96,10 +108,7 @@ class AppEventHandlers:
 
     @staticmethod
     def _normalize_date(value: str) -> str:
-        if not value:
-            return ""
-        match = re.search(r"\d{4}-\d{2}-\d{2}", value)
-        return match.group(0) if match else value
+        return _normalize_date(value)
 
     @staticmethod
     def _strip_extra_dates(value: str) -> str:
@@ -168,10 +177,70 @@ class AppEventHandlers:
         idx = self.research_panel.get_selected_archetype_index()
         if idx < 0:
             return
-        archetype = self.filtered_archetypes[idx]
+        if idx == 0:  # "Any" — load all cached decks sorted by date
+            self._load_all_decks()
+            return
+        archetype = self.filtered_archetypes[idx - 1]
         self._load_decks_for_archetype(archetype)
 
-    def on_deck_selected(self: AppFrame, _event: wx.CommandEvent) -> None:
+    def on_event_type_filter_changed(self: AppFrame) -> None:
+        self._apply_deck_filters()
+
+    def on_result_filter_changed(self: AppFrame) -> None:
+        self._apply_deck_filters()
+
+    def on_player_name_filter_changed(self: AppFrame) -> None:
+        self._apply_deck_filters()
+
+    def on_date_filter_changed(self: AppFrame) -> None:
+        self._apply_deck_filters()
+
+    @staticmethod
+    def _classify_event_type(event_str: str) -> str | None:
+        """Return a canonical event type label for the given event string, or None."""
+        return _classify_event_type(event_str)
+
+    def _apply_deck_filters(self: AppFrame) -> None:
+        """Filter the displayed deck list based on all active filters (AND logic)."""
+        event_type = self.research_panel.get_event_type_filter()
+        result_query = self.research_panel.get_result_filter()
+        player_query = self.research_panel.get_player_name_filter()
+        date_query = self.research_panel.get_date_filter()
+
+        self.controller.session_manager.update_deck_event_type_filter(event_type)
+        self.controller.session_manager.update_deck_result_filter(result_query)
+        self.controller.session_manager.update_deck_player_filter(player_query)
+        self.controller.session_manager.update_deck_date_filter(date_query)
+        self._schedule_settings_save()
+
+        filtered = filter_decks(
+            list(self._all_loaded_decks), event_type, result_query, player_query, date_query
+        )
+        self.controller.deck_repo.set_decks_list(filtered)
+        self.deck_list.Clear()
+        if not filtered:
+            self.deck_list.Append(self._t("deck_results.no_decks"))
+            self.deck_list.Disable()
+            return
+        slug_to_name = {a.get("href", ""): a.get("name", "") for a in self.archetypes}
+        show_source = self.controller.get_deck_data_source() == "both"
+        for deck in filtered:
+            slug = deck.get("name", "")
+            self.deck_list.AppendDeck(
+                player=deck.get("player", "Unknown"),
+                archetype=slug_to_name.get(slug, slug),
+                event=AppEventHandlers._strip_extra_dates(deck.get("event", "")),
+                result=deck.get("result", ""),
+                date=AppEventHandlers._normalize_date(deck.get("date", "")),
+                emoji=(
+                    ("🐠" if deck.get("source") == "mtggoldfish" else "🧙🏾‍♂️")
+                    if show_source
+                    else ""
+                ),
+            )
+        self.deck_list.Enable()
+
+    def on_deck_selected(self: AppFrame, _event: wx.CommandEvent | None = None) -> None:
         with self._loading_lock:
             if self.loading_decks:
                 return
@@ -187,7 +256,6 @@ class AppEventHandlers:
         loading_label = self._t("deck.loading")
         self.main_table.show_loading(loading_label)
         self.side_table.show_loading(loading_label)
-        self._show_left_panel("builder")
         self._download_and_display_deck(deck)
         self._schedule_settings_save()
 
@@ -312,12 +380,10 @@ class AppEventHandlers:
         self.research_panel.enable_controls()
         count = len(self.archetypes)
         self._set_status("app.research.archetypes_loaded", count=count, format=self.current_format)
-        # Skip overwriting the deck summary if a deck is already displayed — this handler
-        # may be called a second time by the background stale-while-revalidate refresh.
-        if not self._has_deck_loaded():
-            self.summary_text.ChangeValue(
-                self._t("app.research.select_archetype_loaded", count=count)
-            )
+        # Auto-load all recent decks on first archetype list arrival
+        if not self._initial_any_load_triggered:
+            self._initial_any_load_triggered = True
+            self._load_all_decks()
 
     def _on_archetypes_error(self: AppFrame, error: Exception) -> None:
         with self._loading_lock:
@@ -331,18 +397,32 @@ class AppEventHandlers:
     def _on_decks_loaded(self: AppFrame, archetype_name: str, decks: list[dict[str, Any]]) -> None:
         with self._loading_lock:
             self.loading_decks = False
-        self.controller.deck_repo.set_decks_list(decks)
-        self.deck_list.Clear()
+        if archetype_name == "Any":
+            decks = decks[:100]
+        self._all_loaded_decks = decks
+        if self._is_first_deck_load:
+            self._is_first_deck_load = False
+            sm = self.controller.session_manager
+            self.research_panel.set_event_type_filter(sm.get_deck_event_type_filter())
+            self.research_panel.set_result_filter(sm.get_deck_result_filter())
+            self.research_panel.set_player_name_filter(sm.get_deck_player_filter())
+            self.research_panel.set_date_filter(sm.get_deck_date_filter())
+        else:
+            self.research_panel.reset_event_type_filter()
+            self.research_panel.reset_result_filter()
+            self.research_panel.reset_player_name_filter()
+            self.research_panel.reset_date_filter()
         if not decks:
+            self.controller.deck_repo.set_decks_list([])
+            self.deck_list.Clear()
             self.deck_list.Append(self._t("deck_results.no_decks"))
             self.deck_list.Disable()
             self._set_status("deck_results.no_decks_for", archetype=archetype_name)
-            self.summary_text.ChangeValue(f"{archetype_name}\n\nNo deck data available.")
+            self.summary_text.SetPage(
+                _simple_summary_html(f"{archetype_name}\n\nNo deck data available.")
+            )
             return
-        show_source = self.controller.get_deck_data_source() == "both"
-        for deck in decks:
-            self.deck_list.Append(self.format_deck_list_entry(deck, show_source=show_source))
-        self.deck_list.Enable()
+        self._apply_deck_filters()
         self.daily_average_button.Enable()
         self._present_archetype_summary(archetype_name, decks)
         self._set_status(
@@ -394,7 +474,6 @@ class AppEventHandlers:
         self.deck_notes_panel.load_notes_for_current()
         self._load_guide_for_current()
         self._set_status("app.status.deck_ready", source=source)
-        self._show_left_panel("builder")
         self._schedule_settings_save()
 
     def _on_collection_fetched(self: AppFrame, filepath: Path, cards: list) -> None:
@@ -666,28 +745,77 @@ class AppEventHandlers:
         )
 
     def _present_archetype_summary(self, archetype_name: str, decks: list[dict[str, Any]]) -> None:
-        by_date: dict[str, int] = {}
-        for deck in decks:
-            date = deck.get("date", "").lower()
-            by_date[date] = by_date.get(date, 0) + 1
-        latest_dates = sorted(by_date.items(), reverse=True)[:7]
-        lines = [archetype_name, "", self._t("deck_results.total_loaded", count=len(decks)), ""]
-        if latest_dates:
-            lines.append(self._t("deck_results.recent_activity"))
-            for day, count in latest_dates:
-                lines.append(f"  {day}: {count} deck(s)")
+        total = len(decks)
+        today = date.today()
+        day_counts = []
+        for days_ago in range(6, -1, -1):
+            target = (today - timedelta(days=days_ago)).strftime("%Y-%m-%d")
+            count = sum(1 for d in decks if d.get("date", "")[:10] == target)
+            day_counts.append(str(count))
+        per_day_str = "/".join(day_counts)
+        name_escaped = (
+            archetype_name.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+        )
+        if archetype_name == "Any":
+            right_cell = ""
         else:
-            lines.append(self._t("deck_results.no_activity"))
-        self.summary_text.ChangeValue("\n".join(lines))
+            right_cell = (
+                '<td align="right" valign="middle">'
+                f'<font size="3" color="#3B82F6"><b>{per_day_str}</b></font><br>'
+                '<font size="2" color="#B9BFCA">last 7 days</font>'
+                "</td>"
+            )
+        html = (
+            '<html><body bgcolor="#22272E" text="#ECECEC">'
+            '<table width="100%" cellpadding="5" cellspacing="0" bgcolor="#282E36">'
+            "<tr>"
+            "<td valign=middle>"
+            f'<font size="4"><b>{name_escaped}</b></font><br>'
+            f'<font size="2" color="#B9BFCA">{total} decks</font>'
+            "</td>"
+            f"{right_cell}"
+            "</tr>"
+            "</table>"
+            "</body></html>"
+        )
+        self.summary_text.SetPage(html)
+
+    def _load_all_decks(self: AppFrame) -> None:
+        """Load all locally cached decks across archetypes, sorted by date."""
+        self._all_loaded_decks = []
+        if not self._is_first_deck_load:
+            self.research_panel.reset_event_type_filter()
+            self.research_panel.reset_result_filter()
+            self.research_panel.reset_player_name_filter()
+            self.research_panel.reset_date_filter()
+
+        self.deck_list.Clear()
+        self.deck_list.Append("Loading\u2026")
+        self.deck_list.Disable()
+        self.summary_text.SetPage(_simple_summary_html("Any\n\nFetching deck results\u2026"))
+
+        self.controller.load_all_decks(
+            on_success=lambda archetype_name, decks: wx.CallAfter(
+                self._on_decks_loaded, archetype_name, decks
+            ),
+            on_error=lambda error: wx.CallAfter(self._on_decks_error, error),
+            on_status=lambda *a, **kw: wx.CallAfter(self._set_status, *a, **kw),
+        )
 
     def _load_decks_for_archetype(self, archetype: dict[str, Any]) -> None:
         name = archetype.get("name", "Unknown")
+        self._all_loaded_decks = []
+        if not self._is_first_deck_load:
+            self.research_panel.reset_event_type_filter()
+            self.research_panel.reset_result_filter()
+            self.research_panel.reset_player_name_filter()
+            self.research_panel.reset_date_filter()
 
         # Update UI state immediately
         self.deck_list.Clear()
         self.deck_list.Append("Loading…")
         self.deck_list.Disable()
-        self.summary_text.ChangeValue(f"{name}\n\nFetching deck results…")
+        self.summary_text.SetPage(_simple_summary_html(f"{name}\n\nFetching deck results\u2026"))
 
         # Delegate to controller
         self.controller.load_decks_for_archetype(

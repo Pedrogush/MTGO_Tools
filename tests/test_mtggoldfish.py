@@ -92,6 +92,12 @@ def temp_curr_deck_file(temp_cache_dir):
     return curr_deck_file
 
 
+@pytest.fixture(scope="class")
+def temp_archetype_decks_file(tmp_path_factory):
+    """Class-scoped temp cache file for archetype decks (shared across tests in the class)."""
+    return tmp_path_factory.mktemp("deck_cache") / "archetype_decks.json"
+
+
 class TestCacheLoading:
     """Test archetype cache loading functions."""
 
@@ -291,14 +297,15 @@ class TestGetArchetypeDecks:
     """Test get_archetype_decks function."""
 
     @patch("navigators.mtggoldfish.requests.get")
-    def test_get_archetype_decks_success(self, mock_get):
+    def test_get_archetype_decks_success(self, mock_get, temp_archetype_decks_file):
         """Test successfully fetching archetype decks."""
         mock_response = Mock()
         mock_response.text = SAMPLE_ARCHETYPE_DECKS_HTML
         mock_response.raise_for_status = Mock()
         mock_get.return_value = mock_response
 
-        result = get_archetype_decks("modern-rakdos-midrange")
+        with patch("navigators.mtggoldfish.ARCHETYPE_DECKS_CACHE_FILE", temp_archetype_decks_file):
+            result = get_archetype_decks("modern-rakdos-midrange")
 
         assert len(result) == 2
         assert result[0]["date"] == "Jan 15"
@@ -312,17 +319,18 @@ class TestGetArchetypeDecks:
         assert result[1]["player"] == "PlayerTwo"
 
     @patch("navigators.mtggoldfish.requests.get")
-    def test_get_archetype_decks_request_failure(self, mock_get):
+    def test_get_archetype_decks_request_failure(self, mock_get, temp_archetype_decks_file):
         """Test handling request failure returns cached data."""
         mock_get.side_effect = Exception("Network error")
 
         # Should return cached data from previous successful test
-        result = get_archetype_decks("modern-rakdos-midrange")
+        with patch("navigators.mtggoldfish.ARCHETYPE_DECKS_CACHE_FILE", temp_archetype_decks_file):
+            result = get_archetype_decks("modern-rakdos-midrange")
         assert len(result) == 2  # Returns cached data as fallback
         assert result[0]["number"] == "123456"
 
     @patch("navigators.mtggoldfish.requests.get")
-    def test_get_archetype_decks_missing_table(self, mock_get):
+    def test_get_archetype_decks_missing_table(self, mock_get, temp_archetype_decks_file):
         """Test handling missing deck table returns cached data."""
         mock_response = Mock()
         mock_response.text = "<html><body>No table here</body></html>"
@@ -330,7 +338,8 @@ class TestGetArchetypeDecks:
         mock_get.return_value = mock_response
 
         # Should return cached data from previous successful test
-        result = get_archetype_decks("modern-rakdos-midrange")
+        with patch("navigators.mtggoldfish.ARCHETYPE_DECKS_CACHE_FILE", temp_archetype_decks_file):
+            result = get_archetype_decks("modern-rakdos-midrange")
         assert len(result) == 2  # Returns cached data as fallback
         assert result[0]["number"] == "123456"
 

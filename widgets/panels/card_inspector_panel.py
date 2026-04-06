@@ -216,12 +216,12 @@ class CardInspectorPanel(wx.Panel):
         self.image_column_panel.SetMinSize((column_width, image_column_height))
         self.image_column_panel.SetMaxSize((column_width, image_column_height))
         self.details_panel.SetMinSize((column_width + PADDING_MD, image_height))
-        self.details_panel.SetMaxSize((column_width + PADDING_MD, image_height))
+        self.details_panel.SetMaxSize((column_width + PADDING_MD, -1))
 
         panel_width = column_width + PADDING_XL
         panel_height = image_column_height + PADDING_XL
         self.SetMinSize((panel_width, panel_height))
-        self.SetMaxSize((panel_width, panel_height))
+        self.SetMaxSize((panel_width, -1))
 
     # ============= Public API =============
 

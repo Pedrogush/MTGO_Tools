@@ -14,7 +14,6 @@ from utils.card_images import CardImageRequest
 from utils.constants import (
     APP_FRAME_MIN_SIZE,
     APP_FRAME_SIZE,
-    APP_FRAME_SUMMARY_MIN_HEIGHT,
     DARK_ACCENT,
     DARK_BG,
     DARK_PANEL,
@@ -27,14 +26,11 @@ from utils.constants import (
 )
 from utils.i18n import LOCALE_LABELS, SUPPORTED_LOCALES, translate
 from utils.mana_icon_factory import ManaIconFactory
-from utils.stylize import stylize_textctrl
-from widgets.buttons.deck_action_buttons import DeckActionButtons
 from widgets.buttons.toolbar_buttons import ToolbarButtons
-from widgets.deck_results_list import DeckResultsList
 from widgets.dialogs.help_dialog import show_help
 from widgets.dialogs.image_download_dialog import show_image_download_dialog
 from widgets.dialogs.tutorial_dialog import show_tutorial
-from widgets.handlers.app_event_handlers import AppEventHandlers
+from widgets.handlers.app_event_handlers import AppEventHandlers, _simple_summary_html
 from widgets.handlers.card_table_panel_handler import CardTablePanelHandler
 from widgets.handlers.sideboard_guide_handlers import SideboardGuideHandlers
 from widgets.identify_opponent import MTGOpponentDeckSpy
@@ -99,6 +95,9 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
         self._inspector_hover_timer: wx.Timer | None = None
         self._pending_hover: tuple[str, dict[str, Any]] | None = None
         self._pending_deck_restore: bool = False
+        self._is_first_deck_load: bool = True
+        self._initial_any_load_triggered: bool = False
+        self._all_loaded_decks: list[dict[str, Any]] = []
 
         self._build_ui()
         self._apply_window_preferences()
@@ -153,10 +152,24 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
             on_archetype_selected=self.on_archetype_selected,
             on_reload_archetypes=lambda: self.fetch_archetypes(force=True),
             on_switch_to_builder=lambda: self._show_left_panel("builder"),
+            on_deck_selected=self.on_deck_selected,
+            on_copy=lambda: self.on_copy_clicked(None),
+            on_save=lambda: self.on_save_clicked(None),
+            on_daily_average=lambda: self.on_daily_average_clicked(None),
+            on_load=self.on_load_deck_clicked,
+            on_event_type_filter=self.on_event_type_filter_changed,
+            on_result_filter=self.on_result_filter_changed,
+            on_player_name_filter=self.on_player_name_filter_changed,
+            on_date_filter=self.on_date_filter_changed,
             labels={
                 "format": self._t("research.format"),
+                "archetype": self._t("research.archetype"),
+                "event": self._t("research.event"),
+                "player_name": self._t("research.player_name"),
+                "result": self._t("research.result"),
+                "date": self._t("research.date"),
+                "info": self._t("research.info"),
                 "search_hint": self._t("research.search_hint"),
-                "reload_archetypes": self._t("research.reload_archetypes"),
                 "loading_archetypes": self._t("research.loading_archetypes"),
                 "failed_archetypes": self._t("research.failed_archetypes"),
                 "no_archetypes": self._t("research.no_archetypes"),
@@ -164,7 +177,14 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
                 "format_tooltip": self._t("research.tooltip.format"),
                 "search_tooltip": self._t("research.tooltip.search"),
                 "archetypes_tooltip": self._t("research.tooltip.archetypes"),
-                "reload_tooltip": self._t("research.tooltip.reload"),
+                "daily_average": self._t("deck_actions.daily_average"),
+                "copy": self._t("deck_actions.copy"),
+                "load_deck": self._t("deck_actions.load_deck"),
+                "save_deck": self._t("deck_actions.save_deck"),
+                "daily_average_tooltip": self._t("deck_actions.tooltip.daily_average"),
+                "copy_tooltip": self._t("deck_actions.tooltip.copy"),
+                "load_deck_tooltip": self._t("deck_actions.tooltip.load_deck"),
+                "save_deck_tooltip": self._t("deck_actions.tooltip.save_deck"),
             },
         )
         self.left_stack.AddPage(self.research_panel, self._t("app.label.left_panel.research"))
@@ -212,18 +232,10 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
         content_split.Add(inspector_column, 0, wx.EXPAND)
 
         inspector_box = self._build_card_inspector(right_panel)
-        inspector_static = inspector_box.GetStaticBox()
-        inspector_min_width = inspector_static.GetMinSize().GetWidth()
-        inspector_column.Add(inspector_box, 0, wx.BOTTOM, PADDING_LG)
+        inspector_column.Add(inspector_box, 0, wx.EXPAND)
 
-        deck_results = self._build_deck_results(right_panel)
-        deck_results_box = deck_results.GetStaticBox()
-        deck_results_box.SetMinSize((inspector_min_width, -1))
-        deck_results_box.SetMaxSize((inspector_min_width, -1))
-        list_min_width = max(inspector_min_width - (PADDING_MD * 2), 0)
-        self.summary_text.SetMinSize((list_min_width, APP_FRAME_SUMMARY_MIN_HEIGHT))
-        self.deck_list.SetMinSize((list_min_width, -1))
-        inspector_column.Add(deck_results, 1, wx.EXPAND)
+        oracle_box = self._build_oracle_text_panel(right_panel)
+        inspector_column.Add(oracle_box, 1, wx.EXPAND | wx.TOP, PADDING_MD)
 
         return right_panel
 
@@ -386,56 +398,34 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
         self.controller.set_average_hours(hours)
         self._schedule_settings_save()
 
-    def _build_deck_results(self, parent: wx.Window) -> wx.StaticBoxSizer:
-        deck_box = wx.StaticBox(parent, label=self._t("app.label.deck_results"))
-        deck_box.SetForegroundColour(LIGHT_TEXT)
-        deck_box.SetBackgroundColour(DARK_PANEL)
-        deck_sizer = wx.StaticBoxSizer(deck_box, wx.VERTICAL)
+    # ------------------------------------------------------------------ Delegation properties for deck results widgets --------------------------
+    @property
+    def deck_list(self):  # type: ignore[override]
+        return self.research_panel.deck_list
 
-        self.summary_text = wx.TextCtrl(
-            deck_box,
-            style=wx.TE_MULTILINE | wx.TE_READONLY | wx.TE_WORDWRAP | wx.NO_BORDER,
-        )
-        stylize_textctrl(self.summary_text, multiline=True)
-        self.summary_text.SetMinSize((-1, APP_FRAME_SUMMARY_MIN_HEIGHT))
-        deck_sizer.Add(self.summary_text, 0, wx.EXPAND | wx.ALL, PADDING_MD)
+    @property
+    def summary_text(self):  # type: ignore[override]
+        return self.research_panel.summary_text
 
-        self.deck_list = DeckResultsList(deck_box)
-        self.deck_list.Bind(wx.EVT_LISTBOX, self.on_deck_selected)
-        deck_sizer.Add(self.deck_list, 1, wx.EXPAND | wx.ALL, PADDING_MD)
+    @property
+    def deck_action_buttons(self):  # type: ignore[override]
+        return self.research_panel.deck_action_buttons
 
-        # Deck action buttons
-        self.deck_action_buttons = DeckActionButtons(
-            deck_box,
-            on_copy=lambda: self.on_copy_clicked(None),
-            on_save=lambda: self.on_save_clicked(None),
-            on_daily_average=lambda: self.on_daily_average_clicked(None),
-            on_load=self.on_load_deck_clicked,
-            labels={
-                "daily_average": self._t("deck_actions.daily_average"),
-                "copy": self._t("deck_actions.copy"),
-                "load_deck": self._t("deck_actions.load_deck"),
-                "save_deck": self._t("deck_actions.save_deck"),
-                "daily_average_tooltip": self._t("deck_actions.tooltip.daily_average"),
-                "copy_tooltip": self._t("deck_actions.tooltip.copy"),
-                "load_deck_tooltip": self._t("deck_actions.tooltip.load_deck"),
-                "save_deck_tooltip": self._t("deck_actions.tooltip.save_deck"),
-            },
-        )
-        deck_sizer.Add(
-            self.deck_action_buttons,
-            0,
-            wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM,
-            PADDING_MD,
-        )
+    @property
+    def daily_average_button(self):  # type: ignore[override]
+        return self.research_panel.daily_average_button
 
-        # Keep references for backward compatibility
-        self.daily_average_button = self.deck_action_buttons.daily_average_button
-        self.copy_button = self.deck_action_buttons.copy_button
-        self.load_button = self.deck_action_buttons.load_button
-        self.save_button = self.deck_action_buttons.save_button
+    @property
+    def copy_button(self):  # type: ignore[override]
+        return self.research_panel.copy_button
 
-        return deck_sizer
+    @property
+    def load_button(self):  # type: ignore[override]
+        return self.research_panel.load_button
+
+    @property
+    def save_button(self):  # type: ignore[override]
+        return self.research_panel.save_button
 
     def _build_card_inspector(self, parent: wx.Window) -> wx.StaticBoxSizer:
         inspector_box = wx.StaticBox(parent, label=self._t("app.label.card_inspector"))
@@ -465,13 +455,29 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
         inspector_sizer.Layout()
         inspector_min_size = inspector_sizer.GetMinSize()
         inspector_box.SetMinSize(inspector_min_size)
-        inspector_box.SetMaxSize(inspector_min_size)
 
         # Keep backward compatibility references (delegate to image service via controller)
         self.image_cache = self.controller.image_service.image_cache
         self.image_downloader = self.controller.image_service.image_downloader
 
         return inspector_sizer
+
+    def _build_oracle_text_panel(self, parent: wx.Window) -> wx.StaticBoxSizer:
+        oracle_box = wx.StaticBox(parent, label=self._t("app.label.oracle_text"))
+        oracle_box.SetForegroundColour(LIGHT_TEXT)
+        oracle_box.SetBackgroundColour(DARK_PANEL)
+        oracle_sizer = wx.StaticBoxSizer(oracle_box, wx.VERTICAL)
+
+        self.oracle_text_ctrl = wx.TextCtrl(
+            oracle_box,
+            style=wx.TE_MULTILINE | wx.TE_READONLY | wx.TE_WORDWRAP | wx.BORDER_NONE,
+        )
+        self.oracle_text_ctrl.SetBackgroundColour(DARK_PANEL)
+        self.oracle_text_ctrl.SetForegroundColour(LIGHT_TEXT)
+        self.oracle_text_ctrl.SetMinSize((-1, 200))
+
+        oracle_sizer.Add(self.oracle_text_ctrl, 1, wx.EXPAND | wx.ALL, PADDING_SM)
+        return oracle_sizer
 
     def _handle_image_downloaded(self, request: CardImageRequest) -> None:
         self.card_inspector_panel.handle_image_downloaded(request)
@@ -728,7 +734,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
 
     def _clear_deck_display(self) -> None:
         self.controller.deck_repo.set_current_deck(None)
-        self.summary_text.ChangeValue(self._t("app.status.select_archetype"))
+        self.summary_text.SetPage(_simple_summary_html(self._t("app.status.select_archetype")))
         self.zone_cards = {"main": [], "side": [], "out": []}
         self.main_table.set_cards([])
         self.side_table.set_cards([])
@@ -763,7 +769,9 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
             self._render_current_deck()
 
     def _populate_archetype_list(self) -> None:
-        archetype_names = [item.get("name", "Unknown") for item in self.filtered_archetypes]
+        archetype_names = ["Any"] + [
+            item.get("name", "Unknown") for item in self.filtered_archetypes
+        ]
         self.research_panel.populate_archetypes(archetype_names)
 
     def _on_deck_download_success(self, content: str) -> None:

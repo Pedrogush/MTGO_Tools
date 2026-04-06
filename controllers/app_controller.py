@@ -265,6 +265,37 @@ class AppController:
             on_error=error_handler,
         )
 
+    def load_all_decks(
+        self,
+        on_success: Callable[[str, list[dict[str, Any]]], None],
+        on_error: Callable[[Exception], None],
+        on_status: Callable[[str], None],
+    ) -> None:
+        with self._loading_lock:
+            if self.loading_decks:
+                return
+            self.loading_decks = True
+
+        on_status("app.status.loading_decks", name="Any")
+        source_filter = self.get_deck_data_source()
+
+        def loader(_: None):
+            return self.workflow_service.load_all_decks(source_filter=source_filter)
+
+        def success_handler(decks: list[dict[str, Any]]):
+            with self._loading_lock:
+                self.loading_decks = False
+            self.workflow_service.set_decks_list(decks)
+            on_success("Any", decks)
+
+        def error_handler(error: Exception):
+            with self._loading_lock:
+                self.loading_decks = False
+            logger.error(f"Failed to load all decks: {error}")
+            on_error(error)
+
+        self._worker.submit(loader, None, on_success=success_handler, on_error=error_handler)
+
     # ============= Deck Management =============
 
     def download_and_display_deck(

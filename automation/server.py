@@ -402,8 +402,8 @@ class AutomationServer:
                 return {"selected": False, "error": f"Archetype not found: {name}"}
 
         if index is not None:
-            # Set selection in the list
-            research_panel.archetype_list.SetSelection(index)
+            # Set selection in the list; +1 because "Any" occupies position 0
+            research_panel.archetype_list.SetSelection(index + 1)
             # Trigger the selection callback (no args needed)
             if hasattr(self.frame, "on_archetype_selected"):
                 self.frame.on_archetype_selected()

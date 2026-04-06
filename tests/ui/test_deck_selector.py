@@ -13,9 +13,11 @@ def test_deck_selector_loads_archetypes_and_mainboard_stats(
     try:
         frame.fetch_archetypes()
         pump_ui_events(wx.GetApp())
-        assert frame.research_panel.archetype_list.GetCount() == 2
+        assert frame.research_panel.archetype_list.GetCount() == 3  # "Any" + 2 archetypes
 
-        frame.research_panel.archetype_list.SetSelection(0)
+        frame.research_panel.archetype_list.SetSelection(
+            1
+        )  # index 0 = "Any", index 1 = first archetype
         frame.on_archetype_selected()
         pump_ui_events(wx.GetApp())
 
