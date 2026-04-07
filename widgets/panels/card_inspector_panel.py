@@ -247,7 +247,7 @@ class CardInspectorPanel(wx.Panel):
         self.name_label.SetLabel(header)
 
         # Get or use metadata
-        if meta is None and self.card_manager:
+        if meta is None and self.card_manager and self.card_manager.is_loaded:
             meta = self.card_manager.get_card(card["name"]) or {}
         else:
             meta = meta or {}
