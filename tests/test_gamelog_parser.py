@@ -5,10 +5,12 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import pytest
 
 from utils.gamelog_parser import (
+    detect_format_from_cards,
     find_gamelog_files,
     infer_username_from_matches,
     parse_gamelog_file,
@@ -96,6 +98,148 @@ class TestInferUsername:
         username = os.environ.get("MTGO_USERNAME", "testplayer")
         matches = [{"players": [username, f"opp{i}"]} for i in range(100)]
         assert infer_username_from_matches(matches) == username
+
+
+# ---------------------------------------------------------------------------
+# Unit tests for detect_format_from_cards
+# ---------------------------------------------------------------------------
+
+
+def _make_manager(card_legalities: dict[str, dict[str, str]]) -> MagicMock:
+    """Build a mock CardDataManager where each card name maps to given legalities."""
+    manager = MagicMock()
+    manager.is_loaded = True
+
+    def get_card(name: str):
+        legalities = card_legalities.get(name.lower())
+        if legalities is None:
+            return None
+        entry = MagicMock()
+        entry.legalities = legalities
+        return entry
+
+    manager.get_card.side_effect = get_card
+    return manager
+
+
+class TestDetectFormatFromCards:
+    def _modern_card(self) -> dict[str, str]:
+        return {"modern": "Legal", "legacy": "Legal", "vintage": "Legal"}
+
+    def _legacy_only_card(self) -> dict[str, str]:
+        return {"legacy": "Legal", "vintage": "Legal"}
+
+    def _vintage_only_card(self) -> dict[str, str]:
+        return {"vintage": "Legal"}
+
+    def _pioneer_card(self) -> dict[str, str]:
+        return {"pioneer": "Legal", "modern": "Legal", "legacy": "Legal", "vintage": "Legal"}
+
+    def _standard_card(self) -> dict[str, str]:
+        return {
+            "standard": "Legal",
+            "pioneer": "Legal",
+            "modern": "Legal",
+            "legacy": "Legal",
+            "vintage": "Legal",
+        }
+
+    def _build_deck(self, legalities: dict[str, str], count: int = 10) -> dict[str, dict[str, str]]:
+        return {f"card{i}": legalities for i in range(count)}
+
+    def test_returns_unknown_without_card_manager(self):
+        assert detect_format_from_cards(["Force of Will"] * 10) == "Unknown"
+
+    def test_returns_last_parsed_format_without_card_manager(self):
+        assert (
+            detect_format_from_cards(["Force of Will"] * 10, last_parsed_format="Modern")
+            == "Modern"
+        )
+
+    def test_returns_unknown_when_manager_not_loaded(self):
+        manager = MagicMock()
+        manager.is_loaded = False
+        assert detect_format_from_cards(["Force of Will"] * 10, manager) == "Unknown"
+
+    def test_returns_last_parsed_format_when_manager_not_loaded(self):
+        manager = MagicMock()
+        manager.is_loaded = False
+        assert (
+            detect_format_from_cards(["Force of Will"] * 10, manager, last_parsed_format="Legacy")
+            == "Legacy"
+        )
+
+    def test_detects_format_with_few_cards(self):
+        # No minimum card count — even a single recognised card is enough
+        manager = _make_manager({"card0": self._modern_card()})
+        assert detect_format_from_cards(["card0"] * 3, manager) == "Modern"
+
+    def test_returns_last_parsed_format_when_no_legality_data(self):
+        # All cards unknown to the index → fall back to last_parsed_format
+        manager = _make_manager({})
+        assert (
+            detect_format_from_cards(["token1", "token2"], manager, last_parsed_format="Modern")
+            == "Modern"
+        )
+
+    def test_detects_modern(self):
+        deck = self._build_deck(self._modern_card())
+        manager = _make_manager(deck)
+        result = detect_format_from_cards(list(deck.keys()), manager)
+        assert result == "Modern"
+
+    def test_detects_legacy_when_non_modern_card_present(self):
+        deck = {
+            **self._build_deck(self._modern_card(), 9),
+            "force_of_will": self._legacy_only_card(),
+        }
+        manager = _make_manager(deck)
+        result = detect_format_from_cards(list(deck.keys()), manager)
+        assert result == "Legacy"
+
+    def test_detects_vintage_when_power_card_present(self):
+        deck = {
+            **self._build_deck(self._modern_card(), 9),
+            "black_lotus": self._vintage_only_card(),
+        }
+        manager = _make_manager(deck)
+        result = detect_format_from_cards(list(deck.keys()), manager)
+        assert result == "Vintage"
+
+    def test_detects_standard_when_all_standard_legal(self):
+        deck = self._build_deck(self._standard_card())
+        manager = _make_manager(deck)
+        result = detect_format_from_cards(list(deck.keys()), manager)
+        assert result == "Standard"
+
+    def test_skips_cards_not_found_in_index(self):
+        # 10 modern-legal + 5 unknown (tokens, etc.) — should still detect Modern
+        deck = self._build_deck(self._modern_card())
+        manager = _make_manager(deck)
+        cards = list(deck.keys()) + ["token1", "token2", "token3", "token4", "token5"]
+        result = detect_format_from_cards(cards, manager)
+        assert result == "Modern"
+
+    def test_skips_cards_with_empty_legalities(self):
+        # Cards with {} legalities (e.g. MDFCs with alias collision) are ignored
+        deck = {**self._build_deck(self._modern_card()), "mdfc_alias": {}}
+        manager = _make_manager(deck)
+        result = detect_format_from_cards(list(deck.keys()), manager)
+        assert result == "Modern"
+
+    def test_returns_last_parsed_format_when_no_common_format(self):
+        # Two cards each legal in mutually exclusive formats — intersection is empty,
+        # falls back to last_parsed_format (default "Unknown")
+        deck = {
+            **{f"vintage_only_{i}": {"vintage": "Legal"} for i in range(5)},
+            **{f"standard_only_{i}": {"standard": "Legal"} for i in range(5)},
+        }
+        manager = _make_manager(deck)
+        assert detect_format_from_cards(list(deck.keys()), manager) == "Unknown"
+        assert (
+            detect_format_from_cards(list(deck.keys()), manager, last_parsed_format="Modern")
+            == "Modern"
+        )
 
 
 # ---------------------------------------------------------------------------

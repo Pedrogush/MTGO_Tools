@@ -13,16 +13,33 @@ Key modifications:
 - Added support for locating log files via MTGOSDK
 """
 
+from __future__ import annotations
+
 import json
 import os
 import re
 import subprocess  # nosec B404 - used to invoke trusted MTGO bridge helper
 from datetime import datetime
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from loguru import logger
 
 from utils.constants import BRIDGE_PATH
+
+if TYPE_CHECKING:
+    from utils.card_data import CardDataManager
+
+# MTGO competitive formats in priority order (most → least restrictive card pool)
+_COMPETITIVE_FORMATS: list[str] = ["standard", "pioneer", "modern", "legacy", "vintage", "pauper"]
+_FORMAT_DISPLAY: dict[str, str] = {
+    "standard": "Standard",
+    "pioneer": "Pioneer",
+    "modern": "Modern",
+    "legacy": "Legacy",
+    "vintage": "Vintage",
+    "pauper": "Pauper",
+}
 
 
 def get_current_username() -> str | None:
@@ -45,60 +62,49 @@ def get_current_username() -> str | None:
     return None
 
 
-def detect_format_from_cards(cards: list[str]) -> str:
-    """Attempt to detect format from card list."""
-    # Common Modern-only cards (not in Standard, Pioneer, Legacy staples)
-    modern_indicators = {
-        "Thoughtseize",
-        "Fatal Push",
-        "Lightning Bolt",
-        "Counterspell",
-        "Urza's Saga",
-        "Ragavan, Nimble Pilferer",
-        "Solitude",
-        "Fury",
-        "Grief",
-        "Omnath, Locus of Creation",
-        "Wrenn and Six",
-        "Lurrus of the Dream-Den",
-        "Mishra's Bauble",
-        "Aether Vial",
-    }
+def detect_format_from_cards(
+    cards: list[str],
+    card_manager: CardDataManager | None = None,
+    last_parsed_format: str = "Unknown",
+) -> str:
+    """Detect the MTGO format from a card list using legality data.
 
-    # Vintage/Legacy indicators (Power 9, reserved list)
-    vintage_legacy_indicators = {
-        "Black Lotus",
-        "Mox Pearl",
-        "Mox Sapphire",
-        "Mox Jet",
-        "Mox Ruby",
-        "Mox Emerald",
-        "Time Walk",
-        "Ancestral Recall",
-        "Force of Will",
-        "Brainstorm",
-        "Wasteland",
-        "Daze",
-    }
+    When *card_manager* is supplied and loaded the function intersects each
+    card's legal competitive formats and returns the most restrictive one that
+    covers the whole deck.  Falls back to *last_parsed_format* when the format
+    cannot be determined (e.g. no cards with legality data were played).
+    """
+    if card_manager is not None and card_manager.is_loaded:
+        return _detect_format_via_legalities(cards, card_manager, last_parsed_format)
+    return last_parsed_format
 
-    # Standard rotates frequently, harder to detect
-    # For now, check for recent sets
 
-    card_set = set(cards)
+def _detect_format_via_legalities(
+    cards: list[str],
+    card_manager: CardDataManager,
+    last_parsed_format: str = "Unknown",
+) -> str:
+    legal_format_sets: list[set[str]] = []
+    for card_name in set(cards):
+        entry = card_manager.get_card(card_name)
+        if entry is None:
+            continue
+        legal = {fmt for fmt in _COMPETITIVE_FORMATS if entry.legalities.get(fmt) == "Legal"}
+        if legal:
+            legal_format_sets.append(legal)
 
-    # Check for Vintage/Legacy
-    if any(card in vintage_legacy_indicators for card in card_set):
-        return "Legacy"  # Could also be Vintage, but Legacy is more common
+    if not legal_format_sets:
+        return last_parsed_format
 
-    # Check for Modern indicators
-    if any(card in modern_indicators for card in card_set):
-        return "Modern"
+    common: set[str] = legal_format_sets[0].copy()
+    for s in legal_format_sets[1:]:
+        common &= s
 
-    # Default to Modern as most common format on MTGO
-    if len(cards) > 10:  # If we have a decent card list
-        return "Modern"
+    for fmt in _COMPETITIVE_FORMATS:
+        if fmt in common:
+            return _FORMAT_DISPLAY[fmt]
 
-    return "Unknown"
+    return last_parsed_format
 
 
 def detect_archetype(cards: list[str]) -> str:
@@ -504,7 +510,10 @@ def parse_game_results(content: str) -> list[dict[str, str]]:
     return games
 
 
-def parse_gamelog_file(file_path: str) -> dict | None:
+def parse_gamelog_file(
+    file_path: str,
+    card_manager: CardDataManager | None = None,
+) -> dict | None:
     try:
         with open(file_path, encoding="latin1") as f:
             content = f.read()
@@ -565,7 +574,7 @@ def parse_gamelog_file(file_path: str) -> dict | None:
         match_id = os.path.basename(file_path).replace("Match_GameLog_", "").replace(".dat", "")
 
         # Detect format and archetypes
-        detected_format = detect_format_from_cards(player1_deck + player2_deck)
+        detected_format = detect_format_from_cards(player1_deck + player2_deck, card_manager)
         player1_archetype = detect_archetype(player1_deck)
         player2_archetype = detect_archetype(player2_deck)
 
@@ -651,6 +660,7 @@ def parse_all_gamelogs(
     directory: str | list[str] | None = None,
     limit: int = None,
     progress_callback=None,
+    card_manager: CardDataManager | None = None,
 ) -> list[dict]:
     if directory is None:
         directories = find_all_gamelog_dirs()
@@ -681,7 +691,7 @@ def parse_all_gamelogs(
         if progress_callback:
             progress_callback(i + 1, total_files)
 
-        match_data = parse_gamelog_file(file_path)
+        match_data = parse_gamelog_file(file_path, card_manager)
         if match_data:
             matches.append(match_data)
 
