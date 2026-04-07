@@ -69,17 +69,6 @@ class MetagameRepository:
         archetype_decks_cache_file: Path = ARCHETYPE_DECKS_CACHE_FILE,
         remote_snapshot_client: "RemoteSnapshotClient | None" = None,
     ):
-        """
-        Initialize the metagame repository.
-
-        Args:
-            cache_ttl: Time-to-live for cached data in seconds (default: 1 hour)
-            archetype_list_cache_file: Path to archetype list cache (overridable for testing)
-            archetype_decks_cache_file: Path to archetype deck cache (overridable for testing)
-            remote_snapshot_client: Optional remote snapshot client; injected for testing.
-                When ``None`` the default singleton is used if ``REMOTE_SNAPSHOTS_ENABLED``
-                is set, otherwise remote snapshots are skipped entirely.
-        """
         self.cache_ttl = cache_ttl
         self.archetype_list_cache_file = Path(archetype_list_cache_file)
         self.archetype_decks_cache_file = Path(archetype_decks_cache_file)
@@ -93,26 +82,12 @@ class MetagameRepository:
         force_refresh: bool = False,
         on_background_refresh: Callable[[list[dict[str, Any]]], None] | None = None,
     ) -> list[dict[str, Any]]:
-        """
-        Get list of archetypes for a specific format.
-
-        Resolution order (unless force_refresh):
+        """Resolution order (unless force_refresh):
         1. Local cache (if still fresh)
-        2. Stale local cache — returned immediately while a background re-fetch is
-           triggered via ``on_background_refresh`` (stale-while-revalidate)
+        2. Stale local cache + background re-fetch via on_background_refresh
         3. Remote snapshot (if REMOTE_SNAPSHOTS_ENABLED)
         4. Live MTGGoldfish scrape
-        5. Stale local cache (last-resort fallback on live-scrape failure)
-
-        Args:
-            mtg_format: MTG format (e.g., "Modern", "Standard")
-            force_refresh: If True, bypass local cache and fetch fresh data
-            on_background_refresh: Optional callback invoked with fresh archetypes
-                once the background re-fetch completes (only used when stale cache
-                is returned via the stale-while-revalidate path).
-
-        Returns:
-            List of archetype dictionaries with keys: name, url, share, etc.
+        5. Stale local cache (last-resort fallback)
         """
         # 1. Fresh local cache
         if not force_refresh:
@@ -202,17 +177,6 @@ class MetagameRepository:
         force_refresh: bool = False,
         source_filter: str | None = None,
     ) -> list[dict[str, Any]]:
-        """
-        Get deck lists for a specific archetype.
-
-        Args:
-            archetype: Archetype dictionary with 'href' or 'url' key
-            force_refresh: If True, bypass cache and fetch fresh data
-            source_filter: Optional source filter ('mtggoldfish', 'mtgo', or 'both')
-
-        Returns:
-            List of deck dictionaries
-        """
         # Support both 'href' (from get_archetypes) and 'url' for compatibility
         archetype_href = archetype.get("href") or archetype.get("url", "")
         archetype_name = archetype.get("name", "Unknown")
@@ -281,19 +245,6 @@ class MetagameRepository:
         return unique
 
     def download_deck_content(self, deck: dict[str, Any], source_filter: str | None = None) -> str:
-        """
-        Download the actual deck list content.
-
-        Args:
-            deck: Deck dictionary with 'number' key (deck ID)
-            source_filter: Optional source filter ('mtggoldfish', 'mtgo', or 'both')
-
-        Returns:
-            Deck list as text string
-
-        Raises:
-            Exception: If download fails
-        """
         deck_name = deck.get("name", "Unknown")
         deck_number = deck.get("number", "")
 
@@ -360,16 +311,6 @@ class MetagameRepository:
     def _load_cached_archetypes(
         self, mtg_format: str, max_age: int | None | object = _USE_DEFAULT_MAX_AGE
     ) -> list[dict[str, Any]] | None:
-        """
-        Load cached archetype list.
-
-        Args:
-            mtg_format: MTG format to load
-            max_age: Maximum age in seconds (None = ignore age, -1 = use default TTL)
-
-        Returns:
-            List of archetypes or None if cache miss
-        """
         if max_age == -1:
             max_age = _USE_DEFAULT_MAX_AGE
         effective_max_age = self.cache_ttl if max_age is _USE_DEFAULT_MAX_AGE else max_age
@@ -399,13 +340,6 @@ class MetagameRepository:
         return entry.get("items")
 
     def _save_cached_archetypes(self, mtg_format: str, items: list[dict[str, Any]]) -> None:
-        """
-        Save archetypes to cache.
-
-        Args:
-            mtg_format: MTG format
-            items: List of archetype dictionaries
-        """
         with locked_path(self.archetype_list_cache_file):
             data: dict[str, Any] = {}
             if self.archetype_list_cache_file.exists():
@@ -426,16 +360,6 @@ class MetagameRepository:
     def _load_cached_decks(
         self, archetype_url: str, max_age: int | None | object = _USE_DEFAULT_MAX_AGE
     ) -> list[dict[str, Any]] | None:
-        """
-        Load cached deck list for an archetype.
-
-        Args:
-            archetype_url: URL identifying the archetype
-            max_age: Maximum age in seconds (None = ignore age, -1 = use default TTL)
-
-        Returns:
-            List of decks or None if cache miss
-        """
         if max_age == -1:
             max_age = _USE_DEFAULT_MAX_AGE
         effective_max_age = self.cache_ttl if max_age is _USE_DEFAULT_MAX_AGE else max_age
@@ -465,13 +389,6 @@ class MetagameRepository:
         return entry.get("items")
 
     def _save_cached_decks(self, archetype_url: str, items: list[dict[str, Any]]) -> None:
-        """
-        Save decks to cache.
-
-        Args:
-            archetype_url: URL identifying the archetype
-            items: List of deck dictionaries
-        """
         with locked_path(self.archetype_decks_cache_file):
             data: dict[str, Any] = {}
             if self.archetype_decks_cache_file.exists():
@@ -492,16 +409,6 @@ class MetagameRepository:
     def _filter_decks_by_source(
         self, decks: list[dict[str, Any]], source_filter: str | None
     ) -> list[dict[str, Any]]:
-        """
-        Filter decks by source.
-
-        Args:
-            decks: List of deck dictionaries
-            source_filter: Optional source filter ('mtggoldfish', 'mtgo', or 'both')
-
-        Returns:
-            Filtered list of decks
-        """
         if not source_filter or source_filter == "both":
             return decks
 
@@ -510,16 +417,6 @@ class MetagameRepository:
     def _get_mtgo_decks_from_db(
         self, archetype_name: str, source_filter: str | None
     ) -> list[dict[str, Any]]:
-        """
-        Retrieve MTGO decks from JSON cache for a specific archetype.
-
-        Args:
-            archetype_name: Name of the archetype
-            source_filter: Optional source filter ('mtggoldfish', 'mtgo', or 'both')
-
-        Returns:
-            List of MTGO deck dictionaries formatted for UI display
-        """
         if not MTGO_DECKLISTS_ENABLED:
             logger.info("MTGO decklists disabled; skipping MTGO deck lookup.")
             return []
@@ -545,16 +442,6 @@ class MetagameRepository:
     def _merge_and_sort_decks(
         self, mtggoldfish_decks: list[dict[str, Any]], mtgo_decks: list[dict[str, Any]]
     ) -> list[dict[str, Any]]:
-        """
-        Merge MTGGoldfish and MTGO decks and sort by date (newest first).
-
-        Args:
-            mtggoldfish_decks: Decks from MTGGoldfish
-            mtgo_decks: Decks from MTGO (MongoDB)
-
-        Returns:
-            Merged and sorted list of decks
-        """
         all_decks = mtggoldfish_decks + mtgo_decks
 
         all_decks.sort(key=lambda d: _parse_deck_date(d.get("date", "")), reverse=True)
@@ -584,11 +471,6 @@ def get_metagame_repository() -> MetagameRepository:
 
 
 def reset_metagame_repository() -> None:
-    """
-    Reset the global metagame repository instance.
-
-    This is primarily useful for testing to ensure test isolation
-    and prevent state leakage between tests.
-    """
+    """Reset the global metagame repository (use in tests for isolation)."""
     global _default_repository
     _default_repository = None

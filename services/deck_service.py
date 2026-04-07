@@ -42,13 +42,6 @@ class DeckService:
         deck_averager: DeckAverager | None = None,
         deck_text_builder: DeckTextBuilder | None = None,
     ):
-        """
-        Initialize the deck service.
-
-        Args:
-            deck_repository: DeckRepository instance
-            metagame_repository: MetagameRepository instance
-        """
         self.deck_repo = deck_repository or get_deck_repository()
         self.metagame_repo = metagame_repository or get_metagame_repository()
         self.deck_parser = deck_parser or DeckParser()
@@ -58,51 +51,15 @@ class DeckService:
     # ============= Deck Parsing and Analysis =============
 
     def deck_to_dictionary(self, deck_text: str) -> dict[str, float]:
-        """
-        Convert deck text to a dictionary representation.
-
-        Args:
-            deck_text: Deck list as text (format: "quantity card_name")
-
-        Returns:
-            Dictionary mapping card names to quantities (floats to preserve averages)
-            Sideboard cards are prefixed with "Sideboard "
-        """
+        # Sideboard cards are prefixed with "Sideboard " in the returned dict.
         return self.deck_parser.deck_to_dictionary(deck_text)
 
     def analyze_deck(self, deck_content: str) -> dict[str, Any]:
-        """
-        Analyze a deck and return statistics.
-
-        Args:
-            deck_content: Deck list as text
-
-        Returns:
-            Dictionary with keys:
-                - mainboard_count: int
-                - sideboard_count: int
-                - total_cards: int
-                - unique_mainboard: int
-                - unique_sideboard: int
-                - mainboard_cards: list of (card_name, count) tuples
-                - sideboard_cards: list of (card_name, count) tuples
-                - estimated_lands: int
-        """
         return self.deck_parser.analyze_deck(deck_content)
 
     # ============= Deck Averaging and Aggregation =============
 
     def add_deck_to_buffer(self, buffer: dict[str, float], deck_text: str) -> dict[str, float]:
-        """
-        Add a deck to an averaging buffer.
-
-        Args:
-            buffer: Existing buffer of card totals
-            deck_text: Deck list to add
-
-        Returns:
-            Updated buffer
-        """
         return self.deck_averager.add_deck_to_buffer(buffer, deck_text)
 
     def add_deck_to_karsten_buffer(self, buffer: dict[str, int], deck_text: str) -> dict[str, int]:
@@ -110,16 +67,6 @@ class DeckService:
         return self.deck_averager.add_deck_to_karsten_buffer(buffer, deck_text)
 
     def render_average_deck(self, buffer: dict[str, float], deck_count: int) -> str:
-        """
-        Render an average deck from a buffer.
-
-        Args:
-            buffer: Dictionary of card names to total counts
-            deck_count: Number of decks averaged
-
-        Returns:
-            Deck list as text with average card counts
-        """
         return self.deck_averager.render_average_deck(buffer, deck_count)
 
     def render_karsten_deck(self, buffer: dict[str, int]) -> str:
@@ -132,17 +79,6 @@ class DeckService:
         max_decks: int = DEFAULT_MAX_DECKS,
         source_filter: str | None = None,
     ) -> tuple[str, int]:
-        """
-        Build an average deck from recent tournament results.
-
-        Args:
-            archetype: Archetype dictionary with 'url' key
-            max_decks: Maximum number of decks to average
-            source_filter: Optional source filter ('mtggoldfish', 'mtgo', or 'both')
-
-        Returns:
-            Tuple of (averaged_deck_text, decks_processed)
-        """
         try:
             return self.deck_averager.build_daily_average(
                 archetype,
@@ -158,29 +94,9 @@ class DeckService:
     # ============= Deck Building Helpers =============
 
     def build_deck_text_from_zones(self, zone_cards: dict[str, list[dict[str, Any]]]) -> str:
-        """
-        Build deck text from zone_cards dictionary (used in deck selector UI).
-
-        Args:
-            zone_cards: Dictionary with 'main' and 'side' keys mapping to card lists
-                       Each card is a dict with 'name' and 'qty' keys
-
-        Returns:
-            Formatted deck list text
-        """
         return self.deck_text_builder.build_deck_text_from_zones(zone_cards)
 
     def build_deck_text(self, zones: dict[str, list[dict[str, Any]]]) -> str:
-        """
-        Build deck text from zone dictionaries.
-
-        Args:
-            zones: Dictionary mapping zone names to card lists
-                   Each card is a dict with 'name' and 'count' keys
-
-        Returns:
-            Formatted deck list text
-        """
         return self.deck_text_builder.build_deck_text(zones)
 
     # ============= Daily Average Building =============
@@ -188,16 +104,6 @@ class DeckService:
     def filter_today_decks(
         self, decks: list[dict[str, Any]], today: str | None = None
     ) -> list[dict[str, Any]]:
-        """
-        Filter decks to only those from today.
-
-        Args:
-            decks: List of deck dictionaries
-            today: Date string (YYYY-MM-DD format), defaults to today
-
-        Returns:
-            Filtered list of decks from today
-        """
         return self.deck_averager.filter_today_decks(decks, today=today)
 
     def build_average_text(
@@ -206,18 +112,6 @@ class DeckService:
         download_deck: Callable[[str], None],
         read_deck_file: Callable[[], str],
     ) -> str:
-        """
-        Build average deck text from a list of decks.
-
-        Args:
-            todays_decks: List of deck dictionaries to average
-            download_deck: Function to download a deck by number
-            read_deck_file: Function to read the current deck file
-            progress_callback: Optional callback for progress updates (current, total)
-
-        Returns:
-            Averaged deck text
-        """
         return self.deck_averager.build_average_text(
             todays_decks,
             download_deck,
@@ -239,12 +133,7 @@ def get_deck_service() -> DeckService:
 
 
 def reset_deck_service() -> None:
-    """
-    Reset the global deck service instance.
-
-    This is primarily useful for testing to ensure test isolation
-    and prevent state leakage between tests.
-    """
+    """Reset the global deck service (use in tests for isolation)."""
     global _default_service
     _default_service = None
 
