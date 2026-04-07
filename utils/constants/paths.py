@@ -1,14 +1,92 @@
 """Filesystem paths and config/cache locations."""
 
+from __future__ import annotations
+
+import os
 import sys
 from pathlib import Path
+
+BASE_DATA_DIR_ENV_VAR = "MTGO_TOOLS_BASE_DATA_DIR"
+
+
+def _resolved_env_base_dir() -> Path | None:
+    """Return an explicit base-data directory override, if configured."""
+    raw_value = os.getenv(BASE_DATA_DIR_ENV_VAR)
+    if not raw_value:
+        return None
+    return Path(raw_value).expanduser().resolve()
+
+
+def _safe_cwd() -> Path | None:
+    try:
+        return Path.cwd().resolve()
+    except OSError:
+        return None
+
+
+def _find_git_marker(start: Path) -> Path | None:
+    """Find the nearest .git marker from a directory inside a worktree."""
+    current = start if start.is_dir() else start.parent
+    for candidate in (current, *current.parents):
+        marker = candidate / ".git"
+        if marker.exists():
+            return marker
+    return None
+
+
+def _resolve_gitdir(worktree_git_marker: Path) -> Path | None:
+    """Resolve a .git directory or linked-worktree gitdir file."""
+    if worktree_git_marker.is_dir():
+        return worktree_git_marker.resolve()
+    try:
+        content = worktree_git_marker.read_text(encoding="utf-8").strip()
+    except OSError:
+        return None
+    prefix = "gitdir:"
+    if not content.startswith(prefix):
+        return None
+    gitdir = Path(content[len(prefix) :].strip()).expanduser()
+    if not gitdir.is_absolute():
+        gitdir = worktree_git_marker.parent / gitdir
+    return gitdir.resolve()
+
+
+def _primary_worktree_root_from_marker(worktree_git_marker: Path) -> Path:
+    """Return the primary checkout root for a Git worktree marker."""
+    gitdir = _resolve_gitdir(worktree_git_marker)
+    if gitdir is None:
+        return worktree_git_marker.parent.resolve()
+
+    if gitdir.parent.name == "worktrees":
+        common_git_dir = gitdir.parent.parent
+        if common_git_dir.name == ".git":
+            return common_git_dir.parent.resolve()
+
+    if gitdir.name == ".git":
+        return gitdir.parent.resolve()
+
+    return worktree_git_marker.parent.resolve()
+
+
+def _base_dir_from_cwd() -> Path | None:
+    """Resolve the shared data root from the current working directory."""
+    cwd = _safe_cwd()
+    if cwd is None:
+        return None
+    git_marker = _find_git_marker(cwd)
+    if git_marker is None:
+        return None
+    return _primary_worktree_root_from_marker(git_marker)
 
 
 def _default_base_dir() -> Path:
     """Return the writable base directory for config/cache/logging."""
+    env_base_dir = _resolved_env_base_dir()
+    if env_base_dir is not None:
+        return env_base_dir
     if getattr(sys, "frozen", False):
         return Path(sys.executable).resolve().parent
-    return Path(__file__).resolve().parent.parent.parent
+    return _base_dir_from_cwd() or Path(__file__).resolve().parent.parent.parent
 
 
 BASE_DATA_DIR = _default_base_dir()
