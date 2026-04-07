@@ -69,7 +69,7 @@ CALC_GRID_COLS = 2  # columns in the input FlexGridSizer
 CALC_GRID_VGAP = 4  # vertical gap between grid cells
 CALC_GRID_HGAP = 8  # horizontal gap between grid cells
 CALC_SPIN_WIDTH = 70  # width of SpinCtrl widgets (px); -1 = default height
-CALC_PRESET_BUTTON_WIDTH = 55  # width of preset buttons (px)
+CALC_PRESET_BUTTON_WIDTH = 72  # width of preset buttons (px); wide enough for "Calculate"
 CALC_PRESET_BUTTON_HEIGHT = 24  # height of preset buttons (px)
 CALC_PRESET_BUTTON_SPACING = 4  # right-margin between preset buttons
 CALC_ACTION_BUTTON_SPACING = 8  # right-margin between action buttons
