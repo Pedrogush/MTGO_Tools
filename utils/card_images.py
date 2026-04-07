@@ -384,15 +384,7 @@ class CardImageCache:
 
     @timed
     def get_image_path(self, card_name: str, size: str = "normal") -> Path | None:
-        """Get cached image path for a card name.
-
-        Args:
-            card_name: Card name (case-insensitive)
-            size: Image size (small, normal, large, png)
-
-        Returns:
-            Path to cached image file, or None if not cached
-        """
+        """Get cached image path for a card name."""
         key = (card_name.lower(), size)
         with self._path_cache_lock:
             if key in self._path_cache:
@@ -700,14 +692,7 @@ class BulkImageDownloader:
         return True, metadata
 
     def download_bulk_metadata(self, force: bool = False) -> tuple[bool, str]:
-        """Download Scryfall bulk data JSON.
-
-        Args:
-            force: Force re-download even if cached
-
-        Returns:
-            (success, message)
-        """
+        """Download Scryfall bulk data JSON."""
         try:
             metadata = self._fetch_bulk_metadata()
         except Exception as exc:
@@ -772,15 +757,7 @@ class BulkImageDownloader:
     def _download_single_image(
         self, card: dict[str, Any], size: str = "normal"
     ) -> tuple[bool, str]:
-        """Download a single card image.
-
-        Args:
-            card: Card object from bulk data
-            size: Image size to download
-
-        Returns:
-            (success, message)
-        """
+        """Download a single card image."""
         uuid = card.get("id")
         name = card.get("name", "Unknown")
 
@@ -907,16 +884,7 @@ class BulkImageDownloader:
         max_cards: int | None = None,
         progress_callback: callable | None = None,
     ) -> dict[str, Any]:
-        """Download all card images from bulk data.
-
-        Args:
-            size: Image size to download (small, normal, large, png)
-            max_cards: Limit number of cards (for testing)
-            progress_callback: Callback function(completed, total, message)
-
-        Returns:
-            Statistics dict
-        """
+        """Download all card images from bulk data."""
         if not BULK_DATA_CACHE.exists():
             return {
                 "success": False,
@@ -1118,15 +1086,7 @@ def get_cache() -> CardImageCache:
 
 
 def get_card_image(card_name: str, size: str = "normal") -> Path | None:
-    """Get card image from cache.
-
-    Args:
-        card_name: Card name (case-insensitive)
-        size: Image size (small, normal, large, png)
-
-    Returns:
-        Path to image file, or None if not cached
-    """
+    """Get card image from cache."""
     cache = get_cache()
     return cache.get_image_path(card_name, size)
 
@@ -1134,16 +1094,7 @@ def get_card_image(card_name: str, size: str = "normal") -> Path | None:
 def download_bulk_images(
     size: str = "normal", max_cards: int | None = None, progress_callback: callable | None = None
 ) -> dict[str, Any]:
-    """High-level function to download all card images.
-
-    Args:
-        size: Image size (small, normal, large, png)
-        max_cards: Limit download (for testing)
-        progress_callback: Progress callback(completed, total, message)
-
-    Returns:
-        Statistics dict
-    """
+    """High-level function to download all card images."""
     cache = get_cache()
     downloader = BulkImageDownloader(cache)
 
