@@ -178,10 +178,10 @@ class AppEventHandlers:
         if idx < 0:
             return
         if idx == 0:  # "Any" — load all cached decks sorted by date
-            self._load_all_decks()
+            self._load_decks(scope="all")
             return
         archetype = self.filtered_archetypes[idx - 1]
-        self._load_decks_for_archetype(archetype)
+        self._load_decks(scope="archetype", archetype=archetype)
 
     def on_event_type_filter_changed(self: AppFrame) -> None:
         self._apply_deck_filters()
@@ -254,7 +254,7 @@ class AppEventHandlers:
         loading_label = self._t("deck.loading")
         self.main_table.show_loading(loading_label)
         self.side_table.show_loading(loading_label)
-        self._download_and_display_deck(deck)
+        self._download_deck_text(deck)
         self._schedule_settings_save()
 
     def on_daily_average_clicked(self: AppFrame, _event: wx.CommandEvent) -> None:
@@ -381,7 +381,7 @@ class AppEventHandlers:
         # Auto-load all recent decks on first archetype list arrival
         if not self._initial_any_load_triggered:
             self._initial_any_load_triggered = True
-            self._load_all_decks()
+            self._load_decks(scope="all")
 
     def _on_archetypes_error(self: AppFrame, error: Exception) -> None:
         with self._loading_lock:
@@ -724,7 +724,7 @@ class AppEventHandlers:
             wx.MessageBox(message, "Daily Average", wx.OK | wx.ICON_INFORMATION)
             return
 
-    def _download_and_display_deck(self, deck: dict[str, Any]) -> None:
+    def _download_deck_text(self, deck: dict[str, Any]) -> None:
         deck_number = deck.get("number")
         if not deck_number:
             wx.MessageBox("Deck identifier missing.", "Deck Error", wx.OK | wx.ICON_ERROR)
@@ -734,13 +734,15 @@ class AppEventHandlers:
         self.copy_button.Disable()
         self.save_button.Disable()
 
-        # Delegate to controller
-        self.controller.download_and_display_deck(
-            deck=deck,
-            on_success=lambda content: wx.CallAfter(self._on_deck_download_success, content),
+        self.controller.download_deck_text(
+            deck_number=deck_number,
+            on_success=lambda content: wx.CallAfter(self.present_deck_text, content),
             on_error=lambda error: wx.CallAfter(self._on_deck_download_error, error),
             on_status=lambda *a, **kw: wx.CallAfter(self._set_status, *a, **kw),
         )
+
+    def present_deck_text(self, content: str) -> None:
+        self._on_deck_content_ready(content, source="mtggoldfish")
 
     def _present_archetype_summary(self, archetype_name: str, decks: list[dict[str, Any]]) -> None:
         total = len(decks)
@@ -778,7 +780,20 @@ class AppEventHandlers:
         )
         self.summary_text.SetPage(html)
 
-    def _load_all_decks(self: AppFrame) -> None:
+    def _load_decks(
+        self: AppFrame,
+        *,
+        scope: str,
+        archetype: dict[str, Any] | None = None,
+    ) -> None:
+        if scope == "all":
+            name = "Any"
+        elif scope == "archetype" and archetype is not None:
+            name = archetype.get("name", "Unknown")
+        else:
+            wx.MessageBox("Archetype missing.", "Deck Error", wx.OK | wx.ICON_ERROR)
+            return
+
         self._all_loaded_decks = []
         if not self._is_first_deck_load:
             self.research_panel.reset_event_type_filter()
@@ -789,33 +804,10 @@ class AppEventHandlers:
         self.deck_list.Clear()
         self.deck_list.Append("Loading\u2026")
         self.deck_list.Disable()
-        self.summary_text.SetPage(_simple_summary_html("Any\n\nFetching deck results\u2026"))
-
-        self.controller.load_all_decks(
-            on_success=lambda archetype_name, decks: wx.CallAfter(
-                self._on_decks_loaded, archetype_name, decks
-            ),
-            on_error=lambda error: wx.CallAfter(self._on_decks_error, error),
-            on_status=lambda *a, **kw: wx.CallAfter(self._set_status, *a, **kw),
-        )
-
-    def _load_decks_for_archetype(self, archetype: dict[str, Any]) -> None:
-        name = archetype.get("name", "Unknown")
-        self._all_loaded_decks = []
-        if not self._is_first_deck_load:
-            self.research_panel.reset_event_type_filter()
-            self.research_panel.reset_result_filter()
-            self.research_panel.reset_player_name_filter()
-            self.research_panel.reset_date_filter()
-
-        # Update UI state immediately
-        self.deck_list.Clear()
-        self.deck_list.Append("Loading…")
-        self.deck_list.Disable()
         self.summary_text.SetPage(_simple_summary_html(f"{name}\n\nFetching deck results\u2026"))
 
-        # Delegate to controller
-        self.controller.load_decks_for_archetype(
+        self.controller.load_decks(
+            scope=scope,
             archetype=archetype,
             on_success=lambda archetype_name, decks: wx.CallAfter(
                 self._on_decks_loaded, archetype_name, decks

@@ -34,6 +34,28 @@ def test_deck_selector_loads_archetypes_and_mainboard_stats(
 
 
 @pytest.mark.usefixtures("wx_app")
+def test_present_deck_text_updates_ui_without_download_io(
+    deck_selector_factory,
+):
+    frame = deck_selector_factory()
+    try:
+        download_calls: list[tuple[tuple[object, ...], dict[str, object]]] = []
+        frame.controller.download_deck_text = lambda *args, **kwargs: download_calls.append(
+            (args, kwargs)
+        )  # type: ignore[assignment]
+
+        frame.present_deck_text("4 Mountain\n4 Island\nSideboard\n2 Dispel\n")
+        pump_ui_events(wx.GetApp())
+
+        assert download_calls == []
+        assert frame.controller.deck_repo.get_current_deck_text().startswith("4 Mountain")
+        assert "8 card" in frame.main_table.count_label.GetLabel()
+        assert frame.deck_action_buttons.copy_button.IsEnabled()
+    finally:
+        frame.Destroy()
+
+
+@pytest.mark.usefixtures("wx_app")
 def test_builder_search_populates_results(
     deck_selector_factory,
 ):

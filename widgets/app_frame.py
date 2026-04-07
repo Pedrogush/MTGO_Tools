@@ -771,7 +771,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
         self.research_panel.populate_archetypes(archetype_names)
 
     def _on_deck_download_success(self, content: str) -> None:
-        self._on_deck_content_ready(content, source="mtggoldfish")
+        self.present_deck_text(content)
 
     def _has_deck_loaded(self) -> bool:
         return bool(self.zone_cards["main"] or self.zone_cards["side"])

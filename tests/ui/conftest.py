@@ -177,7 +177,7 @@ def ui_environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     }.items():
         monkeypatch.setattr(mtggoldfish, attr, value, raising=False)
 
-    def fake_download(number: str) -> None:
+    def fake_download(number: str, source_filter: str | None = None) -> None:  # noqa: ARG001
         (decks / "curr_deck.txt").write_text(
             "4 Mountain\n4 Island\nSideboard\n2 Dispel\n", encoding="utf-8"
         )
@@ -314,27 +314,35 @@ def deck_selector_factory(wx_app) -> AppFrame:
         def fetch_archetypes_sync(force: bool = False) -> None:  # noqa: ARG001
             frame._on_archetypes_loaded(local_archetypes)
 
-        def load_decks_sync(archetype: dict[str, Any]) -> None:
+        def load_decks_sync(
+            *,
+            scope: str,
+            archetype: dict[str, Any] | None = None,
+        ) -> None:
+            if scope == "all":
+                frame._on_decks_loaded("Any", [])
+                return
+            assert archetype is not None
             decks = fake_archetype_decks(archetype.get("href", ""))
             frame._on_decks_loaded(archetype.get("name", "Unknown"), decks)
 
         frame.fetch_archetypes = fetch_archetypes_sync  # type: ignore[assignment]
-        frame._load_decks_for_archetype = load_decks_sync  # type: ignore[assignment]
+        frame._load_decks = load_decks_sync  # type: ignore[assignment]
         controller.fetch_archetypes = lambda **kwargs: kwargs["on_success"](local_archetypes)  # type: ignore[assignment]
-        controller.load_decks_for_archetype = lambda archetype, on_success, **_: on_success(
-            archetype.get("name", "Unknown"), fake_archetype_decks(archetype.get("href", ""))
+        controller.load_decks = lambda scope, on_success, archetype=None, **_: on_success(
+            "Any" if scope == "all" else archetype.get("name", "Unknown"),
+            [] if scope == "all" else fake_archetype_decks(archetype.get("href", "")),
         )  # type: ignore[assignment]
-        controller.load_all_decks = lambda on_success, **_: on_success("Any", [])  # type: ignore[assignment]
         controller.check_and_download_bulk_data = lambda *_, **__: None  # type: ignore[assignment]
         controller.run_initial_loads = lambda *_, **__: None  # type: ignore[assignment]
 
         fake_deck_text = "4 Mountain\n4 Island\nSideboard\n2 Dispel\n"
 
-        def fake_download_and_display_deck(deck, on_success, on_error, on_status):
+        def fake_download_deck_text(deck_number, on_success, on_error, on_status):  # noqa: ARG001
             on_status("Downloading deck…")
             on_success(fake_deck_text)
 
-        controller.download_and_display_deck = fake_download_and_display_deck  # type: ignore[assignment]
+        controller.download_deck_text = fake_download_deck_text  # type: ignore[assignment]
         return frame
 
     return _factory
