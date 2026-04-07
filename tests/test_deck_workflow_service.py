@@ -55,11 +55,15 @@ class FakeDeckRepo:
 
 class FakeMetagameRepo:
     def __init__(self) -> None:
-        self.calls: list[tuple[dict, str]] = []
+        self.calls: list[tuple[str, dict | None, str]] = []
 
     def get_decks_for_archetype(self, archetype, source_filter):
-        self.calls.append((archetype, source_filter))
+        self.calls.append(("archetype", archetype, source_filter))
         return [{"name": archetype.get("name"), "number": "1"}]
+
+    def get_all_cached_decks(self, source_filter):
+        self.calls.append(("all", None, source_filter))
+        return [{"name": "Any", "number": "2"}]
 
 
 class FakeDeckService:
@@ -105,6 +109,24 @@ def test_fetch_archetypes_respects_force_flag():
 
     assert result == [{"name": "Test"}]
     assert calls == [("modern", False)]
+
+
+def test_load_decks_routes_all_and_archetype_scopes_through_one_use_case():
+    metagame_repo = FakeMetagameRepo()
+    service = build_service(metagame_repo=metagame_repo)
+    archetype = {"name": "Dimir Control"}
+
+    archetype_result = service.load_decks(
+        scope="archetype", archetype=archetype, source_filter="mtggoldfish"
+    )
+    all_result = service.load_decks(scope="all", source_filter="mtgo")
+
+    assert archetype_result == [{"name": "Dimir Control", "number": "1"}]
+    assert all_result == [{"name": "Any", "number": "2"}]
+    assert metagame_repo.calls == [
+        ("archetype", archetype, "mtggoldfish"),
+        ("all", None, "mtgo"),
+    ]
 
 
 def test_download_deck_text_uses_injected_dependencies():

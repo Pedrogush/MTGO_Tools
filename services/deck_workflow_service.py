@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any
+from typing import Any, Literal
 
 from loguru import logger
 
 from navigators.mtggoldfish import download_deck, get_archetypes
 from utils.deck import read_curr_deck_file
+
+DeckLoadScope = Literal["all", "archetype"]
 
 
 class DeckWorkflowService:
@@ -38,13 +40,22 @@ class DeckWorkflowService:
         return self._archetype_provider(mtg_format.lower(), allow_stale=not force)
 
     # ------------------------------------------------------------------ decks ------------------------------------------------------------------
-    def load_decks_for_archetype(
-        self, archetype: dict[str, Any], *, source_filter: str
+    def load_decks(
+        self,
+        *,
+        scope: DeckLoadScope,
+        source_filter: str,
+        archetype: dict[str, Any] | None = None,
     ) -> list[dict[str, Any]]:
-        return self.metagame_repo.get_decks_for_archetype(archetype, source_filter=source_filter)
-
-    def load_all_decks(self, *, source_filter: str) -> list[dict[str, Any]]:
-        return self.metagame_repo.get_all_cached_decks(source_filter=source_filter)
+        if scope == "all":
+            return self.metagame_repo.get_all_cached_decks(source_filter=source_filter)
+        if scope == "archetype":
+            if archetype is None:
+                raise ValueError("Archetype scope requires an archetype")
+            return self.metagame_repo.get_decks_for_archetype(
+                archetype, source_filter=source_filter
+            )
+        raise ValueError(f"Unsupported deck load scope: {scope}")
 
     @staticmethod
     def _default_deck_downloader(deck_number: str, source_filter: str | None = None) -> None:

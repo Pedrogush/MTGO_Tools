@@ -30,7 +30,7 @@ from repositories.deck_repository import get_deck_repository
 from repositories.metagame_repository import get_metagame_repository
 from services.collection_service import get_collection_service
 from services.deck_service import get_deck_service
-from services.deck_workflow_service import DeckWorkflowService
+from services.deck_workflow_service import DeckLoadScope, DeckWorkflowService
 from services.image_service import get_image_service
 from services.search_service import get_search_service
 from services.store_service import get_store_service
@@ -226,25 +226,35 @@ class AppController:
             on_error=error_handler,
         )
 
-    def load_decks_for_archetype(
+    def load_decks(
         self,
-        archetype: dict[str, Any],
+        *,
+        scope: DeckLoadScope,
         on_success: Callable[[str, list[dict[str, Any]]], None],
         on_error: Callable[[Exception], None],
-        on_status: Callable[[str], None],
+        on_status: Callable[..., None],
+        archetype: dict[str, Any] | None = None,
     ) -> None:
+        if scope == "all":
+            name = "Any"
+        elif scope == "archetype" and archetype is not None:
+            name = archetype.get("name", "Unknown")
+        else:
+            on_error(ValueError(f"Invalid deck load scope: {scope}"))
+            return
+
         with self._loading_lock:
             if self.loading_decks:
                 return
             self.loading_decks = True
 
-        name = archetype.get("name", "Unknown")
         on_status("app.status.loading_decks", name=name)
-
         source_filter = self.get_deck_data_source()
 
-        def loader(arch: dict[str, Any]):
-            return self.workflow_service.load_decks_for_archetype(arch, source_filter=source_filter)
+        def loader(_: None):
+            return self.workflow_service.load_decks(
+                scope=scope, source_filter=source_filter, archetype=archetype
+            )
 
         def success_handler(decks: list[dict[str, Any]]):
             with self._loading_lock:
@@ -255,57 +265,20 @@ class AppController:
         def error_handler(error: Exception):
             with self._loading_lock:
                 self.loading_decks = False
-            logger.error(f"Failed to load decks: {error}")
-            on_error(error)
-
-        self._worker.submit(
-            loader,
-            archetype,
-            on_success=success_handler,
-            on_error=error_handler,
-        )
-
-    def load_all_decks(
-        self,
-        on_success: Callable[[str, list[dict[str, Any]]], None],
-        on_error: Callable[[Exception], None],
-        on_status: Callable[[str], None],
-    ) -> None:
-        with self._loading_lock:
-            if self.loading_decks:
-                return
-            self.loading_decks = True
-
-        on_status("app.status.loading_decks", name="Any")
-        source_filter = self.get_deck_data_source()
-
-        def loader(_: None):
-            return self.workflow_service.load_all_decks(source_filter=source_filter)
-
-        def success_handler(decks: list[dict[str, Any]]):
-            with self._loading_lock:
-                self.loading_decks = False
-            self.workflow_service.set_decks_list(decks)
-            on_success("Any", decks)
-
-        def error_handler(error: Exception):
-            with self._loading_lock:
-                self.loading_decks = False
-            logger.error(f"Failed to load all decks: {error}")
+            logger.error(f"Failed to load {scope} decks: {error}")
             on_error(error)
 
         self._worker.submit(loader, None, on_success=success_handler, on_error=error_handler)
 
     # ============= Deck Management =============
 
-    def download_and_display_deck(
+    def download_deck_text(
         self,
-        deck: dict[str, Any],
+        deck_number: str,
         on_success: Callable[[str], None],
         on_error: Callable[[Exception], None],
-        on_status: Callable[[str], None],
+        on_status: Callable[..., None],
     ) -> None:
-        deck_number = deck.get("number")
         if not deck_number:
             on_error(ValueError("Deck identifier missing"))
             return
@@ -497,23 +470,6 @@ class AppController:
     def set_event_logging_enabled(self, enabled: bool) -> None:
         self.event_logger.enabled = enabled
         self.session_manager.update_event_logging_enabled(enabled)
-
-    # ============= Business Logic Methods =============
-
-    def download_deck(
-        self,
-        deck_number: str,
-        on_success: Callable[[str], None],
-        on_error: Callable[[Exception], None],
-        on_status: Callable[[str], None],
-    ) -> None:
-        on_status("app.status.downloading_deck")
-        source_filter = self.get_deck_data_source()
-
-        def worker(number: str):
-            return self.workflow_service.download_deck_text(number, source_filter=source_filter)
-
-        self._worker.submit(worker, deck_number, on_success=on_success, on_error=on_error)
 
     # ============= State Accessors =============
 
