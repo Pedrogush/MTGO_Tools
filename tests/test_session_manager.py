@@ -22,21 +22,25 @@ class StubDeckRepo:
     def __init__(self) -> None:
         self._current_deck_text = ""
         self._current_deck: dict | None = None
+        self.set_current_deck_text_calls: list[str] = []
+        self.set_current_deck_calls: list[dict | None] = []
 
     def get_current_deck_text(self) -> str:
         return self._current_deck_text
 
     def set_current_deck_text(self, text: str) -> None:
         self._current_deck_text = text
+        self.set_current_deck_text_calls.append(text)
 
     def get_current_deck(self) -> dict | None:
         return self._current_deck
 
     def set_current_deck(self, deck: dict | None) -> None:
         self._current_deck = deck
+        self.set_current_deck_calls.append(deck)
 
 
-def test_session_manager_persists_and_restores(tmp_path):
+def test_session_manager_persists_and_loads_snapshots(tmp_path):
     settings_file = tmp_path / "settings.json"
     config_file = tmp_path / "config.json"
     default_dir = tmp_path / "decks"
@@ -62,16 +66,17 @@ def test_session_manager_persists_and_restores(tmp_path):
 
     repo.set_current_deck_text("")
     repo.set_current_deck(None)
-    restore_target = {"main": [], "side": [], "out": []}
-
-    restored = manager.restore_session_state(restore_target)
+    window_preferences = manager.load_window_preferences()
+    restored = manager.load_workspace_snapshot()
     assert restored["left_mode"] == "builder"
     assert restored["zone_cards"]["main"][0]["name"] == "Lightning Bolt"
     assert restored["zone_cards"]["main"][0]["qty"] == 4
-    assert restored["window_size"] == (1280, 720)
-    assert restored["screen_pos"] == (10, 20)
-    assert repo.get_current_deck_text() == "4 Lightning Bolt"
-    assert repo.get_current_deck() == {"name": "Burn"}
+    assert restored["deck_text"] == "4 Lightning Bolt"
+    assert restored["deck_info"] == {"name": "Burn"}
+    assert window_preferences["window_size"] == (1280, 720)
+    assert window_preferences["screen_pos"] == (10, 20)
+    assert repo.get_current_deck_text() == ""
+    assert repo.get_current_deck() is None
 
     data = json.loads(settings_file.read_text(encoding="utf-8"))
     assert data["saved_deck_text"] == "4 Lightning Bolt"
@@ -120,3 +125,52 @@ def test_session_manager_validates_defaults_and_config(tmp_path):
 
     config_data = json.loads(config_file.read_text(encoding="utf-8"))
     assert config_data["deck_selector_save_path"] == str(deck_dir)
+
+
+def test_startup_restore_applies_saved_deck_state_once(tmp_path):
+    settings_file = tmp_path / "settings.json"
+    settings_file.write_text(
+        json.dumps(
+            {
+                "left_mode": "builder",
+                "saved_deck_text": "4 Lightning Bolt",
+                "saved_deck_info": {"name": "Burn"},
+                "saved_zone_cards": {
+                    "main": [{"name": "Lightning Bolt", "qty": 4}],
+                    "side": [],
+                    "out": [],
+                },
+                "window_size": [1280, 720],
+                "screen_pos": [10, 20],
+            }
+        ),
+        encoding="utf-8",
+    )
+    repo = StubDeckRepo()
+    manager = DeckSelectorSessionManager(
+        repo,
+        settings_file=settings_file,
+        config_file=tmp_path / "config.json",
+        default_deck_dir=tmp_path / "decks",
+    )
+    zone_cards = {"main": [], "side": [], "out": []}
+
+    assert manager.load_window_preferences() == {
+        "window_size": (1280, 720),
+        "screen_pos": (10, 20),
+    }
+    assert zone_cards == {"main": [], "side": [], "out": []}
+    assert repo.set_current_deck_text_calls == []
+    assert repo.set_current_deck_calls == []
+
+    snapshot = manager.load_workspace_snapshot()
+    if "zone_cards" in snapshot:
+        zone_cards = snapshot["zone_cards"]
+    if snapshot.get("deck_text"):
+        repo.set_current_deck_text(snapshot["deck_text"])
+    if isinstance(snapshot.get("deck_info"), dict):
+        repo.set_current_deck(snapshot["deck_info"])
+
+    assert zone_cards["main"] == [{"name": "Lightning Bolt", "qty": 4}]
+    assert repo.set_current_deck_text_calls == ["4 Lightning Bolt"]
+    assert repo.set_current_deck_calls == [{"name": "Burn"}]

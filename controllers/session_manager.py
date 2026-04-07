@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
@@ -217,38 +218,43 @@ class DeckSelectorSessionManager:
         return {zone: sanitize_zone_cards(cards) for zone, cards in zone_cards.items()}
 
     # ------------------------------------------------------------------ restoration ------------------------------------------------------------------
-    def restore_session_state(self, zone_cards: dict[str, list[dict[str, Any]]]) -> dict[str, Any]:
-        result: dict[str, Any] = {"left_mode": self.get_left_mode()}
+    def load_workspace_snapshot(self) -> dict[str, Any]:
+        snapshot: dict[str, Any] = {"left_mode": self.get_left_mode()}
 
-        saved_zones = self.settings.get("saved_zone_cards") or {}
-        changed = False
-        for zone in ("main", "side", "out"):
-            entries = saved_zones.get(zone, [])
-            if not isinstance(entries, list):
-                continue
-            sanitized = sanitize_zone_cards(entries)
-            if sanitized:
-                zone_cards[zone] = sanitized
-                changed = True
-        if changed:
-            result["zone_cards"] = zone_cards
+        saved_zones = self.settings.get("saved_zone_cards")
+        if isinstance(saved_zones, dict):
+            zone_cards: dict[str, list[dict[str, Any]]] = {"main": [], "side": [], "out": []}
+            has_zone_cards = False
+            for zone in ("main", "side", "out"):
+                entries = saved_zones.get(zone, [])
+                if not isinstance(entries, list):
+                    continue
+                sanitized = sanitize_zone_cards(entries)
+                if sanitized:
+                    zone_cards[zone] = sanitized
+                    has_zone_cards = True
+            if has_zone_cards:
+                snapshot["zone_cards"] = zone_cards
 
         saved_text = self.settings.get("saved_deck_text", "")
         if saved_text:
-            self.deck_repo.set_current_deck_text(saved_text)
-            result["deck_text"] = saved_text
+            snapshot["deck_text"] = saved_text
 
         saved_deck = self.settings.get("saved_deck_info")
         if isinstance(saved_deck, dict):
-            self.deck_repo.set_current_deck(saved_deck)
-            result["deck_info"] = saved_deck
+            snapshot["deck_info"] = deepcopy(saved_deck)
+
+        return snapshot
+
+    def load_window_preferences(self) -> dict[str, Any]:
+        preferences: dict[str, Any] = {}
 
         window_size = self.settings.get("window_size")
         if isinstance(window_size, list) and len(window_size) == 2:
-            result["window_size"] = tuple(window_size)
+            preferences["window_size"] = tuple(window_size)
 
         screen_pos = self.settings.get("screen_pos")
         if isinstance(screen_pos, list) and len(screen_pos) == 2:
-            result["screen_pos"] = tuple(screen_pos)
+            preferences["screen_pos"] = tuple(screen_pos)
 
-        return result
+        return preferences

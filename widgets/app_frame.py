@@ -95,6 +95,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
         self._inspector_hover_timer: wx.Timer | None = None
         self._pending_hover: tuple[str, dict[str, Any]] | None = None
         self._pending_deck_restore: bool = False
+        self._workspace_snapshot_applied: bool = False
         self._is_first_deck_load: bool = True
         self._initial_any_load_triggered: bool = False
         self._all_loaded_decks: list[dict[str, Any]] = []
@@ -621,14 +622,28 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
         show_help(self, topic=topic)
 
     def _restore_session_state(self) -> None:
-        state = self.controller.session_manager.restore_session_state(self.controller.zone_cards)
+        if self._workspace_snapshot_applied:
+            return
+        self._workspace_snapshot_applied = True
+
+        state = self.controller.session_manager.load_workspace_snapshot()
         if not self.controller.session_manager.is_tutorial_shown():
             wx.CallAfter(self._open_tutorial)
 
+        zone_cards = state.get("zone_cards")
+        has_saved_deck = bool(zone_cards)
+        if has_saved_deck:
+            self.controller.zone_cards = zone_cards
+
+        if state.get("deck_text"):
+            self.controller.deck_repo.set_current_deck_text(state["deck_text"])
+
+        deck_info = state.get("deck_info")
+        if isinstance(deck_info, dict):
+            self.controller.deck_repo.set_current_deck(deck_info)
+
         # Restore left panel mode
         self._show_left_panel(state["left_mode"], force=True)
-
-        has_saved_deck = bool(state.get("zone_cards"))
 
         # Restore zone cards
         if has_saved_deck:
@@ -668,7 +683,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
         )
 
     def _apply_window_preferences(self) -> None:
-        state = self.controller.session_manager.restore_session_state(self.controller.zone_cards)
+        state = self.controller.session_manager.load_window_preferences()
 
         # Apply window size
         if "window_size" in state:
