@@ -65,22 +65,24 @@ def get_current_username() -> str | None:
 def detect_format_from_cards(
     cards: list[str],
     card_manager: CardDataManager | None = None,
+    last_parsed_format: str = "Unknown",
 ) -> str:
     """Detect the MTGO format from a card list using legality data.
 
     When *card_manager* is supplied and loaded the function intersects each
     card's legal competitive formats and returns the most restrictive one that
-    covers the whole deck.  Requires at least 5 cards with legality data to
-    make a confident call; returns ``"Unknown"`` otherwise.
+    covers the whole deck.  Falls back to *last_parsed_format* when the format
+    cannot be determined (e.g. no cards with legality data were played).
     """
     if card_manager is not None and card_manager.is_loaded:
-        return _detect_format_via_legalities(cards, card_manager)
-    return "Unknown"
+        return _detect_format_via_legalities(cards, card_manager, last_parsed_format)
+    return last_parsed_format
 
 
 def _detect_format_via_legalities(
     cards: list[str],
     card_manager: CardDataManager,
+    last_parsed_format: str = "Unknown",
 ) -> str:
     legal_format_sets: list[set[str]] = []
     for card_name in set(cards):
@@ -91,8 +93,8 @@ def _detect_format_via_legalities(
         if legal:
             legal_format_sets.append(legal)
 
-    if len(legal_format_sets) < 5:
-        return "Unknown"
+    if not legal_format_sets:
+        return last_parsed_format
 
     common: set[str] = legal_format_sets[0].copy()
     for s in legal_format_sets[1:]:
@@ -102,7 +104,7 @@ def _detect_format_via_legalities(
         if fmt in common:
             return _FORMAT_DISPLAY[fmt]
 
-    return "Unknown"
+    return last_parsed_format
 
 
 def detect_archetype(cards: list[str]) -> str:

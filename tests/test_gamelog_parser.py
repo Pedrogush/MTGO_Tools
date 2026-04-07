@@ -151,14 +151,28 @@ class TestDetectFormatFromCards:
     def test_returns_unknown_without_card_manager(self):
         assert detect_format_from_cards(["Force of Will"] * 10) == "Unknown"
 
+    def test_returns_last_parsed_format_without_card_manager(self):
+        assert detect_format_from_cards(["Force of Will"] * 10, last_parsed_format="Modern") == "Modern"
+
     def test_returns_unknown_when_manager_not_loaded(self):
         manager = MagicMock()
         manager.is_loaded = False
         assert detect_format_from_cards(["Force of Will"] * 10, manager) == "Unknown"
 
-    def test_returns_unknown_when_fewer_than_5_cards_found(self):
+    def test_returns_last_parsed_format_when_manager_not_loaded(self):
+        manager = MagicMock()
+        manager.is_loaded = False
+        assert detect_format_from_cards(["Force of Will"] * 10, manager, last_parsed_format="Legacy") == "Legacy"
+
+    def test_detects_format_with_few_cards(self):
+        # No minimum card count — even a single recognised card is enough
         manager = _make_manager({"card0": self._modern_card()})
-        assert detect_format_from_cards(["card0"] * 3, manager) == "Unknown"
+        assert detect_format_from_cards(["card0"] * 3, manager) == "Modern"
+
+    def test_returns_last_parsed_format_when_no_legality_data(self):
+        # All cards unknown to the index → fall back to last_parsed_format
+        manager = _make_manager({})
+        assert detect_format_from_cards(["token1", "token2"], manager, last_parsed_format="Modern") == "Modern"
 
     def test_detects_modern(self):
         deck = self._build_deck(self._modern_card())
@@ -205,15 +219,16 @@ class TestDetectFormatFromCards:
         result = detect_format_from_cards(list(deck.keys()), manager)
         assert result == "Modern"
 
-    def test_returns_unknown_when_no_common_format(self):
-        # Two cards each legal in mutually exclusive formats — pathological case
+    def test_returns_last_parsed_format_when_no_common_format(self):
+        # Two cards each legal in mutually exclusive formats — intersection is empty,
+        # falls back to last_parsed_format (default "Unknown")
         deck = {
             **{f"vintage_only_{i}": {"vintage": "Legal"} for i in range(5)},
             **{f"standard_only_{i}": {"standard": "Legal"} for i in range(5)},
         }
         manager = _make_manager(deck)
-        result = detect_format_from_cards(list(deck.keys()), manager)
-        assert result == "Unknown"
+        assert detect_format_from_cards(list(deck.keys()), manager) == "Unknown"
+        assert detect_format_from_cards(list(deck.keys()), manager, last_parsed_format="Modern") == "Modern"
 
 
 # ---------------------------------------------------------------------------
