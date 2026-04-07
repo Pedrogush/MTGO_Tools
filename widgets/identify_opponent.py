@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+import json
 import sys
+import threading
+import time
 from pathlib import Path
+from typing import Any
 
 # Ensure the project root is on sys.path when the file is run directly
 # (e.g. `python widgets/identify_opponent.py`).  Has no effect when the
@@ -11,12 +15,6 @@ from pathlib import Path
 _project_root = Path(__file__).resolve().parent.parent
 if str(_project_root) not in sys.path:
     sys.path.insert(0, str(_project_root))
-
-import json
-import threading
-import time
-from pathlib import Path
-from typing import Any
 
 import bs4
 import wx
@@ -30,6 +28,7 @@ from utils.atomic_io import atomic_write_json, locked_path
 from utils.background_worker import BackgroundWorker
 from utils.constants import (
     ACTIVE_GUIDE_FILE,
+    APP_FRAME_SIZE,
     CALC_ACTION_BUTTON_SPACING,
     CALC_BUTTON_GREEN,
     CALC_COPIES_DEFAULT,
@@ -73,7 +72,6 @@ from utils.constants import (
     OPPONENT_TRACKER_FRAME_SIZE,
     OPPONENT_TRACKER_LABEL_WRAP_WIDTH,
     OPPONENT_TRACKER_LEFT_SASH_POS,
-    OPPONENT_TRACKER_RADAR_PANEL_HEIGHT,
     OPPONENT_TRACKER_MIN_SIZE,
     OPPONENT_TRACKER_POLL_INTERVAL_MS,
     OPPONENT_TRACKER_RADAR_THREAD_JOIN_TIMEOUT_SECONDS,
@@ -184,6 +182,8 @@ class MTGOpponentDeckSpy(wx.Frame):
         self._bg_worker = BackgroundWorker()
         self._poll_generation: int = 0
         self._poll_in_progress: bool = False
+        self._watching_enabled: bool = True
+        self._manual_archetype_loaded: bool = False
 
         # Radar integration
         self.radar_service: RadarService = radar_service or get_radar_service()
@@ -250,10 +250,10 @@ class MTGOpponentDeckSpy(wx.Frame):
         refresh_button.Bind(wx.EVT_BUTTON, lambda _evt: self._manual_refresh(force=True))
         controls.Add(refresh_button, 0, wx.RIGHT, OPPONENT_TRACKER_SECTION_PADDING)
 
-        load_arch_btn = wx.Button(panel, label=self._t("tracker.btn.load_archetype"))
-        self._stylize_secondary_button(load_arch_btn)
-        load_arch_btn.Bind(wx.EVT_BUTTON, self._on_load_archetype_clicked)
-        controls.Add(load_arch_btn, 0, wx.RIGHT, OPPONENT_TRACKER_SECTION_PADDING)
+        self.load_arch_btn = wx.Button(panel, label=self._t("tracker.btn.load_archetype"))
+        self._stylize_secondary_button(self.load_arch_btn)
+        self.load_arch_btn.Bind(wx.EVT_BUTTON, self._on_load_archetype_clicked)
+        controls.Add(self.load_arch_btn, 0, wx.RIGHT, OPPONENT_TRACKER_SECTION_PADDING)
 
         close_button = wx.Button(panel, label=self._t("tracker.btn.close"))
         self._stylize_secondary_button(close_button)
@@ -273,7 +273,7 @@ class MTGOpponentDeckSpy(wx.Frame):
         self._left_splitter = wx.SplitterWindow(panel, style=wx.SP_3D | wx.SP_LIVE_UPDATE)
         self._left_splitter.SetBackgroundColour(DARK_BG)
         main_sizer.Add(
-            self._left_splitter, 0, wx.RIGHT | wx.ALIGN_TOP, OPPONENT_TRACKER_SECTION_PADDING
+            self._left_splitter, 0, wx.RIGHT | wx.EXPAND, OPPONENT_TRACKER_SECTION_PADDING
         )
 
         self._build_calculator_panel(self._left_splitter)
@@ -285,6 +285,7 @@ class MTGOpponentDeckSpy(wx.Frame):
             self.calc_panel, self.radar_panel, OPPONENT_TRACKER_LEFT_SASH_POS
         )
         self._left_splitter.SetMinimumPaneSize(80)
+        self._left_splitter.SetSashGravity(0.0)
         wx.CallAfter(self._fit_left_splitter)
 
         # Right panel: Sideboard Guide
@@ -462,18 +463,22 @@ class MTGOpponentDeckSpy(wx.Frame):
         calc_best = self.calc_panel.GetBestSize()
         sash_h = calc_best.GetHeight()
         splitter_w = calc_best.GetWidth()
-        total_h = sash_h + OPPONENT_TRACKER_RADAR_PANEL_HEIGHT
-        self._left_splitter.SetSize(wx.Size(splitter_w, total_h))
+        self._left_splitter.SetMinSize(wx.Size(splitter_w, -1))
         self._left_splitter.SetSashPosition(sash_h)
         self.Layout()
 
     def _on_load_archetype_clicked(self, _event: wx.CommandEvent) -> None:
         """Open dialog to manually load an archetype for radar/guide lookup."""
+        if self._manual_archetype_loaded:
+            self._unload_manual_archetype()
+            return
+
         dlg = _LoadArchetypeDialog(
             self,
             title=self._t("tracker.dlg.load_archetype.title"),
             format_label=self._t("tracker.dlg.load_archetype.format"),
             archetype_label=self._t("tracker.dlg.load_archetype.archetype"),
+            metagame_repository=self.metagame_repo,
             locale=self._locale,
         )
         if dlg.ShowModal() == wx.ID_OK:
@@ -555,15 +560,29 @@ class MTGOpponentDeckSpy(wx.Frame):
 
     def _load_archetype_manually(self, fmt: str, archetype: str) -> None:
         """Load radar and guide for a manually specified archetype."""
+        self._stop_watching()
         self._clear_radar_display()
+        self._manual_archetype_loaded = True
         self.player_name = "(manual)"
         self.last_seen_decks = {fmt: archetype}
         self.deck_label.SetLabel(
             self._t("tracker.label.manual_archetype", archetype=archetype, fmt=fmt)
         )
         self.deck_label.Wrap(OPPONENT_TRACKER_LABEL_WRAP_WIDTH)
+        self.status_label.SetLabel(self._t("tracker.status.manual_loaded"))
+        self.status_label.Wrap(OPPONENT_TRACKER_LABEL_WRAP_WIDTH)
+        self.load_arch_btn.SetLabel(self._t("tracker.btn.unload_archetype"))
         self._trigger_radar_load()
         self._update_guide_display()
+
+    def _unload_manual_archetype(self) -> None:
+        self._manual_archetype_loaded = False
+        self.player_name = ""
+        self.last_seen_decks = {}
+        self.load_arch_btn.SetLabel(self._t("tracker.btn.load_archetype"))
+        self._clear_radar_display()
+        self._refresh_opponent_display()
+        self._start_polling()
 
     def _apply_preset(self, deck_size: int, cards_drawn: int) -> None:
         self.spin_deck_size.SetValue(deck_size)
@@ -718,6 +737,8 @@ class MTGOpponentDeckSpy(wx.Frame):
 
     # ------------------------------------------------------------------ Event handlers -------------------------------------------------------
     def _manual_refresh(self, force: bool = False) -> None:
+        if not self._watching_enabled:
+            return
         if self.player_name:
             self.cache.pop(self.player_name, None)
         # Cancel any in-progress poll and submit a fresh one
@@ -726,14 +747,25 @@ class MTGOpponentDeckSpy(wx.Frame):
 
     # ------------------------------------------------------------------ Opponent detection ---------------------------------------------------
     def _start_polling(self) -> None:
+        self._watching_enabled = True
         self.status_label.SetLabel(self._t("tracker.label.watching"))
-        self._poll_timer.Start(self.POLL_INTERVAL_MS)
+        if not self._poll_timer.IsRunning():
+            self._poll_timer.Start(self.POLL_INTERVAL_MS)
         self._submit_poll()
+
+    def _stop_watching(self) -> None:
+        self._watching_enabled = False
+        self._poll_generation += 1
+        self._poll_in_progress = False
+        if self._poll_timer.IsRunning():
+            self._poll_timer.Stop()
 
     def _on_poll_tick(self, _event: wx.TimerEvent) -> None:
         self._submit_poll()
 
     def _submit_poll(self) -> None:
+        if not self._watching_enabled:
+            return
         if self._poll_in_progress:
             return
         self._poll_in_progress = True
@@ -772,6 +804,9 @@ class MTGOpponentDeckSpy(wx.Frame):
             return  # Stale — a newer poll supersedes this one
 
         self._poll_in_progress = False
+        if not self._watching_enabled:
+            return
+
         kind = result["kind"]
 
         if kind in ("error", "no_match"):
@@ -950,14 +985,16 @@ class MTGOpponentDeckSpy(wx.Frame):
         self.SetBackgroundColour(DARK_BG)
         self.SetMinSize(wx.Size(*OPPONENT_TRACKER_MIN_SIZE))
 
-        # Size the window: width = ~half main app, height = full screen client area
+        # Match the main app's height so the tracker feels aligned when placed side by side.
         try:
             display_idx = wx.Display.GetFromWindow(self) if self.IsShown() else 0
             if display_idx == wx.NOT_FOUND:
                 display_idx = 0
             client_area = wx.Display(display_idx).GetClientArea()
             frame_w, _ = OPPONENT_TRACKER_FRAME_SIZE
-            self.SetSize(frame_w, client_area.GetHeight())
+            parent = self.GetParent()
+            main_h = parent.GetSize().GetHeight() if parent is not None else APP_FRAME_SIZE[1]
+            self.SetSize(frame_w, min(main_h, client_area.GetHeight()))
         except Exception:
             pass  # fall back to the constant size set in __init__
 
@@ -1008,10 +1045,13 @@ class _LoadArchetypeDialog(wx.Dialog):
         title: str,
         format_label: str,
         archetype_label: str,
+        metagame_repository: MetagameRepository,
         locale: str | None = None,
     ) -> None:
         super().__init__(parent, title=title, style=wx.DEFAULT_DIALOG_STYLE)
         self.SetBackgroundColour(DARK_BG)
+        self._metagame_repo = metagame_repository
+        self._archetypes_by_format: dict[str, list[dict[str, Any]]] = {}
 
         sizer = wx.BoxSizer(wx.VERTICAL)
         self.SetSizer(sizer)
@@ -1024,26 +1064,54 @@ class _LoadArchetypeDialog(wx.Dialog):
         lbl_fmt.SetForegroundColour(LIGHT_TEXT)
         self._format_choice = wx.Choice(self, choices=FORMAT_OPTIONS)
         self._format_choice.SetSelection(0)
+        self._format_choice.Bind(wx.EVT_CHOICE, self._on_format_changed)
 
         lbl_arch = wx.StaticText(self, label=archetype_label)
         lbl_arch.SetForegroundColour(LIGHT_TEXT)
-        self._archetype_ctrl = wx.TextCtrl(self, size=(260, -1))
+        self._archetype_choice = wx.Choice(self, choices=[], size=(260, -1))
 
         grid.Add(lbl_fmt, 0, wx.ALIGN_CENTER_VERTICAL)
         grid.Add(self._format_choice, 1, wx.EXPAND)
         grid.Add(lbl_arch, 0, wx.ALIGN_CENTER_VERTICAL)
-        grid.Add(self._archetype_ctrl, 1, wx.EXPAND)
+        grid.Add(self._archetype_choice, 1, wx.EXPAND)
 
         btn_sizer = self.CreateStdDialogButtonSizer(wx.OK | wx.CANCEL)
         sizer.Add(btn_sizer, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 12)
 
+        self._populate_archetype_choices()
         self.Fit()
         self.CentreOnParent()
 
     def get_values(self) -> tuple[str, str]:
         fmt = self._format_choice.GetString(self._format_choice.GetSelection())
-        archetype = self._archetype_ctrl.GetValue().strip()
+        archetype = self._archetype_choice.GetStringSelection().strip()
         return fmt, archetype
+
+    def _on_format_changed(self, _event: wx.CommandEvent) -> None:
+        self._populate_archetype_choices()
+
+    def _populate_archetype_choices(self) -> None:
+        fmt = self._format_choice.GetStringSelection()
+        archetypes = self._archetypes_by_format.get(fmt)
+        if archetypes is None:
+            try:
+                archetypes = self._metagame_repo.get_archetypes_for_format(fmt)
+            except Exception as exc:
+                logger.warning(f"Failed to load archetype choices for {fmt}: {exc}")
+                archetypes = []
+            self._archetypes_by_format[fmt] = archetypes
+
+        names = sorted(
+            {
+                str(archetype.get("name", "")).strip()
+                for archetype in archetypes
+                if str(archetype.get("name", "")).strip()
+            },
+            key=str.casefold,
+        )
+        self._archetype_choice.Set(names)
+        if names:
+            self._archetype_choice.SetSelection(0)
 
 
 def main() -> None:
