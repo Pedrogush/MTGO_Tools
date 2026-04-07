@@ -114,7 +114,22 @@ class DeckService:
             todays_decks,
             download_deck,
             read_deck_file,
-            self.deck_repo,
+        )
+
+    def build_average_buffer(
+        self,
+        todays_decks: list[dict[str, Any]],
+        download_deck: Callable[[str], None],
+        read_deck_file: Callable[[], str],
+        add_to_buffer: Callable[[dict[str, Any], str], dict[str, Any]],
+        progress_callback: Callable[[int, int], None] | None = None,
+    ) -> dict[str, Any]:
+        return self.deck_averager.build_average_buffer(
+            todays_decks,
+            download_deck,
+            read_deck_file,
+            add_to_buffer,
+            progress_callback=progress_callback,
         )
 
 

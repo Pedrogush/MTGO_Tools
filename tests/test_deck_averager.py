@@ -118,3 +118,21 @@ def test_render_average_deck_fractional(averager):
 def test_render_average_deck_empty(averager):
     assert averager.render_average_deck({}, 5) == ""
     assert averager.render_average_deck({"x": 1.0}, 0) == ""
+
+
+def test_build_average_buffer_downloads_reads_and_reports_progress(averager):
+    downloads: list[str] = []
+    reads = iter(["1 Island", "2 Island"])
+    progress_calls: list[tuple[int, int]] = []
+
+    buffer = averager.build_average_buffer(
+        [{"number": "a"}, {"number": "b"}],
+        lambda number: downloads.append(number),
+        lambda: next(reads),
+        averager.add_deck_to_buffer,
+        progress_callback=lambda index, total: progress_calls.append((index, total)),
+    )
+
+    assert downloads == ["a", "b"]
+    assert buffer == {"Island": 3.0}
+    assert progress_calls == [(1, 2), (2, 2)]

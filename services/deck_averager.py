@@ -8,7 +8,6 @@ from typing import Any
 
 from loguru import logger
 
-from repositories.deck_repository import DeckRepository
 from repositories.metagame_repository import MetagameRepository
 from services.deck_parser import DeckParser
 from utils.constants import DEFAULT_MAX_DECKS
@@ -169,14 +168,34 @@ class DeckAverager:
         today = today or time.strftime("%Y-%m-%d").lower()
         return [deck for deck in decks if today in str(deck.get("date", "")).lower()]
 
+    def build_average_buffer(
+        self,
+        decks: list[dict[str, Any]],
+        download_deck: Callable[[str], None],
+        read_deck_file: Callable[[], str],
+        add_to_buffer: Callable[[dict[str, Any], str], dict[str, Any]] | None = None,
+        progress_callback: Callable[[int, int], None] | None = None,
+    ) -> dict[str, Any]:
+        buffer: dict[str, Any] = {}
+        total = len(decks)
+        add_func = add_to_buffer or self.add_deck_to_buffer
+
+        for index, deck in enumerate(decks, start=1):
+            download_deck(deck["number"])
+            deck_content = read_deck_file()
+            buffer = add_func(buffer, deck_content)
+            if progress_callback:
+                progress_callback(index, total)
+
+        return buffer
+
     def build_average_text(
         self,
         todays_decks: list[dict[str, Any]],
         download_deck: Callable[[str], None],
         read_deck_file: Callable[[], str],
-        deck_repo: DeckRepository,
     ) -> str:
-        buffer = deck_repo.build_daily_average_deck(
+        buffer = self.build_average_buffer(
             todays_decks,
             download_deck,
             read_deck_file,

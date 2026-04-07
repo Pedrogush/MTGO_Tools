@@ -11,7 +11,6 @@ class FakeDeckRepo:
         self.current_deck_text = ""
         self.current_deck: dict[str, str] = {}
         self.saved_payload: dict | None = None
-        self.daily_average_rows: list[list[dict]] = []
 
     def set_decks_list(self, decks: list[dict]) -> None:
         self.decks_list = decks
@@ -42,16 +41,6 @@ class FakeDeckRepo:
         self.saved_payload = payload
         return 123
 
-    def build_daily_average_deck(
-        self, rows, download_func, reader_func, add_to_buffer, progress_callback
-    ):
-        self.daily_average_rows.append(rows)
-        for index, row in enumerate(rows, start=1):
-            download_func(row["number"])
-            progress_callback(index, len(rows))
-        add_to_buffer({"name": "Card"}, 0.5)
-        return {"Card": 0.5}
-
 
 class FakeMetagameRepo:
     def __init__(self) -> None:
@@ -70,6 +59,7 @@ class FakeDeckService:
     def __init__(self) -> None:
         self.zone_calls: list[dict] = []
         self.buffer_calls = 0
+        self.daily_average_rows: list[list[dict]] = []
 
     def build_deck_text_from_zones(self, zones):
         self.zone_calls.append(json.loads(json.dumps(zones)))
@@ -80,6 +70,17 @@ class FakeDeckService:
 
     def add_deck_to_karsten_buffer(self, *_args, **_kwargs):
         self.buffer_calls += 1
+
+    def build_average_buffer(
+        self, rows, download_func, reader_func, add_to_buffer, progress_callback
+    ):
+        self.daily_average_rows.append(rows)
+        for index, row in enumerate(rows, start=1):
+            download_func(row["number"])
+            reader_func()
+            progress_callback(index, len(rows))
+        add_to_buffer({"name": "Card"}, "deck text")
+        return {"Card": 0.5}
 
 
 def build_service(
@@ -158,7 +159,12 @@ def test_build_daily_average_buffer_wires_dependencies():
     def downloader(deck_number: str, source_filter: str | None = None):
         downloads.append(f"{deck_number}:{source_filter}")
 
-    service = build_service(deck_repo=repo, deck_service=deck_service, deck_downloader=downloader)
+    service = build_service(
+        deck_repo=repo,
+        deck_service=deck_service,
+        deck_downloader=downloader,
+        deck_reader=lambda: "deck text",
+    )
     rows = [{"number": "a"}, {"number": "b"}]
     buffer = service.build_daily_average_buffer(
         rows,
@@ -170,7 +176,7 @@ def test_build_daily_average_buffer_wires_dependencies():
     assert downloads == ["a:both", "b:both"]
     assert progress_calls == [(1, 2), (2, 2)]
     assert deck_service.buffer_calls == 1
-    assert repo.daily_average_rows == [rows]
+    assert deck_service.daily_average_rows == [rows]
 
 
 def test_save_deck_persists_file_and_db(tmp_path):

@@ -143,7 +143,7 @@ class DeckWorkflowService:
             else self.deck_service.add_deck_to_buffer
         )
 
-        return self.deck_repo.build_daily_average_deck(
+        return self.deck_service.build_average_buffer(
             rows,
             download_with_filter,
             self._deck_reader,
