@@ -26,12 +26,7 @@ from utils.constants import BRIDGE_PATH
 
 
 def get_current_username() -> str | None:
-    """
-    Get current MTGO username via bridge.
-
-    Returns:
-        Current username or None if unavailable
-    """
+    """Get current MTGO username via bridge."""
 
     try:
         result = subprocess.run(
@@ -51,15 +46,7 @@ def get_current_username() -> str | None:
 
 
 def detect_format_from_cards(cards: list[str]) -> str:
-    """
-    Attempt to detect format from card list.
-
-    Args:
-        cards: List of card names
-
-    Returns:
-        Detected format or "Unknown"
-    """
+    """Attempt to detect format from card list."""
     # Common Modern-only cards (not in Standard, Pioneer, Legacy staples)
     modern_indicators = {
         "Thoughtseize",
@@ -115,15 +102,7 @@ def detect_format_from_cards(cards: list[str]) -> str:
 
 
 def detect_archetype(cards: list[str]) -> str:
-    """
-    Detect deck archetype from card list.
-
-    Args:
-        cards: List of unique card names played
-
-    Returns:
-        Detected archetype name
-    """
+    """Detect deck archetype from card list."""
     if not cards or len(cards) < 5:
         return "Unknown"
 
@@ -183,12 +162,7 @@ def detect_archetype(cards: list[str]) -> str:
 
 
 def locate_gamelog_directory_via_bridge() -> str | None:
-    """
-    Use MTGOBridge to locate GameLog files through MTGOSDK.
-
-    Returns:
-        Path to GameLog directory if found, None otherwise
-    """
+    """Use MTGOBridge to locate GameLog files through MTGOSDK."""
     try:
         from utils.constants import CONFIG
     except ImportError:
@@ -246,13 +220,8 @@ def find_all_gamelog_dirs(appdata_base: str | None = None) -> list[str]:
         AppData/Local/Apps/2.0/Data/{hash}/{hash}/mtgo*/Data/AppFiles/{hash}/
         Match_GameLog_*.dat files live directly in the innermost hash folder.
 
-    Args:
-        appdata_base: Override the AppData/Local/Apps/2.0/Data base path.
-                      Auto-detected for both Windows and WSL if None.
-
-    Returns:
-        List of directory paths that contain Match_GameLog_*.dat files,
-        sorted newest-first by the most recent log file's mtime.
+    ``appdata_base`` auto-detects for both Windows and WSL when None.
+    Returns paths sorted newest-first by the most recent log file's mtime.
     """
     if appdata_base:
         bases = [Path(appdata_base)]
@@ -285,9 +254,6 @@ def locate_gamelog_directory() -> str | None:
     Strategy:
     1. Try using MTGOBridge + MTGOSDK (if MTGO is running)
     2. Fall back to scanning the ClickOnce AppData tree
-
-    Returns:
-        Path to GameLog directory if found, None otherwise
     """
     path = locate_gamelog_directory_via_bridge()
     if path:
@@ -304,15 +270,6 @@ def locate_gamelog_directory() -> str | None:
 
 
 def extract_players(content: str) -> list[str]:
-    """
-    Extract player names from log content.
-
-    Args:
-        content: Raw log file content
-
-    Returns:
-        List of player names (typically 2 for 1v1 matches)
-    """
     players = []
 
     # Split by player markers
@@ -331,18 +288,9 @@ def extract_players(content: str) -> list[str]:
 
 
 def normalize_player_name(name: str, to_storage: bool = True) -> str:
-    """
-    Convert player names between display and storage formats.
+    """Convert player names between display and storage formats.
 
-    Storage format: spaces->'+', periods->'*'
-    Display format: reverse transformation
-
-    Args:
-        name: Player name to convert
-        to_storage: If True, convert to storage format; if False, to display format
-
-    Returns:
-        Converted player name
+    Storage format: spaces->'+', periods->'*'. Display format: reverse.
     """
     if to_storage:
         return name.replace(" ", "+").replace(".", "*")
@@ -351,16 +299,6 @@ def normalize_player_name(name: str, to_storage: bool = True) -> str:
 
 
 def parse_timestamp(timestamp_str: str, file_path: str = None) -> datetime:
-    """
-    Parse MTGO log timestamp into datetime object.
-
-    Args:
-        timestamp_str: Timestamp from log file (e.g., "Wed Dec 04 14:23:10 PST 2024")
-        file_path: Optional file path to use modification time as fallback
-
-    Returns:
-        datetime object
-    """
     # Check if this looks like binary data (UUIDs, special characters, etc.)
     if "$" in timestamp_str or any(ord(c) > 127 for c in timestamp_str[:50]):
         # Binary format - use file modification time as fallback
@@ -411,16 +349,6 @@ def parse_timestamp(timestamp_str: str, file_path: str = None) -> datetime:
 
 
 def extract_cards_played(content: str, player_name: str) -> list[str]:
-    """
-    Extract all unique cards played by a specific player.
-
-    Args:
-        content: Raw log file content
-        player_name: Normalized player name (storage format)
-
-    Returns:
-        List of unique card names
-    """
     cards = set()
 
     # Convert to display format for matching
@@ -462,15 +390,9 @@ def extract_cards_played(content: str, player_name: str) -> list[str]:
 
 
 def parse_mulligan_data(content: str) -> dict[str, list[int]]:
-    """
-    Extract mulligan data per player per game.
+    """Extract mulligan counts per player per game.
 
-    Args:
-        content: Raw log file content
-
-    Returns:
-        Dict mapping player name to list of mulligan counts per game
-        Example: {"Player1": [0, 2, 1], "Player2": [1, 0, 0]}
+    Example: ``{"Player1": [0, 2, 1], "Player2": [1, 0, 0]}``
     """
     mulligan_data = {}
     current_game = 0
@@ -517,15 +439,6 @@ def parse_mulligan_data(content: str) -> dict[str, list[int]]:
 
 
 def parse_match_score(content: str) -> tuple[str, int, int] | None:
-    """
-    Parse final match score from log.
-
-    Args:
-        content: Raw log file content
-
-    Returns:
-        Tuple of (winner_name, winner_score, loser_score) or None
-    """
     lines = content.split("\n")
 
     # Look for "PlayerName wins the match X-Y" or "PlayerName leads the match X-Y"
@@ -548,15 +461,6 @@ def parse_match_score(content: str) -> tuple[str, int, int] | None:
 
 
 def parse_game_results(content: str) -> list[dict[str, str]]:
-    """
-    Parse individual game results from match.
-
-    Args:
-        content: Raw log file content
-
-    Returns:
-        List of game result dicts with winner info
-    """
     games = []
     lines = content.split("\n")
     current_game_num = 0
@@ -601,15 +505,6 @@ def parse_game_results(content: str) -> list[dict[str, str]]:
 
 
 def parse_gamelog_file(file_path: str) -> dict | None:
-    """
-    Parse a single GameLog file with enhanced data extraction.
-
-    Args:
-        file_path: Path to GameLog file
-
-    Returns:
-        Dict with comprehensive match data or None if parsing fails
-    """
     try:
         with open(file_path, encoding="latin1") as f:
             content = f.read()
@@ -707,12 +602,6 @@ def infer_username_from_matches(matches: list[dict]) -> str | None:
     The local user appears in every match because GameLog files are stored on
     their machine.  Any player present in ≥80% of matches is treated as the
     local user.
-
-    Args:
-        matches: List of parsed match dicts from parse_gamelog_file
-
-    Returns:
-        Most likely current username, or None if it cannot be determined
     """
     if not matches:
         return None
@@ -739,16 +628,6 @@ def infer_username_from_matches(matches: list[dict]) -> str | None:
 
 
 def find_gamelog_files(directory: str, since_date: datetime | None = None) -> list[str]:
-    """
-    Find all GameLog files in directory, optionally filtered by date.
-
-    Args:
-        directory: Path to GameLog directory
-        since_date: Only return files modified after this date
-
-    Returns:
-        List of file paths
-    """
     files = []
 
     for filename in os.listdir(directory):
@@ -773,18 +652,6 @@ def parse_all_gamelogs(
     limit: int = None,
     progress_callback=None,
 ) -> list[dict]:
-    """
-    Parse all GameLog files across all MTGO GameLog directories.
-
-    Args:
-        directory: Single path, list of paths, or None to auto-detect all
-                   MTGO ClickOnce directories on this machine.
-        limit: Maximum number of files to parse (None for all)
-        progress_callback: Optional callback(current, total) for progress updates
-
-    Returns:
-        List of parsed match data dicts
-    """
     if directory is None:
         directories = find_all_gamelog_dirs()
         if not directories:

@@ -27,17 +27,10 @@ class DeckTextCache:
     """SQLite-based cache for deck text content."""
 
     def __init__(self, db_path: Path = DECK_CACHE_DB):
-        """
-        Initialize the deck text cache.
-
-        Args:
-            db_path: Path to SQLite database file
-        """
         self.db_path = db_path
         self._ensure_schema()
 
     def _ensure_schema(self) -> None:
-        """Create the cache table and indexes if they don't exist."""
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
 
         with sqlite3.connect(self.db_path, timeout=SQLITE_CONNECTION_TIMEOUT_SECONDS) as conn:
@@ -86,16 +79,6 @@ class DeckTextCache:
             logger.debug(f"Deck cache schema initialized at {self.db_path}")
 
     def get(self, deck_number: str, source: str | None = None) -> str | None:
-        """
-        Get deck text from cache.
-
-        Args:
-            deck_number: Deck number/ID
-            source: Optional source filter ('mtggoldfish' or 'mtgo')
-
-        Returns:
-            Deck text if found, None otherwise
-        """
         try:
             with sqlite3.connect(self.db_path, timeout=SQLITE_CONNECTION_TIMEOUT_SECONDS) as conn:
                 cursor = conn.cursor()
@@ -146,17 +129,6 @@ class DeckTextCache:
             return None
 
     def set(self, deck_number: str, deck_text: str, source: str = "mtggoldfish") -> bool:
-        """
-        Store deck text in cache with retry logic for database locks.
-
-        Args:
-            deck_number: Deck number/ID
-            deck_text: Deck list as text
-            source: Data source ('mtggoldfish' or 'mtgo')
-
-        Returns:
-            True if successful, False otherwise
-        """
         max_retries = 3
         retry_delay = 0.1  # Start with 100ms
 
@@ -202,13 +174,7 @@ class DeckTextCache:
     def bulk_set(self, entries: list[tuple[str, str, str]], *, skip_existing: bool = True) -> int:
         """Insert multiple deck texts in a single transaction.
 
-        Args:
-            entries: List of (deck_number, deck_text, source) tuples.
-            skip_existing: When True uses INSERT OR IGNORE so already-cached
-                decks are not overwritten; False uses INSERT OR REPLACE.
-
-        Returns:
-            Number of rows actually inserted.
+        When ``skip_existing=True`` uses INSERT OR IGNORE so already-cached decks are not overwritten.
         """
         if not entries:
             return 0
@@ -237,12 +203,6 @@ class DeckTextCache:
             return 0
 
     def get_stats(self) -> dict:
-        """
-        Get cache statistics.
-
-        Returns:
-            Dictionary with cache stats (total_decks, db_size_mb, oldest_entry, newest_entry)
-        """
         try:
             with sqlite3.connect(self.db_path, timeout=SQLITE_CONNECTION_TIMEOUT_SECONDS) as conn:
                 cursor = conn.cursor()
@@ -281,15 +241,6 @@ class DeckTextCache:
             return {"error": str(exc)}
 
     def cleanup_old_entries(self, max_age_days: int = 90) -> int:
-        """
-        Remove entries older than max_age_days.
-
-        Args:
-            max_age_days: Maximum age in days
-
-        Returns:
-            Number of entries deleted
-        """
         cutoff_time = time.time() - (max_age_days * 24 * 60 * 60)
 
         try:
@@ -314,15 +265,6 @@ class DeckTextCache:
             return 0
 
     def cleanup_lru(self, max_entries: int = 10000) -> int:
-        """
-        Keep only the most recently accessed entries (LRU eviction).
-
-        Args:
-            max_entries: Maximum number of entries to keep
-
-        Returns:
-            Number of entries deleted
-        """
         try:
             with sqlite3.connect(self.db_path, timeout=SQLITE_CONNECTION_TIMEOUT_SECONDS) as conn:
                 cursor = conn.cursor()
@@ -361,15 +303,6 @@ class DeckTextCache:
             return 0
 
     def migrate_from_json(self, json_path: Path) -> int:
-        """
-        Migrate existing JSON cache to SQLite.
-
-        Args:
-            json_path: Path to existing JSON cache file
-
-        Returns:
-            Number of entries migrated
-        """
         if not json_path.exists():
             logger.debug(f"No JSON cache to migrate at {json_path}")
             return 0
@@ -413,7 +346,6 @@ class DeckTextCache:
             return 0
 
     def vacuum(self) -> None:
-        """Optimize database and reclaim space after deletions."""
         try:
             with sqlite3.connect(self.db_path, timeout=SQLITE_CONNECTION_TIMEOUT_SECONDS) as conn:
                 conn.execute("VACUUM")
@@ -422,12 +354,6 @@ class DeckTextCache:
             logger.error(f"Error vacuuming database: {exc}")
 
     def clear(self) -> bool:
-        """
-        Clear all cached entries.
-
-        Returns:
-            True if successful
-        """
         try:
             with sqlite3.connect(self.db_path, timeout=SQLITE_CONNECTION_TIMEOUT_SECONDS) as conn:
                 conn.execute("DELETE FROM deck_cache")

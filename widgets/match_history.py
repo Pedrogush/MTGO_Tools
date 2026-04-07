@@ -60,7 +60,6 @@ class MatchHistoryFrame(wx.Frame):
         wx.CallAfter(self.refresh_history)
 
     def _init_username(self) -> None:
-        """Get current MTGO username in background."""
 
         def worker():
             from utils.gamelog_parser import get_current_username
@@ -71,7 +70,6 @@ class MatchHistoryFrame(wx.Frame):
         threading.Thread(target=worker, daemon=True).start()
 
     def _set_username(self, username: str | None) -> None:
-        """Set the current username and re-render history if already loaded."""
         if username and username != self.current_username:
             self.current_username = username
             logger.debug(f"Set current username: {username}")
@@ -212,7 +210,6 @@ class MatchHistoryFrame(wx.Frame):
         wx.CallAfter(self._fit_tree_columns)
 
     def _fit_tree_columns(self) -> None:
-        """Expand the Players column so the tree fills its width with no horizontal scrollbar."""
         if not self.tree:
             return
         dv_ctrl = self.tree.GetDataView()
@@ -368,7 +365,6 @@ class MatchHistoryFrame(wx.Frame):
         self._clear_opp_stats()
 
     def on_item_activated(self, event: dv.TreeListEvent) -> None:
-        """Show deck list when match is double-clicked."""
         item = event.GetItem()
         if not item.IsOk():
             return
@@ -399,7 +395,6 @@ class MatchHistoryFrame(wx.Frame):
         dlg.Destroy()
 
     def on_item_selected(self, event: dv.TreeListEvent) -> None:
-        """Update vs-opponent stats when a match row is selected."""
         item = event.GetItem()
         if not item.IsOk():
             self._clear_opp_stats()
@@ -418,13 +413,11 @@ class MatchHistoryFrame(wx.Frame):
         self._update_opp_stats(opp_name)
 
     def _get_opponent_name(self, match_data: dict[str, Any]) -> str | None:
-        """Return the opponent's display name from a match dict."""
         # Use the name that was resolved during _populate_history, where the
         # current_username / player-perspective logic already ran correctly.
         return match_data.get("_opp_name") or None
 
     def _update_opp_stats(self, opp_name: str) -> None:
-        """Compute and display stats for all matches vs opp_name."""
         matches = [
             m for m in self.history_items if isinstance(m, dict) and m.get("_opp_name") == opp_name
         ]
@@ -536,7 +529,6 @@ class MatchHistoryFrame(wx.Frame):
             )
 
     def _iter_matches(self, items: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        """Convert match data to metrics format."""
         results: list[dict[str, Any]] = []
         for match in items:
             if not isinstance(match, dict):

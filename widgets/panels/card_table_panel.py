@@ -131,7 +131,6 @@ class CardTablePanel(wx.Panel):
         return panel
 
     def show_loading(self, label: str) -> None:
-        """Display a loading message in place of the card grid."""
         self._loading_state._label.SetLabel(label)  # type: ignore[attr-defined]
         if self._content_book.GetSelection() != 2:
             self._content_book.ChangeSelection(2)
@@ -196,7 +195,6 @@ class CardTablePanel(wx.Panel):
 
     @timed
     def _update_panels(self, cards: list[dict[str, Any]], preserve_scroll: bool = False) -> None:
-        """Update the fixed pool of panels in-place; no widgets are created or destroyed."""
         self.Freeze()
         needs_image_load: list[CardBoxPanel] = []
         try:
@@ -299,13 +297,11 @@ class CardTablePanel(wx.Panel):
             self._notify_selection(None)
 
     def get_selected_card(self) -> dict[str, Any] | None:
-        """Return the currently selected card in this table, if any."""
         if self.active_panel:
             return self.active_panel.card
         return None
 
     def focus_card(self, card_name: str) -> bool:
-        """Programmatically focus the given card by name."""
         if not card_name:
             return False
         match = None

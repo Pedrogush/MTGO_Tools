@@ -33,12 +33,6 @@ class CompactRadarPanel(wx.Panel):
     """Compact panel for displaying radar data in small overlays."""
 
     def __init__(self, parent: wx.Window):
-        """
-        Initialize the compact radar panel.
-
-        Args:
-            parent: Parent window
-        """
         super().__init__(parent)
         self.SetBackgroundColour(DARK_PANEL)
 
@@ -49,7 +43,6 @@ class CompactRadarPanel(wx.Panel):
         self.Hide()
 
     def _build_ui(self) -> None:
-        """Build the compact panel UI."""
         sizer = wx.BoxSizer(wx.VERTICAL)
         self.SetSizer(sizer)
 
@@ -86,16 +79,9 @@ class CompactRadarPanel(wx.Panel):
 
     @property
     def view_mode(self) -> RadarViewMode:
-        """Current view mode."""
         return self._view_mode
 
     def display_radar(self, radar: RadarData) -> None:
-        """
-        Display radar data in the current view mode.
-
-        Args:
-            radar: RadarData to display
-        """
         self.current_radar = radar
         self.header_label.SetLabel(f"Radar: {radar.archetype_name}")
         self.view_toggle_btn.Show()
@@ -105,7 +91,6 @@ class CompactRadarPanel(wx.Panel):
         logger.debug(f"Compact radar displayed: {radar.archetype_name}")
 
     def clear(self) -> None:
-        """Clear the radar display and hide panel."""
         self.current_radar = None
         self.header_label.SetLabel("Radar: Loading...")
         self.status_label.SetLabel("")
@@ -115,12 +100,6 @@ class CompactRadarPanel(wx.Panel):
         self.GetParent().Layout()
 
     def set_loading(self, message: str = "Loading radar data...") -> None:
-        """
-        Show loading state.
-
-        Args:
-            message: Loading message to display
-        """
         self.header_label.SetLabel("Radar: Loading...")
         self.status_label.SetLabel(message)
         self.card_list.Clear()
@@ -129,12 +108,6 @@ class CompactRadarPanel(wx.Panel):
         self.GetParent().Layout()
 
     def set_error(self, error_message: str) -> None:
-        """
-        Show error state.
-
-        Args:
-            error_message: Error message to display
-        """
         self.header_label.SetLabel("Radar: Error")
         self.status_label.SetLabel(error_message)
         self.card_list.Clear()
@@ -145,7 +118,6 @@ class CompactRadarPanel(wx.Panel):
     # ============= Private Methods =============
 
     def _on_toggle_view(self, _event: wx.CommandEvent) -> None:
-        """Toggle between Top Cards and Full Decklist views."""
         if self._view_mode == RadarViewMode.TOP_CARDS:
             self._view_mode = RadarViewMode.FULL_DECKLIST
         else:
@@ -154,14 +126,12 @@ class CompactRadarPanel(wx.Panel):
         self._populate_card_list()
 
     def _update_toggle_button_label(self) -> None:
-        """Update toggle button label to show the other view option."""
         if self._view_mode == RadarViewMode.TOP_CARDS:
             self.view_toggle_btn.SetLabel("Full Decklist")
         else:
             self.view_toggle_btn.SetLabel("Top Cards")
 
     def _populate_card_list(self) -> None:
-        """Populate the card list based on the current view mode."""
         if not self.current_radar:
             return
 
@@ -171,7 +141,6 @@ class CompactRadarPanel(wx.Panel):
             self._populate_full_decklist()
 
     def _populate_top_cards(self) -> None:
-        """Populate with top N mainboard/sideboard cards and inclusion rates."""
         radar = self.current_radar
         if not radar:
             return
@@ -201,7 +170,6 @@ class CompactRadarPanel(wx.Panel):
                 self.card_list.Append(line)
 
     def _populate_full_decklist(self) -> None:
-        """Populate with full average decklist (all cards, rounded avg copies)."""
         radar = self.current_radar
         if not radar:
             return

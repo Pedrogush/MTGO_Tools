@@ -29,12 +29,6 @@ class SearchService:
         card_repository: CardRepository | None = None,
         format_card_pool_service: FormatCardPoolService | None = None,
     ):
-        """
-        Initialize the search service.
-
-        Args:
-            card_repository: CardRepository instance
-        """
         self.card_repo = card_repository or get_card_repository()
         self.format_card_pool_service = format_card_pool_service or get_format_card_pool_service()
 
@@ -43,16 +37,6 @@ class SearchService:
     def search_cards_by_name(
         self, query: str, limit: int = DEFAULT_SEARCH_LIMIT
     ) -> list[dict[str, Any]]:
-        """
-        Search for cards by name.
-
-        Args:
-            query: Text to search for in card names
-            limit: Maximum number of results to return
-
-        Returns:
-            List of matching card dictionaries
-        """
         if not query:
             return []
 
@@ -87,24 +71,6 @@ class SearchService:
         text_contains: str | None = None,
         text_mode: str = "all",
     ) -> list[dict[str, Any]]:
-        """
-        Filter a list of cards by various criteria.
-
-        Args:
-            cards: List of card dictionaries to filter
-            colors: List of color codes to filter by (e.g., ['W', 'U'])
-            color_mode: How to apply color filter ("Any", "At least", "Exactly", "Not these")
-            types: List of type keywords to match (e.g., ['Creature', 'Instant'])
-            mana_cost_query: Mana cost pattern to match (e.g., "2GG")
-            mana_cost_mode: How to match mana cost ("exact" or "at_least")
-            mana_value: Mana value to compare against
-            mana_value_comparator: Comparison operator ("<", "≤", "=", "≥", ">")
-            text_contains: Text that must appear in card text
-            text_mode: How to match text ("all" = full phrase, "any" = any single word)
-
-        Returns:
-            Filtered list of cards
-        """
         filtered = cards
 
         # Apply color filter
@@ -151,36 +117,6 @@ class SearchService:
         card_manager: CardDataManager,
         limit: int | None = None,
     ) -> list[dict[str, Any]]:
-        """
-        Perform a comprehensive card search with all builder panel filters.
-
-        This method handles the complex filtering logic used by the deck builder,
-        including name, type, mana cost, oracle text, format legality, mana value,
-        and color identity filters.
-
-        Args:
-            filters: Dictionary of filter criteria from builder panel
-            card_manager: CardDataManager instance to search
-            limit: Maximum number of results to return (default None for unlimited)
-
-        Returns:
-            List of filtered card dictionaries
-
-        Filter keys expected:
-            - name: str - Card name filter
-            - type: str - Type line filter
-            - text: str - Oracle text filter
-            - mana: str - Mana cost pattern
-            - mana_exact: bool - Whether mana cost must be exact match
-            - mv_value: str - Mana value to compare
-            - mv_comparator: str - Mana value comparator ("<", "≤", "=", "≥", ">", "Any")
-            - formats: list[str] - Format legality filters
-            - color_mode: str - Color filter mode
-            - selected_colors: list[str] - Colors to filter by
-            - radar_enabled: bool - Whether radar filtering is enabled
-            - radar_cards: set[str] - Set of card names to filter by (from radar)
-            - format_pool_enabled: bool - Whether the selected format's local pool should filter
-        """
         # Parse and normalize filters
         mana_query = normalize_mana_query(filters.get("mana", ""))
         mana_mode = "exact" if filters.get("mana_exact") else "contains"
@@ -282,7 +218,6 @@ class SearchService:
     # ============= Private Filter Methods =============
 
     def _matches_color_filter(self, card: dict[str, Any], colors: list[str], mode: str) -> bool:
-        """Check if card matches color filter."""
         card_colors = self._get_card_colors_for_filter(card)
         return matches_color_filter(card_colors, colors, mode)
 
@@ -305,7 +240,6 @@ class SearchService:
         return card_colors
 
     def _matches_type_filter(self, card: dict[str, Any], types: list[str]) -> bool:
-        """Check if card matches type filter."""
         card_type = card.get("type_line", "") or card.get("type", "")
         if not card_type:
             return False
@@ -314,7 +248,6 @@ class SearchService:
         return any(type_keyword.lower() in card_type_lower for type_keyword in types)
 
     def _matches_mana_cost_filter(self, card: dict[str, Any], query: str, mode: str) -> bool:
-        """Check if card matches mana cost filter."""
         card_cost = card.get("mana_cost", "")
         if not card_cost:
             return False
@@ -323,20 +256,13 @@ class SearchService:
     def _matches_mana_value_filter(
         self, card: dict[str, Any], target: float, comparator: str
     ) -> bool:
-        """Check if card matches mana value filter."""
         card_value = card.get("cmc") or card.get("mana_value")
         if card_value is None:
             return False
         return matches_mana_value(card_value, target, comparator)
 
     def _matches_text_filter(self, card: dict[str, Any], query: str, mode: str = "all") -> bool:
-        """Check if card text contains query string.
-
-        Args:
-            card: Card dictionary
-            query: Text to search for
-            mode: "all" requires the full phrase; "any" matches if any single word is found
-        """
+        # mode="all": full phrase match; mode="any": any single word matches
         text = card.get("oracle_text", "") or card.get("text", "")
         if not text:
             return False
@@ -350,16 +276,6 @@ class SearchService:
     def get_card_suggestions(
         self, partial_name: str, limit: int = DEFAULT_SUGGESTION_LIMIT
     ) -> list[str]:
-        """
-        Get card name suggestions based on partial input.
-
-        Args:
-            partial_name: Partial card name
-            limit: Maximum number of suggestions
-
-        Returns:
-            List of suggested card names
-        """
         if len(partial_name) < MIN_PARTIAL_NAME_LENGTH:
             return []
 
@@ -373,16 +289,6 @@ class SearchService:
     # ============= Deck-Specific Search =============
 
     def find_cards_in_deck(self, deck_text: str, search_term: str) -> list[tuple[str, int]]:
-        """
-        Find cards in a deck that match a search term.
-
-        Args:
-            deck_text: Deck list as text
-            search_term: Term to search for in card names
-
-        Returns:
-            List of (card_name, count) tuples
-        """
         results = []
         search_lower = search_term.lower()
 
@@ -409,15 +315,6 @@ class SearchService:
         return results
 
     def group_cards_by_type(self, cards: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
-        """
-        Group cards by their primary type.
-
-        Args:
-            cards: List of card dictionaries
-
-        Returns:
-            Dictionary mapping types to card lists
-        """
         groups: dict[str, list[dict[str, Any]]] = {
             "Creature": [],
             "Instant": [],
@@ -461,11 +358,6 @@ def get_search_service() -> SearchService:
 
 
 def reset_search_service() -> None:
-    """
-    Reset the global search service instance.
-
-    This is primarily useful for testing to ensure test isolation
-    and prevent state leakage between tests.
-    """
+    """Reset the global search service (use in tests for isolation)."""
     global _default_service
     _default_service = None

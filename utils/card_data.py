@@ -78,22 +78,7 @@ _card_index_decoder: msgspec.json.Decoder[CardIndex] = msgspec.json.Decoder(Card
 
 
 def load_card_manager(data_dir: Path | str = CARD_DATA_DIR, force: bool = False) -> CardDataManager:
-    """
-    Load and return a CardDataManager with the latest card data.
-
-    This is a synchronous function intended to be called from a background thread.
-    It will download/update card data if needed and return a ready-to-use manager.
-
-    Args:
-        data_dir: Directory to store card data (default: "data")
-        force: Force refresh even if data is up-to-date
-
-    Returns:
-        CardDataManager instance with loaded card data
-
-    Raises:
-        RuntimeError: If card data cannot be loaded and no cache exists
-    """
+    # Synchronous – call from a background thread. Downloads/updates card data if needed.
     manager = CardDataManager(data_dir)
     manager.ensure_latest(force=force)
     return manager
@@ -195,7 +180,6 @@ class CardDataManager:
 
     @property
     def is_loaded(self) -> bool:
-        """Return True if card data has been loaded into memory."""
         return self._cards is not None
 
     def _require_cards(self) -> None:
@@ -254,7 +238,6 @@ class CardDataManager:
         self._cards_by_name = index["cards_by_name"]
 
     def _load_index(self) -> None:
-        """Load the card index using a typed msgspec decoder for maximum speed."""
         if not self.index_path.exists():
             raise RuntimeError("Card data index missing or invalid")
         try:
@@ -266,7 +249,6 @@ class CardDataManager:
         self._cards_by_name = card_index.cards_by_name
 
     def _load_meta_json(self) -> dict[str, Any] | None:
-        """Load the small metadata sidecar file (stdlib json is fine at ~260 bytes)."""
         if not self.meta_path.exists():
             return None
         try:
@@ -352,7 +334,6 @@ class CardDataManager:
 
     @staticmethod
     def _collect_name_aliases(canonical_name: str, printing: dict[str, Any]) -> set[str]:
-        """Gather alias names for a printing, including individual faces."""
         aliases: set[str] = set()
         face_name = (printing.get("faceName") or "").strip()
         if face_name:

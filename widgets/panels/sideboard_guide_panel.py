@@ -40,20 +40,6 @@ class SideboardGuidePanel(wx.Panel):
         on_edit_flex_slots: Callable[[], None] | None = None,
         locale: str | None = None,
     ):
-        """
-        Initialize the sideboard guide panel.
-
-        Args:
-            parent: Parent window
-            on_add_entry: Callback for adding a new guide entry
-            on_edit_entry: Callback for editing selected entry
-            on_remove_entry: Callback for removing selected entry
-            on_edit_exclusions: Callback for editing archetype exclusions
-            on_export_csv: Callback for exporting guide to CSV
-            on_import_csv: Callback for importing guide from CSV
-            on_pin_guide: Callback for pinning the current deck's guide for the opponent tracker
-            on_edit_flex_slots: Callback for editing the deck's flex slot cards
-        """
         super().__init__(parent)
         self.SetBackgroundColour(DARK_PANEL)
         self._locale = locale
@@ -77,7 +63,6 @@ class SideboardGuidePanel(wx.Panel):
         return translate(self._locale, key, **kwargs)
 
     def _build_ui(self) -> None:
-        """Build the panel UI."""
         sizer = wx.BoxSizer(wx.VERTICAL)
         self.SetSizer(sizer)
 
@@ -193,50 +178,28 @@ class SideboardGuidePanel(wx.Panel):
     def set_entries(
         self, entries: list[dict[str, str]], exclusions: list[str] | None = None
     ) -> None:
-        """
-        Set the guide entries and exclusions.
-
-        Args:
-            entries: List of guide entry dictionaries
-            exclusions: List of excluded archetype names
-        """
         self.entries = entries
         self.exclusions = exclusions or []
         self._refresh_view()
 
     def get_entries(self) -> list[dict[str, str]]:
-        """Get the current guide entries."""
         return self.entries
 
     def get_exclusions(self) -> list[str]:
-        """Get the current excluded archetypes."""
         return self.exclusions
 
     def get_selected_index(self) -> int | None:
-        """
-        Get the index of the currently selected entry.
-
-        Returns:
-            Index of selected entry, or None if no selection
-        """
         item = self.guide_view.GetSelection()
         if not item.IsOk():
             return None
         return self.guide_view.ItemToRow(item)
 
     def clear(self) -> None:
-        """Clear all guide entries."""
         self.entries = []
         self.exclusions = []
         self._refresh_view()
 
     def set_warning(self, message: str) -> None:
-        """
-        Display a warning message.
-
-        Args:
-            message: Warning text to display (empty string to hide)
-        """
         if message:
             self.warning_label.SetLabel(message)
             self.warning_label.Show()
@@ -247,7 +210,6 @@ class SideboardGuidePanel(wx.Panel):
     # ============= Private Methods =============
 
     def _refresh_view(self) -> None:
-        """Refresh the guide view display."""
         self.guide_view.DeleteAllItems()
 
         # Add entries (skip excluded archetypes)
@@ -279,15 +241,7 @@ class SideboardGuidePanel(wx.Panel):
         self.exclusions_label.SetLabel(f"{self._t('guide.label.exclusions')}: {text}")
 
     def _format_card_list(self, cards: dict[str, int] | str) -> str:
-        """
-        Format a card list for display.
-
-        Args:
-            cards: Either a dict mapping card name to quantity, or a string (for old format)
-
-        Returns:
-            Formatted string like "2x Lightning Bolt, 1x Mountain"
-        """
+        # Accepts either a dict (new format) or a plain string (old format).
         if isinstance(cards, str):
             # Old format - just return the string
             return cards
@@ -302,46 +256,32 @@ class SideboardGuidePanel(wx.Panel):
         return ", ".join(formatted)
 
     def _on_add_clicked(self, _event: wx.Event) -> None:
-        """Handle Add Entry button click."""
         self.on_add_entry()
 
     def _on_edit_clicked(self, _event: wx.Event) -> None:
-        """Handle Edit Entry button click."""
         self.on_edit_entry()
 
     def _on_remove_clicked(self, _event: wx.Event) -> None:
-        """Handle Remove Entry button click."""
         self.on_remove_entry()
 
     def _on_exclusions_clicked(self, _event: wx.Event) -> None:
-        """Handle Exclude Archetypes button click."""
         self.on_edit_exclusions()
 
     def _on_export_clicked(self, _event: wx.Event) -> None:
-        """Handle Export CSV button click."""
         self.on_export_csv()
 
     def _on_import_clicked(self, _event: wx.Event) -> None:
-        """Handle Import CSV button click."""
         self.on_import_csv()
 
     def _on_pin_clicked(self, _event: wx.Event) -> None:
-        """Handle Pin for Tracker button click."""
         if self.on_pin_guide:
             self.on_pin_guide()
 
     def _on_flex_slots_clicked(self, _event: wx.Event) -> None:
-        """Handle Flex Slots button click."""
         if self.on_edit_flex_slots:
             self.on_edit_flex_slots()
 
     def set_pinned(self, pinned: bool) -> None:
-        """
-        Update the pin button label to reflect current pinned state.
-
-        Args:
-            pinned: True if this deck's guide is currently pinned
-        """
         if pinned:
             self.pin_btn.SetLabel(self._t("guide.btn.pinned"))
         else:

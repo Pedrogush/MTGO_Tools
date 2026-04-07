@@ -105,7 +105,6 @@ class TopCardsFrame(wx.Frame):
         self.refresh_data()
 
     def refresh_data(self) -> None:
-        """Reload the card list from the local cache."""
         format_name = self.current_format
         summary = self._service.get_summary(format_name)
         top_cards = self._service.get_top_cards(format_name)

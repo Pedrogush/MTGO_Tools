@@ -41,7 +41,6 @@ class FormatCardPoolRepository:
         self._initialize()
 
     def replace_format_pool(self, entry: dict[str, Any]) -> bool:
-        """Replace the stored pool for one format using a bundle entry."""
         format_name = str(entry.get("format", "")).strip().lower()
         cards = entry.get("cards")
         if not format_name or not isinstance(cards, list):
@@ -101,7 +100,6 @@ class FormatCardPoolRepository:
         return True
 
     def bulk_replace(self, entries: list[dict[str, Any]]) -> int:
-        """Replace all provided format pools, preserving other formats."""
         replaced = 0
         for entry in entries:
             try:
@@ -111,7 +109,6 @@ class FormatCardPoolRepository:
         return replaced
 
     def has_format_pool(self, format_name: str) -> bool:
-        """Return True when *format_name* has locally cached pool data."""
         fmt = format_name.strip().lower()
         if not fmt:
             return False
@@ -123,7 +120,6 @@ class FormatCardPoolRepository:
         return row is not None
 
     def get_card_names(self, format_name: str) -> set[str]:
-        """Return all locally cached card names for *format_name*."""
         fmt = format_name.strip().lower()
         if not fmt:
             return set()
@@ -139,7 +135,6 @@ class FormatCardPoolRepository:
         return {str(row[0]) for row in rows}
 
     def get_top_cards(self, format_name: str, limit: int = 100) -> list[FormatCardPoolCardTotal]:
-        """Return the top copy-total cards for *format_name*."""
         fmt = format_name.strip().lower()
         if not fmt:
             return []
@@ -160,7 +155,6 @@ class FormatCardPoolRepository:
         ]
 
     def get_summary(self, format_name: str) -> FormatCardPoolSummary | None:
-        """Return summary metadata for *format_name*."""
         fmt = format_name.strip().lower()
         if not fmt:
             return None
@@ -199,7 +193,6 @@ class FormatCardPoolRepository:
         )
 
     def list_formats(self) -> list[str]:
-        """Return formats with locally cached card-pool data."""
         with self._connect() as conn:
             rows = conn.execute(
                 "SELECT format_name FROM format_card_pools ORDER BY format_name ASC"
@@ -241,7 +234,6 @@ _default_repository: FormatCardPoolRepository | None = None
 
 
 def get_format_card_pool_repository() -> FormatCardPoolRepository:
-    """Return the shared format card-pool repository instance."""
     global _default_repository
     if _default_repository is None:
         _default_repository = FormatCardPoolRepository()
@@ -249,6 +241,5 @@ def get_format_card_pool_repository() -> FormatCardPoolRepository:
 
 
 def reset_format_card_pool_repository() -> None:
-    """Reset the shared format card-pool repository instance."""
     global _default_repository
     _default_repository = None

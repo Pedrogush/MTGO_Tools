@@ -23,16 +23,6 @@ class SideboardCardSelector(wx.Panel):
         flex_slots: list[str] | None = None,
         locale: str | None = None,
     ):
-        """
-        Initialize the card selector.
-
-        Args:
-            parent: Parent window
-            title: Title for this selector (e.g., "Play: Out")
-            available_cards: List of cards available to select from (from mainboard or sideboard)
-            flex_slots: Optional list of card names that are marked as flex slots (highlighted)
-            locale: Locale code for i18n
-        """
         super().__init__(parent)
         self.SetBackgroundColour(DARK_PANEL)
         self._locale = locale
@@ -69,7 +59,6 @@ class SideboardCardSelector(wx.Panel):
         self._build_card_list()
 
     def _build_card_list(self) -> None:
-        """Build the list of cards with quantity controls."""
         self.card_sizer.Clear(delete_windows=True)
         self.card_widgets: dict[str, tuple[wx.StaticText, wx.Panel]] = {}
 
@@ -139,7 +128,6 @@ class SideboardCardSelector(wx.Panel):
         self._update_count()
 
     def _increment(self, card_name: str, max_qty: int) -> None:
-        """Increment quantity for a card."""
         current = self.selected_cards.get(card_name, 0)
         if current < max_qty:
             self.selected_cards[card_name] = current + 1
@@ -147,7 +135,6 @@ class SideboardCardSelector(wx.Panel):
             self._update_count()
 
     def _decrement(self, card_name: str) -> None:
-        """Decrement quantity for a card."""
         current = self.selected_cards.get(card_name, 0)
         if current > 0:
             new_qty = current - 1
@@ -159,37 +146,27 @@ class SideboardCardSelector(wx.Panel):
             self._update_count()
 
     def _set_zero(self, card_name: str) -> None:
-        """Set quantity to 0 for a card."""
         self.selected_cards.pop(card_name, None)
         self._update_display(card_name)
         self._update_count()
 
     def _set_max(self, card_name: str, max_qty: int) -> None:
-        """Set quantity to max for a card."""
         self.selected_cards[card_name] = max_qty
         self._update_display(card_name)
         self._update_count()
 
     def _update_display(self, card_name: str) -> None:
-        """Update the quantity display for a card."""
         qty = self.selected_cards.get(card_name, 0)
         qty_label, _ = self.card_widgets[card_name]
         qty_label.SetLabel(f"{qty:3d}")
 
     def _update_count(self) -> None:
-        """Update the card count label."""
         total = sum(self.selected_cards.values())
         self.count_label.SetLabel(
             translate(self._locale, "guide.selector.cards_selected", count=total)
         )
 
     def set_selected_cards(self, cards: dict[str, int]) -> None:
-        """
-        Set the selected cards.
-
-        Args:
-            cards: Dictionary mapping card name to quantity
-        """
         self.selected_cards = cards.copy()
 
         # Update displays
@@ -199,9 +176,7 @@ class SideboardCardSelector(wx.Panel):
         self._update_count()
 
     def get_selected_cards(self) -> dict[str, int]:
-        """Get the selected cards as a dictionary."""
         return self.selected_cards.copy()
 
     def get_selected_cards_list(self) -> list[dict[str, Any]]:
-        """Get the selected cards as a list of dicts with name and qty."""
         return [{"name": name, "qty": qty} for name, qty in sorted(self.selected_cards.items())]

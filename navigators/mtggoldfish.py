@@ -114,7 +114,6 @@ def get_archetypes(
 
 
 def _load_cached_archetype_decks(archetype: str, max_age: int = METAGAME_CACHE_TTL_SECONDS):
-    """Load cached deck list for an archetype."""
     if not ARCHETYPE_DECKS_CACHE_FILE.exists():
         return None
     with locked_path(ARCHETYPE_DECKS_CACHE_FILE):
@@ -132,7 +131,6 @@ def _load_cached_archetype_decks(archetype: str, max_age: int = METAGAME_CACHE_T
 
 
 def _save_cached_archetype_decks(archetype: str, items: list[dict]):
-    """Save archetype deck list to cache."""
     ARCHETYPE_DECKS_CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
     with locked_path(ARCHETYPE_DECKS_CACHE_FILE):
         try:

@@ -62,13 +62,6 @@ class CompactSideboardPanel(wx.Panel):
     # ============= Public API =============
 
     def display_entry(self, entry: dict, archetype_name: str) -> None:
-        """
-        Display a sideboard guide entry.
-
-        Args:
-            entry: Guide entry dict with play_out, play_in, draw_out, draw_in, notes keys
-            archetype_name: Name of the opponent archetype
-        """
         self._current_entry = entry
         self.header_label.SetLabel(f"Guide: {archetype_name}")
         self.toggle_btn.Show()
@@ -78,7 +71,6 @@ class CompactSideboardPanel(wx.Panel):
         logger.debug(f"Compact sideboard guide displayed for: {archetype_name}")
 
     def clear(self) -> None:
-        """Clear the panel and hide it."""
         self._current_entry = None
         self.header_label.SetLabel("Guide: —")
         self.status_label.SetLabel("")
@@ -88,12 +80,6 @@ class CompactSideboardPanel(wx.Panel):
         self.GetParent().Layout()
 
     def set_no_guide(self, archetype_name: str) -> None:
-        """
-        Show a 'no guide found' state for the given archetype.
-
-        Args:
-            archetype_name: Name of the opponent archetype that wasn't found in the guide
-        """
         self._current_entry = None
         self.header_label.SetLabel(f"Guide: {archetype_name}")
         self.status_label.SetLabel("No guide entry for this matchup.")
@@ -103,7 +89,6 @@ class CompactSideboardPanel(wx.Panel):
         self.GetParent().Layout()
 
     def set_no_pinned_deck(self) -> None:
-        """Show state when no deck has been pinned yet."""
         self._current_entry = None
         self.header_label.SetLabel("Guide: —")
         self.status_label.SetLabel("Pin a deck's guide in the Deck Selector to enable this.")

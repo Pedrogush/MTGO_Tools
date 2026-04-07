@@ -608,7 +608,6 @@ class DeckStatsPanel(wx.Panel):
         return lands, mdfcs
 
     def _curve_items(self) -> list[tuple[str, str, float, str, str]]:
-        """Build mana curve data items."""
         if not self._card_data_available():
             return []
 
@@ -657,7 +656,6 @@ class DeckStatsPanel(wx.Panel):
         return items
 
     def _color_items(self) -> list[tuple[str, str, float, str, str]]:
-        """Build color share data items."""
         if not self._card_data_available():
             return []
 
@@ -684,7 +682,6 @@ class DeckStatsPanel(wx.Panel):
         return items
 
     def _type_items(self) -> list[tuple[str, int, int, str, str]]:
-        """Build card type data items (all types always shown, zero-count ones dimmed)."""
         counts: Counter[str] = Counter()
         for entry in self.zone_cards.get("main", []):
             type_line = ""
@@ -717,7 +714,6 @@ class DeckStatsPanel(wx.Panel):
     def _hand_items(
         self, deck_size: int | float, land_count: int | float
     ) -> list[tuple[str, str, float, str, str]]:
-        """Build opening-hand land probability data items."""
         deck_size = round(deck_size)
         land_count = round(land_count)
         if deck_size <= 0:

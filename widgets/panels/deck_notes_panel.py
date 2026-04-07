@@ -135,7 +135,6 @@ class _NoteCardWidget(wx.Panel):
         outer.Add(self.body_ctrl, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 6)
 
     def get_data(self) -> dict[str, str]:
-        """Return current card data from widget values."""
         return {
             "id": self.card_id,
             "title": self.title_ctrl.GetValue(),
@@ -234,21 +233,17 @@ class DeckNotesPanel(wx.Panel):
     # ═══════════════════════════════════════════════════════════════════════
 
     def set_notes(self, notes: list[dict[str, str]] | str) -> None:
-        """Load note cards from storage data (list-of-cards or legacy string)."""
         self._cards = _migrate(notes)
         self._rebuild_card_widgets()
 
     def get_notes(self) -> list[dict[str, str]]:
-        """Return current card data from all widgets."""
         return [w.get_data() for w in self._card_widgets]
 
     def clear(self) -> None:
-        """Remove all note cards."""
         self._cards = []
         self._rebuild_card_widgets()
 
     def load_notes_for_current(self) -> None:
-        """Load notes for the currently selected deck."""
         deck_key = self.deck_repo.get_current_deck_key()
         raw = self.notes_store.get(deck_key, [])
         logger.info(
@@ -260,7 +255,6 @@ class DeckNotesPanel(wx.Panel):
         self.set_notes(raw)
 
     def save_current_notes(self) -> None:
-        """Persist note cards for the currently selected deck."""
         deck_key = self.deck_repo.get_current_deck_key()
         self.notes_store[deck_key] = self.get_notes()
         self.store_service.save_store(self.notes_store_path, self.notes_store)
@@ -271,7 +265,6 @@ class DeckNotesPanel(wx.Panel):
     # ═══════════════════════════════════════════════════════════════════════
 
     def _rebuild_card_widgets(self) -> None:
-        """Destroy all card widgets and recreate them from self._cards."""
         self.scroll_win.Freeze()
         for w in self._card_widgets:
             w.Destroy()
@@ -303,7 +296,6 @@ class DeckNotesPanel(wx.Panel):
         )
 
     def _flush_widgets_to_cards(self) -> None:
-        """Sync self._cards from current widget values (before reorder/delete)."""
         self._cards = [w.get_data() for w in self._card_widgets]
 
     def _on_add_note(self, _event: wx.Event) -> None:

@@ -42,18 +42,6 @@ def open_mana_keyboard(
     existing_window: "ManaKeyboardFrame | None",
     on_close_callback: Callable[[wx.CloseEvent], None],
 ) -> ManaKeyboardFrame:
-    """
-    Open or raise the mana keyboard window.
-
-    Args:
-        parent: Parent window
-        mana_icons: ManaIconFactory instance for creating mana buttons
-        existing_window: Existing keyboard window if any
-        on_close_callback: Callback to invoke when window closes
-
-    Returns:
-        The ManaKeyboardFrame instance
-    """
     from widgets.buttons.mana_button import create_mana_button
 
     if existing_window and existing_window.IsShown():

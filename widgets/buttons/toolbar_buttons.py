@@ -25,18 +25,6 @@ class ToolbarButtons(wx.Panel):
         on_open_settings_menu: Callable[[wx.Window], None] | None = None,
         labels: dict[str, str] | None = None,
     ):
-        """
-        Initialize the toolbar button panel.
-
-        Args:
-            parent: Parent window
-            on_open_opponent_tracker: Callback for "Opponent Tracker"
-            on_open_timer_alert: Callback for "Timer Alert"
-            on_open_match_history: Callback for "Match History"
-            on_open_metagame_analysis: Callback for "Metagame Analysis"
-            on_open_top_cards: Callback for "Top Cards"
-            on_open_settings_menu: Callback that opens the settings dropdown
-        """
         super().__init__(parent)
         labels = labels or {}
 
@@ -94,7 +82,6 @@ class ToolbarButtons(wx.Panel):
         margin: int = 6,
         tooltip: str = "",
     ) -> wx.Button:
-        """Create a toolbar button and bind its handler if provided."""
         button = wx.Button(self, label=label)
         stylize_button(button)
         if tooltip:
@@ -107,7 +94,6 @@ class ToolbarButtons(wx.Panel):
         return button
 
     def _add_divider(self, gap: int = 8) -> None:
-        """Add a vertical line divider between button groups."""
         self._button_row.AddSpacer(gap)
         line = wx.StaticLine(self, style=wx.LI_VERTICAL)
         self._button_row.Add(line, 0, wx.EXPAND | wx.TOP | wx.BOTTOM, 4)

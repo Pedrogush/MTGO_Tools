@@ -24,18 +24,6 @@ class GuideEntryDialog(wx.Dialog):
         flex_slots: list[str] | None = None,
         locale: str | None = None,
     ) -> None:
-        """
-        Initialize the guide entry dialog.
-
-        Args:
-            parent: Parent window
-            archetype_names: List of archetype names for dropdown
-            mainboard_cards: List of mainboard cards available to take out
-            sideboard_cards: List of sideboard cards available to bring in
-            data: Existing entry data to edit (optional)
-            flex_slots: Card names marked as flex slots (highlighted in Out selectors)
-            locale: Locale code for i18n
-        """
         self._locale = locale
         super().__init__(parent, title="Sideboard Guide Entry", size=(1100, 750))
 
@@ -173,12 +161,10 @@ class GuideEntryDialog(wx.Dialog):
         return translate(self._locale, key, **kwargs)
 
     def _on_save_continue(self, event: wx.Event) -> None:
-        """Handle Save & Continue button click."""
         # Return wx.ID_APPLY to signal save without closing
         self.EndModal(wx.ID_APPLY)
 
     def _load_data(self, data: dict[str, Any]) -> None:
-        """Load existing data into the selectors."""
         # Load play out/in
         if "play_out" in data:
             self.play_out_selector.set_selected_cards(data["play_out"])
@@ -192,7 +178,6 @@ class GuideEntryDialog(wx.Dialog):
             self.draw_in_selector.set_selected_cards(data["draw_in"])
 
     def get_data(self) -> dict[str, Any]:
-        """Get the guide entry data."""
         return {
             "archetype": self.archetype_ctrl.GetValue().strip(),
             "play_out": self.play_out_selector.get_selected_cards(),

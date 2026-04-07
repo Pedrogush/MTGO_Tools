@@ -75,7 +75,6 @@ class CardImageDownloadQueue:
         self._thread.start()
 
     def stop(self, timeout: float = IMAGE_DOWNLOAD_QUEUE_STOP_TIMEOUT_SECONDS) -> None:
-        """Stop the background worker."""
         self._stop_event.set()
         with self._condition:
             self._condition.notify_all()
@@ -83,13 +82,11 @@ class CardImageDownloadQueue:
         self._executor.shutdown(wait=True, cancel_futures=True)
 
     def set_selected_request(self, request: CardImageRequest | None) -> None:
-        """Update the current selection for priority handling."""
         with self._condition:
             self._selected_request = request
             self._ensure_selected_priority_locked()
 
     def enqueue(self, request: CardImageRequest, *, prioritize: bool = False) -> bool:
-        """Add a card image to the download queue."""
         if not request.can_fetch():
             return False
         if self._is_cached(request):
@@ -288,7 +285,6 @@ class ImageService:
     """Service for managing card image bulk data and printing indices."""
 
     def __init__(self):
-        """Initialize the image service."""
         self.image_cache = get_cache()
         self.image_downloader: BulkImageDownloader | None = None
         self.bulk_data_by_name: dict[str, list[dict[str, Any]]] | None = None
@@ -308,7 +304,6 @@ class ImageService:
         self._printings_handle: ProcessHandle | None = None
 
     def shutdown(self) -> None:
-        """Stop background services owned by the image service."""
         self._download_queue.stop()
         if self._bulk_download_handle:
             self._process_worker.terminate(self._bulk_download_handle)
@@ -321,23 +316,19 @@ class ImageService:
     def set_image_download_callback(
         self, callback: Callable[[CardImageRequest], None] | None
     ) -> None:
-        """Register a callback for completed card image downloads."""
         self._on_image_downloaded = callback
 
     def set_image_download_failed_callback(
         self, callback: Callable[[CardImageRequest, str], None] | None
     ) -> None:
-        """Register a callback for failed card image downloads."""
         self._on_image_download_failed = callback
 
     def set_printings_loaded_callback(
         self, callback: Callable[[str, list[dict[str, Any]]], None] | None
     ) -> None:
-        """Register a callback for completed printings fetches."""
         self._on_printings_loaded = callback
 
     def queue_card_image_download(self, request: CardImageRequest, *, prioritize: bool) -> bool:
-        """Queue a card image download request."""
         enqueued = self._download_queue.enqueue(request, prioritize=prioritize)
         logger.debug(
             "Queue image request for %s (set=%s, size=%s, collector=%s) -> %s",
@@ -350,7 +341,6 @@ class ImageService:
         return enqueued
 
     def set_selected_card_request(self, request: CardImageRequest | None) -> None:
-        """Update the currently selected card for queue prioritization."""
         self._download_queue.set_selected_request(request)
 
     def _handle_image_downloaded(self, request: CardImageRequest) -> None:
@@ -364,7 +354,6 @@ class ImageService:
         self._call_after(self._on_image_download_failed, request, message)
 
     def fetch_printings_by_name_async(self, card_name: str) -> None:
-        """Fetch all printings for a card name in the background."""
         key = card_name.lower().strip()
         if not key:
             return
@@ -421,7 +410,6 @@ class ImageService:
 
     @staticmethod
     def _call_after(callback: Callable[..., Any], *args: Any) -> None:
-        """Marshal callback to UI thread if wx is available."""
         try:
             import wx
 
@@ -432,12 +420,6 @@ class ImageService:
     # ============= Bulk Data Management =============
 
     def check_bulk_data_exists(self) -> tuple[bool, str]:
-        """
-        Check if bulk data exists.
-
-        Returns:
-            Tuple of (exists: bool, reason: str)
-        """
         if not BULK_DATA_CACHE.exists():
             return False, "Bulk data cache not found"
 
@@ -449,14 +431,6 @@ class ImageService:
         on_error: Callable[[str], None],
         force: bool = False,
     ) -> None:
-        """
-        Download bulk metadata in a background thread.
-
-        Args:
-            on_success: Callback for successful download (receives success message)
-            on_error: Callback for failed download (receives error message)
-            force: Force download even if vendor metadata matches cache
-        """
         if self._bulk_download_handle and self._bulk_download_handle.process.is_alive():
             logger.debug("Bulk data download already running")
             return
@@ -493,17 +467,6 @@ class ImageService:
         on_success: Callable[[dict[str, list[dict[str, Any]]], dict[str, Any]], None],
         on_error: Callable[[str], None],
     ) -> bool:
-        """
-        Load printing index in a background thread.
-
-        Args:
-            force: Force reload even if already loading/loaded
-            on_success: Callback for successful load (receives bulk_data_by_name, stats)
-            on_error: Callback for failed load (receives error message)
-
-        Returns:
-            True if load was started, False if skipped
-        """
         if self.printing_index_loading and not force:
             logger.debug("Printing index already loading")
             return False
@@ -570,19 +533,15 @@ class ImageService:
         return True
 
     def set_bulk_data(self, bulk_data: dict[str, list[dict[str, Any]]]) -> None:
-        """Set the bulk data reference."""
         self.bulk_data_by_name = bulk_data
 
     def clear_printing_index_loading(self) -> None:
-        """Clear the printing index loading flag."""
         self.printing_index_loading = False
 
     def get_bulk_data(self) -> dict[str, list[dict[str, Any]]] | None:
-        """Get the current bulk data."""
         return self.bulk_data_by_name
 
     def is_loading(self) -> bool:
-        """Check if printing index is currently loading."""
         return self.printing_index_loading
 
 
@@ -599,11 +558,6 @@ def get_image_service() -> ImageService:
 
 
 def reset_image_service() -> None:
-    """
-    Reset the global image service instance.
-
-    This is primarily useful for testing to ensure test isolation
-    and prevent state leakage between tests.
-    """
+    """Reset the global image service (use in tests for isolation)."""
     global _default_service
     _default_service = None

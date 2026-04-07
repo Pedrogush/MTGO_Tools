@@ -139,7 +139,6 @@ class BridgeCommandFuture:
         self._queue = queue
 
     def result(self, timeout: float | None = None) -> Any:
-        """Wait for the command to finish and return the JSON payload."""
         status, payload = self._queue.get(timeout=timeout)
         self._queue.close()
         self._process.join(timeout)

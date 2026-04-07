@@ -10,15 +10,6 @@ from loguru import logger
 
 
 def widget_exists(window: wx.Window | None) -> bool:
-    """
-    Check if a wx window reference is still valid and shown.
-
-    Args:
-        window: Window instance or None
-
-    Returns:
-        True if the window exists and is shown, else False
-    """
     if window is None:
         return False
     try:
@@ -36,21 +27,7 @@ def open_child_window(
     *args,
     **kwargs,
 ) -> wx.Window | None:
-    """
-    Create or raise a child window tracked on the parent frame.
-
-    Args:
-        owner: Parent frame that owns the window reference
-        attr: Attribute name on the owner storing the window
-        window_class: wx window class to instantiate
-        title: Friendly title used in error dialogs
-        on_close: Callback invoked when the window closes
-        *args: Positional args passed to the window constructor
-        **kwargs: Keyword args passed to the window constructor
-
-    Returns:
-        The opened window instance or None if creation failed
-    """
+    """Create or raise a child window tracked on the parent frame."""
     existing = getattr(owner, attr, None)
     if widget_exists(existing):
         existing.Raise()

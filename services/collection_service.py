@@ -48,12 +48,6 @@ class CollectionService:
     """Service for collection/inventory management logic."""
 
     def __init__(self, card_repository: CardRepository | None = None):
-        """
-        Initialize the collection service.
-
-        Args:
-            card_repository: CardRepository instance
-        """
         self.card_repo = card_repository or get_card_repository()
         self._collection: dict[str, int] = {}
         self._collection_path: Path | None = None
@@ -62,16 +56,6 @@ class CollectionService:
     # ============= Collection Loading =============
 
     def load_collection(self, filepath: Path | None = None, force: bool = False) -> bool:
-        """
-        Load collection from file or cache.
-
-        Args:
-            filepath: Path to collection file (optional)
-            force: If True, reload even if already loaded
-
-        Returns:
-            True if loaded successfully, False otherwise
-        """
         if self._collection_loaded and not force:
             return True
 
@@ -104,16 +88,6 @@ class CollectionService:
             return False
 
     def get_owned_status(self, name: str, required: int) -> tuple[str, tuple[int, int, int]]:
-        """
-        Return ownership status text and color for a given card requirement.
-
-        Args:
-            name: Card name
-            required: Quantity needed
-
-        Returns:
-            Tuple containing the status label and RGB color tuple (R, G, B)
-        """
         if not self.get_inventory():
             return ("Owned —", (185, 191, 202))  # Subdued text color
         have = self.get_owned_count(name)
@@ -122,35 +96,11 @@ class CollectionService:
     def find_latest_cached_file(
         self, directory: Path, pattern: str = "collection_full_trade_*.json"
     ) -> Path | None:
-        """
-        Find the most recent cached collection file.
-
-        Args:
-            directory: Directory to search for collection files
-            pattern: Glob pattern for collection files
-
-        Returns:
-            Path to latest file, or None if none found
-        """
         return find_latest_cached_file(directory, pattern)
 
     def load_from_cached_file(
         self, directory: Path, pattern: str = "collection_full_trade_*.json"
     ) -> dict[str, Any]:
-        """
-        Load collection from the most recent cached file.
-
-        Args:
-            directory: Directory to search for collection files
-            pattern: Glob pattern for collection files
-
-        Returns:
-            Dictionary containing: filepath, mapping, age_hours, card_count
-
-        Raises:
-            FileNotFoundError: If no cached collection files found
-            ValueError: If file cannot be parsed or is invalid
-        """
         latest = self.find_latest_cached_file(directory, pattern)
 
         if not latest:
@@ -185,20 +135,6 @@ class CollectionService:
     def load_cached_status(
         self, directory: Path, pattern: str = "collection_full_trade_*.json"
     ) -> CollectionStatus:
-        """
-        Load cached collection info and return display-friendly metadata.
-
-        Args:
-            directory: Directory to search for collection files
-            pattern: Glob pattern for collection files
-
-        Returns:
-            CollectionStatus with formatted label and metadata
-
-        Raises:
-            FileNotFoundError: If no cached collection files found
-            ValueError: If file cannot be parsed or is invalid
-        """
         info = self.load_from_cached_file(directory, pattern)
         age_hours = info["age_hours"]
         age_str = f"{age_hours}h ago" if age_hours > 0 else "recent"
@@ -213,19 +149,6 @@ class CollectionService:
     def load_from_card_list(
         self, cards: list[dict[str, Any]], filepath: Path | None = None
     ) -> dict[str, Any]:
-        """
-        Load collection from a list of card dictionaries.
-
-        Args:
-            cards: List of card dicts with 'name' and 'quantity' keys
-            filepath: Optional path to associate with this collection
-
-        Returns:
-            Dictionary containing: mapping, card_count
-
-        Raises:
-            ValueError: If card list is invalid or cannot be parsed
-        """
         try:
             mapping = build_inventory(cards)
 
@@ -249,21 +172,6 @@ class CollectionService:
         directory: Path,
         filename_prefix: str = "collection_full_trade",
     ) -> Path:
-        """
-        Export collection cards to a JSON file.
-
-        Args:
-            cards: List of card dicts to export
-            directory: Directory to write file to
-            filename_prefix: Prefix for the filename (timestamp will be added)
-
-        Returns:
-            Path to the exported file
-
-        Raises:
-            OSError: If file cannot be written
-            ValueError: If cards list is invalid
-        """
         return export_collection_to_file(cards, directory, filename_prefix)
 
     # ============= Async Collection Refresh =============
@@ -276,22 +184,8 @@ class CollectionService:
         on_error: Callable[[str], None] | None = None,
         cache_max_age_seconds: int = COLLECTION_CACHE_MAX_AGE_SECONDS,
     ) -> bool:
-        """
-        Fetch collection from MTGO Bridge and export to file (async).
-
-        This method runs in a background thread and uses callbacks to report results.
-        It will check for a recent cached collection first (unless forced).
-
-        Args:
-            directory: Directory to save collection file to
-            force: If True, always fetch from bridge (skip cache check)
-            on_success: Callback for successful fetch (receives filepath, cards)
-            on_error: Callback for failed fetch (receives error message)
-            cache_max_age_seconds: Max age of cached file before fetching new (default 1 hour)
-
-        Returns:
-            True if fetch was started, False if recent cache was used
-        """
+        # Runs in a background thread; reports results via on_success/on_error callbacks.
+        # Returns False without fetching if a recent cached file exists (unless force=True).
         return refresh_from_bridge(
             directory=directory,
             force=force,
@@ -304,43 +198,21 @@ class CollectionService:
         )
 
     def is_loaded(self) -> bool:
-        """Check if collection has been loaded."""
         return self._collection_loaded
 
     def get_collection_size(self) -> int:
-        """Get the number of unique cards in collection."""
         return len(self._collection)
 
     def get_total_cards(self) -> int:
-        """Get the total number of cards (including duplicates) in collection."""
         return sum(self._collection.values())
 
     # ============= Ownership Checking =============
 
     def owns_card(self, card_name: str, required_count: int = 1) -> bool:
-        """
-        Check if player owns enough copies of a card.
-
-        Args:
-            card_name: Name of the card
-            required_count: Number of copies needed
-
-        Returns:
-            True if owns enough copies, False otherwise
-        """
         owned = self.get_owned_count(card_name)
         return owned >= required_count
 
     def get_owned_count(self, card_name: str) -> int:
-        """
-        Get the number of copies owned of a card.
-
-        Args:
-            card_name: Name of the card
-
-        Returns:
-            Number of copies owned
-        """
         if card_name in self._collection:
             return self._collection[card_name]
         return self._collection.get(card_name.lower(), 0)
@@ -348,62 +220,20 @@ class CollectionService:
     def get_ownership_status(
         self, card_name: str, required: int
     ) -> tuple[str, tuple[int, int, int]]:
-        """
-        Get ownership status for a card.
-
-        Args:
-            card_name: Name of the card
-            required: Number required
-
-        Returns:
-            Tuple of (status_text, color_rgb)
-            status_text: "X/Y" where X is owned and Y is required
-            color_rgb: RGB tuple for display color
-        """
         owned = self.get_owned_count(card_name)
         return format_owned_status(owned, required)
 
     # ============= Deck Analysis =============
 
     def analyze_deck_ownership(self, deck_text: str) -> dict[str, Any]:
-        """
-        Analyze what cards from a deck are owned.
-
-        Args:
-            deck_text: Deck list as text
-
-        Returns:
-            Dictionary with ownership analysis:
-                - total_unique: int - total unique cards in deck
-                - fully_owned: int - cards fully owned
-                - partially_owned: int - cards partially owned
-                - not_owned: int - cards not owned
-                - missing_cards: list of (card_name, owned, needed) tuples
-                - ownership_percentage: float - percentage fully owned
-        """
         return analyze_deck_ownership_helper(deck_text, self.get_owned_count)
 
     def get_missing_cards_list(self, deck_text: str) -> list[tuple[str, int]]:
-        """
-        Get a list of missing cards for a deck.
-
-        Args:
-            deck_text: Deck list as text
-
-        Returns:
-            List of (card_name, missing_count) tuples
-        """
         return get_missing_cards_list_helper(deck_text, self.get_owned_count)
 
     # ============= Collection Statistics =============
 
     def get_collection_statistics(self) -> dict[str, Any]:
-        """
-        Get statistics about the collection.
-
-        Returns:
-            Dictionary with collection statistics
-        """
         return get_collection_statistics_helper(
             inventory=self._collection,
             card_repo=self.card_repo,
@@ -413,46 +243,21 @@ class CollectionService:
     # ============= State Access Methods =============
 
     def get_inventory(self) -> dict[str, int]:
-        """
-        Get the collection inventory dictionary.
-
-        Returns:
-            Dictionary mapping card names (lowercase) to quantities
-        """
         return self._collection
 
     def set_inventory(self, inventory: dict[str, int]) -> None:
-        """
-        Set the collection inventory dictionary directly.
-
-        Args:
-            inventory: Dictionary mapping card names to quantities
-        """
         self._collection = inventory
         self._collection_loaded = True
 
     def clear_inventory(self) -> None:
-        """Clear the collection inventory."""
         self._collection = {}
         self._collection_path = None
         self._collection_loaded = False
 
     def get_collection_path(self) -> Path | None:
-        """
-        Get the path to the currently loaded collection file.
-
-        Returns:
-            Path to collection file, or None if not loaded from file
-        """
         return self._collection_path
 
     def set_collection_path(self, path: Path | None) -> None:
-        """
-        Set the path to the collection file.
-
-        Args:
-            path: Path to collection file
-        """
         self._collection_path = path
 
 
@@ -461,7 +266,6 @@ _default_service = None
 
 
 def get_collection_service() -> CollectionService:
-    """Get the default collection service instance."""
     global _default_service
     if _default_service is None:
         _default_service = CollectionService()
@@ -469,12 +273,7 @@ def get_collection_service() -> CollectionService:
 
 
 def reset_collection_service() -> None:
-    """
-    Reset the global collection service instance.
-
-    This is primarily useful for testing to ensure test isolation
-    and prevent state leakage between tests.
-    """
+    """Reset the global collection service (use in tests for isolation)."""
     global _default_service
     _default_service = None
 

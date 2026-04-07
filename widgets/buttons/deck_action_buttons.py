@@ -23,16 +23,6 @@ class DeckActionButtons(wx.Panel):
         on_load: Callable[[], None] | None = None,
         labels: dict[str, str] | None = None,
     ):
-        """
-        Initialize the deck action buttons panel.
-
-        Args:
-            parent: Parent window
-            on_copy: Callback when Copy button clicked
-            on_save: Callback when Save Deck button clicked
-            on_daily_average: Callback when Today's Average button clicked
-            on_load: Callback when Load Deck button clicked
-        """
         super().__init__(parent)
 
         self.on_copy = on_copy
@@ -44,7 +34,6 @@ class DeckActionButtons(wx.Panel):
         self._build_ui()
 
     def _build_ui(self) -> None:
-        """Build the button panel UI."""
         col_sizer = wx.BoxSizer(wx.VERTICAL)
         self.SetSizer(col_sizer)
 
@@ -92,33 +81,28 @@ class DeckActionButtons(wx.Panel):
     # ============= Public API =============
 
     def enable_daily_average(self, enable: bool = True) -> None:
-        """Enable or disable the Today's Average button."""
         if enable:
             self.daily_average_button.Enable()
         else:
             self.daily_average_button.Disable()
 
     def enable_copy(self, enable: bool = True) -> None:
-        """Enable or disable the Copy button."""
         if enable:
             self.copy_button.Enable()
         else:
             self.copy_button.Disable()
 
     def enable_save(self, enable: bool = True) -> None:
-        """Enable or disable the Save Deck button."""
         if enable:
             self.save_button.Enable()
         else:
             self.save_button.Disable()
 
     def enable_deck_actions(self, enable: bool = True) -> None:
-        """Enable or disable Copy and Save buttons (for when deck is loaded)."""
         self.enable_copy(enable)
         self.enable_save(enable)
 
     def enable_load(self, enable: bool = True) -> None:
-        """Enable or disable the Load Deck button."""
         if enable:
             self.load_button.Enable()
         else:
@@ -127,21 +111,17 @@ class DeckActionButtons(wx.Panel):
     # ============= Private Methods =============
 
     def _on_daily_average_clicked(self, _event: wx.Event) -> None:
-        """Handle Today's Average button click."""
         if self.on_daily_average:
             self.on_daily_average()
 
     def _on_copy_clicked(self, _event: wx.Event) -> None:
-        """Handle Copy button click."""
         if self.on_copy:
             self.on_copy()
 
     def _on_load_clicked(self, _event: wx.Event) -> None:
-        """Handle Load Deck button click."""
         if self.on_load:
             self.on_load()
 
     def _on_save_clicked(self, _event: wx.Event) -> None:
-        """Handle Save Deck button click."""
         if self.on_save:
             self.on_save()

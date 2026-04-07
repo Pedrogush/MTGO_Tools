@@ -25,7 +25,6 @@ class MtgoBackgroundHelpers:
         self._worker = worker
 
     def start_background_fetch(self) -> None:
-        """Start background thread to fetch MTGO data continuously."""
         from services.mtgo_background_service import fetch_mtgo_data_background
 
         if not MTGO_DECKLISTS_ENABLED:
@@ -33,7 +32,6 @@ class MtgoBackgroundHelpers:
             return
 
         def mtgo_fetch_task():
-            """Background task to fetch MTGO data continuously."""
             formats = MTGO_BACKGROUND_FORMATS
 
             while not self._worker.is_stopped():

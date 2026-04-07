@@ -44,14 +44,6 @@ class CardInspectorPanel(wx.Panel):
         card_manager: CardDataManager | None = None,
         mana_icons: ManaIconFactory | None = None,
     ):
-        """
-        Initialize the card inspector panel.
-
-        Args:
-            parent: Parent window
-            card_manager: Card data manager for metadata lookups
-            mana_icons: Mana icon factory for rendering mana costs
-        """
         super().__init__(parent)
         self.SetBackgroundColour(DARK_PANEL)
 
@@ -81,7 +73,6 @@ class CardInspectorPanel(wx.Panel):
         self.reset()
 
     def _build_ui(self) -> None:
-        """Build the panel UI."""
         sizer = wx.BoxSizer(wx.VERTICAL)
         self.SetSizer(sizer)
 
@@ -226,7 +217,6 @@ class CardInspectorPanel(wx.Panel):
     # ============= Public API =============
 
     def reset(self) -> None:
-        """Reset the inspector to default state."""
         self.active_zone = None
         self.name_label.SetLabel("Select a card to inspect.")
         self.type_label.SetLabel("")
@@ -248,14 +238,6 @@ class CardInspectorPanel(wx.Panel):
     def update_card(
         self, card: dict[str, Any], zone: str | None = None, meta: dict[str, Any] | None = None
     ) -> None:
-        """
-        Update the inspector to show a specific card.
-
-        Args:
-            card: Card dictionary with 'name' and 'qty' keys
-            zone: Zone the card is from (e.g., 'main', 'side', 'out')
-            meta: Optional pre-fetched metadata
-        """
         self.active_zone = zone
         self._has_selection = True
         zone_title = ZONE_TITLES.get(zone, zone.title()) if zone else "Card Search"
@@ -299,11 +281,9 @@ class CardInspectorPanel(wx.Panel):
         self._load_card_image_and_printings(card["name"])
 
     def set_card_manager(self, card_manager: CardDataManager) -> None:
-        """Set the card data manager for metadata lookups."""
         self.card_manager = card_manager
 
     def set_bulk_data(self, bulk_data_by_name: dict[str, list[dict[str, Any]]]) -> None:
-        """Set the bulk data index for fast printing lookups."""
         self.bulk_data_by_name = bulk_data_by_name
         if self.inspector_current_card_name:
             self._load_card_image_and_printings(self.inspector_current_card_name)
@@ -314,16 +294,13 @@ class CardInspectorPanel(wx.Panel):
         on_request: Callable[[CardImageRequest], None] | None,
         on_selected: Callable[[CardImageRequest | None], None] | None,
     ) -> None:
-        """Register callbacks for missing image requests and selection updates."""
         self._image_request_handler = on_request
         self._selected_card_handler = on_selected
 
     def set_printings_request_handler(self, handler: Callable[[str], None] | None) -> None:
-        """Register callback to request printings for a card name."""
         self._printings_request_handler = handler
 
     def handle_image_downloaded(self, request: CardImageRequest) -> None:
-        """Refresh the display if the downloaded image matches the current selection."""
         self._failed_image_requests.discard(self._failure_key(request))
         if not self.inspector_current_card_name:
             return
@@ -332,7 +309,6 @@ class CardInspectorPanel(wx.Panel):
         self._load_current_printing_image()
 
     def handle_image_download_failed(self, request: CardImageRequest, _message: str) -> None:
-        """Remember failed image downloads to avoid repeated requests."""
         self._failed_image_requests.add(self._failure_key(request))
         if not self.inspector_current_card_name:
             return
@@ -342,7 +318,6 @@ class CardInspectorPanel(wx.Panel):
         self._set_display_mode(self._image_available)
 
     def handle_printings_loaded(self, card_name: str, printings: list[dict[str, Any]]) -> None:
-        """Update printings list when background fetch completes."""
         if not self.inspector_current_card_name:
             return
         if card_name.lower() != self.inspector_current_card_name.lower():
@@ -357,7 +332,6 @@ class CardInspectorPanel(wx.Panel):
     # ============= Private Methods =============
 
     def _render_mana_cost(self, mana_cost: str) -> None:
-        """Render mana cost symbols."""
         self.cost_sizer.Clear(delete_windows=True)
         if mana_cost:
             panel = self.mana_icons.render(self.cost_container, mana_cost)
@@ -369,7 +343,6 @@ class CardInspectorPanel(wx.Panel):
         self.cost_container.Layout()
 
     def _load_card_image_and_printings(self, card_name: str) -> None:
-        """Load card image and populate printings list."""
         self.inspector_current_card_name = card_name
         self.inspector_printings = []
         self.inspector_current_printing = 0
@@ -463,7 +436,6 @@ class CardInspectorPanel(wx.Panel):
         active_request: CardImageRequest | None,
         image_path: Path | None,
     ) -> None:
-        """Apply a no-printings image lookup result on the UI thread."""
         if gen != self._image_lookup_gen:
             return
         image_available = False
@@ -495,7 +467,6 @@ class CardInspectorPanel(wx.Panel):
         name_printing_path: Path | None,
         need_double_face: bool,
     ) -> None:
-        """Apply a has-printings image lookup result on the UI thread."""
         try:
             if not self:
                 return
@@ -542,19 +513,16 @@ class CardInspectorPanel(wx.Panel):
             self._request_missing_image(active_request)
 
     def _on_prev_printing(self, _event: wx.Event) -> None:
-        """Navigate to previous printing."""
         if self.inspector_current_printing > 0:
             self.inspector_current_printing -= 1
             self._load_current_printing_image()
 
     def _on_next_printing(self, _event: wx.Event) -> None:
-        """Navigate to next printing."""
         if self.inspector_current_printing < len(self.inspector_printings) - 1:
             self.inspector_current_printing += 1
             self._load_current_printing_image()
 
     def _set_printing_label(self, text: str) -> None:
-        """Update the printing label while keeping the navigation width stable."""
         self.printing_label.SetLabel(text)
         if self.printing_label_width:
             self.printing_label.Wrap(self.printing_label_width)
@@ -563,7 +531,6 @@ class CardInspectorPanel(wx.Panel):
     def _set_display_mode(
         self, image_available: bool, *, show_image_column: bool | None = None
     ) -> None:
-        """Toggle between image-only and text fallback views."""
         self._image_available = image_available
         if show_image_column is None:
             show_image_column = image_available or bool(self.inspector_printings)

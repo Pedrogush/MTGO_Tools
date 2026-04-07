@@ -17,23 +17,7 @@ def hypergeometric_probability(
     """
     Calculate the exact probability of drawing a specific number of target cards.
 
-    Uses the hypergeometric distribution to compute the probability of drawing
-    exactly k target cards when drawing n cards from a deck of N cards that
-    contains K copies of the target card.
-
     Formula: P(X = k) = [C(K, k) × C(N-K, n-k)] / C(N, n)
-
-    Args:
-        population: Total number of cards in the deck (N)
-        successes_in_pop: Number of target cards in the deck (K)
-        sample_size: Number of cards drawn (n)
-        successes_in_sample: Target number of cards to draw (k)
-
-    Returns:
-        Probability as a float between 0.0 and 1.0
-
-    Raises:
-        ValueError: If any input is invalid (negative numbers, sample > population, etc.)
 
     Example:
         >>> # Probability of drawing exactly 1 Lightning Bolt in opening hand
@@ -104,18 +88,6 @@ def hypergeometric_at_least(
 
     Computes P(X >= min_successes) by summing probabilities from min_successes
     to the maximum possible number of target cards that could be drawn.
-
-    Args:
-        population: Total number of cards in the deck (N)
-        successes_in_pop: Number of target cards in the deck (K)
-        sample_size: Number of cards drawn (n)
-        min_successes: Minimum number of target cards desired (k_min)
-
-    Returns:
-        Probability as a float between 0.0 and 1.0
-
-    Raises:
-        ValueError: If any input is invalid
 
     Example:
         >>> # Probability of drawing at least 1 Lightning Bolt in opening hand

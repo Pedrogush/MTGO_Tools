@@ -35,7 +35,6 @@ class DeckWorkflowService:
         return get_archetypes(mtg_format, allow_stale=allow_stale)
 
     def fetch_archetypes(self, mtg_format: str, *, force: bool = False) -> list[dict[str, Any]]:
-        """Retrieve archetype list for a format."""
         return self._archetype_provider(mtg_format.lower(), allow_stale=not force)
 
     # ------------------------------------------------------------------ decks ------------------------------------------------------------------

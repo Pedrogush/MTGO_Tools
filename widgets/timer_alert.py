@@ -105,7 +105,6 @@ class ThresholdPanel(wx.Panel):
             self.on_remove_callback(self)
 
     def get_seconds(self) -> int | None:
-        """Parse MM:SS format to seconds."""
         value = self.time_input.GetValue().strip()
         match = re.match(r"^(\d+):(\d{2})$", value)
         if not match:
@@ -114,7 +113,6 @@ class ThresholdPanel(wx.Panel):
         return int(minutes) * 60 + int(seconds)
 
     def set_enabled(self, enabled: bool) -> None:
-        """Enable/disable the input."""
         self.time_input.Enable(enabled)
         self.remove_btn.Enable(enabled)
 
@@ -310,7 +308,6 @@ class TimerAlertFrame(wx.Frame):
         self.Bind(wx.EVT_SIZE, self._on_resize)
 
     def _add_threshold_panel(self) -> None:
-        """Add a new threshold input panel."""
         panel = ThresholdPanel(self.threshold_container, on_remove=self._remove_threshold_panel)
         self.threshold_panels.append(panel)
         self.threshold_container_sizer.Add(panel, 0, wx.EXPAND | wx.BOTTOM, PADDING_SM)
@@ -318,7 +315,6 @@ class TimerAlertFrame(wx.Frame):
         self.threshold_container.FitInside()
 
     def _remove_threshold_panel(self, panel: ThresholdPanel) -> None:
-        """Remove a threshold input panel."""
         if len(self.threshold_panels) <= 1:
             self._set_status("timer.status.one_threshold_required")
             return
@@ -402,11 +398,9 @@ class TimerAlertFrame(wx.Frame):
         self._set_status("timer.status.stopped")
 
     def test_alert(self) -> None:
-        """Test the selected alert sound."""
         self._play_alert()
 
     def _parse_thresholds(self) -> list[int]:
-        """Parse all threshold panels and return valid seconds."""
         thresholds: list[int] = []
         for panel in self.threshold_panels:
             seconds = panel.get_seconds()
@@ -466,12 +460,10 @@ class TimerAlertFrame(wx.Frame):
                 self.triggered_thresholds.add(threshold)
 
     def _trigger_alert(self, message: str) -> None:
-        """Play the alert sound."""
         logger.debug(f"Timer alert: {message}")
         self._play_alert()
 
     def _play_alert(self) -> None:
-        """Play the selected system sound."""
         if not SOUND_AVAILABLE:
             logger.warning("Sound playback not available")
             return
@@ -485,7 +477,6 @@ class TimerAlertFrame(wx.Frame):
             logger.debug(f"Failed to play sound: {exc}")
 
     def _on_repeat_timer(self, _event: wx.TimerEvent) -> None:
-        """Repeat alarm timer fired."""
         if self.monitor_job_active and self.repeat_alarm_checkbox.GetValue():
             self._play_alert()
 

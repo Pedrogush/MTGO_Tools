@@ -249,13 +249,7 @@ def wait_for_bot_to_take_cards(
     timeout: float = 180.0,
     poll_interval: float = 1.5,
 ) -> dict[str, float | int | str | None]:
-    """Poll TradeEscrow.TradedItems until the local stack is empty.
-
-    Args:
-        expected_partner_cards: Optional floor for partner-traded quantity before returning.
-        timeout: Maximum seconds to wait.
-        poll_interval: Seconds between TradeManager.CurrentTrade snapshots.
-    """
+    """Poll TradeEscrow.TradedItems until the local stack is empty."""
 
     start = time.monotonic()
     deadline = start + timeout
@@ -294,12 +288,7 @@ def wait_for_bot_to_take_cards(
 def generate_stubs(
     output_dir: Path | str | None = None, sample_namespace: str | None = None
 ) -> None:
-    """Generate .pyi stub files for MTGOSDK namespaces.
-
-    Args:
-        output_dir: Directory to write stub files. Defaults to 'stubs/MTGOSDK' relative to script dir.
-        sample_namespace: If provided, only generate stubs for this namespace (e.g., 'MTGOSDK.API.Collection').
-    """
+    """Generate .pyi stub files for MTGOSDK namespaces."""
     if output_dir is None:
         try:
             base_dir = Path(__file__).resolve().parent.parent

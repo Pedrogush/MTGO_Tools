@@ -51,7 +51,6 @@ class RadarRepository:
         self._initialize()
 
     def replace_radar(self, entry: dict[str, Any]) -> bool:
-        """Replace the stored radar for one format/archetype pair."""
         format_name = str(entry.get("format", "")).strip().lower()
         archetype = entry.get("archetype") or {}
         if not isinstance(archetype, dict):
@@ -149,7 +148,6 @@ class RadarRepository:
         return True
 
     def bulk_replace(self, entries: list[dict[str, Any]]) -> int:
-        """Replace all provided radar entries, preserving other archetypes."""
         replaced = 0
         for entry in entries:
             try:
@@ -159,7 +157,6 @@ class RadarRepository:
         return replaced
 
     def get_radar(self, format_name: str, archetype_href: str) -> StoredRadar | None:
-        """Return the locally cached radar for *format_name*/*archetype_href*."""
         fmt = format_name.strip().lower()
         href = archetype_href.strip()
         if not fmt or not href:
@@ -289,7 +286,6 @@ _default_repository: RadarRepository | None = None
 
 
 def get_radar_repository() -> RadarRepository:
-    """Return the shared radar repository instance."""
     global _default_repository
     if _default_repository is None:
         _default_repository = RadarRepository()
@@ -297,6 +293,5 @@ def get_radar_repository() -> RadarRepository:
 
 
 def reset_radar_repository() -> None:
-    """Reset the shared radar repository instance."""
     global _default_repository
     _default_repository = None

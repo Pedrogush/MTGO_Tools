@@ -39,13 +39,6 @@ class CardImageDisplay(wx.Panel):
         width: int = CARD_IMAGE_DISPLAY_WIDTH,
         height: int = CARD_IMAGE_DISPLAY_HEIGHT,
     ):
-        """Initialize the card image display.
-
-        Args:
-            parent: Parent window
-            width: Image display width in pixels
-            height: Image display height in pixels
-        """
         super().__init__(parent)
 
         self.image_width = width
@@ -79,7 +72,6 @@ class CardImageDisplay(wx.Panel):
         self.show_placeholder()
 
     def _create_ui(self) -> None:
-        """Create the UI layout with image display."""
         # Main vertical sizer
         main_sizer = wx.BoxSizer(wx.VERTICAL)
 
@@ -100,11 +92,6 @@ class CardImageDisplay(wx.Panel):
         self.Bind(wx.EVT_CHAR_HOOK, self._on_key_down)
 
     def show_placeholder(self, text: str = "No image") -> None:
-        """Display a placeholder with optional text.
-
-        Args:
-            text: Text to display in the placeholder
-        """
         self.image_paths = []
         self.current_index = 0
         bitmap = self._create_placeholder_bitmap(text)
@@ -113,15 +100,6 @@ class CardImageDisplay(wx.Panel):
         self.Refresh()
 
     def show_images(self, image_paths: list[Path], start_index: int = 0) -> bool:
-        """Display a list of card images with navigation.
-
-        Args:
-            image_paths: List of paths to image files
-            start_index: Index to start at (default: 0)
-
-        Returns:
-            True if at least one image loaded successfully, False otherwise
-        """
         if not image_paths:
             self.show_placeholder("No images")
             return False
@@ -142,27 +120,10 @@ class CardImageDisplay(wx.Panel):
         return success
 
     def show_image(self, image_path: Path) -> bool:
-        """Display a single card image (convenience method).
-
-        Args:
-            image_path: Path to the image file
-
-        Returns:
-            True if image loaded successfully, False otherwise
-        """
         return self.show_images([image_path] if image_path else [])
 
     @timed
     def _load_image_at_index(self, index: int, animate: bool = True) -> bool:
-        """Load and display the image at the given index.
-
-        Args:
-            index: Index in image_paths list
-            animate: Whether to use fade transition
-
-        Returns:
-            True if successful, False otherwise
-        """
         if not 0 <= index < len(self.image_paths):
             return False
 
@@ -209,11 +170,6 @@ class CardImageDisplay(wx.Panel):
             return False
 
     def _start_fade_animation(self, target_bitmap: wx.Bitmap) -> None:
-        """Start a fade transition animation to the target bitmap.
-
-        Args:
-            target_bitmap: The bitmap to fade to
-        """
         # Cancel any existing animation
         if self.animation_timer and self.animation_timer.IsRunning():
             self.animation_timer.Stop()
@@ -229,7 +185,6 @@ class CardImageDisplay(wx.Panel):
         self.animation_timer.Start(CARD_IMAGE_ANIMATION_INTERVAL_MS)  # ~60 FPS
 
     def _on_animation_tick(self, event: wx.TimerEvent) -> None:
-        """Handle animation timer tick."""
         # Increment alpha (fade speed)
         self.animation_alpha += CARD_IMAGE_ANIMATION_ALPHA_STEP
 
@@ -251,16 +206,6 @@ class CardImageDisplay(wx.Panel):
         self.Refresh()
 
     def _blend_bitmaps(self, bmp1: wx.Bitmap, bmp2: wx.Bitmap, alpha: float) -> wx.Bitmap:
-        """Blend two bitmaps with the given alpha value.
-
-        Args:
-            bmp1: Source bitmap (fading out)
-            bmp2: Target bitmap (fading in)
-            alpha: Blend factor (0.0 = bmp1, 1.0 = bmp2)
-
-        Returns:
-            Blended bitmap
-        """
         img1 = bmp1.ConvertToImage()
         img2 = bmp2.ConvertToImage()
 
@@ -284,7 +229,6 @@ class CardImageDisplay(wx.Panel):
         return wx.Bitmap(result)
 
     def _update_navigation(self) -> None:
-        """Update visibility of the flip icon overlay."""
         has_alternate_face = len(self.image_paths) > 1
 
         # Update flip icon visibility state
@@ -296,7 +240,6 @@ class CardImageDisplay(wx.Panel):
                 self._load_image_at_index(self.current_index, animate=False)
 
     def _on_key_down(self, event: wx.KeyEvent) -> None:
-        """Handle keyboard navigation."""
         keycode = event.GetKeyCode()
 
         if keycode in (wx.WXK_LEFT, wx.WXK_RIGHT, wx.WXK_SPACE):
@@ -328,7 +271,6 @@ class CardImageDisplay(wx.Panel):
         self._toggle_face()
 
     def _toggle_face(self) -> None:
-        """Advance to the next face when multiple images are available."""
         if len(self.image_paths) <= 1:
             return
         self.current_index = (self.current_index + 1) % len(self.image_paths)
@@ -336,16 +278,6 @@ class CardImageDisplay(wx.Panel):
         self._update_navigation()
 
     def _create_rounded_bitmap(self, image: wx.Image) -> wx.Bitmap:
-        """Create a bitmap with the image centered and rounded corners.
-
-        Uses alpha channel manipulation for proper rounded corner clipping.
-
-        Args:
-            image: The wx.Image to display
-
-        Returns:
-            A wx.Bitmap with rounded corners
-        """
         # Create a bitmap canvas
         bitmap = wx.Bitmap(self.image_width, self.image_height)
         dc = wx.MemoryDC(bitmap)
@@ -396,11 +328,6 @@ class CardImageDisplay(wx.Panel):
         return bitmap
 
     def _draw_flip_icon_on_gc(self, gc: wx.GraphicsContext) -> None:
-        """Draw the flip icon overlay directly on the card bitmap.
-
-        Args:
-            gc: GraphicsContext to draw on
-        """
         # Calculate icon position (top-left corner)
         icon_x = self.flip_icon_margin
         icon_y = self.flip_icon_margin
@@ -448,26 +375,12 @@ class CardImageDisplay(wx.Panel):
         gc.DrawText(text, text_x, text_y)
 
     def _get_flip_icon_rect(self) -> wx.Rect:
-        """Get the rectangle containing the flip icon for click detection.
-
-        Returns:
-            wx.Rect representing the flip icon bounds
-        """
         icon_x = self.flip_icon_margin
         icon_y = self.flip_icon_margin
         return wx.Rect(icon_x, icon_y, self.flip_icon_size, self.flip_icon_size)
 
     @timed
     def _apply_rounded_corners_to_image(self, image: wx.Image, radius: int) -> wx.Image:
-        """Apply rounded corners to an image using alpha channel manipulation.
-
-        Args:
-            image: The wx.Image to process
-            radius: Corner radius in pixels
-
-        Returns:
-            A new wx.Image with rounded corners
-        """
         img = image.Copy()
         if not img.HasAlpha():
             img.InitAlpha()
@@ -490,14 +403,6 @@ class CardImageDisplay(wx.Panel):
         return img
 
     def _create_placeholder_bitmap(self, text: str) -> wx.Bitmap:
-        """Create a placeholder bitmap with text.
-
-        Args:
-            text: Text to display
-
-        Returns:
-            A wx.Bitmap for the placeholder
-        """
         bitmap = wx.Bitmap(self.image_width, self.image_height)
         dc = wx.MemoryDC(bitmap)
 
@@ -531,7 +436,6 @@ class CardImageDisplay(wx.Panel):
         return bitmap
 
     def show_flip_icon(self) -> None:
-        """Show the flip icon overlay (e.g., for double-faced cards)."""
         if not self.show_flip_icon_overlay:
             self.show_flip_icon_overlay = True
             # Reload current image to redraw with flip icon
@@ -539,7 +443,6 @@ class CardImageDisplay(wx.Panel):
                 self._load_image_at_index(self.current_index, animate=False)
 
     def hide_flip_icon(self) -> None:
-        """Hide the flip icon overlay."""
         if self.show_flip_icon_overlay:
             self.show_flip_icon_overlay = False
             # Reload current image to redraw without flip icon
@@ -547,6 +450,5 @@ class CardImageDisplay(wx.Panel):
                 self._load_image_at_index(self.current_index, animate=False)
 
     def __del__(self):
-        """Cleanup when widget is destroyed."""
         if self.animation_timer and self.animation_timer.IsRunning():
             self.animation_timer.Stop()
