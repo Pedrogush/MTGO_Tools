@@ -67,6 +67,7 @@ class AutomationServer:
             "get_deck_notes": self._handle_get_deck_notes,
             "set_current_deck": self._handle_set_current_deck,
             "toggle_adv_filters": self._handle_toggle_adv_filters,
+            "close_app": self._handle_close_app,
         }
 
     def register_handler(self, command: str, handler: Callable[..., Any]) -> None:
@@ -189,8 +190,13 @@ class AutomationServer:
         """Handle ping command."""
         return {"status": "ok", "timestamp": time.time()}
 
-    def _handle_screenshot(self, path: str | None = None) -> dict[str, Any]:
-        """Take a screenshot of the application window."""
+    def _handle_screenshot(self, path: str | None = None, headless: bool = False) -> dict[str, Any]:
+        """Take a screenshot of the application window.
+
+        When *headless* is True the frame is temporarily restored if it is
+        iconized (minimized) so the capture works even when the window is not
+        visible on screen, then returned to its previous state afterward.
+        """
         import os
         import tempfile
         from datetime import datetime
@@ -205,16 +211,34 @@ class AutomationServer:
         if save_dir and not os.path.isdir(save_dir):
             path = os.path.join(tempfile.gettempdir(), os.path.basename(path))
 
-        # Get the frame's screen position and size
-        rect = self.frame.GetScreenRect()
-        x, y, width, height = rect.x, rect.y, rect.width, rect.height
+        was_iconized = self.frame.IsIconized()
+        was_hidden = not self.frame.IsShown()
 
-        # Create a bitmap to capture the screen
-        screen_dc = wx.ScreenDC()
-        bmp = wx.Bitmap(width, height)
-        mem_dc = wx.MemoryDC(bmp)
-        mem_dc.Blit(0, 0, width, height, screen_dc, x, y)
-        mem_dc.SelectObject(wx.NullBitmap)
+        if headless and (was_iconized or was_hidden):
+            if was_iconized:
+                self.frame.Iconize(False)
+            if was_hidden:
+                self.frame.Show()
+            self.frame.Raise()
+            wx.SafeYield()
+
+        try:
+            # Get the frame's screen position and size
+            rect = self.frame.GetScreenRect()
+            x, y, width, height = rect.x, rect.y, rect.width, rect.height
+
+            # Create a bitmap to capture the screen
+            screen_dc = wx.ScreenDC()
+            bmp = wx.Bitmap(width, height)
+            mem_dc = wx.MemoryDC(bmp)
+            mem_dc.Blit(0, 0, width, height, screen_dc, x, y)
+            mem_dc.SelectObject(wx.NullBitmap)
+        finally:
+            if headless:
+                if was_iconized:
+                    self.frame.Iconize(True)
+                if was_hidden:
+                    self.frame.Hide()
 
         # Save to file — use wx.LogNull to suppress any wx error dialogs on failure
         image = bmp.ConvertToImage()
@@ -650,6 +674,13 @@ class AutomationServer:
             return {"opened": False, "error": f"Method not found: {method_name}"}
         method()
         return {"opened": True, "widget": widget_name}
+
+    def _handle_close_app(self) -> dict[str, Any]:
+        """Close the application after sending the response."""
+        # Schedule Close on the next event-loop iteration so the response is
+        # sent back to the client before the wx app exits.
+        wx.CallAfter(self.frame.Close, True)
+        return {"closed": True}
 
     def _handle_get_card_images_loaded(self, zone: str = "main") -> dict[str, Any]:
         """Count how many card panels in a zone have successfully loaded images."""

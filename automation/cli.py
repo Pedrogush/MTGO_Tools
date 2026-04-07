@@ -3,8 +3,10 @@
 Command-line interface for controlling the MTGO Tools application.
 
 Usage:
+    python -m automation.cli open-app [--wait]
     python -m automation.cli ping
     python -m automation.cli screenshot --path output.png
+    python -m automation.cli screenshot --headless
     python -m automation.cli status
     python -m automation.cli set-format Modern
     python -m automation.cli list-archetypes
@@ -13,6 +15,22 @@ Usage:
     python -m automation.cli select-deck 0
     python -m automation.cli get-deck
     python -m automation.cli switch-tab Stats
+    python -m automation.cli close-app
+
+Common workflow:
+    python -m automation.cli open-app --wait
+    python -m automation.cli ping
+    python -m automation.cli screenshot --path screenshots/current.png
+    python -m automation.cli screenshot --headless --path screenshots/background.png
+    python -m automation.cli close-app
+
+Notes:
+    The --headless screenshot flag is self-contained once the app is running
+    with automation enabled. It temporarily restores a minimized or hidden
+    window for capture, then returns it to the previous minimized/hidden state.
+    WSL callers may need to invoke the Windows Python through WSL interop, but
+    no extra shell or window-management steps are required by screenshot
+    --headless itself.
 """
 
 import argparse
@@ -59,7 +77,7 @@ def cmd_ping(client: AutomationClient, args: argparse.Namespace) -> int:
 
 def cmd_screenshot(client: AutomationClient, args: argparse.Namespace) -> int:
     """Take a screenshot."""
-    result = client.screenshot(args.path)
+    result = client.screenshot(args.path, headless=args.headless)
     print(format_output(result, args.json))
     return 0
 
@@ -278,14 +296,69 @@ def cmd_toggle_adv_filters(client: AutomationClient, args: argparse.Namespace) -
     return 0 if result.get("toggled") else 1
 
 
+def cmd_close_app(client: AutomationClient, args: argparse.Namespace) -> int:
+    """Close the running application."""
+    result = client.close_app()
+    print(format_output(result, args.json))
+    return 0 if result.get("closed") else 1
+
+
+def cmd_open_app(args: argparse.Namespace) -> int:
+    """Launch the application with the automation flag.
+
+    This command does not require the app to already be running.
+    """
+    import subprocess
+    from pathlib import Path
+
+    # Locate main.py relative to this module (automation/ → repo root)
+    repo_root = Path(__file__).parent.parent
+    main_py = repo_root / "main.py"
+
+    if not main_py.exists():
+        print(f"main.py not found at {main_py}", file=sys.stderr)
+        return 1
+
+    cmd = [sys.executable, str(main_py), "--automation"]
+    if args.port != DEFAULT_PORT:
+        cmd += ["--automation-port", str(args.port)]
+
+    proc = subprocess.Popen(cmd)
+
+    if args.wait:
+        client = AutomationClient(host=args.host, port=args.port, timeout=args.timeout)
+        if not client.wait_for_server(timeout=args.wait_timeout):
+            print(
+                f"App launched (PID {proc.pid}) but did not respond within"
+                f" {args.wait_timeout}s",
+                file=sys.stderr,
+            )
+            return 1
+        if not args.json:
+            print(f"App ready (PID {proc.pid})")
+        else:
+            print(json.dumps({"pid": proc.pid, "ready": True}))
+    else:
+        if not args.json:
+            print(f"App launched (PID {proc.pid})")
+        else:
+            print(json.dumps({"pid": proc.pid}))
+
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Control the MTGO Tools application from the command line.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
+  %(prog)s open-app                                Launch app with automation flag
+  %(prog)s open-app --wait                         Launch and wait until ready
   %(prog)s ping                                    Check if app is running
   %(prog)s screenshot --path test.png              Take a screenshot
+  %(prog)s screenshot --headless                   Screenshot even when minimized
+  %(prog)s screenshot --headless --path bg.png      Capture minimized/hidden app
   %(prog)s status                                  Get status bar text
   %(prog)s set-format Modern                       Set format to Modern
   %(prog)s list-archetypes                         List available archetypes
@@ -294,6 +367,12 @@ Examples:
   %(prog)s select-deck 0                           Select first deck
   %(prog)s get-deck                                Print current deck
   %(prog)s switch-tab Stats                        Switch to Stats tab
+  %(prog)s close-app                               Close the running app
+
+Notes:
+  screenshot --headless is self-contained once the app is running with
+  automation enabled: it restores a minimized/hidden window for capture and
+  returns it to the previous minimized/hidden state afterward.
         """,
     )
 
@@ -312,6 +391,11 @@ Examples:
     # screenshot
     p = subparsers.add_parser("screenshot", help="Take a screenshot")
     p.add_argument("--path", "-p", help="Path to save screenshot (default: auto-generated)")
+    p.add_argument(
+        "--headless",
+        action="store_true",
+        help="Restore window if minimized before capturing, then re-minimize",
+    )
 
     # status
     subparsers.add_parser("status", help="Get status bar text")
@@ -402,6 +486,24 @@ Examples:
     # toggle-adv-filters
     subparsers.add_parser("toggle-adv-filters", help="Toggle advanced filters in builder panel")
 
+    # close-app
+    subparsers.add_parser("close-app", help="Close the running application")
+
+    # open-app
+    p = subparsers.add_parser("open-app", help="Launch the application with the automation flag")
+    p.add_argument(
+        "--wait",
+        action="store_true",
+        help="Wait for the automation server to be ready before returning",
+    )
+    p.add_argument(
+        "--wait-timeout",
+        type=float,
+        default=30.0,
+        dest="wait_timeout",
+        help="Seconds to wait for the server when --wait is used (default: 30)",
+    )
+
     args = parser.parse_args()
 
     if not args.command:
@@ -435,7 +537,12 @@ Examples:
         "open-widget": cmd_open_widget,
         "get-deck-notes": cmd_get_deck_notes,
         "toggle-adv-filters": cmd_toggle_adv_filters,
+        "close-app": cmd_close_app,
     }
+
+    # open-app does not need a running server — handle it before connecting.
+    if args.command == "open-app":
+        return cmd_open_app(args)
 
     handler = handlers.get(args.command)
     if handler is None:

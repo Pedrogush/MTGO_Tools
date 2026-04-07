@@ -11,11 +11,14 @@ These tests run against the live application and cover:
 - Card face image loading in the deck zones
 
 Usage:
-    # 1. Start the app with automation enabled (Windows):
-    cmd.exe /c "start python C:\\Users\\Pedro\\Documents\\GitHub\\mtgo_tools\\main.py --automation"
+    # 1. Start the app with automation enabled and wait for readiness:
+    python -m automation.cli open-app --wait
 
-    # 2. Wait for the server to come up, then run:
+    # 2. Run the tests:
     python -m automation.e2e_tests
+
+    # 3. Close the app when finished:
+    python -m automation.cli close-app
 
     # Or run a specific test group:
     python -m automation.e2e_tests --only builder
@@ -31,6 +34,9 @@ Convention:
   When a UI bug is reproduced via the automation CLI, add a test to the
   relevant module in automation/e2e_tests/ that replicates the same command
   sequence so the fix can be verified automatically.
+
+  Use automation.cli screenshot --headless for screenshots when the app may be
+  minimized or hidden; the command handles restore/capture/re-minimize itself.
 """
 
 from __future__ import annotations

@@ -41,6 +41,27 @@ pytest
 
 CI uses **black 26.3.1**. If formatting locally, match with `pip install black==26.3.1`.
 
+### Automation CLI
+
+The `automation` package can launch and control the wxPython app for manual UI
+checks and E2E scripts:
+
+```bash
+python -m automation.cli open-app --wait
+python -m automation.cli ping
+python -m automation.cli screenshot --path screenshots/current.png
+python -m automation.cli screenshot --headless --path screenshots/background.png
+python -m automation.cli close-app
+```
+
+`screenshot --headless` is self-contained once the app is running with
+automation enabled. It temporarily restores a minimized or hidden window for the
+capture and returns it to the previous state afterward; no extra `cmd.exe` or
+manual window-management step is required by the screenshot command itself.
+
+See `automation/README.md` for port options, WSL interop notes, and close-app
+behavior.
+
 ### GameLog / Match History Tests
 
 `tests/test_gamelog_parser.py` parses local MTGO GameLog files and requires the `MTGO_USERNAME` environment variable. The venv activation scripts set this automatically. Tests are skipped when no GameLog directory is found.
@@ -96,7 +117,7 @@ Configuration in `pyproject.toml`.
 │   ├── deck.py                     # Deck text parsing helpers
 │   └── mtgo_bridge_client.py       # IPC client for .NET bridge
 ├── dotnet/MTGOBridge/              # .NET bridge (MTGOSDK)
-├── automation/                     # E2E test automation server
+├── automation/                     # Automation CLI, server, and E2E helpers
 └── tests/                          # pytest test suite
 ```
 

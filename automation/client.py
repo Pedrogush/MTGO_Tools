@@ -66,19 +66,24 @@ class AutomationClient:
                 time.sleep(interval)
         return False
 
-    def screenshot(self, path: str | None = None) -> dict[str, Any]:
+    def screenshot(self, path: str | None = None, headless: bool = False) -> dict[str, Any]:
         """Take a screenshot of the application window.
 
         Args:
             path: Optional path to save the screenshot. If not provided,
                   a timestamped filename will be generated.
+            headless: When True, temporarily restores the window if it is
+                      minimized so the capture succeeds even when the app
+                      is running in the background.
 
         Returns:
             Dict with 'path', 'width', and 'height' keys.
         """
-        kwargs = {}
+        kwargs: dict[str, Any] = {}
         if path is not None:
             kwargs["path"] = path
+        if headless:
+            kwargs["headless"] = True
         return self._send_command("screenshot", **kwargs)
 
     def get_status(self) -> str:
@@ -264,6 +269,18 @@ class AutomationClient:
     def set_current_deck(self, deck: dict[str, Any] | None) -> dict[str, Any]:
         """Set the current deck identity used for deck-scoped data."""
         return self._send_command("set_current_deck", deck=deck)
+
+    def close_app(self) -> dict[str, Any]:
+        """Close the application.
+
+        Sends a close request to the running app.  The app will shut down
+        after acknowledging the command, so the response may arrive just
+        before the connection drops.
+
+        Returns:
+            Dict with 'closed': True on success.
+        """
+        return self._send_command("close_app")
 
 
 def connect(
