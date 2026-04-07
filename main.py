@@ -8,7 +8,7 @@ import argparse
 import wx
 from loguru import logger
 
-from controllers.app_controller import get_deck_selector_controller
+from controllers.app_bootstrap import create_deck_selector_controller
 from utils.constants import BASE_DATA_DIR, LOGS_DIR, ensure_base_dirs
 from utils.logging_config import configure_logging
 from widgets.splash_frame import LoadingFrame
@@ -34,7 +34,7 @@ class MetagameWxApp(wx.App):
         return True
 
     def _build_main_window(self) -> None:
-        controller = get_deck_selector_controller()
+        controller = create_deck_selector_controller()
         self.controller = controller
         self.SetTopWindow(controller.frame)
 

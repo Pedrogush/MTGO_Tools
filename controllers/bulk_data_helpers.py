@@ -13,6 +13,16 @@ if TYPE_CHECKING:
     from widgets.app_frame import AppFrame
 
 
+def _wx_call_after(callback: Callable[..., None], *args: Any) -> None:
+    import wx
+
+    wx.CallAfter(callback, *args)
+
+
+def _noop(*_args: Any, **_kwargs: Any) -> None:
+    return None
+
+
 class BulkDataHelpers:
     def __init__(
         self,
@@ -20,10 +30,12 @@ class BulkDataHelpers:
         image_service: Any,
         worker: BackgroundWorker,
         frame_provider: Callable[[], AppFrame | None],
+        call_after: Callable[..., None] | None = None,
     ) -> None:
         self._image_service = image_service
         self._worker = worker
         self._frame_provider = frame_provider
+        self._call_after = call_after or _wx_call_after
         self._bulk_check_worker_active = False
 
     def check_and_download_bulk_data(self, callbacks: UICallbacks | None) -> None:
@@ -31,12 +43,10 @@ class BulkDataHelpers:
             logger.debug("Bulk data check already running")
             return
 
-        on_status = callbacks.on_status if callbacks else lambda msg: None
-        on_download_needed = callbacks.on_bulk_download_needed if callbacks else lambda reason: None
-        on_download_complete = (
-            callbacks.on_bulk_download_complete if callbacks else lambda msg: None
-        )
-        on_download_failed = callbacks.on_bulk_download_failed if callbacks else lambda msg: None
+        on_status = callbacks.on_status if callbacks else _noop
+        on_download_needed = callbacks.on_bulk_download_needed if callbacks else _noop
+        on_download_complete = callbacks.on_bulk_download_complete if callbacks else _noop
+        on_download_failed = callbacks.on_bulk_download_failed if callbacks else _noop
 
         on_status("bulk.status.checking")
         self._bulk_check_worker_active = True
@@ -86,21 +96,17 @@ class BulkDataHelpers:
         on_status("bulk.status.preparing_cache")
 
         def success_callback(data, stats):
-            import wx
-
             # Persist bulk data and notify UI
             self._image_service.set_bulk_data(data)
             frame = self._frame_provider()
             if frame:
-                wx.CallAfter(frame._on_bulk_data_loaded, data, stats)
+                self._call_after(frame._on_bulk_data_loaded, data, stats)
 
         def error_callback(msg):
-            import wx
-
             logger.warning(f"Bulk data load issue: {msg}")
             frame = self._frame_provider()
             if frame:
-                wx.CallAfter(frame._on_bulk_data_load_failed, msg)
+                self._call_after(frame._on_bulk_data_load_failed, msg)
 
         started = self._image_service.load_printing_index_async(
             force=force,
@@ -109,20 +115,18 @@ class BulkDataHelpers:
         )
 
         if not started:
-            on_status(self._t("app.status.ready"))
+            on_status("app.status.ready")
 
     def force_bulk_data_update(self, callbacks: UICallbacks | None) -> None:
         if self._bulk_check_worker_active:
             logger.debug("Bulk data update already running")
             return
 
-        on_status = callbacks.on_status if callbacks else lambda msg: None
-        on_download_complete = (
-            callbacks.on_bulk_download_complete if callbacks else lambda msg: None
-        )
-        on_download_failed = callbacks.on_bulk_download_failed if callbacks else lambda msg: None
+        on_status = callbacks.on_status if callbacks else _noop
+        on_download_complete = callbacks.on_bulk_download_complete if callbacks else _noop
+        on_download_failed = callbacks.on_bulk_download_failed if callbacks else _noop
 
-        on_status(self._t("bulk.status.downloading"))
+        on_status("bulk.status.downloading")
         self._bulk_check_worker_active = True
 
         def _on_download_complete(msg: str) -> None:
@@ -133,7 +137,7 @@ class BulkDataHelpers:
         def _on_download_failed(msg: str) -> None:
             self._bulk_check_worker_active = False
             on_download_failed(msg)
-            on_status(self._t("app.status.ready"))
+            on_status("app.status.ready")
 
         self._image_service.download_bulk_metadata_async(
             on_success=_on_download_complete,

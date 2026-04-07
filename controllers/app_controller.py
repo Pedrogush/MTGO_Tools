@@ -19,32 +19,20 @@ from loguru import logger
 if TYPE_CHECKING:
     import wx
 
+    from controllers.bulk_data_helpers import BulkDataHelpers
     from widgets.app_frame import AppFrame
 
-from controllers.app_controller_helpers import AppControllerUIHelpers, UICallbacks
-from controllers.bulk_data_helpers import BulkDataHelpers
-from controllers.mtgo_background_helpers import MtgoBackgroundHelpers
+from controllers.app_controller_helpers import UICallbacks
 from controllers.session_manager import DeckSelectorSessionManager
-from repositories.card_repository import get_card_repository
-from repositories.deck_repository import get_deck_repository
-from repositories.metagame_repository import get_metagame_repository
-from services.collection_service import get_collection_service
-from services.deck_service import get_deck_service
 from services.deck_workflow_service import DeckLoadScope, DeckWorkflowService
-from services.image_service import get_image_service
-from services.search_service import get_search_service
-from services.store_service import get_store_service
 from utils.background_worker import BackgroundWorker
 from utils.card_data import CardDataManager
 from utils.constants import (
     COLLECTION_CACHE_MAX_AGE_SECONDS,
     GUIDE_STORE,
-    LOGS_DIR,
     MTGO_BRIDGE_SHUTDOWN_TIMEOUT_SECONDS,
-    MTGO_DECKLISTS_ENABLED,
     NOTES_STORE,
     OUTBOARD_STORE,
-    ensure_base_dirs,
 )
 from utils.diagnostics import EventLogger
 from utils.i18n import normalize_locale
@@ -55,35 +43,32 @@ class AppController:
     def __init__(
         self,
         *,
-        deck_repo=None,
-        metagame_repo=None,
-        card_repo=None,
-        deck_service=None,
-        search_service=None,
-        collection_service=None,
-        image_service=None,
-        store_service=None,
-        session_manager: DeckSelectorSessionManager | None = None,
-        deck_workflow_service: DeckWorkflowService | None = None,
+        deck_repo: Any,
+        metagame_repo: Any,
+        card_repo: Any,
+        deck_service: Any,
+        search_service: Any,
+        collection_service: Any,
+        image_service: Any,
+        store_service: Any,
+        session_manager: DeckSelectorSessionManager,
+        deck_workflow_service: DeckWorkflowService,
+        event_logger: EventLogger,
+        worker: BackgroundWorker,
+        bulk_data_helpers: BulkDataHelpers,
     ):
-        ensure_base_dirs()
+        # Services and repositories are composed by controllers.app_bootstrap.
+        self.deck_repo = deck_repo
+        self.metagame_repo = metagame_repo
+        self.card_repo = card_repo
+        self.deck_service = deck_service
+        self.search_service = search_service
+        self.collection_service = collection_service
+        self.image_service = image_service
+        self.store_service = store_service
 
-        # Services and repositories
-        self.deck_repo = deck_repo or get_deck_repository()
-        self.metagame_repo = metagame_repo or get_metagame_repository()
-        self.card_repo = card_repo or get_card_repository()
-        self.deck_service = deck_service or get_deck_service()
-        self.search_service = search_service or get_search_service()
-        self.collection_service = collection_service or get_collection_service()
-        self.image_service = image_service or get_image_service()
-        self.store_service = store_service or get_store_service()
-
-        self.session_manager = session_manager or DeckSelectorSessionManager(self.deck_repo)
-        self.workflow_service = deck_workflow_service or DeckWorkflowService(
-            deck_repo=self.deck_repo,
-            metagame_repo=self.metagame_repo,
-            deck_service=self.deck_service,
-        )
+        self.session_manager = session_manager
+        self.workflow_service = deck_workflow_service
 
         # Settings management
         self.current_format = self.session_manager.get_current_format()
@@ -99,10 +84,7 @@ class AppController:
         self._average_hours = self.session_manager.get_average_hours()
 
         # Event logger (opt-in, local-only)
-        self.event_logger = EventLogger(
-            LOGS_DIR,
-            enabled=self.session_manager.get_event_logging_enabled(),
-        )
+        self.event_logger = event_logger
 
         # Config-backed deck save directory
         self.deck_save_dir = self.session_manager.ensure_deck_save_dir()
@@ -132,22 +114,13 @@ class AppController:
         self._ui_callbacks: UICallbacks | None = None
 
         # Background worker for tasks with lifecycle control
-        self._worker = BackgroundWorker()
+        self._worker = worker
         self.frame: AppFrame | None = None
-        self._bulk_data_helpers = BulkDataHelpers(
-            image_service=self.image_service,
-            worker=self._worker,
-            frame_provider=lambda: self.frame,
-        )
-        self._mtgo_background_helpers = MtgoBackgroundHelpers(worker=self._worker)
+        self._bulk_data_helpers = bulk_data_helpers
 
-        self.frame = self.create_frame()
-
-        # Start background MTGO data fetch
-        if MTGO_DECKLISTS_ENABLED:
-            self._mtgo_background_helpers.start_background_fetch()
-        else:
-            logger.info("MTGO decklists disabled; skipping background fetch.")
+    def attach_frame(self, frame: AppFrame, callbacks: UICallbacks) -> None:
+        self.frame = frame
+        self._ui_callbacks = callbacks
 
     # ============= Card Data Management =============
 
@@ -569,25 +542,9 @@ class AppController:
     # ============= Frame Factory =============
 
     def create_frame(self, parent: wx.Window | None = None) -> AppFrame:
-        import wx
+        from controllers.app_bootstrap import attach_app_frame
 
-        from widgets.app_frame import AppFrame
-
-        # Create the frame
-        frame = AppFrame(controller=self, parent=parent)
-        self._ui_callbacks = AppControllerUIHelpers(self, frame).build_callbacks()
-
-        # Restore UI state from controller's session data
-        wx.CallAfter(frame._restore_session_state)
-
-        # Trigger initial loading after frame is ready
-        wx.CallAfter(
-            lambda: self.run_initial_loads(
-                deck_save_dir=self.deck_save_dir,
-            )
-        )
-
-        return frame
+        return attach_app_frame(self, parent=parent)
 
     def shutdown(self, timeout: float = MTGO_BRIDGE_SHUTDOWN_TIMEOUT_SECONDS) -> None:
         logger.info("Shutting down AppController background workers...")
@@ -602,10 +559,17 @@ _controller_instance: AppController | None = None
 def get_deck_selector_controller() -> AppController:
     global _controller_instance
     if _controller_instance is None:
-        _controller_instance = AppController()
+        from controllers.app_bootstrap import create_deck_selector_controller
+
+        _controller_instance = create_deck_selector_controller()
     return _controller_instance
 
 
 def reset_deck_selector_controller() -> None:
     global _controller_instance
     _controller_instance = None
+
+
+def set_deck_selector_controller(controller: AppController | None) -> None:
+    global _controller_instance
+    _controller_instance = controller

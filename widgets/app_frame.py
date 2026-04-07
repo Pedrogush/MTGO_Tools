@@ -5,8 +5,6 @@ import wx
 from loguru import logger
 from wx.lib.agw import flatnotebook as fnb
 
-from controllers.app_controller import get_deck_selector_controller
-
 if TYPE_CHECKING:
     from controllers.app_controller import AppController
 
@@ -782,7 +780,9 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
 
 def launch_app() -> None:
     app = wx.App(False)
-    controller = get_deck_selector_controller()
+    from controllers.app_bootstrap import create_deck_selector_controller
+
+    controller = create_deck_selector_controller()
     controller.frame.Show()
     app.MainLoop()
 
