@@ -180,7 +180,6 @@ class CardDataManager:
 
     @property
     def is_loaded(self) -> bool:
-        """Return True if card data has been loaded into memory."""
         return self._cards is not None
 
     def _require_cards(self) -> None:
@@ -239,7 +238,6 @@ class CardDataManager:
         self._cards_by_name = index["cards_by_name"]
 
     def _load_index(self) -> None:
-        """Load the card index using a typed msgspec decoder for maximum speed."""
         if not self.index_path.exists():
             raise RuntimeError("Card data index missing or invalid")
         try:
@@ -251,7 +249,6 @@ class CardDataManager:
         self._cards_by_name = card_index.cards_by_name
 
     def _load_meta_json(self) -> dict[str, Any] | None:
-        """Load the small metadata sidecar file (stdlib json is fine at ~260 bytes)."""
         if not self.meta_path.exists():
             return None
         try:
@@ -337,7 +334,6 @@ class CardDataManager:
 
     @staticmethod
     def _collect_name_aliases(canonical_name: str, printing: dict[str, Any]) -> set[str]:
-        """Gather alias names for a printing, including individual faces."""
         aliases: set[str] = set()
         face_name = (printing.get("faceName") or "").strip()
         if face_name:

@@ -32,7 +32,6 @@ class DeckResultsList(wx.VListBox):
     # ------------------------------------------------------------------
 
     def Append(self, text: str) -> None:
-        """Append a plain-text item (used for status/error messages)."""
         line_one, line_two = self._split_lines(text)
         emoji_prefix, line_one_text = self._split_emoji_prefix(line_one)
         self._items.append((False, (emoji_prefix, line_one_text, line_two)))
@@ -48,7 +47,6 @@ class DeckResultsList(wx.VListBox):
         emoji: str = "",
         archetype: str = "",
     ) -> None:
-        """Append a structured deck entry rendered with left/right card layout."""
         self._items.append((True, (emoji, player, archetype, event, result, date)))
         self.SetItemCount(len(self._items))
         self.Refresh()
@@ -62,7 +60,6 @@ class DeckResultsList(wx.VListBox):
         return len(self._items)
 
     def GetString(self, n: int) -> str:
-        """Return display text for item n (compatible with wx.ListBox API)."""
         if n < 0 or n >= len(self._items):
             return ""
         is_structured, data = self._items[n]
@@ -145,7 +142,6 @@ class DeckResultsList(wx.VListBox):
             self._draw_plain_item(dc, rect, n, data)
 
     def _draw_plain_item(self, dc: wx.DC, rect: wx.Rect, n: int, data: tuple) -> None:
-        """Centered two-line layout for status/error messages."""
         emoji_prefix, line_one, line_two = data
         is_selected = self.IsSelected(n)
         card_bg = self._card_border if is_selected else self._card_bg

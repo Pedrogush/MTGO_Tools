@@ -173,7 +173,6 @@ class CardImageRequest:
     size: str = "normal"
 
     def queue_key(self) -> tuple[str, str, str, str]:
-        """Return a stable key for deduping requests."""
         if self.uuid:
             return ("uuid", self.uuid.lower(), self.size, "")
         set_code = (self.set_code or "").lower()
@@ -181,7 +180,6 @@ class CardImageRequest:
         return ("set", set_code, collector, self.size)
 
     def can_fetch(self) -> bool:
-        """Return True when there is enough data to fetch from Scryfall."""
         return bool((self.card_name or "").strip())
 
 
@@ -207,13 +205,11 @@ class CardImageCache:
         self._path_cache_lock: threading.Lock = threading.Lock()
 
     def _ensure_directories(self) -> None:
-        """Create cache directories if they don't exist."""
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         for size in IMAGE_SIZES.values():
             (self.cache_dir / size).mkdir(exist_ok=True)
 
     def _build_path_roots(self) -> list[Path]:
-        """Precompute base directories used to resolve relative cache entries."""
         roots: list[Path] = []
         candidates = [
             Path.cwd(),
@@ -234,14 +230,12 @@ class CardImageCache:
         return roots
 
     def _init_database(self) -> None:
-        """Initialize SQLite database schema."""
         with sqlite3.connect(self.db_path, timeout=SQLITE_CONNECTION_TIMEOUT_SECONDS) as conn:
             self._create_schema(conn)
             self._ensure_face_index_support(conn)
             conn.commit()
 
     def _create_schema(self, conn: sqlite3.Connection) -> None:
-        """Create base tables if they do not exist."""
         conn.execute("""
             CREATE TABLE IF NOT EXISTS card_images (
                 uuid TEXT NOT NULL,
@@ -273,7 +267,6 @@ class CardImageCache:
         """)
 
     def _ensure_face_index_support(self, conn: sqlite3.Connection) -> None:
-        """Ensure the card_images table can store multiple faces per UUID."""
         info = conn.execute("PRAGMA table_info(card_images)").fetchall()
         has_face_index = any(column[1] == "face_index" for column in info)
         if has_face_index:
@@ -361,7 +354,6 @@ class CardImageCache:
         return resolved
 
     def _normalize_path(self, path: Path) -> Path:
-        """Resolve absolute paths or attempt to rebuild relatives under known roots."""
         try:
             if path.is_absolute():
                 return path
@@ -375,7 +367,6 @@ class CardImageCache:
         return path
 
     def _resolve_relative_path(self, relative: Path) -> Path | None:
-        """Attempt to resolve a relative cache entry against known roots."""
         for root in self._path_roots:
             candidate = (root / relative).resolve()
             if candidate.exists():
@@ -384,7 +375,6 @@ class CardImageCache:
 
     @timed
     def get_image_path(self, card_name: str, size: str = "normal") -> Path | None:
-        """Get cached image path for a card name."""
         key = (card_name.lower(), size)
         with self._path_cache_lock:
             if key in self._path_cache:
@@ -398,7 +388,6 @@ class CardImageCache:
         return result
 
     def _get_image_path_from_db(self, card_name: str, size: str) -> Path | None:
-        """Query the database for a card image path, including double-faced alias lookup."""
         with sqlite3.connect(self.db_path, timeout=SQLITE_CONNECTION_TIMEOUT_SECONDS) as conn:
             cursor = conn.execute(
                 """
@@ -445,7 +434,6 @@ class CardImageCache:
     def _lookup_double_faced_alias(
         self, conn: sqlite3.Connection, card_name: str, size: str
     ) -> Path | None:
-        """Attempt to resolve legacy front/back alias lookups."""
         alias = (card_name or "").strip()
         if not alias or "//" in alias:
             return None
@@ -477,7 +465,6 @@ class CardImageCache:
     def get_image_path_for_printing(
         self, card_name: str, set_code: str, size: str = "normal"
     ) -> Path | None:
-        """Get cached image path for a specific printing."""
         if not set_code:
             return self.get_image_path(card_name, size)
         with sqlite3.connect(self.db_path, timeout=SQLITE_CONNECTION_TIMEOUT_SECONDS) as conn:
@@ -499,7 +486,6 @@ class CardImageCache:
     def get_image_by_uuid(
         self, uuid: str, size: str = "normal", face_index: int | None = 0
     ) -> Path | None:
-        """Get cached image path by Scryfall UUID."""
         query = "SELECT file_path FROM card_images WHERE uuid = ? AND image_size = ? ORDER BY face_index"
         params: tuple[object, ...]
         if face_index is None:
@@ -518,7 +504,6 @@ class CardImageCache:
         return None
 
     def get_image_paths_by_uuid(self, uuid: str, size: str = "normal") -> list[Path]:
-        """Return all cached face images for a UUID, ordered by face index."""
         with sqlite3.connect(self.db_path, timeout=SQLITE_CONNECTION_TIMEOUT_SECONDS) as conn:
             rows = conn.execute(
                 """
@@ -548,7 +533,6 @@ class CardImageCache:
         artist: str | None = None,
         face_index: int = 0,
     ) -> None:
-        """Add image record to database."""
         file_path_str = str(Path(file_path).resolve())
 
         with sqlite3.connect(self.db_path, timeout=SQLITE_CONNECTION_TIMEOUT_SECONDS) as conn:
@@ -579,7 +563,6 @@ class CardImageCache:
             self._path_cache.pop(key, None)
 
     def get_cache_stats(self) -> dict[str, Any]:
-        """Get cache statistics."""
         with sqlite3.connect(self.db_path, timeout=SQLITE_CONNECTION_TIMEOUT_SECONDS) as conn:
             total = conn.execute("SELECT COUNT(DISTINCT uuid) FROM card_images").fetchone()[0]
             by_size = {}
@@ -601,7 +584,6 @@ class CardImageCache:
         }
 
     def is_cached(self, uuid: str, size: str = "normal", face_index: int | None = 0) -> bool:
-        """Check if image is already cached."""
         return self.get_image_by_uuid(uuid, size, face_index=face_index) is not None
 
 
@@ -615,14 +597,12 @@ class BulkImageDownloader:
         self.session.headers.update({"User-Agent": "MTGOMetagameCrawler/1.0"})
 
     def _fetch_bulk_metadata(self) -> dict[str, Any]:
-        """Fetch the bulk data metadata from Scryfall."""
         logger.info("Fetching bulk data metadata from Scryfall...")
         resp = self.session.get(BULK_DATA_URL, timeout=SCRYFALL_REQUEST_TIMEOUT_SECONDS)
         resp.raise_for_status()
         return resp.json()
 
     def fetch_card_by_name(self, name: str, set_code: str | None = None) -> dict[str, Any]:
-        """Fetch card data from Scryfall by exact name."""
         params = {"exact": name}
         if set_code:
             params["set"] = set_code.lower()
@@ -633,7 +613,6 @@ class BulkImageDownloader:
         return resp.json()
 
     def fetch_printings_by_name(self, name: str) -> list[dict[str, Any]]:
-        """Fetch all printings for a card name from Scryfall."""
         params = {"q": f'!"{name}"', "unique": "prints", "order": "released"}
         results: list[dict[str, Any]] = []
         url: str | None = SCRYFALL_CARD_SEARCH_URL
@@ -649,12 +628,10 @@ class BulkImageDownloader:
     def download_card_image_by_name(
         self, name: str, size: str = "normal", set_code: str | None = None
     ) -> tuple[bool, str]:
-        """Fetch card data by name and download its image(s)."""
         card = self.fetch_card_by_name(name, set_code=set_code)
         return self._download_single_image(card, size)
 
     def _get_cached_bulk_data_record(self) -> tuple[str | None, str | None]:
-        """Return the saved bulk data metadata (updated_at, download URI)."""
         with sqlite3.connect(self.cache.db_path, timeout=SQLITE_CONNECTION_TIMEOUT_SECONDS) as conn:
             row = conn.execute(
                 "SELECT downloaded_at, bulk_data_uri FROM bulk_data_meta WHERE id = 1"
@@ -666,7 +643,6 @@ class BulkImageDownloader:
     def is_bulk_data_outdated(
         self, max_staleness_seconds: int | None = None
     ) -> tuple[bool, dict[str, Any]]:
-        """Determine whether the cached bulk data is outdated compared to the vendor."""
         metadata = self._fetch_bulk_metadata()
         download_uri = metadata.get("download_uri")
         updated_at = metadata.get("updated_at")
@@ -692,7 +668,6 @@ class BulkImageDownloader:
         return True, metadata
 
     def download_bulk_metadata(self, force: bool = False) -> tuple[bool, str]:
-        """Download Scryfall bulk data JSON."""
         try:
             metadata = self._fetch_bulk_metadata()
         except Exception as exc:
@@ -757,7 +732,6 @@ class BulkImageDownloader:
     def _download_single_image(
         self, card: dict[str, Any], size: str = "normal"
     ) -> tuple[bool, str]:
-        """Download a single card image."""
         uuid = card.get("id")
         name = card.get("name", "Unknown")
 
@@ -781,7 +755,6 @@ class BulkImageDownloader:
     def _download_multi_face_card(
         self, card: dict[str, Any], faces: list[dict[str, Any]], size: str
     ) -> tuple[bool, str]:
-        """Download images for each face of a double-faced card."""
         uuid = card.get("id")
         if not uuid:
             return False, "Missing UUID for multi-face card"
@@ -832,7 +805,6 @@ class BulkImageDownloader:
         size: str,
         card: dict[str, Any],
     ) -> tuple[bool, str, Path | None]:
-        """Download a specific face image."""
         if self.cache.is_cached(uuid, size, face_index=face_index):
             path = self.cache.get_image_by_uuid(uuid, size, face_index=face_index)
             return True, f"Already cached: {name}", path
@@ -873,7 +845,6 @@ class BulkImageDownloader:
 
     @staticmethod
     def _build_face_filename(uuid: str, face_index: int, ext: str) -> str:
-        """Return deterministic filename for a face image."""
         if face_index <= 0:
             return f"{uuid}.{ext}"
         return f"{uuid}-f{face_index}.{ext}"
@@ -884,7 +855,6 @@ class BulkImageDownloader:
         max_cards: int | None = None,
         progress_callback: callable | None = None,
     ) -> dict[str, Any]:
-        """Download all card images from bulk data."""
         if not BULK_DATA_CACHE.exists():
             return {
                 "success": False,

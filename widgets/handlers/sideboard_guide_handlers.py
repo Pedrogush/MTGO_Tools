@@ -49,7 +49,6 @@ class SideboardGuideHandlers:
         return cleaned
 
     def _refresh_pin_indicator(self: AppFrame) -> None:
-        """Update the pin button to reflect whether the current deck is pinned."""
         if not ACTIVE_GUIDE_FILE.exists():
             self.sideboard_guide_panel.set_pinned(False)
             return
@@ -222,7 +221,6 @@ class SideboardGuideHandlers:
         dlg.Destroy()
 
     def _on_edit_flex_slots(self: AppFrame) -> None:
-        """Allow the user to mark which mainboard cards are flex slots."""
         mainboard_cards = self.zone_cards.get("main", [])
         if not mainboard_cards:
             wx.MessageBox("No mainboard cards loaded.", "Flex Slots", wx.OK | wx.ICON_INFORMATION)
@@ -247,7 +245,6 @@ class SideboardGuideHandlers:
         dlg.Destroy()
 
     def _on_export_guide(self: AppFrame) -> None:
-        """Export sideboard guide to CSV format."""
         if not self.sideboard_guide_entries:
             self._set_status("guide.status.no_entries_to_export")
             return
@@ -279,7 +276,6 @@ class SideboardGuideHandlers:
         threading.Thread(target=worker, daemon=True).start()
 
     def _on_import_guide(self: AppFrame) -> None:
-        """Import sideboard guide from CSV format."""
         self.sideboard_guide_panel.set_warning("")
 
         file_dlg = wx.FileDialog(
@@ -542,7 +538,6 @@ class SideboardGuideHandlers:
         return imported_entries, warnings
 
     def _on_pin_guide(self: AppFrame) -> None:
-        """Pin the current deck's sideboard guide for use in the Opponent Tracker."""
         deck_hash = self.controller.deck_repo.get_current_decklist_hash()
         current_deck = self.controller.deck_repo.get_current_deck()
         deck_name = ""
@@ -562,7 +557,6 @@ class SideboardGuideHandlers:
             self._set_status("guide.status.pin_error")
 
     def _parse_card_text(self: AppFrame, text: str) -> dict[str, int]:
-        """Parse text like '2x Lightning Bolt, 1x Mountain' into a dict."""
         if not text or not isinstance(text, str):
             return {}
 

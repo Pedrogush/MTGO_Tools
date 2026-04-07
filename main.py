@@ -67,14 +67,12 @@ class MetagameWxApp(wx.App):
             show_main()
 
     def OnExit(self) -> int:  # noqa: N802 - wx override
-        """Clean up when the application exits."""
         if getattr(self, "_automation_server", None):
             logger.info("Stopping automation server...")
             self._automation_server.stop()
         return 0
 
     def OnExceptionInMainLoop(self) -> bool:  # noqa: N802 - wx override
-        """Handle exceptions in the main event loop."""
         import sys
         import traceback
 
@@ -96,7 +94,6 @@ class MetagameWxApp(wx.App):
 
 
 def parse_args() -> argparse.Namespace:
-    """Parse command-line arguments."""
     parser = argparse.ArgumentParser(description="MTGO Metagame Deck Builder")
     parser.add_argument(
         "--automation",

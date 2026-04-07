@@ -49,19 +49,16 @@ class _SearchResultsView(wx.ListCtrl):
         self.Bind(wx.EVT_SIZE, self._on_size)
 
     def _on_size(self, event: wx.SizeEvent) -> None:
-        """Resize Name column to fill available width so no blank third column appears."""
         event.Skip()
         self._fit_name_column()
 
     def _fit_name_column(self) -> None:
-        """Set Name column (index 1) width to consume all space left by Mana Cost column."""
         name_w = max(
             BUILDER_NAME_COL_MIN_WIDTH, self.GetClientSize().width - BUILDER_MANA_CANVAS_WIDTH
         )
         self.SetColumnWidth(1, name_w)
 
     def SetData(self, data: list[dict[str, Any]]) -> None:
-        """Set the data source and refresh the display."""
         self._data = data
         if self._mana_icons and self._mana_img_list is not None:
             self._update_mana_cache()
@@ -176,11 +173,9 @@ class _SearchResultsView(wx.ListCtrl):
         return ""
 
     def OnGetItemImage(self, item: int) -> int:
-        """No image on the hidden dummy column 0."""
         return -1
 
     def OnGetItemColumnImage(self, item: int, col: int) -> int:
-        """Return the image-list index for the mana cost icon (column 2)."""
         if col != 2 or not self._mana_icons or item < 0 or item >= len(self._data):
             return -1
         cost = self._data[item].get("mana_cost", "")
@@ -263,7 +258,6 @@ class DeckBuilderPanel(wx.Panel):
         return translate(self._locale, key, **kwargs)
 
     def _build_ui(self) -> None:
-        """Build the complete UI for the deck builder panel."""
         self.SetBackgroundColour(DARK_PANEL)
         sizer = wx.BoxSizer(wx.VERTICAL)
         self.SetSizer(sizer)
@@ -595,11 +589,9 @@ class DeckBuilderPanel(wx.Panel):
         self.status_label = status
 
     def _on_back_clicked(self) -> None:
-        """Handle back button click."""
         self._on_switch_to_research()
 
     def _on_adv_toggle(self, _event: wx.Event) -> None:
-        """Toggle the advanced filters panel visibility."""
         if self._adv_panel is None or self._adv_toggle_btn is None:
             return
         shown = self._adv_panel.IsShown()
@@ -613,7 +605,6 @@ class DeckBuilderPanel(wx.Panel):
         self.Layout()
 
     def _on_result_item_selected(self, event: wx.ListEvent) -> None:
-        """Handle result list item selection."""
         if not self.results_ctrl:
             return
         idx = event.GetIndex()
@@ -634,12 +625,10 @@ class DeckBuilderPanel(wx.Panel):
         event.Skip()
 
     def _on_result_activated(self, event: wx.ListEvent) -> None:
-        """Handle double-click or Enter on search result."""
         idx = event.GetIndex()
         self._add_result_by_index(idx)
 
     def _on_result_key_down(self, event: wx.KeyEvent) -> None:
-        """Handle + key in search results to add to active zone."""
         if event.GetKeyCode() == ord("+") and not event.ControlDown():
             if self.results_ctrl:
                 selected = self.results_ctrl.GetFirstSelected()
@@ -649,7 +638,6 @@ class DeckBuilderPanel(wx.Panel):
         event.Skip()
 
     def _add_result_by_index(self, idx: int) -> None:
-        """Add the search result at the given index to the active zone."""
         card = self.get_result_at_index(idx)
         if card and self._on_add_to_active_zone:
             name = card.get("name")
@@ -657,7 +645,6 @@ class DeckBuilderPanel(wx.Panel):
                 self._on_add_to_active_zone(name)
 
     def _on_add_to_zone(self, zone: str) -> None:
-        """Handle add-to-zone button click."""
         card = self.get_selected_result()
         if not card:
             return
@@ -670,7 +657,6 @@ class DeckBuilderPanel(wx.Panel):
             self._on_add_to_side(name)
 
     def _update_add_buttons(self) -> None:
-        """Enable or disable add buttons based on current selection."""
         has_selection = self.get_selected_result() is not None
         if self._add_main_btn:
             self._add_main_btn.Enable(has_selection and bool(self._on_add_to_main))
@@ -678,7 +664,6 @@ class DeckBuilderPanel(wx.Panel):
             self._add_side_btn.Enable(has_selection and bool(self._on_add_to_side))
 
     def _append_mana_symbol(self, token: str) -> None:
-        """Append a mana symbol to the mana cost field."""
         ctrl = self.inputs.get("mana")
         if not ctrl:
             return
@@ -691,7 +676,6 @@ class DeckBuilderPanel(wx.Panel):
         self._schedule_search()
 
     def get_filters(self) -> dict[str, Any]:
-        """Get all current filter values."""
         filters = {key: ctrl.GetValue().strip() for key, ctrl in self.inputs.items()}
         filters["mana_exact"] = self.mana_exact_cb.IsChecked() if self.mana_exact_cb else False
         filters["text_mode"] = (
@@ -735,7 +719,6 @@ class DeckBuilderPanel(wx.Panel):
         return filters
 
     def clear_filters(self) -> None:
-        """Clear all filter controls."""
         for ctrl in self.inputs.values():
             ctrl.ChangeValue("")
         self.results_cache = []
@@ -773,7 +756,6 @@ class DeckBuilderPanel(wx.Panel):
         self._schedule_search()
 
     def update_results(self, results: list[dict[str, Any]]) -> None:
-        """Update the results list with search results."""
         self.results_cache = results
         if not self.results_ctrl:
             return
@@ -783,13 +765,11 @@ class DeckBuilderPanel(wx.Panel):
             self.status_label.SetLabel(f"Showing {count} card{'s' if count != 1 else ''}.")
 
     def get_result_at_index(self, idx: int) -> dict[str, Any] | None:
-        """Get the result card data at the given index."""
         if idx < 0 or idx >= len(self.results_cache):
             return None
         return self.results_cache[idx]
 
     def get_selected_result(self) -> dict[str, Any] | None:
-        """Return the currently selected search result, if any."""
         if not self.results_ctrl:
             return None
         selected = self.results_ctrl.GetFirstSelected()
@@ -804,26 +784,21 @@ class DeckBuilderPanel(wx.Panel):
         self._update_add_buttons()
 
     def _on_search(self) -> None:
-        """Trigger search callback."""
         self._on_search_callback()
 
     def _on_filters_changed(self, event: wx.Event | None = None) -> None:
-        """Handle any filter change by scheduling a search."""
         self._sync_format_pool_state()
         self._schedule_search()
         if event:
             event.Skip()
 
     def _on_clear(self) -> None:
-        """Handle clear button click."""
         self._on_clear_callback()
 
     def _on_result_selected(self, idx: int | None) -> None:
-        """Handle result list item selection."""
         self._on_result_selected_callback(idx)
 
     def _schedule_search(self) -> None:
-        """Debounce search execution when filters change."""
         if not self._search_timer:
             return
         if self._search_timer.IsRunning():
@@ -831,11 +806,9 @@ class DeckBuilderPanel(wx.Panel):
         self._search_timer.StartOnce(BUILDER_SEARCH_DEBOUNCE_MS)
 
     def _on_search_timer(self, _event: wx.TimerEvent) -> None:
-        """Run the search after the debounce timer fires."""
         self._on_search()
 
     def _sync_format_pool_state(self) -> None:
-        """Enable the format-pool toggle only when a specific format is selected."""
         if self.format_choice is None or self.format_pool_cb is None:
             return
         has_selected_format = self.format_choice.GetSelection() > 0
@@ -846,7 +819,6 @@ class DeckBuilderPanel(wx.Panel):
     # ============= Radar Integration =============
 
     def _on_radar_toggle(self, event: wx.Event) -> None:
-        """Handle radar filter checkbox toggle."""
         self.radar_enabled = self.radar_cb.IsChecked()
         self.radar_zone_choice.Enable(self.radar_enabled)
 
@@ -862,14 +834,12 @@ class DeckBuilderPanel(wx.Panel):
         self._schedule_search()
 
     def _on_radar_zone_changed(self, event: wx.Event) -> None:
-        """Handle radar zone selection change."""
         selection = self.radar_zone_choice.GetSelection()
         zone_map = {0: "both", 1: "mainboard", 2: "sideboard"}
         self.radar_zone = zone_map.get(selection, "both")
         self._schedule_search()
 
     def _on_open_radar(self, event: wx.Event) -> None:
-        """Handle open radar button click."""
         if self._on_open_radar_dialog:
             radar = self._on_open_radar_dialog()
             if radar:

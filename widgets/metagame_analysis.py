@@ -309,7 +309,6 @@ class MetagameAnalysisFrame(wx.Frame):
         self._sync_navigation_controls()
 
     def _aggregate_for_days(self, days: int, base_offset: int = 0) -> dict[str, int]:
-        """Aggregate deck counts for the specified number of days starting from base_offset."""
         format_stats = self.stats_data.get(self.current_format, {})
         today = datetime.now().date()
 
@@ -349,7 +348,6 @@ class MetagameAnalysisFrame(wx.Frame):
         self._update_changes_display()
 
     def _calculate_percentages(self, counts: dict[str, int]) -> dict[str, float]:
-        """Calculate percentage share for each archetype."""
         total = sum(counts.values())
         if total == 0:
             return {}

@@ -47,7 +47,6 @@ class DeckRepository:
         self._decks_added: int = 0
 
     def _get_db(self):
-        """Get or create database connection."""
         if self._db is None:
             if self._client is None:
                 self._client = pymongo.MongoClient("mongodb://localhost:27017/")
@@ -269,7 +268,6 @@ class DeckRepository:
         return self._current_deck
 
     def get_current_deck_key(self) -> str:
-        """Return a stable key for the current deck for store lookups."""
         current_deck = self.get_current_deck()
         if current_deck:
             return current_deck.get("href") or current_deck.get("name", "manual").lower()
@@ -359,7 +357,6 @@ _default_repository = None
 
 
 def get_deck_repository() -> DeckRepository:
-    """Get the default deck repository instance."""
     global _default_repository
     if _default_repository is None:
         _default_repository = DeckRepository()

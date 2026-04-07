@@ -111,7 +111,6 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
 
     # ------------------------------------------------------------------ UI ------------------------------------------------------------------
     def _build_ui(self) -> None:
-        """Build the main UI structure."""
         self.SetBackgroundColour(DARK_BG)
         self._setup_status_bar()
 
@@ -599,7 +598,6 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
         )
 
     def _open_radar_dialog(self):
-        """Open the Radar dialog for archetype card frequency analysis."""
         dialog = RadarDialog(
             parent=self,
             metagame_repo=self.controller.metagame_repo,
@@ -747,7 +745,6 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
         self.card_inspector_panel.reset()
 
     def _render_current_deck(self) -> None:
-        """Render the saved deck into the UI once card data is available."""
         self.main_table.set_cards(self.zone_cards["main"])
         self.side_table.set_cards(self.zone_cards["side"])
         if self.out_table:
@@ -762,7 +759,6 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
         self._pending_deck_restore = False
 
     def _render_pending_deck(self) -> None:
-        """Render a saved deck after card data finishes loading."""
         if not self.controller.card_repo.is_card_data_ready():
             return
         if self._pending_deck_restore or self._has_deck_loaded():

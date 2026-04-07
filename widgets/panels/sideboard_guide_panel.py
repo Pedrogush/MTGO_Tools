@@ -63,7 +63,6 @@ class SideboardGuidePanel(wx.Panel):
         return translate(self._locale, key, **kwargs)
 
     def _build_ui(self) -> None:
-        """Build the panel UI."""
         sizer = wx.BoxSizer(wx.VERTICAL)
         self.SetSizer(sizer)
 
@@ -184,11 +183,9 @@ class SideboardGuidePanel(wx.Panel):
         self._refresh_view()
 
     def get_entries(self) -> list[dict[str, str]]:
-        """Get the current guide entries."""
         return self.entries
 
     def get_exclusions(self) -> list[str]:
-        """Get the current excluded archetypes."""
         return self.exclusions
 
     def get_selected_index(self) -> int | None:
@@ -198,7 +195,6 @@ class SideboardGuidePanel(wx.Panel):
         return self.guide_view.ItemToRow(item)
 
     def clear(self) -> None:
-        """Clear all guide entries."""
         self.entries = []
         self.exclusions = []
         self._refresh_view()
@@ -214,7 +210,6 @@ class SideboardGuidePanel(wx.Panel):
     # ============= Private Methods =============
 
     def _refresh_view(self) -> None:
-        """Refresh the guide view display."""
         self.guide_view.DeleteAllItems()
 
         # Add entries (skip excluded archetypes)
@@ -261,36 +256,28 @@ class SideboardGuidePanel(wx.Panel):
         return ", ".join(formatted)
 
     def _on_add_clicked(self, _event: wx.Event) -> None:
-        """Handle Add Entry button click."""
         self.on_add_entry()
 
     def _on_edit_clicked(self, _event: wx.Event) -> None:
-        """Handle Edit Entry button click."""
         self.on_edit_entry()
 
     def _on_remove_clicked(self, _event: wx.Event) -> None:
-        """Handle Remove Entry button click."""
         self.on_remove_entry()
 
     def _on_exclusions_clicked(self, _event: wx.Event) -> None:
-        """Handle Exclude Archetypes button click."""
         self.on_edit_exclusions()
 
     def _on_export_clicked(self, _event: wx.Event) -> None:
-        """Handle Export CSV button click."""
         self.on_export_csv()
 
     def _on_import_clicked(self, _event: wx.Event) -> None:
-        """Handle Import CSV button click."""
         self.on_import_csv()
 
     def _on_pin_clicked(self, _event: wx.Event) -> None:
-        """Handle Pin for Tracker button click."""
         if self.on_pin_guide:
             self.on_pin_guide()
 
     def _on_flex_slots_clicked(self, _event: wx.Event) -> None:
-        """Handle Flex Slots button click."""
         if self.on_edit_flex_slots:
             self.on_edit_flex_slots()
 

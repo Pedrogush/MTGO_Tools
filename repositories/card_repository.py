@@ -45,7 +45,6 @@ class CardRepository:
 
     @property
     def card_data_manager(self) -> CardDataManager:
-        """Get or create the CardDataManager instance."""
         if self._card_data_manager is None:
             self._card_data_manager = CardDataManager()
         return self._card_data_manager
@@ -90,7 +89,6 @@ class CardRepository:
 
     def load_collection_from_file(self, filepath: Path) -> list[dict[str, Any]]:
         def _extract_cards(payload: Any) -> list[Any]:
-            """Return the most likely card list from the payload."""
             if isinstance(payload, list):
                 return payload
 
@@ -203,7 +201,6 @@ _default_repository = None
 
 
 def get_card_repository() -> CardRepository:
-    """Get the default card repository instance."""
     global _default_repository
     if _default_repository is None:
         _default_repository = CardRepository()

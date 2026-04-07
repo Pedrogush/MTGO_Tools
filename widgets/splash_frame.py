@@ -55,7 +55,6 @@ class LoadingFrame(wx.Frame):
         self.Centre(wx.BOTH)
 
     def set_ready(self, on_ready: Callable[[], None] | None = None) -> None:
-        """Mark the splash as ready to close once the minimum display time is met."""
         self._ready = True
         self._on_ready = on_ready
         self._maybe_finish()

@@ -283,7 +283,6 @@ class BundleSnapshotClient:
     # ------------------------------------------------------------------ #
 
     def _hydrate_archetype_lists(self, archetype_entries: list[dict[str, Any]], now: float) -> None:
-        """Merge archetype list entries into ARCHETYPE_LIST_CACHE_FILE."""
         if not archetype_entries:
             return
 
@@ -311,7 +310,6 @@ class BundleSnapshotClient:
                 logger.warning(f"Failed to write archetype list cache: {exc}")
 
     def _hydrate_archetype_decks(self, deck_entries: list[dict[str, Any]], now: float) -> None:
-        """Merge deck list entries into ARCHETYPE_DECKS_CACHE_FILE."""
         if not deck_entries:
             return
 
@@ -462,7 +460,6 @@ class BundleSnapshotClient:
         return total
 
     def _hydrate_format_card_pools(self, card_pool_entries: list[dict[str, Any]]) -> int:
-        """Insert or replace precomputed format card pools into SQLite."""
         if not card_pool_entries:
             return 0
         try:
@@ -475,7 +472,6 @@ class BundleSnapshotClient:
             return 0
 
     def _hydrate_radars(self, radar_entries: list[dict[str, Any]]) -> int:
-        """Insert or replace precomputed archetype radars into SQLite."""
         if not radar_entries:
             return 0
         try:
@@ -532,7 +528,6 @@ _default_client: BundleSnapshotClient | None = None
 
 
 def get_bundle_snapshot_client() -> BundleSnapshotClient:
-    """Return the shared ``BundleSnapshotClient`` instance."""
     global _default_client
     if _default_client is None:
         _default_client = BundleSnapshotClient()

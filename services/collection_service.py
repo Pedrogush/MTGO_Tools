@@ -266,7 +266,6 @@ _default_service = None
 
 
 def get_collection_service() -> CollectionService:
-    """Get the default collection service instance."""
     global _default_service
     if _default_service is None:
         _default_service = CollectionService()

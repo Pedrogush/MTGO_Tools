@@ -63,14 +63,12 @@ class DeckService:
         return self.deck_averager.add_deck_to_buffer(buffer, deck_text)
 
     def add_deck_to_karsten_buffer(self, buffer: dict[str, int], deck_text: str) -> dict[str, int]:
-        """Add a deck to a Karsten unique-copy frequency buffer."""
         return self.deck_averager.add_deck_to_karsten_buffer(buffer, deck_text)
 
     def render_average_deck(self, buffer: dict[str, float], deck_count: int) -> str:
         return self.deck_averager.render_average_deck(buffer, deck_count)
 
     def render_karsten_deck(self, buffer: dict[str, int]) -> str:
-        """Render a Karsten-method average deck from a unique-copy frequency buffer."""
         return self.deck_averager.render_karsten_deck(buffer)
 
     def build_daily_average(

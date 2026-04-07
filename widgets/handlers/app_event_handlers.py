@@ -197,11 +197,9 @@ class AppEventHandlers:
 
     @staticmethod
     def _classify_event_type(event_str: str) -> str | None:
-        """Return a canonical event type label for the given event string, or None."""
         return _classify_event_type(event_str)
 
     def _apply_deck_filters(self: AppFrame) -> None:
-        """Filter the displayed deck list based on all active filters (AND logic)."""
         event_type = self.research_panel.get_event_type_filter()
         result_query = self.research_panel.get_result_filter()
         player_query = self.research_panel.get_player_name_filter()
@@ -781,7 +779,6 @@ class AppEventHandlers:
         self.summary_text.SetPage(html)
 
     def _load_all_decks(self: AppFrame) -> None:
-        """Load all locally cached decks across archetypes, sorted by date."""
         self._all_loaded_decks = []
         if not self._is_first_deck_load:
             self.research_panel.reset_event_type_filter()

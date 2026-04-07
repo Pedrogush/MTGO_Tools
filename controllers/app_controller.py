@@ -435,7 +435,6 @@ class AppController:
         self._bulk_data_helpers.load_bulk_data_into_memory(on_status, force=force)
 
     def force_bulk_data_update(self) -> None:
-        """Force download of bulk data regardless of current state."""
         self._bulk_data_helpers.force_bulk_data_update(self._ui_callbacks)
 
     def save_settings(
@@ -635,7 +634,6 @@ class AppController:
         return frame
 
     def shutdown(self, timeout: float = MTGO_BRIDGE_SHUTDOWN_TIMEOUT_SECONDS) -> None:
-        """Shutdown all background workers gracefully."""
         logger.info("Shutting down AppController background workers...")
         self.image_service.shutdown()
         self._worker.shutdown(timeout=timeout)

@@ -166,7 +166,6 @@ class CardBoxPanel(wx.Panel):
         Thread(target=self._image_load_worker, args=(gen, candidates), daemon=True).start()
 
     def _image_load_worker(self, gen: int, candidates: list[str]) -> None:
-        """Background thread: locate and load the card image via PIL."""
         image_path = None
         for name in candidates:
             path = get_card_image(name, "normal")
@@ -188,7 +187,6 @@ class CardBoxPanel(wx.Panel):
             wx.CallAfter(self._on_image_load_done, gen, None)
 
     def _on_image_load_done(self, gen: int, pil_img: "PilImage.Image | None") -> None:
-        """Main-thread callback: apply the loaded image bitmap."""
         try:
             if not self:
                 return

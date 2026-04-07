@@ -186,7 +186,6 @@ class RadarService:
         *,
         max_decks: int | None,
     ) -> RadarData | None:
-        """Return a locally cached precomputed radar when it satisfies the request."""
         if not archetype_href:
             return None
         snapshot = self.radar_repo.get_radar(format_name, archetype_href)
@@ -199,7 +198,6 @@ class RadarService:
         return self._snapshot_to_radar_data(snapshot)
 
     def _snapshot_to_radar_data(self, snapshot: StoredRadar) -> RadarData:
-        """Convert a stored radar snapshot into the public RadarData shape."""
         return RadarData(
             archetype_name=snapshot.archetype_name,
             format_name=snapshot.format_name.title(),

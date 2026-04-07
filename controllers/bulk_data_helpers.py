@@ -112,7 +112,6 @@ class BulkDataHelpers:
             on_status(self._t("app.status.ready"))
 
     def force_bulk_data_update(self, callbacks: UICallbacks | None) -> None:
-        """Force download of bulk data regardless of current state."""
         if self._bulk_check_worker_active:
             logger.debug("Bulk data update already running")
             return

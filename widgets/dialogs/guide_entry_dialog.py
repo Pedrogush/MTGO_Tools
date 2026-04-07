@@ -161,12 +161,10 @@ class GuideEntryDialog(wx.Dialog):
         return translate(self._locale, key, **kwargs)
 
     def _on_save_continue(self, event: wx.Event) -> None:
-        """Handle Save & Continue button click."""
         # Return wx.ID_APPLY to signal save without closing
         self.EndModal(wx.ID_APPLY)
 
     def _load_data(self, data: dict[str, Any]) -> None:
-        """Load existing data into the selectors."""
         # Load play out/in
         if "play_out" in data:
             self.play_out_selector.set_selected_cards(data["play_out"])
@@ -180,7 +178,6 @@ class GuideEntryDialog(wx.Dialog):
             self.draw_in_selector.set_selected_cards(data["draw_in"])
 
     def get_data(self) -> dict[str, Any]:
-        """Get the guide entry data."""
         return {
             "archetype": self.archetype_ctrl.GetValue().strip(),
             "play_out": self.play_out_selector.get_selected_cards(),

@@ -72,7 +72,6 @@ class CardImageDisplay(wx.Panel):
         self.show_placeholder()
 
     def _create_ui(self) -> None:
-        """Create the UI layout with image display."""
         # Main vertical sizer
         main_sizer = wx.BoxSizer(wx.VERTICAL)
 
@@ -101,7 +100,6 @@ class CardImageDisplay(wx.Panel):
         self.Refresh()
 
     def show_images(self, image_paths: list[Path], start_index: int = 0) -> bool:
-        """Display a list of card images with navigation."""
         if not image_paths:
             self.show_placeholder("No images")
             return False
@@ -122,12 +120,10 @@ class CardImageDisplay(wx.Panel):
         return success
 
     def show_image(self, image_path: Path) -> bool:
-        """Display a single card image (convenience method)."""
         return self.show_images([image_path] if image_path else [])
 
     @timed
     def _load_image_at_index(self, index: int, animate: bool = True) -> bool:
-        """Load and display the image at the given index."""
         if not 0 <= index < len(self.image_paths):
             return False
 
@@ -189,7 +185,6 @@ class CardImageDisplay(wx.Panel):
         self.animation_timer.Start(CARD_IMAGE_ANIMATION_INTERVAL_MS)  # ~60 FPS
 
     def _on_animation_tick(self, event: wx.TimerEvent) -> None:
-        """Handle animation timer tick."""
         # Increment alpha (fade speed)
         self.animation_alpha += CARD_IMAGE_ANIMATION_ALPHA_STEP
 
@@ -234,7 +229,6 @@ class CardImageDisplay(wx.Panel):
         return wx.Bitmap(result)
 
     def _update_navigation(self) -> None:
-        """Update visibility of the flip icon overlay."""
         has_alternate_face = len(self.image_paths) > 1
 
         # Update flip icon visibility state
@@ -246,7 +240,6 @@ class CardImageDisplay(wx.Panel):
                 self._load_image_at_index(self.current_index, animate=False)
 
     def _on_key_down(self, event: wx.KeyEvent) -> None:
-        """Handle keyboard navigation."""
         keycode = event.GetKeyCode()
 
         if keycode in (wx.WXK_LEFT, wx.WXK_RIGHT, wx.WXK_SPACE):
@@ -278,7 +271,6 @@ class CardImageDisplay(wx.Panel):
         self._toggle_face()
 
     def _toggle_face(self) -> None:
-        """Advance to the next face when multiple images are available."""
         if len(self.image_paths) <= 1:
             return
         self.current_index = (self.current_index + 1) % len(self.image_paths)
@@ -286,7 +278,6 @@ class CardImageDisplay(wx.Panel):
         self._update_navigation()
 
     def _create_rounded_bitmap(self, image: wx.Image) -> wx.Bitmap:
-        """Create a bitmap with the image centered and rounded corners."""
         # Create a bitmap canvas
         bitmap = wx.Bitmap(self.image_width, self.image_height)
         dc = wx.MemoryDC(bitmap)
@@ -390,7 +381,6 @@ class CardImageDisplay(wx.Panel):
 
     @timed
     def _apply_rounded_corners_to_image(self, image: wx.Image, radius: int) -> wx.Image:
-        """Apply rounded corners to an image using alpha channel manipulation."""
         img = image.Copy()
         if not img.HasAlpha():
             img.InitAlpha()
@@ -446,7 +436,6 @@ class CardImageDisplay(wx.Panel):
         return bitmap
 
     def show_flip_icon(self) -> None:
-        """Show the flip icon overlay (e.g., for double-faced cards)."""
         if not self.show_flip_icon_overlay:
             self.show_flip_icon_overlay = True
             # Reload current image to redraw with flip icon
@@ -454,7 +443,6 @@ class CardImageDisplay(wx.Panel):
                 self._load_image_at_index(self.current_index, animate=False)
 
     def hide_flip_icon(self) -> None:
-        """Hide the flip icon overlay."""
         if self.show_flip_icon_overlay:
             self.show_flip_icon_overlay = False
             # Reload current image to redraw without flip icon
@@ -462,6 +450,5 @@ class CardImageDisplay(wx.Panel):
                 self._load_image_at_index(self.current_index, animate=False)
 
     def __del__(self):
-        """Cleanup when widget is destroyed."""
         if self.animation_timer and self.animation_timer.IsRunning():
             self.animation_timer.Stop()

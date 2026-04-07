@@ -205,7 +205,6 @@ class RemoteSnapshotClient:
         return result
 
     def is_available(self) -> bool:
-        """Return True if the remote manifest can be fetched successfully."""
         return self._get_manifest() is not None
 
     # ------------------------------------------------------------------ #
@@ -213,7 +212,6 @@ class RemoteSnapshotClient:
     # ------------------------------------------------------------------ #
 
     def _get_manifest(self) -> dict[str, Any] | None:
-        """Return the manifest, using a local cache when still fresh."""
         cached = self._load_cached_manifest()
         if cached is not None:
             return cached
@@ -263,7 +261,6 @@ class RemoteSnapshotClient:
     # ------------------------------------------------------------------ #
 
     def _get_artifact(self, artifact_path: str) -> dict[str, Any] | None:
-        """Return a cached artifact, downloading it if stale or absent."""
         local_path = self._local_artifact_path(artifact_path)
 
         # Check local copy freshness
@@ -299,7 +296,6 @@ class RemoteSnapshotClient:
         return data
 
     def _local_artifact_path(self, artifact_path: str) -> Path:
-        """Convert a remote relative path to a local staging path."""
         # artifact_path looks like "data/latest/modern/archetypes.json"
         return self.cache_dir / artifact_path.lstrip("/")
 

@@ -82,7 +82,6 @@ class ToolbarButtons(wx.Panel):
         margin: int = 6,
         tooltip: str = "",
     ) -> wx.Button:
-        """Create a toolbar button and bind its handler if provided."""
         button = wx.Button(self, label=label)
         stylize_button(button)
         if tooltip:
@@ -95,7 +94,6 @@ class ToolbarButtons(wx.Panel):
         return button
 
     def _add_divider(self, gap: int = 8) -> None:
-        """Add a vertical line divider between button groups."""
         self._button_row.AddSpacer(gap)
         line = wx.StaticLine(self, style=wx.LI_VERTICAL)
         self._button_row.Add(line, 0, wx.EXPAND | wx.TOP | wx.BOTTOM, 4)

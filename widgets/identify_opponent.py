@@ -313,7 +313,6 @@ class MTGOpponentDeckSpy(wx.Frame):
         button.SetFont(font)
 
     def _build_calculator_panel(self, panel: wx.Panel, parent_sizer: wx.BoxSizer) -> None:
-        """Build the collapsible hypergeometric calculator panel."""
         self.calc_panel = wx.Panel(panel)
         self.calc_panel.SetBackgroundColour(DARK_PANEL)
 
@@ -455,7 +454,6 @@ class MTGOpponentDeckSpy(wx.Frame):
         self.calc_panel.Hide()
 
     def _toggle_calculator_panel(self, _event: wx.CommandEvent | None = None) -> None:
-        """Toggle calculator panel visibility."""
         self._calculator_visible = not self._calculator_visible
         if self._calculator_visible:
             self.calc_panel.Show()
@@ -467,7 +465,6 @@ class MTGOpponentDeckSpy(wx.Frame):
         self.Fit()
 
     def _toggle_radar_panel(self, _event: wx.CommandEvent | None = None) -> None:
-        """Toggle radar panel visibility."""
         self._radar_visible = not self._radar_visible
         if self._radar_visible:
             self.radar_panel.Show()
@@ -479,7 +476,6 @@ class MTGOpponentDeckSpy(wx.Frame):
         self.Fit()
 
     def _toggle_guide_panel(self, _event: wx.CommandEvent | None = None) -> None:
-        """Toggle sideboard guide panel visibility."""
         self._guide_visible = not self._guide_visible
         if self._guide_visible:
             self.sideboard_panel.Show()
@@ -496,7 +492,6 @@ class MTGOpponentDeckSpy(wx.Frame):
         self.Fit()
 
     def _update_guide_display(self) -> None:
-        """Look up the current opponent archetype in the pinned guide and update the panel."""
         if not self.last_seen_decks:
             self.sideboard_panel.clear()
             return
@@ -568,13 +563,11 @@ class MTGOpponentDeckSpy(wx.Frame):
             self.sideboard_panel.display_entry(match, archetype_name)
 
     def _apply_preset(self, deck_size: int, cards_drawn: int) -> None:
-        """Apply a preset to the calculator inputs and run calculation."""
         self.spin_deck_size.SetValue(deck_size)
         self.spin_drawn.SetValue(cards_drawn)
         self._on_calculate(None)
 
     def _on_calculate(self, _event: wx.CommandEvent | None) -> None:
-        """Calculate and display hypergeometric probability."""
         try:
             deck_size = self.spin_deck_size.GetValue()
             copies = self.spin_copies.GetValue()
@@ -611,7 +604,6 @@ class MTGOpponentDeckSpy(wx.Frame):
             self.calc_result_label.SetLabel("Calculation error")
 
     def _on_clear_calculator(self, _event: wx.CommandEvent) -> None:
-        """Reset calculator to default values."""
         self.spin_deck_size.SetValue(CALC_DECK_SIZE_DEFAULT)
         self.spin_copies.SetValue(CALC_COPIES_DEFAULT)
         self.spin_drawn.SetValue(CALC_DRAWN_DEFAULT)
@@ -670,7 +662,6 @@ class MTGOpponentDeckSpy(wx.Frame):
         logger.info(f"Started radar generation for {archetype_name} ({format_name})")
 
     def _generate_radar_worker(self, archetype_dict: dict[str, Any], format_name: str) -> None:
-        """Worker thread to generate radar data. Runs in background; uses wx.CallAfter for UI updates."""
         try:
             # Progress callback - safely updates UI from worker thread
             def update_progress(current: int, total: int, deck_name: str) -> None:
@@ -724,7 +715,6 @@ class MTGOpponentDeckSpy(wx.Frame):
         logger.info(f"Radar displayed for {radar.archetype_name}")
 
     def _clear_radar_display(self) -> None:
-        """Clear the radar display."""
         self._radar_cancel_requested = True
         self.current_radar = None
         self._last_radar_archetype = ""
@@ -750,7 +740,6 @@ class MTGOpponentDeckSpy(wx.Frame):
         self._submit_poll()
 
     def _submit_poll(self) -> None:
-        """Submit a background poll if one is not already running."""
         if self._poll_in_progress:
             return
         self._poll_in_progress = True
@@ -764,7 +753,6 @@ class MTGOpponentDeckSpy(wx.Frame):
         )
 
     def _poll_worker(self, generation: int, current_player: str) -> dict:
-        """Background thread: detect opponent and fetch decks if opponent changed."""
         try:
             opponents = find_opponent_names()
         except Exception as exc:  # noqa: BLE001
@@ -782,12 +770,10 @@ class MTGOpponentDeckSpy(wx.Frame):
         return {"generation": generation, "kind": "new", "opponent": opponent_name, "decks": decks}
 
     def _on_poll_error(self, exc: Exception) -> None:
-        """UI thread: release the in-progress guard after an unexpected poll error."""
         self._poll_in_progress = False
         logger.error(f"Unexpected poll worker error: {exc}")
 
     def _apply_poll_result(self, result: dict) -> None:
-        """UI thread: apply results from the background poll worker."""
         if result["generation"] != self._poll_generation:
             return  # Stale — a newer poll supersedes this one
 
@@ -824,7 +810,6 @@ class MTGOpponentDeckSpy(wx.Frame):
     def _lookup_decks_all_formats(
         self, opponent_name: str, *, force: bool = False
     ) -> dict[str, str]:
-        """Lookup opponent's recent decks across all formats."""
         cached = self.cache.get(opponent_name)
         now = time.time()
 
@@ -952,7 +937,6 @@ class MTGOpponentDeckSpy(wx.Frame):
             break
 
     def _place_beside_parent(self) -> None:
-        """Position the tracker to the right of the parent window, clamped to the display."""
         parent = self.GetParent()
         if parent is None:
             return
@@ -1007,7 +991,6 @@ class MTGOpponentDeckSpy(wx.Frame):
             self.Fit()
 
     def _is_widget_ok(self, widget: wx.Window) -> bool:
-        """Check if a widget is still valid and not destroyed."""
         if widget is None:
             return False
         try:

@@ -52,7 +52,6 @@ class BackgroundWorker:
         logger.debug(f"Started background thread: {func.__name__}")
 
     def _call_after(self, callback: Callable, *args: Any) -> None:
-        """Marshal callback to UI thread if wx is available, otherwise call directly."""
         try:
             import wx
 
@@ -61,11 +60,9 @@ class BackgroundWorker:
             callback(*args)
 
     def is_stopped(self) -> bool:
-        """Check if executor has been stopped."""
         return self._stop_event.is_set()
 
     def shutdown(self, timeout: float = 10.0) -> None:
-        """Signal all threads to stop and wait for them to finish."""
         logger.info("Shutting down background worker...")
         self._stop_event.set()
 

@@ -31,7 +31,6 @@ class DeckTextCache:
         self._ensure_schema()
 
     def _ensure_schema(self) -> None:
-        """Create the cache table and indexes if they don't exist."""
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
 
         with sqlite3.connect(self.db_path, timeout=SQLITE_CONNECTION_TIMEOUT_SECONDS) as conn:
@@ -347,7 +346,6 @@ class DeckTextCache:
             return 0
 
     def vacuum(self) -> None:
-        """Optimize database and reclaim space after deletions."""
         try:
             with sqlite3.connect(self.db_path, timeout=SQLITE_CONNECTION_TIMEOUT_SECONDS) as conn:
                 conn.execute("VACUUM")

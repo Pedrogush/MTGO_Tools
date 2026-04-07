@@ -216,7 +216,6 @@ class MetagameRepository:
             raise
 
     def get_all_cached_decks(self, source_filter: str | None = None) -> list[dict[str, Any]]:
-        """Return all locally cached decks across all archetypes, sorted by date descending."""
         if not self.archetype_decks_cache_file.exists():
             return []
         try:
@@ -448,7 +447,6 @@ class MetagameRepository:
         return all_decks
 
     def clear_cache(self) -> None:
-        """Clear all metagame caches."""
         for cache_file in [self.archetype_list_cache_file, self.archetype_decks_cache_file]:
             if cache_file.exists():
                 try:
@@ -463,7 +461,6 @@ _default_repository = None
 
 
 def get_metagame_repository() -> MetagameRepository:
-    """Get the default metagame repository instance."""
     global _default_repository
     if _default_repository is None:
         _default_repository = MetagameRepository()

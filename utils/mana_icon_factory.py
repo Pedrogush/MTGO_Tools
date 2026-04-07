@@ -112,7 +112,6 @@ class ManaIconFactory:
         return self._get_bitmap(token or "")
 
     def bitmap_for_cost(self, mana_cost: str) -> wx.Bitmap | None:
-        """Render an entire mana cost into a single bitmap for compact display."""
         tokens = self._tokenize(mana_cost)
         if not tokens:
             return None
@@ -440,7 +439,6 @@ class ManaIconFactory:
         return None
 
     def _assets_root(self) -> Path:
-        """Locate bundled assets in both source and PyInstaller builds."""
         frozen_root = getattr(sys, "_MEIPASS", None)
         if frozen_root:
             return Path(frozen_root)

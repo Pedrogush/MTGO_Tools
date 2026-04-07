@@ -71,7 +71,6 @@ class CompactSideboardPanel(wx.Panel):
         logger.debug(f"Compact sideboard guide displayed for: {archetype_name}")
 
     def clear(self) -> None:
-        """Clear the panel and hide it."""
         self._current_entry = None
         self.header_label.SetLabel("Guide: —")
         self.status_label.SetLabel("")
@@ -90,7 +89,6 @@ class CompactSideboardPanel(wx.Panel):
         self.GetParent().Layout()
 
     def set_no_pinned_deck(self) -> None:
-        """Show state when no deck has been pinned yet."""
         self._current_entry = None
         self.header_label.SetLabel("Guide: —")
         self.status_label.SetLabel("Pin a deck's guide in the Deck Selector to enable this.")

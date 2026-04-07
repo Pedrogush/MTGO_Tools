@@ -123,7 +123,6 @@ class FeedbackDialog(wx.Dialog):
     # ------------------------------------------------------------------
     @property
     def event_logging_enabled(self) -> bool:
-        """Whether the user has opted into event logging."""
         return self._event_log_check.GetValue()
 
     # ------------------------------------------------------------------

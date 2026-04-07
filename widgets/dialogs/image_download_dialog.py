@@ -46,7 +46,6 @@ class ImageDownloadDialog(wx.Dialog):
         self._build_ui()
 
     def _build_ui(self) -> None:
-        """Build the dialog UI."""
         panel = wx.Panel(self)
         panel.SetBackgroundColour(DARK_BG)
         sizer = wx.BoxSizer(wx.VERTICAL)
@@ -110,7 +109,6 @@ class ImageDownloadDialog(wx.Dialog):
         self.Centre()
 
     def get_selected_options(self) -> tuple[str, int | None]:
-        """Get the user-selected quality and download amount."""
         quality_map = {0: "small", 1: "normal", 2: "large", 3: "png"}
         quality = quality_map[self.quality_choice.GetSelection()]
 
@@ -120,7 +118,6 @@ class ImageDownloadDialog(wx.Dialog):
         return quality, max_cards
 
     def start_download(self, quality: str, max_cards: int | None) -> None:
-        """Start the image download process with a progress dialog."""
         # Create progress dialog
         max_value = max_cards if max_cards else 80000
         progress_dialog = wx.ProgressDialog(
@@ -135,8 +132,7 @@ class ImageDownloadDialog(wx.Dialog):
         download_cancelled = [False]
 
         def progress_callback(completed: int, total: int, message: str):
-            """Update progress dialog from worker thread."""
-            wx.CallAfter(
+                wx.CallAfter(
                 self._update_progress,
                 progress_dialog,
                 completed,
@@ -146,7 +142,6 @@ class ImageDownloadDialog(wx.Dialog):
             )
 
         def worker():
-            """Background download worker."""
             try:
                 # Ensure downloader exists
                 if self.image_downloader is None:
@@ -195,7 +190,6 @@ class ImageDownloadDialog(wx.Dialog):
         message: str,
         cancelled_flag: list,
     ):
-        """Update progress dialog (called from main thread via wx.CallAfter)."""
         if not dialog:
             return
 
@@ -232,7 +226,6 @@ class ImageDownloadDialog(wx.Dialog):
             dialog.Destroy()
 
     def _on_download_complete(self, dialog: wx.ProgressDialog, result: dict[str, Any]):
-        """Handle successful image download."""
         try:
             dialog.Destroy()
         except RuntimeError:
@@ -241,7 +234,6 @@ class ImageDownloadDialog(wx.Dialog):
             self.on_status_update("app.status.image_download_complete")
 
     def _on_download_failed(self, dialog: wx.ProgressDialog, error_msg: str):
-        """Handle image download failure."""
         try:
             dialog.Destroy()
         except RuntimeError:
@@ -253,7 +245,6 @@ class ImageDownloadDialog(wx.Dialog):
             self.on_status_update("app.status.ready")
 
     def _on_download_cancelled(self, dialog: wx.ProgressDialog):
-        """Handle image download cancellation."""
         try:
             dialog.Destroy()
         except RuntimeError:

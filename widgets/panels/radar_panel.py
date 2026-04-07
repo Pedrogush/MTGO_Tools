@@ -47,7 +47,6 @@ class RadarPanel(wx.Panel):
         return translate(self._locale, key, **kwargs)
 
     def _build_ui(self) -> None:
-        """Build the panel UI."""
         sizer = wx.BoxSizer(wx.VERTICAL)
         self.SetSizer(sizer)
 
@@ -146,7 +145,6 @@ class RadarPanel(wx.Panel):
         self._populate_card_list(self.sideboard_list, radar.sideboard_cards)
 
     def clear(self) -> None:
-        """Clear the radar display."""
         self.current_radar = None
         self.archetype_label.SetLabel(self._t("radar.label.no_radar"))
         self.summary_label.SetLabel("")
@@ -174,12 +172,10 @@ class RadarPanel(wx.Panel):
             )
 
     def _bind_tooltip_handlers(self, list_ctrl: dv.DataViewListCtrl) -> None:
-        """Attach mouse handlers to update tooltips per row."""
         list_ctrl.Bind(wx.EVT_MOTION, lambda event: self._on_list_mouse_move(list_ctrl, event))
         list_ctrl.Bind(wx.EVT_LEAVE_WINDOW, lambda event: self._clear_tooltip(list_ctrl, event))
 
     def _on_list_mouse_move(self, list_ctrl: dv.DataViewListCtrl, event: wx.MouseEvent) -> None:
-        """Show copy distribution tooltip for the row under the cursor."""
         if not self.current_radar:
             self._clear_tooltip(list_ctrl, event)
             return
@@ -221,14 +217,12 @@ class RadarPanel(wx.Panel):
         event.Skip()
 
     def _clear_tooltip(self, list_ctrl: dv.DataViewListCtrl, event: wx.Event | None = None) -> None:
-        """Remove any tooltip when leaving the control or losing hover context."""
         if list_ctrl.GetToolTip():
             list_ctrl.SetToolTip("")
         if event:
             event.Skip()
 
     def _format_distribution_tooltip(self, card: CardFrequency, total_decks: int) -> str:
-        """Build tooltip text summarizing how many decks play each copy count."""
         if total_decks <= 0:
             return ""
 
@@ -240,12 +234,10 @@ class RadarPanel(wx.Panel):
         return "\n".join(lines)
 
     def _on_export_clicked(self, event: wx.Event) -> None:
-        """Handle export button click."""
         if self.current_radar and self.on_export:
             self.on_export(self.current_radar)
 
     def _on_use_search_clicked(self, event: wx.Event) -> None:
-        """Handle use for search button click."""
         if self.current_radar and self.on_use_for_search:
             self.on_use_for_search(self.current_radar)
 
@@ -284,7 +276,6 @@ class RadarDialog(wx.Dialog):
         return translate(self._locale, key, **kwargs)
 
     def _build_ui(self) -> None:
-        """Build the dialog UI."""
         sizer = wx.BoxSizer(wx.VERTICAL)
         self.SetSizer(sizer)
 
@@ -334,7 +325,6 @@ class RadarDialog(wx.Dialog):
         sizer.Add(close_btn, 0, wx.ALIGN_RIGHT | wx.ALL, 10)
 
     def _load_archetypes(self) -> None:
-        """Load archetypes for the current format."""
         try:
             self.archetypes = self.metagame_repo.get_archetypes_for_format(self.format_name)
             archetype_names = [arch.get("name", "Unknown") for arch in self.archetypes]
@@ -347,7 +337,6 @@ class RadarDialog(wx.Dialog):
             logger.exception(f"Failed to load archetypes: {exc}")
 
     def _on_generate_clicked(self, event: wx.Event) -> None:
-        """Handle generate radar button click."""
         selection = self.archetype_choice.GetSelection()
         if selection == wx.NOT_FOUND:
             logger.error("No archetype selected for radar generation")
@@ -372,13 +361,11 @@ class RadarDialog(wx.Dialog):
         self.worker_thread.start()
 
     def _on_cancel_clicked(self, event: wx.Event) -> None:
-        """Handle cancel button click."""
         self.cancel_requested = True
         wx.CallAfter(self.progress_label.SetLabel, "Cancelling...")
         wx.CallAfter(self.cancel_btn.Enable, False)
 
     def _generate_radar_worker(self, archetype: dict[str, Any]) -> None:
-        """Worker thread to generate radar. Runs in background; uses wx.CallAfter for UI updates."""
         try:
             # Progress callback - safely updates UI from worker thread
             def update_progress(current: int, total: int, deck_name: str) -> None:
@@ -471,11 +458,9 @@ class RadarDialog(wx.Dialog):
             self.Close()
 
     def get_current_radar(self) -> RadarData | None:
-        """Get the currently displayed radar."""
         return self.current_radar
 
     def _on_close(self, event: wx.Event) -> None:
-        """Handle close button click."""
         # If worker is running, request cancellation
         if self.worker_thread and self.worker_thread.is_alive():
             response = wx.MessageBox(
