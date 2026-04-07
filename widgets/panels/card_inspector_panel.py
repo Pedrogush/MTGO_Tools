@@ -6,12 +6,12 @@ Shows card image, metadata, oracle text, and allows navigation through different
 
 from collections.abc import Callable
 from pathlib import Path
-from threading import Thread
 from typing import Any
 
 import wx
 from loguru import logger
 
+from utils.background_worker import BackgroundWorker
 from utils.card_data import CardDataManager
 from utils.card_images import BULK_DATA_CACHE, CardImageRequest, get_cache, get_card_image
 from utils.constants import (
@@ -68,8 +68,10 @@ class CardInspectorPanel(wx.Panel):
         self._failed_image_requests: set[tuple[str, str]] = set()
         self._image_request_name: str | None = None
         self._image_lookup_gen: int = 0
+        self._image_worker = BackgroundWorker(thread_name_prefix="card-inspector-image")
 
         self._build_ui()
+        self.Bind(wx.EVT_WINDOW_DESTROY, self._on_destroy)
         self.reset()
 
     def _build_ui(self) -> None:
@@ -402,7 +404,13 @@ class CardInspectorPanel(wx.Panel):
                 path = get_card_image(card_name, "normal") if card_name else None
                 if not path and image_request_name:
                     path = get_card_image(image_request_name, "normal")
-                wx.CallAfter(self._apply_no_printings_image, gen, card_name, active_request, path)
+                self._image_worker.call_after(
+                    self._apply_no_printings_image,
+                    gen,
+                    card_name,
+                    active_request,
+                    path,
+                )
             else:
                 uuid = active_request.uuid if active_request else None
                 image_paths = image_cache.get_image_paths_by_uuid(uuid, "normal") if uuid else []
@@ -416,7 +424,7 @@ class CardInspectorPanel(wx.Panel):
                     and image_request_name is not None
                     and "//" in image_request_name
                 )
-                wx.CallAfter(
+                self._image_worker.call_after(
                     self._apply_printings_image,
                     gen,
                     printings,
@@ -427,7 +435,12 @@ class CardInspectorPanel(wx.Panel):
                     need_double_face,
                 )
 
-        Thread(target=_lookup, daemon=True).start()
+        self._image_worker.submit(_lookup, name="card-inspector-image-lookup")
+
+    def _on_destroy(self, event: wx.Event) -> None:
+        if event.GetEventObject() is self:
+            self._image_worker.shutdown(timeout=0.0)
+        event.Skip()
 
     def _apply_no_printings_image(
         self,

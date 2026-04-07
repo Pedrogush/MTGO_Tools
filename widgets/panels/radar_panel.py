@@ -17,6 +17,7 @@ from loguru import logger
 
 from services.radar_service import CardFrequency, RadarData, RadarService, get_radar_service
 from utils.atomic_io import atomic_write_text
+from utils.background_worker import BackgroundWorker
 from utils.constants import DARK_ALT, DARK_PANEL, LIGHT_TEXT
 from utils.i18n import translate
 
@@ -267,8 +268,10 @@ class RadarDialog(wx.Dialog):
         self.archetypes: list[dict[str, Any]] = []
         self.current_radar: RadarData | None = None
         self.worker_thread: threading.Thread | None = None
+        self._worker = BackgroundWorker(thread_name_prefix="radar-dialog")
         self.cancel_requested = False
 
+        self.Bind(wx.EVT_CLOSE, self._on_close)
         self._build_ui()
         self._load_archetypes()
 
@@ -353,17 +356,16 @@ class RadarDialog(wx.Dialog):
         self.cancel_requested = False
 
         # Start worker thread
-        self.worker_thread = threading.Thread(
-            target=self._generate_radar_worker,
-            args=(archetype,),
-            daemon=True,
+        self.worker_thread = self._worker.submit(
+            self._generate_radar_worker,
+            archetype,
+            name="radar-dialog-generate",
         )
-        self.worker_thread.start()
 
     def _on_cancel_clicked(self, event: wx.Event) -> None:
         self.cancel_requested = True
-        wx.CallAfter(self.progress_label.SetLabel, "Cancelling...")
-        wx.CallAfter(self.cancel_btn.Enable, False)
+        self._worker.call_after(self.progress_label.SetLabel, "Cancelling...")
+        self._worker.call_after(self.cancel_btn.Enable, False)
 
     def _generate_radar_worker(self, archetype: dict[str, Any]) -> None:
         try:
@@ -373,8 +375,8 @@ class RadarDialog(wx.Dialog):
                     raise InterruptedError("Radar generation cancelled by user")
 
                 percent = int((current / total) * 100) if total > 0 else 0
-                wx.CallAfter(self.progress.SetValue, percent)
-                wx.CallAfter(
+                self._worker.call_after(self.progress.SetValue, percent)
+                self._worker.call_after(
                     self.progress_label.SetLabel,
                     f"Analyzing deck {current}/{total}: {deck_name}",
                 )
@@ -388,29 +390,35 @@ class RadarDialog(wx.Dialog):
 
             # Display results on UI thread
             if not self.cancel_requested:
-                wx.CallAfter(self.radar_panel.display_radar, radar)
-                wx.CallAfter(self.progress_label.SetLabel, "Radar generated successfully!")
-                self.current_radar = radar
+                self._worker.call_after(self._display_generated_radar, radar)
+                self._worker.call_after(
+                    self.progress_label.SetLabel,
+                    "Radar generated successfully!",
+                )
 
         except InterruptedError as exc:
             # User cancelled
-            wx.CallAfter(self.progress_label.SetLabel, f"Cancelled: {exc}")
-            wx.CallAfter(self.progress.SetValue, 0)
+            self._worker.call_after(self.progress_label.SetLabel, f"Cancelled: {exc}")
+            self._worker.call_after(self.progress.SetValue, 0)
 
         except Exception as exc:
             # Error occurred
             logger.exception(f"Failed to generate radar: {exc}")
-            wx.CallAfter(self.progress_label.SetLabel, "Failed to generate radar.")
-            wx.CallAfter(self.progress.SetValue, 0)
+            self._worker.call_after(self.progress_label.SetLabel, "Failed to generate radar.")
+            self._worker.call_after(self.progress.SetValue, 0)
 
         finally:
             # Re-enable UI controls
-            wx.CallAfter(self.generate_btn.Enable, True)
-            wx.CallAfter(self.cancel_btn.Enable, False)
-            wx.CallAfter(self.archetype_choice.Enable, True)
+            self._worker.call_after(self.generate_btn.Enable, True)
+            self._worker.call_after(self.cancel_btn.Enable, False)
+            self._worker.call_after(self.archetype_choice.Enable, True)
             if not self.cancel_requested:
-                wx.CallAfter(self.progress.SetValue, 0)
+                self._worker.call_after(self.progress.SetValue, 0)
             self.worker_thread = None
+
+    def _display_generated_radar(self, radar: RadarData) -> None:
+        self.current_radar = radar
+        self.radar_panel.display_radar(radar)
 
     def _export_radar(self, radar: RadarData) -> None:
         # Ask for minimum expected copies threshold
@@ -461,6 +469,7 @@ class RadarDialog(wx.Dialog):
         return self.current_radar
 
     def _on_close(self, event: wx.Event) -> None:
+        is_close_event = isinstance(event, wx.CloseEvent)
         # If worker is running, request cancellation
         if self.worker_thread and self.worker_thread.is_alive():
             response = wx.MessageBox(
@@ -473,11 +482,14 @@ class RadarDialog(wx.Dialog):
 
             # Cancel the worker
             self.cancel_requested = True
-            # Give it a moment to clean up
-            if self.worker_thread:
-                self.worker_thread.join(timeout=2.0)
+            self._worker.shutdown(timeout=2.0)
+            self.worker_thread = None
+        else:
+            self._worker.shutdown(timeout=0.2)
 
         if self.IsModal():
             self.EndModal(wx.ID_OK)
+        elif is_close_event:
+            event.Skip()
         else:
             self.Close()

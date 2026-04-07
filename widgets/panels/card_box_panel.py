@@ -1,10 +1,10 @@
 from collections.abc import Callable
-from threading import Thread
 from typing import Any
 
 import wx
 from PIL import Image as PilImage
 
+from utils.background_worker import BackgroundWorker
 from utils.card_images import get_card_image
 from utils.constants import (
     DARK_ACCENT,
@@ -64,12 +64,14 @@ class CardBoxPanel(wx.Panel):
         self._image_attempted = False
         self._image_generation: int = 0
         self._image_name_candidates: list[str] = []
+        self._image_worker = BackgroundWorker(thread_name_prefix="card-box-image")
 
         self.SetBackgroundColour(DARK_ALT)
         self.SetBackgroundStyle(wx.BG_STYLE_PAINT)
         self.SetMinSize((DECK_CARD_WIDTH, DECK_CARD_HEIGHT))
         self.SetMaxSize((DECK_CARD_WIDTH, DECK_CARD_HEIGHT))
         self.Bind(wx.EVT_PAINT, self._on_paint)
+        self.Bind(wx.EVT_WINDOW_DESTROY, self._on_destroy)
 
         layout = wx.BoxSizer(wx.VERTICAL)
         self.SetSizer(layout)
@@ -157,13 +159,18 @@ class CardBoxPanel(wx.Panel):
 
         Safe to call simultaneously on many panels — all I/O happens in parallel
         daemon threads and results are posted back to the main thread via
-        wx.CallAfter, so the UI is never blocked.
+        BackgroundWorker.call_after, so the UI is never blocked after teardown.
         """
         self._image_generation += 1
         gen = self._image_generation
         self._image_attempted = True
         candidates = list(self._image_name_candidates)
-        Thread(target=self._image_load_worker, args=(gen, candidates), daemon=True).start()
+        self._image_worker.submit(
+            self._image_load_worker,
+            gen,
+            candidates,
+            name="card-box-image-load",
+        )
 
     def _image_load_worker(self, gen: int, candidates: list[str]) -> None:
         image_path = None
@@ -173,7 +180,7 @@ class CardBoxPanel(wx.Panel):
                 image_path = path
                 break
         if not image_path:
-            wx.CallAfter(self._on_image_load_done, gen, None)
+            self._image_worker.call_after(self._on_image_load_done, gen, None)
             return
         try:
             pil_img = PilImage.open(str(image_path)).convert("RGB")
@@ -182,9 +189,9 @@ class CardBoxPanel(wx.Panel):
             new_w = max(1, int(w * scale))
             new_h = max(1, int(h * scale))
             pil_img = pil_img.resize((new_w, new_h), PilImage.LANCZOS)
-            wx.CallAfter(self._on_image_load_done, gen, pil_img)
+            self._image_worker.call_after(self._on_image_load_done, gen, pil_img)
         except Exception:
-            wx.CallAfter(self._on_image_load_done, gen, None)
+            self._image_worker.call_after(self._on_image_load_done, gen, None)
 
     def _on_image_load_done(self, gen: int, pil_img: "PilImage.Image | None") -> None:
         try:
@@ -204,6 +211,11 @@ class CardBoxPanel(wx.Panel):
             self._card_bitmap = self._render_bitmap_with_image(wx_img)
             self._image_available = True
         self.Refresh()
+
+    def _on_destroy(self, event: wx.Event) -> None:
+        if event.GetEventObject() is self:
+            self._image_worker.shutdown(timeout=0.0)
+        event.Skip()
 
     def set_active(self, active: bool) -> None:
         if self._active == active:

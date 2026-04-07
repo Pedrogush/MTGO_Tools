@@ -59,6 +59,68 @@ def test_is_loading_when_loading():
     assert service.is_loading() is True
 
 
+class _InlineWorker:
+    def __init__(self):
+        self.submit_names: list[str | None] = []
+        self.call_after_calls: list[tuple[object, tuple[object, ...]]] = []
+
+    def submit(self, target, *args, name=None, **kwargs):  # noqa: ANN001
+        self.submit_names.append(name)
+        target(*args, **kwargs)
+        return None
+
+    def call_after(self, callback, *args, **_kwargs) -> bool:  # noqa: ANN001
+        self.call_after_calls.append((callback, args))
+        callback(*args)
+        return True
+
+    def shutdown(self, timeout: float = 10.0) -> None:
+        pass
+
+
+class _FakePrintingsDownloader:
+    def fetch_printings_by_name(self, card_name: str):
+        return [
+            {
+                "id": f"{card_name}-id",
+                "set": "abc",
+                "set_name": "Alpha Beta",
+                "collector_number": "42",
+                "released_at": "2024-01-01",
+            }
+        ]
+
+
+def test_fetch_printings_by_name_async_uses_background_worker() -> None:
+    service = ImageService()
+    worker = _InlineWorker()
+    service._worker = worker
+    service.image_downloader = _FakePrintingsDownloader()
+    loaded = []
+    service.set_printings_loaded_callback(lambda name, printings: loaded.append((name, printings)))
+
+    try:
+        service.fetch_printings_by_name_async("Island")
+    finally:
+        service.shutdown()
+
+    assert worker.submit_names == ["image-service-printings"]
+    assert loaded == [
+        (
+            "Island",
+            [
+                {
+                    "id": "Island-id",
+                    "set": "ABC",
+                    "set_name": "Alpha Beta",
+                    "collector_number": "42",
+                    "released_at": "2024-01-01",
+                }
+            ],
+        )
+    ]
+
+
 class _FakeCache:
     def get_image_path_for_printing(self, card_name, set_code, size):
         return None

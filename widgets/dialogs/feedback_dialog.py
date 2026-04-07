@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-import threading
 from collections.abc import Callable
 from pathlib import Path
 
 import wx
 from loguru import logger
 
+from utils.background_worker import BackgroundWorker
 from utils.constants import DARK_BG, DARK_PANEL, LIGHT_TEXT, SUBDUED_TEXT
 from utils.diagnostics import export_diagnostics_bundle
 
@@ -31,8 +31,10 @@ class FeedbackDialog(wx.Dialog):
 
         self._logs_dir = logs_dir
         self._event_logging_enabled = event_logging_enabled
+        self._worker = BackgroundWorker(thread_name_prefix="feedback-export")
 
         self._build_ui()
+        self.Bind(wx.EVT_CLOSE, self._on_close)
         self.Centre()
 
     # ------------------------------------------------------------------
@@ -145,24 +147,31 @@ class FeedbackDialog(wx.Dialog):
         self._export_btn.Disable()
         self._status_label.SetLabel("Exporting…")
 
-        def _worker() -> None:
-            try:
-                out = export_diagnostics_bundle(
-                    dest,
-                    logs_dir=self._logs_dir,
-                    notes=notes,
-                    include_events=include_events,
-                )
-                wx.CallAfter(self._on_export_done, out, None)
-            except Exception as exc:
-                logger.exception("Failed to export diagnostics bundle")
-                wx.CallAfter(self._on_export_done, None, exc)
+        def _worker() -> Path:
+            return export_diagnostics_bundle(
+                dest,
+                logs_dir=self._logs_dir,
+                notes=notes,
+                include_events=include_events,
+            )
 
-        threading.Thread(target=_worker, daemon=True).start()
+        def _on_error(exc: Exception) -> None:
+            logger.error(f"Failed to export diagnostics bundle: {exc}")
+            self._on_export_done(None, exc)
+
+        self._worker.submit(
+            _worker,
+            on_success=lambda out: self._on_export_done(out, None),
+            on_error=_on_error,
+            name="feedback-export",
+        )
 
     def _on_export_done(self, out: Path | None, exc: Exception | None) -> None:
-        self._status_label.SetLabel("")
-        self._export_btn.Enable()
+        try:
+            self._status_label.SetLabel("")
+            self._export_btn.Enable()
+        except RuntimeError:
+            return
         if exc is not None:
             wx.MessageBox(
                 f"Export failed: {exc}",
@@ -175,6 +184,10 @@ class FeedbackDialog(wx.Dialog):
                 "Export complete",
                 wx.OK | wx.ICON_INFORMATION,
             )
+
+    def _on_close(self, event: wx.CloseEvent) -> None:
+        self._worker.shutdown(timeout=0.2)
+        event.Skip()
 
 
 def _timestamp() -> str:

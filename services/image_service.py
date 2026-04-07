@@ -17,6 +17,7 @@ from typing import Any
 
 from loguru import logger
 
+from utils.background_worker import BackgroundWorker
 from utils.card_images import (
     BULK_DATA_CACHE,
     PRINTING_INDEX_CACHE,
@@ -67,18 +68,17 @@ class CardImageDownloadQueue:
         self._lock = threading.Lock()
         self._condition = threading.Condition(self._lock)
         self._executor = ThreadPoolExecutor(max_workers=self._MAX_CONCURRENT_DOWNLOADS)
-        self._thread = threading.Thread(
-            target=self._run,
+        self._worker = BackgroundWorker(thread_name_prefix="card-image-download-queue")
+        self._thread = self._worker.submit(
+            self._run,
             name="card-image-download-queue",
-            daemon=True,
         )
-        self._thread.start()
 
     def stop(self, timeout: float = IMAGE_DOWNLOAD_QUEUE_STOP_TIMEOUT_SECONDS) -> None:
         self._stop_event.set()
         with self._condition:
             self._condition.notify_all()
-        self._thread.join(timeout=timeout)
+        self._worker.shutdown(timeout=timeout)
         self._executor.shutdown(wait=True, cancel_futures=True)
 
     def set_selected_request(self, request: CardImageRequest | None) -> None:
@@ -300,11 +300,13 @@ class ImageService:
         self._printings_inflight: set[str] = set()
         self._on_printings_loaded: Callable[[str, list[dict[str, Any]]], None] | None = None
         self._process_worker = ProcessWorker()
+        self._worker = BackgroundWorker(thread_name_prefix="image-service")
         self._bulk_download_handle: ProcessHandle | None = None
         self._printings_handle: ProcessHandle | None = None
 
     def shutdown(self) -> None:
         self._download_queue.stop()
+        self._worker.shutdown(timeout=IMAGE_DOWNLOAD_QUEUE_STOP_TIMEOUT_SECONDS)
         if self._bulk_download_handle:
             self._process_worker.terminate(self._bulk_download_handle)
             self._bulk_download_handle = None
@@ -393,7 +395,7 @@ class ImageService:
         def run_task() -> None:
             self._run_printings_task(worker, success_handler, error_handler)
 
-        threading.Thread(target=run_task, daemon=True).start()
+        self._worker.submit(run_task, name="image-service-printings")
 
     @staticmethod
     def _run_printings_task(
@@ -408,14 +410,8 @@ class ImageService:
             return
         on_success(result)
 
-    @staticmethod
-    def _call_after(callback: Callable[..., Any], *args: Any) -> None:
-        try:
-            import wx
-
-            wx.CallAfter(callback, *args)
-        except ImportError:
-            callback(*args)
+    def _call_after(self, callback: Callable[..., Any], *args: Any) -> None:
+        self._worker.call_after(callback, *args)
 
     # ============= Bulk Data Management =============
 

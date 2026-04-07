@@ -8,6 +8,10 @@ from typing import Any
 
 import pytest
 
+from utils.background_worker import BackgroundWorker
+
+pytest.importorskip("wx")
+
 
 def _load_card_box_panel_module():
     """Load widgets/panels/card_box_panel.py directly, bypassing the package __init__."""
@@ -103,3 +107,42 @@ def test_build_image_name_candidates(card: dict[str, Any], meta: Any, expected: 
     """_build_image_name_candidates must return the correct candidate list for each input."""
     result = CardBoxPanel._build_image_name_candidates(None, card, meta)
     assert result == expected
+
+
+def test_image_load_worker_skips_ui_callback_after_worker_shutdown(monkeypatch) -> None:
+    """Late image lookups must not queue wx callbacks after panel teardown."""
+    panel = CardBoxPanel.__new__(CardBoxPanel)
+    panel._image_worker = BackgroundWorker()
+    panel._image_worker.shutdown(timeout=0.1)
+    callbacks: list[tuple[int, object]] = []
+    panel._on_image_load_done = lambda gen, image: callbacks.append((gen, image))
+
+    monkeypatch.setattr(_cbp_mod, "get_card_image", lambda *_args, **_kwargs: None)
+
+    CardBoxPanel._image_load_worker(panel, 7, ["Island"])
+
+    assert callbacks == []
+
+
+def test_on_destroy_stops_image_worker_without_waiting() -> None:
+    panel = CardBoxPanel.__new__(CardBoxPanel)
+    shutdown_calls: list[float] = []
+    panel._image_worker = type(
+        "Worker",
+        (),
+        {"shutdown": lambda self, timeout=10.0: shutdown_calls.append(timeout)},
+    )()
+    skipped = []
+    event = type(
+        "Event",
+        (),
+        {
+            "GetEventObject": lambda self: panel,
+            "Skip": lambda self: skipped.append(True),
+        },
+    )()
+
+    CardBoxPanel._on_destroy(panel, event)
+
+    assert shutdown_calls == [0.0]
+    assert skipped == [True]

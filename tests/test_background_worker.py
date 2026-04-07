@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import sys
 import threading
 import time
+from types import SimpleNamespace
 
 from utils.background_worker import BackgroundWorker
 
@@ -116,3 +118,53 @@ def test_background_worker_shutdown_timeout():
     worker.shutdown(timeout=0.2)
 
     assert worker.is_stopped()
+
+
+def test_background_worker_call_after_uses_wx_when_app_available(monkeypatch):
+    worker = BackgroundWorker()
+    calls = []
+
+    fake_wx = SimpleNamespace(
+        GetApp=lambda: object(),
+        CallAfter=lambda callback, *args, **kwargs: calls.append((callback, args, kwargs)),
+    )
+    monkeypatch.setitem(sys.modules, "wx", fake_wx)
+
+    callback = lambda value: value  # noqa: E731
+
+    assert worker.call_after(callback, "ok") is True
+    assert calls == [(callback, ("ok",), {})]
+
+    worker.shutdown()
+
+
+def test_background_worker_call_after_skips_when_wx_app_missing(monkeypatch):
+    worker = BackgroundWorker()
+    calls = []
+
+    def fail_call_after(*_args, **_kwargs):
+        raise AssertionError("wx.CallAfter should not be called without a wx app")
+
+    fake_wx = SimpleNamespace(GetApp=lambda: None, CallAfter=fail_call_after)
+    monkeypatch.setitem(sys.modules, "wx", fake_wx)
+
+    assert worker.call_after(lambda: calls.append("called")) is False
+    assert calls == []
+
+    worker.shutdown()
+
+
+def test_background_worker_call_after_skips_after_wx_teardown(monkeypatch):
+    worker = BackgroundWorker()
+    calls = []
+
+    def raising_call_after(*_args, **_kwargs):
+        raise RuntimeError("wrapped C/C++ object of type App has been deleted")
+
+    fake_wx = SimpleNamespace(GetApp=lambda: object(), CallAfter=raising_call_after)
+    monkeypatch.setitem(sys.modules, "wx", fake_wx)
+
+    assert worker.call_after(lambda: calls.append("called")) is False
+    assert calls == []
+
+    worker.shutdown()

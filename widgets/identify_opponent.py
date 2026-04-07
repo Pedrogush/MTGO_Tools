@@ -642,23 +642,29 @@ class MTGOpponentDeckSpy(wx.Frame):
 
         if not archetype_dict:
             logger.warning(f"Could not resolve archetype: {archetype_name} in {format_name}")
-            wx.CallAfter(self.radar_panel.set_error, f"Archetype '{archetype_name}' not found")
+            self._bg_worker.call_after(
+                self.radar_panel.set_error,
+                f"Archetype '{archetype_name}' not found",
+            )
             return
 
         # Update tracking
         self._last_radar_archetype = archetype_name
 
         # Show loading state
-        wx.CallAfter(self.radar_panel.set_loading, f"Loading radar for {archetype_name}...")
-
-        # Start background thread to generate radar
-        self._radar_cancel_requested = False
-        self._radar_worker_thread = threading.Thread(
-            target=self._generate_radar_worker,
-            args=(archetype_dict, format_name),
-            daemon=True,
+        self._bg_worker.call_after(
+            self.radar_panel.set_loading,
+            f"Loading radar for {archetype_name}...",
         )
-        self._radar_worker_thread.start()
+
+        # Start background task to generate radar
+        self._radar_cancel_requested = False
+        self._radar_worker_thread = self._bg_worker.submit(
+            self._generate_radar_worker,
+            archetype_dict,
+            format_name,
+            name="opponent-radar-generate",
+        )
         logger.info(f"Started radar generation for {archetype_name} ({format_name})")
 
     def _generate_radar_worker(self, archetype_dict: dict[str, Any], format_name: str) -> None:
@@ -669,7 +675,7 @@ class MTGOpponentDeckSpy(wx.Frame):
                     raise InterruptedError("Radar generation cancelled")
 
                 # Update status label with progress
-                wx.CallAfter(
+                self._bg_worker.call_after(
                     self.radar_panel.set_loading,
                     f"Analyzing deck {current}/{total}...",
                 )
@@ -684,17 +690,17 @@ class MTGOpponentDeckSpy(wx.Frame):
 
             # Display results on UI thread
             if not self._radar_cancel_requested:
-                wx.CallAfter(self._display_radar, radar)
+                self._bg_worker.call_after(self._display_radar, radar)
 
         except InterruptedError:
             # User cancelled or switched opponents
             logger.info("Radar generation cancelled")
-            wx.CallAfter(self.radar_panel.clear)
+            self._bg_worker.call_after(self.radar_panel.clear)
 
         except Exception as exc:
             # Error occurred
             logger.exception(f"Failed to generate radar: {exc}")
-            wx.CallAfter(self.radar_panel.set_error, "Failed to load radar")
+            self._bg_worker.call_after(self.radar_panel.set_error, "Failed to load radar")
 
         finally:
             # Reset worker thread reference
@@ -1007,14 +1013,12 @@ class MTGOpponentDeckSpy(wx.Frame):
         # Cancel any running radar worker
         if self._radar_worker_thread and self._radar_worker_thread.is_alive():
             self._radar_cancel_requested = True
-            # Give it a moment to clean up
-            self._radar_worker_thread.join(
-                timeout=OPPONENT_TRACKER_RADAR_THREAD_JOIN_TIMEOUT_SECONDS
-            )
 
         if self._poll_timer.IsRunning():
             self._poll_timer.Stop()
-        self._bg_worker.shutdown(timeout=5.0)
+        self._bg_worker.shutdown(
+            timeout=max(5.0, OPPONENT_TRACKER_RADAR_THREAD_JOIN_TIMEOUT_SECONDS)
+        )
         event.Skip()
 
 
