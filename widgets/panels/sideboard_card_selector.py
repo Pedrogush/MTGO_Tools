@@ -23,16 +23,6 @@ class SideboardCardSelector(wx.Panel):
         flex_slots: list[str] | None = None,
         locale: str | None = None,
     ):
-        """
-        Initialize the card selector.
-
-        Args:
-            parent: Parent window
-            title: Title for this selector (e.g., "Play: Out")
-            available_cards: List of cards available to select from (from mainboard or sideboard)
-            flex_slots: Optional list of card names that are marked as flex slots (highlighted)
-            locale: Locale code for i18n
-        """
         super().__init__(parent)
         self.SetBackgroundColour(DARK_PANEL)
         self._locale = locale
@@ -184,12 +174,6 @@ class SideboardCardSelector(wx.Panel):
         )
 
     def set_selected_cards(self, cards: dict[str, int]) -> None:
-        """
-        Set the selected cards.
-
-        Args:
-            cards: Dictionary mapping card name to quantity
-        """
         self.selected_cards = cards.copy()
 
         # Update displays

@@ -7,14 +7,6 @@ from navigators.mtgo_decklists import fetch_decklist_index
 
 
 def list_events(year: int = None, month: int = None, format_filter: str = None):
-    """
-    List available MTGO events.
-
-    Args:
-        year: Year to fetch (default: current year)
-        month: Month to fetch (default: current month)
-        format_filter: Optional format filter (e.g., 'modern', 'legacy')
-    """
     now = datetime.now()
     year = year or now.year
     month = month or now.month

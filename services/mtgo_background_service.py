@@ -100,14 +100,6 @@ def deck_to_text(clean_deck: dict) -> str:
 
 
 def save_mtgo_deck_metadata(archetype: str, mtg_format: str, deck_metadata: dict) -> None:
-    """
-    Save MTGO deck metadata to JSON cache.
-
-    Args:
-        archetype: Archetype name
-        mtg_format: Format (e.g., "modern")
-        deck_metadata: Deck metadata dictionary
-    """
     if _mtgo_feature_disabled("skip saving deck metadata"):
         return
 
@@ -140,16 +132,6 @@ def save_mtgo_deck_metadata(archetype: str, mtg_format: str, deck_metadata: dict
 
 
 def load_mtgo_deck_metadata(archetype: str, mtg_format: str) -> list[dict]:
-    """
-    Load MTGO deck metadata from JSON cache.
-
-    Args:
-        archetype: Archetype name
-        mtg_format: Format (e.g., "modern")
-
-    Returns:
-        List of deck metadata dictionaries
-    """
     if _mtgo_feature_disabled("returning no cached metadata"):
         return []
 
@@ -176,11 +158,6 @@ def load_mtgo_deck_metadata(archetype: str, mtg_format: str) -> list[dict]:
 def fetch_mtgo_events_for_period(
     start_date: datetime, end_date: datetime, mtg_format: str = "modern"
 ):
-    """
-    Fetch MTGO events between start_date and end_date.
-
-    Returns list of event URLs.
-    """
     if _mtgo_feature_disabled("skipping fetch_mtgo_events_for_period"):
         return []
 
@@ -260,14 +237,6 @@ def process_mtgo_event(
     mtg_format: str = "modern",
     delay: float = MTGO_BACKGROUND_FETCH_DELAY_SECONDS,
 ):
-    """
-    Fetch and process a single MTGO event.
-
-    Args:
-        event_url: URL of the MTGO event
-        mtg_format: Format for archetype classification (default: "modern")
-        delay: Delay in seconds between requests (default: 2.0)
-    """
     if _mtgo_feature_disabled("skipping process_mtgo_event"):
         return 0
 
@@ -346,17 +315,6 @@ def fetch_mtgo_data_background(
     mtg_format: str = "modern",
     delay: float = MTGO_BACKGROUND_FETCH_DELAY_SECONDS,
 ):
-    """
-    Background task to fetch MTGO data for the past N days.
-
-    Args:
-        days: Number of days to fetch (default: 7)
-        mtg_format: Format to fetch (default: "modern")
-        delay: Delay between requests in seconds (default: 2.0)
-
-    Returns:
-        Dict with stats about the fetch operation
-    """
     if _mtgo_feature_disabled("skipping background fetch"):
         return {
             "events_found": 0,

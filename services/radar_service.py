@@ -61,14 +61,6 @@ class RadarService:
         deck_service: DeckService | None = None,
         radar_repository: RadarRepository | None = None,
     ):
-        """
-        Initialize the radar service.
-
-        Args:
-            metagame_repository: MetagameRepository instance
-            deck_service: DeckService instance
-            radar_repository: Repository containing precomputed radar snapshots
-        """
         self.metagame_repo = metagame_repository or get_metagame_repository()
         self.deck_service = deck_service or get_deck_service()
         self.radar_repo = radar_repository or get_radar_repository()
@@ -80,18 +72,6 @@ class RadarService:
         max_decks: int | None = None,
         progress_callback: Callable[[int, int, str], None] | None = None,
     ) -> RadarData:
-        """
-        Calculate radar data for a specific archetype.
-
-        Args:
-            archetype: Archetype dictionary with 'url' and 'name' keys
-            format_name: MTG format (e.g., "Modern", "Standard")
-            max_decks: Maximum number of decks to analyze (None = all)
-            progress_callback: Optional callback(current, total, deck_name)
-
-        Returns:
-            RadarData with frequency statistics
-        """
         archetype_name = archetype.get("name", "Unknown")
         logger.info(f"Calculating radar for {archetype_name} in {format_name}")
 
@@ -256,16 +236,6 @@ class RadarService:
     def _calculate_frequencies(
         self, card_stats: dict[str, list[int]], total_decks: int
     ) -> list[CardFrequency]:
-        """
-        Calculate frequency statistics for a set of cards.
-
-        Args:
-            card_stats: Dictionary mapping card names to list of counts (one per deck)
-            total_decks: Total number of decks analyzed
-
-        Returns:
-            List of CardFrequency objects
-        """
         frequencies = []
 
         for card_name, counts in card_stats.items():
@@ -309,20 +279,7 @@ class RadarService:
         min_expected_copies: float = RADAR_MIN_EXPECTED_COPIES_DEFAULT,
         max_cards: int | None = None,
     ) -> str:
-        """
-        Export radar data as a standard deck list format.
-
-        Cards are included based on their average count when present,
-        filtered by minimum expected copies per deck.
-
-        Args:
-            radar: RadarData to export
-            min_expected_copies: Minimum expected copies to include (0-4+)
-            max_cards: Maximum number of cards to include per zone (None = all)
-
-        Returns:
-            Deck list as text
-        """
+        # Cards are included based on their average count, filtered by min_expected_copies.
         lines = []
 
         # Filter and format mainboard
@@ -354,16 +311,6 @@ class RadarService:
         return "\n".join(lines)
 
     def get_radar_card_names(self, radar: RadarData, zone: str = "both") -> set[str]:
-        """
-        Get set of all card names in the radar.
-
-        Args:
-            radar: RadarData to extract from
-            zone: "mainboard", "sideboard", or "both"
-
-        Returns:
-            Set of card names
-        """
         cards = set()
 
         if zone in ("mainboard", "both"):
@@ -388,12 +335,7 @@ def get_radar_service() -> RadarService:
 
 
 def reset_radar_service() -> None:
-    """
-    Reset the global radar service instance.
-
-    This is primarily useful for testing to ensure test isolation
-    and prevent state leakage between tests.
-    """
+    """Reset the global radar service (use in tests for isolation)."""
     global _default_service
     _default_service = None
 

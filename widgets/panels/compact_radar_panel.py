@@ -33,12 +33,6 @@ class CompactRadarPanel(wx.Panel):
     """Compact panel for displaying radar data in small overlays."""
 
     def __init__(self, parent: wx.Window):
-        """
-        Initialize the compact radar panel.
-
-        Args:
-            parent: Parent window
-        """
         super().__init__(parent)
         self.SetBackgroundColour(DARK_PANEL)
 
@@ -90,12 +84,6 @@ class CompactRadarPanel(wx.Panel):
         return self._view_mode
 
     def display_radar(self, radar: RadarData) -> None:
-        """
-        Display radar data in the current view mode.
-
-        Args:
-            radar: RadarData to display
-        """
         self.current_radar = radar
         self.header_label.SetLabel(f"Radar: {radar.archetype_name}")
         self.view_toggle_btn.Show()
@@ -115,12 +103,6 @@ class CompactRadarPanel(wx.Panel):
         self.GetParent().Layout()
 
     def set_loading(self, message: str = "Loading radar data...") -> None:
-        """
-        Show loading state.
-
-        Args:
-            message: Loading message to display
-        """
         self.header_label.SetLabel("Radar: Loading...")
         self.status_label.SetLabel(message)
         self.card_list.Clear()
@@ -129,12 +111,6 @@ class CompactRadarPanel(wx.Panel):
         self.GetParent().Layout()
 
     def set_error(self, error_message: str) -> None:
-        """
-        Show error state.
-
-        Args:
-            error_message: Error message to display
-        """
         self.header_label.SetLabel("Radar: Error")
         self.status_label.SetLabel(error_message)
         self.card_list.Clear()

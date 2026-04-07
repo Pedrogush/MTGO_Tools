@@ -50,10 +50,7 @@ class EventLogger:
     def log(self, event: str, data: dict[str, Any] | None = None) -> None:
         """Record an event if logging is enabled.
 
-        Args:
-            event: Short snake_case event name (e.g. ``"deck_loaded"``).
-            data:  Optional dict of *anonymised* key/value pairs.
-                   Must not contain usernames, IP addresses, or personal data.
+        ``data`` must not contain usernames, IP addresses, or personal data.
         """
         if not self._enabled:
             return
@@ -118,15 +115,6 @@ def export_diagnostics_bundle(
     """Package log files and system info into a zip archive.
 
     No network activity.  The resulting file can be shared manually.
-
-    Args:
-        output_path:    Destination ``.zip`` file path.
-        logs_dir:       Directory that holds ``mtgo_tools_*.log`` files.
-        notes:          Optional free-text notes from the user.
-        include_events: Whether to include the event log (``events.jsonl``).
-
-    Returns:
-        The resolved path of the written zip file.
     """
     output_path = output_path.with_suffix(".zip") if output_path.suffix != ".zip" else output_path
     output_path.parent.mkdir(parents=True, exist_ok=True)

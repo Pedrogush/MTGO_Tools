@@ -876,12 +876,6 @@ class DeckBuilderPanel(wx.Panel):
                 self.set_active_radar(radar)
 
     def set_active_radar(self, radar: RadarData) -> None:
-        """
-        Set the active radar for filtering.
-
-        Args:
-            radar: RadarData to use for filtering
-        """
         self.active_radar = radar
         self.radar_enabled = True
         self.radar_cb.SetValue(True)

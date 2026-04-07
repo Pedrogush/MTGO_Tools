@@ -29,14 +29,7 @@ def find_archetype_by_name(
 
     Fetches the archetype list for the given format and finds the
     archetype whose name matches (case-insensitive, normalized).
-
-    Args:
-        archetype_name: Archetype name string (e.g. "UR Murktide")
-        format_name: MTG format (e.g. "Modern")
-        metagame_repo: Optional metagame repository instance
-
-    Returns:
-        Archetype dictionary with 'name', 'href' keys, or None if not found.
+    Falls back to partial matching if no exact match is found.
     """
     repo = metagame_repo or get_metagame_repository()
     normalized_input = normalize_archetype_name(archetype_name)

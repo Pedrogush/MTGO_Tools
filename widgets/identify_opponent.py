@@ -670,15 +670,7 @@ class MTGOpponentDeckSpy(wx.Frame):
         logger.info(f"Started radar generation for {archetype_name} ({format_name})")
 
     def _generate_radar_worker(self, archetype_dict: dict[str, Any], format_name: str) -> None:
-        """
-        Worker thread to generate radar data.
-
-        Runs in background thread, uses wx.CallAfter for UI updates.
-
-        Args:
-            archetype_dict: Archetype dictionary with 'name' and 'href' keys
-            format_name: MTG format (e.g., "Modern")
-        """
+        """Worker thread to generate radar data. Runs in background; uses wx.CallAfter for UI updates."""
         try:
             # Progress callback - safely updates UI from worker thread
             def update_progress(current: int, total: int, deck_name: str) -> None:
@@ -718,12 +710,6 @@ class MTGOpponentDeckSpy(wx.Frame):
             self._radar_worker_thread = None
 
     def _display_radar(self, radar: RadarData) -> None:
-        """
-        Display radar data in the compact panel.
-
-        Args:
-            radar: RadarData to display
-        """
         self.current_radar = radar
         self.radar_panel.display_radar(radar)
 

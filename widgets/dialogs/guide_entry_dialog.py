@@ -24,18 +24,6 @@ class GuideEntryDialog(wx.Dialog):
         flex_slots: list[str] | None = None,
         locale: str | None = None,
     ) -> None:
-        """
-        Initialize the guide entry dialog.
-
-        Args:
-            parent: Parent window
-            archetype_names: List of archetype names for dropdown
-            mainboard_cards: List of mainboard cards available to take out
-            sideboard_cards: List of sideboard cards available to bring in
-            data: Existing entry data to edit (optional)
-            flex_slots: Card names marked as flex slots (highlighted in Out selectors)
-            locale: Locale code for i18n
-        """
         self._locale = locale
         super().__init__(parent, title="Sideboard Guide Entry", size=(1100, 750))
 

@@ -44,14 +44,6 @@ class CardInspectorPanel(wx.Panel):
         card_manager: CardDataManager | None = None,
         mana_icons: ManaIconFactory | None = None,
     ):
-        """
-        Initialize the card inspector panel.
-
-        Args:
-            parent: Parent window
-            card_manager: Card data manager for metadata lookups
-            mana_icons: Mana icon factory for rendering mana costs
-        """
         super().__init__(parent)
         self.SetBackgroundColour(DARK_PANEL)
 
@@ -248,14 +240,6 @@ class CardInspectorPanel(wx.Panel):
     def update_card(
         self, card: dict[str, Any], zone: str | None = None, meta: dict[str, Any] | None = None
     ) -> None:
-        """
-        Update the inspector to show a specific card.
-
-        Args:
-            card: Card dictionary with 'name' and 'qty' keys
-            zone: Zone the card is from (e.g., 'main', 'side', 'out')
-            meta: Optional pre-fetched metadata
-        """
         self.active_zone = zone
         self._has_selection = True
         zone_title = ZONE_TITLES.get(zone, zone.title()) if zone else "Card Search"

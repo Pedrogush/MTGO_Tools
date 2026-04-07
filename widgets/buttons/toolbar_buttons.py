@@ -25,18 +25,6 @@ class ToolbarButtons(wx.Panel):
         on_open_settings_menu: Callable[[wx.Window], None] | None = None,
         labels: dict[str, str] | None = None,
     ):
-        """
-        Initialize the toolbar button panel.
-
-        Args:
-            parent: Parent window
-            on_open_opponent_tracker: Callback for "Opponent Tracker"
-            on_open_timer_alert: Callback for "Timer Alert"
-            on_open_match_history: Callback for "Match History"
-            on_open_metagame_analysis: Callback for "Metagame Analysis"
-            on_open_top_cards: Callback for "Top Cards"
-            on_open_settings_menu: Callback that opens the settings dropdown
-        """
         super().__init__(parent)
         labels = labels or {}
 

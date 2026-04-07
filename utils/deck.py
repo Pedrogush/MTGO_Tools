@@ -19,13 +19,6 @@ def sanitize_filename(filename: str, fallback: str = "saved_deck") -> str:
     - Invalid filesystem characters
     - Reserved Windows filenames
     - Leading/trailing dots and spaces
-
-    Args:
-        filename: Original filename
-        fallback: Default filename if result is empty
-
-    Returns:
-        Sanitized filename safe for filesystem use
     """
     # Replace null bytes with underscores
     filename = filename.replace("\x00", "_")
@@ -86,17 +79,6 @@ def sanitize_filename(filename: str, fallback: str = "saved_deck") -> str:
 
 
 def sanitize_zone_cards(entries: list) -> list[dict[str, int | float | str]]:
-    """
-    Validate and sanitize zone card entries.
-
-    Filters out invalid entries and ensures all cards have valid names and quantities.
-
-    Args:
-        entries: List of card entries (each should be a dict with 'name' and 'qty')
-
-    Returns:
-        List of validated card dictionaries with 'name' (str) and 'qty' (int or float) keys
-    """
     sanitized: list[dict[str, int | float | str]] = []
 
     for entry in entries:

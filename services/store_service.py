@@ -15,15 +15,6 @@ class StoreService:
     """Service that reads and writes lightweight JSON stores."""
 
     def load_store(self, path: Path) -> dict[str, Any]:
-        """
-        Load JSON data from the given path.
-
-        Args:
-            path: Path to the JSON store
-
-        Returns:
-            Dictionary payload (empty dict if unreadable)
-        """
         if not path.exists():
             return {}
         try:
@@ -37,13 +28,6 @@ class StoreService:
             return {}
 
     def save_store(self, path: Path, data: dict[str, Any]) -> None:
-        """
-        Persist JSON data to the given path.
-
-        Args:
-            path: Path to write
-            data: Dictionary payload
-        """
         try:
             atomic_write_json(path, data, indent=2, ensure_ascii=False)
         except OSError as exc:

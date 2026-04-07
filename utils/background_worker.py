@@ -30,15 +30,7 @@ class BackgroundWorker:
     ) -> None:
         """Submit a task to run in a background thread.
 
-        Args:
-            func: The function to execute
-            *args: Positional arguments for func
-            on_success: Optional callback for successful completion (marshaled to UI thread)
-            on_error: Optional callback for errors (marshaled to UI thread)
-            **kwargs: Keyword arguments for func
-
-        For long-running tasks, the function should periodically check self.is_stopped()
-        and exit when True.
+        For long-running tasks, the function should periodically check self.is_stopped() and exit when True.
         """
 
         def wrapper():

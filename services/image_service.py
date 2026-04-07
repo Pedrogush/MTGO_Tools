@@ -288,7 +288,6 @@ class ImageService:
     """Service for managing card image bulk data and printing indices."""
 
     def __init__(self):
-        """Initialize the image service."""
         self.image_cache = get_cache()
         self.image_downloader: BulkImageDownloader | None = None
         self.bulk_data_by_name: dict[str, list[dict[str, Any]]] | None = None
@@ -432,12 +431,6 @@ class ImageService:
     # ============= Bulk Data Management =============
 
     def check_bulk_data_exists(self) -> tuple[bool, str]:
-        """
-        Check if bulk data exists.
-
-        Returns:
-            Tuple of (exists: bool, reason: str)
-        """
         if not BULK_DATA_CACHE.exists():
             return False, "Bulk data cache not found"
 
@@ -449,14 +442,6 @@ class ImageService:
         on_error: Callable[[str], None],
         force: bool = False,
     ) -> None:
-        """
-        Download bulk metadata in a background thread.
-
-        Args:
-            on_success: Callback for successful download (receives success message)
-            on_error: Callback for failed download (receives error message)
-            force: Force download even if vendor metadata matches cache
-        """
         if self._bulk_download_handle and self._bulk_download_handle.process.is_alive():
             logger.debug("Bulk data download already running")
             return
@@ -493,17 +478,6 @@ class ImageService:
         on_success: Callable[[dict[str, list[dict[str, Any]]], dict[str, Any]], None],
         on_error: Callable[[str], None],
     ) -> bool:
-        """
-        Load printing index in a background thread.
-
-        Args:
-            force: Force reload even if already loading/loaded
-            on_success: Callback for successful load (receives bulk_data_by_name, stats)
-            on_error: Callback for failed load (receives error message)
-
-        Returns:
-            True if load was started, False if skipped
-        """
         if self.printing_index_loading and not force:
             logger.debug("Printing index already loading")
             return False
@@ -570,19 +544,15 @@ class ImageService:
         return True
 
     def set_bulk_data(self, bulk_data: dict[str, list[dict[str, Any]]]) -> None:
-        """Set the bulk data reference."""
         self.bulk_data_by_name = bulk_data
 
     def clear_printing_index_loading(self) -> None:
-        """Clear the printing index loading flag."""
         self.printing_index_loading = False
 
     def get_bulk_data(self) -> dict[str, list[dict[str, Any]]] | None:
-        """Get the current bulk data."""
         return self.bulk_data_by_name
 
     def is_loading(self) -> bool:
-        """Check if printing index is currently loading."""
         return self.printing_index_loading
 
 
@@ -599,11 +569,6 @@ def get_image_service() -> ImageService:
 
 
 def reset_image_service() -> None:
-    """
-    Reset the global image service instance.
-
-    This is primarily useful for testing to ensure test isolation
-    and prevent state leakage between tests.
-    """
+    """Reset the global image service (use in tests for isolation)."""
     global _default_service
     _default_service = None

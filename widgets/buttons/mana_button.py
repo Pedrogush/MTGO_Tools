@@ -14,16 +14,6 @@ from utils.mana_icon_factory import ManaIconFactory
 
 
 def get_mana_font(size: int = 14, parent_font: wx.Font | None = None) -> wx.Font:
-    """
-    Get a font suitable for displaying mana symbols.
-
-    Args:
-        size: Font size in points
-        parent_font: Optional parent font to use as base if mana font not loaded
-
-    Returns:
-        wx.Font configured for mana symbols
-    """
     if ManaIconFactory._FONT_LOADED:
         return wx.Font(
             size,
@@ -50,19 +40,6 @@ def create_mana_button(
     mana_icons: ManaIconFactory,
     font_size: int = 15,
 ) -> wx.Button:
-    """
-    Create a button for a mana symbol, using bitmap icon if available.
-
-    Args:
-        parent: Parent window for the button
-        token: Mana symbol token (e.g., 'W', 'U', 'B', 'R', 'G', '2')
-        handler: Callback function when button is clicked, receives token
-        mana_icons: ManaIconFactory instance for rendering bitmap icons
-        font_size: Font size for text fallback (default: 15)
-
-    Returns:
-        wx.Button (or wx.BitmapButton) configured for the mana symbol
-    """
     bmp: wx.Bitmap | None = None
     try:
         bmp = mana_icons.bitmap_for_symbol(token)

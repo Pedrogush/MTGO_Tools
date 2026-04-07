@@ -18,16 +18,7 @@ class DeckParser:
     """Parse deck text into structured data for downstream services."""
 
     def deck_to_dictionary(self, deck_text: str) -> dict[str, float]:
-        """
-        Convert deck text to a dictionary representation.
-
-        Args:
-            deck_text: Deck list as text (format: "quantity card_name")
-
-        Returns:
-            Dictionary mapping card names to quantities (floats to preserve averages)
-            Sideboard cards are prefixed with "Sideboard "
-        """
+        # Sideboard cards are keyed as "Sideboard {name}".
         deck_dict: dict[str, float] = {}
 
         for entry in self._iter_entries(deck_text, strip_input=False, ignore_trailing_empty=True):
@@ -37,23 +28,6 @@ class DeckParser:
         return deck_dict
 
     def analyze_deck(self, deck_content: str) -> dict[str, Any]:
-        """
-        Analyze a deck and return statistics.
-
-        Args:
-            deck_content: Deck list as text
-
-        Returns:
-            Dictionary with keys:
-                - mainboard_count: int
-                - sideboard_count: int
-                - total_cards: int
-                - unique_mainboard: int
-                - unique_sideboard: int
-                - mainboard_cards: list of (card_name, count) tuples
-                - sideboard_cards: list of (card_name, count) tuples
-                - estimated_lands: int
-        """
         mainboard_totals: dict[str, float] = {}
         sideboard_totals: dict[str, float] = {}
         mainboard_order: list[str] = []

@@ -269,15 +269,6 @@ def show_image_download_dialog(
     image_downloader: BulkImageDownloader | None,
     on_status_update: Callable[[str], None] | None = None,
 ) -> None:
-    """
-    Show the image download dialog and start download if user confirms.
-
-    Args:
-        parent: Parent window
-        image_cache: Image cache instance
-        image_downloader: Bulk image downloader instance (or None to create)
-        on_status_update: Optional callback for status bar updates
-    """
     dialog = ImageDownloadDialog(parent, image_cache, image_downloader, on_status_update)
 
     if dialog.ShowModal() == wx.ID_OK:

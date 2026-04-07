@@ -23,16 +23,6 @@ class DeckActionButtons(wx.Panel):
         on_load: Callable[[], None] | None = None,
         labels: dict[str, str] | None = None,
     ):
-        """
-        Initialize the deck action buttons panel.
-
-        Args:
-            parent: Parent window
-            on_copy: Callback when Copy button clicked
-            on_save: Callback when Save Deck button clicked
-            on_daily_average: Callback when Today's Average button clicked
-            on_load: Callback when Load Deck button clicked
-        """
         super().__init__(parent)
 
         self.on_copy = on_copy

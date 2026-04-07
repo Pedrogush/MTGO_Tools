@@ -78,22 +78,7 @@ _card_index_decoder: msgspec.json.Decoder[CardIndex] = msgspec.json.Decoder(Card
 
 
 def load_card_manager(data_dir: Path | str = CARD_DATA_DIR, force: bool = False) -> CardDataManager:
-    """
-    Load and return a CardDataManager with the latest card data.
-
-    This is a synchronous function intended to be called from a background thread.
-    It will download/update card data if needed and return a ready-to-use manager.
-
-    Args:
-        data_dir: Directory to store card data (default: "data")
-        force: Force refresh even if data is up-to-date
-
-    Returns:
-        CardDataManager instance with loaded card data
-
-    Raises:
-        RuntimeError: If card data cannot be loaded and no cache exists
-    """
+    # Synchronous – call from a background thread. Downloads/updates card data if needed.
     manager = CardDataManager(data_dir)
     manager.ensure_latest(force=force)
     return manager

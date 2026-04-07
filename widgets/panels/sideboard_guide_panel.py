@@ -40,20 +40,6 @@ class SideboardGuidePanel(wx.Panel):
         on_edit_flex_slots: Callable[[], None] | None = None,
         locale: str | None = None,
     ):
-        """
-        Initialize the sideboard guide panel.
-
-        Args:
-            parent: Parent window
-            on_add_entry: Callback for adding a new guide entry
-            on_edit_entry: Callback for editing selected entry
-            on_remove_entry: Callback for removing selected entry
-            on_edit_exclusions: Callback for editing archetype exclusions
-            on_export_csv: Callback for exporting guide to CSV
-            on_import_csv: Callback for importing guide from CSV
-            on_pin_guide: Callback for pinning the current deck's guide for the opponent tracker
-            on_edit_flex_slots: Callback for editing the deck's flex slot cards
-        """
         super().__init__(parent)
         self.SetBackgroundColour(DARK_PANEL)
         self._locale = locale
@@ -193,13 +179,6 @@ class SideboardGuidePanel(wx.Panel):
     def set_entries(
         self, entries: list[dict[str, str]], exclusions: list[str] | None = None
     ) -> None:
-        """
-        Set the guide entries and exclusions.
-
-        Args:
-            entries: List of guide entry dictionaries
-            exclusions: List of excluded archetype names
-        """
         self.entries = entries
         self.exclusions = exclusions or []
         self._refresh_view()
@@ -213,12 +192,6 @@ class SideboardGuidePanel(wx.Panel):
         return self.exclusions
 
     def get_selected_index(self) -> int | None:
-        """
-        Get the index of the currently selected entry.
-
-        Returns:
-            Index of selected entry, or None if no selection
-        """
         item = self.guide_view.GetSelection()
         if not item.IsOk():
             return None
@@ -231,12 +204,6 @@ class SideboardGuidePanel(wx.Panel):
         self._refresh_view()
 
     def set_warning(self, message: str) -> None:
-        """
-        Display a warning message.
-
-        Args:
-            message: Warning text to display (empty string to hide)
-        """
         if message:
             self.warning_label.SetLabel(message)
             self.warning_label.Show()
@@ -279,15 +246,7 @@ class SideboardGuidePanel(wx.Panel):
         self.exclusions_label.SetLabel(f"{self._t('guide.label.exclusions')}: {text}")
 
     def _format_card_list(self, cards: dict[str, int] | str) -> str:
-        """
-        Format a card list for display.
-
-        Args:
-            cards: Either a dict mapping card name to quantity, or a string (for old format)
-
-        Returns:
-            Formatted string like "2x Lightning Bolt, 1x Mountain"
-        """
+        # Accepts either a dict (new format) or a plain string (old format).
         if isinstance(cards, str):
             # Old format - just return the string
             return cards
@@ -336,12 +295,6 @@ class SideboardGuidePanel(wx.Panel):
             self.on_edit_flex_slots()
 
     def set_pinned(self, pinned: bool) -> None:
-        """
-        Update the pin button label to reflect current pinned state.
-
-        Args:
-            pinned: True if this deck's guide is currently pinned
-        """
         if pinned:
             self.pin_btn.SetLabel(self._t("guide.btn.pinned"))
         else:

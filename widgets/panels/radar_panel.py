@@ -32,16 +32,6 @@ class RadarPanel(wx.Panel):
         on_use_for_search: Callable[[RadarData], None] | None = None,
         locale: str | None = None,
     ):
-        """
-        Initialize the radar panel.
-
-        Args:
-            parent: Parent window
-            radar_service: Radar service for calculations
-            on_export: Callback when export button clicked (radar_data)
-            on_use_for_search: Callback when "Use for Search" clicked (radar_data)
-            locale: Locale code for i18n
-        """
         super().__init__(parent)
         self.SetBackgroundColour(DARK_PANEL)
         self._locale = locale
@@ -132,12 +122,6 @@ class RadarPanel(wx.Panel):
     # ============= Public API =============
 
     def display_radar(self, radar: RadarData) -> None:
-        """
-        Display radar data in the panel.
-
-        Args:
-            radar: RadarData to display
-        """
         self.current_radar = radar
 
         # Update header
@@ -176,13 +160,6 @@ class RadarPanel(wx.Panel):
     def _populate_card_list(
         self, list_ctrl: dv.DataViewListCtrl, cards: list[CardFrequency]
     ) -> None:
-        """
-        Populate a list control with card frequency data.
-
-        Args:
-            list_ctrl: DataViewListCtrl to populate
-            cards: List of CardFrequency objects
-        """
         list_ctrl.DeleteAllItems()
 
         for card in cards:
@@ -284,16 +261,6 @@ class RadarDialog(wx.Dialog):
         radar_service: RadarService | None = None,
         locale: str | None = None,
     ):
-        """
-        Initialize the radar dialog.
-
-        Args:
-            parent: Parent window
-            metagame_repo: Metagame repository for fetching archetypes
-            format_name: MTG format (e.g., "Modern", "Standard")
-            radar_service: Radar service for calculations
-            locale: Locale code for i18n
-        """
         super().__init__(
             parent,
             title=f"Archetype Radar - {format_name}",
@@ -411,13 +378,7 @@ class RadarDialog(wx.Dialog):
         wx.CallAfter(self.cancel_btn.Enable, False)
 
     def _generate_radar_worker(self, archetype: dict[str, Any]) -> None:
-        """
-        Worker thread function to generate radar for the selected archetype.
-        Runs in background thread, uses wx.CallAfter for UI updates.
-
-        Args:
-            archetype: Archetype dictionary
-        """
+        """Worker thread to generate radar. Runs in background; uses wx.CallAfter for UI updates."""
         try:
             # Progress callback - safely updates UI from worker thread
             def update_progress(current: int, total: int, deck_name: str) -> None:
@@ -465,12 +426,6 @@ class RadarDialog(wx.Dialog):
             self.worker_thread = None
 
     def _export_radar(self, radar: RadarData) -> None:
-        """
-        Export radar as a deck list.
-
-        Args:
-            radar: RadarData to export
-        """
         # Ask for minimum expected copies threshold
         dlg = wx.TextEntryDialog(
             self,
@@ -509,12 +464,6 @@ class RadarDialog(wx.Dialog):
         dlg.Destroy()
 
     def _use_radar_for_search(self, radar: RadarData) -> None:
-        """
-        Use radar for deck builder search.
-
-        Args:
-            radar: RadarData to use
-        """
         logger.info("Radar used as search filter")
         if self.IsModal():
             self.EndModal(wx.ID_OK)
