@@ -270,7 +270,6 @@ class AutomationClient:
         """Set the current deck identity used for deck-scoped data."""
         return self._send_command("set_current_deck", deck=deck)
 
-
     def close_app(self) -> dict[str, Any]:
         """Close the application.
 

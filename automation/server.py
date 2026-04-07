@@ -190,9 +190,7 @@ class AutomationServer:
         """Handle ping command."""
         return {"status": "ok", "timestamp": time.time()}
 
-    def _handle_screenshot(
-        self, path: str | None = None, headless: bool = False
-    ) -> dict[str, Any]:
+    def _handle_screenshot(self, path: str | None = None, headless: bool = False) -> dict[str, Any]:
         """Take a screenshot of the application window.
 
         When *headless* is True the frame is temporarily restored if it is

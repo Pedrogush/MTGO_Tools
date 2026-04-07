@@ -469,9 +469,7 @@ Examples:
     subparsers.add_parser("close-app", help="Close the running application")
 
     # open-app
-    p = subparsers.add_parser(
-        "open-app", help="Launch the application with the automation flag"
-    )
+    p = subparsers.add_parser("open-app", help="Launch the application with the automation flag")
     p.add_argument(
         "--wait",
         action="store_true",
