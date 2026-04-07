@@ -72,11 +72,11 @@ from utils.constants import (
     OPPONENT_TRACKER_DEFAULT_X_GAP,
     OPPONENT_TRACKER_FRAME_SIZE,
     OPPONENT_TRACKER_LABEL_WRAP_WIDTH,
+    OPPONENT_TRACKER_LEFT_SASH_POS,
     OPPONENT_TRACKER_MIN_SIZE,
     OPPONENT_TRACKER_POLL_INTERVAL_MS,
     OPPONENT_TRACKER_RADAR_THREAD_JOIN_TIMEOUT_SECONDS,
     OPPONENT_TRACKER_SECTION_PADDING,
-    OPPONENT_TRACKER_SPACER_HEIGHT,
     RADAR_MAX_DECKS_OPPONENT_TRACKER,
     SUBDUED_TEXT,
 )
@@ -178,7 +178,6 @@ class MTGOpponentDeckSpy(wx.Frame):
         self.last_seen_decks: dict[str, str] = {}  # format -> deck name
 
         self._saved_position: list[int] | None = None
-        self._calculator_visible: bool = False
 
         # Background poll worker
         self._bg_worker = BackgroundWorker()
@@ -192,10 +191,8 @@ class MTGOpponentDeckSpy(wx.Frame):
         self._radar_worker_thread: threading.Thread | None = None
         self._radar_cancel_requested: bool = False
         self._last_radar_archetype: str = ""
-        self._radar_visible: bool = False
 
         # Sideboard guide integration
-        self._guide_visible: bool = False
         self._last_guide_archetype: str = ""
 
         self._load_cache()
@@ -218,18 +215,19 @@ class MTGOpponentDeckSpy(wx.Frame):
 
         panel = wx.Panel(self)
         panel.SetBackgroundColour(DARK_BG)
-        sizer = wx.BoxSizer(wx.VERTICAL)
-        panel.SetSizer(sizer)
+        outer_sizer = wx.BoxSizer(wx.VERTICAL)
+        panel.SetSizer(outer_sizer)
 
+        # --- Header: deck label, status, controls ---
         self.deck_label = wx.StaticText(panel, label=self._t("tracker.label.not_detected"))
         self._stylize_label(self.deck_label)
         self.deck_label.Wrap(OPPONENT_TRACKER_LABEL_WRAP_WIDTH)
-        sizer.Add(self.deck_label, 0, wx.ALL | wx.EXPAND, OPPONENT_TRACKER_SECTION_PADDING)
+        outer_sizer.Add(self.deck_label, 0, wx.ALL | wx.EXPAND, OPPONENT_TRACKER_SECTION_PADDING)
 
         self.status_label = wx.StaticText(panel, label=self._t("tracker.label.watching"))
         self._stylize_label(self.status_label, subtle=True)
         self.status_label.Wrap(OPPONENT_TRACKER_LABEL_WRAP_WIDTH)
-        sizer.Add(
+        outer_sizer.Add(
             self.status_label,
             0,
             wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND,
@@ -237,12 +235,12 @@ class MTGOpponentDeckSpy(wx.Frame):
         )
 
         divider = wx.StaticLine(panel)
-        sizer.Add(
+        outer_sizer.Add(
             divider, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, OPPONENT_TRACKER_SECTION_PADDING
         )
 
         controls = wx.BoxSizer(wx.HORIZONTAL)
-        sizer.Add(controls, 0, wx.ALL | wx.EXPAND, OPPONENT_TRACKER_SECTION_PADDING)
+        outer_sizer.Add(controls, 0, wx.ALL | wx.EXPAND, OPPONENT_TRACKER_SECTION_PADDING)
 
         controls.AddStretchSpacer(1)
 
@@ -251,48 +249,46 @@ class MTGOpponentDeckSpy(wx.Frame):
         refresh_button.Bind(wx.EVT_BUTTON, lambda _evt: self._manual_refresh(force=True))
         controls.Add(refresh_button, 0, wx.RIGHT, OPPONENT_TRACKER_SECTION_PADDING)
 
-        self.calc_toggle_btn = wx.Button(panel, label=self._t("tracker.btn.calculator"))
-        self._stylize_secondary_button(self.calc_toggle_btn)
-        self.calc_toggle_btn.Bind(wx.EVT_BUTTON, self._toggle_calculator_panel)
-        controls.Add(self.calc_toggle_btn, 0, wx.RIGHT, OPPONENT_TRACKER_SECTION_PADDING)
-
-        self.radar_toggle_btn = wx.Button(panel, label="Radar")
-        self._stylize_secondary_button(self.radar_toggle_btn)
-        self.radar_toggle_btn.Bind(wx.EVT_BUTTON, self._toggle_radar_panel)
-        controls.Add(self.radar_toggle_btn, 0, wx.RIGHT, OPPONENT_TRACKER_SECTION_PADDING)
-
-        self.guide_toggle_btn = wx.Button(panel, label=self._t("tracker.btn.guide"))
-        self._stylize_secondary_button(self.guide_toggle_btn)
-        self.guide_toggle_btn.Bind(wx.EVT_BUTTON, self._toggle_guide_panel)
-        controls.Add(self.guide_toggle_btn, 0, wx.RIGHT, OPPONENT_TRACKER_SECTION_PADDING)
+        load_arch_btn = wx.Button(panel, label=self._t("tracker.btn.load_archetype"))
+        self._stylize_secondary_button(load_arch_btn)
+        load_arch_btn.Bind(wx.EVT_BUTTON, self._on_load_archetype_clicked)
+        controls.Add(load_arch_btn, 0, wx.RIGHT, OPPONENT_TRACKER_SECTION_PADDING)
 
         close_button = wx.Button(panel, label=self._t("tracker.btn.close"))
         self._stylize_secondary_button(close_button)
         close_button.Bind(wx.EVT_BUTTON, lambda _evt: self.Close())
         controls.Add(close_button, 0)
 
-        # Calculator Panel (initially hidden)
-        self._build_calculator_panel(panel, sizer)
-
-        # Radar Panel (initially hidden)
-        self.radar_panel = CompactRadarPanel(panel)
-        sizer.Add(
-            self.radar_panel,
+        # --- Main two-panel area ---
+        main_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        outer_sizer.Add(
+            main_sizer,
             1,
-            wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND,
+            wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM,
             OPPONENT_TRACKER_SECTION_PADDING,
         )
 
-        # Sideboard Guide Panel (initially hidden)
+        # Left panel: vertical splitter — Calc (top) / Radar (bottom)
+        self._left_splitter = wx.SplitterWindow(panel, style=wx.SP_3D | wx.SP_LIVE_UPDATE)
+        self._left_splitter.SetBackgroundColour(DARK_BG)
+        main_sizer.Add(
+            self._left_splitter, 1, wx.EXPAND | wx.RIGHT, OPPONENT_TRACKER_SECTION_PADDING
+        )
+
+        self._build_calculator_panel(self._left_splitter)
+
+        self.radar_panel = CompactRadarPanel(self._left_splitter)
+        self.radar_panel.clear()  # show placeholder (does not hide in new layout)
+
+        self._left_splitter.SplitHorizontally(
+            self.calc_panel, self.radar_panel, OPPONENT_TRACKER_LEFT_SASH_POS
+        )
+        self._left_splitter.SetMinimumPaneSize(80)
+
+        # Right panel: Sideboard Guide
         self.sideboard_panel = CompactSideboardPanel(panel)
-        sizer.Add(
-            self.sideboard_panel,
-            1,
-            wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND,
-            OPPONENT_TRACKER_SECTION_PADDING,
-        )
-
-        sizer.AddSpacer(OPPONENT_TRACKER_SPACER_HEIGHT)
+        self.sideboard_panel.set_no_pinned_deck()
+        main_sizer.Add(self.sideboard_panel, 1, wx.EXPAND)
 
     def _stylize_label(
         self, label: wx.StaticText, *, bold: bool = False, subtle: bool = False
@@ -312,8 +308,8 @@ class MTGOpponentDeckSpy(wx.Frame):
         font.MakeBold()
         button.SetFont(font)
 
-    def _build_calculator_panel(self, panel: wx.Panel, parent_sizer: wx.BoxSizer) -> None:
-        self.calc_panel = wx.Panel(panel)
+    def _build_calculator_panel(self, parent: wx.Window) -> None:
+        self.calc_panel = wx.Panel(parent)
         self.calc_panel.SetBackgroundColour(DARK_PANEL)
 
         calc_sizer = wx.BoxSizer(wx.VERTICAL)
@@ -444,52 +440,20 @@ class MTGOpponentDeckSpy(wx.Frame):
         self.calc_result_label.SetForegroundColour(LIGHT_TEXT)
         calc_sizer.Add(self.calc_result_label, 0, wx.ALL, CALC_SECTION_PADDING)
 
-        # Add panel to parent sizer but hide initially
-        parent_sizer.Add(
-            self.calc_panel,
-            0,
-            wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND,
-            OPPONENT_TRACKER_SECTION_PADDING,
+    def _on_load_archetype_clicked(self, _event: wx.CommandEvent) -> None:
+        """Open dialog to manually load an archetype for radar/guide lookup."""
+        dlg = _LoadArchetypeDialog(
+            self,
+            title=self._t("tracker.dlg.load_archetype.title"),
+            format_label=self._t("tracker.dlg.load_archetype.format"),
+            archetype_label=self._t("tracker.dlg.load_archetype.archetype"),
+            locale=self._locale,
         )
-        self.calc_panel.Hide()
-
-    def _toggle_calculator_panel(self, _event: wx.CommandEvent | None = None) -> None:
-        self._calculator_visible = not self._calculator_visible
-        if self._calculator_visible:
-            self.calc_panel.Show()
-            self.calc_toggle_btn.SetLabel("Hide Calc")
-        else:
-            self.calc_panel.Hide()
-            self.calc_toggle_btn.SetLabel(self._t("tracker.btn.calculator"))
-        self.Layout()
-        self.Fit()
-
-    def _toggle_radar_panel(self, _event: wx.CommandEvent | None = None) -> None:
-        self._radar_visible = not self._radar_visible
-        if self._radar_visible:
-            self.radar_panel.Show()
-            self.radar_toggle_btn.SetLabel("Hide Radar")
-        else:
-            self.radar_panel.Hide()
-            self.radar_toggle_btn.SetLabel("Radar")
-        self.Layout()
-        self.Fit()
-
-    def _toggle_guide_panel(self, _event: wx.CommandEvent | None = None) -> None:
-        self._guide_visible = not self._guide_visible
-        if self._guide_visible:
-            self.sideboard_panel.Show()
-            self.guide_toggle_btn.SetLabel("Hide Guide")
-            # Load guide if we have an opponent archetype
-            if self.last_seen_decks:
-                self._update_guide_display()
-            else:
-                self.sideboard_panel.set_no_pinned_deck()
-        else:
-            self.sideboard_panel.Hide()
-            self.guide_toggle_btn.SetLabel("Guide")
-        self.Layout()
-        self.Fit()
+        if dlg.ShowModal() == wx.ID_OK:
+            fmt, archetype = dlg.get_values()
+            if fmt and archetype:
+                self._load_archetype_manually(fmt, archetype)
+        dlg.Destroy()
 
     def _update_guide_display(self) -> None:
         if not self.last_seen_decks:
@@ -561,6 +525,18 @@ class MTGOpponentDeckSpy(wx.Frame):
             self.sideboard_panel.set_no_guide(archetype_name)
         else:
             self.sideboard_panel.display_entry(match, archetype_name)
+
+    def _load_archetype_manually(self, fmt: str, archetype: str) -> None:
+        """Load radar and guide for a manually specified archetype."""
+        self._clear_radar_display()
+        self.player_name = "(manual)"
+        self.last_seen_decks = {fmt: archetype}
+        self.deck_label.SetLabel(
+            self._t("tracker.label.manual_archetype", archetype=archetype, fmt=fmt)
+        )
+        self.deck_label.Wrap(OPPONENT_TRACKER_LABEL_WRAP_WIDTH)
+        self._trigger_radar_load()
+        self._update_guide_display()
 
     def _apply_preset(self, deck_size: int, cards_drawn: int) -> None:
         self.spin_deck_size.SetValue(deck_size)
@@ -703,15 +679,6 @@ class MTGOpponentDeckSpy(wx.Frame):
     def _display_radar(self, radar: RadarData) -> None:
         self.current_radar = radar
         self.radar_panel.display_radar(radar)
-
-        # Show radar panel if not already visible
-        if not self._radar_visible:
-            self._radar_visible = True
-            self.radar_panel.Show()
-            self.radar_toggle_btn.SetLabel("Hide Radar")
-            self.Layout()
-            self.Fit()
-
         logger.info(f"Radar displayed for {radar.archetype_name}")
 
     def _clear_radar_display(self) -> None:
@@ -800,8 +767,7 @@ class MTGOpponentDeckSpy(wx.Frame):
             self.last_seen_decks = result["decks"]
             if self.last_seen_decks:
                 self._trigger_radar_load()
-                if self._guide_visible:
-                    self._update_guide_display()
+                self._update_guide_display()
 
         self.status_label.SetLabel(f"Match detected: vs {self.player_name}")
         self.status_label.Wrap(OPPONENT_TRACKER_LABEL_WRAP_WIDTH)
@@ -864,9 +830,6 @@ class MTGOpponentDeckSpy(wx.Frame):
 
         config = {
             "screen_pos": position,
-            "calculator_visible": self._calculator_visible,
-            "radar_visible": self._radar_visible,
-            "guide_visible": self._guide_visible,
         }
         try:
             atomic_write_json(DECK_MONITOR_CONFIG_FILE, config, indent=4)
@@ -898,9 +861,6 @@ class MTGOpponentDeckSpy(wx.Frame):
             except OSError as exc:
                 logger.warning(f"Failed to migrate deck monitor config: {exc}")
         self._saved_position = data.get("screen_pos")
-        self._calculator_visible = data.get("calculator_visible", False)
-        self._radar_visible = data.get("radar_visible", False)
-        self._guide_visible = data.get("guide_visible", False)
 
     def _save_cache(self) -> None:
         payload = {"entries": self.cache}
@@ -962,6 +922,18 @@ class MTGOpponentDeckSpy(wx.Frame):
     def _apply_window_preferences(self) -> None:
         self.SetBackgroundColour(DARK_BG)
         self.SetMinSize(wx.Size(*OPPONENT_TRACKER_MIN_SIZE))
+
+        # Size the window: width = ~half main app, height = full screen client area
+        try:
+            display_idx = wx.Display.GetFromWindow(self) if self.IsShown() else 0
+            if display_idx == wx.NOT_FOUND:
+                display_idx = 0
+            client_area = wx.Display(display_idx).GetClientArea()
+            frame_w, _ = OPPONENT_TRACKER_FRAME_SIZE
+            self.SetSize(frame_w, client_area.GetHeight())
+        except Exception:
+            pass  # fall back to the constant size set in __init__
+
         if getattr(self, "_saved_position", None):
             try:
                 x, y = self._saved_position
@@ -971,24 +943,6 @@ class MTGOpponentDeckSpy(wx.Frame):
                 self._place_beside_parent()
         else:
             self._place_beside_parent()
-        # Restore calculator panel visibility
-        if getattr(self, "_calculator_visible", False):
-            self.calc_panel.Show()
-            self.calc_toggle_btn.SetLabel("Hide Calc")
-            self.Layout()
-            self.Fit()
-        # Restore radar panel visibility
-        if getattr(self, "_radar_visible", False):
-            self.radar_panel.Show()
-            self.radar_toggle_btn.SetLabel("Hide Radar")
-            self.Layout()
-            self.Fit()
-        # Restore guide panel visibility
-        if getattr(self, "_guide_visible", False):
-            self.sideboard_panel.Show()
-            self.guide_toggle_btn.SetLabel("Hide Guide")
-            self.Layout()
-            self.Fit()
 
     def _is_widget_ok(self, widget: wx.Window) -> bool:
         if widget is None:
@@ -1018,6 +972,53 @@ class MTGOpponentDeckSpy(wx.Frame):
         event.Skip()
 
 
+class _LoadArchetypeDialog(wx.Dialog):
+    """Small dialog for manually selecting a format + archetype name."""
+
+    def __init__(
+        self,
+        parent: wx.Window,
+        title: str,
+        format_label: str,
+        archetype_label: str,
+        locale: str | None = None,
+    ) -> None:
+        super().__init__(parent, title=title, style=wx.DEFAULT_DIALOG_STYLE)
+        self.SetBackgroundColour(DARK_BG)
+
+        sizer = wx.BoxSizer(wx.VERTICAL)
+        self.SetSizer(sizer)
+
+        grid = wx.FlexGridSizer(2, 2, 6, 8)
+        grid.AddGrowableCol(1, 1)
+        sizer.Add(grid, 0, wx.EXPAND | wx.ALL, 12)
+
+        lbl_fmt = wx.StaticText(self, label=format_label)
+        lbl_fmt.SetForegroundColour(LIGHT_TEXT)
+        self._format_choice = wx.Choice(self, choices=FORMAT_OPTIONS)
+        self._format_choice.SetSelection(0)
+
+        lbl_arch = wx.StaticText(self, label=archetype_label)
+        lbl_arch.SetForegroundColour(LIGHT_TEXT)
+        self._archetype_ctrl = wx.TextCtrl(self, size=(260, -1))
+
+        grid.Add(lbl_fmt, 0, wx.ALIGN_CENTER_VERTICAL)
+        grid.Add(self._format_choice, 1, wx.EXPAND)
+        grid.Add(lbl_arch, 0, wx.ALIGN_CENTER_VERTICAL)
+        grid.Add(self._archetype_ctrl, 1, wx.EXPAND)
+
+        btn_sizer = self.CreateStdDialogButtonSizer(wx.OK | wx.CANCEL)
+        sizer.Add(btn_sizer, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 12)
+
+        self.Fit()
+        self.CentreOnParent()
+
+    def get_values(self) -> tuple[str, str]:
+        fmt = self._format_choice.GetString(self._format_choice.GetSelection())
+        archetype = self._archetype_ctrl.GetValue().strip()
+        return fmt, archetype
+
+
 def main() -> None:
     """Launch the opponent tracker as a standalone application."""
     from utils.constants import LOGS_DIR, ensure_base_dirs
@@ -1038,4 +1039,4 @@ if __name__ == "__main__":
     main()
 
 
-__all__ = ["MTGOpponentDeckSpy"]
+__all__ = ["MTGOpponentDeckSpy", "_LoadArchetypeDialog"]

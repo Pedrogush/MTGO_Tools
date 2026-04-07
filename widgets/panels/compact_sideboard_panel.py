@@ -73,10 +73,9 @@ class CompactSideboardPanel(wx.Panel):
     def clear(self) -> None:
         self._current_entry = None
         self.header_label.SetLabel("Guide: —")
-        self.status_label.SetLabel("")
+        self.status_label.SetLabel("Waiting for opponent\u2026")
         self.card_list.Clear()
         self.toggle_btn.Hide()
-        self.Hide()
         self.GetParent().Layout()
 
     def set_no_guide(self, archetype_name: str) -> None:
