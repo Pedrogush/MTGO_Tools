@@ -9,7 +9,7 @@ import wx
 from loguru import logger
 
 from controllers.app_controller import get_deck_selector_controller
-from utils.constants import LOGS_DIR, ensure_base_dirs
+from utils.constants import BASE_DATA_DIR, LOGS_DIR, ensure_base_dirs
 from utils.logging_config import configure_logging
 from widgets.splash_frame import LoadingFrame
 
@@ -120,6 +120,7 @@ def main() -> None:
     log_file = configure_logging(LOGS_DIR)
     if log_file:
         logger.info(f"Writing logs to {log_file}")
+    logger.info(f"Using base data directory: {BASE_DATA_DIR}")
 
     if _automation_enabled:
         logger.info(f"Automation mode enabled on port {_automation_port}")
