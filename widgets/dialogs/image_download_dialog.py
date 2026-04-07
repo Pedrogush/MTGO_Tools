@@ -132,7 +132,7 @@ class ImageDownloadDialog(wx.Dialog):
         download_cancelled = [False]
 
         def progress_callback(completed: int, total: int, message: str):
-                wx.CallAfter(
+            wx.CallAfter(
                 self._update_progress,
                 progress_dialog,
                 completed,
