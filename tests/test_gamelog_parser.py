@@ -152,7 +152,10 @@ class TestDetectFormatFromCards:
         assert detect_format_from_cards(["Force of Will"] * 10) == "Unknown"
 
     def test_returns_last_parsed_format_without_card_manager(self):
-        assert detect_format_from_cards(["Force of Will"] * 10, last_parsed_format="Modern") == "Modern"
+        assert (
+            detect_format_from_cards(["Force of Will"] * 10, last_parsed_format="Modern")
+            == "Modern"
+        )
 
     def test_returns_unknown_when_manager_not_loaded(self):
         manager = MagicMock()
@@ -162,7 +165,10 @@ class TestDetectFormatFromCards:
     def test_returns_last_parsed_format_when_manager_not_loaded(self):
         manager = MagicMock()
         manager.is_loaded = False
-        assert detect_format_from_cards(["Force of Will"] * 10, manager, last_parsed_format="Legacy") == "Legacy"
+        assert (
+            detect_format_from_cards(["Force of Will"] * 10, manager, last_parsed_format="Legacy")
+            == "Legacy"
+        )
 
     def test_detects_format_with_few_cards(self):
         # No minimum card count — even a single recognised card is enough
@@ -172,7 +178,10 @@ class TestDetectFormatFromCards:
     def test_returns_last_parsed_format_when_no_legality_data(self):
         # All cards unknown to the index → fall back to last_parsed_format
         manager = _make_manager({})
-        assert detect_format_from_cards(["token1", "token2"], manager, last_parsed_format="Modern") == "Modern"
+        assert (
+            detect_format_from_cards(["token1", "token2"], manager, last_parsed_format="Modern")
+            == "Modern"
+        )
 
     def test_detects_modern(self):
         deck = self._build_deck(self._modern_card())
@@ -228,7 +237,10 @@ class TestDetectFormatFromCards:
         }
         manager = _make_manager(deck)
         assert detect_format_from_cards(list(deck.keys()), manager) == "Unknown"
-        assert detect_format_from_cards(list(deck.keys()), manager, last_parsed_format="Modern") == "Modern"
+        assert (
+            detect_format_from_cards(list(deck.keys()), manager, last_parsed_format="Modern")
+            == "Modern"
+        )
 
 
 # ---------------------------------------------------------------------------
