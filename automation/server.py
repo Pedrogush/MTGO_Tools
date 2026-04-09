@@ -5,7 +5,9 @@ The server runs in a background thread and uses wx.CallAfter to execute
 commands on the main UI thread.
 """
 
+import ctypes
 import json
+import os as _os
 import socket
 import threading
 import time
@@ -20,6 +22,21 @@ if TYPE_CHECKING:
 
 DEFAULT_PORT = 19847
 BUFFER_SIZE = 65536
+
+# Win32 PrintWindow — the only reliable way to capture a wxFrame on Windows
+# 10/11, including when the window is occluded by other windows.  A plain
+# ScreenDC/Blit captures screen pixels, so any covering window corrupts the
+# result.  PrintWindow asks DWM to render the window's own composition
+# buffer directly into a supplied HDC.
+_PW_RENDERFULLCONTENT = 0x00000002
+_user32 = ctypes.windll.user32 if _os.name == "nt" else None  # type: ignore[attr-defined]
+if _user32 is not None:
+    _user32.PrintWindow.argtypes = [
+        ctypes.c_void_p,  # HWND
+        ctypes.c_void_p,  # HDC
+        ctypes.c_uint,  # flags
+    ]
+    _user32.PrintWindow.restype = ctypes.c_int
 
 
 class AutomationServer:
@@ -199,9 +216,10 @@ class AutomationServer:
     def _handle_screenshot(self, path: str | None = None, headless: bool = False) -> dict[str, Any]:
         """Take a screenshot of the application window.
 
-        When *headless* is True the frame is temporarily restored if it is
-        iconized (minimized) so the capture works even when the window is not
-        visible on screen, then returned to its previous state afterward.
+        Uses the Win32 PrintWindow API (PW_RENDERFULLCONTENT) so the capture
+        works even when the window is occluded by other windows.  The *headless*
+        parameter is accepted for backward compatibility but is now a no-op —
+        PrintWindow is inherently headless.
         """
         import os
         import tempfile
@@ -217,44 +235,70 @@ class AutomationServer:
         if save_dir and not os.path.isdir(save_dir):
             path = os.path.join(tempfile.gettempdir(), os.path.basename(path))
 
-        was_iconized = self.frame.IsIconized()
-        was_hidden = not self.frame.IsShown()
+        bmp = self._capture_frame_bitmap()
+        width, height = bmp.GetWidth(), bmp.GetHeight()
 
-        if headless and (was_iconized or was_hidden):
-            if was_iconized:
-                self.frame.Iconize(False)
-            if was_hidden:
-                self.frame.Show()
-            self.frame.Raise()
-            wx.SafeYield()
-
-        try:
-            # Get the frame's screen position and size
-            rect = self.frame.GetScreenRect()
-            x, y, width, height = rect.x, rect.y, rect.width, rect.height
-
-            # Create a bitmap to capture the screen
-            screen_dc = wx.ScreenDC()
-            bmp = wx.Bitmap(width, height)
-            mem_dc = wx.MemoryDC(bmp)
-            mem_dc.Blit(0, 0, width, height, screen_dc, x, y)
-            mem_dc.SelectObject(wx.NullBitmap)
-        finally:
-            if headless:
-                if was_iconized:
-                    self.frame.Iconize(True)
-                if was_hidden:
-                    self.frame.Hide()
-
-        # Save to file — use wx.LogNull to suppress any wx error dialogs on failure
-        image = bmp.ConvertToImage()
+        os.makedirs(os.path.dirname(os.path.abspath(path)) or ".", exist_ok=True)
         log_null = wx.LogNull()
-        ok = image.SaveFile(path, wx.BITMAP_TYPE_PNG)
+        ok = bmp.SaveFile(path, wx.BITMAP_TYPE_PNG)
         del log_null
         if not ok:
             raise RuntimeError(f"Failed to save screenshot to {path!r}")
 
+        # Best-effort fsync so the WSL side sees the full file immediately.
+        try:
+            fd = os.open(path, os.O_RDONLY)
+            os.fsync(fd)
+            os.close(fd)
+        except OSError:
+            pass
+
         return {"path": os.path.abspath(path), "width": width, "height": height}
+
+    def _capture_frame_bitmap(self) -> wx.Bitmap:
+        """Capture the full frame via Win32 PrintWindow and return a wx.Bitmap.
+
+        Must be called on the wx main thread.  Performs a layout + repaint
+        pass and drains the event queue before capturing so DWM has finished
+        compositing the window contents.
+        """
+        if _user32 is None:
+            raise RuntimeError("PrintWindow is only available on Windows")
+
+        # DWM cannot composite a minimized (iconized) window — restore it first.
+        if self.frame.IsIconized():
+            self.frame.Iconize(False)
+
+        # Force a fresh layout and an immediate repaint of the whole widget tree.
+        self.frame.Layout()
+        self.frame.SendSizeEvent()
+
+        def _refresh_tree(w: wx.Window) -> None:
+            w.Refresh(eraseBackground=False)
+            w.Update()
+            for child in w.GetChildren():
+                _refresh_tree(child)
+
+        _refresh_tree(self.frame)
+
+        # Drain the event queue, sleep for DWM composite, then drain again.
+        # Values tuned empirically — shorter sleeps produced half-painted captures.
+        for _ in range(5):
+            wx.Yield()
+        time.sleep(0.15)
+        for _ in range(3):
+            wx.Yield()
+
+        w, h = self.frame.GetSize()
+        bmp = wx.Bitmap(w, h, depth=32)
+        mdc = wx.MemoryDC(bmp)
+        hdc = mdc.GetHDC()
+        hwnd = self.frame.GetHandle()
+        ok = _user32.PrintWindow(hwnd, hdc, _PW_RENDERFULLCONTENT)
+        mdc.SelectObject(wx.NullBitmap)
+        if not ok:
+            raise RuntimeError("PrintWindow returned 0 (DWM not compositing?)")
+        return bmp
 
     def _handle_get_status(self) -> dict[str, Any]:
         """Get the status bar text."""
@@ -753,7 +797,11 @@ class AutomationServer:
     def _handle_screenshot_widget(
         self, widget_name: str, path: str | None = None
     ) -> dict[str, Any]:
-        """Take a screenshot cropped to a specific widget's screen rect."""
+        """Take a screenshot cropped to a specific widget's area.
+
+        Captures the full frame via PrintWindow (so occluding windows don't
+        corrupt the result) then crops to the widget's position within the frame.
+        """
         import os
         import tempfile
         from datetime import datetime
@@ -770,25 +818,40 @@ class AutomationServer:
         if save_dir and not os.path.isdir(save_dir):
             path = os.path.join(tempfile.gettempdir(), os.path.basename(path))
 
-        rect = widget.GetScreenRect()
-        x, y, w, h = rect.x, rect.y, rect.width, rect.height
-        if w <= 0 or h <= 0:
+        widget_size = widget.GetSize()
+        ww, wh = widget_size.width, widget_size.height
+        if ww <= 0 or wh <= 0:
             return {"error": f"Widget {widget_name!r} has zero size"}
 
-        screen_dc = wx.ScreenDC()
-        bmp = wx.Bitmap(w, h)
-        mem_dc = wx.MemoryDC(bmp)
-        mem_dc.Blit(0, 0, w, h, screen_dc, x, y)
-        mem_dc.SelectObject(wx.NullBitmap)
+        # Capture the full frame, then crop to the widget's client-relative rect.
+        full_bmp = self._capture_frame_bitmap()
+        fw, fh = full_bmp.GetWidth(), full_bmp.GetHeight()
 
-        image = bmp.ConvertToImage()
+        # Convert the widget's screen position to frame-client coordinates.
+        client_pos = self.frame.ScreenToClient(widget.GetScreenPosition())
+        cx = max(0, min(client_pos.x, fw - 1))
+        cy = max(0, min(client_pos.y, fh - 1))
+        cw = min(ww, fw - cx)
+        ch = min(wh, fh - cy)
+
+        img = full_bmp.ConvertToImage()
+        cropped = img.GetSubImage(wx.Rect(cx, cy, cw, ch))
+
+        os.makedirs(os.path.dirname(os.path.abspath(path)) or ".", exist_ok=True)
         log_null = wx.LogNull()
-        ok = image.SaveFile(path, wx.BITMAP_TYPE_PNG)
+        ok = cropped.SaveFile(path, wx.BITMAP_TYPE_PNG)
         del log_null
         if not ok:
             raise RuntimeError(f"Failed to save widget screenshot to {path!r}")
 
-        return {"path": os.path.abspath(path), "width": w, "height": h}
+        try:
+            fd = os.open(path, os.O_RDONLY)
+            os.fsync(fd)
+            os.close(fd)
+        except OSError:
+            pass
+
+        return {"path": os.path.abspath(path), "width": cw, "height": ch}
 
     def _find_mana_widget(self, name: str) -> wx.Window | None:
         """Resolve a named widget for screenshot purposes."""

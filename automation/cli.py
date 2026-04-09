@@ -6,7 +6,6 @@ Usage:
     python -m automation.cli open-app [--wait]
     python -m automation.cli ping
     python -m automation.cli screenshot --path output.png
-    python -m automation.cli screenshot --headless
     python -m automation.cli status
     python -m automation.cli set-format Modern
     python -m automation.cli list-archetypes
@@ -21,16 +20,13 @@ Common workflow:
     python -m automation.cli open-app --wait
     python -m automation.cli ping
     python -m automation.cli screenshot --path screenshots/current.png
-    python -m automation.cli screenshot --headless --path screenshots/background.png
     python -m automation.cli close-app
 
 Notes:
-    The --headless screenshot flag is self-contained once the app is running
-    with automation enabled. It temporarily restores a minimized or hidden
-    window for capture, then returns it to the previous minimized/hidden state.
-    WSL callers may need to invoke the Windows Python through WSL interop, but
-    no extra shell or window-management steps are required by screenshot
-    --headless itself.
+    Screenshots use the Win32 PrintWindow API (PW_RENDERFULLCONTENT), which
+    renders the window through DWM regardless of whether other windows are
+    covering it.  The --headless flag is kept for backward compatibility but
+    is now a no-op — every screenshot is inherently headless.
 """
 
 import argparse
@@ -357,8 +353,7 @@ Examples:
   %(prog)s open-app --wait                         Launch and wait until ready
   %(prog)s ping                                    Check if app is running
   %(prog)s screenshot --path test.png              Take a screenshot
-  %(prog)s screenshot --headless                   Screenshot even when minimized
-  %(prog)s screenshot --headless --path bg.png      Capture minimized/hidden app
+  %(prog)s screenshot --path bg.png                Capture even when minimized/occluded
   %(prog)s status                                  Get status bar text
   %(prog)s set-format Modern                       Set format to Modern
   %(prog)s list-archetypes                         List available archetypes
@@ -370,9 +365,8 @@ Examples:
   %(prog)s close-app                               Close the running app
 
 Notes:
-  screenshot --headless is self-contained once the app is running with
-  automation enabled: it restores a minimized/hidden window for capture and
-  returns it to the previous minimized/hidden state afterward.
+  Screenshots use Win32 PrintWindow (PW_RENDERFULLCONTENT) and work even when
+  the window is occluded.  --headless is accepted but is now a no-op.
         """,
     )
 
@@ -394,7 +388,7 @@ Notes:
     p.add_argument(
         "--headless",
         action="store_true",
-        help="Restore window if minimized before capturing, then re-minimize",
+        help="Accepted for backward compatibility; screenshots are always headless via PrintWindow",
     )
 
     # status
