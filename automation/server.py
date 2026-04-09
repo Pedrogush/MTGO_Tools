@@ -89,6 +89,7 @@ class AutomationServer:
             "set_mana_search": self._handle_set_mana_search,
             "set_oracle_search": self._handle_set_oracle_search,
             "screenshot_widget": self._handle_screenshot_widget,
+            "screenshot_window": self._handle_screenshot_window,
             "add_lorem_mana_card": self._handle_add_lorem_mana_card,
             "get_inspector_oracle_text": self._handle_get_inspector_oracle_text,
         }
@@ -235,7 +236,7 @@ class AutomationServer:
         if save_dir and not os.path.isdir(save_dir):
             path = os.path.join(tempfile.gettempdir(), os.path.basename(path))
 
-        bmp = self._capture_frame_bitmap()
+        bmp = self._capture_window_bitmap(self.frame)
         width, height = bmp.GetWidth(), bmp.GetHeight()
 
         os.makedirs(os.path.dirname(os.path.abspath(path)) or ".", exist_ok=True)
@@ -255,23 +256,24 @@ class AutomationServer:
 
         return {"path": os.path.abspath(path), "width": width, "height": height}
 
-    def _capture_frame_bitmap(self) -> wx.Bitmap:
-        """Capture the full frame via Win32 PrintWindow and return a wx.Bitmap.
+    def _capture_window_bitmap(self, window: wx.Frame) -> wx.Bitmap:
+        """Capture *window* via Win32 PrintWindow and return a wx.Bitmap.
 
-        Must be called on the wx main thread.  Performs a layout + repaint
-        pass and drains the event queue before capturing so DWM has finished
-        compositing the window contents.
+        Works for any wx.Frame — the main AppFrame or any secondary top-level
+        window.  Must be called on the wx main thread.  Performs a layout +
+        repaint pass and drains the event queue before capturing so DWM has
+        finished compositing the window contents.
         """
         if _user32 is None:
             raise RuntimeError("PrintWindow is only available on Windows")
 
         # DWM cannot composite a minimized (iconized) window — restore it first.
-        if self.frame.IsIconized():
-            self.frame.Iconize(False)
+        if window.IsIconized():
+            window.Iconize(False)
 
         # Force a fresh layout and an immediate repaint of the whole widget tree.
-        self.frame.Layout()
-        self.frame.SendSizeEvent()
+        window.Layout()
+        window.SendSizeEvent()
 
         def _refresh_tree(w: wx.Window) -> None:
             w.Refresh(eraseBackground=False)
@@ -279,7 +281,7 @@ class AutomationServer:
             for child in w.GetChildren():
                 _refresh_tree(child)
 
-        _refresh_tree(self.frame)
+        _refresh_tree(window)
 
         # Drain the event queue, sleep for DWM composite, then drain again.
         # Values tuned empirically — shorter sleeps produced half-painted captures.
@@ -289,16 +291,83 @@ class AutomationServer:
         for _ in range(3):
             wx.Yield()
 
-        w, h = self.frame.GetSize()
+        w, h = window.GetSize()
         bmp = wx.Bitmap(w, h, depth=32)
         mdc = wx.MemoryDC(bmp)
         hdc = mdc.GetHDC()
-        hwnd = self.frame.GetHandle()
+        hwnd = window.GetHandle()
         ok = _user32.PrintWindow(hwnd, hdc, _PW_RENDERFULLCONTENT)
         mdc.SelectObject(wx.NullBitmap)
         if not ok:
             raise RuntimeError("PrintWindow returned 0 (DWM not compositing?)")
         return bmp
+
+    def _resolve_secondary_window(self, window_name: str) -> wx.Frame | None:
+        """Return the live wx.Frame for a named secondary window, or None."""
+        attr_map = {
+            "opponent_tracker": "tracker_window",
+            "timer_alert": "timer_window",
+            "match_history": "history_window",
+            "metagame": "metagame_window",
+            "top_cards": "top_cards_window",
+            "mana_keyboard": "mana_keyboard_window",
+        }
+        attr = attr_map.get(window_name)
+        if attr is None:
+            return None
+        window = getattr(self.frame, attr, None)
+        if window is None or not window.IsShown():
+            return None
+        return window
+
+    def _handle_screenshot_window(
+        self, window_name: str, path: str | None = None
+    ) -> dict[str, Any]:
+        """Take a screenshot of a named secondary top-level window.
+
+        Supported window names: opponent_tracker, timer_alert, match_history,
+        metagame, top_cards, mana_keyboard.  The window must already be open
+        (use open_widget first if needed).
+        """
+        import os
+        import tempfile
+        from datetime import datetime
+
+        window = self._resolve_secondary_window(window_name)
+        if window is None:
+            available = (
+                "opponent_tracker, timer_alert, match_history, metagame, top_cards, mana_keyboard"
+            )
+            return {
+                "error": f"Window {window_name!r} not found or not open. Available: {available}"
+            }
+
+        if path is None:
+            ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+            path = f"window_{window_name}_{ts}.png"
+
+        save_dir = os.path.dirname(os.path.abspath(path))
+        if save_dir and not os.path.isdir(save_dir):
+            path = os.path.join(tempfile.gettempdir(), os.path.basename(path))
+
+        bmp = self._capture_window_bitmap(window)
+        width, height = bmp.GetWidth(), bmp.GetHeight()
+
+        os.makedirs(os.path.dirname(os.path.abspath(path)) or ".", exist_ok=True)
+        log_null = wx.LogNull()
+        ok = bmp.SaveFile(path, wx.BITMAP_TYPE_PNG)
+        del log_null
+        if not ok:
+            raise RuntimeError(f"Failed to save window screenshot to {path!r}")
+
+        try:
+            fd = os.open(path, os.O_RDONLY)
+            os.fsync(fd)
+            os.close(fd)
+        except OSError:
+            pass
+
+        return {"path": os.path.abspath(path), "width": width, "height": height}
 
     def _handle_get_status(self) -> dict[str, Any]:
         """Get the status bar text."""
@@ -824,7 +893,7 @@ class AutomationServer:
             return {"error": f"Widget {widget_name!r} has zero size"}
 
         # Capture the full frame, then crop to the widget's client-relative rect.
-        full_bmp = self._capture_frame_bitmap()
+        full_bmp = self._capture_window_bitmap(self.frame)
         fw, fh = full_bmp.GetWidth(), full_bmp.GetHeight()
 
         # Convert the widget's screen position to frame-client coordinates.

@@ -78,6 +78,13 @@ def cmd_screenshot(client: AutomationClient, args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_screenshot_window(client: AutomationClient, args: argparse.Namespace) -> int:
+    """Take a screenshot of a named secondary window."""
+    result = client.screenshot_window(args.window_name, args.path)
+    print(format_output(result, args.json))
+    return 0 if "path" in result else 1
+
+
 def cmd_status(client: AutomationClient, args: argparse.Namespace) -> int:
     """Get status bar text."""
     status = client.get_status()
@@ -474,6 +481,22 @@ Notes:
         help="Widget to open",
     )
 
+    # screenshot-window
+    p = subparsers.add_parser("screenshot-window", help="Take a screenshot of a secondary window")
+    p.add_argument(
+        "window_name",
+        choices=[
+            "opponent_tracker",
+            "timer_alert",
+            "match_history",
+            "metagame",
+            "top_cards",
+            "mana_keyboard",
+        ],
+        help="Window to capture (must already be open)",
+    )
+    p.add_argument("--path", "-p", help="Path to save screenshot (default: auto-generated)")
+
     # get-deck-notes
     subparsers.add_parser("get-deck-notes", help="Get the current deck notes")
 
@@ -529,6 +552,7 @@ Notes:
         "get-builder-results": cmd_get_builder_results,
         "get-builder-top-item": cmd_get_builder_top_item,
         "open-widget": cmd_open_widget,
+        "screenshot-window": cmd_screenshot_window,
         "get-deck-notes": cmd_get_deck_notes,
         "toggle-adv-filters": cmd_toggle_adv_filters,
         "close-app": cmd_close_app,

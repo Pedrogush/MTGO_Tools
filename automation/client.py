@@ -315,6 +315,23 @@ class AutomationClient:
             kwargs["path"] = path
         return self._send_command("screenshot_widget", **kwargs)
 
+    def screenshot_window(self, window_name: str, path: str | None = None) -> dict[str, Any]:
+        """Take a screenshot of a named secondary top-level window.
+
+        Args:
+            window_name: One of: opponent_tracker, timer_alert, match_history,
+                         metagame, top_cards, mana_keyboard.  The window must
+                         already be open.
+            path: Optional save path for the PNG.
+
+        Returns:
+            Dict with 'path', 'width', 'height'.
+        """
+        kwargs: dict[str, Any] = {"window_name": window_name}
+        if path is not None:
+            kwargs["path"] = path
+        return self._send_command("screenshot_window", **kwargs)
+
     def add_lorem_mana_card(self) -> dict[str, Any]:
         """Insert a dummy card with LOREM_MANA oracle text into the card manager."""
         return self._send_command("add_lorem_mana_card")
