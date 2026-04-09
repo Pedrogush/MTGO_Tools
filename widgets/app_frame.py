@@ -45,6 +45,7 @@ from widgets.panels.deck_research_panel import DeckResearchPanel
 from widgets.panels.deck_stats_panel import DeckStatsPanel
 from widgets.panels.radar_panel import RadarDialog
 from widgets.panels.sideboard_guide_panel import SideboardGuidePanel
+from widgets.mana_rich_text_ctrl import ManaSymbolRichCtrl
 from widgets.timer_alert import TimerAlertFrame
 from widgets.top_cards import TopCardsFrame
 
@@ -467,12 +468,12 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
         oracle_box.SetBackgroundColour(DARK_PANEL)
         oracle_sizer = wx.StaticBoxSizer(oracle_box, wx.VERTICAL)
 
-        self.oracle_text_ctrl = wx.TextCtrl(
+        self.oracle_text_ctrl = ManaSymbolRichCtrl(
             oracle_box,
-            style=wx.TE_MULTILINE | wx.TE_READONLY | wx.TE_WORDWRAP | wx.BORDER_NONE,
+            self.mana_icons,
+            readonly=True,
+            multiline=True,
         )
-        self.oracle_text_ctrl.SetBackgroundColour(DARK_PANEL)
-        self.oracle_text_ctrl.SetForegroundColour(LIGHT_TEXT)
         self.oracle_text_ctrl.SetMinSize((-1, 200))
 
         oracle_sizer.Add(self.oracle_text_ctrl, 1, wx.EXPAND | wx.ALL, PADDING_SM)

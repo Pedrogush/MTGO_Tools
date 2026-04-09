@@ -32,6 +32,7 @@ from utils.stylize import (
     stylize_textctrl,
 )
 from widgets.buttons.mana_button import create_mana_button
+from widgets.mana_rich_text_ctrl import ManaSymbolRichCtrl
 
 
 class _SearchResultsView(wx.ListCtrl):
@@ -290,10 +291,14 @@ class DeckBuilderPanel(wx.Panel):
         lbl = wx.StaticText(self, label=self._t("builder.field.mana_cost"))
         stylize_label(lbl, True)
         sizer.Add(lbl, 0, wx.LEFT | wx.RIGHT, PADDING_MD)
-        mana_ctrl = wx.TextCtrl(self)
-        stylize_textctrl(mana_ctrl)
+        mana_ctrl = ManaSymbolRichCtrl(
+            self,
+            self.mana_icons,
+            readonly=False,
+            multiline=False,
+            mana_key_input=True,
+        )
         mana_ctrl.SetHint(self._t("builder.hint.mana_cost"))
-        mana_ctrl.SetToolTip("Filter cards by mana cost")
         mana_ctrl.Bind(wx.EVT_TEXT, self._on_filters_changed)
         self.inputs["mana"] = mana_ctrl
         sizer.Add(mana_ctrl, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_SM)
@@ -365,8 +370,13 @@ class DeckBuilderPanel(wx.Panel):
         lbl = wx.StaticText(pwin, label=self._t("builder.field.oracle_text"))
         stylize_label(lbl, True)
         adv_sizer.Add(lbl, 0, wx.ALIGN_CENTER_HORIZONTAL, PADDING_MD)
-        text_ctrl = wx.TextCtrl(pwin)
-        stylize_textctrl(text_ctrl)
+        text_ctrl = ManaSymbolRichCtrl(
+            pwin,
+            self.mana_icons,
+            readonly=False,
+            multiline=False,
+            oracle_symbol_detect=True,
+        )
         text_ctrl.SetHint(self._t("builder.hint.oracle_text"))
         text_ctrl.SetToolTip("Filter cards by oracle text")
         text_ctrl.Bind(wx.EVT_TEXT, self._on_filters_changed)

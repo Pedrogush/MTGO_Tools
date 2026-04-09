@@ -33,6 +33,7 @@ from utils.constants import (
 from utils.mana_icon_factory import ManaIconFactory
 from utils.stylize import stylize_button, stylize_textctrl
 from widgets.card_image_display import CardImageDisplay
+from widgets.mana_rich_text_ctrl import ManaSymbolRichCtrl
 
 
 class CardInspectorPanel(wx.Panel):
@@ -100,11 +101,12 @@ class CardInspectorPanel(wx.Panel):
         self.image_text_panel.SetMinSize((CARD_IMAGE_DISPLAY_WIDTH, CARD_IMAGE_DISPLAY_HEIGHT))
         image_text_sizer = wx.BoxSizer(wx.VERTICAL)
         self.image_text_panel.SetSizer(image_text_sizer)
-        self.image_text_ctrl = wx.TextCtrl(
+        self.image_text_ctrl = ManaSymbolRichCtrl(
             self.image_text_panel,
-            style=wx.TE_MULTILINE | wx.TE_READONLY | wx.TE_WORDWRAP | wx.NO_BORDER,
+            self.mana_icons,
+            readonly=True,
+            multiline=True,
         )
-        stylize_textctrl(self.image_text_ctrl, multiline=True)
         image_text_sizer.Add(self.image_text_ctrl, 1, wx.EXPAND | wx.ALL, PADDING_SM)
         image_column.Add(self.image_text_panel, 0, wx.ALIGN_CENTER_HORIZONTAL | wx.ALL, PADDING_SM)
         self.image_text_panel.Hide()
@@ -188,11 +190,12 @@ class CardInspectorPanel(wx.Panel):
         details.Add(self.stats_label, 0, wx.BOTTOM, PADDING_SM)
 
         # Oracle text
-        self.text_ctrl = wx.TextCtrl(
+        self.text_ctrl = ManaSymbolRichCtrl(
             self.details_panel,
-            style=wx.TE_MULTILINE | wx.TE_READONLY | wx.TE_WORDWRAP | wx.NO_BORDER,
+            self.mana_icons,
+            readonly=True,
+            multiline=True,
         )
-        stylize_textctrl(self.text_ctrl, multiline=True)
         self.text_ctrl.SetMinSize((-1, CARD_IMAGE_TEXT_MIN_HEIGHT))
         details.Add(self.text_ctrl, 1, wx.EXPAND | wx.TOP, PADDING_SM)
 

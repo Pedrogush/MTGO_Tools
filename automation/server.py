@@ -68,6 +68,12 @@ class AutomationServer:
             "set_current_deck": self._handle_set_current_deck,
             "toggle_adv_filters": self._handle_toggle_adv_filters,
             "close_app": self._handle_close_app,
+            # Mana symbol rendering commands (issue #410)
+            "set_mana_search": self._handle_set_mana_search,
+            "set_oracle_search": self._handle_set_oracle_search,
+            "screenshot_widget": self._handle_screenshot_widget,
+            "add_lorem_mana_card": self._handle_add_lorem_mana_card,
+            "get_inspector_oracle_text": self._handle_get_inspector_oracle_text,
         }
 
     def register_handler(self, command: str, handler: Callable[..., Any]) -> None:
@@ -703,3 +709,145 @@ class AutomationServer:
             if bmp is not None and hasattr(bmp, "IsOk") and bmp.IsOk():
                 loaded += 1
         return {"zone": zone, "loaded": loaded, "total": total}
+
+    # ------------------------------------------------------------------ Mana symbol rendering (issue #410) ------------------------------------------------------------------
+
+    def _handle_set_mana_search(self, text: str = "") -> dict[str, Any]:
+        """Set the mana-cost search input value directly (bypasses key simulation)."""
+        if not self.frame.builder_panel:
+            return {"set": False, "error": "Builder panel not available"}
+        if hasattr(self.frame, "_show_left_panel"):
+            self.frame._show_left_panel("builder", force=True)
+        ctrl = self.frame.builder_panel.inputs.get("mana")
+        if ctrl is None:
+            return {"set": False, "error": "Mana search input not found"}
+        ctrl.ChangeValue(text)
+        if hasattr(self.frame, "_on_builder_search"):
+            self.frame._on_builder_search()
+        return {"set": True, "text": text}
+
+    def _handle_set_oracle_search(self, text: str = "", expand_adv: bool = True) -> dict[str, Any]:
+        """Set the oracle-text search input value directly."""
+        if not self.frame.builder_panel:
+            return {"set": False, "error": "Builder panel not available"}
+        if hasattr(self.frame, "_show_left_panel"):
+            self.frame._show_left_panel("builder", force=True)
+        panel = self.frame.builder_panel
+        # Expand advanced filters so the oracle text input is visible
+        if expand_adv:
+            adv_panel = getattr(panel, "_adv_panel", None)
+            if adv_panel and not adv_panel.IsShown():
+                btn = getattr(panel, "_adv_toggle_btn", None)
+                if btn:
+                    event = wx.CommandEvent(wx.wxEVT_BUTTON, btn.GetId())
+                    event.SetEventObject(btn)
+                    btn.ProcessEvent(event)
+        ctrl = panel.inputs.get("text")
+        if ctrl is None:
+            return {"set": False, "error": "Oracle text input not found"}
+        ctrl.ChangeValue(text)
+        if hasattr(self.frame, "_on_builder_search"):
+            self.frame._on_builder_search()
+        return {"set": True, "text": text}
+
+    def _handle_screenshot_widget(
+        self, widget_name: str, path: str | None = None
+    ) -> dict[str, Any]:
+        """Take a screenshot cropped to a specific widget's screen rect."""
+        import os
+        import tempfile
+        from datetime import datetime
+
+        widget = self._find_mana_widget(widget_name)
+        if widget is None:
+            return {"error": f"Widget not found: {widget_name}"}
+
+        if path is None:
+            ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+            path = f"widget_{widget_name}_{ts}.png"
+
+        save_dir = os.path.dirname(os.path.abspath(path))
+        if save_dir and not os.path.isdir(save_dir):
+            path = os.path.join(tempfile.gettempdir(), os.path.basename(path))
+
+        rect = widget.GetScreenRect()
+        x, y, w, h = rect.x, rect.y, rect.width, rect.height
+        if w <= 0 or h <= 0:
+            return {"error": f"Widget {widget_name!r} has zero size"}
+
+        screen_dc = wx.ScreenDC()
+        bmp = wx.Bitmap(w, h)
+        mem_dc = wx.MemoryDC(bmp)
+        mem_dc.Blit(0, 0, w, h, screen_dc, x, y)
+        mem_dc.SelectObject(wx.NullBitmap)
+
+        image = bmp.ConvertToImage()
+        log_null = wx.LogNull()
+        ok = image.SaveFile(path, wx.BITMAP_TYPE_PNG)
+        del log_null
+        if not ok:
+            raise RuntimeError(f"Failed to save widget screenshot to {path!r}")
+
+        return {"path": os.path.abspath(path), "width": w, "height": h}
+
+    def _find_mana_widget(self, name: str) -> wx.Window | None:
+        """Resolve a named widget for screenshot purposes."""
+        base = self._find_widget(name)
+        if base:
+            return base
+        extra: dict[str, wx.Window | None] = {}
+        if self.frame.builder_panel:
+            mana_ctrl = self.frame.builder_panel.inputs.get("mana")
+            text_ctrl = self.frame.builder_panel.inputs.get("text")
+            extra["mana_search"] = mana_ctrl
+            extra["oracle_search"] = text_ctrl
+        inspector = getattr(self.frame, "card_inspector_panel", None)
+        if inspector:
+            extra["oracle_display"] = getattr(inspector, "text_ctrl", None)
+        oracle_panel = getattr(self.frame, "oracle_text_ctrl", None)
+        extra["oracle_panel"] = oracle_panel
+        return extra.get(name)
+
+    def _handle_add_lorem_mana_card(self) -> dict[str, Any]:
+        """Insert a dummy card with LOREM_MANA oracle text into the card manager."""
+        from utils.constants import LOREM_MANA
+
+        card_manager = None
+        if hasattr(self.frame, "controller") and hasattr(self.frame.controller, "card_manager"):
+            card_manager = self.frame.controller.card_manager
+
+        if card_manager is None:
+            return {"added": False, "error": "Card manager not available"}
+
+        dummy_name = "_LoremMana_Test_Card_"
+        dummy_entry: dict[str, Any] = {
+            "name": dummy_name,
+            "mana_cost": "{W}{U}",
+            "oracle_text": LOREM_MANA,
+            "type_line": "Instant",
+            "mana_value": 2,
+            "color_identity": ["W", "U"],
+        }
+        # Store in the card manager's in-memory data if possible
+        try:
+            if hasattr(card_manager, "_data") and isinstance(card_manager._data, dict):
+                card_manager._data[dummy_name.lower()] = dummy_entry
+            elif hasattr(card_manager, "_cards") and isinstance(card_manager._cards, dict):
+                card_manager._cards[dummy_name.lower()] = dummy_entry
+            else:
+                return {"added": False, "error": "Cannot access card manager data store"}
+        except Exception as exc:
+            return {"added": False, "error": str(exc)}
+
+        return {"added": True, "name": dummy_name, "oracle_text": LOREM_MANA}
+
+    def _handle_get_inspector_oracle_text(self) -> dict[str, Any]:
+        """Return the plain-text value of the card inspector's oracle text control."""
+        inspector = getattr(self.frame, "card_inspector_panel", None)
+        if inspector is None:
+            return {"text": "", "error": "Card inspector not available"}
+        ctrl = getattr(inspector, "text_ctrl", None)
+        if ctrl is None:
+            return {"text": "", "error": "Oracle text control not found"}
+        value = ctrl.GetValue() if hasattr(ctrl, "GetValue") else ""
+        return {"text": value}

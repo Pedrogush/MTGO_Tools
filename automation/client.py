@@ -282,6 +282,47 @@ class AutomationClient:
         """
         return self._send_command("close_app")
 
+    def set_mana_search(self, text: str) -> dict[str, Any]:
+        """Set the mana-cost search input to a given text value.
+
+        Args:
+            text: Mana cost string e.g. '{W}{U}' or '{R/G}'
+        """
+        return self._send_command("set_mana_search", text=text)
+
+    def set_oracle_search(self, text: str, expand_adv: bool = True) -> dict[str, Any]:
+        """Set the oracle-text search input to a given text value.
+
+        Args:
+            text: Oracle text query string, may contain {W} style symbols.
+            expand_adv: If True, expand advanced filters so the control is visible.
+        """
+        return self._send_command("set_oracle_search", text=text, expand_adv=expand_adv)
+
+    def screenshot_widget(self, widget_name: str, path: str | None = None) -> dict[str, Any]:
+        """Take a screenshot cropped to a named widget.
+
+        Args:
+            widget_name: One of: mana_search, oracle_search, oracle_display,
+                         oracle_panel, or any widget name supported by list_widgets.
+            path: Optional save path for the PNG.
+
+        Returns:
+            Dict with 'path', 'width', 'height'.
+        """
+        kwargs: dict[str, Any] = {"widget_name": widget_name}
+        if path is not None:
+            kwargs["path"] = path
+        return self._send_command("screenshot_widget", **kwargs)
+
+    def add_lorem_mana_card(self) -> dict[str, Any]:
+        """Insert a dummy card with LOREM_MANA oracle text into the card manager."""
+        return self._send_command("add_lorem_mana_card")
+
+    def get_inspector_oracle_text(self) -> dict[str, Any]:
+        """Return the plain-text value of the card inspector oracle text control."""
+        return self._send_command("get_inspector_oracle_text")
+
 
 def connect(
     host: str = "127.0.0.1", port: int = DEFAULT_PORT, timeout: float = 30.0
