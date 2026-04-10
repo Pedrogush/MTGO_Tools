@@ -50,8 +50,12 @@ class ManaIconFactory:
         "r": (241, 155, 121),
         "g": (159, 203, 166),
         "c": (208, 198, 187),
+        "tap": (208, 198, 187),
         "multicolor": (246, 223, 138),
     }
+
+    # Symbols that are NOT circle-enclosed mana icons — render as plain text.
+    _NON_CIRCLE_SYMBOLS: frozenset[str] = frozenset({"e", "energy"})
 
     def __init__(self, icon_size: int = MANA_ICON_DEFAULT_SIZE) -> None:
         self._cache: dict[str, wx.Bitmap] = {}
@@ -90,25 +94,31 @@ class ManaIconFactory:
         )
         return panel
 
-    def bitmap_for_symbol_hires(self, symbol: str) -> wx.Bitmap:
+    def bitmap_for_symbol_hires(self, symbol: str) -> wx.Bitmap | None:
         """Return the symbol bitmap at render-scale resolution (before final downscale).
 
         Callers that need to scale to an arbitrary target size should use this
         instead of bitmap_for_symbol to avoid a second downscale of an already
-        small source.
+        small source.  Returns None for non-circle symbols (e.g. energy).
         """
         token = symbol.strip()
         if token.startswith("{") and token.endswith("}"):
             token = token[1:-1]
+        normalized = self._normalize_symbol(token or "")
+        if normalized in self._NON_CIRCLE_SYMBOLS:
+            return None
         key = token or ""
         if key not in self._hires_cache:
             self._get_bitmap(key)  # populates both caches as a side-effect
         return self._hires_cache.get(key) or self._get_bitmap(key)
 
-    def bitmap_for_symbol(self, symbol: str) -> wx.Bitmap:
+    def bitmap_for_symbol(self, symbol: str) -> wx.Bitmap | None:
         token = symbol.strip()
         if token.startswith("{") and token.endswith("}"):
             token = token[1:-1]
+        normalized = self._normalize_symbol(token or "")
+        if normalized in self._NON_CIRCLE_SYMBOLS:
+            return None
         return self._get_bitmap(token or "")
 
     def bitmap_for_cost(self, mana_cost: str) -> wx.Bitmap | None:
@@ -396,6 +406,8 @@ class ManaIconFactory:
             return self.FALLBACK_COLORS["multicolor"]
         if key in self._color_map:
             return self._color_map[key]
+        if key in self.FALLBACK_COLORS:
+            return self.FALLBACK_COLORS[key]
         if key.isdigit() or key in {"x", "y", "z"}:
             return self._color_map.get("c", self.FALLBACK_COLORS["c"])
         if "-" in key:
@@ -424,6 +436,7 @@ class ManaIconFactory:
             "1/2": "1-2",
             "half": "1-2",
             "snow": "s",
+            "t": "tap",
         }
         return aliases.get(token, token)
 

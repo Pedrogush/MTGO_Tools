@@ -130,9 +130,10 @@ class ManaSymbolRichCtrl(wx.richtext.RichTextCtrl):
         mana_key_input: bool = False,
         oracle_symbol_detect: bool = False,
     ) -> None:
-        style = wx.BORDER_NONE
-        if multiline:
-            style |= wx.richtext.RE_MULTILINE
+        # Always use RE_MULTILINE: without it, wxRichTextCtrl forces both
+        # scrollbars visible unconditionally.  We control single-line appearance
+        # through a constrained minimum height instead.
+        style = wx.BORDER_THEME | wx.richtext.RE_MULTILINE
         if readonly:
             style |= wx.richtext.RE_READONLY
         super().__init__(parent, style=style)
@@ -150,6 +151,17 @@ class ManaSymbolRichCtrl(wx.richtext.RichTextCtrl):
         self._sequence_keys: set[str] = set()
 
         self._apply_dark_style()
+        # Clear() re-creates the initial empty paragraph with the basic style
+        # (zero paragraph spacing) set above, ensuring virtual height == line
+        # height and suppressing the spurious scrollbar.
+        self.Clear()
+
+        # For single-line use, pin the height to match a plain wx.TextCtrl so
+        # the sizer allocates the correct space and the scrollbar stays hidden.
+        if not multiline:
+            ch = self.GetCharHeight()
+            h = max(ch + 8, self.FromDIP(26))
+            self.SetMinSize(wx.Size(-1, h))
 
         # --- event bindings ---
         if mana_key_input and not readonly:
@@ -193,7 +205,12 @@ class ManaSymbolRichCtrl(wx.richtext.RichTextCtrl):
         attr = wx.richtext.RichTextAttr()
         attr.SetTextColour(LIGHT_TEXT)
         attr.SetBackgroundColour(DARK_ALT)
+        # Zero out paragraph spacing so the buffer's natural height equals the
+        # line height (preventing a spurious scrollbar in single-line mode).
+        attr.SetParagraphSpacingBefore(0)
+        attr.SetParagraphSpacingAfter(0)
         self.SetDefaultStyle(attr)
+        self.SetBasicStyle(attr)
 
     def _rerender(self) -> None:
         """Clear and re-render _plain_text."""
@@ -222,7 +239,9 @@ class ManaSymbolRichCtrl(wx.richtext.RichTextCtrl):
     def _write_mana_image(self, symbol: str) -> None:
         """Render a single mana symbol as an inline image."""
         token = symbol[1:-1] if len(symbol) > 2 else symbol
-        bmp = self._mana_icons.bitmap_for_symbol(token)
+        # Use the hi-res (pre-downscale) bitmap so we only downscale once,
+        # which matches the supersampling quality used in the deck builder.
+        bmp = self._mana_icons.bitmap_for_symbol_hires(token)
         if bmp and bmp.IsOk():
             h = self._symbol_height()
             img = bmp.ConvertToImage()
