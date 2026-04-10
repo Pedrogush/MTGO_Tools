@@ -160,7 +160,7 @@ class ManaSymbolRichCtrl(wx.richtext.RichTextCtrl):
         # the sizer allocates the correct space and the scrollbar stays hidden.
         if not multiline:
             ch = self.GetCharHeight()
-            h = max(ch + 8, self.FromDIP(26))
+            h = max(ch + 6, self.FromDIP(26))
             self.SetMinSize(wx.Size(-1, h))
 
         # --- event bindings ---
@@ -247,16 +247,18 @@ class ManaSymbolRichCtrl(wx.richtext.RichTextCtrl):
             img = bmp.ConvertToImage()
             if img.GetHeight() != sym_h:
                 img = img.Scale(sym_h, sym_h, wx.IMAGE_QUALITY_HIGH)
-            # RichTextCtrl top-anchors inline images; pad to the full character
-            # height so the symbol sits vertically centred in the text line.
+            # RichTextCtrl top-anchors inline images and its actual rendered
+            # line height exceeds GetCharHeight() by internal leading/spacing.
+            # Add an explicit downward offset so the symbol aligns with the
+            # text cap-height rather than sitting against the top of the line.
             line_h = self.GetCharHeight()
-            if line_h > sym_h:
-                pad_top = (line_h - sym_h) // 2
-                bg = self.GetBackgroundColour()
-                padded = wx.Image(sym_h, line_h)
-                padded.SetRGB(wx.Rect(0, 0, sym_h, line_h), bg.Red(), bg.Green(), bg.Blue())
-                padded.Paste(img, 0, pad_top)
-                img = padded
+            pad_top = max(0, (line_h - sym_h) // 2) + 3
+            image_h = max(line_h, sym_h + pad_top)
+            bg = self.GetBackgroundColour()
+            padded = wx.Image(sym_h, image_h)
+            padded.SetRGB(wx.Rect(0, 0, sym_h, image_h), bg.Red(), bg.Green(), bg.Blue())
+            padded.Paste(img, 0, pad_top)
+            img = padded
             self.WriteImage(img)
             self._symbol_list.append(symbol)
         else:

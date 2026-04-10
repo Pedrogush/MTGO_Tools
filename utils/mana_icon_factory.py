@@ -58,9 +58,10 @@ class ManaIconFactory:
     _NON_CIRCLE_SYMBOLS: frozenset[str] = frozenset({"e", "energy"})
 
     # Glyph colours for standalone (non-circle) symbols.
+    # Energy is silver-grey to match how it appears on actual MTG cards.
     _STANDALONE_COLORS: dict[str, tuple[int, int, int]] = {
-        "e": (80, 210, 190),
-        "energy": (80, 210, 190),
+        "e": (175, 170, 165),
+        "energy": (175, 170, 165),
     }
 
     def __init__(self, icon_size: int = MANA_ICON_DEFAULT_SIZE) -> None:
