@@ -57,9 +57,18 @@ class ManaIconFactory:
     # Symbols that are NOT circle-enclosed mana icons — rendered as bare glyphs.
     _NON_CIRCLE_SYMBOLS: frozenset[str] = frozenset({"e", "energy"})
 
-    # Glyph colours for standalone (non-circle) symbols.
-    # Energy is silver-grey to match how it appears on actual MTG cards.
+    # Glyph (ring/border) colours for standalone symbols.
+    # Energy ring is drawn in near-black so it reads as a dark border.
     _STANDALONE_COLORS: dict[str, tuple[int, int, int]] = {
+        "e": (0, 0, 0),
+        "energy": (0, 0, 0),
+    }
+
+    # Highlight fill drawn *under* the glyph for symbols whose glyph path uses
+    # a cutout (even-odd) design — the highlight colour shows through the hole.
+    # Energy: a silver ellipse is drawn first; the lightning-bolt cutout in the
+    # black ring glyph then reveals the silver beneath it.
+    _STANDALONE_HIGHLIGHT: dict[str, tuple[int, int, int]] = {
         "e": (175, 170, 165),
         "energy": (175, 170, 165),
     }
@@ -234,7 +243,12 @@ class ManaIconFactory:
         return final
 
     def _get_standalone_bitmap(self, symbol: str, key: str | None) -> wx.Bitmap:
-        """Render a standalone glyph without a circle background (e.g. energy {E})."""
+        """Render a standalone glyph without a circle background (e.g. energy {E}).
+
+        For glyphs with an even-odd cutout design (like energy), a highlight
+        ellipse is drawn first so the cutout area (lightning bolt) reveals the
+        highlight colour instead of the dark background.
+        """
         scale = self._RENDER_SCALE
         size = self._icon_size * scale
         bmp = wx.Bitmap(size, size)
@@ -244,7 +258,15 @@ class ManaIconFactory:
         glyph = self._glyph_map.get(key or "") if key else ""
         if glyph:
             cx = cy = size // 2
+            radius = (size // 2) - scale
             gctx = wx.GraphicsContext.Create(dc)
+            # If a highlight colour is defined, fill an ellipse beneath the glyph
+            # so the glyph's cutout (hole) areas show that colour.
+            highlight_rgb = self._STANDALONE_HIGHLIGHT.get(key or "")
+            if highlight_rgb:
+                gctx.SetPen(wx.Pen(wx.Colour(0, 0, 0, 0)))
+                gctx.SetBrush(wx.Brush(wx.Colour(*highlight_rgb)))
+                gctx.DrawEllipse(cx - radius, cy - radius, radius * 2, radius * 2)
             # Slightly larger font than in-circle glyphs — no border to eat into space.
             font_size = int(MANA_GLYPH_FONT_SIZE_BASE * scale * 1.25)
             text_font = self._build_render_font(font_size)
