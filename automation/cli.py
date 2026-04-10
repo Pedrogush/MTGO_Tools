@@ -292,6 +292,13 @@ def cmd_get_deck_notes(client: AutomationClient, args: argparse.Namespace) -> in
     return 0
 
 
+def cmd_type_into_oracle(client: AutomationClient, args: argparse.Namespace) -> int:
+    """Type characters one at a time into the oracle search box."""
+    result = client.type_into_oracle(args.text, expand_adv=not args.no_expand)
+    print(format_output(result, args.json))
+    return 0 if result.get("typed") else 1
+
+
 def cmd_toggle_adv_filters(client: AutomationClient, args: argparse.Namespace) -> int:
     """Toggle the advanced filters panel in the deck builder."""
     result = client.toggle_adv_filters()
@@ -500,6 +507,18 @@ Notes:
     # get-deck-notes
     subparsers.add_parser("get-deck-notes", help="Get the current deck notes")
 
+    # type-into-oracle
+    p = subparsers.add_parser(
+        "type-into-oracle",
+        help="Type characters one at a time into the oracle text search box",
+    )
+    p.add_argument("text", help="String to type (e.g. '{W}' or 'deals damage')")
+    p.add_argument(
+        "--no-expand",
+        action="store_true",
+        help="Do not expand the advanced filters panel before typing",
+    )
+
     # toggle-adv-filters
     subparsers.add_parser("toggle-adv-filters", help="Toggle advanced filters in builder panel")
 
@@ -554,6 +573,7 @@ Notes:
         "open-widget": cmd_open_widget,
         "screenshot-window": cmd_screenshot_window,
         "get-deck-notes": cmd_get_deck_notes,
+        "type-into-oracle": cmd_type_into_oracle,
         "toggle-adv-filters": cmd_toggle_adv_filters,
         "close-app": cmd_close_app,
     }

@@ -171,6 +171,50 @@ def test_oracle_text_lorem_mana_display(client: AutomationClient) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Test 5 — keyboard typing renders symbols in oracle text search
+# ---------------------------------------------------------------------------
+
+
+def test_oracle_text_keyboard_typing_renders_symbols(client: AutomationClient) -> None:
+    """Typing {W} character-by-character should render the symbol immediately on '}'.
+
+    This tests the fix for the regression where GetKeyCode() returned the raw
+    key scancode (e.g. ']') instead of the character code ('}'), causing the
+    trigger condition in _on_oracle_key_up to miss the closing brace and leave
+    the symbol unrendered.  The type_into_oracle command drives simulate_char_typed
+    which runs the same detection path as real keyboard input.
+    """
+    sequences = [
+        ("{W}", "W"),
+        ("{R/G}", "RG"),
+        ("{2/W}", "2W"),
+    ]
+    for text, label_suffix in sequences:
+        # Clear first
+        client.set_oracle_search("", expand_adv=True)
+        time.sleep(0.05)
+
+        result = client.type_into_oracle(text, expand_adv=True)
+        assert result.get("typed"), f"type_into_oracle failed for {text!r}: {result}"
+
+        # After typing the closing '}' the symbol should be rendered; the
+        # control's plain-text value must still equal the original token.
+        value = result.get("value", "")
+        assert value == text, (
+            f"After typing {text!r} character-by-character the oracle ctrl "
+            f"returned {value!r} instead of {text!r}"
+        )
+
+        time.sleep(0.1)
+        label = f"oracle_keyboard_type_{label_suffix}"
+        path = _capture_widget(client, "oracle_search", label)
+        assert os.path.exists(path), f"Screenshot not saved for {text}: {path}"
+
+    # Clear after test
+    client.set_oracle_search("", expand_adv=False)
+
+
+# ---------------------------------------------------------------------------
 # Test group registry
 # ---------------------------------------------------------------------------
 
@@ -194,5 +238,10 @@ ALL_TESTS: list[tuple[str, str, Callable[[AutomationClient], None]]] = [
         "mana_input",
         "Oracle text display renders LOREM_MANA",
         test_oracle_text_lorem_mana_display,
+    ),
+    (
+        "mana_input",
+        "Oracle text keyboard typing renders symbols",
+        test_oracle_text_keyboard_typing_renders_symbols,
     ),
 ]

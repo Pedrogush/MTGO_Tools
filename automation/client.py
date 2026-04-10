@@ -332,6 +332,19 @@ class AutomationClient:
             kwargs["path"] = path
         return self._send_command("screenshot_window", **kwargs)
 
+    def type_into_oracle(self, text: str, expand_adv: bool = True) -> dict[str, Any]:
+        """Type characters one at a time into the oracle search box.
+
+        Unlike set_oracle_search (which bypasses keyboard events), each character
+        goes through the oracle symbol-detection pipeline so {W}, {R/G}, etc. are
+        rendered as inline images exactly as when the user types them.
+
+        Args:
+            text: String to type, e.g. '{W}' or 'deals damage'
+            expand_adv: If True, expand advanced filters so the oracle input is visible.
+        """
+        return self._send_command("type_into_oracle", text=text, expand_adv=expand_adv)
+
     def add_lorem_mana_card(self) -> dict[str, Any]:
         """Insert a dummy card with LOREM_MANA oracle text into the card manager."""
         return self._send_command("add_lorem_mana_card")

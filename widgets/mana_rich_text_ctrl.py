@@ -363,26 +363,18 @@ class ManaSymbolRichCtrl(wx.richtext.RichTextCtrl):
             evt.Skip()
             return
 
-        kc = evt.GetKeyCode()
-        uni = evt.GetUnicodeKey()
-        ch = chr(uni) if (uni and uni != wx.WXK_NONE) else ""
-
-        # Sync plain text from current rich text state
+        # Always sync and check on every keystroke: any key could complete a
+        # {X} sequence.  super().GetValue() returns U+FFFC for already-rendered
+        # images and literal text for everything else; _SYMBOL_PATTERN matches
+        # only when a complete {X} sequence exists as unrendered literal text.
         self._plain_text = self._reconstruct_from_richtext()
+        new_text = _normalize_symbol_patterns(self._plain_text)
+        raw = super().GetValue()
+        if new_text != self._plain_text or bool(_SYMBOL_PATTERN.search(raw)):
+            self._plain_text = new_text
+            self._rerender()
+            self._emit_text_event()
 
-        # Decide whether to attempt symbol detection
-        trigger = kc == ord("}") or kc == ord("{") or (ch.isalpha() and ch.isupper())
-        if trigger:
-            new_text = _normalize_symbol_patterns(self._plain_text)
-            if new_text != self._plain_text:
-                self._plain_text = new_text
-                self._rerender()
-                self._emit_text_event()
-                evt.Skip()
-                return
-
-        # For non-trigger keys just keep plain text synced; native EVT_TEXT
-        # will propagate normally from the RichText buffer.
         evt.Skip()
 
     def _on_oracle_key_down_for_paste(self, evt: wx.KeyEvent) -> None:
@@ -398,10 +390,35 @@ class ManaSymbolRichCtrl(wx.richtext.RichTextCtrl):
             return
         self._plain_text = self._reconstruct_from_richtext()
         new_text = _normalize_symbol_patterns(self._plain_text)
-        if new_text != self._plain_text:
+        raw = super().GetValue()
+        if new_text != self._plain_text or bool(_SYMBOL_PATTERN.search(raw)):
             self._plain_text = new_text
             self._rerender()
         self._emit_text_event()
+
+    # ------------------------------------------------------------------
+    # Automation helpers
+    # ------------------------------------------------------------------
+
+    def simulate_char_typed(self, char: str) -> None:
+        """Insert *char* as if the user typed it, triggering oracle symbol detection.
+
+        Used by the automation server to drive the oracle-text search box one
+        character at a time so that the full keyboard-catching mechanism fires
+        (symbol detection, re-render, EVT_TEXT) rather than bypassing it with
+        ChangeValue/SetValue.
+        """
+        if self._readonly:
+            return
+        self.WriteText(char)
+        if self._oracle_symbol_detect:
+            self._plain_text = self._reconstruct_from_richtext()
+            new_text = _normalize_symbol_patterns(self._plain_text)
+            raw = super().GetValue()
+            if new_text != self._plain_text or bool(_SYMBOL_PATTERN.search(raw)):
+                self._plain_text = new_text
+                self._rerender()
+                self._emit_text_event()
 
     # ------------------------------------------------------------------
     # Copy as plain text
