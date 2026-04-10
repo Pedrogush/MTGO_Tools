@@ -54,8 +54,14 @@ class ManaIconFactory:
         "multicolor": (246, 223, 138),
     }
 
-    # Symbols that are NOT circle-enclosed mana icons — render as plain text.
+    # Symbols that are NOT circle-enclosed mana icons — rendered as bare glyphs.
     _NON_CIRCLE_SYMBOLS: frozenset[str] = frozenset({"e", "energy"})
+
+    # Glyph colours for standalone (non-circle) symbols.
+    _STANDALONE_COLORS: dict[str, tuple[int, int, int]] = {
+        "e": (80, 210, 190),
+        "energy": (80, 210, 190),
+    }
 
     def __init__(self, icon_size: int = MANA_ICON_DEFAULT_SIZE) -> None:
         self._cache: dict[str, wx.Bitmap] = {}
@@ -99,14 +105,12 @@ class ManaIconFactory:
 
         Callers that need to scale to an arbitrary target size should use this
         instead of bitmap_for_symbol to avoid a second downscale of an already
-        small source.  Returns None for non-circle symbols (e.g. energy).
+        small source.  Non-circle symbols (e.g. energy) are rendered as bare
+        glyphs and included here.
         """
         token = symbol.strip()
         if token.startswith("{") and token.endswith("}"):
             token = token[1:-1]
-        normalized = self._normalize_symbol(token or "")
-        if normalized in self._NON_CIRCLE_SYMBOLS:
-            return None
         key = token or ""
         if key not in self._hires_cache:
             self._get_bitmap(key)  # populates both caches as a side-effect
@@ -116,9 +120,6 @@ class ManaIconFactory:
         token = symbol.strip()
         if token.startswith("{") and token.endswith("}"):
             token = token[1:-1]
-        normalized = self._normalize_symbol(token or "")
-        if normalized in self._NON_CIRCLE_SYMBOLS:
-            return None
         return self._get_bitmap(token or "")
 
     def bitmap_for_cost(self, mana_cost: str) -> wx.Bitmap | None:
@@ -160,6 +161,8 @@ class ManaIconFactory:
         if symbol in self._cache:
             return self._cache[symbol]
         key = self._normalize_symbol(symbol)
+        if key in self._NON_CIRCLE_SYMBOLS:
+            return self._get_standalone_bitmap(symbol, key)
         components = self._hybrid_components(key)
         second_color: tuple[int, int, int] | None = None
         glyph = self._glyph_map.get(key or "") if not components else ""
@@ -224,6 +227,35 @@ class ManaIconFactory:
         img = bmp.ConvertToImage()
         img = img.Blur(MANA_ICON_BLUR_RADIUS)
         self._hires_cache[symbol] = wx.Bitmap(img)  # store at render-scale before downscale
+        img = img.Scale(self._icon_size, self._icon_size, wx.IMAGE_QUALITY_HIGH)
+        final = wx.Bitmap(img)
+        self._cache[symbol] = final
+        return final
+
+    def _get_standalone_bitmap(self, symbol: str, key: str | None) -> wx.Bitmap:
+        """Render a standalone glyph without a circle background (e.g. energy {E})."""
+        scale = self._RENDER_SCALE
+        size = self._icon_size * scale
+        bmp = wx.Bitmap(size, size)
+        dc = wx.MemoryDC(bmp)
+        dc.SetBackground(wx.Brush(DARK_ALT))
+        dc.Clear()
+        glyph = self._glyph_map.get(key or "") if key else ""
+        if glyph:
+            cx = cy = size // 2
+            gctx = wx.GraphicsContext.Create(dc)
+            # Slightly larger font than in-circle glyphs — no border to eat into space.
+            font_size = int(MANA_GLYPH_FONT_SIZE_BASE * scale * 1.25)
+            text_font = self._build_render_font(font_size)
+            color_rgb = self._STANDALONE_COLORS.get(key or "", (220, 200, 140))
+            text_color = wx.Colour(*color_rgb)
+            gctx.SetFont(text_font, text_color)
+            tw, th = gctx.GetTextExtent(glyph)
+            gctx.DrawText(glyph, cx - tw / 2, cy - th / 2)
+        dc.SelectObject(wx.NullBitmap)
+        img = bmp.ConvertToImage()
+        img = img.Blur(MANA_ICON_BLUR_RADIUS)
+        self._hires_cache[symbol] = wx.Bitmap(img)
         img = img.Scale(self._icon_size, self._icon_size, wx.IMAGE_QUALITY_HIGH)
         final = wx.Bitmap(img)
         self._cache[symbol] = final

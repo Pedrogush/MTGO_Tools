@@ -243,20 +243,28 @@ class ManaSymbolRichCtrl(wx.richtext.RichTextCtrl):
         # which matches the supersampling quality used in the deck builder.
         bmp = self._mana_icons.bitmap_for_symbol_hires(token)
         if bmp and bmp.IsOk():
-            h = self._symbol_height()
+            sym_h = self._symbol_height()
             img = bmp.ConvertToImage()
-            if img.GetHeight() != h:
-                img = img.Scale(h, h, wx.IMAGE_QUALITY_HIGH)
+            if img.GetHeight() != sym_h:
+                img = img.Scale(sym_h, sym_h, wx.IMAGE_QUALITY_HIGH)
+            # RichTextCtrl top-anchors inline images; pad to the full character
+            # height so the symbol sits vertically centred in the text line.
+            line_h = self.GetCharHeight()
+            if line_h > sym_h:
+                pad_top = (line_h - sym_h) // 2
+                bg = self.GetBackgroundColour()
+                padded = wx.Image(sym_h, line_h)
+                padded.SetRGB(wx.Rect(0, 0, sym_h, line_h), bg.Red(), bg.Green(), bg.Blue())
+                padded.Paste(img, 0, pad_top)
+                img = padded
             self.WriteImage(img)
             self._symbol_list.append(symbol)
         else:
             self.WriteText(symbol)
 
     def _symbol_height(self) -> int:
-        font = self.GetFont()
-        if font.IsOk():
-            return max(16, int(font.GetPointSize() * 1.6))
-        return 20
+        ch = self.GetCharHeight()
+        return max(16, ch - 2)
 
     def _emit_text_event(self) -> None:
         evt = wx.CommandEvent(wx.wxEVT_TEXT, self.GetId())
