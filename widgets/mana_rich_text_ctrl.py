@@ -363,14 +363,55 @@ class ManaSymbolRichCtrl(wx.richtext.RichTextCtrl):
             evt.Skip()
             return
 
-        # Always sync and check on every keystroke: any key could complete a
-        # {X} sequence.  super().GetValue() returns U+FFFC for already-rendered
-        # images and literal text for everything else; _SYMBOL_PATTERN matches
-        # only when a complete {X} sequence exists as unrendered literal text.
-        self._plain_text = self._reconstruct_from_richtext()
+        kc = evt.GetKeyCode()
+        uni = evt.GetUnicodeKey()
+
+        # Backspace: remove last rendered symbol token or last plain character.
+        if kc == wx.WXK_BACK:
+            if self._plain_text:
+                m = re.search(r"\{[^}]+\}$", self._plain_text)
+                if m:
+                    self._plain_text = self._plain_text[: m.start()]
+                else:
+                    self._plain_text = self._plain_text[:-1]
+                self._rerender()
+                self._emit_text_event()
+            evt.Skip()
+            return
+
+        # Delete: clear everything.
+        if kc == wx.WXK_DELETE:
+            self._plain_text = ""
+            self._rerender()
+            self._emit_text_event()
+            evt.Skip()
+            return
+
+        # Skip modifier/navigation/non-character keys — they don't add text.
+        if not uni or uni == wx.WXK_NONE:
+            evt.Skip()
+            return
+
+        # Skip Ctrl/Alt combos (copy, paste, undo, select-all, etc.) — they
+        # don't insert text into the buffer even though they carry a unicode key.
+        if evt.ControlDown() or evt.AltDown():
+            evt.Skip()
+            return
+
+        ch = chr(uni)
+        if not ch.isprintable():
+            evt.Skip()
+            return
+
+        # Append the typed character to _plain_text directly (avoids relying on
+        # super().GetValue() returning U+FFFC for already-rendered images, which
+        # is not guaranteed to work correctly on all platforms/wx versions when
+        # the buffer contains a mix of images and literal text).
+        self._plain_text += ch
         new_text = _normalize_symbol_patterns(self._plain_text)
-        raw = super().GetValue()
-        if new_text != self._plain_text or bool(_SYMBOL_PATTERN.search(raw)):
+        # Re-render when normalisation changed something (e.g. {w} → {W}), or
+        # when the user just typed '}' completing a symbol sequence.
+        if new_text != self._plain_text or (ch == "}" and bool(_SYMBOL_PATTERN.search(self._plain_text))):
             self._plain_text = new_text
             self._rerender()
             self._emit_text_event()
@@ -412,10 +453,11 @@ class ManaSymbolRichCtrl(wx.richtext.RichTextCtrl):
             return
         self.WriteText(char)
         if self._oracle_symbol_detect:
-            self._plain_text = self._reconstruct_from_richtext()
+            self._plain_text += char
             new_text = _normalize_symbol_patterns(self._plain_text)
-            raw = super().GetValue()
-            if new_text != self._plain_text or bool(_SYMBOL_PATTERN.search(raw)):
+            if new_text != self._plain_text or (
+                char == "}" and bool(_SYMBOL_PATTERN.search(self._plain_text))
+            ):
                 self._plain_text = new_text
                 self._rerender()
                 self._emit_text_event()
