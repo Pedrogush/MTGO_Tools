@@ -387,31 +387,36 @@ class ManaSymbolRichCtrl(wx.richtext.RichTextCtrl):
             evt.Skip()
             return
 
-        # Skip modifier/navigation/non-character keys — they don't add text.
-        if not uni or uni == wx.WXK_NONE:
-            evt.Skip()
-            return
-
         # Skip Ctrl/Alt combos (copy, paste, undo, select-all, etc.) — they
         # don't insert text into the buffer even though they carry a unicode key.
         if evt.ControlDown() or evt.AltDown():
             evt.Skip()
             return
 
-        ch = chr(uni)
-        if not ch.isprintable():
-            evt.Skip()
-            return
+        # Append the typed character to _plain_text when GetUnicodeKey() gives
+        # a printable character.  For shifted characters such as '}' (Shift+']')
+        # on Windows, GetUnicodeKey() may return WXK_NONE if Shift is released
+        # before the key-up fires.  In that case we skip the append and rely on
+        # the buffer check below to detect symbol completion.
+        if uni and uni != wx.WXK_NONE:
+            ch = chr(uni)
+            if ch.isprintable():
+                self._plain_text += ch
 
-        # Append the typed character to _plain_text directly (avoids relying on
-        # super().GetValue() returning U+FFFC for already-rendered images, which
-        # is not guaranteed to work correctly on all platforms/wx versions when
-        # the buffer contains a mix of images and literal text).
-        self._plain_text += ch
         new_text = _normalize_symbol_patterns(self._plain_text)
-        # Re-render when normalisation changed something (e.g. {w} → {W}), or
-        # when the user just typed '}' completing a symbol sequence.
-        if new_text != self._plain_text or (ch == "}" and bool(_SYMBOL_PATTERN.search(self._plain_text))):
+        # Inspect the raw RTF buffer: already-rendered images show as U+FFFC
+        # and won't match _SYMBOL_PATTERN; only unrendered literal {X} sequences
+        # will match.  This catches the GetUnicodeKey()=0 edge case where the
+        # closing '}' was inserted by the default char handler but was not
+        # reflected in _plain_text above.
+        raw = super().GetValue()
+        has_unrendered = bool(_SYMBOL_PATTERN.search(raw))
+        if has_unrendered and not self._plain_text.endswith("}"):
+            # Closing '}' was missed by the unicode tracker — append it so that
+            # the rerender uses the complete {X} token.
+            self._plain_text += "}"
+            new_text = _normalize_symbol_patterns(self._plain_text)
+        if new_text != self._plain_text or has_unrendered:
             self._plain_text = new_text
             self._rerender()
             self._emit_text_event()
