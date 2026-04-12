@@ -149,6 +149,7 @@ class ManaSymbolRichCtrl(wx.richtext.RichTextCtrl):
         # mana key-input state
         self._held_keys: set[str] = set()
         self._sequence_keys: set[str] = set()
+        self._mana_mode_active: bool = False  # toggled by Ctrl+M in oracle mode
 
         self._apply_dark_style()
         # Clear() re-creates the initial empty paragraph with the basic style
@@ -168,8 +169,8 @@ class ManaSymbolRichCtrl(wx.richtext.RichTextCtrl):
             self.Bind(wx.EVT_KEY_DOWN, self._on_mana_key_down)
             self.Bind(wx.EVT_KEY_UP, self._on_mana_key_up)
         elif oracle_symbol_detect and not readonly:
+            self.Bind(wx.EVT_KEY_DOWN, self._on_oracle_key_down)
             self.Bind(wx.EVT_KEY_UP, self._on_oracle_key_up)
-            self.Bind(wx.EVT_KEY_DOWN, self._on_oracle_key_down_for_paste)
 
         # intercept Ctrl+C to put plain text (not RTF) on clipboard
         self.Bind(wx.EVT_KEY_DOWN, self._on_copy_key_down)
@@ -274,17 +275,18 @@ class ManaSymbolRichCtrl(wx.richtext.RichTextCtrl):
         evt.SetEventObject(self)
         self.GetEventHandler().ProcessEvent(evt)
 
-    def _reconstruct_from_richtext(self) -> str:
+    def _reconstruct_from_richtext(self, raw: str | None = None) -> str:
         """Reconstruct _plain_text by mapping \\ufffc image placeholders to symbols.
 
         wx.richtext.RichTextCtrl.GetValue() returns U+FFFC (Object Replacement
         Character) for each embedded image.  We replace those in order with the
         symbols stored in _symbol_list.
         """
-        try:
-            raw = super().GetValue()
-        except Exception:
-            return self._plain_text
+        if raw is None:
+            try:
+                raw = super().GetValue()
+            except Exception:
+                return self._plain_text
         result: list[str] = []
         idx = 0
         for ch in raw:
@@ -355,117 +357,28 @@ class ManaSymbolRichCtrl(wx.richtext.RichTextCtrl):
         evt.Skip()
 
     # ------------------------------------------------------------------
-    # Oracle-text symbol-detection handlers
+    # Oracle-text key handlers (Ctrl+M toggle + mana-mode routing)
     # ------------------------------------------------------------------
+
+    def _on_oracle_key_down(self, evt: wx.KeyEvent) -> None:
+        # Ctrl+M: toggle mana-symbol input mode
+        if evt.GetKeyCode() == ord("M") and evt.ControlDown():
+            self._mana_mode_active = not self._mana_mode_active
+            self._held_keys.clear()
+            self._sequence_keys.clear()
+            return  # consume
+
+        if self._mana_mode_active:
+            self._on_mana_key_down(evt)
+            return  # _on_mana_key_down handles Skip/consume itself
+
+        evt.Skip()
 
     def _on_oracle_key_up(self, evt: wx.KeyEvent) -> None:
-        if self._suppress:
-            evt.Skip()
-            return
-
-        kc = evt.GetKeyCode()
-        uni = evt.GetUnicodeKey()
-
-        # Backspace: remove last rendered symbol token or last plain character.
-        if kc == wx.WXK_BACK:
-            if self._plain_text:
-                m = re.search(r"\{[^}]+\}$", self._plain_text)
-                if m:
-                    self._plain_text = self._plain_text[: m.start()]
-                else:
-                    self._plain_text = self._plain_text[:-1]
-                self._rerender()
-                self._emit_text_event()
-            evt.Skip()
-            return
-
-        # Delete: clear everything.
-        if kc == wx.WXK_DELETE:
-            self._plain_text = ""
-            self._rerender()
-            self._emit_text_event()
-            evt.Skip()
-            return
-
-        # Skip Ctrl/Alt combos (copy, paste, undo, select-all, etc.) — they
-        # don't insert text into the buffer even though they carry a unicode key.
-        if evt.ControlDown() or evt.AltDown():
-            evt.Skip()
-            return
-
-        # Append the typed character to _plain_text when GetUnicodeKey() gives
-        # a printable character.  For shifted characters such as '}' (Shift+']')
-        # on Windows, GetUnicodeKey() may return WXK_NONE if Shift is released
-        # before the key-up fires.  In that case we skip the append and rely on
-        # the buffer check below to detect symbol completion.
-        if uni and uni != wx.WXK_NONE:
-            ch = chr(uni)
-            if ch.isprintable():
-                self._plain_text += ch
-
-        new_text = _normalize_symbol_patterns(self._plain_text)
-        # Inspect the raw RTF buffer: already-rendered images show as U+FFFC
-        # and won't match _SYMBOL_PATTERN; only unrendered literal {X} sequences
-        # will match.  This catches the GetUnicodeKey()=0 edge case where the
-        # closing '}' was inserted by the default char handler but was not
-        # reflected in _plain_text above.
-        raw = super().GetValue()
-        has_unrendered = bool(_SYMBOL_PATTERN.search(raw))
-        if has_unrendered and not self._plain_text.endswith("}"):
-            # Closing '}' was missed by the unicode tracker — append it so that
-            # the rerender uses the complete {X} token.
-            self._plain_text += "}"
-            new_text = _normalize_symbol_patterns(self._plain_text)
-        if new_text != self._plain_text or has_unrendered:
-            self._plain_text = new_text
-            self._rerender()
-            self._emit_text_event()
-
-        evt.Skip()
-
-    def _on_oracle_key_down_for_paste(self, evt: wx.KeyEvent) -> None:
-        """Intercept Ctrl+V to process symbols after paste."""
-        if evt.GetKeyCode() == ord("V") and evt.ControlDown():
-            evt.Skip()  # let the paste happen
-            wx.CallAfter(self._post_paste)
+        if self._mana_mode_active:
+            self._on_mana_key_up(evt)
             return
         evt.Skip()
-
-    def _post_paste(self) -> None:
-        if not self:
-            return
-        self._plain_text = self._reconstruct_from_richtext()
-        new_text = _normalize_symbol_patterns(self._plain_text)
-        raw = super().GetValue()
-        if new_text != self._plain_text or bool(_SYMBOL_PATTERN.search(raw)):
-            self._plain_text = new_text
-            self._rerender()
-        self._emit_text_event()
-
-    # ------------------------------------------------------------------
-    # Automation helpers
-    # ------------------------------------------------------------------
-
-    def simulate_char_typed(self, char: str) -> None:
-        """Insert *char* as if the user typed it, triggering oracle symbol detection.
-
-        Used by the automation server to drive the oracle-text search box one
-        character at a time so that the full keyboard-catching mechanism fires
-        (symbol detection, re-render, EVT_TEXT) rather than bypassing it with
-        ChangeValue/SetValue.
-        """
-        if self._readonly:
-            return
-        self.WriteText(char)
-        if self._oracle_symbol_detect:
-            self._plain_text += char
-            new_text = _normalize_symbol_patterns(self._plain_text)
-            if new_text != self._plain_text or (
-                char == "}" and bool(_SYMBOL_PATTERN.search(self._plain_text))
-            ):
-                self._plain_text = new_text
-                self._rerender()
-                self._emit_text_event()
 
     # ------------------------------------------------------------------
     # Copy as plain text
