@@ -151,18 +151,21 @@ class ManaSymbolRichCtrl(wx.richtext.RichTextCtrl):
         self._sequence_keys: set[str] = set()
         self._mana_mode_active: bool = False  # toggled by Ctrl+M in oracle mode
 
-        self._apply_dark_style()
-        # Clear() re-creates the initial empty paragraph with the basic style
-        # (zero paragraph spacing) set above, ensuring virtual height == line
-        # height and suppressing the spurious scrollbar.
-        self.Clear()
+        # hint (placeholder) text
+        self._hint: str = ""
+        self._showing_hint: bool = False
 
-        # For single-line use, pin the height to match a plain wx.TextCtrl so
-        # the sizer allocates the correct space and the scrollbar stays hidden.
+        # For single-line use, pin the height to match a plain wx.TextCtrl.
+        self._multiline = multiline
         if not multiline:
             ch = self.GetCharHeight()
-            h = max(ch + 6, self.FromDIP(26))
-            self.SetMinSize(wx.Size(-1, h))
+            self.SetMinSize(wx.Size(-1, ch + 6))
+
+        self._apply_dark_style()
+        # Clear() re-creates the initial empty paragraph with the basic style
+        # set above, ensuring virtual height == line height and suppressing
+        # the spurious scrollbar.
+        self.Clear()
 
         # --- event bindings ---
         if mana_key_input and not readonly:
@@ -174,6 +177,15 @@ class ManaSymbolRichCtrl(wx.richtext.RichTextCtrl):
 
         # intercept Ctrl+C to put plain text (not RTF) on clipboard
         self.Bind(wx.EVT_KEY_DOWN, self._on_copy_key_down)
+
+        # hint (placeholder) display
+        self.Bind(wx.EVT_SET_FOCUS, self._on_focus_gained)
+        self.Bind(wx.EVT_KILL_FOCUS, self._on_focus_lost)
+        # Re-render hint after the sizer gives the control its real height.
+        # _show_hint called during SetHint (panel construction) sees client_h≈0;
+        # EVT_SIZE fires once layout is complete with the actual height.
+        if not multiline:
+            self.Bind(wx.EVT_SIZE, self._on_size_for_hint)
 
     # ------------------------------------------------------------------
     # Public TextCtrl-compatible API
@@ -194,27 +206,111 @@ class ManaSymbolRichCtrl(wx.richtext.RichTextCtrl):
         self._emit_text_event()
 
     def SetHint(self, hint: str) -> None:  # type: ignore[override]
-        """Store hint for future use (displayed as tooltip if not natively supported)."""
-        self.SetToolTip(hint)
+        self._hint = hint
+        if not self._plain_text and not self.HasFocus():
+            self._show_hint()
+
+    # ------------------------------------------------------------------
+    # Hint (placeholder) display
+    # ------------------------------------------------------------------
+
+    def _show_hint(self) -> None:
+        if not self._hint or self._showing_hint:
+            return
+        self._showing_hint = True
+        self._suppress += 1
+        self.Freeze()
+        try:
+            self.Clear()
+            self._apply_hint_style()
+            self.WriteText(self._hint)
+            self._apply_dark_style()  # restore default style for real input
+            self.SetInsertionPoint(0)
+        finally:
+            self._suppress -= 1
+            self.Thaw()
+
+    def _hide_hint(self) -> None:
+        if not self._showing_hint:
+            return
+        self._showing_hint = False
+        self._suppress += 1
+        self.Freeze()
+        try:
+            self.Clear()
+            self._symbol_list = []
+            if self._plain_text:
+                self._render_text(self._plain_text)
+            self.SetInsertionPointEnd()
+        finally:
+            self._suppress -= 1
+            self.Thaw()
+
+    def _on_focus_gained(self, evt: wx.FocusEvent) -> None:
+        self._hide_hint()
+        evt.Skip()
+
+    def _on_focus_lost(self, evt: wx.FocusEvent) -> None:
+        if not self._plain_text:
+            self._show_hint()
+        evt.Skip()
 
     # ------------------------------------------------------------------
     # Internal rendering
     # ------------------------------------------------------------------
+
+    def _top_spacing_mm10(self) -> int:
+        """Tenths-of-mm top paragraph spacing to vertically centre text.
+
+        Computed from the live client height so it is correct whether called
+        during initial layout or later. Returns 0 for multiline controls.
+        """
+        client_h = self.GetClientSize().height
+        char_h = self.GetCharHeight()
+        if client_h > char_h > 0:
+            top_px = (client_h - char_h) // 2
+            dpi_y = self.FromDIP(96)  # FromDIP(96) == physical DPI
+            if dpi_y > 0:
+                return round(top_px * 254 / dpi_y)
+        return 0
+
+    def _left_indent_mm10(self) -> int:
+        """Tenths-of-mm left indent matching a plain wx.TextCtrl's internal padding."""
+        dpi_x = self.FromDIP(96)
+        return round(2 * 254 / dpi_x) if dpi_x > 0 else 0
+
+    def _apply_hint_style(self) -> None:
+        """Apply the placeholder style matching a styled wx.TextCtrl hint."""
+        attr = wx.richtext.RichTextAttr()
+        attr.SetFont(wx.SystemSettings.GetFont(wx.SYS_DEFAULT_GUI_FONT))
+        attr.SetTextColour(wx.Colour(*SUBDUED_TEXT))
+        attr.SetBackgroundColour(DARK_ALT)
+        attr.SetParagraphSpacingBefore(self._top_spacing_mm10())
+        attr.SetParagraphSpacingAfter(0)
+        attr.SetLeftIndent(self._left_indent_mm10())
+        self.SetDefaultStyle(attr)
+        self.SetBasicStyle(attr)
 
     def _apply_dark_style(self) -> None:
         self.SetBackgroundColour(DARK_ALT)
         attr = wx.richtext.RichTextAttr()
         attr.SetTextColour(LIGHT_TEXT)
         attr.SetBackgroundColour(DARK_ALT)
-        # Zero out paragraph spacing so the buffer's natural height equals the
-        # line height (preventing a spurious scrollbar in single-line mode).
-        attr.SetParagraphSpacingBefore(0)
+        attr.SetParagraphSpacingBefore(self._top_spacing_mm10())
         attr.SetParagraphSpacingAfter(0)
+        attr.SetLeftIndent(self._left_indent_mm10())
         self.SetDefaultStyle(attr)
         self.SetBasicStyle(attr)
 
+    def _on_size_for_hint(self, evt: wx.SizeEvent) -> None:
+        evt.Skip()
+        if self._showing_hint and not self._plain_text and self._suppress == 0:
+            self._showing_hint = False
+            self._show_hint()
+
     def _rerender(self) -> None:
         """Clear and re-render _plain_text."""
+        self._showing_hint = False
         self._suppress += 1
         self.Freeze()
         try:

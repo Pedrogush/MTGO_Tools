@@ -299,6 +299,11 @@ class DeckBuilderPanel(wx.Panel):
             mana_key_input=True,
         )
         mana_ctrl.SetHint(self._t("builder.hint.mana_cost"))
+        mana_ctrl.SetToolTip(
+            "Type single letters to enter mana symbols (W, U, B, R, G, C, X, 0-9)\n"
+            "Hold two keys at once for hybrid symbols (W+U → {W/U}, 2+W → {2/W})\n"
+            "Backspace removes the last symbol; Delete clears all"
+        )
         mana_ctrl.Bind(wx.EVT_TEXT, self._on_filters_changed)
         self.inputs["mana"] = mana_ctrl
         sizer.Add(mana_ctrl, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_SM)
@@ -378,7 +383,13 @@ class DeckBuilderPanel(wx.Panel):
             oracle_symbol_detect=True,
         )
         text_ctrl.SetHint(self._t("builder.hint.oracle_text"))
-        text_ctrl.SetToolTip("Filter cards by oracle text")
+        text_ctrl.SetToolTip(
+            "Filter cards by oracle text\n"
+            "Ctrl+M toggles mana symbol input mode:\n"
+            "  Single key for basic symbols (W, U, B, R, G…)\n"
+            "  Hold two keys at once for hybrids (W+U → {W/U}, 2+W → {2/W})\n"
+            "  Press Ctrl+M again to return to normal typing"
+        )
         text_ctrl.Bind(wx.EVT_TEXT, self._on_filters_changed)
         self.inputs["text"] = text_ctrl
         text_row = wx.BoxSizer(wx.HORIZONTAL)

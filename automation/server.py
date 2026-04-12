@@ -92,7 +92,7 @@ class AutomationServer:
             "screenshot_window": self._handle_screenshot_window,
             "add_lorem_mana_card": self._handle_add_lorem_mana_card,
             "get_inspector_oracle_text": self._handle_get_inspector_oracle_text,
-            "type_into_oracle": self._handle_type_into_oracle,
+
         }
 
     def register_handler(self, command: str, handler: Callable[..., Any]) -> None:
@@ -985,37 +985,3 @@ class AutomationServer:
         value = ctrl.GetValue() if hasattr(ctrl, "GetValue") else ""
         return {"text": value}
 
-    def _handle_type_into_oracle(self, text: str = "", expand_adv: bool = True) -> dict[str, Any]:
-        """Simulate typing characters into the oracle search box one keystroke at a time.
-
-        Unlike set_oracle_search (which calls ChangeValue and bypasses keyboard
-        events), this method calls simulate_char_typed for each character so the
-        full oracle symbol-detection pipeline fires exactly as it would for real
-        keyboard input.
-        """
-        if not self.frame.builder_panel:
-            return {"typed": False, "error": "Builder panel not available"}
-        if hasattr(self.frame, "_show_left_panel"):
-            self.frame._show_left_panel("builder", force=True)
-        panel = self.frame.builder_panel
-        if expand_adv:
-            adv_panel = getattr(panel, "_adv_panel", None)
-            if adv_panel and not adv_panel.IsShown():
-                btn = getattr(panel, "_adv_toggle_btn", None)
-                if btn:
-                    event = wx.CommandEvent(wx.wxEVT_BUTTON, btn.GetId())
-                    event.SetEventObject(btn)
-                    btn.ProcessEvent(event)
-        ctrl = panel.inputs.get("text")
-        if ctrl is None:
-            return {"typed": False, "error": "Oracle text input not found"}
-        ctrl.SetFocus()
-        for char in text:
-            if hasattr(ctrl, "simulate_char_typed"):
-                ctrl.simulate_char_typed(char)
-            else:
-                ctrl.WriteText(char)
-            for _ in range(2):
-                wx.Yield()
-        plain = ctrl.GetValue() if hasattr(ctrl, "GetValue") else ""
-        return {"typed": True, "text": text, "value": plain}
