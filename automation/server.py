@@ -194,8 +194,12 @@ class AutomationServer:
         """Take a screenshot of the application window.
 
         When *headless* is True the frame is temporarily restored if it is
-        iconized (minimized) so the capture works even when the window is not
-        visible on screen, then returned to its previous state afterward.
+        iconized (minimized) or hidden so the capture works even when the
+        window is not visible on screen, then returned to its previous state
+        afterward. Hidden windows are first minimized before the restore so
+        they take the same code path as minimized windows — Show() alone does
+        not paint the window reliably before capture, causing the screen DC
+        to grab whatever is in the foreground at the window's coordinates.
         """
         import os
         import tempfile
@@ -215,10 +219,13 @@ class AutomationServer:
         was_hidden = not self.frame.IsShown()
 
         if headless and (was_iconized or was_hidden):
-            if was_iconized:
-                self.frame.Iconize(False)
             if was_hidden:
+                # Convert hidden into minimized so we can use the known-working
+                # restore-from-minimized path below.
                 self.frame.Show()
+                self.frame.Iconize(True)
+                wx.SafeYield()
+            self.frame.Iconize(False)
             self.frame.Raise()
             wx.SafeYield()
 
@@ -235,7 +242,7 @@ class AutomationServer:
             mem_dc.SelectObject(wx.NullBitmap)
         finally:
             if headless:
-                if was_iconized:
+                if was_iconized or was_hidden:
                     self.frame.Iconize(True)
                 if was_hidden:
                     self.frame.Hide()
