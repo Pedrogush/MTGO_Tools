@@ -1,6 +1,12 @@
 """Unit tests for the pure deck results filter logic in utils.deck_results_filter."""
 
-from utils.deck_results_filter import _classify_event_type, _normalize_date, filter_decks
+from utils.deck_results_filter import (
+    _classify_event_type,
+    _normalize_date,
+    filter_decks,
+    parse_placement,
+    parse_wins,
+)
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -92,6 +98,54 @@ def test_normalize_date_extracts_first_date():
 
 
 # ---------------------------------------------------------------------------
+# parse_placement
+# ---------------------------------------------------------------------------
+
+
+def test_parse_placement_ordinals():
+    assert parse_placement("1st") == 1
+    assert parse_placement("2nd") == 2
+    assert parse_placement("3rd") == 3
+    assert parse_placement("7th") == 7
+    assert parse_placement("11th") == 11
+
+
+def test_parse_placement_top_n():
+    assert parse_placement("Top 8") == 8
+    assert parse_placement("Top 16") == 16
+    assert parse_placement("top32") == 32
+
+
+def test_parse_placement_record_returns_none():
+    # Record-style results are not placements
+    assert parse_placement("5-0") is None
+    assert parse_placement("4-1") is None
+
+
+def test_parse_placement_unparseable_returns_none():
+    assert parse_placement("Winner") is None
+    assert parse_placement("") is None
+
+
+# ---------------------------------------------------------------------------
+# parse_wins
+# ---------------------------------------------------------------------------
+
+
+def test_parse_wins_record():
+    assert parse_wins("5-0") == 5
+    assert parse_wins("4-1") == 4
+    assert parse_wins("0-3") == 0
+
+
+def test_parse_wins_non_record_returns_none():
+    assert parse_wins("1st") is None
+    assert parse_wins("Top 8") is None
+    assert parse_wins("Winner") is None
+    assert parse_wins("") is None
+
+
+# ---------------------------------------------------------------------------
 # filter_decks — no filters (all results returned)
 # ---------------------------------------------------------------------------
 
@@ -146,36 +200,79 @@ def test_event_type_no_matches():
 
 
 # ---------------------------------------------------------------------------
-# filter_decks — result filter
+# filter_decks — placement filter (operator + field + value)
 # ---------------------------------------------------------------------------
 
 
-def test_result_filter_exact_value():
-    result = filter_decks(DECKS, result_query="1st")
+def test_placement_filter_eq_placement_value():
+    # placement = 1 → only "1st"
+    result = filter_decks(DECKS, placement_op="=", placement_field="placement", placement_value="1")
     assert len(result) == 1
-    assert result[0]["player"] == "PlayerAlpha"
-    assert result[0]["event"] == "Modern Challenge"
+    assert result[0]["result"] == "1st"
 
 
-def test_result_filter_partial_match():
-    result = filter_decks(DECKS, result_query="top")
+def test_placement_filter_ge_placement_includes_top_8():
+    # placement >= 8 → Top 8 (placement=8); 1st, 2nd, 7th excluded
+    result = filter_decks(
+        DECKS, placement_op=">=", placement_field="placement", placement_value="8"
+    )
+    placements = [d["result"] for d in result]
+    assert placements == ["Top 8"]
+
+
+def test_placement_filter_lt_placement_excludes_top_8():
+    # placement < 8 → 1st, 2nd, 7th
+    result = filter_decks(DECKS, placement_op="<", placement_field="placement", placement_value="8")
+    placements = [d["result"] for d in result]
+    assert placements == ["1st", "7th", "2nd"]
+
+
+def test_placement_filter_gt_wins_4():
+    # wins > 4 → 5-0
+    result = filter_decks(DECKS, placement_op=">", placement_field="wins", placement_value="4")
     assert len(result) == 1
-    assert result[0]["result"] == "Top 8"
+    assert result[0]["result"] == "5-0"
 
 
-def test_result_filter_query_must_be_lowercased():
-    # The caller (UI) is responsible for lowercasing; uppercase query won't match
-    result = filter_decks(DECKS, result_query="TOP 8")
-    assert len(result) == 0
+def test_placement_filter_ge_wins_4():
+    # wins >= 4 → 5-0 and 4-1
+    result = filter_decks(DECKS, placement_op=">=", placement_field="wins", placement_value="4")
+    results = sorted(d["result"] for d in result)
+    assert results == ["4-1", "5-0"]
 
 
-def test_result_filter_no_match():
-    result = filter_decks(DECKS, result_query="99th")
-    assert result == []
+def test_placement_filter_excludes_decks_without_parseable_value():
+    # placement filter against "wins" excludes "1st", "2nd", "Top 8", "7th", "Winner"
+    result = filter_decks(DECKS, placement_op=">=", placement_field="wins", placement_value="0")
+    assert len(result) == 2  # Only 5-0 and 4-1 have wins data
 
 
-def test_result_filter_empty_string_no_filter():
-    result = filter_decks(DECKS, result_query="")
+def test_placement_filter_no_op_skips_filter():
+    result = filter_decks(DECKS, placement_op="", placement_field="placement", placement_value="1")
+    assert result == DECKS
+
+
+def test_placement_filter_no_value_skips_filter():
+    result = filter_decks(DECKS, placement_op=">", placement_field="placement", placement_value="")
+    assert result == DECKS
+
+
+def test_placement_filter_invalid_value_skips_filter():
+    result = filter_decks(
+        DECKS, placement_op=">", placement_field="placement", placement_value="abc"
+    )
+    assert result == DECKS
+
+
+def test_placement_filter_unknown_field_skips_filter():
+    result = filter_decks(DECKS, placement_op=">", placement_field="unknown", placement_value="1")
+    assert result == DECKS
+
+
+def test_placement_filter_unknown_op_skips_filter():
+    result = filter_decks(
+        DECKS, placement_op="!=", placement_field="placement", placement_value="1"
+    )
     assert result == DECKS
 
 
@@ -261,8 +358,14 @@ def test_combined_event_type_and_player():
     assert len(result) == 2  # Modern Challenge (PlayerAlpha) + Legacy Challenge (PlayerAlpha)
 
 
-def test_combined_event_type_and_result():
-    result = filter_decks(DECKS, event_type="League", result_query="5-0")
+def test_combined_event_type_and_placement():
+    result = filter_decks(
+        DECKS,
+        event_type="League",
+        placement_op="=",
+        placement_field="wins",
+        placement_value="5",
+    )
     assert len(result) == 1
     assert result[0]["player"] == "PlayerBeta"
 
@@ -273,8 +376,14 @@ def test_combined_event_type_and_date():
     assert result[0]["event"] == "Modern Challenge"
 
 
-def test_combined_player_and_result():
-    result = filter_decks(DECKS, player_query="alpha", result_query="1st")
+def test_combined_player_and_placement():
+    result = filter_decks(
+        DECKS,
+        player_query="alpha",
+        placement_op="=",
+        placement_field="placement",
+        placement_value="1",
+    )
     assert len(result) == 1
     assert result[0]["event"] == "Modern Challenge"
 
@@ -283,7 +392,9 @@ def test_combined_all_filters():
     result = filter_decks(
         DECKS,
         event_type="Challenge",
-        result_query="1st",
+        placement_op="=",
+        placement_field="placement",
+        placement_value="1",
         player_query="alpha",
         date_query="2024-03",
     )
@@ -293,7 +404,13 @@ def test_combined_all_filters():
 
 def test_combined_filters_no_match():
     result = filter_decks(
-        DECKS, event_type="League", result_query="1st", player_query="alpha", date_query="2024"
+        DECKS,
+        event_type="League",
+        placement_op="=",
+        placement_field="placement",
+        placement_value="1",
+        player_query="alpha",
+        date_query="2024",
     )
     # PlayerAlpha has no League entries
     assert result == []
@@ -316,9 +433,9 @@ def test_event_filter_on_deck_missing_event_field():
     assert result == []
 
 
-def test_result_filter_on_deck_missing_result_field():
+def test_placement_filter_on_deck_missing_result_field():
     decks = [{"event": "Challenge", "player": "P", "date": "2024-01-01"}]
-    result = filter_decks(decks, result_query="1st")
+    result = filter_decks(decks, placement_op="=", placement_field="placement", placement_value="1")
     assert result == []
 
 

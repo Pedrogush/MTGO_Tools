@@ -186,7 +186,7 @@ class AppEventHandlers:
     def on_event_type_filter_changed(self: AppFrame) -> None:
         self._apply_deck_filters()
 
-    def on_result_filter_changed(self: AppFrame) -> None:
+    def on_placement_filter_changed(self: AppFrame) -> None:
         self._apply_deck_filters()
 
     def on_player_name_filter_changed(self: AppFrame) -> None:
@@ -201,18 +201,26 @@ class AppEventHandlers:
 
     def _apply_deck_filters(self: AppFrame) -> None:
         event_type = self.research_panel.get_event_type_filter()
-        result_query = self.research_panel.get_result_filter()
+        placement_op, placement_field, placement_value = self.research_panel.get_placement_filter()
         player_query = self.research_panel.get_player_name_filter()
         date_query = self.research_panel.get_date_filter()
 
         self.controller.session_manager.update_deck_event_type_filter(event_type)
-        self.controller.session_manager.update_deck_result_filter(result_query)
+        self.controller.session_manager.update_deck_placement_filter(
+            placement_op, placement_field, placement_value
+        )
         self.controller.session_manager.update_deck_player_filter(player_query)
         self.controller.session_manager.update_deck_date_filter(date_query)
         self._schedule_settings_save()
 
         filtered = filter_decks(
-            list(self._all_loaded_decks), event_type, result_query, player_query, date_query
+            list(self._all_loaded_decks),
+            event_type,
+            placement_op=placement_op,
+            placement_field=placement_field,
+            placement_value=placement_value,
+            player_query=player_query,
+            date_query=date_query,
         )
         self.controller.deck_repo.set_decks_list(filtered)
         self.deck_list.Clear()
@@ -402,12 +410,12 @@ class AppEventHandlers:
             self._is_first_deck_load = False
             sm = self.controller.session_manager
             self.research_panel.set_event_type_filter(sm.get_deck_event_type_filter())
-            self.research_panel.set_result_filter(sm.get_deck_result_filter())
+            self.research_panel.set_placement_filter(*sm.get_deck_placement_filter())
             self.research_panel.set_player_name_filter(sm.get_deck_player_filter())
             self.research_panel.set_date_filter(sm.get_deck_date_filter())
         else:
             self.research_panel.reset_event_type_filter()
-            self.research_panel.reset_result_filter()
+            self.research_panel.reset_placement_filter()
             self.research_panel.reset_player_name_filter()
             self.research_panel.reset_date_filter()
         if not decks:
@@ -797,7 +805,7 @@ class AppEventHandlers:
         self._all_loaded_decks = []
         if not self._is_first_deck_load:
             self.research_panel.reset_event_type_filter()
-            self.research_panel.reset_result_filter()
+            self.research_panel.reset_placement_filter()
             self.research_panel.reset_player_name_filter()
             self.research_panel.reset_date_filter()
 

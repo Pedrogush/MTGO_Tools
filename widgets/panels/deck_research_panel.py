@@ -12,6 +12,7 @@ from utils.constants import (
     LIGHT_TEXT,
     PADDING_MD,
 )
+from utils.deck_results_filter import PLACEMENT_FIELDS, PLACEMENT_OPERATORS
 from utils.stylize import (
     stylize_button,
     stylize_choice,
@@ -41,7 +42,7 @@ class DeckResearchPanel(wx.Panel):
         on_daily_average: Callable[[], None] | None = None,
         on_load: Callable[[], None] | None = None,
         on_event_type_filter: Callable[[], None] | None = None,
-        on_result_filter: Callable[[], None] | None = None,
+        on_placement_filter: Callable[[], None] | None = None,
         on_player_name_filter: Callable[[], None] | None = None,
         on_date_filter: Callable[[], None] | None = None,
         labels: dict[str, str] | None = None,
@@ -57,7 +58,7 @@ class DeckResearchPanel(wx.Panel):
         self._on_daily_average = on_daily_average
         self._on_load = on_load
         self._on_event_type_filter = on_event_type_filter
-        self._on_result_filter = on_result_filter
+        self._on_placement_filter = on_placement_filter
         self._on_player_name_filter = on_player_name_filter
         self._on_date_filter = on_date_filter
 
@@ -157,25 +158,49 @@ class DeckResearchPanel(wx.Panel):
         event_date_row.Add(self.date_filter, 1, wx.EXPAND)
         sizer.Add(event_date_row, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_MD)
 
-        # Row 3: Result | Player name
+        # Row 3: Placement filter (op + field + value) | Player name
         row3_labels = wx.BoxSizer(wx.HORIZONTAL)
-        result_label = wx.StaticText(self, label=self._labels.get("result", "Result"))
-        stylize_label(result_label, subtle=True)
+        placement_label = wx.StaticText(self, label=self._labels.get("placement", "Placement"))
+        stylize_label(placement_label, subtle=True)
         player_name_label = wx.StaticText(
             self, label=self._labels.get("player_name", "Player name")
         )
         stylize_label(player_name_label, subtle=True)
-        row3_labels.Add(result_label, 1, wx.RIGHT, PADDING_MD)
+        row3_labels.Add(placement_label, 1, wx.RIGHT, PADDING_MD)
         row3_labels.Add(player_name_label, 1)
         sizer.Add(row3_labels, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, PADDING_MD)
 
         row3 = wx.BoxSizer(wx.HORIZONTAL)
-        self.result_filter = wx.TextCtrl(self, style=wx.TE_PROCESS_ENTER)
-        self.result_filter.SetHint(self._labels.get("result_hint", "Result..."))
-        stylize_textctrl(self.result_filter)
-        if self._on_result_filter is not None:
-            self.result_filter.Bind(wx.EVT_TEXT, lambda _evt: self._on_result_filter())  # type: ignore[misc]
-        row3.Add(self.result_filter, 1, wx.EXPAND | wx.RIGHT, PADDING_MD)
+
+        placement_row = wx.BoxSizer(wx.HORIZONTAL)
+        self.placement_op_choice = wx.Choice(self, choices=list(PLACEMENT_OPERATORS))
+        self.placement_op_choice.SetSelection(0)
+        stylize_choice(self.placement_op_choice)
+        if self._on_placement_filter is not None:
+            self.placement_op_choice.Bind(
+                wx.EVT_CHOICE, lambda _evt: self._on_placement_filter()  # type: ignore[misc]
+            )
+        placement_row.Add(self.placement_op_choice, 0, wx.EXPAND | wx.RIGHT, PADDING_MD)
+
+        self.placement_field_choice = wx.Choice(self, choices=list(PLACEMENT_FIELDS))
+        self.placement_field_choice.SetSelection(0)
+        stylize_choice(self.placement_field_choice)
+        if self._on_placement_filter is not None:
+            self.placement_field_choice.Bind(
+                wx.EVT_CHOICE, lambda _evt: self._on_placement_filter()  # type: ignore[misc]
+            )
+        placement_row.Add(self.placement_field_choice, 0, wx.EXPAND | wx.RIGHT, PADDING_MD)
+
+        self.placement_value_filter = wx.TextCtrl(self, style=wx.TE_PROCESS_ENTER)
+        self.placement_value_filter.SetHint(self._labels.get("placement_hint", "value"))
+        stylize_textctrl(self.placement_value_filter)
+        if self._on_placement_filter is not None:
+            self.placement_value_filter.Bind(
+                wx.EVT_TEXT, lambda _evt: self._on_placement_filter()  # type: ignore[misc]
+            )
+        placement_row.Add(self.placement_value_filter, 1, wx.EXPAND)
+
+        row3.Add(placement_row, 1, wx.EXPAND | wx.RIGHT, PADDING_MD)
 
         self.player_name_filter = wx.TextCtrl(self, style=wx.TE_PROCESS_ENTER)
         self.player_name_filter.SetHint(self._labels.get("player_name_hint", "Player name..."))
@@ -258,14 +283,24 @@ class DeckResearchPanel(wx.Panel):
     def reset_event_type_filter(self) -> None:
         self.event_type_choice.SetSelection(0)
 
-    def get_result_filter(self) -> str:
-        return self.result_filter.GetValue().strip().lower()
+    def get_placement_filter(self) -> tuple[str, str, str]:
+        return (
+            self.placement_op_choice.GetStringSelection(),
+            self.placement_field_choice.GetStringSelection(),
+            self.placement_value_filter.GetValue().strip(),
+        )
 
-    def set_result_filter(self, value: str) -> None:
-        self.result_filter.ChangeValue(value)
+    def set_placement_filter(self, op: str, field: str, value: str) -> None:
+        if not self.placement_op_choice.SetStringSelection(op):
+            self.placement_op_choice.SetSelection(0)
+        if not self.placement_field_choice.SetStringSelection(field):
+            self.placement_field_choice.SetSelection(0)
+        self.placement_value_filter.ChangeValue(value)
 
-    def reset_result_filter(self) -> None:
-        self.result_filter.ChangeValue("")
+    def reset_placement_filter(self) -> None:
+        self.placement_op_choice.SetSelection(0)
+        self.placement_field_choice.SetSelection(0)
+        self.placement_value_filter.ChangeValue("")
 
     def get_player_name_filter(self) -> str:
         return self.player_name_filter.GetValue().strip().lower()
