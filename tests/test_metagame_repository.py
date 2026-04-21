@@ -226,7 +226,6 @@ def test_get_decks_returns_stale_cache_when_fetch_fails(
         "repositories.metagame_repository.get_archetype_decks",
         fake_get_decks,
     )
-    monkeypatch.setattr(repo, "_get_mtgo_decks_from_db", lambda *_: [])
 
     result = repo.get_decks_for_archetype({"href": "Modern", "name": "Modern"})
 
@@ -465,7 +464,6 @@ def test_get_decks_recovers_from_corrupt_cache(
     monkeypatch.setattr(
         "repositories.metagame_repository.get_archetype_decks", lambda _href: fresh_decks
     )
-    monkeypatch.setattr(repo, "_get_mtgo_decks_from_db", lambda *_: [])
 
     result = repo.get_decks_for_archetype({"href": "modern-living-end", "name": "Living End"})
 
@@ -484,18 +482,16 @@ def test_parse_deck_date_supports_common_formats():
     assert _parse_deck_date("not a date") == (0, 0, 0)
 
 
-def test_merge_and_sort_decks_is_deterministic(metagame_repo):
-    """Merged decks should sort by date while remaining stable for ties."""
-    mtggoldfish_decks = [
+def test_sort_decks_by_date_is_deterministic(metagame_repo):
+    """Sorted decks should order by date while remaining stable for ties."""
+    decks = [
         {"name": "GF Latest", "date": "2024-03-04", "source": "mtggoldfish"},
         {"name": "GF Old", "date": "03/02/2024", "source": "mtggoldfish"},
-    ]
-    mtgo_decks = [
         {"name": "MTGO Top", "date": "03/05/2024", "source": "mtgo"},
         {"name": "MTGO Tie", "date": "2024-03-04", "source": "mtgo"},
     ]
 
-    result = metagame_repo._merge_and_sort_decks(mtggoldfish_decks, mtgo_decks)
+    result = metagame_repo._sort_decks_by_date(decks)
 
     assert [deck["name"] for deck in result] == [
         "MTGO Top",
@@ -517,23 +513,22 @@ def test_get_decks_respects_source_filters_and_sorting(
         {"name": "GF New", "date": "2024-03-04", "source": "mtggoldfish", "number": "1"},
         {"name": "GF Old", "date": "03/02/2024", "source": "mtggoldfish", "number": "2"},
     ]
-    mtgo_decks = [
+    bundle_mtgo_decks = [
         {"name": "MTGO New", "date": "03/05/2024", "source": "mtgo", "number": "3"},
         {"name": "MTGO Old", "date": "2024-03-01", "source": "mtgo", "number": "4"},
     ]
     archetype = {"href": "test-decks", "name": "Test"}
 
+    # Bundle-hydrated MTGO decks live in the archetype cache alongside MTGGoldfish entries
+    _write_cache(
+        archetype_deck_cache_file,
+        {"test-decks": {"timestamp": time.time(), "items": list(bundle_mtgo_decks)}},
+    )
+
     monkeypatch.setattr(
         "repositories.metagame_repository.get_archetype_decks",
         lambda _href: mtggoldfish_decks,
     )
-
-    def fake_mtgo(_name, source_filter):
-        if source_filter == "mtggoldfish":
-            return []
-        return mtgo_decks
-
-    monkeypatch.setattr(repo, "_get_mtgo_decks_from_db", fake_mtgo)
 
     combined = repo.get_decks_for_archetype(archetype, force_refresh=True)
     assert [deck["name"] for deck in combined] == ["MTGO New", "GF New", "GF Old", "MTGO Old"]
@@ -574,7 +569,6 @@ def test_live_scrape_preserves_bundle_mtgo_decks(
         "repositories.metagame_repository.get_archetype_decks",
         lambda _href: [fresh_gf],
     )
-    monkeypatch.setattr(repo, "_get_mtgo_decks_from_db", lambda *_: [])
 
     result = repo.get_decks_for_archetype(archetype, force_refresh=True)
 
@@ -605,7 +599,6 @@ def test_live_scrape_preserves_only_mtgo_source(
         "repositories.metagame_repository.get_archetype_decks",
         lambda _href: [fresh_gf],
     )
-    monkeypatch.setattr(repo, "_get_mtgo_decks_from_db", lambda *_: [])
 
     result = repo.get_decks_for_archetype(archetype, force_refresh=True)
 
@@ -630,7 +623,6 @@ def test_live_scrape_no_prior_bundle_entries(
         "repositories.metagame_repository.get_archetype_decks",
         lambda _href: [fresh_gf],
     )
-    monkeypatch.setattr(repo, "_get_mtgo_decks_from_db", lambda *_: [])
 
     result = repo.get_decks_for_archetype(archetype, force_refresh=True)
 
@@ -638,9 +630,7 @@ def test_live_scrape_no_prior_bundle_entries(
     assert result[0]["name"] == "GF Fresh"
 
 
-def test_cached_path_returns_bundle_mtgo_decks(
-    archetype_cache_file, archetype_deck_cache_file, monkeypatch
-):
+def test_cached_path_returns_bundle_mtgo_decks(archetype_cache_file, archetype_deck_cache_file):
     """Bundle MTGO decks in the archetype cache are returned on the cache hit path."""
     repo = MetagameRepository(
         archetype_list_cache_file=archetype_cache_file,
@@ -654,7 +644,6 @@ def test_cached_path_returns_bundle_mtgo_decks(
         archetype_deck_cache_file,
         {"test-arch": {"timestamp": time.time(), "items": [gf_deck, bundle_mtgo]}},
     )
-    monkeypatch.setattr(repo, "_get_mtgo_decks_from_db", lambda *_: [])
 
     result = repo.get_decks_for_archetype(archetype)
 
@@ -683,7 +672,6 @@ def test_saved_cache_after_live_scrape_contains_bundle_mtgo(
         "repositories.metagame_repository.get_archetype_decks",
         lambda _href: [fresh_gf],
     )
-    monkeypatch.setattr(repo, "_get_mtgo_decks_from_db", lambda *_: [])
 
     repo.get_decks_for_archetype(archetype, force_refresh=True)
 

@@ -14,7 +14,6 @@ graph TB
         AC[AppController<br/>Central State & Coordination]
         ACH[app_controller_helpers.py]
         SM[SessionManager]
-        MBGH[mtgo_background_helpers.py]
         BDH[bulk_data_helpers.py]
     end
 
@@ -38,7 +37,6 @@ graph TB
         IS[ImageService]
         StS[StoreService]
         RS[RadarService]
-        MBS[MTGOBackgroundService]
         FCPS[FormatCardPoolService]
         DWS[DeckWorkflowService]
         BSC[BundleSnapshotClient]
@@ -65,7 +63,6 @@ graph TB
 
     subgraph "Web Scrapers"
         MTG_GF[mtggoldfish.py]
-        MTGODL[mtgo_decklists.py]
     end
 
     subgraph "External Bridge"
@@ -83,7 +80,6 @@ graph TB
     AC --> AF
     AC --> ACH
     AC --> SM
-    AC --> MBGH
     AC --> BDH
     AF --> DRP
     AF --> DBP
@@ -100,14 +96,12 @@ graph TB
     AC --> IS
     AC --> StS
     AC --> RS
-    AC --> MBS
     DS --> DR
     DS --> CR
     SS --> CR
     SS --> FCPS
     CS --> CR
     RS --> RR
-    MBS --> MR
     FCPS --> FCPR
     CR --> CD
     DR --> DECK
@@ -118,7 +112,6 @@ graph TB
     MR --> BSC
     MR --> RSC
     MTG_GF --> GOLDFISH
-    MTGODL --> MTGO_CLIENT
     CI --> SCRYFALL
     CD --> MTGJSON
     MBC --> BRIDGE
@@ -131,8 +124,8 @@ graph TB
     classDef util fill:#cc99ff,stroke:#333,stroke-width:2px
     classDef external fill:#ffff99,stroke:#333,stroke-width:2px
 
-    class AC,ACH,SM,MBGH,BDH controller
-    class DS,CS,SS,IS,StS,RS,MBS,FCPS,DWS,BSC,RSC service
+    class AC,ACH,SM,BDH controller
+    class DS,CS,SS,IS,StS,RS,FCPS,DWS,BSC,RSC service
     class CR,DR,MR,RR,FCPR repo
     class AF,DRP,DBP,CTP,CIP,SGP,RP,ODS,MH,TA ui
     class CD,CI,AC_CLASS,DECK,MBC,AIO,GP util
@@ -141,7 +134,7 @@ graph TB
 
 ## Layer Responsibilities
 
-**Controllers**: Central coordination and state management via `AppController`. Helper modules (`app_controller_helpers`, `bulk_data_helpers`, `mtgo_background_helpers`, `session_manager`) handle specific subsystems to keep the main controller lean.
+**Controllers**: Central coordination and state management via `AppController`. Helper modules (`app_controller_helpers`, `bulk_data_helpers`, `session_manager`) handle specific subsystems to keep the main controller lean.
 
 **Services**: Business logic. Collection is split into focused sub-modules (`collection_cache`, `collection_parsing`, `collection_ownership`, `collection_deck_analysis`, `collection_stats`, `collection_bridge_refresh`, `collection_exporter`). Radar, format card pool, and deck workflow each have their own service.
 
@@ -151,7 +144,7 @@ graph TB
 
 **Utils**: Card data management (`card_data.py`, `card_images.py`), atomic I/O (`atomic_io.py`), archetype classification, gamelog parsing, mana icon rendering, and search filter helpers.
 
-**Navigators**: `mtggoldfish.py` scrapes metagame data and deck lists. `mtgo_decklists.py` is currently disabled while that feature moves to a service/API.
+**Navigators**: `mtggoldfish.py` scrapes metagame data and deck lists. MTGO.com decklists are consumed from the published metagame bundle rather than scraped live.
 
 **External Bridge**: .NET 9.0 application using MTGOSDK to read collection and match data directly from the running MTGO client.
 

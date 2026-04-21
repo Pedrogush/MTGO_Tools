@@ -23,7 +23,6 @@ if TYPE_CHECKING:
 
 from controllers.app_controller_helpers import AppControllerUIHelpers, UICallbacks
 from controllers.bulk_data_helpers import BulkDataHelpers
-from controllers.mtgo_background_helpers import MtgoBackgroundHelpers
 from controllers.session_manager import DeckSelectorSessionManager
 from repositories.card_repository import get_card_repository
 from repositories.deck_repository import get_deck_repository
@@ -41,7 +40,6 @@ from utils.constants import (
     GUIDE_STORE,
     LOGS_DIR,
     MTGO_BRIDGE_SHUTDOWN_TIMEOUT_SECONDS,
-    MTGO_DECKLISTS_ENABLED,
     NOTES_STORE,
     OUTBOARD_STORE,
     ensure_base_dirs,
@@ -139,15 +137,8 @@ class AppController:
             worker=self._worker,
             frame_provider=lambda: self.frame,
         )
-        self._mtgo_background_helpers = MtgoBackgroundHelpers(worker=self._worker)
 
         self.frame = self.create_frame()
-
-        # Start background MTGO data fetch
-        if MTGO_DECKLISTS_ENABLED:
-            self._mtgo_background_helpers.start_background_fetch()
-        else:
-            logger.info("MTGO decklists disabled; skipping background fetch.")
 
     # ============= Card Data Management =============
 

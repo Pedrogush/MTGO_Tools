@@ -83,7 +83,6 @@ Configuration in `pyproject.toml`.
 │   ├── app_controller.py
 │   ├── app_controller_helpers.py
 │   ├── bulk_data_helpers.py
-│   ├── mtgo_background_helpers.py
 │   └── session_manager.py
 ├── widgets/                        # wxPython UI
 │   ├── app_frame.py                # Main window
@@ -97,7 +96,6 @@ Configuration in `pyproject.toml`.
 │   ├── image_service.py            # Card image caching
 │   ├── radar_service.py            # Radar aggregation
 │   ├── format_card_pool_service.py # Format card pool cache
-│   ├── mtgo_background_service.py  # Background MTGO data fetch
 │   └── store_service.py            # App state persistence
 ├── repositories/                   # Data access
 │   ├── deck_repository.py          # Deck DB + file + state
@@ -106,8 +104,7 @@ Configuration in `pyproject.toml`.
 │   ├── radar_repository.py         # Radar snapshots (SQLite)
 │   └── format_card_pool_repository.py  # Format pools (SQLite)
 ├── navigators/                     # Web scrapers
-│   ├── mtggoldfish.py              # MTGGoldfish metagame + decklists
-│   └── mtgo_decklists.py           # MTGO.com parser (currently disabled)
+│   └── mtggoldfish.py              # MTGGoldfish metagame + decklists
 ├── utils/                          # Shared utilities
 │   ├── card_data.py                # CardDataManager (MTGJson atomic-cards)
 │   ├── card_images.py              # Scryfall bulk image downloader
