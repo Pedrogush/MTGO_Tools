@@ -43,7 +43,13 @@ from utils.constants.formats import (
     MTGO_BACKGROUND_FORMATS,
     ZONE_TITLES,
 )
-from utils.constants.gameplay import FULL_MANA_SYMBOLS, LOREM_MANA
+from utils.constants.gameplay import (
+    FULL_MANA_SYMBOLS,
+    LOREM_MANA,
+    MANA_INPUT_CHARS,
+    MANA_KEY_SYMBOL_MAP,
+    MANA_SYMBOL_PATTERN,
+)
 from utils.constants.images import ATOMIC_DATA_URL
 from utils.constants.paths import (
     ARCHETYPE_CACHE_FILE,
@@ -287,6 +293,9 @@ __all__ = [
     "ZONE_TITLES",
     "FULL_MANA_SYMBOLS",
     "LOREM_MANA",
+    "MANA_INPUT_CHARS",
+    "MANA_KEY_SYMBOL_MAP",
+    "MANA_SYMBOL_PATTERN",
     "ATOMIC_DATA_URL",
     "DEFAULT_SEARCH_LIMIT",
     "DEFAULT_SUGGESTION_LIMIT",
