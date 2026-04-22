@@ -215,7 +215,11 @@ class MetagameRepository:
                 return self._merge_and_sort_decks(mtggoldfish_decks, mtgo_decks)
             raise
 
-    def get_all_cached_decks(self, source_filter: str | None = None) -> list[dict[str, Any]]:
+    def get_all_cached_decks(
+        self,
+        source_filter: str | None = None,
+        mtg_format: str | None = None,
+    ) -> list[dict[str, Any]]:
         if not self.archetype_decks_cache_file.exists():
             return []
         try:
@@ -225,8 +229,15 @@ class MetagameRepository:
         except json.JSONDecodeError as exc:
             logger.warning(f"Cached deck list invalid: {exc}")
             return []
+        # Archetype hrefs (used as cache keys) are prefixed with the format
+        # slug, e.g. "modern-izzet-cauldron", "legacy-affinity-stompy". When a
+        # format is provided, restrict the aggregation to that format so the
+        # "Any" archetype view does not mix decks from every format.
+        format_prefix = f"{mtg_format.lower()}-" if mtg_format else None
         all_decks: list[dict[str, Any]] = []
-        for entry in data.values():
+        for key, entry in data.items():
+            if format_prefix is not None and not key.startswith(format_prefix):
+                continue
             items = entry.get("items", [])
             filtered = self._filter_decks_by_source(items, source_filter)
             all_decks.extend(filtered)

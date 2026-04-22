@@ -250,10 +250,14 @@ class AppController:
 
         on_status("app.status.loading_decks", name=name)
         source_filter = self.get_deck_data_source()
+        mtg_format = self.current_format
 
         def loader(_: None):
             return self.workflow_service.load_decks(
-                scope=scope, source_filter=source_filter, archetype=archetype
+                scope=scope,
+                source_filter=source_filter,
+                archetype=archetype,
+                mtg_format=mtg_format,
             )
 
         def success_handler(decks: list[dict[str, Any]]):

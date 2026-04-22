@@ -204,6 +204,54 @@ def test_load_cached_decks_invalid_json(metagame_repo, archetype_deck_cache_file
     assert metagame_repo._load_cached_decks("url") is None
 
 
+def test_get_all_cached_decks_filters_by_format(metagame_repo, archetype_deck_cache_file):
+    """The 'Any' archetype view must only aggregate decks for the selected format."""
+    _write_cache(
+        archetype_deck_cache_file,
+        {
+            "modern-izzet-cauldron": {
+                "timestamp": time.time(),
+                "items": [{"name": "Izzet Cauldron", "number": "m1", "date": "2026-04-01"}],
+            },
+            "pioneer-rakdos-vampires": {
+                "timestamp": time.time(),
+                "items": [{"name": "Rakdos Vampires", "number": "p1", "date": "2026-04-02"}],
+            },
+            "legacy-beseech-storm": {
+                "timestamp": time.time(),
+                "items": [{"name": "Beseech Storm", "number": "l1", "date": "2026-04-03"}],
+            },
+        },
+    )
+
+    pioneer_decks = metagame_repo.get_all_cached_decks(mtg_format="Pioneer")
+
+    assert [d["number"] for d in pioneer_decks] == ["p1"]
+
+
+def test_get_all_cached_decks_without_format_returns_every_entry(
+    metagame_repo, archetype_deck_cache_file
+):
+    """Omitting mtg_format preserves the legacy 'aggregate everything' behavior."""
+    _write_cache(
+        archetype_deck_cache_file,
+        {
+            "modern-izzet-cauldron": {
+                "timestamp": time.time(),
+                "items": [{"name": "Izzet Cauldron", "number": "m1", "date": "2026-04-01"}],
+            },
+            "legacy-beseech-storm": {
+                "timestamp": time.time(),
+                "items": [{"name": "Beseech Storm", "number": "l1", "date": "2026-04-03"}],
+            },
+        },
+    )
+
+    decks = metagame_repo.get_all_cached_decks()
+
+    assert {d["number"] for d in decks} == {"m1", "l1"}
+
+
 def test_get_decks_returns_stale_cache_when_fetch_fails(
     archetype_cache_file, archetype_deck_cache_file, monkeypatch
 ):

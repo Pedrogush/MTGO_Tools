@@ -187,13 +187,13 @@ class AppEventHandlers:
         self._apply_deck_filters()
 
     def on_result_filter_changed(self: AppFrame) -> None:
-        self._apply_deck_filters()
+        self._schedule_filter_debounce()
 
     def on_player_name_filter_changed(self: AppFrame) -> None:
-        self._apply_deck_filters()
+        self._schedule_filter_debounce()
 
     def on_date_filter_changed(self: AppFrame) -> None:
-        self._apply_deck_filters()
+        self._schedule_filter_debounce()
 
     @staticmethod
     def _classify_event_type(event_str: str) -> str | None:
@@ -356,6 +356,8 @@ class AppEventHandlers:
     def on_close(self: AppFrame, event: wx.CloseEvent) -> None:
         if self._save_timer and self._save_timer.IsRunning():
             self._save_timer.Stop()
+        if self._filter_debounce_timer and self._filter_debounce_timer.IsRunning():
+            self._filter_debounce_timer.Stop()
         self._save_window_settings()
         for attr in ("tracker_window", "timer_window", "history_window"):
             window = getattr(self, attr)
@@ -378,10 +380,10 @@ class AppEventHandlers:
         self.research_panel.enable_controls()
         count = len(self.archetypes)
         self._set_status("app.research.archetypes_loaded", count=count, format=self.current_format)
-        # Auto-load all recent decks on first archetype list arrival
-        if not self._initial_any_load_triggered:
-            self._initial_any_load_triggered = True
-            self._load_decks(scope="all")
+        # populate_archetypes resets the combo selection to "Any" (index 0) via SetSelection,
+        # which does not fire EVT_COMBOBOX. Load decks for the current selection explicitly so
+        # the list reflects the newly loaded format on startup and on every format change.
+        self._load_decks(scope="all")
 
     def _on_archetypes_error(self: AppFrame, error: Exception) -> None:
         with self._loading_lock:

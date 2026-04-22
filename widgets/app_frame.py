@@ -85,6 +85,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
         self.root_panel: wx.Panel | None = None
 
         self._save_timer: wx.Timer | None = None
+        self._filter_debounce_timer: wx.Timer | None = None
         self.mana_icons = ManaIconFactory()
         self.tracker_window: MTGOpponentDeckSpy | None = None
         self.timer_window: TimerAlertFrame | None = None
@@ -96,7 +97,6 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
         self._pending_hover: tuple[str, dict[str, Any]] | None = None
         self._pending_deck_restore: bool = False
         self._is_first_deck_load: bool = True
-        self._initial_any_load_triggered: bool = False
         self._all_loaded_decks: list[dict[str, Any]] = []
 
         self._build_ui()
@@ -713,6 +713,17 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
 
     def _flush_pending_settings(self, _event: wx.TimerEvent) -> None:
         self._save_window_settings()
+
+    def _schedule_filter_debounce(self) -> None:
+        if self._filter_debounce_timer is None:
+            self._filter_debounce_timer = wx.Timer(self)
+            self.Bind(wx.EVT_TIMER, self._flush_deck_filters, self._filter_debounce_timer)
+        if self._filter_debounce_timer.IsRunning():
+            self._filter_debounce_timer.Stop()
+        self._filter_debounce_timer.StartOnce(250)
+
+    def _flush_deck_filters(self, _event: wx.TimerEvent) -> None:
+        self._apply_deck_filters()
 
     def fetch_archetypes(self, force: bool = False) -> None:
         self.research_panel.set_loading_state()
