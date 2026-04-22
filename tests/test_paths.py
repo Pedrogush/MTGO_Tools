@@ -111,7 +111,7 @@ def test_default_base_dir_resolves_wsl_gitdir_on_windows(tmp_path, monkeypatch):
     drive = tmp_path.drive  # e.g. "C:" on Windows, "" on Linux
     if drive:
         wsl_prefix = f"/mnt/{drive[0].lower()}"
-        wsl_gitdir = wsl_prefix + str(gitdir)[len(drive):].replace("\\", "/")
+        wsl_gitdir = wsl_prefix + str(gitdir)[len(drive) :].replace("\\", "/")
     else:
         # On non-Windows test hosts, fabricate a WSL path that maps back to tmp_path's posix form.
         wsl_gitdir = "/mnt/c" + str(gitdir)
