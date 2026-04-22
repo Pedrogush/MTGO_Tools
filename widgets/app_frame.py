@@ -35,6 +35,7 @@ from widgets.handlers.card_table_panel_handler import CardTablePanelHandler
 from widgets.handlers.sideboard_guide_handlers import SideboardGuideHandlers
 from widgets.identify_opponent import MTGOpponentDeckSpy
 from widgets.mana_keyboard import ManaKeyboardFrame, open_mana_keyboard
+from widgets.mana_rich_text_ctrl import ManaSymbolRichCtrl
 from widgets.match_history import MatchHistoryFrame
 from widgets.metagame_analysis import MetagameAnalysisFrame
 from widgets.panels.card_inspector_panel import CardInspectorPanel
@@ -45,7 +46,6 @@ from widgets.panels.deck_research_panel import DeckResearchPanel
 from widgets.panels.deck_stats_panel import DeckStatsPanel
 from widgets.panels.radar_panel import RadarDialog
 from widgets.panels.sideboard_guide_panel import SideboardGuidePanel
-from widgets.mana_rich_text_ctrl_2 import ManaSymbolRichCtrl
 from widgets.timer_alert import TimerAlertFrame
 from widgets.top_cards import TopCardsFrame
 

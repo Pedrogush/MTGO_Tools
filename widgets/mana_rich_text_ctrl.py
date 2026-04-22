@@ -1,16 +1,24 @@
-"""Mana-symbol-aware RichTextCtrl used by mana-cost and oracle-text fields.
+"""Mana-symbol-aware RichTextCtrl with inline mana-symbol images.
 
-Renders `{W}`, `{R/G}`, `{2/W}` etc. as inline images while keeping the
-brace-notation string as the canonical value returned by `GetValue()`.
+A TextCtrl-compatible control that renders `{W}`, `{R/G}`, `{2/W}` etc.
+as inline images while keeping the brace-notation string as the
+canonical value returned by `GetValue()`.
 
-Input modes (mutually exclusive):
-  mana_key_input    — every keystroke is intercepted; single letters and
-                      two-key chords resolve to mana symbols (mana-cost box).
-  ctrl_m_mana_mode  — typing behaves like a regular text field until the user
-                      presses Ctrl+M, which toggles the mana_key_input flow
-                      on/off (oracle-text search: mostly words, occasional
-                      symbols).
-Passing neither yields a plain display control with Ctrl+C → plain text.
+The placeholder hint is a separate `wx.StaticText` overlay rather than
+text written into the rich-text buffer. Writing the hint into the buffer
+(with a grey character style) leaves residue that contaminates later
+typed characters — the overlay approach keeps the buffer's style
+pristine so typed text always renders in the single persistent dark
+style set once in __init__.
+
+Input modes (mutually exclusive, optional):
+  mana_key_input    — every key is captured; single letters and two-key
+                      chords resolve to mana symbols (mana-cost box).
+  ctrl_m_mana_mode  — regular text entry until Ctrl+M toggles into the
+                      mana_key_input flow (oracle-text search).
+
+Without either flag the control is a read-through display whose Ctrl+C
+copies the canonical plain-text value rather than the RTF placeholder.
 """
 
 from __future__ import annotations
@@ -40,7 +48,7 @@ class ManaSymbolRichCtrl(wx.richtext.RichTextCtrl):
     def __init__(
         self,
         parent: wx.Window,
-        mana_icons: "ManaIconFactory",
+        mana_icons: ManaIconFactory,
         *,
         readonly: bool = False,
         multiline: bool = True,
@@ -57,17 +65,25 @@ class ManaSymbolRichCtrl(wx.richtext.RichTextCtrl):
         self._symbol_list: list[str] = []
         self._padded_image_cache: dict[tuple[str, int, tuple[int, int, int]], wx.Image] = {}
 
-        # _held_keys is idempotent under key auto-repeat (set membership);
-        # _sequence_keys accumulates across the whole chord so a key released
-        # before its partner still contributes to the final symbol.
+        # _held_keys: idempotent under key auto-repeat; _chord_keys:
+        # accumulates across the whole chord so a key released before its
+        # partner still contributes to the final symbol.
         self._held_keys: set[str] = set()
-        self._sequence_keys: set[str] = set()
-        self._mana_mode_active: bool = False
+        self._chord_keys: set[str] = set()
+        self._mana_mode_active = False
 
-        self._hint: str = ""
-        self._showing_hint: bool = False
+        font = wx.SystemSettings.GetFont(wx.SYS_DEFAULT_GUI_FONT)
+        self.SetFont(font)
+        self.SetBackgroundColour(wx.Colour(*DARK_ALT))
 
-        self.SetFont(wx.SystemSettings.GetFont(wx.SYS_DEFAULT_GUI_FONT))
+        # Install the sole persistent buffer style. Never mutated again,
+        # so nothing the control ever writes can leak a foreign colour
+        # onto typed characters.
+        persistent_style = wx.richtext.RichTextAttr()
+        persistent_style.SetTextColour(wx.Colour(*LIGHT_TEXT))
+        persistent_style.SetBackgroundColour(wx.Colour(*DARK_ALT))
+        self.SetBasicStyle(persistent_style)
+        self.SetDefaultStyle(persistent_style)
 
         if not multiline:
             ref = wx.TextCtrl(parent)
@@ -75,8 +91,16 @@ class ManaSymbolRichCtrl(wx.richtext.RichTextCtrl):
             ref.Destroy()
             self.SetMinSize(wx.Size(-1, ref_h))
 
-        self.Clear()
-        self._apply_default_style()
+        # Hint overlay. Positioned over the rich-text area, never written
+        # into the buffer. We leave auto-resize on so SetLabel expands the
+        # control to fit the text, and skip SetBackgroundColour (some
+        # backends ignore it on StaticText — the RTC's own DARK_ALT bg
+        # shows through instead).
+        self._hint_label = wx.StaticText(self, label="")
+        self._hint_label.SetFont(font)
+        self._hint_label.SetForegroundColour(wx.Colour(*HINT_TEXT))
+        self._hint_label.Hide()
+        self._hint_label.Bind(wx.EVT_LEFT_DOWN, self._on_hint_click)
 
         if mana_key_input and not readonly:
             self.Bind(wx.EVT_KEY_DOWN, self._on_mana_key_down)
@@ -89,6 +113,14 @@ class ManaSymbolRichCtrl(wx.richtext.RichTextCtrl):
 
         self.Bind(wx.EVT_SET_FOCUS, self._on_focus_gained)
         self.Bind(wx.EVT_KILL_FOCUS, self._on_focus_lost)
+        # The control frequently has no size yet when SetHint is called
+        # (parent sizer has not laid out). Re-sync on every size event so
+        # the first real layout pass shows the hint.
+        self.Bind(wx.EVT_SIZE, self._on_size)
+
+    # ------------------------------------------------------------------
+    # Public TextCtrl-compatible API
+    # ------------------------------------------------------------------
 
     def GetValue(self) -> str:  # type: ignore[override]
         return self._plain_text
@@ -103,81 +135,68 @@ class ManaSymbolRichCtrl(wx.richtext.RichTextCtrl):
         self._emit_text_event()
 
     def SetHint(self, hint: str) -> None:  # type: ignore[override]
-        self._hint = hint
-        if not self._plain_text and not self.HasFocus():
-            self._show_hint()
+        self._hint_label.SetLabel(hint)
+        # Defer to after the current event cycle so focus races and the
+        # initial layout pass have a chance to settle before we decide
+        # whether to show.
+        wx.CallAfter(self._sync_hint_visibility)
 
-    def _show_hint(self) -> None:
-        if not self._hint or self._showing_hint:
-            return
-        self._showing_hint = True
-        self.Freeze()
-        try:
-            self.Clear()
-            self._apply_default_style()
-            start = self.GetInsertionPoint()
-            self.WriteText(self._hint)
-            end = self.GetInsertionPoint()
-            hint_attr = wx.richtext.RichTextAttr()
-            hint_attr.SetTextColour(wx.Colour(*HINT_TEXT))
-            hint_attr.SetBackgroundColour(DARK_ALT)
-            self.SetStyle(wx.richtext.RichTextRange(start, end), hint_attr)
-            self.SetInsertionPoint(0)
-        finally:
-            self.Thaw()
+    # ------------------------------------------------------------------
+    # Hint overlay management
+    # ------------------------------------------------------------------
 
-    def _hide_hint(self) -> None:
-        if self._showing_hint:
-            self._rerender()
+    def _has_content(self) -> bool:
+        # Covers both mana-mode symbols (tracked in _plain_text) and any
+        # native typing that lands in the RichTextCtrl buffer directly
+        # (ctrl_m mode when not in mana mode).
+        return bool(self._plain_text) or self.GetLastPosition() > 0
+
+    def _sync_hint_visibility(self) -> None:
+        show = bool(self._hint_label.GetLabel()) and not self._has_content() and not self.HasFocus()
+        if show:
+            inset = wx.Point(self.FromDIP(3), self.FromDIP(2))
+            self._hint_label.SetPosition(inset)
+            self._hint_label.Show()
+            self._hint_label.Raise()
+        else:
+            self._hint_label.Hide()
+
+    def _on_hint_click(self, _evt: wx.MouseEvent) -> None:
+        # Forward the click-to-focus intent; StaticText does not receive
+        # keyboard focus on its own.
+        self.SetFocus()
 
     def _on_focus_gained(self, evt: wx.FocusEvent) -> None:
-        self._hide_hint()
+        self._hint_label.Hide()
         evt.Skip()
 
     def _on_focus_lost(self, evt: wx.FocusEvent) -> None:
-        if not self._plain_text:
-            self._show_hint()
         evt.Skip()
+        # HasFocus() may still reflect the pre-transfer state during the
+        # EVT_KILL_FOCUS callback; defer so the check sees reality.
+        wx.CallAfter(self._sync_hint_visibility)
 
-    def _left_indent_mm10(self) -> int:
-        dpi_x = self.FromDIP(96)
-        return round(2 * 254 / dpi_x) if dpi_x > 0 else 0
+    def _on_size(self, evt: wx.SizeEvent) -> None:
+        evt.Skip()
+        self._sync_hint_visibility()
 
-    def _apply_default_style(self) -> None:
-        """Install the sole persistent style (light text on DARK_ALT).
-
-        Hint text gets its grey colour from an inline BeginStyle/EndStyle
-        wrapper around WriteText; the basic/default style stays dark so
-        typed characters never inherit the hint colour.
-        """
-        self.SetBackgroundColour(DARK_ALT)
-        attr = wx.richtext.RichTextAttr()
-        attr.SetTextColour(LIGHT_TEXT)
-        attr.SetBackgroundColour(DARK_ALT)
-        attr.SetLeftIndent(self._left_indent_mm10())
-        self.SetDefaultStyle(attr)
-        self.SetBasicStyle(attr)
+    # ------------------------------------------------------------------
+    # Buffer rendering
+    # ------------------------------------------------------------------
 
     def _rerender(self) -> None:
-        self._showing_hint = False
         self.Freeze()
         try:
             self.Clear()
-            self._apply_default_style()
             self._symbol_list = []
             if self._plain_text:
-                self._render_text(self._plain_text)
+                self._render_plain_text(self._plain_text)
             self.SetInsertionPointEnd()
-            # Re-assert the default style after positioning the caret.
-            # wxRichTextCtrl's default-typing handler picks the character
-            # attributes at the current cursor position; without this the
-            # first inserted character can inherit whatever run style was
-            # at position 0 before Clear (notably the hint grey).
-            self._apply_default_style()
         finally:
             self.Thaw()
+        self._sync_hint_visibility()
 
-    def _render_text(self, text: str) -> None:
+    def _render_plain_text(self, text: str) -> None:
         pos = 0
         for m in MANA_SYMBOL_PATTERN.finditer(text):
             if m.start() > pos:
@@ -214,14 +233,22 @@ class ManaSymbolRichCtrl(wx.richtext.RichTextCtrl):
         self._symbol_list.append(symbol)
 
     def _symbol_height(self) -> int:
-        ch = self.GetCharHeight()
-        return max(16, ch - 2)
+        return max(16, self.GetCharHeight() - 2)
 
     def _emit_text_event(self) -> None:
         evt = wx.CommandEvent(wx.wxEVT_TEXT, self.GetId())
         evt.SetString(self._plain_text)
         evt.SetEventObject(self)
         self.GetEventHandler().ProcessEvent(evt)
+
+    def _copy_plain_text(self) -> None:
+        if wx.TheClipboard.Open():
+            wx.TheClipboard.SetData(wx.TextDataObject(self._plain_text))
+            wx.TheClipboard.Close()
+
+    # ------------------------------------------------------------------
+    # Key handling
+    # ------------------------------------------------------------------
 
     def _on_mana_key_down(self, evt: wx.KeyEvent) -> None:
         kc = evt.GetKeyCode()
@@ -238,9 +265,10 @@ class ManaSymbolRichCtrl(wx.richtext.RichTextCtrl):
             return
 
         if kc == wx.WXK_DELETE:
-            self._plain_text = ""
-            self._rerender()
-            self._emit_text_event()
+            if self._plain_text:
+                self._plain_text = ""
+                self._rerender()
+                self._emit_text_event()
             return
 
         if evt.ControlDown():
@@ -257,18 +285,20 @@ class ManaSymbolRichCtrl(wx.richtext.RichTextCtrl):
         ch = key_char(evt)
         if ch and ch in MANA_INPUT_CHARS:
             self._held_keys.add(ch)
-            self._sequence_keys.add(ch)
+            self._chord_keys.add(ch)
             return
+        # Any other printable key is swallowed — a mana-cost box cannot
+        # hold arbitrary text.
 
     def _on_mana_key_up(self, evt: wx.KeyEvent) -> None:
         ch = key_char(evt)
         if ch:
             self._held_keys.discard(ch)
 
-        if not self._held_keys and self._sequence_keys:
-            seq = frozenset(self._sequence_keys)
-            self._sequence_keys.clear()
-            symbol = MANA_KEY_SYMBOL_MAP.get(seq)
+        if not self._held_keys and self._chord_keys:
+            chord = frozenset(self._chord_keys)
+            self._chord_keys.clear()
+            symbol = MANA_KEY_SYMBOL_MAP.get(chord)
             if symbol:
                 self._plain_text += f"{{{symbol}}}"
                 self._rerender()
@@ -281,7 +311,7 @@ class ManaSymbolRichCtrl(wx.richtext.RichTextCtrl):
         if kc == ord("M") and evt.ControlDown():
             self._mana_mode_active = not self._mana_mode_active
             self._held_keys.clear()
-            self._sequence_keys.clear()
+            self._chord_keys.clear()
             return
 
         if self._mana_mode_active:
@@ -305,8 +335,3 @@ class ManaSymbolRichCtrl(wx.richtext.RichTextCtrl):
             self._copy_plain_text()
             return
         evt.Skip()
-
-    def _copy_plain_text(self) -> None:
-        if wx.TheClipboard.Open():
-            wx.TheClipboard.SetData(wx.TextDataObject(self._plain_text))
-            wx.TheClipboard.Close()

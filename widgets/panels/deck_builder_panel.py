@@ -32,7 +32,7 @@ from utils.stylize import (
     stylize_textctrl,
 )
 from widgets.buttons.mana_button import create_mana_button
-from widgets.mana_rich_text_ctrl_2 import ManaSymbolRichCtrl
+from widgets.mana_rich_text_ctrl import ManaSymbolRichCtrl
 
 
 class _SearchResultsView(wx.ListCtrl):
