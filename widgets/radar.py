@@ -1,15 +1,24 @@
 """
-Radar Panel - Displays archetype card frequency analysis.
+Radar widget - Archetype card frequency analysis window.
 
-Shows mainboard and sideboard card frequencies with inclusion rates and expected copies.
+Contains both the inner RadarPanel (used here and in CompactRadarPanel callers)
+and RadarFrame, the standalone window the user opens via the toolbar or by
+selecting an archetype in the research panel.
 """
+
+# ruff: noqa: E402
 
 from __future__ import annotations
 
+import sys
 import threading
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
+
+_project_root = Path(__file__).resolve().parent.parent
+if str(_project_root) not in sys.path:
+    sys.path.insert(0, str(_project_root))
 
 import wx
 import wx.dataview as dv
@@ -242,21 +251,24 @@ class RadarPanel(wx.Panel):
             self.on_use_for_search(self.current_radar)
 
 
-class RadarDialog(wx.Dialog):
-    """Dialog for generating and viewing archetype radars."""
+class RadarFrame(wx.Frame):
+    """Standalone window for generating and viewing archetype radars."""
 
     def __init__(
         self,
-        parent: wx.Window,
-        metagame_repo,
-        format_name: str,
+        parent: wx.Window | None = None,
+        metagame_repo: Any = None,
+        format_name: str = "",
         radar_service: RadarService | None = None,
+        on_use_for_search: Callable[[RadarData], None] | None = None,
         locale: str | None = None,
     ):
+        style = wx.DEFAULT_FRAME_STYLE | wx.STAY_ON_TOP
         super().__init__(
             parent,
-            title=f"Archetype Radar - {format_name}",
+            title=translate(locale, "window.title.radar", format=format_name),
             size=(900, 700),
+            style=style,
         )
         self.SetBackgroundColour(DARK_PANEL)
         self._locale = locale
@@ -264,6 +276,7 @@ class RadarDialog(wx.Dialog):
         self.metagame_repo = metagame_repo
         self.format_name = format_name
         self.radar_service = radar_service or get_radar_service()
+        self._on_use_for_search_cb = on_use_for_search
         self.archetypes: list[dict[str, Any]] = []
         self.current_radar: RadarData | None = None
         self.worker_thread: threading.Thread | None = None
@@ -271,47 +284,50 @@ class RadarDialog(wx.Dialog):
 
         self._build_ui()
         self._load_archetypes()
+        self.Centre(wx.BOTH)
 
     def _t(self, key: str, **kwargs: object) -> str:
         return translate(self._locale, key, **kwargs)
 
     def _build_ui(self) -> None:
+        panel = wx.Panel(self)
+        panel.SetBackgroundColour(DARK_PANEL)
         sizer = wx.BoxSizer(wx.VERTICAL)
-        self.SetSizer(sizer)
+        panel.SetSizer(sizer)
 
         # Archetype selection
         selection_sizer = wx.BoxSizer(wx.HORIZONTAL)
         sizer.Add(selection_sizer, 0, wx.EXPAND | wx.ALL, 10)
 
-        label = wx.StaticText(self, label=self._t("radar.dialog.select_archetype"))
+        label = wx.StaticText(panel, label=self._t("radar.dialog.select_archetype"))
         label.SetForegroundColour(LIGHT_TEXT)
         selection_sizer.Add(label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 6)
 
-        self.archetype_choice = wx.Choice(self)
+        self.archetype_choice = wx.Choice(panel)
         self.archetype_choice.SetBackgroundColour(DARK_ALT)
         self.archetype_choice.SetForegroundColour(LIGHT_TEXT)
         selection_sizer.Add(self.archetype_choice, 1, wx.RIGHT, 6)
 
-        self.generate_btn = wx.Button(self, label=self._t("radar.dialog.generate"))
+        self.generate_btn = wx.Button(panel, label=self._t("radar.dialog.generate"))
         self.generate_btn.Bind(wx.EVT_BUTTON, self._on_generate_clicked)
         selection_sizer.Add(self.generate_btn, 0, wx.RIGHT, 6)
 
-        self.cancel_btn = wx.Button(self, label=self._t("radar.btn.cancel"))
+        self.cancel_btn = wx.Button(panel, label=self._t("radar.btn.cancel"))
         self.cancel_btn.Bind(wx.EVT_BUTTON, self._on_cancel_clicked)
         self.cancel_btn.Enable(False)
         selection_sizer.Add(self.cancel_btn, 0)
 
         # Progress gauge
-        self.progress = wx.Gauge(self, range=100)
+        self.progress = wx.Gauge(panel, range=100)
         sizer.Add(self.progress, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 10)
 
-        self.progress_label = wx.StaticText(self, label="")
+        self.progress_label = wx.StaticText(panel, label="")
         self.progress_label.SetForegroundColour(LIGHT_TEXT)
         sizer.Add(self.progress_label, 0, wx.ALL, 10)
 
         # Radar panel
         self.radar_panel = RadarPanel(
-            self,
+            panel,
             radar_service=self.radar_service,
             on_export=self._export_radar,
             on_use_for_search=self._use_radar_for_search,
@@ -319,10 +335,7 @@ class RadarDialog(wx.Dialog):
         )
         sizer.Add(self.radar_panel, 1, wx.EXPAND | wx.ALL, 10)
 
-        # Close button
-        close_btn = wx.Button(self, wx.ID_CLOSE, self._t("radar.btn.close"))
-        close_btn.Bind(wx.EVT_BUTTON, self._on_close)
-        sizer.Add(close_btn, 0, wx.ALIGN_RIGHT | wx.ALL, 10)
+        self.Bind(wx.EVT_CLOSE, self._on_close)
 
     def _load_archetypes(self) -> None:
         try:
@@ -336,14 +349,32 @@ class RadarDialog(wx.Dialog):
         except Exception as exc:
             logger.exception(f"Failed to load archetypes: {exc}")
 
+    # ============= Public API =============
+
+    def generate_for_archetype(self, archetype_name: str) -> bool:
+        """Select the named archetype in the choice widget and start generation.
+
+        Returns True if the archetype was found and generation was started.
+        """
+        for idx, arch in enumerate(self.archetypes):
+            if arch.get("name") == archetype_name:
+                self.archetype_choice.SetSelection(idx)
+                self._start_generation(arch)
+                return True
+        logger.debug(f"Archetype '{archetype_name}' not found for radar generation")
+        return False
+
+    # ============= Private Methods =============
+
     def _on_generate_clicked(self, event: wx.Event) -> None:
         selection = self.archetype_choice.GetSelection()
         if selection == wx.NOT_FOUND:
             logger.error("No archetype selected for radar generation")
             return
 
-        archetype = self.archetypes[selection]
+        self._start_generation(self.archetypes[selection])
 
+    def _start_generation(self, archetype: dict[str, Any]) -> None:
         # Update UI state
         self.generate_btn.Enable(False)
         self.cancel_btn.Enable(True)
@@ -452,32 +483,27 @@ class RadarDialog(wx.Dialog):
 
     def _use_radar_for_search(self, radar: RadarData) -> None:
         logger.info("Radar used as search filter")
-        if self.IsModal():
-            self.EndModal(wx.ID_OK)
-        else:
-            self.Close()
+        if self._on_use_for_search_cb:
+            self._on_use_for_search_cb(radar)
 
     def get_current_radar(self) -> RadarData | None:
         return self.current_radar
 
-    def _on_close(self, event: wx.Event) -> None:
+    def _on_close(self, event: wx.CloseEvent) -> None:
         # If worker is running, request cancellation
         if self.worker_thread and self.worker_thread.is_alive():
             response = wx.MessageBox(
                 "Radar generation is in progress. Are you sure you want to close?",
-                "Close Dialog",
+                "Close Radar",
                 wx.YES_NO | wx.ICON_QUESTION,
             )
             if response == wx.NO:
+                event.Veto()
                 return
 
-            # Cancel the worker
+            # Cancel the worker and give it a moment to clean up
             self.cancel_requested = True
-            # Give it a moment to clean up
             if self.worker_thread:
                 self.worker_thread.join(timeout=2.0)
 
-        if self.IsModal():
-            self.EndModal(wx.ID_OK)
-        else:
-            self.Close()
+        event.Skip()
