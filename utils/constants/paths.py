@@ -3,10 +3,54 @@
 from __future__ import annotations
 
 import os
+import re
 import sys
 from pathlib import Path
 
 BASE_DATA_DIR_ENV_VAR = "MTGO_TOOLS_BASE_DATA_DIR"
+
+# Matches a WSL mount path like "/mnt/c" or "/mnt/c/foo/bar".
+_WSL_MOUNT_RE = re.compile(r"^/mnt/([a-zA-Z])(?:/(.*))?$")
+# Matches a Windows drive path like "C:\foo\bar" or "C:/foo/bar".
+_WINDOWS_DRIVE_RE = re.compile(r"^([a-zA-Z]):[\\/](.*)$")
+
+
+def _running_under_wsl() -> bool:
+    if sys.platform != "linux":
+        return False
+    if os.environ.get("WSL_DISTRO_NAME") or os.environ.get("WSL_INTEROP"):
+        return True
+    try:
+        with open("/proc/version", encoding="utf-8") as f:
+            return "microsoft" in f.read().lower()
+    except OSError:
+        return False
+
+
+def _translate_worktree_path(raw: str) -> str:
+    """Bridge path styles between WSL and Windows in .git worktree pointers.
+
+    Git worktree markers are plain text pointing at the primary repo's
+    ``.git/worktrees/<name>``. A worktree created by WSL git encodes the path
+    as ``/mnt/<drive>/…``; Windows git encodes it as ``<drive>:\\…``. When the
+    process reading the pointer runs on the other OS, the raw string can't be
+    interpreted as an absolute path and silently resolves to the wrong place
+    (e.g. ``C:\\mnt\\c\\…`` on Windows), so the caller has to translate.
+    """
+    if os.name == "nt":
+        match = _WSL_MOUNT_RE.match(raw)
+        if match:
+            drive = match.group(1).upper()
+            rest = match.group(2) or ""
+            rest = rest.replace("/", "\\")
+            return f"{drive}:\\{rest}" if rest else f"{drive}:\\"
+    elif _running_under_wsl():
+        match = _WINDOWS_DRIVE_RE.match(raw)
+        if match:
+            drive = match.group(1).lower()
+            rest = match.group(2).replace("\\", "/")
+            return f"/mnt/{drive}/{rest}" if rest else f"/mnt/{drive}"
+    return raw
 
 
 def _resolved_env_base_dir() -> Path | None:
@@ -45,7 +89,9 @@ def _resolve_gitdir(worktree_git_marker: Path) -> Path | None:
     prefix = "gitdir:"
     if not content.startswith(prefix):
         return None
-    gitdir = Path(content[len(prefix) :].strip()).expanduser()
+    raw = content[len(prefix) :].strip()
+    raw = _translate_worktree_path(raw)
+    gitdir = Path(raw).expanduser()
     if not gitdir.is_absolute():
         gitdir = worktree_git_marker.parent / gitdir
     return gitdir.resolve()
