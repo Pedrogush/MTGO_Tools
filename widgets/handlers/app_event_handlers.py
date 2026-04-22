@@ -18,6 +18,7 @@ from widgets.dialogs.feedback_dialog import show_feedback_dialog
 from widgets.identify_opponent import MTGOpponentDeckSpy
 from widgets.match_history import MatchHistoryFrame
 from widgets.metagame_analysis import MetagameAnalysisFrame
+from widgets.radar import RadarFrame
 from widgets.timer_alert import TimerAlertFrame
 from widgets.top_cards import TopCardsFrame
 
@@ -182,6 +183,7 @@ class AppEventHandlers:
             return
         archetype = self.filtered_archetypes[idx - 1]
         self._load_decks(scope="archetype", archetype=archetype)
+        self._load_radar_in_background(archetype)
 
     def on_event_type_filter_changed(self: AppFrame) -> None:
         self._apply_deck_filters()
@@ -190,10 +192,10 @@ class AppEventHandlers:
         self._apply_deck_filters()
 
     def on_player_name_filter_changed(self: AppFrame) -> None:
-        self._apply_deck_filters()
+        self._schedule_filter_debounce()
 
     def on_date_filter_changed(self: AppFrame) -> None:
-        self._apply_deck_filters()
+        self._schedule_filter_debounce()
 
     @staticmethod
     def _classify_event_type(event_str: str) -> str | None:
@@ -364,8 +366,17 @@ class AppEventHandlers:
     def on_close(self: AppFrame, event: wx.CloseEvent) -> None:
         if self._save_timer and self._save_timer.IsRunning():
             self._save_timer.Stop()
+        if self._filter_debounce_timer and self._filter_debounce_timer.IsRunning():
+            self._filter_debounce_timer.Stop()
         self._save_window_settings()
-        for attr in ("tracker_window", "timer_window", "history_window"):
+        for attr in (
+            "tracker_window",
+            "timer_window",
+            "history_window",
+            "metagame_window",
+            "top_cards_window",
+            "radar_window",
+        ):
             window = getattr(self, attr)
             if widget_exists(window):
                 window.Destroy()
@@ -386,9 +397,11 @@ class AppEventHandlers:
         self.research_panel.enable_controls()
         count = len(self.archetypes)
         self._set_status("app.research.archetypes_loaded", count=count, format=self.current_format)
-        # Archetype dropdown resets to "Any" whenever the list reloads, so the
-        # deck list must reload too — otherwise it shows stale results from the
-        # previous format.
+        # populate_archetypes resets the combo selection to "Any" (index 0) via
+        # SetSelection, which does not fire EVT_COMBOBOX. Load decks explicitly
+        # so the list reflects the newly loaded format on startup and on every
+        # format change — otherwise it shows stale results from the previous
+        # format.
         self._load_decks(scope="all")
 
     def _on_archetypes_error(self: AppFrame, error: Exception) -> None:
@@ -583,6 +596,7 @@ class AppEventHandlers:
         if idx is None:
             if self.card_inspector_panel.active_zone is None:
                 self.card_inspector_panel.reset()
+                self.oracle_text_ctrl.ChangeValue("")
             return
         meta = self.builder_panel.get_result_at_index(idx)
         if not meta:
@@ -590,6 +604,8 @@ class AppEventHandlers:
         self._clear_zone_selections()
         faux_card = {"name": meta.get("name", "Unknown"), "qty": 1}
         self.card_inspector_panel.update_card(faux_card, zone=None, meta=meta)
+        oracle_text = meta.get("oracle_text") if meta is not None else None
+        self.oracle_text_ctrl.ChangeValue(oracle_text or "")
 
     def _on_daily_average_success(self, deck_text: str) -> None:
         self.daily_average_button.Enable()
@@ -700,6 +716,47 @@ class AppEventHandlers:
             self._handle_child_close,
             locale=self.locale,
         )
+
+    def open_radar(self, archetype_name: str | None = None) -> RadarFrame | None:
+        window = open_child_window(
+            self,
+            "radar_window",
+            RadarFrame,
+            "Radar",
+            self._handle_child_close,
+            metagame_repo=self.controller.metagame_repo,
+            format_name=self.current_format,
+            on_use_for_search=self._on_radar_use_for_search,
+            locale=self.locale,
+        )
+        if window and archetype_name:
+            window.generate_for_archetype(archetype_name)
+        return window
+
+    def _on_radar_use_for_search(self: AppFrame, radar) -> None:
+        if self.builder_panel:
+            self.builder_panel.set_active_radar(radar)
+        self._show_left_panel("builder")
+
+    def _load_radar_in_background(self: AppFrame, archetype: dict[str, Any]) -> None:
+        from services.radar_service import get_radar_service
+
+        radar_service = get_radar_service()
+        format_name = self.current_format
+
+        def worker() -> None:
+            try:
+                radar = radar_service.calculate_radar(archetype, format_name)
+            except Exception as exc:
+                logger.exception(f"Background radar load failed: {exc}")
+                return
+            wx.CallAfter(self._apply_background_radar, radar)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _apply_background_radar(self: AppFrame, radar) -> None:
+        if self.builder_panel:
+            self.builder_panel.set_active_radar(radar)
 
     def _open_feedback_dialog(self) -> None:
         show_feedback_dialog(

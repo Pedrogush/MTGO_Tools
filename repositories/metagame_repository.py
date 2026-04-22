@@ -219,7 +219,7 @@ class MetagameRepository:
     def get_all_cached_decks(
         self,
         source_filter: str | None = None,
-        format_filter: str | None = None,
+        mtg_format: str | None = None,
     ) -> list[dict[str, Any]]:
         if not self.archetype_decks_cache_file.exists():
             return []
@@ -230,14 +230,15 @@ class MetagameRepository:
         except json.JSONDecodeError as exc:
             logger.warning(f"Cached deck list invalid: {exc}")
             return []
-        format_key = format_filter.lower() if format_filter else None
-        # Match the format as a whole word anywhere in the event string so paper
-        # scrapes like "4 Torneio Super Modern" or "Charlotte Legacy League" are
-        # classified correctly alongside MTGGoldfish's "Modern Challenge …".
+        format_key = mtg_format.lower() if mtg_format else None
+        # Archetype hrefs (used as cache keys) are prefixed with the format
+        # slug, e.g. "modern-izzet-cauldron". Match the format as a whole word
+        # anywhere in the event string too, so paper scrapes like "4 Torneio
+        # Super Modern" or "Charlotte Legacy League" (whose slugs predate
+        # format prefixing — "amulet-titan", "tron") are classified correctly
+        # alongside MTGGoldfish's "Modern Challenge …".
         event_format_re = (
-            re.compile(rf"\b{re.escape(format_key)}\b", re.IGNORECASE)
-            if format_key
-            else None
+            re.compile(rf"\b{re.escape(format_key)}\b", re.IGNORECASE) if format_key else None
         )
         all_decks: list[dict[str, Any]] = []
         for slug, entry in data.items():
@@ -247,7 +248,8 @@ class MetagameRepository:
                 items = [
                     deck
                     for deck in items
-                    if slug_matches or (event_format_re and event_format_re.search(deck.get("event", "")))
+                    if slug_matches
+                    or (event_format_re and event_format_re.search(deck.get("event", "")))
                 ]
             filtered = self._filter_decks_by_source(items, source_filter)
             all_decks.extend(filtered)

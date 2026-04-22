@@ -11,6 +11,7 @@ from loguru import logger
 from controllers.app_controller import get_deck_selector_controller
 from utils.constants import BASE_DATA_DIR, LOGS_DIR, ensure_base_dirs
 from utils.logging_config import configure_logging
+from utils.runtime_flags import set_automation_enabled
 from widgets.splash_frame import LoadingFrame
 
 # Global flag for automation mode
@@ -115,6 +116,7 @@ def main() -> None:
     args = parse_args()
     _automation_enabled = args.automation
     _automation_port = args.automation_port
+    set_automation_enabled(_automation_enabled)
 
     ensure_base_dirs()
     log_file = configure_logging(LOGS_DIR)

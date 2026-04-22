@@ -34,6 +34,44 @@ def test_deck_selector_loads_archetypes_and_mainboard_stats(
 
 
 @pytest.mark.usefixtures("wx_app")
+def test_format_change_reloads_decks_with_any_selected(
+    deck_selector_factory,
+):
+    """Switching formats while "Any" is selected must reload the decklists.
+
+    Regression test: previously, the auto-load of "Any" decks was gated by a
+    `_initial_any_load_triggered` flag that only fired once per session, so a
+    format change populated the archetype list but left the deck list empty.
+    """
+    frame = deck_selector_factory()
+    try:
+        load_decks_calls: list[dict[str, object]] = []
+        original_load_decks = frame._load_decks
+
+        def recording_load_decks(**kwargs):
+            load_decks_calls.append(kwargs)
+            return original_load_decks(**kwargs)
+
+        frame._load_decks = recording_load_decks  # type: ignore[assignment]
+
+        frame.fetch_archetypes()
+        pump_ui_events(wx.GetApp())
+        assert frame.research_panel.archetype_list.GetSelection() == 0  # "Any"
+        assert load_decks_calls == [{"scope": "all"}]
+
+        # Simulate the user picking a different format while "Any" is still selected.
+        frame.research_panel.format_choice.SetStringSelection("Legacy")
+        frame.on_format_changed()
+        pump_ui_events(wx.GetApp())
+
+        assert frame.current_format == "Legacy"
+        # A second "all" load must fire so decklists refresh for the new format.
+        assert load_decks_calls == [{"scope": "all"}, {"scope": "all"}]
+    finally:
+        frame.Destroy()
+
+
+@pytest.mark.usefixtures("wx_app")
 def test_present_deck_text_updates_ui_without_download_io(
     deck_selector_factory,
 ):

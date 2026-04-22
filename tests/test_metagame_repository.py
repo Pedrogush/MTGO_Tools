@@ -204,6 +204,54 @@ def test_load_cached_decks_invalid_json(metagame_repo, archetype_deck_cache_file
     assert metagame_repo._load_cached_decks("url") is None
 
 
+def test_get_all_cached_decks_filters_by_format(metagame_repo, archetype_deck_cache_file):
+    """The 'Any' archetype view must only aggregate decks for the selected format."""
+    _write_cache(
+        archetype_deck_cache_file,
+        {
+            "modern-izzet-cauldron": {
+                "timestamp": time.time(),
+                "items": [{"name": "Izzet Cauldron", "number": "m1", "date": "2026-04-01"}],
+            },
+            "pioneer-rakdos-vampires": {
+                "timestamp": time.time(),
+                "items": [{"name": "Rakdos Vampires", "number": "p1", "date": "2026-04-02"}],
+            },
+            "legacy-beseech-storm": {
+                "timestamp": time.time(),
+                "items": [{"name": "Beseech Storm", "number": "l1", "date": "2026-04-03"}],
+            },
+        },
+    )
+
+    pioneer_decks = metagame_repo.get_all_cached_decks(mtg_format="Pioneer")
+
+    assert [d["number"] for d in pioneer_decks] == ["p1"]
+
+
+def test_get_all_cached_decks_without_format_returns_every_entry(
+    metagame_repo, archetype_deck_cache_file
+):
+    """Omitting mtg_format preserves the legacy 'aggregate everything' behavior."""
+    _write_cache(
+        archetype_deck_cache_file,
+        {
+            "modern-izzet-cauldron": {
+                "timestamp": time.time(),
+                "items": [{"name": "Izzet Cauldron", "number": "m1", "date": "2026-04-01"}],
+            },
+            "legacy-beseech-storm": {
+                "timestamp": time.time(),
+                "items": [{"name": "Beseech Storm", "number": "l1", "date": "2026-04-03"}],
+            },
+        },
+    )
+
+    decks = metagame_repo.get_all_cached_decks()
+
+    assert {d["number"] for d in decks} == {"m1", "l1"}
+
+
 def test_get_decks_returns_stale_cache_when_fetch_fails(
     archetype_cache_file, archetype_deck_cache_file, monkeypatch
 ):
@@ -911,7 +959,7 @@ def test_get_all_cached_decks_format_filter_matches_slug_prefix(
             "pioneer-boros": {"items": [{"event": "Pioneer Challenge", "number": "p1"}]},
         },
     )
-    result = metagame_repo.get_all_cached_decks(format_filter="Modern")
+    result = metagame_repo.get_all_cached_decks(mtg_format="Modern")
     assert [d["number"] for d in result] == ["m1"]
 
 
@@ -927,8 +975,8 @@ def test_get_all_cached_decks_format_filter_matches_event_for_unprefixed_slug(
             "tron": {"items": [{"event": "Legacy League 2026-04-22", "number": "l1"}]},
         },
     )
-    modern = metagame_repo.get_all_cached_decks(format_filter="Modern")
-    legacy = metagame_repo.get_all_cached_decks(format_filter="Legacy")
+    modern = metagame_repo.get_all_cached_decks(mtg_format="Modern")
+    legacy = metagame_repo.get_all_cached_decks(mtg_format="Legacy")
     assert [d["number"] for d in modern] == ["m1"]
     assert [d["number"] for d in legacy] == ["l1"]
 
@@ -940,9 +988,5 @@ def test_get_all_cached_decks_format_filter_is_case_insensitive(
         archetype_deck_cache_file,
         {"modern-tron": {"items": [{"event": "Modern Challenge", "number": "m1"}]}},
     )
-    assert [d["number"] for d in metagame_repo.get_all_cached_decks(format_filter="modern")] == [
-        "m1"
-    ]
-    assert [d["number"] for d in metagame_repo.get_all_cached_decks(format_filter="MODERN")] == [
-        "m1"
-    ]
+    assert [d["number"] for d in metagame_repo.get_all_cached_decks(mtg_format="modern")] == ["m1"]
+    assert [d["number"] for d in metagame_repo.get_all_cached_decks(mtg_format="MODERN")] == ["m1"]

@@ -203,7 +203,6 @@ class DeckBuilderPanel(wx.Panel):
         on_search: Callable[[], None],
         on_clear: Callable[[], None],
         on_result_selected: Callable[[int | None], None],
-        on_open_radar_dialog: Callable[[], RadarData | None] | None = None,
         on_add_to_main: Callable[[str], None] | None = None,
         on_add_to_side: Callable[[str], None] | None = None,
         on_add_to_active_zone: Callable[[str], None] | None = None,
@@ -221,7 +220,6 @@ class DeckBuilderPanel(wx.Panel):
         self._on_search_callback = on_search
         self._on_clear_callback = on_clear
         self._on_result_selected_callback = on_result_selected
-        self._on_open_radar_dialog = on_open_radar_dialog
         self._on_add_to_main = on_add_to_main
         self._on_add_to_side = on_add_to_side
         self._on_add_to_active_zone = on_add_to_active_zone
@@ -530,13 +528,6 @@ class DeckBuilderPanel(wx.Panel):
         self.radar_zone_choice.Bind(wx.EVT_CHOICE, self._on_radar_zone_changed)
         controls.Add(self.radar_zone_choice, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, PADDING_MD)
 
-        # Open Radar button
-        self.open_radar_btn = wx.Button(self, label=self._t("builder.radar.open"))
-        stylize_button(self.open_radar_btn)
-        self.open_radar_btn.SetToolTip("Open a radar to filter cards by archetype frequency")
-        self.open_radar_btn.Bind(wx.EVT_BUTTON, self._on_open_radar)
-        controls.Add(self.open_radar_btn, 0)
-
         controls.AddStretchSpacer(1)
         sizer.Add(controls, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_MD)
 
@@ -824,7 +815,7 @@ class DeckBuilderPanel(wx.Panel):
 
         if self.radar_enabled and not self.active_radar:
             wx.MessageBox(
-                "Please open a radar using the 'Open Radar...' button.",
+                "Please open a radar using the 'Radar' button in the toolbar.",
                 "No Radar Loaded",
                 wx.OK | wx.ICON_INFORMATION,
             )
@@ -838,12 +829,6 @@ class DeckBuilderPanel(wx.Panel):
         zone_map = {0: "both", 1: "mainboard", 2: "sideboard"}
         self.radar_zone = zone_map.get(selection, "both")
         self._schedule_search()
-
-    def _on_open_radar(self, event: wx.Event) -> None:
-        if self._on_open_radar_dialog:
-            radar = self._on_open_radar_dialog()
-            if radar:
-                self.set_active_radar(radar)
 
     def set_active_radar(self, radar: RadarData) -> None:
         self.active_radar = radar

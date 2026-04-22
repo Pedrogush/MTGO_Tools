@@ -26,6 +26,7 @@ from utils.constants import (
 )
 from utils.i18n import LOCALE_LABELS, SUPPORTED_LOCALES, translate
 from utils.mana_icon_factory import ManaIconFactory
+from utils.runtime_flags import is_automation_enabled
 from widgets.buttons.toolbar_buttons import ToolbarButtons
 from widgets.dialogs.help_dialog import show_help
 from widgets.dialogs.image_download_dialog import show_image_download_dialog
@@ -43,8 +44,8 @@ from widgets.panels.deck_builder_panel import DeckBuilderPanel
 from widgets.panels.deck_notes_panel import DeckNotesPanel
 from widgets.panels.deck_research_panel import DeckResearchPanel
 from widgets.panels.deck_stats_panel import DeckStatsPanel
-from widgets.panels.radar_panel import RadarDialog
 from widgets.panels.sideboard_guide_panel import SideboardGuidePanel
+from widgets.radar import RadarFrame
 from widgets.timer_alert import TimerAlertFrame
 from widgets.top_cards import TopCardsFrame
 
@@ -85,12 +86,14 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
         self.root_panel: wx.Panel | None = None
 
         self._save_timer: wx.Timer | None = None
+        self._filter_debounce_timer: wx.Timer | None = None
         self.mana_icons = ManaIconFactory()
         self.tracker_window: MTGOpponentDeckSpy | None = None
         self.timer_window: TimerAlertFrame | None = None
         self.history_window: MatchHistoryFrame | None = None
         self.metagame_window: MetagameAnalysisFrame | None = None
         self.top_cards_window: TopCardsFrame | None = None
+        self.radar_window: RadarFrame | None = None
         self.mana_keyboard_window: ManaKeyboardFrame | None = None
         self._inspector_hover_timer: wx.Timer | None = None
         self._pending_hover: tuple[str, dict[str, Any]] | None = None
@@ -197,7 +200,6 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
             on_search=self._on_builder_search,
             on_clear=self._on_builder_clear,
             on_result_selected=self._on_builder_result_selected,
-            on_open_radar_dialog=self._open_radar_dialog,
             on_add_to_main=lambda name: self._handle_zone_delta("main", name, 1),
             on_add_to_side=lambda name: self._handle_zone_delta("side", name, 1),
             on_add_to_active_zone=self._add_search_card_to_active_zone,
@@ -264,6 +266,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
             on_open_match_history=self.open_match_history,
             on_open_metagame_analysis=self.open_metagame_analysis,
             on_open_top_cards=self.open_top_cards,
+            on_open_radar=self.open_radar,
             on_open_settings_menu=self._open_toolbar_settings_menu,
             labels={
                 "opponent_tracker": self._t("toolbar.opponent_tracker"),
@@ -271,6 +274,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
                 "match_history": self._t("toolbar.match_history"),
                 "metagame_analysis": self._t("toolbar.metagame_analysis"),
                 "top_cards": self._t("toolbar.top_cards"),
+                "radar": self._t("toolbar.radar"),
                 "settings": "\u2699",
                 "settings_tooltip": self._t("toolbar.settings"),
                 "opponent_tracker_tooltip": self._t("toolbar.tooltip.opponent_tracker"),
@@ -278,6 +282,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
                 "match_history_tooltip": self._t("toolbar.tooltip.match_history"),
                 "metagame_analysis_tooltip": self._t("toolbar.tooltip.metagame_analysis"),
                 "top_cards_tooltip": self._t("toolbar.tooltip.top_cards"),
+                "radar_tooltip": self._t("toolbar.tooltip.radar"),
             },
         )
 
@@ -597,22 +602,6 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
             self, self.mana_icons, self.mana_keyboard_window, self._on_mana_keyboard_closed
         )
 
-    def _open_radar_dialog(self):
-        dialog = RadarDialog(
-            parent=self,
-            metagame_repo=self.controller.metagame_repo,
-            format_name=self.current_format,
-            locale=self.locale,
-        )
-
-        if dialog.ShowModal() == wx.ID_OK:
-            radar = dialog.get_current_radar()
-            dialog.Destroy()
-            return radar
-
-        dialog.Destroy()
-        return None
-
     def _open_tutorial(self) -> None:
         show_tutorial(self, locale=self.locale)
         self.controller.session_manager.mark_tutorial_shown()
@@ -622,7 +611,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
 
     def _restore_session_state(self) -> None:
         state = self.controller.session_manager.restore_session_state(self.controller.zone_cards)
-        if not self.controller.session_manager.is_tutorial_shown():
+        if not self.controller.session_manager.is_tutorial_shown() and not is_automation_enabled():
             wx.CallAfter(self._open_tutorial)
 
         # Restore left panel mode
@@ -713,6 +702,17 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
 
     def _flush_pending_settings(self, _event: wx.TimerEvent) -> None:
         self._save_window_settings()
+
+    def _schedule_filter_debounce(self) -> None:
+        if self._filter_debounce_timer is None:
+            self._filter_debounce_timer = wx.Timer(self)
+            self.Bind(wx.EVT_TIMER, self._flush_deck_filters, self._filter_debounce_timer)
+        if self._filter_debounce_timer.IsRunning():
+            self._filter_debounce_timer.Stop()
+        self._filter_debounce_timer.StartOnce(250)
+
+    def _flush_deck_filters(self, _event: wx.TimerEvent) -> None:
+        self._apply_deck_filters()
 
     def fetch_archetypes(self, force: bool = False) -> None:
         self.research_panel.set_loading_state()
