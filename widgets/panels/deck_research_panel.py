@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 
 import wx
+import wx.adv
 import wx.html
 
 from utils.constants import (
@@ -21,6 +22,36 @@ from utils.stylize import (
 )
 from widgets.buttons.deck_action_buttons import DeckActionButtons
 from widgets.deck_results_list import DeckResultsList
+
+
+class _CenteredChoice(wx.adv.OwnerDrawnComboBox):
+    """Read-only combo box that center-aligns text and fits its width to its widest item."""
+
+    # Room for the native dropdown button + internal text margins on either side.
+    _BUTTON_AND_PADDING_PX = 36
+
+    def __init__(self, parent: wx.Window, choices: list[str]) -> None:
+        super().__init__(parent, choices=choices, style=wx.CB_READONLY)
+        self._fit_to_widest_choice(choices)
+
+    def _fit_to_widest_choice(self, choices: list[str]) -> None:
+        if not choices:
+            return
+        dc = wx.ClientDC(self)
+        dc.SetFont(self.GetFont())
+        max_text_w = max(dc.GetTextExtent(c)[0] for c in choices)
+        width = max_text_w + self._BUTTON_AND_PADDING_PX
+        self.SetMinSize(wx.Size(width, -1))
+        self.SetInitialSize(wx.Size(width, -1))
+
+    def OnDrawItem(self, dc: wx.DC, rect: wx.Rect, item: int, flags: int) -> None:  # noqa: N802
+        if item == wx.NOT_FOUND:
+            return
+        text = self.GetString(item)
+        tw, th = dc.GetTextExtent(text)
+        x = rect.x + (rect.width - tw) // 2
+        y = rect.y + (rect.height - th) // 2
+        dc.DrawText(text, x, y)
 
 
 class DeckResearchPanel(wx.Panel):
@@ -173,31 +204,23 @@ class DeckResearchPanel(wx.Panel):
         row3 = wx.BoxSizer(wx.HORIZONTAL)
 
         placement_row = wx.BoxSizer(wx.HORIZONTAL)
-        self.placement_op_choice = wx.Choice(self, choices=list(PLACEMENT_OPERATORS))
+        self.placement_op_choice = _CenteredChoice(self, choices=list(PLACEMENT_OPERATORS))
         self.placement_op_choice.SetSelection(0)
         stylize_choice(self.placement_op_choice)
         if self._on_placement_filter is not None:
             self.placement_op_choice.Bind(
-                wx.EVT_CHOICE, lambda _evt: self._on_placement_filter()  # type: ignore[misc]
+                wx.EVT_COMBOBOX, lambda _evt: self._on_placement_filter()  # type: ignore[misc]
             )
-        op_cell = wx.BoxSizer(wx.HORIZONTAL)
-        op_cell.AddStretchSpacer(1)
-        op_cell.Add(self.placement_op_choice, 0, wx.ALIGN_CENTER_VERTICAL)
-        op_cell.AddStretchSpacer(1)
-        placement_row.Add(op_cell, 1, wx.EXPAND | wx.RIGHT, PADDING_MD)
+        placement_row.Add(self.placement_op_choice, 0, wx.EXPAND | wx.RIGHT, PADDING_MD)
 
-        self.placement_field_choice = wx.Choice(self, choices=list(PLACEMENT_FIELDS))
+        self.placement_field_choice = _CenteredChoice(self, choices=list(PLACEMENT_FIELDS))
         self.placement_field_choice.SetSelection(0)
         stylize_choice(self.placement_field_choice)
         if self._on_placement_filter is not None:
             self.placement_field_choice.Bind(
-                wx.EVT_CHOICE, lambda _evt: self._on_placement_filter()  # type: ignore[misc]
+                wx.EVT_COMBOBOX, lambda _evt: self._on_placement_filter()  # type: ignore[misc]
             )
-        field_cell = wx.BoxSizer(wx.HORIZONTAL)
-        field_cell.AddStretchSpacer(1)
-        field_cell.Add(self.placement_field_choice, 0, wx.ALIGN_CENTER_VERTICAL)
-        field_cell.AddStretchSpacer(1)
-        placement_row.Add(field_cell, 1, wx.EXPAND | wx.RIGHT, PADDING_MD)
+        placement_row.Add(self.placement_field_choice, 0, wx.EXPAND | wx.RIGHT, PADDING_MD)
 
         self.placement_value_filter = wx.TextCtrl(self, style=wx.TE_PROCESS_ENTER)
         self.placement_value_filter.SetHint(self._labels.get("placement_hint", "value"))

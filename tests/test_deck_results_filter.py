@@ -220,10 +220,8 @@ def test_placement_filter_gt_placement_reads_as_better_than():
 
 
 def test_placement_filter_ge_placement_reads_as_at_least_as_good():
-    # Placement ">= 8" reads as "at least as good as 8th" (numerically <= 8).
-    result = filter_decks(
-        DECKS, placement_op=">=", placement_field="Placement", placement_value="8"
-    )
+    # Placement "≥ 8" reads as "at least as good as 8th" (numerically <= 8).
+    result = filter_decks(DECKS, placement_op="≥", placement_field="Placement", placement_value="8")
     placements = sorted(d["result"] for d in result)
     assert placements == ["1st", "2nd", "7th", "Top 8"]
 
@@ -236,10 +234,8 @@ def test_placement_filter_lt_placement_reads_as_worse_than():
 
 
 def test_placement_filter_le_placement_reads_as_at_least_as_bad():
-    # Placement "<= 8" reads as "at least as bad as 8th" (numerically >= 8).
-    result = filter_decks(
-        DECKS, placement_op="<=", placement_field="Placement", placement_value="8"
-    )
+    # Placement "≤ 8" reads as "at least as bad as 8th" (numerically >= 8).
+    result = filter_decks(DECKS, placement_op="≤", placement_field="Placement", placement_value="8")
     placements = [d["result"] for d in result]
     assert placements == ["Top 8"]
 
@@ -252,15 +248,15 @@ def test_placement_filter_gt_wins_4():
 
 
 def test_placement_filter_ge_wins_4():
-    # Wins >= 4 → 5-0 and 4-1
-    result = filter_decks(DECKS, placement_op=">=", placement_field="Wins", placement_value="4")
+    # Wins ≥ 4 → 5-0 and 4-1
+    result = filter_decks(DECKS, placement_op="≥", placement_field="Wins", placement_value="4")
     results = sorted(d["result"] for d in result)
     assert results == ["4-1", "5-0"]
 
 
 def test_placement_filter_excludes_decks_without_parseable_value():
     # Wins filter excludes "1st", "2nd", "Top 8", "7th", "Winner"
-    result = filter_decks(DECKS, placement_op=">=", placement_field="Wins", placement_value="0")
+    result = filter_decks(DECKS, placement_op="≥", placement_field="Wins", placement_value="0")
     assert len(result) == 2  # Only 5-0 and 4-1 have wins data
 
 

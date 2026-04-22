@@ -8,13 +8,13 @@ from collections.abc import Callable
 from typing import Any
 
 PLACEMENT_OP_NONE = "-"
-PLACEMENT_OPERATORS: tuple[str, ...] = (PLACEMENT_OP_NONE, ">", ">=", "<=", "<", "=")
+PLACEMENT_OPERATORS: tuple[str, ...] = (PLACEMENT_OP_NONE, ">", "≥", "≤", "<", "=")
 PLACEMENT_FIELDS: tuple[str, ...] = ("Placement", "Wins")
 
 _OPERATOR_FUNCS: dict[str, Callable[[int, int], bool]] = {
     ">": _op.gt,
-    ">=": _op.ge,
-    "<=": _op.le,
+    "≥": _op.ge,
+    "≤": _op.le,
     "<": _op.lt,
     "=": _op.eq,
 }
@@ -23,8 +23,8 @@ _OPERATOR_FUNCS: dict[str, Callable[[int, int], bool]] = {
 # "did better than 8th" (1st–7th), so flip comparator direction for that field.
 _INVERTED_OPERATORS: dict[str, str] = {
     ">": "<",
-    ">=": "<=",
-    "<=": ">=",
+    "≥": "≤",
+    "≤": "≥",
     "<": ">",
     "=": "=",
 }
