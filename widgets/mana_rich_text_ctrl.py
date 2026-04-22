@@ -115,12 +115,13 @@ class ManaSymbolRichCtrl(wx.richtext.RichTextCtrl):
         try:
             self.Clear()
             self._apply_default_style()
+            start = self.GetInsertionPoint()
+            self.WriteText(self._hint)
+            end = self.GetInsertionPoint()
             hint_attr = wx.richtext.RichTextAttr()
             hint_attr.SetTextColour(wx.Colour(*HINT_TEXT))
             hint_attr.SetBackgroundColour(DARK_ALT)
-            self.BeginStyle(hint_attr)
-            self.WriteText(self._hint)
-            self.EndStyle()
+            self.SetStyle(wx.richtext.RichTextRange(start, end), hint_attr)
             self.SetInsertionPoint(0)
         finally:
             self.Thaw()
@@ -167,6 +168,12 @@ class ManaSymbolRichCtrl(wx.richtext.RichTextCtrl):
             if self._plain_text:
                 self._render_text(self._plain_text)
             self.SetInsertionPointEnd()
+            # Re-assert the default style after positioning the caret.
+            # wxRichTextCtrl's default-typing handler picks the character
+            # attributes at the current cursor position; without this the
+            # first inserted character can inherit whatever run style was
+            # at position 0 before Clear (notably the hint grey).
+            self._apply_default_style()
         finally:
             self.Thaw()
 
