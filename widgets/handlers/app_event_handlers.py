@@ -183,7 +183,7 @@ class AppEventHandlers:
             return
         archetype = self.filtered_archetypes[idx - 1]
         self._load_decks(scope="archetype", archetype=archetype)
-        self.open_radar(archetype_name=archetype.get("name"))
+        self._load_radar_in_background(archetype)
 
     def on_event_type_filter_changed(self: AppFrame) -> None:
         self._apply_deck_filters()
@@ -724,6 +724,26 @@ class AppEventHandlers:
         if self.builder_panel:
             self.builder_panel.set_active_radar(radar)
         self._show_left_panel("builder")
+
+    def _load_radar_in_background(self: AppFrame, archetype: dict[str, Any]) -> None:
+        from services.radar_service import get_radar_service
+
+        radar_service = get_radar_service()
+        format_name = self.current_format
+
+        def worker() -> None:
+            try:
+                radar = radar_service.calculate_radar(archetype, format_name)
+            except Exception as exc:
+                logger.exception(f"Background radar load failed: {exc}")
+                return
+            wx.CallAfter(self._apply_background_radar, radar)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _apply_background_radar(self: AppFrame, radar) -> None:
+        if self.builder_panel:
+            self.builder_panel.set_active_radar(radar)
 
     def _open_feedback_dialog(self) -> None:
         show_feedback_dialog(
