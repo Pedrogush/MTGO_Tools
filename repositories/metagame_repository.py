@@ -28,7 +28,6 @@ from utils.constants import (
     ARCHETYPE_DECKS_CACHE_FILE,
     ARCHETYPE_LIST_CACHE_FILE,
     METAGAME_CACHE_TTL_SECONDS,
-    MTGO_DECKLISTS_ENABLED,
     REMOTE_SNAPSHOTS_ENABLED,
 )
 
@@ -187,9 +186,7 @@ class MetagameRepository:
             cached = self._load_cached_decks(archetype_href)
             if cached is not None:
                 logger.debug(f"Using cached decks for {archetype_name}")
-                mtggoldfish_decks = self._filter_decks_by_source(cached, source_filter)
-                mtgo_decks = self._get_mtgo_decks_from_db(archetype_name, source_filter)
-                return self._merge_and_sort_decks(mtggoldfish_decks, mtgo_decks)
+                return self._sort_decks_by_date(self._filter_decks_by_source(cached, source_filter))
 
         # Fetch fresh data
         logger.info(f"Fetching fresh decks for {archetype_name}")
@@ -202,18 +199,14 @@ class MetagameRepository:
             bundle_mtgo = [d for d in existing if d.get("source") == "mtgo"]
             merged = decks + bundle_mtgo
             self._save_cached_decks(archetype_href, merged)
-            filtered = self._filter_decks_by_source(merged, source_filter)
-            mtgo_decks = self._get_mtgo_decks_from_db(archetype_name, source_filter)
-            return self._merge_and_sort_decks(filtered, mtgo_decks)
+            return self._sort_decks_by_date(self._filter_decks_by_source(merged, source_filter))
         except Exception as exc:
             logger.error(f"Failed to fetch decks for {archetype_name}: {exc}")
             # Try to return stale cache if available
             cached = self._load_cached_decks(archetype_href, max_age=None)
             if cached:
                 logger.warning(f"Returning stale cached decks for {archetype_name}")
-                mtggoldfish_decks = self._filter_decks_by_source(cached, source_filter)
-                mtgo_decks = self._get_mtgo_decks_from_db(archetype_name, source_filter)
-                return self._merge_and_sort_decks(mtggoldfish_decks, mtgo_decks)
+                return self._sort_decks_by_date(self._filter_decks_by_source(cached, source_filter))
             raise
 
     def get_all_cached_decks(
@@ -436,38 +429,8 @@ class MetagameRepository:
 
         return [deck for deck in decks if deck.get("source") == source_filter]
 
-    def _get_mtgo_decks_from_db(
-        self, archetype_name: str, source_filter: str | None
-    ) -> list[dict[str, Any]]:
-        if not MTGO_DECKLISTS_ENABLED:
-            logger.info("MTGO decklists disabled; skipping MTGO deck lookup.")
-            return []
-
-        if source_filter == "mtggoldfish":
-            return []
-
-        try:
-            from services.mtgo_background_service import load_mtgo_deck_metadata
-
-            mtgo_decks = []
-            for fmt in ("modern", "standard", "pioneer", "legacy"):
-                decks = load_mtgo_deck_metadata(archetype_name, fmt)
-                mtgo_decks.extend(decks)
-
-            logger.debug(f"Retrieved {len(mtgo_decks)} MTGO decks from cache for {archetype_name}")
-            return mtgo_decks
-
-        except Exception as exc:
-            logger.warning(f"Failed to retrieve MTGO decks from cache: {exc}")
-            return []
-
-    def _merge_and_sort_decks(
-        self, mtggoldfish_decks: list[dict[str, Any]], mtgo_decks: list[dict[str, Any]]
-    ) -> list[dict[str, Any]]:
-        all_decks = mtggoldfish_decks + mtgo_decks
-
-        all_decks.sort(key=lambda d: _parse_deck_date(d.get("date", "")), reverse=True)
-        return all_decks
+    def _sort_decks_by_date(self, decks: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        return sorted(decks, key=lambda d: _parse_deck_date(d.get("date", "")), reverse=True)
 
     def clear_cache(self) -> None:
         for cache_file in [self.archetype_list_cache_file, self.archetype_decks_cache_file]:

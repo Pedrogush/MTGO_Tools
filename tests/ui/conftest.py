@@ -104,7 +104,6 @@ def ui_environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         "ARCHETYPE_CACHE_FILE": cache / "archetype_cache.json",
         "ARCHETYPE_LIST_CACHE_FILE": cache / "archetype_list.json",
         "MTGO_ARTICLES_CACHE_FILE": cache / "mtgo_articles.json",
-        "MTGO_DECK_CACHE_FILE": cache / "mtgo_decks.json",
         "DECK_TEXT_CACHE_FILE": cache / "deck_text_cache.json",
         "ARCHETYPE_DECKS_CACHE_FILE": cache / "archetype_decks_cache.json",
         "DECK_CACHE_FILE": cache / "deck_cache.json",
