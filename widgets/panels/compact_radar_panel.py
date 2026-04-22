@@ -92,11 +92,10 @@ class CompactRadarPanel(wx.Panel):
 
     def clear(self) -> None:
         self.current_radar = None
-        self.header_label.SetLabel("Radar: Loading...")
-        self.status_label.SetLabel("")
+        self.header_label.SetLabel("Radar: —")
+        self.status_label.SetLabel("Waiting for opponent\u2026")
         self.card_list.Clear()
         self.view_toggle_btn.Hide()
-        self.Hide()
         self.GetParent().Layout()
 
     def set_loading(self, message: str = "Loading radar data...") -> None:
