@@ -98,7 +98,6 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
         self._is_first_deck_load: bool = True
         self._initial_any_load_triggered: bool = False
         self._all_loaded_decks: list[dict[str, Any]] = []
-        self._any_scope: bool = False
 
         self._build_ui()
         self._apply_window_preferences()
