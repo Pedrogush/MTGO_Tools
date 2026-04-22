@@ -29,6 +29,7 @@ import wx
 import wx.richtext
 
 from utils.constants import (
+    DARK_ACCENT,
     DARK_ALT,
     HINT_TEXT,
     LIGHT_TEXT,
@@ -102,6 +103,12 @@ class ManaSymbolRichCtrl(wx.richtext.RichTextCtrl):
         self._hint_label.Hide()
         self._hint_label.Bind(wx.EVT_LEFT_DOWN, self._on_hint_click)
 
+        # Blue accent line shown along the bottom edge while focused, to
+        # mirror the native themed TextCtrl's focus indicator.
+        self._focus_line = wx.Panel(self, size=(-1, self.FromDIP(2)))
+        self._focus_line.SetBackgroundColour(wx.Colour(*DARK_ACCENT))
+        self._focus_line.Hide()
+
         if mana_key_input and not readonly:
             self.Bind(wx.EVT_KEY_DOWN, self._on_mana_key_down)
             self.Bind(wx.EVT_KEY_UP, self._on_mana_key_up)
@@ -139,7 +146,7 @@ class ManaSymbolRichCtrl(wx.richtext.RichTextCtrl):
         # Defer to after the current event cycle so focus races and the
         # initial layout pass have a chance to settle before we decide
         # whether to show.
-        wx.CallAfter(self._sync_hint_visibility)
+        wx.CallAfter(self._sync_overlays)
 
     # ------------------------------------------------------------------
     # Hint overlay management
@@ -161,24 +168,38 @@ class ManaSymbolRichCtrl(wx.richtext.RichTextCtrl):
         else:
             self._hint_label.Hide()
 
+    def _sync_focus_line(self) -> None:
+        if self.HasFocus():
+            size = self.GetClientSize()
+            line_h = self.FromDIP(2)
+            self._focus_line.SetSize(0, size.height - line_h, size.width, line_h)
+            self._focus_line.Show()
+            self._focus_line.Raise()
+        else:
+            self._focus_line.Hide()
+
+    def _sync_overlays(self) -> None:
+        self._sync_hint_visibility()
+        self._sync_focus_line()
+
     def _on_hint_click(self, _evt: wx.MouseEvent) -> None:
         # Forward the click-to-focus intent; StaticText does not receive
         # keyboard focus on its own.
         self.SetFocus()
 
     def _on_focus_gained(self, evt: wx.FocusEvent) -> None:
-        self._hint_label.Hide()
         evt.Skip()
+        self._sync_overlays()
 
     def _on_focus_lost(self, evt: wx.FocusEvent) -> None:
         evt.Skip()
         # HasFocus() may still reflect the pre-transfer state during the
         # EVT_KILL_FOCUS callback; defer so the check sees reality.
-        wx.CallAfter(self._sync_hint_visibility)
+        wx.CallAfter(self._sync_overlays)
 
     def _on_size(self, evt: wx.SizeEvent) -> None:
         evt.Skip()
-        self._sync_hint_visibility()
+        self._sync_overlays()
 
     # ------------------------------------------------------------------
     # Buffer rendering
@@ -194,7 +215,7 @@ class ManaSymbolRichCtrl(wx.richtext.RichTextCtrl):
             self.SetInsertionPointEnd()
         finally:
             self.Thaw()
-        self._sync_hint_visibility()
+        self._sync_overlays()
 
     def _render_plain_text(self, text: str) -> None:
         pos = 0
