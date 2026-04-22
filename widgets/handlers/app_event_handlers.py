@@ -222,6 +222,8 @@ class AppEventHandlers:
             player_query=player_query,
             date_query=date_query,
         )
+        if getattr(self, "_any_scope", False):
+            filtered = filtered[:100]
         self.controller.deck_repo.set_decks_list(filtered)
         self.deck_list.Clear()
         if not filtered:
@@ -403,8 +405,11 @@ class AppEventHandlers:
     def _on_decks_loaded(self: AppFrame, archetype_name: str, decks: list[dict[str, Any]]) -> None:
         with self._loading_lock:
             self.loading_decks = False
-        if archetype_name == "Any":
-            decks = decks[:100]
+        # Keep the full dataset for filtering; we cap the displayed list in
+        # _apply_deck_filters so filters see every cached deck, not just the
+        # most recent 100 (which are dominated by League 5-0s and would hide
+        # Challenge placements behind date order).
+        self._any_scope = archetype_name == "Any"
         self._all_loaded_decks = decks
         if self._is_first_deck_load:
             self._is_first_deck_load = False
