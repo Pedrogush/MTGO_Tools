@@ -1,6 +1,20 @@
+"""Mana-symbol-aware RichTextCtrl used by mana-cost and oracle-text fields.
+
+Renders `{W}`, `{R/G}`, `{2/W}` etc. as inline images while keeping the
+brace-notation string as the canonical value returned by `GetValue()`.
+
+Input modes (mutually exclusive):
+  mana_key_input    — every keystroke is intercepted; single letters and
+                      two-key chords resolve to mana symbols (mana-cost box).
+  ctrl_m_mana_mode  — typing behaves like a regular text field until the user
+                      presses Ctrl+M, which toggles the mana_key_input flow
+                      on/off (oracle-text search: mostly words, occasional
+                      symbols).
+Passing neither yields a plain display control with Ctrl+C → plain text.
+"""
+
 from __future__ import annotations
 
-import re
 from typing import TYPE_CHECKING
 
 import wx
@@ -8,10 +22,12 @@ import wx.richtext
 
 from utils.constants import (
     DARK_ALT,
+    HINT_TEXT,
     LIGHT_TEXT,
     MANA_INPUT_CHARS,
     MANA_KEY_SYMBOL_MAP,
     MANA_SYMBOL_PATTERN,
+    MANA_TRAILING_SYMBOL_PATTERN,
     NAVIGATION_KEYS,
 )
 from utils.keyboard_evts import key_char
@@ -39,7 +55,11 @@ class ManaSymbolRichCtrl(wx.richtext.RichTextCtrl):
         self._mana_icons = mana_icons
         self._plain_text: str = ""
         self._symbol_list: list[str] = []
+        self._padded_image_cache: dict[tuple[str, int, tuple[int, int, int]], wx.Image] = {}
 
+        # _held_keys is idempotent under key auto-repeat (set membership);
+        # _sequence_keys accumulates across the whole chord so a key released
+        # before its partner still contributes to the final symbol.
         self._held_keys: set[str] = set()
         self._sequence_keys: set[str] = set()
         self._mana_mode_active: bool = False
@@ -47,8 +67,7 @@ class ManaSymbolRichCtrl(wx.richtext.RichTextCtrl):
         self._hint: str = ""
         self._showing_hint: bool = False
 
-        self._text_font: wx.Font = wx.SystemSettings.GetFont(wx.SYS_DEFAULT_GUI_FONT)
-        self.SetFont(self._text_font)
+        self.SetFont(wx.SystemSettings.GetFont(wx.SYS_DEFAULT_GUI_FONT))
 
         if not multiline:
             ref = wx.TextCtrl(parent)
@@ -57,7 +76,7 @@ class ManaSymbolRichCtrl(wx.richtext.RichTextCtrl):
             self.SetMinSize(wx.Size(-1, ref_h))
 
         self.Clear()
-        self._apply_dark_style()
+        self._apply_default_style()
 
         if mana_key_input and not readonly:
             self.Bind(wx.EVT_KEY_DOWN, self._on_mana_key_down)
@@ -95,8 +114,13 @@ class ManaSymbolRichCtrl(wx.richtext.RichTextCtrl):
         self.Freeze()
         try:
             self.Clear()
-            self._apply_hint_style()
+            self._apply_default_style()
+            hint_attr = wx.richtext.RichTextAttr()
+            hint_attr.SetTextColour(wx.Colour(*HINT_TEXT))
+            hint_attr.SetBackgroundColour(DARK_ALT)
+            self.BeginStyle(hint_attr)
             self.WriteText(self._hint)
+            self.EndStyle()
             self.SetInsertionPoint(0)
         finally:
             self.Thaw()
@@ -118,19 +142,15 @@ class ManaSymbolRichCtrl(wx.richtext.RichTextCtrl):
         dpi_x = self.FromDIP(96)
         return round(2 * 254 / dpi_x) if dpi_x > 0 else 0
 
-    def _apply_hint_style(self) -> None:
-        attr = wx.richtext.RichTextAttr()
-        attr.SetFont(self._text_font)
-        attr.SetTextColour(wx.Colour(87, 87, 87))
-        attr.SetBackgroundColour(DARK_ALT)
-        attr.SetLeftIndent(self._left_indent_mm10())
-        self.SetDefaultStyle(attr)
-        self.SetBasicStyle(attr)
+    def _apply_default_style(self) -> None:
+        """Install the sole persistent style (light text on DARK_ALT).
 
-    def _apply_dark_style(self) -> None:
+        Hint text gets its grey colour from an inline BeginStyle/EndStyle
+        wrapper around WriteText; the basic/default style stays dark so
+        typed characters never inherit the hint colour.
+        """
         self.SetBackgroundColour(DARK_ALT)
         attr = wx.richtext.RichTextAttr()
-        attr.SetFont(self._text_font)
         attr.SetTextColour(LIGHT_TEXT)
         attr.SetBackgroundColour(DARK_ALT)
         attr.SetLeftIndent(self._left_indent_mm10())
@@ -142,7 +162,7 @@ class ManaSymbolRichCtrl(wx.richtext.RichTextCtrl):
         self.Freeze()
         try:
             self.Clear()
-            self._apply_dark_style()
+            self._apply_default_style()
             self._symbol_list = []
             if self._plain_text:
                 self._render_text(self._plain_text)
@@ -162,24 +182,29 @@ class ManaSymbolRichCtrl(wx.richtext.RichTextCtrl):
 
     def _write_mana_image(self, symbol: str) -> None:
         token = symbol[1:-1] if len(symbol) > 2 else symbol
-        bmp = self._mana_icons.bitmap_for_symbol_hires(token)
-        if bmp and bmp.IsOk():
-            sym_h = self._symbol_height()
-            img = bmp.ConvertToImage()
-            if img.GetHeight() != sym_h:
-                img = img.Scale(sym_h, sym_h, wx.IMAGE_QUALITY_HIGH)
+        sym_h = self._symbol_height()
+        bg = self.GetBackgroundColour()
+        cache_key = (token, sym_h, (bg.Red(), bg.Green(), bg.Blue()))
+
+        img = self._padded_image_cache.get(cache_key)
+        if img is None:
+            bmp = self._mana_icons.bitmap_for_symbol_hires(token)
+            if not bmp or not bmp.IsOk():
+                self.WriteText(symbol)
+                return
+            src = bmp.ConvertToImage()
+            if src.GetHeight() != sym_h:
+                src = src.Scale(sym_h, sym_h, wx.IMAGE_QUALITY_HIGH)
             line_h = self.GetCharHeight()
             pad_top = max(0, (line_h - sym_h) // 2) + 3
             image_h = max(line_h, sym_h + pad_top)
-            bg = self.GetBackgroundColour()
-            padded = wx.Image(sym_h, image_h)
-            padded.SetRGB(wx.Rect(0, 0, sym_h, image_h), bg.Red(), bg.Green(), bg.Blue())
-            padded.Paste(img, 0, pad_top)
-            img = padded
-            self.WriteImage(img)
-            self._symbol_list.append(symbol)
-        else:
-            self.WriteText(symbol)
+            img = wx.Image(sym_h, image_h)
+            img.SetRGB(wx.Rect(0, 0, sym_h, image_h), bg.Red(), bg.Green(), bg.Blue())
+            img.Paste(src, 0, pad_top)
+            self._padded_image_cache[cache_key] = img
+
+        self.WriteImage(img)
+        self._symbol_list.append(symbol)
 
     def _symbol_height(self) -> int:
         ch = self.GetCharHeight()
@@ -196,7 +221,7 @@ class ManaSymbolRichCtrl(wx.richtext.RichTextCtrl):
 
         if kc == wx.WXK_BACK:
             if self._plain_text:
-                m = re.search(r"\{[^}]+\}$", self._plain_text)
+                m = MANA_TRAILING_SYMBOL_PATTERN.search(self._plain_text)
                 if m:
                     self._plain_text = self._plain_text[: m.start()]
                 else:

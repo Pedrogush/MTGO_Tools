@@ -3,6 +3,7 @@
 import re
 
 MANA_SYMBOL_PATTERN = re.compile(r"\{[^}]{1,6}\}")
+MANA_TRAILING_SYMBOL_PATTERN = re.compile(r"\{[^}]+\}$")
 
 MANA_INPUT_CHARS: frozenset[str] = frozenset("wubrgcsxyz0123456789p")
 

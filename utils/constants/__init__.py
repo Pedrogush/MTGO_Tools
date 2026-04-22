@@ -12,6 +12,7 @@ from utils.constants.colors import (
     DARK_PANEL,
     DECK_CARD_ACTION_BUTTON_FG,
     DECK_CARD_IMAGE_BG,
+    HINT_TEXT,
     LIGHT_TEXT,
     SUBDUED_TEXT,
 )
@@ -49,6 +50,7 @@ from utils.constants.gameplay import (
     MANA_INPUT_CHARS,
     MANA_KEY_SYMBOL_MAP,
     MANA_SYMBOL_PATTERN,
+    MANA_TRAILING_SYMBOL_PATTERN,
 )
 from utils.constants.images import ATOMIC_DATA_URL
 from utils.constants.keyboard import NAVIGATION_KEYS
@@ -285,6 +287,7 @@ __all__ = [
     "DARK_PANEL",
     "DECK_CARD_ACTION_BUTTON_FG",
     "DECK_CARD_IMAGE_BG",
+    "HINT_TEXT",
     "LIGHT_TEXT",
     "SUBDUED_TEXT",
     "CHALLENGE_LOOKUP_OPTIONS",
@@ -297,6 +300,7 @@ __all__ = [
     "MANA_INPUT_CHARS",
     "MANA_KEY_SYMBOL_MAP",
     "MANA_SYMBOL_PATTERN",
+    "MANA_TRAILING_SYMBOL_PATTERN",
     "NAVIGATION_KEYS",
     "ATOMIC_DATA_URL",
     "DEFAULT_SEARCH_LIMIT",
