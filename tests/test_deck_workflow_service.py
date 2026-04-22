@@ -55,14 +55,14 @@ class FakeDeckRepo:
 
 class FakeMetagameRepo:
     def __init__(self) -> None:
-        self.calls: list[tuple[str, dict | None, str]] = []
+        self.calls: list[tuple] = []
 
     def get_decks_for_archetype(self, archetype, source_filter):
         self.calls.append(("archetype", archetype, source_filter))
         return [{"name": archetype.get("name"), "number": "1"}]
 
-    def get_all_cached_decks(self, source_filter):
-        self.calls.append(("all", None, source_filter))
+    def get_all_cached_decks(self, source_filter, format_filter=None):
+        self.calls.append(("all", None, source_filter, format_filter))
         return [{"name": "Any", "number": "2"}]
 
 
@@ -119,13 +119,13 @@ def test_load_decks_routes_all_and_archetype_scopes_through_one_use_case():
     archetype_result = service.load_decks(
         scope="archetype", archetype=archetype, source_filter="mtggoldfish"
     )
-    all_result = service.load_decks(scope="all", source_filter="mtgo")
+    all_result = service.load_decks(scope="all", source_filter="mtgo", format_filter="Modern")
 
     assert archetype_result == [{"name": "Dimir Control", "number": "1"}]
     assert all_result == [{"name": "Any", "number": "2"}]
     assert metagame_repo.calls == [
         ("archetype", archetype, "mtggoldfish"),
-        ("all", None, "mtgo"),
+        ("all", None, "mtgo", "Modern"),
     ]
 
 

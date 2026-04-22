@@ -386,10 +386,10 @@ class AppEventHandlers:
         self.research_panel.enable_controls()
         count = len(self.archetypes)
         self._set_status("app.research.archetypes_loaded", count=count, format=self.current_format)
-        # Auto-load all recent decks on first archetype list arrival
-        if not self._initial_any_load_triggered:
-            self._initial_any_load_triggered = True
-            self._load_decks(scope="all")
+        # Archetype dropdown resets to "Any" whenever the list reloads, so the
+        # deck list must reload too — otherwise it shows stale results from the
+        # previous format.
+        self._load_decks(scope="all")
 
     def _on_archetypes_error(self: AppFrame, error: Exception) -> None:
         with self._loading_lock:

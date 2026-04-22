@@ -96,7 +96,6 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
         self._pending_hover: tuple[str, dict[str, Any]] | None = None
         self._pending_deck_restore: bool = False
         self._is_first_deck_load: bool = True
-        self._initial_any_load_triggered: bool = False
         self._all_loaded_decks: list[dict[str, Any]] = []
 
         self._build_ui()

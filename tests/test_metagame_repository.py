@@ -879,3 +879,70 @@ def test_remote_client_not_used_when_disabled(tmp_path, monkeypatch):
 
     result = repo.get_archetypes_for_format("modern")
     assert result == live_archetypes
+
+
+# ============= get_all_cached_decks format filter =============
+
+
+def test_get_all_cached_decks_no_format_filter_returns_all(
+    metagame_repo, archetype_deck_cache_file
+):
+    _write_cache(
+        archetype_deck_cache_file,
+        {
+            "modern-tron": {"items": [{"event": "Modern Challenge", "number": "m1"}]},
+            "legacy-burn": {"items": [{"event": "Legacy Challenge", "number": "l1"}]},
+            "pioneer-boros": {"items": [{"event": "Pioneer Challenge", "number": "p1"}]},
+        },
+    )
+    result = metagame_repo.get_all_cached_decks()
+    numbers = sorted(d["number"] for d in result)
+    assert numbers == ["l1", "m1", "p1"]
+
+
+def test_get_all_cached_decks_format_filter_matches_slug_prefix(
+    metagame_repo, archetype_deck_cache_file
+):
+    _write_cache(
+        archetype_deck_cache_file,
+        {
+            "modern-tron": {"items": [{"event": "Modern Challenge", "number": "m1"}]},
+            "legacy-burn": {"items": [{"event": "Legacy Challenge", "number": "l1"}]},
+            "pioneer-boros": {"items": [{"event": "Pioneer Challenge", "number": "p1"}]},
+        },
+    )
+    result = metagame_repo.get_all_cached_decks(format_filter="Modern")
+    assert [d["number"] for d in result] == ["m1"]
+
+
+def test_get_all_cached_decks_format_filter_matches_event_for_unprefixed_slug(
+    metagame_repo, archetype_deck_cache_file
+):
+    # Older cache entries (pre-format-prefixed slugs) carry the format only in
+    # the event string — the filter must still classify these correctly.
+    _write_cache(
+        archetype_deck_cache_file,
+        {
+            "amulet-titan": {"items": [{"event": "Modern League 2026-04-22", "number": "m1"}]},
+            "tron": {"items": [{"event": "Legacy League 2026-04-22", "number": "l1"}]},
+        },
+    )
+    modern = metagame_repo.get_all_cached_decks(format_filter="Modern")
+    legacy = metagame_repo.get_all_cached_decks(format_filter="Legacy")
+    assert [d["number"] for d in modern] == ["m1"]
+    assert [d["number"] for d in legacy] == ["l1"]
+
+
+def test_get_all_cached_decks_format_filter_is_case_insensitive(
+    metagame_repo, archetype_deck_cache_file
+):
+    _write_cache(
+        archetype_deck_cache_file,
+        {"modern-tron": {"items": [{"event": "Modern Challenge", "number": "m1"}]}},
+    )
+    assert [d["number"] for d in metagame_repo.get_all_cached_decks(format_filter="modern")] == [
+        "m1"
+    ]
+    assert [d["number"] for d in metagame_repo.get_all_cached_decks(format_filter="MODERN")] == [
+        "m1"
+    ]

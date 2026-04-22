@@ -8,6 +8,7 @@ This module handles all metagame-related data fetching including:
 """
 
 import json
+import re
 import threading
 import time
 from collections.abc import Callable
@@ -215,7 +216,11 @@ class MetagameRepository:
                 return self._merge_and_sort_decks(mtggoldfish_decks, mtgo_decks)
             raise
 
-    def get_all_cached_decks(self, source_filter: str | None = None) -> list[dict[str, Any]]:
+    def get_all_cached_decks(
+        self,
+        source_filter: str | None = None,
+        format_filter: str | None = None,
+    ) -> list[dict[str, Any]]:
         if not self.archetype_decks_cache_file.exists():
             return []
         try:
@@ -225,9 +230,25 @@ class MetagameRepository:
         except json.JSONDecodeError as exc:
             logger.warning(f"Cached deck list invalid: {exc}")
             return []
+        format_key = format_filter.lower() if format_filter else None
+        # Match the format as a whole word anywhere in the event string so paper
+        # scrapes like "4 Torneio Super Modern" or "Charlotte Legacy League" are
+        # classified correctly alongside MTGGoldfish's "Modern Challenge …".
+        event_format_re = (
+            re.compile(rf"\b{re.escape(format_key)}\b", re.IGNORECASE)
+            if format_key
+            else None
+        )
         all_decks: list[dict[str, Any]] = []
-        for entry in data.values():
+        for slug, entry in data.items():
             items = entry.get("items", [])
+            if format_key:
+                slug_matches = slug.startswith(f"{format_key}-") or slug == format_key
+                items = [
+                    deck
+                    for deck in items
+                    if slug_matches or (event_format_re and event_format_re.search(deck.get("event", "")))
+                ]
             filtered = self._filter_decks_by_source(items, source_filter)
             all_decks.extend(filtered)
         # Deduplicate by deck number

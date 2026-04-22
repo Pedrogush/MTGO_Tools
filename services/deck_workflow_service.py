@@ -46,9 +46,12 @@ class DeckWorkflowService:
         scope: DeckLoadScope,
         source_filter: str,
         archetype: dict[str, Any] | None = None,
+        format_filter: str | None = None,
     ) -> list[dict[str, Any]]:
         if scope == "all":
-            return self.metagame_repo.get_all_cached_decks(source_filter=source_filter)
+            return self.metagame_repo.get_all_cached_decks(
+                source_filter=source_filter, format_filter=format_filter
+            )
         if scope == "archetype":
             if archetype is None:
                 raise ValueError("Archetype scope requires an archetype")
