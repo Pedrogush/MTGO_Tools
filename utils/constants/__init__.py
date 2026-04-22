@@ -51,6 +51,7 @@ from utils.constants.gameplay import (
     MANA_SYMBOL_PATTERN,
 )
 from utils.constants.images import ATOMIC_DATA_URL
+from utils.constants.keyboard import NAVIGATION_KEYS
 from utils.constants.paths import (
     ARCHETYPE_CACHE_FILE,
     ARCHETYPE_DECKS_CACHE_FILE,
@@ -296,6 +297,7 @@ __all__ = [
     "MANA_INPUT_CHARS",
     "MANA_KEY_SYMBOL_MAP",
     "MANA_SYMBOL_PATTERN",
+    "NAVIGATION_KEYS",
     "ATOMIC_DATA_URL",
     "DEFAULT_SEARCH_LIMIT",
     "DEFAULT_SUGGESTION_LIMIT",

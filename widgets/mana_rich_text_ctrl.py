@@ -12,30 +12,12 @@ from utils.constants import (
     MANA_INPUT_CHARS,
     MANA_KEY_SYMBOL_MAP,
     MANA_SYMBOL_PATTERN,
+    NAVIGATION_KEYS,
 )
 from utils.keyboard_evts import key_char
 
 if TYPE_CHECKING:
     from utils.mana_icon_factory import ManaIconFactory
-
-
-_NAVIGATION_KEYS: frozenset[int] = frozenset({
-    wx.WXK_TAB,
-    wx.WXK_LEFT,
-    wx.WXK_RIGHT,
-    wx.WXK_UP,
-    wx.WXK_DOWN,
-    wx.WXK_HOME,
-    wx.WXK_END,
-    wx.WXK_PAGEUP,
-    wx.WXK_PAGEDOWN,
-    wx.WXK_RETURN,
-    wx.WXK_NUMPAD_ENTER,
-    wx.WXK_ESCAPE,
-    wx.WXK_SHIFT,
-    wx.WXK_CONTROL,
-    wx.WXK_ALT,
-})
 
 
 class ManaSymbolRichCtrl(wx.richtext.RichTextCtrl):
@@ -236,7 +218,7 @@ class ManaSymbolRichCtrl(wx.richtext.RichTextCtrl):
             evt.Skip()
             return
 
-        if kc in _NAVIGATION_KEYS:
+        if kc in NAVIGATION_KEYS:
             evt.Skip()
             return
 
