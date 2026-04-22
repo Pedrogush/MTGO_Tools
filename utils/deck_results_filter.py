@@ -7,8 +7,9 @@ import re
 from collections.abc import Callable
 from typing import Any
 
-PLACEMENT_OPERATORS: tuple[str, ...] = (">", ">=", "<=", "<", "=")
-PLACEMENT_FIELDS: tuple[str, ...] = ("placement", "wins")
+PLACEMENT_OP_NONE = "-"
+PLACEMENT_OPERATORS: tuple[str, ...] = (PLACEMENT_OP_NONE, ">", ">=", "<=", "<", "=")
+PLACEMENT_FIELDS: tuple[str, ...] = ("Placement", "Wins")
 
 _OPERATOR_FUNCS: dict[str, Callable[[int, int], bool]] = {
     ">": _op.gt,
@@ -16,6 +17,16 @@ _OPERATOR_FUNCS: dict[str, Callable[[int, int], bool]] = {
     "<=": _op.le,
     "<": _op.lt,
     "=": _op.eq,
+}
+
+# Placement uses "better means smaller number" semantics: "> 8th" reads as
+# "did better than 8th" (1st–7th), so flip comparator direction for that field.
+_INVERTED_OPERATORS: dict[str, str] = {
+    ">": "<",
+    ">=": "<=",
+    "<=": ">=",
+    "<": ">",
+    "=": "=",
 }
 
 _PLACEMENT_RE = re.compile(r"\b(?:top\s*)?(\d+)(?:st|nd|rd|th)?\b", re.IGNORECASE)
@@ -78,9 +89,9 @@ def parse_wins(result_str: str) -> int | None:
 
 
 def _placement_value_for_field(result_str: str, field: str) -> int | None:
-    if field == "placement":
+    if field == "Placement":
         return parse_placement(result_str)
-    if field == "wins":
+    if field == "Wins":
         return parse_wins(result_str)
     return None
 
@@ -88,8 +99,8 @@ def _placement_value_for_field(result_str: str, field: str) -> int | None:
 def filter_decks(
     decks: list[dict[str, Any]],
     event_type: str = "All",
-    placement_op: str = "",
-    placement_field: str = "placement",
+    placement_op: str = PLACEMENT_OP_NONE,
+    placement_field: str = "Placement",
     placement_value: str = "",
     player_query: str = "",
     date_query: str = "",
@@ -98,16 +109,23 @@ def filter_decks(
 
     The placement filter is a numeric comparison on a value parsed from
     ``deck["result"]``. ``placement_field`` selects which value to parse
-    (``"placement"`` for ``"1st"`` / ``"Top 8"`` style results, ``"wins"``
+    (``"Placement"`` for ``"1st"`` / ``"Top 8"`` style results, ``"Wins"``
     for record-style ``"5-0"`` results). Decks whose result does not yield
     a parseable value for the chosen field are excluded when the filter
-    is active.
+    is active. ``placement_op`` of ``"-"`` (or empty) skips the filter.
+    For ``Placement``, comparator direction is inverted so ``">"`` reads
+    as "better than" (smaller ordinal).
     """
     filtered = list(decks)
     if event_type != "All":
         filtered = [d for d in filtered if _classify_event_type(d.get("event", "")) == event_type]
-    if placement_op and placement_value:
-        op_func = _OPERATOR_FUNCS.get(placement_op)
+    if placement_op and placement_op != PLACEMENT_OP_NONE and placement_value:
+        effective_op = (
+            _INVERTED_OPERATORS.get(placement_op, placement_op)
+            if placement_field == "Placement"
+            else placement_op
+        )
+        op_func = _OPERATOR_FUNCS.get(effective_op)
         try:
             target = int(placement_value)
         except ValueError:

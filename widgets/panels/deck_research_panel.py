@@ -180,7 +180,11 @@ class DeckResearchPanel(wx.Panel):
             self.placement_op_choice.Bind(
                 wx.EVT_CHOICE, lambda _evt: self._on_placement_filter()  # type: ignore[misc]
             )
-        placement_row.Add(self.placement_op_choice, 0, wx.EXPAND | wx.RIGHT, PADDING_MD)
+        op_cell = wx.BoxSizer(wx.HORIZONTAL)
+        op_cell.AddStretchSpacer(1)
+        op_cell.Add(self.placement_op_choice, 0, wx.ALIGN_CENTER_VERTICAL)
+        op_cell.AddStretchSpacer(1)
+        placement_row.Add(op_cell, 1, wx.EXPAND | wx.RIGHT, PADDING_MD)
 
         self.placement_field_choice = wx.Choice(self, choices=list(PLACEMENT_FIELDS))
         self.placement_field_choice.SetSelection(0)
@@ -189,7 +193,11 @@ class DeckResearchPanel(wx.Panel):
             self.placement_field_choice.Bind(
                 wx.EVT_CHOICE, lambda _evt: self._on_placement_filter()  # type: ignore[misc]
             )
-        placement_row.Add(self.placement_field_choice, 0, wx.EXPAND | wx.RIGHT, PADDING_MD)
+        field_cell = wx.BoxSizer(wx.HORIZONTAL)
+        field_cell.AddStretchSpacer(1)
+        field_cell.Add(self.placement_field_choice, 0, wx.ALIGN_CENTER_VERTICAL)
+        field_cell.AddStretchSpacer(1)
+        placement_row.Add(field_cell, 1, wx.EXPAND | wx.RIGHT, PADDING_MD)
 
         self.placement_value_filter = wx.TextCtrl(self, style=wx.TE_PROCESS_ENTER)
         self.placement_value_filter.SetHint(self._labels.get("placement_hint", "value"))
