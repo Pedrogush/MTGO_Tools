@@ -45,7 +45,7 @@ from widgets.panels.deck_research_panel import DeckResearchPanel
 from widgets.panels.deck_stats_panel import DeckStatsPanel
 from widgets.panels.radar_panel import RadarDialog
 from widgets.panels.sideboard_guide_panel import SideboardGuidePanel
-from widgets.mana_rich_text_ctrl import ManaSymbolRichCtrl
+from widgets.mana_rich_text_ctrl_2 import ManaSymbolRichCtrl
 from widgets.timer_alert import TimerAlertFrame
 from widgets.top_cards import TopCardsFrame
 
