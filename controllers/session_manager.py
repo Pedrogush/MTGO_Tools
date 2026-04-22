@@ -120,11 +120,31 @@ class DeckSelectorSessionManager:
             value if value in self._VALID_EVENT_TYPE_FILTERS else "All"
         )
 
-    def get_deck_result_filter(self, default: str = "") -> str:
-        return str(self.settings.get("deck_result_filter", default))
+    _VALID_PLACEMENT_OPS = {"-", ">", "≥", "≤", "<", "="}
+    _VALID_PLACEMENT_FIELDS = {"Placement", "Wins"}
+    _PLACEMENT_FIELD_MIGRATIONS = {"placement": "Placement", "wins": "Wins"}
+    _PLACEMENT_OP_MIGRATIONS = {">=": "≥", "<=": "≤"}
 
-    def update_deck_result_filter(self, value: str) -> None:
-        self.settings["deck_result_filter"] = value
+    def get_deck_placement_filter(self) -> tuple[str, str, str]:
+        op = str(self.settings.get("deck_placement_op", "-"))
+        field = str(self.settings.get("deck_placement_field", "Placement"))
+        value = str(self.settings.get("deck_placement_value", ""))
+        op = self._PLACEMENT_OP_MIGRATIONS.get(op, op)
+        field = self._PLACEMENT_FIELD_MIGRATIONS.get(field, field)
+        if op not in self._VALID_PLACEMENT_OPS:
+            op = "-"
+        if field not in self._VALID_PLACEMENT_FIELDS:
+            field = "Placement"
+        return op, field, value
+
+    def update_deck_placement_filter(self, op: str, field: str, value: str) -> None:
+        op = self._PLACEMENT_OP_MIGRATIONS.get(op, op)
+        field = self._PLACEMENT_FIELD_MIGRATIONS.get(field, field)
+        self.settings["deck_placement_op"] = op if op in self._VALID_PLACEMENT_OPS else "-"
+        self.settings["deck_placement_field"] = (
+            field if field in self._VALID_PLACEMENT_FIELDS else "Placement"
+        )
+        self.settings["deck_placement_value"] = value
 
     def get_deck_player_filter(self, default: str = "") -> str:
         return str(self.settings.get("deck_player_filter", default))

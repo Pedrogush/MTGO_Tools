@@ -8,6 +8,7 @@ This module handles all metagame-related data fetching including:
 """
 
 import json
+import re
 import threading
 import time
 from collections.abc import Callable
@@ -229,16 +230,27 @@ class MetagameRepository:
         except json.JSONDecodeError as exc:
             logger.warning(f"Cached deck list invalid: {exc}")
             return []
+        format_key = mtg_format.lower() if mtg_format else None
         # Archetype hrefs (used as cache keys) are prefixed with the format
-        # slug, e.g. "modern-izzet-cauldron", "legacy-affinity-stompy". When a
-        # format is provided, restrict the aggregation to that format so the
-        # "Any" archetype view does not mix decks from every format.
-        format_prefix = f"{mtg_format.lower()}-" if mtg_format else None
+        # slug, e.g. "modern-izzet-cauldron". Match the format as a whole word
+        # anywhere in the event string too, so paper scrapes like "4 Torneio
+        # Super Modern" or "Charlotte Legacy League" (whose slugs predate
+        # format prefixing — "amulet-titan", "tron") are classified correctly
+        # alongside MTGGoldfish's "Modern Challenge …".
+        event_format_re = (
+            re.compile(rf"\b{re.escape(format_key)}\b", re.IGNORECASE) if format_key else None
+        )
         all_decks: list[dict[str, Any]] = []
-        for key, entry in data.items():
-            if format_prefix is not None and not key.startswith(format_prefix):
-                continue
+        for slug, entry in data.items():
             items = entry.get("items", [])
+            if format_key:
+                slug_matches = slug.startswith(f"{format_key}-") or slug == format_key
+                items = [
+                    deck
+                    for deck in items
+                    if slug_matches
+                    or (event_format_re and event_format_re.search(deck.get("event", "")))
+                ]
             filtered = self._filter_decks_by_source(items, source_filter)
             all_decks.extend(filtered)
         # Deduplicate by deck number
