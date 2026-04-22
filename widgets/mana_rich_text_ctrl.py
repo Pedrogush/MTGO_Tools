@@ -38,10 +38,6 @@ class ManaSymbolRichCtrl(wx.richtext.RichTextCtrl):
         self._mana_icons = mana_icons
         self._plain_text: str = ""
         self._symbol_list: list[str] = []
-        self._suppress: int = 0
-        self._readonly = readonly
-        self._mana_key_input = mana_key_input
-        self._oracle_symbol_detect = oracle_symbol_detect
 
         self._held_keys: set[str] = set()
         self._sequence_keys: set[str] = set()
@@ -53,14 +49,12 @@ class ManaSymbolRichCtrl(wx.richtext.RichTextCtrl):
         self._text_font: wx.Font = wx.SystemSettings.GetFont(wx.SYS_DEFAULT_GUI_FONT)
         self.SetFont(self._text_font)
 
-        self._multiline = multiline
         if not multiline:
             ref = wx.TextCtrl(parent)
             ref_h = ref.GetBestSize().height
             ref.Destroy()
             self.SetMinSize(wx.Size(-1, ref_h))
 
-        self._apply_dark_style()
         self.Clear()
         self._apply_dark_style()
 
@@ -75,8 +69,6 @@ class ManaSymbolRichCtrl(wx.richtext.RichTextCtrl):
 
         self.Bind(wx.EVT_SET_FOCUS, self._on_focus_gained)
         self.Bind(wx.EVT_KILL_FOCUS, self._on_focus_lost)
-        if not multiline:
-            self.Bind(wx.EVT_SIZE, self._on_size_for_hint)
 
     def GetValue(self) -> str:  # type: ignore[override]
         return self._plain_text
@@ -99,34 +91,18 @@ class ManaSymbolRichCtrl(wx.richtext.RichTextCtrl):
         if not self._hint or self._showing_hint:
             return
         self._showing_hint = True
-        self._suppress += 1
         self.Freeze()
         try:
             self.Clear()
             self._apply_hint_style()
             self.WriteText(self._hint)
-            self._apply_dark_style()
             self.SetInsertionPoint(0)
         finally:
-            self._suppress -= 1
             self.Thaw()
 
     def _hide_hint(self) -> None:
-        if not self._showing_hint:
-            return
-        self._showing_hint = False
-        self._suppress += 1
-        self.Freeze()
-        try:
-            self.Clear()
-            self._apply_dark_style()
-            self._symbol_list = []
-            if self._plain_text:
-                self._render_text(self._plain_text)
-            self.SetInsertionPointEnd()
-        finally:
-            self._suppress -= 1
-            self.Thaw()
+        if self._showing_hint:
+            self._rerender()
 
     def _on_focus_gained(self, evt: wx.FocusEvent) -> None:
         self._hide_hint()
@@ -136,16 +112,6 @@ class ManaSymbolRichCtrl(wx.richtext.RichTextCtrl):
         if not self._plain_text:
             self._show_hint()
         evt.Skip()
-
-    def _top_spacing_mm10(self) -> int:
-        client_h = self.GetClientSize().height
-        char_h = self.GetCharHeight()
-        if client_h > char_h > 0:
-            top_px = (client_h - char_h) // 2
-            dpi_y = self.FromDIP(96)
-            if dpi_y > 0:
-                return round(top_px * 254 / dpi_y)
-        return 0
 
     def _left_indent_mm10(self) -> int:
         dpi_x = self.FromDIP(96)
@@ -170,15 +136,8 @@ class ManaSymbolRichCtrl(wx.richtext.RichTextCtrl):
         self.SetDefaultStyle(attr)
         self.SetBasicStyle(attr)
 
-    def _on_size_for_hint(self, evt: wx.SizeEvent) -> None:
-        evt.Skip()
-        if self._showing_hint and not self._plain_text and self._suppress == 0:
-            self._showing_hint = False
-            self._show_hint()
-
     def _rerender(self) -> None:
         self._showing_hint = False
-        self._suppress += 1
         self.Freeze()
         try:
             self.Clear()
@@ -188,7 +147,6 @@ class ManaSymbolRichCtrl(wx.richtext.RichTextCtrl):
                 self._render_text(self._plain_text)
             self.SetInsertionPointEnd()
         finally:
-            self._suppress -= 1
             self.Thaw()
 
     def _render_text(self, text: str) -> None:
