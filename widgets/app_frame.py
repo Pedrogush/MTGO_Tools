@@ -26,6 +26,7 @@ from utils.constants import (
 )
 from utils.i18n import LOCALE_LABELS, SUPPORTED_LOCALES, translate
 from utils.mana_icon_factory import ManaIconFactory
+from utils.runtime_flags import is_automation_enabled
 from widgets.buttons.toolbar_buttons import ToolbarButtons
 from widgets.dialogs.help_dialog import show_help
 from widgets.dialogs.image_download_dialog import show_image_download_dialog
@@ -609,7 +610,7 @@ class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, 
 
     def _restore_session_state(self) -> None:
         state = self.controller.session_manager.restore_session_state(self.controller.zone_cards)
-        if not self.controller.session_manager.is_tutorial_shown():
+        if not self.controller.session_manager.is_tutorial_shown() and not is_automation_enabled():
             wx.CallAfter(self._open_tutorial)
 
         # Restore left panel mode
