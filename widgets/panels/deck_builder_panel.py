@@ -380,7 +380,7 @@ class DeckBuilderPanel(wx.Panel):
             self.mana_icons,
             readonly=False,
             multiline=False,
-            oracle_symbol_detect=True,
+            ctrl_m_mana_mode=True,
         )
         text_ctrl.SetHint(self._t("builder.hint.oracle_text"))
         text_ctrl.SetToolTip(

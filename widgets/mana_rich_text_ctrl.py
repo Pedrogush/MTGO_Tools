@@ -19,6 +19,25 @@ if TYPE_CHECKING:
     from utils.mana_icon_factory import ManaIconFactory
 
 
+_NAVIGATION_KEYS: frozenset[int] = frozenset({
+    wx.WXK_TAB,
+    wx.WXK_LEFT,
+    wx.WXK_RIGHT,
+    wx.WXK_UP,
+    wx.WXK_DOWN,
+    wx.WXK_HOME,
+    wx.WXK_END,
+    wx.WXK_PAGEUP,
+    wx.WXK_PAGEDOWN,
+    wx.WXK_RETURN,
+    wx.WXK_NUMPAD_ENTER,
+    wx.WXK_ESCAPE,
+    wx.WXK_SHIFT,
+    wx.WXK_CONTROL,
+    wx.WXK_ALT,
+})
+
+
 class ManaSymbolRichCtrl(wx.richtext.RichTextCtrl):
     def __init__(
         self,
@@ -28,7 +47,7 @@ class ManaSymbolRichCtrl(wx.richtext.RichTextCtrl):
         readonly: bool = False,
         multiline: bool = True,
         mana_key_input: bool = False,
-        oracle_symbol_detect: bool = False,
+        ctrl_m_mana_mode: bool = False,
     ) -> None:
         style = wx.BORDER_THEME | wx.richtext.RE_MULTILINE
         if readonly:
@@ -61,11 +80,11 @@ class ManaSymbolRichCtrl(wx.richtext.RichTextCtrl):
         if mana_key_input and not readonly:
             self.Bind(wx.EVT_KEY_DOWN, self._on_mana_key_down)
             self.Bind(wx.EVT_KEY_UP, self._on_mana_key_up)
-        elif oracle_symbol_detect and not readonly:
-            self.Bind(wx.EVT_KEY_DOWN, self._on_oracle_key_down)
-            self.Bind(wx.EVT_KEY_UP, self._on_oracle_key_up)
-
-        self.Bind(wx.EVT_KEY_DOWN, self._on_copy_key_down)
+        elif ctrl_m_mana_mode and not readonly:
+            self.Bind(wx.EVT_KEY_DOWN, self._on_ctrl_m_key_down)
+            self.Bind(wx.EVT_KEY_UP, self._on_ctrl_m_key_up)
+        else:
+            self.Bind(wx.EVT_KEY_DOWN, self._on_copy_key_down)
 
         self.Bind(wx.EVT_SET_FOCUS, self._on_focus_gained)
         self.Bind(wx.EVT_KILL_FOCUS, self._on_focus_lost)
@@ -211,6 +230,13 @@ class ManaSymbolRichCtrl(wx.richtext.RichTextCtrl):
             return
 
         if evt.ControlDown():
+            if kc == ord("C") and not evt.ShiftDown():
+                self._copy_plain_text()
+                return
+            evt.Skip()
+            return
+
+        if kc in _NAVIGATION_KEYS:
             evt.Skip()
             return
 
@@ -219,8 +245,6 @@ class ManaSymbolRichCtrl(wx.richtext.RichTextCtrl):
             self._held_keys.add(ch)
             self._sequence_keys.add(ch)
             return
-
-        return
 
     def _on_mana_key_up(self, evt: wx.KeyEvent) -> None:
         ch = key_char(evt)
@@ -238,8 +262,9 @@ class ManaSymbolRichCtrl(wx.richtext.RichTextCtrl):
 
         evt.Skip()
 
-    def _on_oracle_key_down(self, evt: wx.KeyEvent) -> None:
-        if evt.GetKeyCode() == ord("M") and evt.ControlDown():
+    def _on_ctrl_m_key_down(self, evt: wx.KeyEvent) -> None:
+        kc = evt.GetKeyCode()
+        if kc == ord("M") and evt.ControlDown():
             self._mana_mode_active = not self._mana_mode_active
             self._held_keys.clear()
             self._sequence_keys.clear()
@@ -249,9 +274,13 @@ class ManaSymbolRichCtrl(wx.richtext.RichTextCtrl):
             self._on_mana_key_down(evt)
             return
 
+        if kc == ord("C") and evt.ControlDown() and not evt.ShiftDown():
+            self._copy_plain_text()
+            return
+
         evt.Skip()
 
-    def _on_oracle_key_up(self, evt: wx.KeyEvent) -> None:
+    def _on_ctrl_m_key_up(self, evt: wx.KeyEvent) -> None:
         if self._mana_mode_active:
             self._on_mana_key_up(evt)
             return
@@ -259,8 +288,11 @@ class ManaSymbolRichCtrl(wx.richtext.RichTextCtrl):
 
     def _on_copy_key_down(self, evt: wx.KeyEvent) -> None:
         if evt.GetKeyCode() == ord("C") and evt.ControlDown() and not evt.ShiftDown():
-            if wx.TheClipboard.Open():
-                wx.TheClipboard.SetData(wx.TextDataObject(self._plain_text))
-                wx.TheClipboard.Close()
+            self._copy_plain_text()
             return
         evt.Skip()
+
+    def _copy_plain_text(self) -> None:
+        if wx.TheClipboard.Open():
+            wx.TheClipboard.SetData(wx.TextDataObject(self._plain_text))
+            wx.TheClipboard.Close()
