@@ -588,6 +588,7 @@ class AppEventHandlers:
         if idx is None:
             if self.card_inspector_panel.active_zone is None:
                 self.card_inspector_panel.reset()
+                self.oracle_text_ctrl.ChangeValue("")
             return
         meta = self.builder_panel.get_result_at_index(idx)
         if not meta:
@@ -595,6 +596,8 @@ class AppEventHandlers:
         self._clear_zone_selections()
         faux_card = {"name": meta.get("name", "Unknown"), "qty": 1}
         self.card_inspector_panel.update_card(faux_card, zone=None, meta=meta)
+        oracle_text = meta.get("oracle_text") if meta is not None else None
+        self.oracle_text_ctrl.ChangeValue(oracle_text or "")
 
     def _on_daily_average_success(self, deck_text: str) -> None:
         self.daily_average_button.Enable()
