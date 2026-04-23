@@ -33,7 +33,7 @@ class MetagameRepository(
         *,
         archetype_list_cache_file: Path = ARCHETYPE_LIST_CACHE_FILE,
         archetype_decks_cache_file: Path = ARCHETYPE_DECKS_CACHE_FILE,
-        remote_snapshot_client: "RemoteSnapshotClient | None" = None,
+        remote_snapshot_client: RemoteSnapshotClient | None = None,
     ):
         self.cache_ttl = cache_ttl
         self.archetype_list_cache_file = Path(archetype_list_cache_file)

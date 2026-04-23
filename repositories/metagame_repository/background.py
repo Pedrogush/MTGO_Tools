@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-import repositories.metagame_repository as _pkg
 import threading
 from collections.abc import Callable
 from typing import Any
 
 from loguru import logger
+
+import repositories.metagame_repository as _pkg
 
 
 class BackgroundRefreshMixin:

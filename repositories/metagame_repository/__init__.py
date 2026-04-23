@@ -25,10 +25,9 @@ from navigators.mtggoldfish import (  # noqa: F401
     get_archetype_decks,
     get_archetypes,
 )
-from utils.constants import REMOTE_SNAPSHOTS_ENABLED  # noqa: F401
-
 from repositories.metagame_repository.date_utils import _parse_deck_date
 from repositories.metagame_repository.repository import MetagameRepository
+from utils.constants import REMOTE_SNAPSHOTS_ENABLED  # noqa: F401
 
 _default_repository: MetagameRepository | None = None
 

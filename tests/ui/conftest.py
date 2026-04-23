@@ -79,6 +79,12 @@ def fixture_wx_app() -> wx.App:
             f"wxPython cannot initialize a GUI in this environment: {exc}",
             allow_module_level=True,
         )
+    # wx C++ assertions (e.g. GetLayoutDirection on a not-yet-realized HWND) are
+    # development warnings that surface as Python exceptions and abort tests when
+    # accumulated wx state turns flaky during long sessions. Suppress them so a
+    # benign warning from one test does not fail an unrelated assertion path.
+    if hasattr(wx, "APP_ASSERT_SUPPRESS"):
+        app.SetAssertMode(wx.APP_ASSERT_SUPPRESS)
     yield app
     app.Destroy()
 

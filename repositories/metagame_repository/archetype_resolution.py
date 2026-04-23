@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-import repositories.metagame_repository as _pkg
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 from loguru import logger
+
+import repositories.metagame_repository as _pkg
 
 if TYPE_CHECKING:
     from services.remote_snapshot_client import RemoteSnapshotClient
@@ -91,7 +92,7 @@ class ArchetypeResolutionMixin:
         logger.info(f"[live-scrape] metagame stats for {mtg_format}")
         return get_archetype_stats(mtg_format)
 
-    def _remote_client_or_default(self) -> "RemoteSnapshotClient | None":
+    def _remote_client_or_default(self) -> RemoteSnapshotClient | None:
         """Return the remote snapshot client when remote snapshots are enabled."""
         if self._remote_client is not None:
             return self._remote_client
