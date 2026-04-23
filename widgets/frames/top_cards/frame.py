@@ -1,13 +1,11 @@
-"""Top Cards widget for browsing locally cached format card-pool totals."""
-
-# ruff: noqa: E402
+"""UI construction for the Top Cards viewer."""
 
 from __future__ import annotations
 
 import sys
 from pathlib import Path
 
-_project_root = Path(__file__).resolve().parent.parent.parent
+_project_root = Path(__file__).resolve().parent.parent.parent.parent
 if str(_project_root) not in sys.path:
     sys.path.insert(0, str(_project_root))
 
@@ -19,6 +17,8 @@ from services.format_card_pool_service import (
 )
 from utils.constants import DARK_ALT, DARK_BG, DARK_PANEL, FORMAT_OPTIONS, LIGHT_TEXT, SUBDUED_TEXT
 from utils.i18n import translate
+from widgets.frames.top_cards.handlers import TopCardsHandlersMixin
+from widgets.frames.top_cards.properties import TopCardsPropertiesMixin
 
 TOP_CARDS_EXCLUDED_FORMATS = {"Commander", "Brawl", "Historic"}
 TOP_CARDS_FORMAT_OPTIONS = [
@@ -26,7 +26,7 @@ TOP_CARDS_FORMAT_OPTIONS = [
 ]
 
 
-class TopCardsFrame(wx.Frame):
+class TopCardsFrame(TopCardsHandlersMixin, TopCardsPropertiesMixin, wx.Frame):
     """Widget for browsing the most-played cards in each format."""
 
     def __init__(
@@ -50,9 +50,6 @@ class TopCardsFrame(wx.Frame):
         self.Centre(wx.BOTH)
         self.Bind(wx.EVT_CLOSE, self.on_close)
         wx.CallAfter(self.refresh_data)
-
-    def _t(self, key: str, **kwargs: object) -> str:
-        return translate(self._locale, key, **kwargs)
 
     def _build_ui(self) -> None:
         panel = wx.Panel(self)
@@ -99,35 +96,3 @@ class TopCardsFrame(wx.Frame):
         font = button.GetFont()
         font.MakeBold()
         button.SetFont(font)
-
-    def on_format_change(self, _event: wx.CommandEvent) -> None:
-        self.current_format = self.format_choice.GetStringSelection().lower()
-        self.refresh_data()
-
-    def refresh_data(self) -> None:
-        format_name = self.current_format
-        summary = self._service.get_summary(format_name)
-        top_cards = self._service.get_top_cards(format_name)
-
-        self.card_list.DeleteAllItems()
-        if summary is None or not top_cards:
-            self.status_label.SetLabel(
-                self._t("top_cards.status.no_data", format=format_name.title())
-            )
-            return
-
-        self.status_label.SetLabel(
-            self._t(
-                "top_cards.status.loaded",
-                decks=summary.total_decks_analyzed,
-                unique_cards=summary.unique_cards,
-                generated_at=summary.generated_at,
-            )
-        )
-        for index, entry in enumerate(top_cards, start=1):
-            row = self.card_list.InsertItem(self.card_list.GetItemCount(), str(index))
-            self.card_list.SetItem(row, 1, entry.card_name)
-            self.card_list.SetItem(row, 2, str(entry.copies_played))
-
-    def on_close(self, event: wx.CloseEvent) -> None:
-        event.Skip()

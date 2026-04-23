@@ -71,6 +71,7 @@ ignore = [
 "widgets/frames/identify_opponent.py" = ["E402"]
 "widgets/frames/match_history/frame.py" = ["E402"]
 "widgets/frames/timer_alert/frame.py" = ["E402"]
+"widgets/frames/top_cards/frame.py" = ["E402"]
 "widgets/frames/metagame_analysis.py" = ["E402"]
 
 [tool.black]
