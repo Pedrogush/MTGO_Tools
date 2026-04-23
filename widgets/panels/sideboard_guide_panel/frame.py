@@ -1,8 +1,7 @@
-"""
-Sideboard Guide Panel - Manages matchup-specific sideboarding strategies.
+"""UI construction for the sideboard guide panel.
 
-Allows users to create, edit, and manage guides for different matchups, including cards
-to side in/out and matchup notes.
+Manages matchup-specific sideboarding strategies, allowing users to create, edit, and
+manage guides for different matchups, including cards to side in/out and matchup notes.
 """
 
 from __future__ import annotations
@@ -20,11 +19,16 @@ from utils.constants.ui_layout import (
     GUIDE_COL_NOTES_WIDTH,
     PADDING_MD,
 )
-from utils.i18n import translate
 from utils.stylize import stylize_button
+from widgets.panels.sideboard_guide_panel.handlers import SideboardGuidePanelHandlersMixin
+from widgets.panels.sideboard_guide_panel.properties import SideboardGuidePanelPropertiesMixin
 
 
-class SideboardGuidePanel(wx.Panel):
+class SideboardGuidePanel(
+    SideboardGuidePanelHandlersMixin,
+    SideboardGuidePanelPropertiesMixin,
+    wx.Panel,
+):
     """Panel that manages sideboard guides for matchups."""
 
     def __init__(
@@ -58,9 +62,6 @@ class SideboardGuidePanel(wx.Panel):
 
         self._build_ui()
         self._refresh_view()
-
-    def _t(self, key: str, **kwargs: object) -> str:
-        return translate(self._locale, key, **kwargs)
 
     def _build_ui(self) -> None:
         sizer = wx.BoxSizer(wx.VERTICAL)
@@ -172,117 +173,3 @@ class SideboardGuidePanel(wx.Panel):
         self.warning_label.SetForegroundColour(wx.Colour(*WARNING_LABEL_COLOR))
         self.warning_label.Hide()
         sizer.Add(self.warning_label, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_MD)
-
-    # ============= Public API =============
-
-    def set_entries(
-        self, entries: list[dict[str, str]], exclusions: list[str] | None = None
-    ) -> None:
-        self.entries = entries
-        self.exclusions = exclusions or []
-        self._refresh_view()
-
-    def get_entries(self) -> list[dict[str, str]]:
-        return self.entries
-
-    def get_exclusions(self) -> list[str]:
-        return self.exclusions
-
-    def get_selected_index(self) -> int | None:
-        item = self.guide_view.GetSelection()
-        if not item.IsOk():
-            return None
-        return self.guide_view.ItemToRow(item)
-
-    def clear(self) -> None:
-        self.entries = []
-        self.exclusions = []
-        self._refresh_view()
-
-    def set_warning(self, message: str) -> None:
-        if message:
-            self.warning_label.SetLabel(message)
-            self.warning_label.Show()
-        else:
-            self.warning_label.Hide()
-        self.Layout()
-
-    # ============= Private Methods =============
-
-    def _refresh_view(self) -> None:
-        self.guide_view.DeleteAllItems()
-
-        # Add entries (skip excluded archetypes)
-        visible_entries = 0
-        for entry in self.entries:
-            if entry.get("archetype") in self.exclusions:
-                continue
-            self.guide_view.AppendItem(
-                [
-                    entry.get("archetype", ""),
-                    self._format_card_list(entry.get("play_out", {})),
-                    self._format_card_list(entry.get("play_in", {})),
-                    self._format_card_list(entry.get("draw_out", {})),
-                    self._format_card_list(entry.get("draw_in", {})),
-                    entry.get("notes", ""),
-                ]
-            )
-            visible_entries += 1
-
-        # Toggle empty state visibility
-        is_empty = visible_entries == 0
-        self.guide_view.Show(not is_empty)
-        self.empty_state_panel.Show(is_empty)
-        self.button_row.Show(not is_empty)
-        self.Layout()
-
-        # Update exclusions label
-        text = ", ".join(self.exclusions) if self.exclusions else "\u2014"
-        self.exclusions_label.SetLabel(f"{self._t('guide.label.exclusions')}: {text}")
-
-    def _format_card_list(self, cards: dict[str, int] | str) -> str:
-        # Accepts either a dict (new format) or a plain string (old format).
-        if isinstance(cards, str):
-            # Old format - just return the string
-            return cards
-
-        if not cards:
-            return ""
-
-        # New format - dict of card name to quantity
-        formatted = []
-        for name, qty in sorted(cards.items()):
-            formatted.append(f"{qty}x {name}")
-        return ", ".join(formatted)
-
-    def _on_add_clicked(self, _event: wx.Event) -> None:
-        self.on_add_entry()
-
-    def _on_edit_clicked(self, _event: wx.Event) -> None:
-        self.on_edit_entry()
-
-    def _on_remove_clicked(self, _event: wx.Event) -> None:
-        self.on_remove_entry()
-
-    def _on_exclusions_clicked(self, _event: wx.Event) -> None:
-        self.on_edit_exclusions()
-
-    def _on_export_clicked(self, _event: wx.Event) -> None:
-        self.on_export_csv()
-
-    def _on_import_clicked(self, _event: wx.Event) -> None:
-        self.on_import_csv()
-
-    def _on_pin_clicked(self, _event: wx.Event) -> None:
-        if self.on_pin_guide:
-            self.on_pin_guide()
-
-    def _on_flex_slots_clicked(self, _event: wx.Event) -> None:
-        if self.on_edit_flex_slots:
-            self.on_edit_flex_slots()
-
-    def set_pinned(self, pinned: bool) -> None:
-        if pinned:
-            self.pin_btn.SetLabel(self._t("guide.btn.pinned"))
-        else:
-            self.pin_btn.SetLabel(self._t("guide.btn.pin"))
