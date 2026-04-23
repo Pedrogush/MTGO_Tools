@@ -9,7 +9,6 @@ a CLI for manual testing, E2E scripts, and debugging UI regressions.
 python -m automation.cli open-app --wait
 python -m automation.cli ping
 python -m automation.cli screenshot --path screenshots/current.png
-python -m automation.cli screenshot --headless --path screenshots/background.png
 python -m automation.cli close-app
 ```
 
@@ -22,16 +21,34 @@ python -m automation.cli --port 19857 ping
 python -m automation.cli --port 19857 close-app
 ```
 
-## Headless Screenshots
+## Screenshots
 
-`screenshot --headless` is self-contained once the app is running with
-automation enabled. If the main window is minimized or hidden, the server
-temporarily restores it, captures the screenshot, and returns it to the previous
-minimized or hidden state afterward.
+All screenshots use the Win32 `PrintWindow` API (`PW_RENDERFULLCONTENT`), which
+renders the window through DWM regardless of whether other windows are covering
+it — unlike a plain screen-blit which reads raw screen pixels. The capture
+works even when the app is behind other windows.
 
-No extra shell, `cmd.exe`, or manual window-management step is required by
-`screenshot --headless` itself. The only WSL-specific concern is how you invoke
-the Windows Python process when running the CLI from WSL.
+`--headless` is accepted on the `screenshot` command for backward compatibility
+but is now a no-op; every screenshot is inherently headless.
+
+### Capturing the main window
+
+```bash
+python -m automation.cli screenshot --path screenshots/main.png
+```
+
+### Capturing a secondary window
+
+Use `open-widget` to open the window first, then `screenshot-window` to capture
+it. Supported window names: `opponent_tracker`, `timer_alert`, `match_history`,
+`metagame`, `top_cards`, `mana_keyboard`.
+
+```bash
+python -m automation.cli open-widget match_history
+python -m automation.cli screenshot-window match_history --path screenshots/history.png
+```
+
+`screenshot-window` returns an error if the named window is not currently open.
 
 ## WSL Interop Note
 

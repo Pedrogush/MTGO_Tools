@@ -6,7 +6,6 @@ Usage:
     python -m automation.cli open-app [--wait]
     python -m automation.cli ping
     python -m automation.cli screenshot --path output.png
-    python -m automation.cli screenshot --headless
     python -m automation.cli status
     python -m automation.cli set-format Modern
     python -m automation.cli list-archetypes
@@ -21,16 +20,13 @@ Common workflow:
     python -m automation.cli open-app --wait
     python -m automation.cli ping
     python -m automation.cli screenshot --path screenshots/current.png
-    python -m automation.cli screenshot --headless --path screenshots/background.png
     python -m automation.cli close-app
 
 Notes:
-    The --headless screenshot flag is self-contained once the app is running
-    with automation enabled. It temporarily restores a minimized or hidden
-    window for capture, then returns it to the previous minimized/hidden state.
-    WSL callers may need to invoke the Windows Python through WSL interop, but
-    no extra shell or window-management steps are required by screenshot
-    --headless itself.
+    Screenshots use the Win32 PrintWindow API (PW_RENDERFULLCONTENT), which
+    renders the window through DWM regardless of whether other windows are
+    covering it.  The --headless flag is kept for backward compatibility but
+    is now a no-op — every screenshot is inherently headless.
 """
 
 import argparse
@@ -80,6 +76,13 @@ def cmd_screenshot(client: AutomationClient, args: argparse.Namespace) -> int:
     result = client.screenshot(args.path, headless=args.headless)
     print(format_output(result, args.json))
     return 0
+
+
+def cmd_screenshot_window(client: AutomationClient, args: argparse.Namespace) -> int:
+    """Take a screenshot of a named secondary window."""
+    result = client.screenshot_window(args.window_name, args.path)
+    print(format_output(result, args.json))
+    return 0 if "path" in result else 1
 
 
 def cmd_status(client: AutomationClient, args: argparse.Namespace) -> int:
@@ -289,6 +292,13 @@ def cmd_get_deck_notes(client: AutomationClient, args: argparse.Namespace) -> in
     return 0
 
 
+def cmd_type_into_oracle(client: AutomationClient, args: argparse.Namespace) -> int:
+    """Type characters one at a time into the oracle search box."""
+    result = client.type_into_oracle(args.text, expand_adv=not args.no_expand)
+    print(format_output(result, args.json))
+    return 0 if result.get("typed") else 1
+
+
 def cmd_toggle_adv_filters(client: AutomationClient, args: argparse.Namespace) -> int:
     """Toggle the advanced filters panel in the deck builder."""
     result = client.toggle_adv_filters()
@@ -357,8 +367,7 @@ Examples:
   %(prog)s open-app --wait                         Launch and wait until ready
   %(prog)s ping                                    Check if app is running
   %(prog)s screenshot --path test.png              Take a screenshot
-  %(prog)s screenshot --headless                   Screenshot even when minimized
-  %(prog)s screenshot --headless --path bg.png      Capture minimized/hidden app
+  %(prog)s screenshot --path bg.png                Capture even when minimized/occluded
   %(prog)s status                                  Get status bar text
   %(prog)s set-format Modern                       Set format to Modern
   %(prog)s list-archetypes                         List available archetypes
@@ -370,9 +379,8 @@ Examples:
   %(prog)s close-app                               Close the running app
 
 Notes:
-  screenshot --headless is self-contained once the app is running with
-  automation enabled: it restores a minimized/hidden window for capture and
-  returns it to the previous minimized/hidden state afterward.
+  Screenshots use Win32 PrintWindow (PW_RENDERFULLCONTENT) and work even when
+  the window is occluded.  --headless is accepted but is now a no-op.
         """,
     )
 
@@ -394,7 +402,7 @@ Notes:
     p.add_argument(
         "--headless",
         action="store_true",
-        help="Restore window if minimized before capturing, then re-minimize",
+        help="Accepted for backward compatibility; screenshots are always headless via PrintWindow",
     )
 
     # status
@@ -480,8 +488,36 @@ Notes:
         help="Widget to open",
     )
 
+    # screenshot-window
+    p = subparsers.add_parser("screenshot-window", help="Take a screenshot of a secondary window")
+    p.add_argument(
+        "window_name",
+        choices=[
+            "opponent_tracker",
+            "timer_alert",
+            "match_history",
+            "metagame",
+            "top_cards",
+            "mana_keyboard",
+        ],
+        help="Window to capture (must already be open)",
+    )
+    p.add_argument("--path", "-p", help="Path to save screenshot (default: auto-generated)")
+
     # get-deck-notes
     subparsers.add_parser("get-deck-notes", help="Get the current deck notes")
+
+    # type-into-oracle
+    p = subparsers.add_parser(
+        "type-into-oracle",
+        help="Type characters one at a time into the oracle text search box",
+    )
+    p.add_argument("text", help="String to type (e.g. '{W}' or 'deals damage')")
+    p.add_argument(
+        "--no-expand",
+        action="store_true",
+        help="Do not expand the advanced filters panel before typing",
+    )
 
     # toggle-adv-filters
     subparsers.add_parser("toggle-adv-filters", help="Toggle advanced filters in builder panel")
@@ -535,7 +571,9 @@ Notes:
         "get-builder-results": cmd_get_builder_results,
         "get-builder-top-item": cmd_get_builder_top_item,
         "open-widget": cmd_open_widget,
+        "screenshot-window": cmd_screenshot_window,
         "get-deck-notes": cmd_get_deck_notes,
+        "type-into-oracle": cmd_type_into_oracle,
         "toggle-adv-filters": cmd_toggle_adv_filters,
         "close-app": cmd_close_app,
     }

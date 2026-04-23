@@ -6,6 +6,7 @@ DARK_PANEL = (34, 39, 46)
 DARK_ALT = (40, 46, 54)
 DARK_ACCENT = (59, 130, 246)
 LIGHT_TEXT = (236, 236, 236)
+HINT_TEXT = (87, 87, 87)
 
 # Deck workspace card display colors
 DECK_CARD_ACTION_BUTTON_FG = (12, 14, 18)  # near-black foreground text on action buttons

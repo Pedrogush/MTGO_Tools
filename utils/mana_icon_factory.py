@@ -50,7 +50,18 @@ class ManaIconFactory:
         "r": (241, 155, 121),
         "g": (159, 203, 166),
         "c": (208, 198, 187),
+        "tap": (208, 198, 187),
         "multicolor": (246, 223, 138),
+    }
+
+    # Symbols that are NOT circle-enclosed mana icons — rendered as bare glyphs.
+    _NON_CIRCLE_SYMBOLS: frozenset[str] = frozenset({"e", "energy"})
+
+    # Glyph colours for standalone (non-circle) symbols.
+    # Energy is silver-grey to match how it appears on actual MTG cards.
+    _STANDALONE_COLORS: dict[str, tuple[int, int, int]] = {
+        "e": (175, 170, 165),
+        "energy": (175, 170, 165),
     }
 
     def __init__(self, icon_size: int = MANA_ICON_DEFAULT_SIZE) -> None:
@@ -90,12 +101,13 @@ class ManaIconFactory:
         )
         return panel
 
-    def bitmap_for_symbol_hires(self, symbol: str) -> wx.Bitmap:
+    def bitmap_for_symbol_hires(self, symbol: str) -> wx.Bitmap | None:
         """Return the symbol bitmap at render-scale resolution (before final downscale).
 
         Callers that need to scale to an arbitrary target size should use this
         instead of bitmap_for_symbol to avoid a second downscale of an already
-        small source.
+        small source.  Non-circle symbols (e.g. energy) are rendered as bare
+        glyphs and included here.
         """
         token = symbol.strip()
         if token.startswith("{") and token.endswith("}"):
@@ -105,7 +117,7 @@ class ManaIconFactory:
             self._get_bitmap(key)  # populates both caches as a side-effect
         return self._hires_cache.get(key) or self._get_bitmap(key)
 
-    def bitmap_for_symbol(self, symbol: str) -> wx.Bitmap:
+    def bitmap_for_symbol(self, symbol: str) -> wx.Bitmap | None:
         token = symbol.strip()
         if token.startswith("{") and token.endswith("}"):
             token = token[1:-1]
@@ -150,6 +162,8 @@ class ManaIconFactory:
         if symbol in self._cache:
             return self._cache[symbol]
         key = self._normalize_symbol(symbol)
+        if key in self._NON_CIRCLE_SYMBOLS:
+            return self._get_standalone_bitmap(symbol, key)
         components = self._hybrid_components(key)
         second_color: tuple[int, int, int] | None = None
         glyph = self._glyph_map.get(key or "") if not components else ""
@@ -214,6 +228,35 @@ class ManaIconFactory:
         img = bmp.ConvertToImage()
         img = img.Blur(MANA_ICON_BLUR_RADIUS)
         self._hires_cache[symbol] = wx.Bitmap(img)  # store at render-scale before downscale
+        img = img.Scale(self._icon_size, self._icon_size, wx.IMAGE_QUALITY_HIGH)
+        final = wx.Bitmap(img)
+        self._cache[symbol] = final
+        return final
+
+    def _get_standalone_bitmap(self, symbol: str, key: str | None) -> wx.Bitmap:
+        """Render a standalone glyph without a circle background (e.g. energy {E})."""
+        scale = self._RENDER_SCALE
+        size = self._icon_size * scale
+        bmp = wx.Bitmap(size, size)
+        dc = wx.MemoryDC(bmp)
+        dc.SetBackground(wx.Brush(DARK_ALT))
+        dc.Clear()
+        glyph = self._glyph_map.get(key or "") if key else ""
+        if glyph:
+            cx = cy = size // 2
+            gctx = wx.GraphicsContext.Create(dc)
+            # Slightly larger font than in-circle glyphs — no border to eat into space.
+            font_size = int(MANA_GLYPH_FONT_SIZE_BASE * scale * 1.25)
+            text_font = self._build_render_font(font_size)
+            color_rgb = self._STANDALONE_COLORS.get(key or "", (220, 200, 140))
+            text_color = wx.Colour(*color_rgb)
+            gctx.SetFont(text_font, text_color)
+            tw, th = gctx.GetTextExtent(glyph)
+            gctx.DrawText(glyph, cx - tw / 2, cy - th / 2)
+        dc.SelectObject(wx.NullBitmap)
+        img = bmp.ConvertToImage()
+        img = img.Blur(MANA_ICON_BLUR_RADIUS)
+        self._hires_cache[symbol] = wx.Bitmap(img)
         img = img.Scale(self._icon_size, self._icon_size, wx.IMAGE_QUALITY_HIGH)
         final = wx.Bitmap(img)
         self._cache[symbol] = final
@@ -396,6 +439,8 @@ class ManaIconFactory:
             return self.FALLBACK_COLORS["multicolor"]
         if key in self._color_map:
             return self._color_map[key]
+        if key in self.FALLBACK_COLORS:
+            return self.FALLBACK_COLORS[key]
         if key.isdigit() or key in {"x", "y", "z"}:
             return self._color_map.get("c", self.FALLBACK_COLORS["c"])
         if "-" in key:
@@ -424,6 +469,7 @@ class ManaIconFactory:
             "1/2": "1-2",
             "half": "1-2",
             "snow": "s",
+            "t": "tap",
         }
         return aliases.get(token, token)
 
