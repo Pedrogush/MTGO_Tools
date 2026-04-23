@@ -8,9 +8,9 @@ TextCtrl's blue focus underline is painted by Windows' uxtheme on the
 EDIT control's non-client area, which a custom-drawn RichTextCtrl can't
 receive. To match the look we paint the whole 2-DIP grey frame ourselves
 — replicating the outer/inner two-tone composition sampled from an
-adjacent native wx.TextCtrl — and tint the bottom outer row DARK_ACCENT
-on focus. The actual rich-text buffer is a borderless child RichTextCtrl
-that fills the panel interior.
+adjacent native wx.TextCtrl — and tint the whole bottom band to the
+Windows system accent colour on focus. The actual rich-text buffer is
+a borderless child RichTextCtrl that fills the panel interior.
 
 The placeholder hint is a separate `wx.StaticText` overlay rather than
 text written into the rich-text buffer. Writing the hint into the buffer
@@ -37,7 +37,6 @@ import wx
 import wx.richtext
 
 from utils.constants import (
-    DARK_ACCENT,
     DARK_ALT,
     HINT_TEXT,
     LIGHT_TEXT,
@@ -347,9 +346,9 @@ class _ManaRichTextInner(wx.richtext.RichTextCtrl):
 class ManaSymbolRichCtrl(wx.Panel):
     """Public wrapper. Custom-paints a 2-DIP frame matching the native Win11
     dark-mode wx.TextCtrl outline (outer light halo + inner near-white
-    ring, with a darker outer row at the bottom that tints DARK_ACCENT on
-    focus); delegates the TextCtrl API to an inner borderless RichTextCtrl
-    that fills the panel interior.
+    ring, with a darker outer row at the bottom that tints the Windows
+    system accent colour on focus); delegates the TextCtrl API to an
+    inner borderless RichTextCtrl that fills the panel interior.
     """
 
     def __init__(
@@ -432,10 +431,19 @@ class ManaSymbolRichCtrl(wx.Panel):
             max(0, size.height - 2 * outer),
         )
 
-        # Full bottom band tints DARK_ACCENT on focus.
-        bottom_colour = wx.Colour(*DARK_ACCENT) if self._inner.HasFocus() else _BORDER_OUTER_DARK
-        dc.SetBrush(wx.Brush(bottom_colour))
-        dc.DrawRectangle(0, size.height - 2 * outer, size.width, 2 * outer)
+        # Bottom band: unfocused keeps the native split — the inner row
+        # stays near-white from the inner-ring fill and only the outer
+        # row is mid-grey. On focus the whole 2-DIP band tints the
+        # Windows system accent colour (queried each paint so a theme
+        # change is picked up live) so it reads as one continuous focus
+        # underline matching the native TextCtrl.
+        if self._inner.HasFocus():
+            accent = wx.SystemSettings.GetColour(wx.SYS_COLOUR_HIGHLIGHT)
+            dc.SetBrush(wx.Brush(accent))
+            dc.DrawRectangle(0, size.height - 2 * outer, size.width, 2 * outer)
+        else:
+            dc.SetBrush(wx.Brush(_BORDER_OUTER_DARK))
+            dc.DrawRectangle(0, size.height - outer, size.width, outer)
 
     def _on_inner_focus_change(self, evt: wx.FocusEvent) -> None:
         evt.Skip()
