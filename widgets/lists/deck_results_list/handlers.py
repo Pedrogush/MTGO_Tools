@@ -1,31 +1,25 @@
+"""Public state setters, drawing overrides, and drawing helpers for the deck results list."""
+
 from __future__ import annotations
 
 import wx
 
-from utils.constants import DARK_ACCENT, DARK_ALT, DARK_PANEL, LIGHT_TEXT, SUBDUED_TEXT
 
+class DeckResultsListHandlersMixin:
+    """Public setters, drawing overrides, and sizing helpers for :class:`DeckResultsList`."""
 
-class DeckResultsList(wx.VListBox):
-    _ITEM_MARGIN = 6
-    _CARD_RADIUS = 8
-    _CARD_PADDING = 8
-    _MIN_FONT_SIZE = 8
-    _RIGHT_COL_RATIO = 0.30  # fraction of card width reserved for right column
+    _ITEM_MARGIN: int
+    _CARD_RADIUS: int
+    _CARD_PADDING: int
+    _MIN_FONT_SIZE: int
+    _RIGHT_COL_RATIO: float
 
-    def __init__(self, parent: wx.Window) -> None:
-        super().__init__(parent, style=wx.BORDER_NONE)
-        # Each item is (is_structured, data).
-        # Plain:  data = (emoji, line_one, line_two)
-        # Deck:   data = (emoji, player, archetype, event, result, date)
-        self._items: list[tuple[bool, tuple]] = []
-        self._line_one_color = wx.Colour(*LIGHT_TEXT)
-        self._line_two_color = wx.Colour(*SUBDUED_TEXT)
-        self._card_bg = wx.Colour(*DARK_PANEL)
-        self._card_border = wx.Colour(*DARK_ACCENT)
-        self._selection_fg = wx.Colour(15, 17, 22)
-        self.SetBackgroundColour(DARK_ALT)
-        self.SetForegroundColour(wx.Colour(*LIGHT_TEXT))
-        self.SetItemCount(0)
+    _items: list[tuple[bool, tuple]]
+    _line_one_color: wx.Colour
+    _line_two_color: wx.Colour
+    _card_bg: wx.Colour
+    _card_border: wx.Colour
+    _selection_fg: wx.Colour
 
     # ------------------------------------------------------------------
     # Public API
@@ -56,44 +50,9 @@ class DeckResultsList(wx.VListBox):
         self.SetItemCount(0)
         self.Refresh()
 
-    def GetCount(self) -> int:
-        return len(self._items)
-
-    def GetString(self, n: int) -> str:
-        if n < 0 or n >= len(self._items):
-            return ""
-        is_structured, data = self._items[n]
-        if is_structured:
-            emoji, player, archetype, event, result, date = data
-            player_arch = f"{player}, {archetype}" if archetype else player
-            parts = [p for p in (player_arch, result, date) if p]
-            line_one = f"{emoji} {', '.join(parts)}".strip() if emoji else ", ".join(parts)
-            return f"{line_one}\n{event}" if event else line_one
-        else:
-            emoji, line_one, line_two = data
-            full_line_one = emoji + line_one if emoji else line_one
-            return f"{full_line_one}\n{line_two}" if line_two else full_line_one
-
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
-
-    @staticmethod
-    def _split_emoji_prefix(line: str) -> tuple[str, str]:
-        if not line or ord(line[0]) < 128:
-            return "", line
-        idx = line.find(" ")
-        if idx == -1:
-            return line, ""
-        return line[: idx + 1], line[idx + 1 :]
-
-    def _split_lines(self, text: str) -> tuple[str, str]:
-        lines = [line.strip() for line in text.splitlines() if line.strip()]
-        if not lines:
-            return "", ""
-        if len(lines) == 1:
-            return lines[0], ""
-        return lines[0], " ".join(lines[1:])
 
     def _truncate_to_width(self, dc: wx.DC, text: str, max_width: int) -> str:
         if not text:
