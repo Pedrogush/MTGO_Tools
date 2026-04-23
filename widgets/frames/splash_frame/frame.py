@@ -1,3 +1,5 @@
+"""UI construction for the loading splash frame."""
+
 from __future__ import annotations
 
 import time
@@ -6,9 +8,11 @@ from collections.abc import Callable
 import wx
 
 from utils.constants import DARK_BG, DARK_PANEL, LIGHT_TEXT
+from widgets.frames.splash_frame.handlers import LoadingFrameHandlersMixin
+from widgets.frames.splash_frame.properties import LoadingFramePropertiesMixin
 
 
-class LoadingFrame(wx.Frame):
+class LoadingFrame(LoadingFrameHandlersMixin, LoadingFramePropertiesMixin, wx.Frame):
     """Lightweight splash that shows a loading message while the main UI initializes."""
 
     def __init__(self, min_duration: float = 0.8, max_duration: float = 1.8) -> None:
@@ -25,6 +29,15 @@ class LoadingFrame(wx.Frame):
         self._finished = False
         self._on_ready: Callable[[], None] | None = None
 
+        self._build_ui()
+
+        self._timer = wx.Timer(self)
+        self.Bind(wx.EVT_TIMER, self._on_tick, self._timer)
+        self._timer.Start(40)
+
+        self.Centre(wx.BOTH)
+
+    def _build_ui(self) -> None:
         self.SetBackgroundColour(DARK_BG)
         panel = wx.Panel(self)
         panel.SetBackgroundColour(DARK_PANEL)
@@ -47,33 +60,3 @@ class LoadingFrame(wx.Frame):
 
         panel.Layout()
         self.Layout()
-
-        self._timer = wx.Timer(self)
-        self.Bind(wx.EVT_TIMER, self._on_tick, self._timer)
-        self._timer.Start(40)
-
-        self.Centre(wx.BOTH)
-
-    def set_ready(self, on_ready: Callable[[], None] | None = None) -> None:
-        self._ready = True
-        self._on_ready = on_ready
-        self._maybe_finish()
-
-    def _on_tick(self, _event: wx.TimerEvent) -> None:
-        self._maybe_finish()
-
-    def _maybe_finish(self) -> None:
-        if self._finished:
-            return
-        elapsed = time.monotonic() - self._start
-        if (self._ready and elapsed >= self._min_duration) or elapsed >= self._max_duration:
-            self._finished = True
-            self._timer.Stop()
-            callback = self._on_ready
-            self.Hide()
-            self.Destroy()
-            if callback:
-                wx.CallAfter(callback)
-
-
-__all__ = ["LoadingFrame"]
