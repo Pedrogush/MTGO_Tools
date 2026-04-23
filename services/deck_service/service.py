@@ -1,13 +1,6 @@
-"""
-Deck Service - Business logic for deck operations.
+"""DeckService assembled from parser/averager/text-builder modules."""
 
-This module contains all the business logic for working with decks including:
-- Deck parsing and analysis
-- Deck averaging and aggregation
-- Deck validation
-- Format compliance checking
-- Zone management
-"""
+from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -17,9 +10,9 @@ from loguru import logger
 
 from repositories.deck_repository import DeckRepository, get_deck_repository
 from repositories.metagame_repository import MetagameRepository, get_metagame_repository
-from services.deck_averager import DeckAverager
-from services.deck_parser import DeckParser
-from services.deck_text_builder import DeckTextBuilder
+from services.deck_service.averager import DeckAverager
+from services.deck_service.parser import DeckParser
+from services.deck_service.text_builder import DeckTextBuilder
 from utils.constants import DEFAULT_MAX_DECKS
 
 
@@ -116,29 +109,3 @@ class DeckService:
             read_deck_file,
             self.deck_repo,
         )
-
-
-# Global instance for backward compatibility
-_default_service = None
-
-
-def get_deck_service() -> DeckService:
-    """Get the default deck service instance."""
-    global _default_service
-    if _default_service is None:
-        _default_service = DeckService()
-    return _default_service
-
-
-def reset_deck_service() -> None:
-    """Reset the global deck service (use in tests for isolation)."""
-    global _default_service
-    _default_service = None
-
-
-__all__ = [
-    "DeckService",
-    "ZoneUpdateResult",
-    "get_deck_service",
-    "reset_deck_service",
-]
