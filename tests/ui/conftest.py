@@ -240,6 +240,13 @@ def ui_environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
 
     yield
 
+    # Drain pending wx events after each test so accumulated wx.CallAfter
+    # callbacks and pending Destroy() operations complete before the next test
+    # creates more widgets. Without this, ~24 frames into the suite the wx
+    # process exhausts native handles and new wx.ScrolledWindow / Layout calls
+    # assert inside the C++ layer.
+    pump_ui_events(wx.GetApp())
+
 
 def pump_ui_events(app: wx.App, *, max_passes: int = 25) -> None:
     """Process pending wx events until the queue drains or a safety cap is reached."""
