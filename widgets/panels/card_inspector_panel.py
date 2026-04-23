@@ -31,7 +31,7 @@ from utils.constants import (
     ZONE_TITLES,
 )
 from utils.mana_icon_factory import ManaIconFactory
-from utils.stylize import stylize_button, stylize_textctrl
+from utils.stylize import stylize_button
 from widgets.card_image_display import CardImageDisplay
 from widgets.mana_rich_text_ctrl import ManaSymbolRichCtrl
 

@@ -92,7 +92,6 @@ class AutomationServer:
             "screenshot_window": self._handle_screenshot_window,
             "add_lorem_mana_card": self._handle_add_lorem_mana_card,
             "get_inspector_oracle_text": self._handle_get_inspector_oracle_text,
-
         }
 
     def register_handler(self, command: str, handler: Callable[..., Any]) -> None:
@@ -984,4 +983,3 @@ class AutomationServer:
             return {"text": "", "error": "Oracle text control not found"}
         value = ctrl.GetValue() if hasattr(ctrl, "GetValue") else ""
         return {"text": value}
-
