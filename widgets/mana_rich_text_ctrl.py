@@ -1,8 +1,14 @@
-"""Mana-symbol-aware RichTextCtrl with inline mana-symbol images.
+"""Mana-symbol-aware TextCtrl-compatible widget with inline mana-symbol images.
 
-A TextCtrl-compatible control that renders `{W}`, `{R/G}`, `{2/W}` etc.
-as inline images while keeping the brace-notation string as the
-canonical value returned by `GetValue()`.
+Renders `{W}`, `{R/G}`, `{2/W}` etc. as inline images while keeping the
+brace-notation string as the canonical value returned by `GetValue()`.
+
+Why this is a wx.Panel, not a wx.richtext.RichTextCtrl: the native
+TextCtrl's blue focus underline is painted by Windows' uxtheme on the
+EDIT control's non-client area, which a custom-drawn RichTextCtrl can't
+receive. To match the look we paint the whole 1-DIP grey frame ourselves
+and tint the bottom edge DARK_ACCENT on focus. The actual rich-text
+buffer is a borderless child RichTextCtrl that fills the panel interior.
 
 The placeholder hint is a separate `wx.StaticText` overlay rather than
 text written into the rich-text buffer. Writing the hint into the buffer
@@ -45,21 +51,32 @@ if TYPE_CHECKING:
     from utils.mana_icon_factory import ManaIconFactory
 
 
-class ManaSymbolRichCtrl(wx.richtext.RichTextCtrl):
+# Two-tone frame matching the Win11 themed edit-control look: a slightly
+# darker stripe on the top and sides, a lighter (and thicker) stripe on
+# the bottom that tints DARK_ACCENT when the control has focus.
+_BORDER_GREY_SIDES = wx.Colour(82, 82, 82)
+_BORDER_GREY_BOTTOM = wx.Colour(138, 138, 138)
+_BORDER_SIDE_DIP = 1
+_BORDER_BOTTOM_DIP = 2
+
+
+class _ManaRichTextInner(wx.richtext.RichTextCtrl):
+    """Inner borderless RichTextCtrl owned by ManaSymbolRichCtrl.
+
+    Handles buffer rendering, symbol images, the hint overlay, and all
+    key interception. The surrounding frame is painted by the parent
+    Panel, not here.
+    """
+
     def __init__(
         self,
         parent: wx.Window,
         mana_icons: ManaIconFactory,
         *,
-        readonly: bool = False,
-        multiline: bool = True,
-        mana_key_input: bool = False,
-        ctrl_m_mana_mode: bool = False,
+        readonly: bool,
+        mana_key_input: bool,
+        ctrl_m_mana_mode: bool,
     ) -> None:
-        # BORDER_NONE (not BORDER_THEME): we draw the bottom border ourselves
-        # so the focus accent can tint the same line instead of stacking a
-        # blue line above the OS-drawn grey one (themed borders live outside
-        # the client area and can't be covered by child overlays).
         style = wx.BORDER_NONE | wx.richtext.RE_MULTILINE
         if readonly:
             style |= wx.richtext.RE_READONLY
@@ -90,30 +107,12 @@ class ManaSymbolRichCtrl(wx.richtext.RichTextCtrl):
         self.SetBasicStyle(persistent_style)
         self.SetDefaultStyle(persistent_style)
 
-        if not multiline:
-            ref = wx.TextCtrl(parent)
-            ref_h = ref.GetBestSize().height
-            ref.Destroy()
-            self.SetMinSize(wx.Size(-1, ref_h))
-
-        # Hint overlay. Positioned over the rich-text area, never written
-        # into the buffer. We leave auto-resize on so SetLabel expands the
-        # control to fit the text, and skip SetBackgroundColour (some
-        # backends ignore it on StaticText — the RTC's own DARK_ALT bg
-        # shows through instead).
+        # Hint overlay (a StaticText child, not text in the buffer).
         self._hint_label = wx.StaticText(self, label="")
         self._hint_label.SetFont(font)
         self._hint_label.SetForegroundColour(wx.Colour(*HINT_TEXT))
         self._hint_label.Hide()
         self._hint_label.Bind(wx.EVT_LEFT_DOWN, self._on_hint_click)
-
-        # Bottom-edge line. Always visible and tints between grey (unfocused)
-        # and DARK_ACCENT (focused) so the whole line changes colour, rather
-        # than stacking a second line above the existing one — this matches
-        # the native themed TextCtrl's focus indicator.
-        self._bottom_line_grey = wx.Colour(87, 87, 87)
-        self._bottom_line = wx.Panel(self, size=(-1, self.FromDIP(2)))
-        self._bottom_line.SetBackgroundColour(self._bottom_line_grey)
 
         if mana_key_input and not readonly:
             self.Bind(wx.EVT_KEY_DOWN, self._on_mana_key_down)
@@ -126,13 +125,10 @@ class ManaSymbolRichCtrl(wx.richtext.RichTextCtrl):
 
         self.Bind(wx.EVT_SET_FOCUS, self._on_focus_gained)
         self.Bind(wx.EVT_KILL_FOCUS, self._on_focus_lost)
-        # The control frequently has no size yet when SetHint is called
-        # (parent sizer has not laid out). Re-sync on every size event so
-        # the first real layout pass shows the hint.
         self.Bind(wx.EVT_SIZE, self._on_size)
 
     # ------------------------------------------------------------------
-    # Public TextCtrl-compatible API
+    # TextCtrl-compatible API (delegated by the Panel wrapper)
     # ------------------------------------------------------------------
 
     def GetValue(self) -> str:  # type: ignore[override]
@@ -152,16 +148,13 @@ class ManaSymbolRichCtrl(wx.richtext.RichTextCtrl):
         # Defer to after the current event cycle so focus races and the
         # initial layout pass have a chance to settle before we decide
         # whether to show.
-        wx.CallAfter(self._sync_overlays)
+        wx.CallAfter(self._sync_hint_visibility)
 
     # ------------------------------------------------------------------
     # Hint overlay management
     # ------------------------------------------------------------------
 
     def _has_content(self) -> bool:
-        # Covers both mana-mode symbols (tracked in _plain_text) and any
-        # native typing that lands in the RichTextCtrl buffer directly
-        # (ctrl_m mode when not in mana mode).
         return bool(self._plain_text) or self.GetLastPosition() > 0
 
     def _sync_hint_visibility(self) -> None:
@@ -174,39 +167,20 @@ class ManaSymbolRichCtrl(wx.richtext.RichTextCtrl):
         else:
             self._hint_label.Hide()
 
-    def _sync_bottom_line(self) -> None:
-        size = self.GetClientSize()
-        if size.width <= 0 or size.height <= 0:
-            return
-        line_h = self.FromDIP(2)
-        self._bottom_line.SetSize(0, size.height - line_h, size.width, line_h)
-        colour = wx.Colour(*DARK_ACCENT) if self.HasFocus() else self._bottom_line_grey
-        self._bottom_line.SetBackgroundColour(colour)
-        self._bottom_line.Refresh()
-        self._bottom_line.Raise()
-
-    def _sync_overlays(self) -> None:
-        self._sync_hint_visibility()
-        self._sync_bottom_line()
-
     def _on_hint_click(self, _evt: wx.MouseEvent) -> None:
-        # Forward the click-to-focus intent; StaticText does not receive
-        # keyboard focus on its own.
         self.SetFocus()
 
     def _on_focus_gained(self, evt: wx.FocusEvent) -> None:
         evt.Skip()
-        self._sync_overlays()
+        self._sync_hint_visibility()
 
     def _on_focus_lost(self, evt: wx.FocusEvent) -> None:
         evt.Skip()
-        # HasFocus() may still reflect the pre-transfer state during the
-        # EVT_KILL_FOCUS callback; defer so the check sees reality.
-        wx.CallAfter(self._sync_overlays)
+        wx.CallAfter(self._sync_hint_visibility)
 
     def _on_size(self, evt: wx.SizeEvent) -> None:
         evt.Skip()
-        self._sync_overlays()
+        self._sync_hint_visibility()
 
     # ------------------------------------------------------------------
     # Buffer rendering
@@ -222,7 +196,7 @@ class ManaSymbolRichCtrl(wx.richtext.RichTextCtrl):
             self.SetInsertionPointEnd()
         finally:
             self.Thaw()
-        self._sync_overlays()
+        self._sync_hint_visibility()
 
     def _render_plain_text(self, text: str) -> None:
         pos = 0
@@ -315,7 +289,7 @@ class ManaSymbolRichCtrl(wx.richtext.RichTextCtrl):
             self._held_keys.add(ch)
             self._chord_keys.add(ch)
             return
-        # Any other printable key is swallowed — a mana-cost box cannot
+        # Other printable keys are swallowed — the mana-cost box cannot
         # hold arbitrary text.
 
     def _on_mana_key_up(self, evt: wx.KeyEvent) -> None:
@@ -363,3 +337,112 @@ class ManaSymbolRichCtrl(wx.richtext.RichTextCtrl):
             self._copy_plain_text()
             return
         evt.Skip()
+
+
+class ManaSymbolRichCtrl(wx.Panel):
+    """Public wrapper. Custom-paints a 1-DIP grey frame with a 2-DIP bottom
+    edge that tints DARK_ACCENT on focus; delegates the TextCtrl API to an
+    inner borderless RichTextCtrl that fills the panel interior.
+    """
+
+    def __init__(
+        self,
+        parent: wx.Window,
+        mana_icons: ManaIconFactory,
+        *,
+        readonly: bool = False,
+        multiline: bool = True,
+        mana_key_input: bool = False,
+        ctrl_m_mana_mode: bool = False,
+    ) -> None:
+        super().__init__(parent, style=wx.BORDER_NONE)
+        # Required by wx.AutoBufferedPaintDC: we paint the background
+        # ourselves in _on_paint, so suppress the default erase-bg pass.
+        self.SetBackgroundStyle(wx.BG_STYLE_PAINT)
+        self.SetBackgroundColour(_BORDER_GREY_SIDES)
+
+        self._inner = _ManaRichTextInner(
+            self,
+            mana_icons,
+            readonly=readonly,
+            mana_key_input=mana_key_input,
+            ctrl_m_mana_mode=ctrl_m_mana_mode,
+        )
+
+        if not multiline:
+            ref = wx.TextCtrl(parent)
+            ref_h = ref.GetBestSize().height
+            ref.Destroy()
+            self.SetMinSize(wx.Size(-1, ref_h))
+
+        self.Bind(wx.EVT_PAINT, self._on_paint)
+        self.Bind(wx.EVT_SIZE, self._on_size)
+        # Inner focus changes drive a re-paint so the bottom edge tints.
+        self._inner.Bind(wx.EVT_SET_FOCUS, self._on_inner_focus_change)
+        self._inner.Bind(wx.EVT_KILL_FOCUS, self._on_inner_focus_change)
+
+        self._layout_inner()
+
+    # ------------------------------------------------------------------
+    # Frame painting + inner layout
+    # ------------------------------------------------------------------
+
+    def _layout_inner(self) -> None:
+        size = self.GetClientSize()
+        if size.width <= 0 or size.height <= 0:
+            return
+        side = self.FromDIP(_BORDER_SIDE_DIP)
+        bot = self.FromDIP(_BORDER_BOTTOM_DIP)
+        self._inner.SetSize(
+            side,
+            side,
+            max(0, size.width - 2 * side),
+            max(0, size.height - side - bot),
+        )
+
+    def _on_size(self, evt: wx.SizeEvent) -> None:
+        evt.Skip()
+        self._layout_inner()
+        self.Refresh()
+
+    def _on_paint(self, _evt: wx.PaintEvent) -> None:
+        dc = wx.AutoBufferedPaintDC(self)
+        size = self.GetClientSize()
+        bot = self.FromDIP(_BORDER_BOTTOM_DIP)
+
+        dc.SetPen(wx.TRANSPARENT_PEN)
+        # Darker-grey base covers the top and side edges; the inner RTC
+        # paints over the middle.
+        dc.SetBrush(wx.Brush(_BORDER_GREY_SIDES))
+        dc.DrawRectangle(0, 0, size.width, size.height)
+
+        # Lighter (and thicker) bottom band, tinting DARK_ACCENT on focus.
+        bottom_colour = wx.Colour(*DARK_ACCENT) if self._inner.HasFocus() else _BORDER_GREY_BOTTOM
+        dc.SetBrush(wx.Brush(bottom_colour))
+        dc.DrawRectangle(0, size.height - bot, size.width, bot)
+
+    def _on_inner_focus_change(self, evt: wx.FocusEvent) -> None:
+        evt.Skip()
+        # Defer: HasFocus() may still reflect the pre-transition state.
+        wx.CallAfter(self.Refresh)
+
+    # ------------------------------------------------------------------
+    # Public TextCtrl-compatible API (delegation to the inner RTC)
+    # ------------------------------------------------------------------
+
+    def GetValue(self) -> str:
+        return self._inner.GetValue()
+
+    def SetValue(self, text: str) -> None:
+        self._inner.SetValue(text)
+
+    def ChangeValue(self, text: str) -> None:
+        self._inner.ChangeValue(text)
+
+    def SetHint(self, hint: str) -> None:
+        self._inner.SetHint(hint)
+
+    def SetToolTip(self, tip) -> None:  # type: ignore[override]
+        # The inner RTC covers the whole interior; putting the tooltip on
+        # the frame panel alone would only fire on the 1-DIP edge.
+        self._inner.SetToolTip(tip)
