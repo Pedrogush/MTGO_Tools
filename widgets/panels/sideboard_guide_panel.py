@@ -57,7 +57,11 @@ class SideboardGuidePanel(wx.Panel):
         self.exclusions: list[str] = []
 
         self._build_ui()
-        self._refresh_view()
+        # Defer the initial relayout: _refresh_view() calls Layout(), which
+        # asserts inside wxWindow::GetLayoutDirection on Windows when child
+        # HWNDs are not yet realised during construction. wx.CallAfter runs it
+        # once the panel has been added to its parent and shown.
+        wx.CallAfter(self._refresh_view)
 
     def _t(self, key: str, **kwargs: object) -> str:
         return translate(self._locale, key, **kwargs)
@@ -234,12 +238,7 @@ class SideboardGuidePanel(wx.Panel):
         self.guide_view.Show(not is_empty)
         self.empty_state_panel.Show(is_empty)
         self.button_row.Show(not is_empty)
-        # GetHandle() returns 0 when the underlying HWND is not realized yet —
-        # calling Layout() in that state asserts inside wxWindow::GetLayoutDirection.
-        # Skip the explicit relayout; the parent sizer will lay the panel out
-        # naturally once the frame is shown.
-        if self.GetHandle():
-            self.Layout()
+        self.Layout()
 
         # Update exclusions label
         text = ", ".join(self.exclusions) if self.exclusions else "\u2014"
