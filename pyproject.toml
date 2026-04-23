@@ -73,7 +73,7 @@ ignore = [
 "widgets/frames/radar/frame.py" = ["E402"]
 "widgets/frames/timer_alert/frame.py" = ["E402"]
 "widgets/frames/top_cards/frame.py" = ["E402"]
-"widgets/frames/metagame_analysis.py" = ["E402"]
+"widgets/frames/metagame_analysis/frame.py" = ["E402"]
 
 [tool.black]
 line-length = 100
