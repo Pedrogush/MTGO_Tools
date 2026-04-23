@@ -1,3 +1,7 @@
+"""UI construction for the on-screen mana keyboard."""
+
+from __future__ import annotations
+
 from collections.abc import Callable
 
 import wx
@@ -39,7 +43,7 @@ class ManaKeyboardFrame(wx.Frame):
 def open_mana_keyboard(
     parent: wx.Window,
     mana_icons: ManaIconFactory,
-    existing_window: "ManaKeyboardFrame | None",
+    existing_window: ManaKeyboardFrame | None,
     on_close_callback: Callable[[wx.CloseEvent], None],
 ) -> ManaKeyboardFrame:
     from widgets.buttons.mana_button import create_mana_button
