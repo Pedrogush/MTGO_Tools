@@ -1,95 +1,39 @@
-"""Card image display widget with navigation and transition animations.
-
-Features:
-- Display MTG card images with rounded corners
-- Toggle between multiple faces with an overlay button
-- Smooth fade transition animations between images
-"""
+"""Event handlers, workers, public state setters, and bitmap renderers for the card image display widget."""
 
 from __future__ import annotations
 
 from pathlib import Path
 
-import numpy as np
 import wx
 from loguru import logger
-from PIL import Image as PilImage
-from PIL import ImageDraw
 
 from utils.constants import (
     CARD_IMAGE_ANIMATION_ALPHA_STEP,
     CARD_IMAGE_ANIMATION_INTERVAL_MS,
-    CARD_IMAGE_CORNER_RADIUS,
-    CARD_IMAGE_DISPLAY_HEIGHT,
-    CARD_IMAGE_DISPLAY_WIDTH,
-    CARD_IMAGE_FLIP_ICON_MARGIN,
-    CARD_IMAGE_FLIP_ICON_SIZE,
     CARD_IMAGE_FLIP_ICON_TEXT_SCALE,
     CARD_IMAGE_PLACEHOLDER_INSET,
 )
 from utils.perf import timed
 
 
-class CardImageDisplay(wx.Panel):
-    """A panel that displays MTG card images with navigation and animations."""
+class CardImageDisplayHandlersMixin:
+    """Event callbacks, public state setters, UI populators, and bitmap renderers for :class:`CardImageDisplay`."""
 
-    def __init__(
-        self,
-        parent: wx.Window,
-        width: int = CARD_IMAGE_DISPLAY_WIDTH,
-        height: int = CARD_IMAGE_DISPLAY_HEIGHT,
-    ):
-        super().__init__(parent)
-
-        self.image_width = width
-        self.image_height = height
-        self.corner_radius = CARD_IMAGE_CORNER_RADIUS
-
-        # Flip icon state
-        self.show_flip_icon_overlay = False
-        self.flip_icon_size = CARD_IMAGE_FLIP_ICON_SIZE
-        self.flip_icon_margin = (
-            CARD_IMAGE_FLIP_ICON_MARGIN  # Small margin to align with card border
-        )
-
-        # Image navigation state
-        self.image_paths: list[Path] = []
-        self.current_index: int = 0
-
-        # Animation state
-        self.animation_timer: wx.Timer | None = None
-        self.animation_alpha: float = 0.0
-        self.animation_target_bitmap: wx.Bitmap | None = None
-        self.animation_current_bitmap: wx.Bitmap | None = None
-
-        # Set panel size
-        self.SetMinSize((width, height))
-
-        # Create UI components
-        self._create_ui()
-
-        # Show placeholder initially
-        self.show_placeholder()
-
-    def _create_ui(self) -> None:
-        # Main vertical sizer
-        main_sizer = wx.BoxSizer(wx.VERTICAL)
-
-        # Image display area
-        self.image_panel = wx.Panel(self, size=(self.image_width, self.image_height))
-
-        # Card image bitmap
-        self.bitmap_ctrl = wx.StaticBitmap(
-            self.image_panel, size=(self.image_width, self.image_height), pos=(0, 0)
-        )
-        self.bitmap_ctrl.Bind(wx.EVT_LEFT_UP, self._on_bitmap_left_click)
-
-        main_sizer.Add(self.image_panel, 1, wx.EXPAND | wx.ALL, 0)
-
-        self.SetSizer(main_sizer)
-
-        # Keyboard shortcuts
-        self.Bind(wx.EVT_CHAR_HOOK, self._on_key_down)
+    # Attributes supplied by :class:`CardImageDisplay` / the properties mixin.
+    image_width: int
+    image_height: int
+    corner_radius: int
+    show_flip_icon_overlay: bool
+    flip_icon_size: int
+    flip_icon_margin: int
+    image_paths: list[Path]
+    current_index: int
+    animation_timer: wx.Timer | None
+    animation_alpha: float
+    animation_target_bitmap: wx.Bitmap | None
+    animation_current_bitmap: wx.Bitmap | None
+    bitmap_ctrl: wx.StaticBitmap
+    image_panel: wx.Panel
 
     def show_placeholder(self, text: str = "No image") -> None:
         self.image_paths = []
@@ -204,29 +148,6 @@ class CardImageDisplay(wx.Panel):
 
         self.bitmap_ctrl.SetBitmap(blended)
         self.Refresh()
-
-    def _blend_bitmaps(self, bmp1: wx.Bitmap, bmp2: wx.Bitmap, alpha: float) -> wx.Bitmap:
-        img1 = bmp1.ConvertToImage()
-        img2 = bmp2.ConvertToImage()
-
-        w1, h1 = img1.GetWidth(), img1.GetHeight()
-        w2, h2 = img2.GetWidth(), img2.GetHeight()
-
-        # Normalise to same size (preserves existing size-mismatch contract)
-        if (w1, h1) != (w2, h2):
-            img1 = img1.Resize(img2.GetSize(), (0, 0))
-            w1, h1 = w2, h2
-
-        # Convert wx.Image RGB data to PIL, blend in C, convert back.
-        # wx.Image.GetData() always returns raw RGB bytes (3 bytes/pixel, no alpha),
-        # matching PIL.Image.frombytes("RGB"). Semantics: out = img1*(1-alpha) + img2*alpha.
-        pil1 = PilImage.frombytes("RGB", (w1, h1), bytes(img1.GetData()))
-        pil2 = PilImage.frombytes("RGB", (w2, h2), bytes(img2.GetData()))
-        blended = PilImage.blend(pil1, pil2, alpha)
-
-        result = wx.Image(w1, h1)
-        result.SetData(blended.tobytes())
-        return wx.Bitmap(result)
 
     def _update_navigation(self) -> None:
         has_alternate_face = len(self.image_paths) > 1
@@ -374,34 +295,6 @@ class CardImageDisplay(wx.Panel):
         text_y = icon_y + (self.flip_icon_size - th) / 2
         gc.DrawText(text, text_x, text_y)
 
-    def _get_flip_icon_rect(self) -> wx.Rect:
-        icon_x = self.flip_icon_margin
-        icon_y = self.flip_icon_margin
-        return wx.Rect(icon_x, icon_y, self.flip_icon_size, self.flip_icon_size)
-
-    @timed
-    def _apply_rounded_corners_to_image(self, image: wx.Image, radius: int) -> wx.Image:
-        img = image.Copy()
-        if not img.HasAlpha():
-            img.InitAlpha()
-
-        w, h = img.GetWidth(), img.GetHeight()
-
-        # Build a binary rounded-rectangle mask via PIL (C-native rasterisation).
-        # Interior pixels are 255; outside-corner pixels are 0.
-        mask_pil = PilImage.new("L", (w, h), 0)
-        draw = ImageDraw.Draw(mask_pil)
-        draw.rounded_rectangle([0, 0, w - 1, h - 1], radius=radius, fill=255)
-        mask_bytes = np.frombuffer(mask_pil.tobytes(), dtype=np.uint8)
-
-        # Apply mask: np.minimum preserves partial alpha inside the rect and
-        # forces alpha=0 in the transparent corner regions.
-        # bytes(img.GetAlpha()) creates a copy, so frombuffer is not read-only.
-        existing_alpha = np.frombuffer(bytes(img.GetAlpha()), dtype=np.uint8)
-        new_alpha = np.minimum(existing_alpha, mask_bytes)
-        img.SetAlpha(new_alpha.tobytes())
-        return img
-
     def _create_placeholder_bitmap(self, text: str) -> wx.Bitmap:
         bitmap = wx.Bitmap(self.image_width, self.image_height)
         dc = wx.MemoryDC(bitmap)
@@ -448,7 +341,3 @@ class CardImageDisplay(wx.Panel):
             # Reload current image to redraw without flip icon
             if self.image_paths and 0 <= self.current_index < len(self.image_paths):
                 self._load_image_at_index(self.current_index, animate=False)
-
-    def __del__(self):
-        if self.animation_timer and self.animation_timer.IsRunning():
-            self.animation_timer.Stop()
