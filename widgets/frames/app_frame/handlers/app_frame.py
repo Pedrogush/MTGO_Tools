@@ -16,8 +16,8 @@ from utils.runtime_flags import is_automation_enabled
 from widgets.dialogs.help_dialog import show_help
 from widgets.dialogs.image_download_dialog import show_image_download_dialog
 from widgets.dialogs.tutorial_dialog import show_tutorial
+from widgets.frames.app_frame.handlers.app_events import _simple_summary_html
 from widgets.frames.mana_keyboard import ManaKeyboardFrame, open_mana_keyboard
-from widgets.handlers.app_event_handlers import _simple_summary_html
 from widgets.panels.card_inspector_panel import CardInspectorPanel
 from widgets.panels.card_table_panel import CardTablePanel
 from widgets.panels.deck_notes_panel import DeckNotesPanel

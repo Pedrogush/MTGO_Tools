@@ -8,10 +8,12 @@ import wx
 
 from utils.constants import DARK_ALT, DARK_BG, LIGHT_TEXT
 from utils.i18n import translate
+from widgets.dialogs.guide_entry_dialog.handlers import GuideEntryDialogHandlersMixin
+from widgets.dialogs.guide_entry_dialog.properties import GuideEntryDialogPropertiesMixin
 from widgets.panels.sideboard_card_selector import SideboardCardSelector
 
 
-class GuideEntryDialog(wx.Dialog):
+class GuideEntryDialog(GuideEntryDialogHandlersMixin, GuideEntryDialogPropertiesMixin, wx.Dialog):
     """Dialog for editing a sideboard guide entry with card selection from mainboard/sideboard."""
 
     def __init__(
@@ -159,31 +161,3 @@ class GuideEntryDialog(wx.Dialog):
 
     def _t(self, key: str, **kwargs: object) -> str:
         return translate(self._locale, key, **kwargs)
-
-    def _on_save_continue(self, event: wx.Event) -> None:
-        # Return wx.ID_APPLY to signal save without closing
-        self.EndModal(wx.ID_APPLY)
-
-    def _load_data(self, data: dict[str, Any]) -> None:
-        # Load play out/in
-        if "play_out" in data:
-            self.play_out_selector.set_selected_cards(data["play_out"])
-        if "play_in" in data:
-            self.play_in_selector.set_selected_cards(data["play_in"])
-
-        # Load draw out/in
-        if "draw_out" in data:
-            self.draw_out_selector.set_selected_cards(data["draw_out"])
-        if "draw_in" in data:
-            self.draw_in_selector.set_selected_cards(data["draw_in"])
-
-    def get_data(self) -> dict[str, Any]:
-        return {
-            "archetype": self.archetype_ctrl.GetValue().strip(),
-            "play_out": self.play_out_selector.get_selected_cards(),
-            "play_in": self.play_in_selector.get_selected_cards(),
-            "draw_out": self.draw_out_selector.get_selected_cards(),
-            "draw_in": self.draw_in_selector.get_selected_cards(),
-            "notes": self.notes_ctrl.GetValue().strip(),
-            "enable_double_entries": self.enable_double_checkbox.GetValue(),
-        }

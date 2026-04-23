@@ -6,6 +6,7 @@ import wx
 
 from utils.constants import DARK_BG, DARK_PANEL, LIGHT_TEXT, SUBDUED_TEXT
 from utils.i18n import DEFAULT_LOCALE, translate
+from widgets.dialogs.tutorial_dialog.handlers import TutorialDialogHandlersMixin
 
 _STEP_KEYS: list[tuple[str, str]] = [
     ("tutorial.step0.title", "tutorial.step0.body"),
@@ -18,7 +19,7 @@ _STEP_KEYS: list[tuple[str, str]] = [
 ]
 
 
-class TutorialDialog(wx.Dialog):
+class TutorialDialog(TutorialDialogHandlersMixin, wx.Dialog):
     """Multi-page wizard that introduces the main features of MTGO Tools."""
 
     def __init__(self, parent: wx.Window, locale: str = DEFAULT_LOCALE) -> None:
@@ -119,31 +120,6 @@ class TutorialDialog(wx.Dialog):
         )
         self._skip_btn.Show(not is_last)
         self.Layout()
-
-    def _on_back(self, _evt: wx.CommandEvent) -> None:
-        if self._step > 0:
-            self._step -= 1
-            self._refresh()
-
-    def _on_next(self, _evt: wx.CommandEvent) -> None:
-        if self._step < self._total - 1:
-            self._step += 1
-            self._refresh()
-        else:
-            self.EndModal(wx.ID_OK)
-
-    def _on_skip(self, _evt: wx.CommandEvent) -> None:
-        self.EndModal(wx.ID_CANCEL)
-
-    # ------------------------------------------------------------------ resize --
-    def OnSize(self, event: wx.SizeEvent) -> None:  # noqa: N802 - wx override
-        event.Skip()
-        wx.CallAfter(self._rewrap)
-
-    def _rewrap(self) -> None:
-        if self._body_label:
-            self._body_label.Wrap(self.GetClientSize().GetWidth() - 40)
-            self.Layout()
 
 
 def show_tutorial(parent: wx.Window, locale: str = DEFAULT_LOCALE) -> None:

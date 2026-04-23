@@ -9,9 +9,11 @@ from collections.abc import Callable
 import wx
 
 from utils.stylize import stylize_button
+from widgets.buttons.deck_action_buttons.handlers import DeckActionButtonsHandlersMixin
+from widgets.buttons.deck_action_buttons.properties import DeckActionButtonsPropertiesMixin
 
 
-class DeckActionButtons(wx.Panel):
+class DeckActionButtons(DeckActionButtonsHandlersMixin, DeckActionButtonsPropertiesMixin, wx.Panel):
     """Panel containing deck action buttons (Copy, Save, Today's Average)."""
 
     def __init__(
@@ -77,51 +79,3 @@ class DeckActionButtons(wx.Panel):
         self.copy_button.Disable()
         self.copy_button.Bind(wx.EVT_BUTTON, self._on_copy_clicked)
         row2.Add(self.copy_button, 1)
-
-    # ============= Public API =============
-
-    def enable_daily_average(self, enable: bool = True) -> None:
-        if enable:
-            self.daily_average_button.Enable()
-        else:
-            self.daily_average_button.Disable()
-
-    def enable_copy(self, enable: bool = True) -> None:
-        if enable:
-            self.copy_button.Enable()
-        else:
-            self.copy_button.Disable()
-
-    def enable_save(self, enable: bool = True) -> None:
-        if enable:
-            self.save_button.Enable()
-        else:
-            self.save_button.Disable()
-
-    def enable_deck_actions(self, enable: bool = True) -> None:
-        self.enable_copy(enable)
-        self.enable_save(enable)
-
-    def enable_load(self, enable: bool = True) -> None:
-        if enable:
-            self.load_button.Enable()
-        else:
-            self.load_button.Disable()
-
-    # ============= Private Methods =============
-
-    def _on_daily_average_clicked(self, _event: wx.Event) -> None:
-        if self.on_daily_average:
-            self.on_daily_average()
-
-    def _on_copy_clicked(self, _event: wx.Event) -> None:
-        if self.on_copy:
-            self.on_copy()
-
-    def _on_load_clicked(self, _event: wx.Event) -> None:
-        if self.on_load:
-            self.on_load()
-
-    def _on_save_clicked(self, _event: wx.Event) -> None:
-        if self.on_save:
-            self.on_save()

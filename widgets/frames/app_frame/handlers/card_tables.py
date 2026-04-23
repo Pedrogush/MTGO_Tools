@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     from widgets.panels.card_table_panel import CardTablePanel
 
 
-class CardTablePanelHandler:
+class CardTablesHandler:
     """Mixin containing zone editing and card focus handlers."""
 
     def _after_zone_change(self, zone: str) -> None:

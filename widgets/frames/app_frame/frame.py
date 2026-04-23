@@ -27,7 +27,12 @@ from utils.constants import (
 from utils.i18n import SUPPORTED_LOCALES, translate
 from utils.mana_icon_factory import ManaIconFactory
 from widgets.buttons.toolbar_buttons import ToolbarButtons
-from widgets.frames.app_frame.handlers import AppFrameHandlersMixin
+from widgets.frames.app_frame.handlers import (
+    AppEventHandlers,
+    AppFrameHandlersMixin,
+    CardTablesHandler,
+    SideboardGuideHandlers,
+)
 from widgets.frames.app_frame.properties import AppFramePropertiesMixin
 from widgets.frames.identify_opponent import MTGOpponentDeckSpy
 from widgets.frames.mana_keyboard import ManaKeyboardFrame
@@ -36,9 +41,6 @@ from widgets.frames.metagame_analysis import MetagameAnalysisFrame
 from widgets.frames.radar import RadarFrame
 from widgets.frames.timer_alert import TimerAlertFrame
 from widgets.frames.top_cards import TopCardsFrame
-from widgets.handlers.app_event_handlers import AppEventHandlers
-from widgets.handlers.card_table_panel_handler import CardTablePanelHandler
-from widgets.handlers.sideboard_guide_handlers import SideboardGuideHandlers
 from widgets.panels.card_inspector_panel import CardInspectorPanel
 from widgets.panels.card_table_panel import CardTablePanel
 from widgets.panels.deck_builder_panel import DeckBuilderPanel
@@ -54,7 +56,7 @@ class AppFrame(
     AppFramePropertiesMixin,
     AppEventHandlers,
     SideboardGuideHandlers,
-    CardTablePanelHandler,
+    CardTablesHandler,
     wx.Frame,
 ):
     """wxPython-based metagame research + deck builder UI."""

@@ -2,18 +2,17 @@
 
 from __future__ import annotations
 
-import threading
 from collections.abc import Callable
 from pathlib import Path
 
 import wx
-from loguru import logger
 
 from utils.constants import DARK_BG, DARK_PANEL, LIGHT_TEXT, SUBDUED_TEXT
-from utils.diagnostics import export_diagnostics_bundle
+from widgets.dialogs.feedback_dialog.handlers import FeedbackDialogHandlersMixin
+from widgets.dialogs.feedback_dialog.properties import FeedbackDialogPropertiesMixin
 
 
-class FeedbackDialog(wx.Dialog):
+class FeedbackDialog(FeedbackDialogHandlersMixin, FeedbackDialogPropertiesMixin, wx.Dialog):
     """Let users add optional notes and export a local diagnostics zip.
 
     No data is uploaded anywhere.  The exported zip can be shared manually.
@@ -119,68 +118,6 @@ class FeedbackDialog(wx.Dialog):
         sizer.Add(btn_sizer, 0, wx.EXPAND | wx.ALL, 10)
 
         panel.SetSizer(sizer)
-
-    # ------------------------------------------------------------------
-    @property
-    def event_logging_enabled(self) -> bool:
-        return self._event_log_check.GetValue()
-
-    # ------------------------------------------------------------------
-    def _on_export(self, _evt: wx.CommandEvent) -> None:
-        default_name = f"mtgo_tools_diagnostics_{_timestamp()}.zip"
-        with wx.FileDialog(
-            self,
-            "Save diagnostics bundle",
-            defaultFile=default_name,
-            wildcard="ZIP files (*.zip)|*.zip",
-            style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT,
-        ) as dlg:
-            if dlg.ShowModal() != wx.ID_OK:
-                return
-            dest = Path(dlg.GetPath())
-
-        notes = self._notes_ctrl.GetValue()
-        include_events = self._include_events_check.GetValue()
-
-        self._export_btn.Disable()
-        self._status_label.SetLabel("Exporting…")
-
-        def _worker() -> None:
-            try:
-                out = export_diagnostics_bundle(
-                    dest,
-                    logs_dir=self._logs_dir,
-                    notes=notes,
-                    include_events=include_events,
-                )
-                wx.CallAfter(self._on_export_done, out, None)
-            except Exception as exc:
-                logger.exception("Failed to export diagnostics bundle")
-                wx.CallAfter(self._on_export_done, None, exc)
-
-        threading.Thread(target=_worker, daemon=True).start()
-
-    def _on_export_done(self, out: Path | None, exc: Exception | None) -> None:
-        self._status_label.SetLabel("")
-        self._export_btn.Enable()
-        if exc is not None:
-            wx.MessageBox(
-                f"Export failed: {exc}",
-                "Export Error",
-                wx.OK | wx.ICON_ERROR,
-            )
-        else:
-            wx.MessageBox(
-                f"Diagnostics bundle saved to:\n{out}",
-                "Export complete",
-                wx.OK | wx.ICON_INFORMATION,
-            )
-
-
-def _timestamp() -> str:
-    from datetime import datetime
-
-    return datetime.now().strftime("%Y%m%d_%H%M%S")
 
 
 def show_feedback_dialog(
