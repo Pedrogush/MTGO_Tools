@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from services.deck_averager import DeckAverager
+from services.deck_service.averager import DeckAverager
 
 
 @pytest.fixture()
