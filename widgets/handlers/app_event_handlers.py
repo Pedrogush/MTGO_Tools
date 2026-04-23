@@ -15,15 +15,15 @@ from utils.deck import sanitize_filename
 from utils.deck_results_filter import _classify_event_type, _normalize_date, filter_decks
 from utils.ui_helpers import open_child_window, widget_exists
 from widgets.dialogs.feedback_dialog import show_feedback_dialog
-from widgets.identify_opponent import MTGOpponentDeckSpy
-from widgets.match_history import MatchHistoryFrame
-from widgets.metagame_analysis import MetagameAnalysisFrame
-from widgets.radar import RadarFrame
-from widgets.timer_alert import TimerAlertFrame
-from widgets.top_cards import TopCardsFrame
+from widgets.frames.identify_opponent import MTGOpponentDeckSpy
+from widgets.frames.match_history import MatchHistoryFrame
+from widgets.frames.metagame_analysis import MetagameAnalysisFrame
+from widgets.frames.radar import RadarFrame
+from widgets.frames.timer_alert import TimerAlertFrame
+from widgets.frames.top_cards import TopCardsFrame
 
 if TYPE_CHECKING:
-    from widgets.app_frame import AppFrame
+    from widgets.frames.app_frame import AppFrame
 
 
 def _simple_summary_html(text: str) -> str:

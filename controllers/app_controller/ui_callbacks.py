@@ -10,7 +10,7 @@ from loguru import logger
 
 if TYPE_CHECKING:
     from controllers.app_controller import AppController
-    from widgets.app_frame import AppFrame
+    from widgets.frames.app_frame import AppFrame
 
 
 @dataclass

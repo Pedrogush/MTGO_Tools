@@ -12,7 +12,7 @@ from controllers.app_controller import get_deck_selector_controller
 from utils.constants import BASE_DATA_DIR, LOGS_DIR, ensure_base_dirs
 from utils.logging_config import configure_logging
 from utils.runtime_flags import set_automation_enabled
-from widgets.splash_frame import LoadingFrame
+from widgets.frames.splash_frame import LoadingFrame
 
 # Global flag for automation mode
 _automation_enabled = False

@@ -10,7 +10,7 @@ from services.radar_service import RadarData
 @pytest.fixture
 def mock_wx():
     """Mock wx module to avoid GUI dependencies."""
-    with patch("widgets.identify_opponent.wx") as mock:
+    with patch("widgets.frames.identify_opponent.wx") as mock:
         # Mock common wx classes
         mock.Frame = MagicMock
         mock.Panel = MagicMock
@@ -59,7 +59,7 @@ class TestRadarIntegration:
         self, mock_wx, mock_radar_service, mock_metagame_repo
     ):
         """Test that radar loading is triggered when opponent has known deck."""
-        with patch("widgets.identify_opponent.find_archetype_by_name") as mock_find:
+        with patch("widgets.frames.identify_opponent.find_archetype_by_name") as mock_find:
             mock_find.return_value = {
                 "name": "UR Murktide",
                 "href": "/archetype/ur-murktide",

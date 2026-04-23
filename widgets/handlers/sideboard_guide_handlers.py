@@ -19,7 +19,7 @@ from utils.constants.ui_windows import (
 from widgets.dialogs.guide_entry_dialog import GuideEntryDialog
 
 if TYPE_CHECKING:
-    from widgets.app_frame import AppFrame
+    from widgets.frames.app_frame import AppFrame
 
 
 class SideboardGuideHandlers:

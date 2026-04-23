@@ -21,7 +21,7 @@ from utils.stylize import (
     stylize_textctrl,
 )
 from widgets.buttons.deck_action_buttons import DeckActionButtons
-from widgets.deck_results_list import DeckResultsList
+from widgets.lists.deck_results_list import DeckResultsList
 
 
 class _CenteredChoice(wx.adv.OwnerDrawnComboBox):

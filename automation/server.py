@@ -18,7 +18,7 @@ import wx
 from loguru import logger
 
 if TYPE_CHECKING:
-    from widgets.app_frame import AppFrame
+    from widgets.frames.app_frame import AppFrame
 
 DEFAULT_PORT = 19847
 BUFFER_SIZE = 65536

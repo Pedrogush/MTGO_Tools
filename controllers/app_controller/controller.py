@@ -34,7 +34,7 @@ from utils.constants import (
 from utils.diagnostics import EventLogger
 
 if TYPE_CHECKING:
-    from widgets.app_frame import AppFrame
+    from widgets.frames.app_frame import AppFrame
 
 
 class AppController(

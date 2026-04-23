@@ -32,8 +32,8 @@ from utils.constants import (
 )
 from utils.mana_icon_factory import ManaIconFactory
 from utils.stylize import stylize_button
-from widgets.card_image_display import CardImageDisplay
-from widgets.mana_rich_text_ctrl import ManaSymbolRichCtrl
+from widgets.panels.card_image_display import CardImageDisplay
+from widgets.panels.mana_rich_text_ctrl import ManaSymbolRichCtrl
 
 
 class CardInspectorPanel(wx.Panel):

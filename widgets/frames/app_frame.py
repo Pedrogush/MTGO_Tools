@@ -31,24 +31,24 @@ from widgets.buttons.toolbar_buttons import ToolbarButtons
 from widgets.dialogs.help_dialog import show_help
 from widgets.dialogs.image_download_dialog import show_image_download_dialog
 from widgets.dialogs.tutorial_dialog import show_tutorial
+from widgets.frames.identify_opponent import MTGOpponentDeckSpy
+from widgets.frames.mana_keyboard import ManaKeyboardFrame, open_mana_keyboard
+from widgets.frames.match_history import MatchHistoryFrame
+from widgets.frames.metagame_analysis import MetagameAnalysisFrame
+from widgets.frames.radar import RadarFrame
+from widgets.frames.timer_alert import TimerAlertFrame
+from widgets.frames.top_cards import TopCardsFrame
 from widgets.handlers.app_event_handlers import AppEventHandlers, _simple_summary_html
 from widgets.handlers.card_table_panel_handler import CardTablePanelHandler
 from widgets.handlers.sideboard_guide_handlers import SideboardGuideHandlers
-from widgets.identify_opponent import MTGOpponentDeckSpy
-from widgets.mana_keyboard import ManaKeyboardFrame, open_mana_keyboard
-from widgets.mana_rich_text_ctrl import ManaSymbolRichCtrl
-from widgets.match_history import MatchHistoryFrame
-from widgets.metagame_analysis import MetagameAnalysisFrame
 from widgets.panels.card_inspector_panel import CardInspectorPanel
 from widgets.panels.card_table_panel import CardTablePanel
 from widgets.panels.deck_builder_panel import DeckBuilderPanel
 from widgets.panels.deck_notes_panel import DeckNotesPanel
 from widgets.panels.deck_research_panel import DeckResearchPanel
 from widgets.panels.deck_stats_panel import DeckStatsPanel
+from widgets.panels.mana_rich_text_ctrl import ManaSymbolRichCtrl
 from widgets.panels.sideboard_guide_panel import SideboardGuidePanel
-from widgets.radar import RadarFrame
-from widgets.timer_alert import TimerAlertFrame
-from widgets.top_cards import TopCardsFrame
 
 
 class AppFrame(AppEventHandlers, SideboardGuideHandlers, CardTablePanelHandler, wx.Frame):

@@ -12,7 +12,7 @@ from typing import Any
 # Ensure the project root is on sys.path when the file is run directly
 # (e.g. `python widgets/identify_opponent.py`).  Has no effect when the
 # package is imported normally or via the installed console script.
-_project_root = Path(__file__).resolve().parent.parent
+_project_root = Path(__file__).resolve().parent.parent.parent
 if str(_project_root) not in sys.path:
     sys.path.insert(0, str(_project_root))
 

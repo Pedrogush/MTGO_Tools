@@ -12,7 +12,7 @@ from utils.constants import MTGO_BRIDGE_SHUTDOWN_TIMEOUT_SECONDS
 if TYPE_CHECKING:
     import wx
 
-    from widgets.app_frame import AppFrame
+    from widgets.frames.app_frame import AppFrame
 
 
 class LifecycleMixin:
@@ -90,7 +90,7 @@ class LifecycleMixin:
         import wx
 
         from controllers.app_controller.ui_callbacks import AppControllerUIHelpers
-        from widgets.app_frame import AppFrame
+        from widgets.frames.app_frame import AppFrame
 
         frame = AppFrame(controller=self, parent=parent)
         self._ui_callbacks = AppControllerUIHelpers(self, frame).build_callbacks()

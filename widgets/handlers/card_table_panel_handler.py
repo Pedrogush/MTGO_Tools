@@ -10,7 +10,7 @@ import wx
 from utils.constants import ZONE_TITLES
 
 if TYPE_CHECKING:
-    from widgets.app_frame import AppFrame
+    from widgets.frames.app_frame import AppFrame
     from widgets.panels.card_table_panel import CardTablePanel
 
 
