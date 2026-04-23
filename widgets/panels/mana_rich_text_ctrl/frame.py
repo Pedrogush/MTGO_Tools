@@ -35,12 +35,12 @@ from typing import TYPE_CHECKING
 
 import wx
 import wx.richtext
+
+from utils.constants import DARK_ALT, HINT_TEXT, LIGHT_TEXT
 from widgets.panels.mana_rich_text_ctrl.handlers import (
     ManaRichTextInnerHandlersMixin,
     ManaSymbolRichCtrlHandlersMixin,
 )
-
-from utils.constants import DARK_ALT, HINT_TEXT, LIGHT_TEXT
 from widgets.panels.mana_rich_text_ctrl.properties import (
     ManaRichTextInnerPropertiesMixin,
     ManaSymbolRichCtrlPropertiesMixin,

@@ -11,7 +11,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import wx
-from widgets.panels.card_image_display.handlers import CardImageDisplayHandlersMixin
 
 from utils.constants import (
     CARD_IMAGE_CORNER_RADIUS,
@@ -20,6 +19,7 @@ from utils.constants import (
     CARD_IMAGE_FLIP_ICON_MARGIN,
     CARD_IMAGE_FLIP_ICON_SIZE,
 )
+from widgets.panels.card_image_display.handlers import CardImageDisplayHandlersMixin
 from widgets.panels.card_image_display.properties import CardImageDisplayPropertiesMixin
 
 
