@@ -258,8 +258,23 @@ def pump_ui_events(app: wx.App, *, max_passes: int = 25) -> None:
     deletes.
     """
     for _ in range(max_passes):
-        wx.SafeYield(None, onlyIfNeeded=False)
-        app.ProcessIdle()
+        # wx.WakeUpIdle ensures the idle loop actually fires even when the
+        # message queue is otherwise quiet (so DeletePendingObjects runs).
+        wx.WakeUpIdle()
+        # app.Yield processes pending events AND runs idle on wxMSW, which
+        # is what invokes wxAppBase::DeletePendingObjects.
+        try:
+            app.Yield()
+        except Exception:
+            # Re-entrancy: fall back to the safer variant.
+            wx.SafeYield(None, onlyIfNeeded=False)
+        # Explicitly push an idle cycle to top-level windows so pending
+        # deletes are definitely processed. SendIdleEvents is what wx's own
+        # event loop calls during its idle phase.
+        for win in wx.GetTopLevelWindows():
+            if win:
+                evt = wx.IdleEvent()
+                win.ProcessEvent(evt)
         if hasattr(app, "HasPendingEvents") and not app.HasPendingEvents():
             break
         time_module.sleep(0)
