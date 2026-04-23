@@ -69,7 +69,7 @@ ignore = [
 "**/tests/**" = ["C901"]
 # Widget entry points insert project root into sys.path before other imports
 "widgets/frames/identify_opponent.py" = ["E402"]
-"widgets/frames/match_history.py" = ["E402"]
+"widgets/frames/match_history/frame.py" = ["E402"]
 "widgets/frames/timer_alert.py" = ["E402"]
 "widgets/frames/metagame_analysis.py" = ["E402"]
 
