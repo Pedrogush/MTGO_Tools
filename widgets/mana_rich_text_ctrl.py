@@ -6,9 +6,11 @@ brace-notation string as the canonical value returned by `GetValue()`.
 Why this is a wx.Panel, not a wx.richtext.RichTextCtrl: the native
 TextCtrl's blue focus underline is painted by Windows' uxtheme on the
 EDIT control's non-client area, which a custom-drawn RichTextCtrl can't
-receive. To match the look we paint the whole 1-DIP grey frame ourselves
-and tint the bottom edge DARK_ACCENT on focus. The actual rich-text
-buffer is a borderless child RichTextCtrl that fills the panel interior.
+receive. To match the look we paint the whole 2-DIP grey frame ourselves
+— replicating the outer/inner two-tone composition sampled from an
+adjacent native wx.TextCtrl — and tint the bottom outer row DARK_ACCENT
+on focus. The actual rich-text buffer is a borderless child RichTextCtrl
+that fills the panel interior.
 
 The placeholder hint is a separate `wx.StaticText` overlay rather than
 text written into the rich-text buffer. Writing the hint into the buffer
@@ -51,13 +53,16 @@ if TYPE_CHECKING:
     from utils.mana_icon_factory import ManaIconFactory
 
 
-# Two-tone frame matching the Win11 themed edit-control look: a slightly
-# darker stripe on the top and sides, a lighter (and thicker) stripe on
-# the bottom that tints DARK_ACCENT when the control has focus.
-_BORDER_GREY_SIDES = wx.Colour(82, 82, 82)
-_BORDER_GREY_BOTTOM = wx.Colour(138, 138, 138)
-_BORDER_SIDE_DIP = 1
-_BORDER_BOTTOM_DIP = 2
+# Three-tone frame matching the native Win11 dark-mode TextCtrl outline,
+# as sampled from an adjacent wx.TextCtrl in the same dialog: a 1-DIP
+# outer halo (lighter on top/left/right, darker on bottom) wrapping a
+# 1-DIP near-white inner ring. Total frame thickness: 2 DIP on every
+# side. On focus the bottom outer row tints the accent colour.
+_BORDER_OUTER_LIGHT = wx.Colour(236, 236, 236)
+_BORDER_INNER = wx.Colour(254, 254, 254)
+_BORDER_OUTER_DARK = wx.Colour(131, 131, 131)
+_BORDER_DIP = 2
+_BORDER_OUTER_DIP = 1
 
 
 class _ManaRichTextInner(wx.richtext.RichTextCtrl):
@@ -340,9 +345,11 @@ class _ManaRichTextInner(wx.richtext.RichTextCtrl):
 
 
 class ManaSymbolRichCtrl(wx.Panel):
-    """Public wrapper. Custom-paints a 1-DIP grey frame with a 2-DIP bottom
-    edge that tints DARK_ACCENT on focus; delegates the TextCtrl API to an
-    inner borderless RichTextCtrl that fills the panel interior.
+    """Public wrapper. Custom-paints a 2-DIP frame matching the native Win11
+    dark-mode wx.TextCtrl outline (outer light halo + inner near-white
+    ring, with a darker outer row at the bottom that tints DARK_ACCENT on
+    focus); delegates the TextCtrl API to an inner borderless RichTextCtrl
+    that fills the panel interior.
     """
 
     def __init__(
@@ -359,7 +366,7 @@ class ManaSymbolRichCtrl(wx.Panel):
         # Required by wx.AutoBufferedPaintDC: we paint the background
         # ourselves in _on_paint, so suppress the default erase-bg pass.
         self.SetBackgroundStyle(wx.BG_STYLE_PAINT)
-        self.SetBackgroundColour(_BORDER_GREY_SIDES)
+        self.SetBackgroundColour(_BORDER_OUTER_LIGHT)
 
         self._inner = _ManaRichTextInner(
             self,
@@ -391,13 +398,12 @@ class ManaSymbolRichCtrl(wx.Panel):
         size = self.GetClientSize()
         if size.width <= 0 or size.height <= 0:
             return
-        side = self.FromDIP(_BORDER_SIDE_DIP)
-        bot = self.FromDIP(_BORDER_BOTTOM_DIP)
+        thick = self.FromDIP(_BORDER_DIP)
         self._inner.SetSize(
-            side,
-            side,
-            max(0, size.width - 2 * side),
-            max(0, size.height - side - bot),
+            thick,
+            thick,
+            max(0, size.width - 2 * thick),
+            max(0, size.height - 2 * thick),
         )
 
     def _on_size(self, evt: wx.SizeEvent) -> None:
@@ -408,18 +414,28 @@ class ManaSymbolRichCtrl(wx.Panel):
     def _on_paint(self, _evt: wx.PaintEvent) -> None:
         dc = wx.AutoBufferedPaintDC(self)
         size = self.GetClientSize()
-        bot = self.FromDIP(_BORDER_BOTTOM_DIP)
+        outer = self.FromDIP(_BORDER_OUTER_DIP)
 
         dc.SetPen(wx.TRANSPARENT_PEN)
-        # Darker-grey base covers the top and side edges; the inner RTC
-        # paints over the middle.
-        dc.SetBrush(wx.Brush(_BORDER_GREY_SIDES))
+        # Outer halo covers the whole rectangle; the inner ring and the
+        # bottom outer row are painted over it. The inner RTC occupies
+        # the centre.
+        dc.SetBrush(wx.Brush(_BORDER_OUTER_LIGHT))
         dc.DrawRectangle(0, 0, size.width, size.height)
 
-        # Lighter (and thicker) bottom band, tinting DARK_ACCENT on focus.
-        bottom_colour = wx.Colour(*DARK_ACCENT) if self._inner.HasFocus() else _BORDER_GREY_BOTTOM
+        # Near-white inner ring inset by the outer halo.
+        dc.SetBrush(wx.Brush(_BORDER_INNER))
+        dc.DrawRectangle(
+            outer,
+            outer,
+            max(0, size.width - 2 * outer),
+            max(0, size.height - 2 * outer),
+        )
+
+        # Full bottom band tints DARK_ACCENT on focus.
+        bottom_colour = wx.Colour(*DARK_ACCENT) if self._inner.HasFocus() else _BORDER_OUTER_DARK
         dc.SetBrush(wx.Brush(bottom_colour))
-        dc.DrawRectangle(0, size.height - bot, size.width, bot)
+        dc.DrawRectangle(0, size.height - 2 * outer, size.width, 2 * outer)
 
     def _on_inner_focus_change(self, evt: wx.FocusEvent) -> None:
         evt.Skip()
