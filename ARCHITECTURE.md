@@ -136,7 +136,7 @@ graph TB
 
 **Controllers**: Central coordination and state management via `AppController`. Helper modules (`app_controller_helpers`, `bulk_data_helpers`, `session_manager`) handle specific subsystems to keep the main controller lean.
 
-**Services**: Business logic. Collection is split into focused sub-modules (`collection_cache`, `collection_parsing`, `collection_ownership`, `collection_deck_analysis`, `collection_stats`, `collection_bridge_refresh`, `collection_exporter`). Radar, format card pool, and deck workflow each have their own service.
+**Services**: Business logic. Image, collection, and deck services are each Python packages whose main class inherits from (or composes) focused mixins/helpers. For example `services/collection_service/` contains `cache`, `parsing`, `ownership`, `deck_analysis`, `stats`, `bridge_refresh`, and `exporter` modules; `services/image_service/` splits into `bulk_data`, `metadata`, `printing_index`, `cache`, and `download_queue`; `services/deck_service/` contains `parser`, `averager`, and `text_builder`. Radar, format card pool, and deck workflow each have their own service.
 
 **Repositories**: Data access with caching. `DeckRepository` and `MetagameRepository` use JSON file caches. `RadarRepository` and `FormatCardPoolRepository` use SQLite. `CardRepository` wraps `CardDataManager` for the MTGJson atomic-cards index.
 

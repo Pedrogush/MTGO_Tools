@@ -242,38 +242,58 @@ def ui_environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def pump_ui_events(app: wx.App, *, max_passes: int = 25) -> None:
-    """Process pending wx events until the queue drains or a safety cap is reached."""
+    """Drain the wx event queue AND the idle loop.
+
+    wx.Window.Destroy() is lazy: it enqueues the window on the app's
+    pending-delete list, which is only drained during idle processing
+    (wxAppBase::OnIdle -> DeletePendingObjects). Dispatching queued events
+    alone never runs OnIdle, so frame.Destroy() doesn't actually free the
+    Win32 HWNDs. Across ~10 AppFrames (~1200 HWNDs each) that exhausts the
+    Windows per-process USER-handle ceiling (~10k) and subsequent
+    ::CreateWindowEx calls return NULL — which surfaces as wxWindow::
+    GetLayoutDirection "invalid window" asserts during Layout().
+
+    wx.SafeYield processes pending events and runs OnIdle; calling it in a
+    loop until the queue is quiet drains both queued events and pending
+    deletes.
+    """
     for _ in range(max_passes):
-        processed = False
-        pending = getattr(app, "Pending", None)
-        if pending:
-            while pending():
-                app.Dispatch()
-                processed = True
-        else:
-            loop_pending = getattr(app, "ProcessPendingEvents", None)
-            if loop_pending:
-                while loop_pending():
-                    time_module.sleep(0)
-                    processed = True
-            else:
-                # Fall back to the older Pending/Dispatch loop if available
-                pending_func = getattr(wx, "Pending", None)
-                if pending_func:
-                    while pending_func():
-                        app.Dispatch()
-                        processed = True
-                else:
-                    app.Yield()
-                    processed = True
-        time_module.sleep(0)
-        if not processed:
+        # wx.WakeUpIdle ensures the idle loop actually fires even when the
+        # message queue is otherwise quiet (so DeletePendingObjects runs).
+        wx.WakeUpIdle()
+        # app.Yield processes pending events AND runs idle on wxMSW, which
+        # is what invokes wxAppBase::DeletePendingObjects.
+        try:
+            app.Yield()
+        except Exception:
+            # Re-entrancy: fall back to the safer variant.
+            wx.SafeYield(None, onlyIfNeeded=False)
+        # Explicitly push an idle cycle to top-level windows so pending
+        # deletes are definitely processed. SendIdleEvents is what wx's own
+        # event loop calls during its idle phase.
+        for win in wx.GetTopLevelWindows():
+            if win:
+                evt = wx.IdleEvent()
+                win.ProcessEvent(evt)
+        if hasattr(app, "HasPendingEvents") and not app.HasPendingEvents():
             break
+        time_module.sleep(0)
 
 
 @pytest.fixture
 def deck_selector_factory(wx_app) -> AppFrame:
     def _factory() -> AppFrame:
+        # Drain wx events and force GC of the prior controller before resetting.
+        # The previous test's frame.Destroy() schedules async cleanup; without
+        # pumping, those Destroy events plus queued wx.CallAfter callbacks
+        # accumulate. By the last UI test, wx fails to back new windows with
+        # HWNDs and Layout()/SetScrollRate() asserts inside the C++ layer.
+        import gc
+
+        pump_ui_events(wx_app)
+        gc.collect()
+        pump_ui_events(wx_app)
+
         reset_deck_selector_controller()
         controller = get_deck_selector_controller()
         frame = controller.frame
