@@ -1,5 +1,4 @@
-"""
-Deck Notes Panel - Structured note card editor for deck notes.
+"""UI construction for the deck notes panel.
 
 Each note is an individual card with a title, type, and body. Cards can be
 added, edited, reordered, and deleted independently.
@@ -13,7 +12,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import wx
-from loguru import logger
 
 from utils.constants import (
     DARK_ALT,
@@ -24,6 +22,8 @@ from utils.constants import (
 )
 from utils.i18n import translate
 from utils.stylize import stylize_button, stylize_textctrl
+from widgets.panels.deck_notes_panel.handlers import DeckNotesPanelHandlersMixin
+from widgets.panels.deck_notes_panel.properties import DeckNotesPanelPropertiesMixin
 
 if TYPE_CHECKING:
     from repositories.deck_repository import DeckRepository
@@ -152,7 +152,11 @@ class _NoteCardWidget(wx.Panel):
         self.type_choice.Refresh()
 
 
-class DeckNotesPanel(wx.Panel):
+class DeckNotesPanel(
+    DeckNotesPanelHandlersMixin,
+    DeckNotesPanelPropertiesMixin,
+    wx.Panel,
+):
     """Panel for structured deck notes composed of individual note cards."""
 
     def __init__(
@@ -179,9 +183,6 @@ class DeckNotesPanel(wx.Panel):
         self._card_widgets: list[_NoteCardWidget] = []
 
         self._build_ui()
-
-    def _t(self, key: str, **kwargs: object) -> str:
-        return translate(self._locale, key, **kwargs)
 
     def _build_ui(self) -> None:
         outer = wx.BoxSizer(wx.VERTICAL)
@@ -227,109 +228,3 @@ class DeckNotesPanel(wx.Panel):
         empty_sizer.AddStretchSpacer(1)
         self.empty_state_panel.Hide()
         outer.Add(self.empty_state_panel, 1, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 6)
-
-    # ═══════════════════════════════════════════════════════════════════════
-    # Public API
-    # ═══════════════════════════════════════════════════════════════════════
-
-    def set_notes(self, notes: list[dict[str, str]] | str) -> None:
-        self._cards = _migrate(notes)
-        self._rebuild_card_widgets()
-
-    def get_notes(self) -> list[dict[str, str]]:
-        return [w.get_data() for w in self._card_widgets]
-
-    def clear(self) -> None:
-        self._cards = []
-        self._rebuild_card_widgets()
-
-    def load_notes_for_current(self) -> None:
-        deck_key = self.deck_repo.get_current_deck_key()
-        raw = self.notes_store.get(deck_key, [])
-        logger.info(
-            "Loading deck notes: deck_key={} found={} note_count={}",
-            deck_key,
-            deck_key in self.notes_store,
-            len(raw) if isinstance(raw, list) else int(bool(raw)),
-        )
-        self.set_notes(raw)
-
-    def save_current_notes(self) -> None:
-        deck_key = self.deck_repo.get_current_deck_key()
-        self.notes_store[deck_key] = self.get_notes()
-        self.store_service.save_store(self.notes_store_path, self.notes_store)
-        self.on_status_update("notes.saved")
-
-    # ═══════════════════════════════════════════════════════════════════════
-    # Private helpers
-    # ═══════════════════════════════════════════════════════════════════════
-
-    def _rebuild_card_widgets(self) -> None:
-        self.scroll_win.Freeze()
-        for w in self._card_widgets:
-            w.Destroy()
-        self._card_widgets = []
-        self.cards_sizer.Clear(delete_windows=False)  # already destroyed above
-
-        for card in self._cards:
-            widget = self._make_card_widget(card)
-            self._card_widgets.append(widget)
-            self.cards_sizer.Add(widget, 0, wx.EXPAND | wx.ALL, 4)
-
-        has_cards = bool(self._cards)
-        self.scroll_win.Show(has_cards)
-        self.empty_state_panel.Show(not has_cards)
-        self.cards_sizer.Layout()
-        self.scroll_win.Layout()
-        self.scroll_win.FitInside()
-        self.scroll_win.Thaw()
-        self.Layout()
-
-    def _make_card_widget(self, card: dict[str, str]) -> _NoteCardWidget:
-        return _NoteCardWidget(
-            self.scroll_win,
-            card,
-            on_move_up=self._on_card_move_up,
-            on_move_down=self._on_card_move_down,
-            on_delete=self._on_card_delete,
-            locale=self._locale,
-        )
-
-    def _flush_widgets_to_cards(self) -> None:
-        self._cards = [w.get_data() for w in self._card_widgets]
-
-    def _on_add_note(self, _event: wx.Event) -> None:
-        self._flush_widgets_to_cards()
-        self._cards.append(_new_card())
-        self._rebuild_card_widgets()
-        # Scroll to bottom so the new card is visible
-        self.scroll_win.Scroll(0, self.scroll_win.GetVirtualSize().height)
-
-    def _on_card_move_up(self, widget: _NoteCardWidget) -> None:
-        self._flush_widgets_to_cards()
-        idx = self._card_widgets.index(widget)
-        if idx > 0:
-            self._cards[idx - 1], self._cards[idx] = (
-                self._cards[idx],
-                self._cards[idx - 1],
-            )
-            self._rebuild_card_widgets()
-
-    def _on_card_move_down(self, widget: _NoteCardWidget) -> None:
-        self._flush_widgets_to_cards()
-        idx = self._card_widgets.index(widget)
-        if idx < len(self._cards) - 1:
-            self._cards[idx], self._cards[idx + 1] = (
-                self._cards[idx + 1],
-                self._cards[idx],
-            )
-            self._rebuild_card_widgets()
-
-    def _on_card_delete(self, widget: _NoteCardWidget) -> None:
-        self._flush_widgets_to_cards()
-        idx = self._card_widgets.index(widget)
-        self._cards.pop(idx)
-        self._rebuild_card_widgets()
-
-    def _on_save_clicked(self, _event: wx.Event) -> None:
-        self.save_current_notes()
