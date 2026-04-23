@@ -1,3 +1,7 @@
+"""Event handlers, workers, and UI renderers for the card box panel."""
+
+from __future__ import annotations
+
 from collections.abc import Callable
 from threading import Thread
 from typing import Any
@@ -13,8 +17,6 @@ from utils.constants import (
     DECK_CARD_ACTION_BUTTON_SIZE,
     DECK_CARD_ACTIVE_BORDER_WIDTH,
     DECK_CARD_BADGE_PADDING,
-    DECK_CARD_BASE_FONT_SIZE,
-    DECK_CARD_BUTTON_MARGIN,
     DECK_CARD_CORNER_RADIUS,
     DECK_CARD_HEIGHT,
     DECK_CARD_IMAGE_BG,
@@ -28,96 +30,31 @@ from utils.mana_icon_factory import ManaIconFactory
 from utils.perf import timed
 
 
-class CardBoxPanel(wx.Panel):
-    _template_cache: dict[tuple[str, str, tuple[int, int, int]], wx.Bitmap] = {}
+class CardBoxPanelHandlersMixin:
+    """Event callbacks, workers, public state setters, and bitmap renderers for :class:`CardBoxPanel`."""
 
-    def __init__(
-        self,
-        parent: wx.Window,
-        zone: str,
-        card: dict[str, Any],
-        icon_factory: ManaIconFactory,
-        get_metadata: Callable[[str], dict[str, Any] | None],
-        owned_status: Callable[[str, int], tuple[str, tuple[int, int, int]]],
-        on_delta: Callable[[str, str, int], None],
-        on_remove: Callable[[str, str], None],
-        on_select: Callable[[str, dict[str, Any], "CardBoxPanel"], None],
-        on_hover: Callable[[str, dict[str, Any]], None] | None = None,
-    ) -> None:
-        super().__init__(parent)
-        self.zone = zone
-        self.card = card
-        self._icon_factory = icon_factory
-        self._get_metadata = get_metadata
-        self._owned_status = owned_status
-        self._on_delta = on_delta
-        self._on_remove = on_remove
-        self._on_select = on_select
-        self._on_hover = on_hover
-        self._active = False
-        self._mana_cost = ""
-        self._card_color = ManaIconFactory.FALLBACK_COLORS["c"]
-        self._mana_cost_bitmap: wx.Bitmap | None = None
-        self._template_bitmap: wx.Bitmap | None = None
-        self._card_bitmap: wx.Bitmap | None = None
-        self._image_available = False
-        self._image_attempted = False
-        self._image_generation: int = 0
-        self._image_name_candidates: list[str] = []
-
-        self.SetBackgroundColour(DARK_ALT)
-        self.SetBackgroundStyle(wx.BG_STYLE_PAINT)
-        self.SetMinSize((DECK_CARD_WIDTH, DECK_CARD_HEIGHT))
-        self.SetMaxSize((DECK_CARD_WIDTH, DECK_CARD_HEIGHT))
-        self.Bind(wx.EVT_PAINT, self._on_paint)
-
-        layout = wx.BoxSizer(wx.VERTICAL)
-        self.SetSizer(layout)
-
-        base_font = wx.Font(
-            DECK_CARD_BASE_FONT_SIZE, wx.FONTFAMILY_SWISS, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL
-        )
-
-        # Quantity label
-        badge_row = wx.BoxSizer(wx.HORIZONTAL)
-        self.qty_label = wx.StaticText(self, label=str(card["qty"]))
-        self.qty_label.SetForegroundColour(LIGHT_TEXT)
-        self.qty_label.SetFont(base_font)
-        self.qty_label.SetBackgroundColour(DARK_ALT)
-        badge_row.Add(self.qty_label, 0, wx.ALL, DECK_CARD_BADGE_PADDING)
-        badge_row.AddStretchSpacer(1)
-        layout.Add(badge_row, 0, wx.EXPAND)
-
-        layout.AddStretchSpacer(1)
-
-        # Button panel
-        self.button_panel = wx.Panel(self)
-        self.button_panel.SetBackgroundColour(DARK_ALT)
-        btn_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        self.button_panel.SetSizer(btn_sizer)
-        add_btn = wx.Button(self.button_panel, label="+")
-        self._style_action_button(add_btn)
-        add_btn.Bind(wx.EVT_BUTTON, lambda _evt: self._on_delta(self.zone, self.card["name"], 1))
-        btn_sizer.Add(add_btn, 0)
-        sub_btn = wx.Button(self.button_panel, label="−")
-        self._style_action_button(sub_btn)
-        sub_btn.Bind(wx.EVT_BUTTON, lambda _evt: self._on_delta(self.zone, self.card["name"], -1))
-        btn_sizer.Add(sub_btn, 0, wx.LEFT, 2)
-        rem_btn = wx.Button(self.button_panel, label="×")
-        self._style_action_button(rem_btn)
-        rem_btn.Bind(wx.EVT_BUTTON, lambda _evt: self._on_remove(self.zone, self.card["name"]))
-        btn_sizer.Add(rem_btn, 0, wx.LEFT, 2)
-        buttons_row = wx.BoxSizer(wx.HORIZONTAL)
-        buttons_row.Add(self.button_panel, 0, wx.LEFT | wx.BOTTOM, DECK_CARD_BUTTON_MARGIN)
-        buttons_row.AddStretchSpacer(1)
-        layout.Add(buttons_row, 0, wx.EXPAND)
-        self.button_panel.Hide()
-
-        self._update_card_state(card)
-
-        # Bind click events to all widgets so clicks anywhere on the card work
-        self._bind_click_targets([self, self.qty_label])
-        self._bind_hover_targets([self, self.qty_label, self.button_panel])
+    # Attributes supplied by :class:`CardBoxPanel` / the properties mixin.
+    zone: str
+    card: dict[str, Any]
+    qty_label: wx.StaticText
+    button_panel: wx.Panel
+    _icon_factory: ManaIconFactory
+    _get_metadata: Callable[[str], dict[str, Any] | None]
+    _owned_status: Callable[[str, int], tuple[str, tuple[int, int, int]]]
+    _on_delta: Callable[[str, str, int], None]
+    _on_remove: Callable[[str, str], None]
+    _on_select: Callable[[str, dict[str, Any], Any], None]
+    _on_hover: Callable[[str, dict[str, Any]], None] | None
+    _active: bool
+    _mana_cost: str
+    _card_color: tuple[int, int, int]
+    _mana_cost_bitmap: wx.Bitmap | None
+    _template_bitmap: wx.Bitmap | None
+    _card_bitmap: wx.Bitmap | None
+    _image_available: bool
+    _image_attempted: bool
+    _image_generation: int
+    _image_name_candidates: list[str]
 
     def refresh_image(self) -> None:
         self._image_attempted = False
@@ -186,7 +123,7 @@ class CardBoxPanel(wx.Panel):
         except Exception:
             wx.CallAfter(self._on_image_load_done, gen, None)
 
-    def _on_image_load_done(self, gen: int, pil_img: "PilImage.Image | None") -> None:
+    def _on_image_load_done(self, gen: int, pil_img: PilImage.Image | None) -> None:
         try:
             if not self:
                 return
@@ -263,17 +200,6 @@ class CardBoxPanel(wx.Panel):
         _, owned_colour_rgb = self._owned_status(card["name"], qty_for_check)
         self.qty_label.SetForegroundColour(wx.Colour(*owned_colour_rgb))
 
-    def _resolve_card_color(self, meta: dict[str, Any]) -> tuple[int, int, int]:
-        identity = meta.get("color_identity") or meta.get("colors") or []
-        normalized = [str(c).lower() for c in identity if c]
-        if not normalized:
-            return ManaIconFactory.FALLBACK_COLORS["c"]
-        if len(normalized) == 1:
-            return ManaIconFactory.FALLBACK_COLORS.get(
-                normalized[0], ManaIconFactory.FALLBACK_COLORS["c"]
-            )
-        return ManaIconFactory.FALLBACK_COLORS["multicolor"]
-
     def _get_mana_cost_bitmap(self) -> wx.Bitmap | None:
         if self._mana_cost_bitmap is None:
             self._mana_cost_bitmap = self._icon_factory.bitmap_for_cost(self._mana_cost)
@@ -318,29 +244,6 @@ class CardBoxPanel(wx.Panel):
         self._image_available = False
         self._card_bitmap = None
 
-    def _build_image_name_candidates(self, card: dict[str, Any], meta: dict[str, Any]) -> list[str]:
-        candidates: list[str] = []
-        base_name = card.get("name")
-        if base_name:
-            candidates.append(base_name)
-        aliases = meta.get("aliases") if meta is not None else None
-        if isinstance(aliases, list):
-            for alias in aliases:
-                if alias and alias not in candidates:
-                    candidates.append(alias)
-        # Promote the combined DFC name (from meta.name) to position 0 when
-        # base_name is a single face name (no "//").  The image DB stores
-        # face-0 entries under the combined name reliably; individual face names
-        # can collide with same-named back faces of other printings (e.g.
-        # "Witch Enchanter" also appears as face_index=1 of a different card).
-        # When base_name already contains "//" it is already the canonical key.
-        if base_name and "//" not in base_name and meta is not None:
-            meta_name = meta.get("name")
-            if meta_name and "//" in meta_name and meta_name in candidates:
-                candidates.remove(meta_name)
-                candidates.insert(0, meta_name)
-        return candidates
-
     @timed
     def _scale_image_to_card(self, image: wx.Image) -> wx.Image:
         img_width = image.GetWidth()
@@ -365,6 +268,8 @@ class CardBoxPanel(wx.Panel):
 
     @timed
     def _build_template_bitmap(self) -> wx.Bitmap:
+        from widgets.panels.card_box_panel.frame import CardBoxPanel
+
         key = (self.card["name"], self._mana_cost, self._card_color)
         cached = CardBoxPanel._template_cache.get(key)
         if cached is not None:
@@ -417,20 +322,3 @@ class CardBoxPanel(wx.Panel):
             text_x = rect.x + (rect.width - text_width) // 2
             dc.DrawText(line, text_x, start_y)
             start_y += line_height
-
-    def _wrap_text(self, dc: wx.DC, text: str, max_width: int) -> list[str]:
-        words = text.split()
-        if not words:
-            return [text]
-        lines: list[str] = []
-        current = ""
-        for word in words:
-            test = f"{current} {word}".strip()
-            if dc.GetTextExtent(test)[0] <= max_width or not current:
-                current = test
-            else:
-                lines.append(current)
-                current = word
-        if current:
-            lines.append(current)
-        return lines
