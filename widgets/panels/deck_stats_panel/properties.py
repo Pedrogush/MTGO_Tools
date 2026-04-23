@@ -1,10 +1,6 @@
-"""
-Deck Stats Panel - Displays deck statistics using an HTML/CSS visualization.
+"""Pure-data helpers, HTML/CSS builders, and read-only item getters for the deck stats panel."""
 
-Shows summary statistics, mana curve breakdown, color distribution, type counts,
-and opening-hand land probability analysis.  All charts are rendered in a
-wx.html2.WebView so they support hover tooltips and pixel-perfect layout.
-"""
+from __future__ import annotations
 
 import math
 from collections import Counter
@@ -12,12 +8,7 @@ from html import escape
 from pathlib import Path
 from typing import Any
 
-import wx
-import wx.html2
-
-from services.deck_service import DeckService, get_deck_service
 from utils.card_data import CardDataManager
-from utils.constants import DARK_PANEL
 from utils.constants.deck_rules import (
     STATS_CURVE_COLOUR_LERP_MAX_CMC,
     STATS_CURVE_HIGH_CMC_BUCKET,
@@ -125,7 +116,7 @@ _COLOR_SVG_FILENAMES: dict[str, str] = {
 
 def _load_mana_svgs() -> dict[str, str]:
     """Load and inline mana symbol SVGs for each color key, sized 18×18."""
-    svg_dir = Path(__file__).parent.parent.parent / "assets" / "mana" / "svg"
+    svg_dir = Path(__file__).parent.parent.parent.parent / "assets" / "mana" / "svg"
     result: dict[str, str] = {}
     for key, stem in _COLOR_SVG_FILENAMES.items():
         path = svg_dir / f"{stem}.svg"
@@ -514,80 +505,15 @@ _EMPTY_HTML = _build_html(
 )
 
 
-# ---------------------------------------------------------------------------
-# Panel
-# ---------------------------------------------------------------------------
+class DeckStatsPanelPropertiesMixin:
+    """Read-only data getters and pure-data helpers for :class:`DeckStatsPanel`.
 
+    Kept as a mixin (no ``__init__``) so :class:`DeckStatsPanel` remains the
+    single source of truth for instance-state initialization.
+    """
 
-class DeckStatsPanel(wx.Panel):
-    """Panel that displays deck statistics using an embedded HTML view."""
-
-    def __init__(
-        self,
-        parent: wx.Window,
-        card_manager: CardDataManager | None = None,
-        deck_service: DeckService | None = None,
-    ):
-        super().__init__(parent)
-        self.SetBackgroundColour(DARK_PANEL)
-
-        self.card_manager = card_manager
-        self.deck_service = deck_service or get_deck_service()
-        self.zone_cards: dict[str, list[dict[str, Any]]] = {}
-
-        self._webview = wx.html2.WebView.New(self)
-        sizer = wx.BoxSizer(wx.VERTICAL)
-        sizer.Add(self._webview, 1, wx.EXPAND)
-        self.SetSizer(sizer)
-
-        self._webview.SetPage(_EMPTY_HTML, "")
-
-        # Hidden label kept for test/automation compatibility (summary text readable via GetLabel)
-        self.summary_label = wx.StaticText(self, label="No deck loaded.")
-        self.summary_label.Hide()
-
-    # ── Public API ──────────────────────────────────────────────────────────
-
-    def update_stats(self, deck_text: str, zone_cards: dict[str, list[dict[str, Any]]]) -> None:
-        self.zone_cards = zone_cards
-
-        if not deck_text.strip():
-            self.summary_label.SetLabel("No deck loaded.")
-            self._webview.SetPage(_EMPTY_HTML, "")
-            return
-
-        stats = self.deck_service.analyze_deck(deck_text)
-        land_count, mdfc_count = self._count_lands()
-        total_land_count = land_count + mdfc_count
-
-        land_label = f"{land_count} land{'s' if land_count != 1 else ''}"
-        if mdfc_count:
-            land_label += f" + {mdfc_count} MDFC{'s' if mdfc_count != 1 else ''}"
-        summary = (
-            f"Mainboard: {stats['mainboard_count']} cards ({stats['unique_mainboard']} unique)"
-            f"  |  Sideboard: {stats['sideboard_count']} cards ({stats['unique_sideboard']} unique)"
-            f"  |  Lands: {land_label}"
-        )
-
-        self.summary_label.SetLabel(summary)
-
-        html = _build_html(
-            summary,
-            self._curve_items(),
-            self._color_items(),
-            self._type_items(),
-            self._hand_items(stats["mainboard_count"], total_land_count),
-        )
-        self._webview.SetPage(html, "")
-
-    def set_card_manager(self, card_manager: CardDataManager) -> None:
-        self.card_manager = card_manager
-
-    def clear(self) -> None:
-        self.summary_label.SetLabel("No deck loaded.")
-        self._webview.SetPage(_EMPTY_HTML, "")
-
-    # ── Private helpers ─────────────────────────────────────────────────────
+    card_manager: CardDataManager | None
+    zone_cards: dict[str, list[dict[str, Any]]]
 
     def _card_data_available(self) -> bool:
         return self.card_manager is not None and self.card_manager.is_loaded
