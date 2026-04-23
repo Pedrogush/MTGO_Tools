@@ -1,4 +1,4 @@
-"""Panel for browsing MTG deck archetypes and filtering by format."""
+"""UI construction for the deck research panel."""
 
 from __future__ import annotations
 
@@ -22,12 +22,13 @@ from utils.stylize import (
 )
 from widgets.buttons.deck_action_buttons import DeckActionButtons
 from widgets.lists.deck_results_list import DeckResultsList
+from widgets.panels.deck_research_panel.handlers import DeckResearchHandlersMixin
+from widgets.panels.deck_research_panel.properties import DeckResearchPropertiesMixin
 
 
 class _CenteredChoice(wx.adv.OwnerDrawnComboBox):
     """Read-only combo box that center-aligns text and fits its width to its widest item."""
 
-    # Room for the native dropdown button + internal text margins on either side.
     _BUTTON_AND_PADDING_PX = 36
 
     def __init__(self, parent: wx.Window, choices: list[str]) -> None:
@@ -54,7 +55,7 @@ class _CenteredChoice(wx.adv.OwnerDrawnComboBox):
         dc.DrawText(text, x, y)
 
 
-class DeckResearchPanel(wx.Panel):
+class DeckResearchPanel(DeckResearchHandlersMixin, DeckResearchPropertiesMixin, wx.Panel):
     """Panel for selecting format, searching archetypes, and browsing tournament data."""
 
     def __init__(
@@ -104,7 +105,6 @@ class DeckResearchPanel(wx.Panel):
         sizer = wx.BoxSizer(wx.VERTICAL)
         self.SetSizer(sizer)
 
-        # Row 0: Deck Research / Deck Builder toggle button
         if self._on_switch_to_builder is not None:
             builder_btn = wx.Button(
                 self, label=self._labels.get("switch_to_builder", "Deck Builder")
@@ -120,10 +120,8 @@ class DeckResearchPanel(wx.Panel):
             stylize_label(info_label, subtle=True)
             sizer.Add(info_label, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_MD)
 
-        # Row 1: Format | Archetype (side by side)
         format_arch_row = wx.BoxSizer(wx.HORIZONTAL)
 
-        # Format column
         format_col = wx.BoxSizer(wx.VERTICAL)
         format_label = wx.StaticText(self, label=self._labels.get("format", "Format"))
         stylize_label(format_label, subtle=True)
@@ -138,7 +136,6 @@ class DeckResearchPanel(wx.Panel):
         format_col.Add(self.format_choice, 0, wx.EXPAND | wx.TOP, PADDING_MD)
         format_arch_row.Add(format_col, 1, wx.EXPAND | wx.RIGHT, PADDING_MD)
 
-        # Archetype column
         archetype_col = wx.BoxSizer(wx.VERTICAL)
         archetype_label = wx.StaticText(self, label=self._labels.get("archetype", "Archetype"))
         stylize_label(archetype_label, subtle=True)
@@ -153,12 +150,10 @@ class DeckResearchPanel(wx.Panel):
         format_arch_row.Add(archetype_col, 1, wx.EXPAND)
         sizer.Add(format_arch_row, 0, wx.EXPAND | wx.ALL, PADDING_MD)
 
-        # Backward-compat aliases
         self.archetype_list = self.archetype_combo
         self.archetype_dropdown = self.archetype_combo
         self.search_ctrl = self.archetype_combo
 
-        # Row 2: Event | Date (side by side)
         event_date_labels = wx.BoxSizer(wx.HORIZONTAL)
         event_label = wx.StaticText(self, label=self._labels.get("event", "Event"))
         stylize_label(event_label, subtle=True)
@@ -189,7 +184,6 @@ class DeckResearchPanel(wx.Panel):
         event_date_row.Add(self.date_filter, 1, wx.EXPAND)
         sizer.Add(event_date_row, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_MD)
 
-        # Row 3: Placement filter (op + field + value) | Player name
         row3_labels = wx.BoxSizer(wx.HORIZONTAL)
         placement_label = wx.StaticText(self, label=self._labels.get("placement", "Placement"))
         stylize_label(placement_label, subtle=True)
@@ -299,97 +293,3 @@ class DeckResearchPanel(wx.Panel):
         self.copy_button = self.deck_action_buttons.copy_button
         self.load_button = self.deck_action_buttons.load_button
         self.save_button = self.deck_action_buttons.save_button
-
-    # ------------------------------------------------------------------
-    # Public accessors
-    # ------------------------------------------------------------------
-
-    def get_event_type_filter(self) -> str:
-        return self.event_type_choice.GetStringSelection()
-
-    def set_event_type_filter(self, value: str) -> None:
-        if not self.event_type_choice.SetStringSelection(value):
-            self.event_type_choice.SetSelection(0)
-
-    def reset_event_type_filter(self) -> None:
-        self.event_type_choice.SetSelection(0)
-
-    def get_placement_filter(self) -> tuple[str, str, str]:
-        return (
-            self.placement_op_choice.GetStringSelection(),
-            self.placement_field_choice.GetStringSelection(),
-            self.placement_value_filter.GetValue().strip(),
-        )
-
-    def set_placement_filter(self, op: str, field: str, value: str) -> None:
-        if not self.placement_op_choice.SetStringSelection(op):
-            self.placement_op_choice.SetSelection(0)
-        if not self.placement_field_choice.SetStringSelection(field):
-            self.placement_field_choice.SetSelection(0)
-        self.placement_value_filter.ChangeValue(value)
-
-    def reset_placement_filter(self) -> None:
-        self.placement_op_choice.SetSelection(0)
-        self.placement_field_choice.SetSelection(0)
-        self.placement_value_filter.ChangeValue("")
-
-    def get_player_name_filter(self) -> str:
-        return self.player_name_filter.GetValue().strip().lower()
-
-    def set_player_name_filter(self, value: str) -> None:
-        self.player_name_filter.ChangeValue(value)
-
-    def reset_player_name_filter(self) -> None:
-        self.player_name_filter.ChangeValue("")
-
-    def get_date_filter(self) -> str:
-        return self.date_filter.GetValue().strip()
-
-    def set_date_filter(self, value: str) -> None:
-        self.date_filter.ChangeValue(value)
-
-    def reset_date_filter(self) -> None:
-        self.date_filter.ChangeValue("")
-
-    def get_selected_format(self) -> str:
-        return self.format_choice.GetStringSelection()
-
-    def get_search_query(self) -> str:
-        return ""
-
-    def get_selected_archetype_index(self) -> int:
-        idx = self.archetype_combo.GetSelection()
-        return idx if idx != wx.NOT_FOUND else -1
-
-    def set_loading_state(self) -> None:
-        self.archetype_combo.Clear()
-        self.archetype_combo.Append(self._labels.get("loading_archetypes", "Loading..."))
-        self.archetype_combo.SetSelection(0)
-        self.archetype_combo.Disable()
-
-    def set_error_state(self) -> None:
-        self.archetype_combo.Clear()
-        self.archetype_combo.Append(
-            self._labels.get("failed_archetypes", "Failed to load archetypes.")
-        )
-        self.archetype_combo.SetSelection(0)
-
-    def populate_archetypes(self, archetype_names: list[str]) -> None:
-        self.archetype_combo.Clear()
-        if not archetype_names:
-            self.archetype_combo.Append(self._labels.get("no_archetypes", "No archetypes found."))
-            self.archetype_combo.SetSelection(0)
-            self.archetype_combo.Disable()
-        else:
-            for name in archetype_names:
-                self.archetype_combo.Append(name)
-            self.archetype_combo.SetSelection(0)
-            self.archetype_combo.Enable()
-
-    def enable_controls(self) -> None:
-        self.archetype_combo.Enable()
-        self.format_choice.Enable()
-
-    def disable_controls(self) -> None:
-        self.archetype_combo.Disable()
-        self.format_choice.Disable()
