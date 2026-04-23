@@ -240,13 +240,6 @@ def ui_environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
 
     yield
 
-    # Drain pending wx events after each test so accumulated wx.CallAfter
-    # callbacks and pending Destroy() operations complete before the next test
-    # creates more widgets. Without this, ~24 frames into the suite the wx
-    # process exhausts native handles and new wx.ScrolledWindow / Layout calls
-    # assert inside the C++ layer.
-    pump_ui_events(wx.GetApp())
-
 
 def pump_ui_events(app: wx.App, *, max_passes: int = 25) -> None:
     """Process pending wx events until the queue drains or a safety cap is reached."""
@@ -281,6 +274,17 @@ def pump_ui_events(app: wx.App, *, max_passes: int = 25) -> None:
 @pytest.fixture
 def deck_selector_factory(wx_app) -> AppFrame:
     def _factory() -> AppFrame:
+        # Drain wx events and force GC of the prior controller before resetting.
+        # The previous test's frame.Destroy() schedules async cleanup; without
+        # pumping, those Destroy events plus queued wx.CallAfter callbacks
+        # accumulate. By the last UI test, wx fails to back new windows with
+        # HWNDs and Layout()/SetScrollRate() asserts inside the C++ layer.
+        import gc
+
+        pump_ui_events(wx_app)
+        gc.collect()
+        pump_ui_events(wx_app)
+
         reset_deck_selector_controller()
         controller = get_deck_selector_controller()
         frame = controller.frame
