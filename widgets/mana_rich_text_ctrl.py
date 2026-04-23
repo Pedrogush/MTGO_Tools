@@ -107,19 +107,13 @@ class ManaSymbolRichCtrl(wx.richtext.RichTextCtrl):
         self._hint_label.Hide()
         self._hint_label.Bind(wx.EVT_LEFT_DOWN, self._on_hint_click)
 
-        # Border lines. With BORDER_NONE on the control, we draw the grey
-        # frame ourselves using four child panels. The bottom line tints to
-        # DARK_ACCENT on focus to match the native TextCtrl behaviour; the
-        # other three stay grey always.
-        self._border_grey = wx.Colour(87, 87, 87)
-        self._border_top = wx.Panel(self, size=(-1, 1))
-        self._border_top.SetBackgroundColour(self._border_grey)
-        self._border_left = wx.Panel(self, size=(1, -1))
-        self._border_left.SetBackgroundColour(self._border_grey)
-        self._border_right = wx.Panel(self, size=(1, -1))
-        self._border_right.SetBackgroundColour(self._border_grey)
+        # Bottom-edge line. Always visible and tints between grey (unfocused)
+        # and DARK_ACCENT (focused) so the whole line changes colour, rather
+        # than stacking a second line above the existing one — this matches
+        # the native themed TextCtrl's focus indicator.
+        self._bottom_line_grey = wx.Colour(87, 87, 87)
         self._bottom_line = wx.Panel(self, size=(-1, self.FromDIP(2)))
-        self._bottom_line.SetBackgroundColour(self._border_grey)
+        self._bottom_line.SetBackgroundColour(self._bottom_line_grey)
 
         if mana_key_input and not readonly:
             self.Bind(wx.EVT_KEY_DOWN, self._on_mana_key_down)
@@ -180,26 +174,20 @@ class ManaSymbolRichCtrl(wx.richtext.RichTextCtrl):
         else:
             self._hint_label.Hide()
 
-    def _sync_borders(self) -> None:
+    def _sync_bottom_line(self) -> None:
         size = self.GetClientSize()
         if size.width <= 0 or size.height <= 0:
             return
-        self._border_top.SetSize(0, 0, size.width, 1)
-        self._border_left.SetSize(0, 0, 1, size.height)
-        self._border_right.SetSize(size.width - 1, 0, 1, size.height)
-
         line_h = self.FromDIP(2)
         self._bottom_line.SetSize(0, size.height - line_h, size.width, line_h)
-        bottom_colour = wx.Colour(*DARK_ACCENT) if self.HasFocus() else self._border_grey
-        self._bottom_line.SetBackgroundColour(bottom_colour)
+        colour = wx.Colour(*DARK_ACCENT) if self.HasFocus() else self._bottom_line_grey
+        self._bottom_line.SetBackgroundColour(colour)
         self._bottom_line.Refresh()
-
-        for border in (self._border_top, self._border_left, self._border_right, self._bottom_line):
-            border.Raise()
+        self._bottom_line.Raise()
 
     def _sync_overlays(self) -> None:
         self._sync_hint_visibility()
-        self._sync_borders()
+        self._sync_bottom_line()
 
     def _on_hint_click(self, _evt: wx.MouseEvent) -> None:
         # Forward the click-to-focus intent; StaticText does not receive
