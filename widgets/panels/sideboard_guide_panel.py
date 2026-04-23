@@ -234,7 +234,12 @@ class SideboardGuidePanel(wx.Panel):
         self.guide_view.Show(not is_empty)
         self.empty_state_panel.Show(is_empty)
         self.button_row.Show(not is_empty)
-        self.Layout()
+        # GetHandle() returns 0 when the underlying HWND is not realized yet —
+        # calling Layout() in that state asserts inside wxWindow::GetLayoutDirection.
+        # Skip the explicit relayout; the parent sizer will lay the panel out
+        # naturally once the frame is shown.
+        if self.GetHandle():
+            self.Layout()
 
         # Update exclusions label
         text = ", ".join(self.exclusions) if self.exclusions else "\u2014"

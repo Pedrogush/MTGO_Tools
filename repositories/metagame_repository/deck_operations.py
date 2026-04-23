@@ -30,9 +30,7 @@ class DeckOperationsMixin:
             cached = self._load_cached_decks(archetype_href)
             if cached is not None:
                 logger.debug(f"Using cached decks for {archetype_name}")
-                return self._sort_decks_by_date(
-                    self._filter_decks_by_source(cached, source_filter)
-                )
+                return self._sort_decks_by_date(self._filter_decks_by_source(cached, source_filter))
 
         logger.info(f"Fetching fresh decks for {archetype_name}")
         try:
@@ -50,9 +48,7 @@ class DeckOperationsMixin:
             cached = self._load_cached_decks(archetype_href, max_age=None)
             if cached:
                 logger.warning(f"Returning stale cached decks for {archetype_name}")
-                return self._sort_decks_by_date(
-                    self._filter_decks_by_source(cached, source_filter)
-                )
+                return self._sort_decks_by_date(self._filter_decks_by_source(cached, source_filter))
             raise
 
     def get_all_cached_decks(

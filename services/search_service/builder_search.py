@@ -101,7 +101,6 @@ class BuilderSearchMixin:
                 break
 
         logger.debug(
-            f"Search completed: {len(results)} initial results, "
-            f"{len(filtered)} after filtering"
+            f"Search completed: {len(results)} initial results, " f"{len(filtered)} after filtering"
         )
         return filtered

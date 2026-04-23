@@ -13,9 +13,7 @@ from utils.atomic_io import atomic_write_json, locked_path
 class ArchetypeCacheMixin:
     """Hydrate archetype-list, archetype-deck, MTGO decklist, and deck-text caches."""
 
-    def _hydrate_archetype_lists(
-        self, archetype_entries: list[dict[str, Any]], now: float
-    ) -> None:
+    def _hydrate_archetype_lists(self, archetype_entries: list[dict[str, Any]], now: float) -> None:
         if not archetype_entries:
             return
 
@@ -173,8 +171,6 @@ class ArchetypeCacheMixin:
                     f"Merged {total} MTGO decks into {len(decks_by_href)} archetype cache entries"
                 )
             except OSError as exc:
-                logger.warning(
-                    f"Failed to write archetype decks cache with MTGO decks: {exc}"
-                )
+                logger.warning(f"Failed to write archetype decks cache with MTGO decks: {exc}")
 
         return total

@@ -19,9 +19,7 @@ class SnapshotCacheMixin:
         try:
             repo = FormatCardPoolRepository(self.format_card_pool_db_file)
             replaced = repo.bulk_replace(card_pool_entries)
-            logger.debug(
-                f"Hydrated {replaced}/{len(card_pool_entries)} format card pool snapshots"
-            )
+            logger.debug(f"Hydrated {replaced}/{len(card_pool_entries)} format card pool snapshots")
             return replaced
         except Exception as exc:
             logger.warning(f"Failed to hydrate format card pools: {exc}")

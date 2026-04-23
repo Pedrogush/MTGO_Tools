@@ -41,6 +41,4 @@ class BackgroundRefreshMixin:
             except Exception as exc:
                 logger.warning(f"[background-refresh] archetypes for {mtg_format} failed: {exc}")
 
-        threading.Thread(
-            target=_do_refresh, daemon=True, name=f"archetype-bg-{mtg_format}"
-        ).start()
+        threading.Thread(target=_do_refresh, daemon=True, name=f"archetype-bg-{mtg_format}").start()
