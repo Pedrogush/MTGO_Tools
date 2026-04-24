@@ -1,33 +1,16 @@
-"""UI construction for the deck notes panel.
-
-Each note is an individual card with a title, type, and body. Cards can be
-added, edited, reordered, and deleted independently.
-"""
+"""Single styled note card widget plus the note-data shape and migration helpers."""
 
 from __future__ import annotations
 
 import uuid
 from collections.abc import Callable
-from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import wx
 
-from utils.constants import (
-    DARK_ALT,
-    DARK_BG,
-    DARK_PANEL,
-    LIGHT_TEXT,
-    SUBDUED_TEXT,
-)
+from utils.constants import DARK_ALT, DARK_BG, LIGHT_TEXT, SUBDUED_TEXT
 from utils.i18n import translate
-from utils.stylize import stylize_button, stylize_textctrl
-from widgets.panels.deck_notes_panel.handlers import DeckNotesPanelHandlersMixin
-from widgets.panels.deck_notes_panel.properties import DeckNotesPanelPropertiesMixin
-
-if TYPE_CHECKING:
-    from repositories.deck_repository import DeckRepository
-    from services.store_service import StoreService
+from utils.stylize import stylize_textctrl
 
 NOTE_TYPES = ["General", "Matchup", "Sideboard Plan", "Custom"]
 
@@ -150,81 +133,3 @@ class _NoteCardWidget(wx.Panel):
         color = _TYPE_FG.get(note_type, LIGHT_TEXT)
         self.type_choice.SetForegroundColour(color)
         self.type_choice.Refresh()
-
-
-class DeckNotesPanel(
-    DeckNotesPanelHandlersMixin,
-    DeckNotesPanelPropertiesMixin,
-    wx.Panel,
-):
-    """Panel for structured deck notes composed of individual note cards."""
-
-    def __init__(
-        self,
-        parent: wx.Window,
-        deck_repo: DeckRepository,
-        store_service: StoreService,
-        notes_store: dict,
-        notes_store_path: Path,
-        on_status_update: Callable[[str], None],
-        locale: str | None = None,
-    ):
-        super().__init__(parent)
-        self.SetBackgroundColour(DARK_PANEL)
-        self._locale = locale
-
-        self.deck_repo = deck_repo
-        self.store_service = store_service
-        self.notes_store = notes_store
-        self.notes_store_path = notes_store_path
-        self.on_status_update = on_status_update
-
-        self._cards: list[dict[str, str]] = []
-        self._card_widgets: list[_NoteCardWidget] = []
-
-        self._build_ui()
-
-    def _build_ui(self) -> None:
-        outer = wx.BoxSizer(wx.VERTICAL)
-        self.SetSizer(outer)
-
-        # ── Toolbar ─────────────────────────────────────────────────────────
-        toolbar = wx.BoxSizer(wx.HORIZONTAL)
-        outer.Add(toolbar, 0, wx.EXPAND | wx.ALL, 6)
-
-        add_btn = wx.Button(self, label=self._t("notes.btn.add"))
-        stylize_button(add_btn)
-        add_btn.Bind(wx.EVT_BUTTON, self._on_add_note)
-        toolbar.Add(add_btn, 0, wx.RIGHT, 6)
-
-        toolbar.AddStretchSpacer(1)
-
-        self.save_btn = wx.Button(self, label=self._t("notes.btn.save"))
-        stylize_button(self.save_btn)
-        self.save_btn.Bind(wx.EVT_BUTTON, self._on_save_clicked)
-        toolbar.Add(self.save_btn, 0)
-
-        # ── Scrollable cards area ────────────────────────────────────────────
-        self.scroll_win = wx.ScrolledWindow(self, style=wx.VSCROLL)
-        self.scroll_win.SetScrollRate(0, 12)
-        self.scroll_win.SetBackgroundColour(DARK_PANEL)
-        outer.Add(self.scroll_win, 1, wx.EXPAND)
-
-        self.cards_sizer = wx.BoxSizer(wx.VERTICAL)
-        self.scroll_win.SetSizer(self.cards_sizer)
-
-        self.empty_state_panel = wx.Panel(self)
-        self.empty_state_panel.SetBackgroundColour(DARK_ALT)
-        empty_sizer = wx.BoxSizer(wx.VERTICAL)
-        self.empty_state_panel.SetSizer(empty_sizer)
-        empty_sizer.AddStretchSpacer(1)
-        empty_label = wx.StaticText(
-            self.empty_state_panel,
-            label=self._t("notes.empty"),
-            style=wx.ALIGN_CENTRE_HORIZONTAL,
-        )
-        empty_label.SetForegroundColour(SUBDUED_TEXT)
-        empty_sizer.Add(empty_label, 0, wx.ALIGN_CENTER | wx.ALL, 12)
-        empty_sizer.AddStretchSpacer(1)
-        self.empty_state_panel.Hide()
-        outer.Add(self.empty_state_panel, 1, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 6)
