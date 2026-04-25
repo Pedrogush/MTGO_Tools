@@ -36,9 +36,7 @@ def _count_cards(section: bs4.Tag | None) -> OrderedDict[str, int]:
     return counts
 
 
-def _format_deck_text(
-    mainboard: OrderedDict[str, int], sideboard: OrderedDict[str, int]
-) -> str:
+def _format_deck_text(mainboard: OrderedDict[str, int], sideboard: OrderedDict[str, int]) -> str:
     main_text = "\n".join(f"{c} {n}" for n, c in mainboard.items())
     if not sideboard:
         return main_text
@@ -60,8 +58,6 @@ def fetch_deck_text_from_visual_page(deck_num: str) -> str:
     """Fallback fetcher: pull the deck text from the unprotected visual view."""
     url = f"https://www.mtggoldfish.com/deck/visual/{deck_num}"
     logger.info(f"Fetching deck {deck_num} from MTGGoldfish visual fallback")
-    page = requests.get(
-        url, impersonate="chrome", timeout=MTGGOLDFISH_REQUEST_TIMEOUT_SECONDS
-    )
+    page = requests.get(url, impersonate="chrome", timeout=MTGGOLDFISH_REQUEST_TIMEOUT_SECONDS)
     page.raise_for_status()
     return parse_visual_page(page.text)
