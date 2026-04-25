@@ -57,7 +57,7 @@ def parse_visual_page(html: str) -> str:
 def fetch_deck_text_from_visual_page(deck_num: str) -> str:
     """Fallback fetcher: pull the deck text from the unprotected visual view."""
     url = f"https://www.mtggoldfish.com/deck/visual/{deck_num}"
-    logger.info(f"Fetching deck {deck_num} from MTGGoldfish visual fallback")
+    logger.info(f"Fetching deck {deck_num} from MTGGoldfish visual")
     page = requests.get(url, impersonate="chrome", timeout=MTGGOLDFISH_REQUEST_TIMEOUT_SECONDS)
     page.raise_for_status()
     return parse_visual_page(page.text)
