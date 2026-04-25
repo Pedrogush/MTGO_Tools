@@ -2,11 +2,20 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from services.radar_service.models import RadarData
 from utils.constants import RADAR_MIN_COPY_COUNT, RADAR_MIN_EXPECTED_COPIES_DEFAULT
 
+if TYPE_CHECKING:
+    from services.radar_service.protocol import RadarServiceProto
 
-class ExportMixin:
+    _Base = RadarServiceProto
+else:
+    _Base = object
+
+
+class ExportMixin(_Base):
     """Render :class:`RadarData` as a decklist and project its card names."""
 
     def export_radar_as_decklist(

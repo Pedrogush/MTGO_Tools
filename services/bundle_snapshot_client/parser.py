@@ -5,12 +5,19 @@ from __future__ import annotations
 import io
 import json
 import tarfile
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
+if TYPE_CHECKING:
+    from services.bundle_snapshot_client.protocol import BundleSnapshotClientProto
 
-class BundleParserMixin:
+    _Base = BundleSnapshotClientProto
+else:
+    _Base = object
+
+
+class BundleParserMixin(_Base):
     """Parse the downloaded tar.gz bundle into grouped artifact entries."""
 
     def _parse_bundle(self, bundle_bytes: bytes) -> tuple[

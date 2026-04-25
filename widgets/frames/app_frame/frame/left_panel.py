@@ -11,24 +11,19 @@ from widgets.panels.deck_builder_panel import DeckBuilderPanel
 from widgets.panels.deck_research_panel import DeckResearchPanel
 
 if TYPE_CHECKING:
-    from controllers.app_controller import AppController
-    from utils.mana_icon_factory import ManaIconFactory
+    from widgets.frames.app_frame.protocol import AppFrameProto
+
+    _Base = AppFrameProto
+else:
+    _Base = object
 
 
-class LeftPanelBuilderMixin:
+class LeftPanelBuilderMixin(_Base):
     """Builds the left ``wx.Simplebook`` containing the research and builder panels.
 
     Kept as a mixin (no ``__init__``) so :class:`AppFrame` remains the single
     source of truth for instance-state initialization.
     """
-
-    controller: AppController
-    locale: str
-    mana_icons: ManaIconFactory
-    left_stack: wx.Simplebook | None
-    research_panel: DeckResearchPanel | None
-    builder_panel: DeckBuilderPanel | None
-    left_mode: str
 
     def _build_left_panel(self, parent: wx.Window) -> wx.Panel:
         left_panel = wx.Panel(parent)

@@ -24,6 +24,11 @@ from widgets.frames.top_cards import TopCardsFrame
 
 if TYPE_CHECKING:
     from widgets.frames.app_frame import AppFrame
+    from widgets.frames.app_frame.protocol import AppFrameProto
+
+    _Base = AppFrameProto
+else:
+    _Base = object
 
 
 def _simple_summary_html(text: str) -> str:
@@ -36,7 +41,7 @@ def _simple_summary_html(text: str) -> str:
     )
 
 
-class AppEventHandlers:
+class AppEventHandlers(_Base):
 
     # ------------------------------------------------------------------ Properties for state delegation ---------------------------------------
     @property

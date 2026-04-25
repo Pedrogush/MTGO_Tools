@@ -4,13 +4,21 @@ from __future__ import annotations
 
 import json
 import time
+from typing import TYPE_CHECKING
 
 from loguru import logger
 
 from utils.constants import REMOTE_SNAPSHOT_CACHE_DIR
 
+if TYPE_CHECKING:
+    from services.bundle_snapshot_client.protocol import BundleSnapshotClientProto
 
-class StampMixin:
+    _Base = BundleSnapshotClientProto
+else:
+    _Base = object
+
+
+class StampMixin(_Base):
     """Stamp file read/write for bundle freshness tracking."""
 
     def _is_stamp_fresh(self) -> bool:

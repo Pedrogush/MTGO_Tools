@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from loguru import logger
 
@@ -10,12 +11,19 @@ from utils.atomic_io import atomic_write_text, locked_path
 from utils.constants import CURR_DECK_FILE, DECKS_DIR
 from utils.deck import sanitize_filename
 
+if TYPE_CHECKING:
+    from repositories.deck_repository.protocol import DeckRepositoryProto
+
+    _Base = DeckRepositoryProto
+else:
+    _Base = object
+
 # Legacy file paths for migration
 LEGACY_CURR_DECK_CACHE = Path("cache") / "curr_deck.txt"
 LEGACY_CURR_DECK_ROOT = Path("curr_deck.txt")
 
 
-class FilesystemMixin:
+class FilesystemMixin(_Base):
     """Filesystem I/O for deck text files plus one-off legacy migration."""
 
     def read_current_deck_file(self) -> str:

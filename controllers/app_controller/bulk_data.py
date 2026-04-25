@@ -3,11 +3,19 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 from loguru import logger
 
+if TYPE_CHECKING:
+    from controllers.app_controller.protocol import AppControllerProto
 
-class BulkDataMixin:
+    _Base = AppControllerProto
+else:
+    _Base = object
+
+
+class BulkDataMixin(_Base):
     """Check/download the Scryfall bulk data and feed it into the printing index."""
 
     def check_and_download_bulk_data(self) -> None:

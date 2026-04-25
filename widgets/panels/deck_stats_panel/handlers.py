@@ -2,24 +2,21 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-import wx
-import wx.html2
-
-from services.deck_service import DeckService
 from utils.card_data import CardDataManager
 from widgets.panels.deck_stats_panel.properties import _EMPTY_HTML, _build_html
 
+if TYPE_CHECKING:
+    from widgets.panels.deck_stats_panel.protocol import DeckStatsPanelProto
 
-class DeckStatsPanelHandlersMixin:
+    _Base = DeckStatsPanelProto
+else:
+    _Base = object
+
+
+class DeckStatsPanelHandlersMixin(_Base):
     """Public API methods that read state and drive the embedded WebView for :class:`DeckStatsPanel`."""
-
-    card_manager: CardDataManager | None
-    deck_service: DeckService
-    zone_cards: dict[str, list[dict[str, Any]]]
-    summary_label: wx.StaticText
-    _webview: wx.html2.WebView
 
     def update_stats(self, deck_text: str, zone_cards: dict[str, list[dict[str, Any]]]) -> None:
         self.zone_cards = zone_cards

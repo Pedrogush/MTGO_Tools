@@ -2,10 +2,17 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from services.collection_service.protocol import CollectionServiceProto
+
+    _Base = CollectionServiceProto
+else:
+    _Base = object
 
 
-class StatsMixin:
+class StatsMixin(_Base):
     """Summarize the loaded collection (rarity, counts, averages)."""
 
     def get_collection_statistics(self) -> dict[str, Any]:

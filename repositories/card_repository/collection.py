@@ -3,11 +3,18 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import msgspec
 import msgspec.json
 from loguru import logger
+
+if TYPE_CHECKING:
+    from repositories.card_repository.protocol import CardRepositoryProto
+
+    _Base = CardRepositoryProto
+else:
+    _Base = object
 
 
 class _CollectionEntry(msgspec.Struct, gc=False):
@@ -21,7 +28,7 @@ class _CollectionEntry(msgspec.Struct, gc=False):
 _collection_any_decoder: msgspec.json.Decoder[Any] = msgspec.json.Decoder(Any)
 
 
-class CollectionMixin:
+class CollectionMixin(_Base):
     """Read MTGO/Scryfall-shaped collection files into normalized dicts."""
 
     def load_collection_from_file(self, filepath: Path) -> list[dict[str, Any]]:

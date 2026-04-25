@@ -3,15 +3,22 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
 from utils.card_images import BULK_DATA_CACHE
 from utils.card_images_workers import download_bulk_metadata_worker
 
+if TYPE_CHECKING:
+    from services.image_service.protocol import ImageServiceProto
 
-class BulkDataMixin:
+    _Base = ImageServiceProto
+else:
+    _Base = object
+
+
+class BulkDataMixin(_Base):
     """Bulk data freshness + download handling."""
 
     def check_bulk_data_exists(self) -> tuple[bool, str]:

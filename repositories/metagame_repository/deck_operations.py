@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
@@ -12,8 +12,15 @@ import repositories.metagame_repository as _pkg
 from repositories.metagame_repository.date_utils import _parse_deck_date
 from utils.atomic_io import locked_path
 
+if TYPE_CHECKING:
+    from repositories.metagame_repository.protocol import MetagameRepositoryProto
 
-class DeckOperationsMixin:
+    _Base = MetagameRepositoryProto
+else:
+    _Base = object
+
+
+class DeckOperationsMixin(_Base):
     """Per-archetype deck fetching, aggregated listings, and deck-text download."""
 
     def get_decks_for_archetype(

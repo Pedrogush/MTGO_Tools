@@ -3,13 +3,21 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 from loguru import logger
 
 from utils.card_data import CardDataManager
 
+if TYPE_CHECKING:
+    from controllers.app_controller.protocol import AppControllerProto
 
-class CardDataMixin:
+    _Base = AppControllerProto
+else:
+    _Base = object
+
+
+class CardDataMixin(_Base):
     """Trigger background card-index loading and keep the repository flags in sync."""
 
     def ensure_card_data_loaded(

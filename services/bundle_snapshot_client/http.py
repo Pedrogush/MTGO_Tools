@@ -2,14 +2,23 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from loguru import logger
+
+if TYPE_CHECKING:
+    from services.bundle_snapshot_client.protocol import BundleSnapshotClientProto
+
+    _Base = BundleSnapshotClientProto
+else:
+    _Base = object
 
 
 class BundleSnapshotError(Exception):
     """Raised when the bundle cannot be downloaded or applied."""
 
 
-class DownloadMixin:
+class DownloadMixin(_Base):
     """Download the compressed bundle archive over HTTP."""
 
     def _download_bundle(self) -> bytes:

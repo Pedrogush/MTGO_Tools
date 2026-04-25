@@ -4,14 +4,21 @@ from __future__ import annotations
 
 import threading
 from collections.abc import Callable
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
 import repositories.metagame_repository as _pkg
 
+if TYPE_CHECKING:
+    from repositories.metagame_repository.protocol import MetagameRepositoryProto
 
-class BackgroundRefreshMixin:
+    _Base = MetagameRepositoryProto
+else:
+    _Base = object
+
+
+class BackgroundRefreshMixin(_Base):
     """Spawn daemon threads that refresh the archetype cache without blocking."""
 
     def _trigger_background_refresh(

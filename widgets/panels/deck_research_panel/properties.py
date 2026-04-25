@@ -2,24 +2,24 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import wx
 
+if TYPE_CHECKING:
+    from widgets.panels.deck_research_panel.protocol import DeckResearchPanelProto
 
-class DeckResearchPropertiesMixin:
+    _Base = DeckResearchPanelProto
+else:
+    _Base = object
+
+
+class DeckResearchPropertiesMixin(_Base):
     """Filter getters for :class:`DeckResearchPanel`.
 
     Kept as a mixin (no ``__init__``) so :class:`DeckResearchPanel` remains
     the single source of truth for instance-state initialization.
     """
-
-    event_type_choice: wx.Choice
-    placement_op_choice: wx.ComboBox
-    placement_field_choice: wx.ComboBox
-    placement_value_filter: wx.TextCtrl
-    player_name_filter: wx.TextCtrl
-    date_filter: wx.TextCtrl
-    format_choice: wx.Choice
-    archetype_combo: wx.ComboBox
 
     def get_event_type_filter(self) -> str:
         return self.event_type_choice.GetStringSelection()

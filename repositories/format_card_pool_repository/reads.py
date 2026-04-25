@@ -2,13 +2,24 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from repositories.format_card_pool_repository.models import (
     FormatCardPoolCardTotal,
     FormatCardPoolSummary,
 )
 
+if TYPE_CHECKING:
+    from repositories.format_card_pool_repository.protocol import (
+        FormatCardPoolRepositoryProto,
+    )
 
-class ReadsMixin:
+    _Base = FormatCardPoolRepositoryProto
+else:
+    _Base = object
+
+
+class ReadsMixin(_Base):
     """Lookup, listing, and summary queries against the cached snapshots."""
 
     def has_format_pool(self, format_name: str) -> bool:

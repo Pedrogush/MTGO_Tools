@@ -4,17 +4,24 @@ from __future__ import annotations
 
 import json
 import time
-from typing import Any, Final
+from typing import TYPE_CHECKING, Any, Final
 
 from loguru import logger
 
 from repositories.metagame_repository.date_utils import _parse_deck_date
 from utils.atomic_io import atomic_write_json, locked_path
 
+if TYPE_CHECKING:
+    from repositories.metagame_repository.protocol import MetagameRepositoryProto
+
+    _Base = MetagameRepositoryProto
+else:
+    _Base = object
+
 _USE_DEFAULT_MAX_AGE: Final = object()
 
 
-class CacheMixin:
+class CacheMixin(_Base):
     """Archetype-list / archetype-decks cache read/write and filter helpers."""
 
     def _load_cached_archetypes(

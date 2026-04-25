@@ -6,9 +6,8 @@ import math
 from collections import Counter
 from html import escape
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING
 
-from utils.card_data import CardDataManager
 from utils.constants.deck_rules import (
     STATS_CURVE_COLOUR_LERP_MAX_CMC,
     STATS_CURVE_HIGH_CMC_BUCKET,
@@ -505,15 +504,20 @@ _EMPTY_HTML = _build_html(
 )
 
 
-class DeckStatsPanelPropertiesMixin:
+if TYPE_CHECKING:
+    from widgets.panels.deck_stats_panel.protocol import DeckStatsPanelProto
+
+    _Base = DeckStatsPanelProto
+else:
+    _Base = object
+
+
+class DeckStatsPanelPropertiesMixin(_Base):
     """Read-only data getters and pure-data helpers for :class:`DeckStatsPanel`.
 
     Kept as a mixin (no ``__init__``) so :class:`DeckStatsPanel` remains the
     single source of truth for instance-state initialization.
     """
-
-    card_manager: CardDataManager | None
-    zone_cards: dict[str, list[dict[str, Any]]]
 
     def _card_data_available(self) -> bool:
         return self.card_manager is not None and self.card_manager.is_loaded

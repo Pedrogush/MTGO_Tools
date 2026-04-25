@@ -2,12 +2,21 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from loguru import logger
 
 from utils.i18n import normalize_locale
 
+if TYPE_CHECKING:
+    from controllers.app_controller.protocol import AppControllerProto
 
-class SettingsMixin:
+    _Base = AppControllerProto
+else:
+    _Base = object
+
+
+class SettingsMixin(_Base):
     """Settings getters/setters that mirror into the ``DeckSelectorSessionManager``."""
 
     def save_settings(

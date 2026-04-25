@@ -2,21 +2,24 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from utils.card_images import CardImageRequest
 
+if TYPE_CHECKING:
+    from widgets.panels.card_inspector_panel.protocol import CardInspectorPanelProto
 
-class CardInspectorPanelPropertiesMixin:
+    _Base = CardInspectorPanelProto
+else:
+    _Base = object
+
+
+class CardInspectorPanelPropertiesMixin(_Base):
     """Pure helpers (no ``self`` UI mutation) for :class:`CardInspectorPanel`.
 
     Kept as a mixin (no ``__init__``) so :class:`CardInspectorPanel` remains
     the single source of truth for instance-state initialization.
     """
-
-    inspector_current_card_name: str | None
-    inspector_printings: list[dict[str, Any]]
-    inspector_current_printing: int
 
     def _resolve_image_request_name(
         self, card: dict[str, Any], meta: dict[str, Any] | None

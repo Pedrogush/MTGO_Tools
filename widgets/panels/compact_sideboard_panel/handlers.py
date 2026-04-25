@@ -2,19 +2,21 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import wx
 from loguru import logger
 
+if TYPE_CHECKING:
+    from widgets.panels.compact_sideboard_panel.protocol import CompactSideboardPanelProto
 
-class CompactSideboardHandlersMixin:
+    _Base = CompactSideboardPanelProto
+else:
+    _Base = object
+
+
+class CompactSideboardHandlersMixin(_Base):
     """Public setters, toggle callback, and list population for :class:`CompactSideboardPanel`."""
-
-    _current_entry: dict | None
-    _play_first: bool
-    header_label: wx.StaticText
-    toggle_btn: wx.Button
-    status_label: wx.StaticText
-    card_list: wx.ListBox
 
     def display_entry(self, entry: dict, archetype_name: str) -> None:
         self._current_entry = entry

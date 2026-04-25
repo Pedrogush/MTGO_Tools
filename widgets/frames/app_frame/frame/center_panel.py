@@ -22,30 +22,19 @@ from widgets.panels.deck_stats_panel import DeckStatsPanel
 from widgets.panels.sideboard_guide_panel import SideboardGuidePanel
 
 if TYPE_CHECKING:
-    from controllers.app_controller import AppController
-    from utils.mana_icon_factory import ManaIconFactory
+    from widgets.frames.app_frame.protocol import AppFrameProto
+
+    _Base = AppFrameProto
+else:
+    _Base = object
 
 
-class CenterPanelBuilderMixin:
+class CenterPanelBuilderMixin(_Base):
     """Builds the center column: deck tables notebook, sideboard guide, notes, stats.
 
     Kept as a mixin (no ``__init__``) so :class:`AppFrame` remains the single
     source of truth for instance-state initialization.
     """
-
-    controller: AppController
-    locale: str
-    mana_icons: ManaIconFactory
-    deck_tabs: fnb.FlatNotebook
-    main_table: CardTablePanel
-    side_table: CardTablePanel
-    out_table: CardTablePanel | None
-    zone_notebook: fnb.FlatNotebook | None
-    sideboard_guide_panel: SideboardGuidePanel
-    deck_notes_panel: DeckNotesPanel
-    deck_stats_panel: DeckStatsPanel
-    collection_status_label: wx.StaticText
-    stats_summary: wx.StaticText
 
     def _create_notebook(self, parent: wx.Window) -> fnb.FlatNotebook:
         notebook = fnb.FlatNotebook(

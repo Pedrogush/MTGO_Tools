@@ -19,19 +19,19 @@ from widgets.buttons.mana_button import create_mana_button
 from widgets.panels.mana_rich_text_ctrl import ManaSymbolRichCtrl
 
 if TYPE_CHECKING:
-    from utils.mana_icon_factory import ManaIconFactory
+    from widgets.panels.deck_builder_panel.protocol import DeckBuilderPanelProto
+
+    _Base = DeckBuilderPanelProto
+else:
+    _Base = object
 
 
-class BasicFiltersBuilderMixin:
+class BasicFiltersBuilderMixin(_Base):
     """Builds the back button, info label, and the always-visible filter rows.
 
     Kept as a mixin (no ``__init__``) so :class:`DeckBuilderPanel` remains the
     single source of truth for instance-state initialization.
     """
-
-    mana_icons: ManaIconFactory
-    inputs: dict[str, wx.TextCtrl]
-    mana_exact_cb: wx.CheckBox | None
 
     def _build_header(self, parent_sizer: wx.Sizer) -> None:
         back_btn = wx.Button(self, label=self._t("builder.back_button"))

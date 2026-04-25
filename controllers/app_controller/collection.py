@@ -3,14 +3,21 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
 from utils.constants import COLLECTION_CACHE_MAX_AGE_SECONDS
 
+if TYPE_CHECKING:
+    from controllers.app_controller.protocol import AppControllerProto
 
-class CollectionMixin:
+    _Base = AppControllerProto
+else:
+    _Base = object
+
+
+class CollectionMixin(_Base):
     """Load the cached collection file and trigger bridge refreshes."""
 
     def load_collection_from_cache(self, directory: Path) -> tuple[bool, dict[str, Any] | None]:

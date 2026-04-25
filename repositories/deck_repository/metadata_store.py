@@ -4,15 +4,22 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
 from utils.atomic_io import atomic_write_json, locked_path
 from utils.constants import GUIDE_STORE, NOTES_STORE, OUTBOARD_STORE
 
+if TYPE_CHECKING:
+    from repositories.deck_repository.protocol import DeckRepositoryProto
 
-class MetadataStoreMixin:
+    _Base = DeckRepositoryProto
+else:
+    _Base = object
+
+
+class MetadataStoreMixin(_Base):
     """Load/save per-deck notes, outboard cards, and sideboard guides."""
 
     def load_notes(self, deck_key: str) -> str:

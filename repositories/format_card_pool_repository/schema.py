@@ -3,11 +3,21 @@
 from __future__ import annotations
 
 import sqlite3
+from typing import TYPE_CHECKING
 
 from utils.constants import SQLITE_CONNECTION_TIMEOUT_SECONDS
 
+if TYPE_CHECKING:
+    from repositories.format_card_pool_repository.protocol import (
+        FormatCardPoolRepositoryProto,
+    )
 
-class SchemaMixin:
+    _Base = FormatCardPoolRepositoryProto
+else:
+    _Base = object
+
+
+class SchemaMixin(_Base):
     """SQLite connection helper and table bootstrap."""
 
     def _initialize(self) -> None:

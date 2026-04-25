@@ -6,6 +6,8 @@ selectors, the event-type/date row, and the placement/player-name row.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import wx
 
 from utils.constants import PADDING_MD
@@ -13,25 +15,20 @@ from utils.deck_results_filter import PLACEMENT_FIELDS, PLACEMENT_OPERATORS
 from utils.stylize import stylize_button, stylize_choice, stylize_label, stylize_textctrl
 from widgets.panels.deck_research_panel.frame.centered_choice import _CenteredChoice
 
+if TYPE_CHECKING:
+    from widgets.panels.deck_research_panel.protocol import DeckResearchPanelProto
 
-class FiltersBuilderMixin:
+    _Base = DeckResearchPanelProto
+else:
+    _Base = object
+
+
+class FiltersBuilderMixin(_Base):
     """Builds the switch-button row and the three filter rows.
 
     Kept as a mixin (no ``__init__``) so :class:`DeckResearchPanel` remains the
     single source of truth for instance-state initialization.
     """
-
-    format_choice: wx.Choice
-    archetype_combo: wx.ComboBox
-    archetype_list: wx.ComboBox
-    archetype_dropdown: wx.ComboBox
-    search_ctrl: wx.ComboBox
-    event_type_choice: wx.Choice
-    date_filter: wx.TextCtrl
-    placement_op_choice: _CenteredChoice
-    placement_field_choice: _CenteredChoice
-    placement_value_filter: wx.TextCtrl
-    player_name_filter: wx.TextCtrl
 
     def _build_switch_button(self, sizer: wx.Sizer) -> None:
         if self._on_switch_to_builder is None:

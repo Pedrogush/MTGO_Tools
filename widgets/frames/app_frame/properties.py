@@ -2,25 +2,26 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING
 
-import wx
 from loguru import logger
 
 from utils.i18n import translate
 
+if TYPE_CHECKING:
+    from widgets.frames.app_frame.protocol import AppFrameProto
 
-class AppFramePropertiesMixin:
+    _Base = AppFrameProto
+else:
+    _Base = object
+
+
+class AppFramePropertiesMixin(_Base):
     """Translation helper, status setter, and delegation getters for :class:`AppFrame`.
 
     Kept as a mixin (no ``__init__``) so :class:`AppFrame` remains the single
     source of truth for instance-state initialization.
     """
-
-    locale: str | None
-    status_bar: wx.StatusBar | None
-    research_panel: Any
-    zone_cards: dict[str, list[Any]]
 
     def _t(self, key: str, **kwargs: object) -> str:
         return translate(self.locale, key, **kwargs)

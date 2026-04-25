@@ -2,15 +2,22 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
 from repositories.format_card_pool_repository import FormatCardPoolRepository
 from repositories.radar_repository import RadarRepository
 
+if TYPE_CHECKING:
+    from services.bundle_snapshot_client.protocol import BundleSnapshotClientProto
 
-class SnapshotCacheMixin:
+    _Base = BundleSnapshotClientProto
+else:
+    _Base = object
+
+
+class SnapshotCacheMixin(_Base):
     """Hydrate SQLite-backed format card pool and precomputed radar stores."""
 
     def _hydrate_format_card_pools(self, card_pool_entries: list[dict[str, Any]]) -> int:

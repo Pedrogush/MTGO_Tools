@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from collections.abc import Callable
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
@@ -15,8 +15,15 @@ from utils.constants import (
     RADAR_INCLUSION_RATE_ROUND_DIGITS,
 )
 
+if TYPE_CHECKING:
+    from services.radar_service.protocol import RadarServiceProto
 
-class AnalysisMixin:
+    _Base = RadarServiceProto
+else:
+    _Base = object
+
+
+class AnalysisMixin(_Base):
     """Compute card-frequency statistics for an archetype's deck pool."""
 
     def calculate_radar(

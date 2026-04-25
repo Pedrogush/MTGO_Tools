@@ -14,7 +14,7 @@ class DeckEntry:
     is_sideboard: bool
 
 
-class DeckParser:
+class DeckParserMixin:
     """Parse deck text into structured data for downstream services."""
 
     def deck_to_dictionary(self, deck_text: str) -> dict[str, float]:
@@ -112,3 +112,7 @@ class DeckParser:
             total = totals[card]
             cards.append((card, int(total) if float(total).is_integer() else total))
         return cards
+
+
+class DeckParser(DeckParserMixin):
+    """Standalone parser for direct instantiation (tests, ad-hoc usage)."""

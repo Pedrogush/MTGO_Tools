@@ -2,21 +2,18 @@
 
 from __future__ import annotations
 
-import wx
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from widgets.panels.deck_research_panel.protocol import DeckResearchPanelProto
+
+    _Base = DeckResearchPanelProto
+else:
+    _Base = object
 
 
-class DeckResearchHandlersMixin:
+class DeckResearchHandlersMixin(_Base):
     """UI-mutating setters, resets, and enable/disable helpers for :class:`DeckResearchPanel`."""
-
-    event_type_choice: wx.Choice
-    placement_op_choice: wx.ComboBox
-    placement_field_choice: wx.ComboBox
-    placement_value_filter: wx.TextCtrl
-    player_name_filter: wx.TextCtrl
-    date_filter: wx.TextCtrl
-    format_choice: wx.Choice
-    archetype_combo: wx.ComboBox
-    _labels: dict[str, str]
 
     def set_event_type_filter(self, value: str) -> None:
         if not self.event_type_choice.SetStringSelection(value):

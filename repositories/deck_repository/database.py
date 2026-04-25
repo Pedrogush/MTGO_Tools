@@ -3,12 +3,20 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 import pymongo
 from loguru import logger
 
+if TYPE_CHECKING:
+    from repositories.deck_repository.protocol import DeckRepositoryProto
 
-class DatabaseMixin:
+    _Base = DeckRepositoryProto
+else:
+    _Base = object
+
+
+class DatabaseMixin(_Base):
     """MongoDB persistence for user-saved decks."""
 
     def _get_db(self):

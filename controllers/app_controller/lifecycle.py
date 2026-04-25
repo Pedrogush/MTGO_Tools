@@ -12,10 +12,15 @@ from utils.constants import MTGO_BRIDGE_SHUTDOWN_TIMEOUT_SECONDS
 if TYPE_CHECKING:
     import wx
 
+    from controllers.app_controller.protocol import AppControllerProto
     from widgets.frames.app_frame import AppFrame
 
+    _Base = AppControllerProto
+else:
+    _Base = object
 
-class LifecycleMixin:
+
+class LifecycleMixin(_Base):
     """Initial-load orchestration, frame factory, and background-worker shutdown."""
 
     def run_initial_loads(self, deck_save_dir: Path, force_archetypes: bool = False) -> None:

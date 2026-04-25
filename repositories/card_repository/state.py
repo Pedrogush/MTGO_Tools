@@ -2,10 +2,19 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from utils.card_data import CardDataManager
 
+if TYPE_CHECKING:
+    from repositories.card_repository.protocol import CardRepositoryProto
 
-class StateMixin:
+    _Base = CardRepositoryProto
+else:
+    _Base = object
+
+
+class StateMixin(_Base):
     """In-memory loading/ready flags and ``CardDataManager`` accessors."""
 
     def is_card_data_loading(self) -> bool:

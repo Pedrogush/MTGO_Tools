@@ -2,36 +2,26 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import wx
 
-from services.radar_service import RadarData
 from utils.i18n import translate
 
+if TYPE_CHECKING:
+    from widgets.panels.deck_builder_panel.protocol import DeckBuilderPanelProto
 
-class DeckBuilderPanelPropertiesMixin:
+    _Base = DeckBuilderPanelProto
+else:
+    _Base = object
+
+
+class DeckBuilderPanelPropertiesMixin(_Base):
     """Filter getters and i18n helpers for :class:`DeckBuilderPanel`.
 
     Kept as a mixin (no ``__init__``) so :class:`DeckBuilderPanel` remains the
     single source of truth for instance-state initialization.
     """
-
-    _locale: str | None
-    inputs: dict[str, wx.TextCtrl]
-    mana_exact_cb: wx.CheckBox | None
-    mv_comparator: wx.Choice | None
-    mv_value: wx.TextCtrl | None
-    format_choice: wx.Choice | None
-    color_checks: dict[str, wx.ToggleButton]
-    color_mode_choice: wx.Choice | None
-    text_mode_choice: wx.Choice | None
-    results_ctrl: Any
-    results_cache: list[dict[str, Any]]
-    format_pool_cb: wx.CheckBox | None
-    active_radar: RadarData | None
-    radar_enabled: bool
-    radar_zone: str
 
     def _t(self, key: str, **kwargs: object) -> str:
         return translate(self._locale, key, **kwargs)

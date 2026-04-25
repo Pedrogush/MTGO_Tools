@@ -5,14 +5,21 @@ from __future__ import annotations
 import json
 import time
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from loguru import logger
+
+if TYPE_CHECKING:
+    from services.remote_snapshot_client.protocol import RemoteSnapshotClientProto
+
+    _Base = RemoteSnapshotClientProto
+else:
+    _Base = object
 
 _SUPPORTED_SCHEMA_VERSION = "1"
 
 
-class ArtifactMixin:
+class ArtifactMixin(_Base):
     """Download/cache the per-format archetype and metagame-stats artifacts."""
 
     def _get_artifact(self, artifact_path: str) -> dict[str, Any] | None:

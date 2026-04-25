@@ -3,14 +3,21 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
 from services.deck_workflow_service import DeckLoadScope
 
+if TYPE_CHECKING:
+    from controllers.app_controller.protocol import AppControllerProto
 
-class ArchetypesMixin:
+    _Base = AppControllerProto
+else:
+    _Base = object
+
+
+class ArchetypesMixin(_Base):
     """Archetype fetch, deck-list loading, and in-memory archetype state."""
 
     def fetch_archetypes(

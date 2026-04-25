@@ -3,29 +3,27 @@
 from __future__ import annotations
 
 import time
-from collections.abc import Callable
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from loguru import logger
+from services.deck_service.parser import DeckParserMixin
 
-from repositories.deck_repository import DeckRepository
-from repositories.metagame_repository import MetagameRepository
-from services.deck_service.parser import DeckParser
-from utils.constants import DEFAULT_MAX_DECKS
+if TYPE_CHECKING:
+    from services.deck_service.protocol import DeckServiceProto
+
+    _Base = DeckServiceProto
+else:
+    _Base = object
 
 _COPY_SEP = "\x00"
 KARSTEN_MAIN_SIZE = 60
 KARSTEN_SIDE_SIZE = 15
 
 
-class DeckAverager:
+class DeckAveragerMixin(_Base):
     """Aggregate and render average decks."""
 
-    def __init__(self, deck_parser: DeckParser | None = None):
-        self.deck_parser = deck_parser or DeckParser()
-
     def add_deck_to_buffer(self, buffer: dict[str, float], deck_text: str) -> dict[str, float]:
-        deck_dict = self.deck_parser.deck_to_dictionary(deck_text)
+        deck_dict = self.deck_to_dictionary(deck_text)
 
         for card_name, count in deck_dict.items():
             buffer[card_name] = buffer.get(card_name, 0.0) + float(count)
@@ -38,7 +36,7 @@ class DeckAverager:
         Each copy of a card (e.g. the 2nd Island) gets its own key.  The value
         is the number of decks that contained at least that many copies.
         """
-        deck_dict = self.deck_parser.deck_to_dictionary(deck_text)
+        deck_dict = self.deck_to_dictionary(deck_text)
         for card_name, count in deck_dict.items():
             for copy_num in range(1, int(count) + 1):
                 key = f"{card_name}{_COPY_SEP}{copy_num}"
@@ -121,65 +119,12 @@ class DeckAverager:
             )
         return "\n".join(lines)
 
-    def build_daily_average(
-        self,
-        archetype: dict[str, Any],
-        metagame_repo: MetagameRepository,
-        max_decks: int = DEFAULT_MAX_DECKS,
-        source_filter: str | None = None,
-    ) -> tuple[str, int]:
-        try:
-            decks = metagame_repo.get_decks_for_archetype(
-                archetype, force_refresh=True, source_filter=source_filter
-            )
-
-            if not decks:
-                logger.warning(f"No decks found for archetype: {archetype.get('name')}")
-                return "", 0
-
-            decks_to_process = decks[:max_decks]
-
-            buffer: dict[str, float] = {}
-            processed = 0
-
-            for deck in decks_to_process:
-                try:
-                    deck_content = metagame_repo.download_deck_content(
-                        deck, source_filter=source_filter
-                    )
-                    buffer = self.add_deck_to_buffer(buffer, deck_content)
-                    processed += 1
-                except Exception as exc:
-                    logger.warning(f"Failed to download deck {deck.get('name')}: {exc}")
-                    continue
-
-            if processed == 0:
-                return "", 0
-
-            averaged_deck = self.render_average_deck(buffer, processed)
-            return averaged_deck, processed
-
-        except Exception as exc:
-            logger.error(f"Failed to build daily average: {exc}")
-            return "", 0
-
     def filter_today_decks(
         self, decks: list[dict[str, Any]], today: str | None = None
     ) -> list[dict[str, Any]]:
         today = today or time.strftime("%Y-%m-%d").lower()
         return [deck for deck in decks if today in str(deck.get("date", "")).lower()]
 
-    def build_average_text(
-        self,
-        todays_decks: list[dict[str, Any]],
-        download_deck: Callable[[str], None],
-        read_deck_file: Callable[[], str],
-        deck_repo: DeckRepository,
-    ) -> str:
-        buffer = deck_repo.build_daily_average_deck(
-            todays_decks,
-            download_deck,
-            read_deck_file,
-            self.add_deck_to_buffer,
-        )
-        return self.render_average_deck(buffer, len(todays_decks))
+
+class DeckAverager(DeckParserMixin, DeckAveragerMixin):
+    """Standalone averager bundling the parser surface for direct instantiation."""

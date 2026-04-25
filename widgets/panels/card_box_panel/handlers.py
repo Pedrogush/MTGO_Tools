@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from threading import Thread
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import wx
 from PIL import Image as PilImage
@@ -26,35 +25,18 @@ from utils.constants import (
     DECK_CARD_WIDTH,
     LIGHT_TEXT,
 )
-from utils.mana_icon_factory import ManaIconFactory
 from utils.perf import timed
 
+if TYPE_CHECKING:
+    from widgets.panels.card_box_panel.protocol import CardBoxPanelProto
 
-class CardBoxPanelHandlersMixin:
+    _Base = CardBoxPanelProto
+else:
+    _Base = object
+
+
+class CardBoxPanelHandlersMixin(_Base):
     """Event callbacks, workers, public state setters, and bitmap renderers for :class:`CardBoxPanel`."""
-
-    # Attributes supplied by :class:`CardBoxPanel` / the properties mixin.
-    zone: str
-    card: dict[str, Any]
-    qty_label: wx.StaticText
-    button_panel: wx.Panel
-    _icon_factory: ManaIconFactory
-    _get_metadata: Callable[[str], dict[str, Any] | None]
-    _owned_status: Callable[[str, int], tuple[str, tuple[int, int, int]]]
-    _on_delta: Callable[[str, str, int], None]
-    _on_remove: Callable[[str, str], None]
-    _on_select: Callable[[str, dict[str, Any], Any], None]
-    _on_hover: Callable[[str, dict[str, Any]], None] | None
-    _active: bool
-    _mana_cost: str
-    _card_color: tuple[int, int, int]
-    _mana_cost_bitmap: wx.Bitmap | None
-    _template_bitmap: wx.Bitmap | None
-    _card_bitmap: wx.Bitmap | None
-    _image_available: bool
-    _image_attempted: bool
-    _image_generation: int
-    _image_name_candidates: list[str]
 
     def refresh_image(self) -> None:
         self._image_attempted = False

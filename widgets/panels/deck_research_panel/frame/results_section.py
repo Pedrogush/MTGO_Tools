@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import wx
 import wx.html
 
@@ -9,21 +11,20 @@ from utils.constants import DARK_PANEL, LIGHT_TEXT, PADDING_MD
 from widgets.buttons.deck_action_buttons import DeckActionButtons
 from widgets.lists.deck_results_list import DeckResultsList
 
+if TYPE_CHECKING:
+    from widgets.panels.deck_research_panel.protocol import DeckResearchPanelProto
 
-class ResultsSectionBuilderMixin:
+    _Base = DeckResearchPanelProto
+else:
+    _Base = object
+
+
+class ResultsSectionBuilderMixin(_Base):
     """Builds the deck-action button row, archetype summary box, and deck list.
 
     Kept as a mixin (no ``__init__``) so :class:`DeckResearchPanel` remains the
     single source of truth for instance-state initialization.
     """
-
-    deck_action_buttons: DeckActionButtons
-    summary_text: wx.html.HtmlWindow
-    deck_list: DeckResultsList
-    daily_average_button: wx.Button
-    copy_button: wx.Button
-    load_button: wx.Button
-    save_button: wx.Button
 
     def _build_deck_results_section(self, sizer: wx.Sizer) -> None:
         self.deck_action_buttons = DeckActionButtons(

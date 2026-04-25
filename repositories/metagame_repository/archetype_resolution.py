@@ -10,10 +10,15 @@ from loguru import logger
 import repositories.metagame_repository as _pkg
 
 if TYPE_CHECKING:
+    from repositories.metagame_repository.protocol import MetagameRepositoryProto
     from services.remote_snapshot_client import RemoteSnapshotClient
 
+    _Base = MetagameRepositoryProto
+else:
+    _Base = object
 
-class ArchetypeResolutionMixin:
+
+class ArchetypeResolutionMixin(_Base):
     """``get_archetypes_for_format`` / ``get_stats_for_format`` and remote lookup."""
 
     def get_archetypes_for_format(

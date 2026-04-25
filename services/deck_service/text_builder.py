@@ -2,10 +2,17 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from services.deck_service.protocol import DeckServiceProto
+
+    _Base = DeckServiceProto
+else:
+    _Base = object
 
 
-class DeckTextBuilder:
+class DeckTextBuilderMixin(_Base):
     """Construct deck list text from zone dictionaries."""
 
     def build_deck_text_from_zones(self, zone_cards: dict[str, list[dict[str, Any]]]) -> str:
@@ -47,3 +54,7 @@ class DeckTextBuilder:
                 break
 
         return "\n".join(lines)
+
+
+class DeckTextBuilder(DeckTextBuilderMixin):
+    """Standalone text-builder for direct instantiation."""

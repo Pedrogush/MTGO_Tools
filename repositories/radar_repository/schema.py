@@ -3,11 +3,19 @@
 from __future__ import annotations
 
 import sqlite3
+from typing import TYPE_CHECKING
 
 from utils.constants import SQLITE_CONNECTION_TIMEOUT_SECONDS
 
+if TYPE_CHECKING:
+    from repositories.radar_repository.protocol import RadarRepositoryProto
 
-class SchemaMixin:
+    _Base = RadarRepositoryProto
+else:
+    _Base = object
+
+
+class SchemaMixin(_Base):
     """SQLite connection helper and table bootstrap."""
 
     def _initialize(self) -> None:

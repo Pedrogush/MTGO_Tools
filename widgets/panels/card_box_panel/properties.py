@@ -2,14 +2,21 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import wx
 
 from utils.mana_icon_factory import ManaIconFactory
 
+if TYPE_CHECKING:
+    from widgets.panels.card_box_panel.protocol import CardBoxPanelProto
 
-class CardBoxPanelPropertiesMixin:
+    _Base = CardBoxPanelProto
+else:
+    _Base = object
+
+
+class CardBoxPanelPropertiesMixin(_Base):
     """Pure helpers (no ``self`` UI mutation) for :class:`CardBoxPanel`.
 
     Kept as a mixin (no ``__init__``) so :class:`CardBoxPanel` remains the

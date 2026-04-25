@@ -6,12 +6,19 @@ import json
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
 from services.collection_service.parsing import build_inventory
 from utils.constants import ONE_HOUR_SECONDS
+
+if TYPE_CHECKING:
+    from services.collection_service.protocol import CollectionServiceProto
+
+    _Base = CollectionServiceProto
+else:
+    _Base = object
 
 
 @dataclass(frozen=True)
@@ -24,7 +31,7 @@ class CollectionStatus:
     age_hours: int
 
 
-class CollectionCacheMixin:
+class CollectionCacheMixin(_Base):
     """Discover, load and expose cached collection files."""
 
     def load_collection(self, filepath: Path | None = None, force: bool = False) -> bool:

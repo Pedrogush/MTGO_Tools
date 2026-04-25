@@ -3,14 +3,21 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
 from utils.card_images import CardImageRequest
 
+if TYPE_CHECKING:
+    from services.image_service.protocol import ImageServiceProto
 
-class ImageCacheMixin:
+    _Base = ImageServiceProto
+else:
+    _Base = object
+
+
+class ImageCacheMixin(_Base):
     """Download-queue orchestration and UI callback plumbing."""
 
     def set_image_download_callback(

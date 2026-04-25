@@ -2,6 +2,15 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from services.collection_service.protocol import CollectionServiceProto
+
+    _Base = CollectionServiceProto
+else:
+    _Base = object
+
 
 def format_owned_status(owned: int, required: int) -> tuple[str, tuple[int, int, int]]:
     """Return a display label and RGB color for owned vs required counts."""
@@ -12,7 +21,7 @@ def format_owned_status(owned: int, required: int) -> tuple[str, tuple[int, int,
     return (f"Owned 0/{required}", (230, 120, 120))
 
 
-class OwnershipMixin:
+class OwnershipMixin(_Base):
     """Ownership lookup and formatting on top of the collection state."""
 
     def owns_card(self, card_name: str, required_count: int = 1) -> bool:

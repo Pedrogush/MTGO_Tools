@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import wx
 from loguru import logger
 
@@ -12,16 +14,16 @@ from widgets.panels.compact_radar_panel.properties import (
     RadarViewMode,
 )
 
+if TYPE_CHECKING:
+    from widgets.panels.compact_radar_panel.protocol import CompactRadarPanelProto
 
-class CompactRadarHandlersMixin:
+    _Base = CompactRadarPanelProto
+else:
+    _Base = object
+
+
+class CompactRadarHandlersMixin(_Base):
     """Public API, toggle callback, and list population for :class:`CompactRadarPanel`."""
-
-    current_radar: RadarData | None
-    _view_mode: RadarViewMode
-    header_label: wx.StaticText
-    view_toggle_btn: wx.Button
-    status_label: wx.StaticText
-    card_list: wx.ListBox
 
     # ============= Public API =============
 

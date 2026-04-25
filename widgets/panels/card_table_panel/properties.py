@@ -2,24 +2,26 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import wx
 
 from utils.constants import DECK_CARD_WIDTH
-from widgets.panels.card_box_panel import CardBoxPanel
+
+if TYPE_CHECKING:
+    from widgets.panels.card_table_panel.protocol import CardTablePanelProto
+
+    _Base = CardTablePanelProto
+else:
+    _Base = object
 
 
-class CardTablePanelPropertiesMixin:
+class CardTablePanelPropertiesMixin(_Base):
     """Read-only getters and pure-data helpers for :class:`CardTablePanel`.
 
     Kept as a mixin (no ``__init__``) so :class:`CardTablePanel` remains the
     single source of truth for instance-state initialization.
     """
-
-    GRID_COLUMNS: int
-    GRID_GAP: int
-    active_panel: CardBoxPanel | None
 
     @classmethod
     def grid_width(cls) -> int:

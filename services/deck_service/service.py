@@ -1,4 +1,4 @@
-"""DeckService assembled from parser/averager/text-builder modules."""
+"""DeckService composed from parser/averager/text-builder mixins."""
 
 from __future__ import annotations
 
@@ -10,9 +10,9 @@ from loguru import logger
 
 from repositories.deck_repository import DeckRepository, get_deck_repository
 from repositories.metagame_repository import MetagameRepository, get_metagame_repository
-from services.deck_service.averager import DeckAverager
-from services.deck_service.parser import DeckParser
-from services.deck_service.text_builder import DeckTextBuilder
+from services.deck_service.averager import DeckAveragerMixin
+from services.deck_service.parser import DeckParserMixin
+from services.deck_service.text_builder import DeckTextBuilderMixin
 from utils.constants import DEFAULT_MAX_DECKS
 
 
@@ -24,45 +24,22 @@ class ZoneUpdateResult:
     has_loaded_deck: bool
 
 
-class DeckService:
+class DeckService(
+    DeckParserMixin,
+    DeckAveragerMixin,
+    DeckTextBuilderMixin,
+):
     """Service for deck-related business logic."""
 
     def __init__(
         self,
         deck_repository: DeckRepository | None = None,
         metagame_repository: MetagameRepository | None = None,
-        deck_parser: DeckParser | None = None,
-        deck_averager: DeckAverager | None = None,
-        deck_text_builder: DeckTextBuilder | None = None,
     ):
         self.deck_repo = deck_repository or get_deck_repository()
         self.metagame_repo = metagame_repository or get_metagame_repository()
-        self.deck_parser = deck_parser or DeckParser()
-        self.deck_averager = deck_averager or DeckAverager(self.deck_parser)
-        self.deck_text_builder = deck_text_builder or DeckTextBuilder()
 
-    # ============= Deck Parsing and Analysis =============
-
-    def deck_to_dictionary(self, deck_text: str) -> dict[str, float]:
-        # Sideboard cards are prefixed with "Sideboard " in the returned dict.
-        return self.deck_parser.deck_to_dictionary(deck_text)
-
-    def analyze_deck(self, deck_content: str) -> dict[str, Any]:
-        return self.deck_parser.analyze_deck(deck_content)
-
-    # ============= Deck Averaging and Aggregation =============
-
-    def add_deck_to_buffer(self, buffer: dict[str, float], deck_text: str) -> dict[str, float]:
-        return self.deck_averager.add_deck_to_buffer(buffer, deck_text)
-
-    def add_deck_to_karsten_buffer(self, buffer: dict[str, int], deck_text: str) -> dict[str, int]:
-        return self.deck_averager.add_deck_to_karsten_buffer(buffer, deck_text)
-
-    def render_average_deck(self, buffer: dict[str, float], deck_count: int) -> str:
-        return self.deck_averager.render_average_deck(buffer, deck_count)
-
-    def render_karsten_deck(self, buffer: dict[str, int]) -> str:
-        return self.deck_averager.render_karsten_deck(buffer)
+    # ============= Repository-coupled orchestration =============
 
     def build_daily_average(
         self,
@@ -71,31 +48,39 @@ class DeckService:
         source_filter: str | None = None,
     ) -> tuple[str, int]:
         try:
-            return self.deck_averager.build_daily_average(
-                archetype,
-                metagame_repo=self.metagame_repo,
-                max_decks=max_decks,
-                source_filter=source_filter,
+            decks = self.metagame_repo.get_decks_for_archetype(
+                archetype, force_refresh=True, source_filter=source_filter
             )
+
+            if not decks:
+                logger.warning(f"No decks found for archetype: {archetype.get('name')}")
+                return "", 0
+
+            decks_to_process = decks[:max_decks]
+
+            buffer: dict[str, float] = {}
+            processed = 0
+
+            for deck in decks_to_process:
+                try:
+                    deck_content = self.metagame_repo.download_deck_content(
+                        deck, source_filter=source_filter
+                    )
+                    buffer = self.add_deck_to_buffer(buffer, deck_content)
+                    processed += 1
+                except Exception as exc:
+                    logger.warning(f"Failed to download deck {deck.get('name')}: {exc}")
+                    continue
+
+            if processed == 0:
+                return "", 0
+
+            averaged_deck = self.render_average_deck(buffer, processed)
+            return averaged_deck, processed
 
         except Exception as exc:
             logger.error(f"Failed to build daily average: {exc}")
             return "", 0
-
-    # ============= Deck Building Helpers =============
-
-    def build_deck_text_from_zones(self, zone_cards: dict[str, list[dict[str, Any]]]) -> str:
-        return self.deck_text_builder.build_deck_text_from_zones(zone_cards)
-
-    def build_deck_text(self, zones: dict[str, list[dict[str, Any]]]) -> str:
-        return self.deck_text_builder.build_deck_text(zones)
-
-    # ============= Daily Average Building =============
-
-    def filter_today_decks(
-        self, decks: list[dict[str, Any]], today: str | None = None
-    ) -> list[dict[str, Any]]:
-        return self.deck_averager.filter_today_decks(decks, today=today)
 
     def build_average_text(
         self,
@@ -103,9 +88,10 @@ class DeckService:
         download_deck: Callable[[str], None],
         read_deck_file: Callable[[], str],
     ) -> str:
-        return self.deck_averager.build_average_text(
+        buffer = self.deck_repo.build_daily_average_deck(
             todays_decks,
             download_deck,
             read_deck_file,
-            self.deck_repo,
+            self.add_deck_to_buffer,
         )
+        return self.render_average_deck(buffer, len(todays_decks))

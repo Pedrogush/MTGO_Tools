@@ -2,10 +2,17 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from services.search_service.protocol import SearchServiceProto
+
+    _Base = SearchServiceProto
+else:
+    _Base = object
 
 
-class DeckSearchMixin:
+class DeckSearchMixin(_Base):
     """Search within a rendered deck text and group cards by type line."""
 
     def find_cards_in_deck(self, deck_text: str, search_term: str) -> list[tuple[str, int]]:

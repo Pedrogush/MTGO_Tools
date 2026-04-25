@@ -3,11 +3,19 @@
 from __future__ import annotations
 
 import json
+from typing import TYPE_CHECKING
 
 from repositories.radar_repository.models import StoredRadar, StoredRadarCard
 
+if TYPE_CHECKING:
+    from repositories.radar_repository.protocol import RadarRepositoryProto
 
-class ReadsMixin:
+    _Base = RadarRepositoryProto
+else:
+    _Base = object
+
+
+class ReadsMixin(_Base):
     """Snapshot lookup and reconstruction from rows into dataclasses."""
 
     def get_radar(self, format_name: str, archetype_href: str) -> StoredRadar | None:

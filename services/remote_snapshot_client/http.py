@@ -3,16 +3,23 @@
 from __future__ import annotations
 
 import json
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from loguru import logger
+
+if TYPE_CHECKING:
+    from services.remote_snapshot_client.protocol import RemoteSnapshotClientProto
+
+    _Base = RemoteSnapshotClientProto
+else:
+    _Base = object
 
 
 class RemoteSnapshotError(Exception):
     """Raised when a remote snapshot operation fails unrecoverably."""
 
 
-class HttpMixin:
+class HttpMixin(_Base):
     """Fetch JSON artifacts over HTTP with a stdlib fallback."""
 
     def _http_get_json(self, url: str) -> dict[str, Any] | None:
