@@ -291,16 +291,37 @@ def fetch_deck_text(deck_num: str, source_filter: str | None = None) -> str:
         )
         raise ValueError(f"Deck {deck_num} not available from MTGO source")
 
-    # Download from MTGGoldfish
+    # Download from MTGGoldfish. The /deck/{id} endpoint went behind Cloudflare's
+    # managed challenge, which rejects every plain-HTTP client (and headless Chrome).
+    # If it doesn't return parseable HTML, fall back to /deck/visual/{id}, which
+    # is served unprotected.
     logger.info(f"Downloading deck {deck_num} from MTGGoldfish")
-    page = requests.get(f"https://www.mtggoldfish.com/deck/{deck_num}", impersonate="chrome")
-    match = re.search(r'initializeDeckComponents\([^,]+,\s*[^,]+,\s*"([^"]+)"', page.text)
-    if not match:
-        logger.error(f"Could not find deck data for deck {deck_num}")
-        raise ValueError(f"Could not parse deck data for deck {deck_num}")
+    deck_text: str | None = None
+    try:
+        page = requests.get(f"https://www.mtggoldfish.com/deck/{deck_num}", impersonate="chrome")
+        page.raise_for_status()
+        match = re.search(r'initializeDeckComponents\([^,]+,\s*[^,]+,\s*"([^"]+)"', page.text)
+        if match:
+            deck_text = unquote(match.group(1))
+        else:
+            logger.warning(
+                f"Deck {deck_num} HTTP response missing deck payload "
+                "(likely Cloudflare challenge); attempting visual-page fallback"
+            )
+    except Exception as exc:
+        logger.warning(
+            f"MTGGoldfish HTTP fetch failed for deck {deck_num}: {exc}; "
+            "attempting visual-page fallback"
+        )
 
-    encoded_deck = match.group(1)
-    deck_text = unquote(encoded_deck)
+    if deck_text is None:
+        try:
+            from navigators.mtggoldfish_visual import fetch_deck_text_from_visual_page
+
+            deck_text = fetch_deck_text_from_visual_page(deck_num)
+        except Exception as exc:
+            logger.error(f"Visual-page fallback failed for deck {deck_num}: {exc}")
+            raise ValueError(f"Could not parse deck data for deck {deck_num}") from exc
 
     # Store in cache with mtggoldfish source
     cache.set(deck_num, deck_text, source="mtggoldfish")
