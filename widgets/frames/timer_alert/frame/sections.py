@@ -24,7 +24,7 @@ from utils.constants import (
     TIMER_ALERT_SCROLL_RATE_Y,
     TIMER_ALERT_STATUS_MIN_HEIGHT,
 )
-from widgets.frames.timer_alert.frame.threshold_panel import SOUND_OPTIONS, ThresholdPanel
+from widgets.frames.timer_alert.frame.threshold_panel import SOUND_OPTIONS
 
 
 class SectionsBuilderMixin:
