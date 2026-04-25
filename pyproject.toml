@@ -14,10 +14,10 @@ classifiers = [
 ]
 
 [project.scripts]
-mtgo-opponent-tracker = "widgets.identify_opponent:main"
-mtgo-match-history = "widgets.match_history:main"
-mtgo-timer-alert = "widgets.timer_alert:main"
-mtgo-metagame = "widgets.metagame_analysis:main"
+mtgo-opponent-tracker = "widgets.frames.identify_opponent:main"
+mtgo-match-history = "widgets.frames.match_history:main"
+mtgo-timer-alert = "widgets.frames.timer_alert:main"
+mtgo-metagame = "widgets.frames.metagame_analysis:main"
 
 [tool.ruff]
 # Exclude common directories
@@ -68,10 +68,12 @@ ignore = [
 "test_*.py" = ["C901"]
 "**/tests/**" = ["C901"]
 # Widget entry points insert project root into sys.path before other imports
-"widgets/identify_opponent.py" = ["E402"]
-"widgets/match_history.py" = ["E402"]
-"widgets/timer_alert.py" = ["E402"]
-"widgets/metagame_analysis.py" = ["E402"]
+"widgets/frames/identify_opponent/frame/__init__.py" = ["E402"]
+"widgets/frames/match_history/frame.py" = ["E402"]
+"widgets/frames/radar/frame.py" = ["E402"]
+"widgets/frames/timer_alert/frame/__init__.py" = ["E402"]
+"widgets/frames/top_cards/frame.py" = ["E402"]
+"widgets/frames/metagame_analysis/frame.py" = ["E402"]
 
 [tool.black]
 line-length = 100

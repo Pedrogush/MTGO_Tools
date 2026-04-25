@@ -13,15 +13,15 @@ if sys.platform != "win32":
 import navigators.mtggoldfish as mtggoldfish
 import utils.card_images as card_images
 import utils.constants as constants
-import widgets.app_frame as app_frame
-import widgets.identify_opponent as identify_opponent
+import widgets.frames.app_frame as app_frame
+import widgets.frames.identify_opponent as identify_opponent
 from controllers.app_controller import (
     get_deck_selector_controller,
     reset_deck_selector_controller,
 )
 from utils.card_data import CardDataManager
 from utils.constants import METAGAME_CACHE_TTL_SECONDS
-from widgets.app_frame import AppFrame
+from widgets.frames.app_frame import AppFrame
 
 wx = pytest.importorskip("wx")
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-import widgets.timer_alert as timer_alert
+import widgets.frames.timer_alert as timer_alert
 
 TimerAlertFrame = timer_alert.TimerAlertFrame
 

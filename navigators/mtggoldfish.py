@@ -1,8 +1,6 @@
 import json
-import re
 import time
 from datetime import datetime, timedelta
-from urllib.parse import unquote
 
 import bs4
 from curl_cffi import requests
@@ -291,18 +289,17 @@ def fetch_deck_text(deck_num: str, source_filter: str | None = None) -> str:
         )
         raise ValueError(f"Deck {deck_num} not available from MTGO source")
 
-    # Download from MTGGoldfish
+    # The /deck/{id} endpoint sits behind Cloudflare's managed challenge, so we
+    # fetch from /deck/visual/{id} which is served unprotected.
     logger.info(f"Downloading deck {deck_num} from MTGGoldfish")
-    page = requests.get(f"https://www.mtggoldfish.com/deck/{deck_num}", impersonate="chrome")
-    match = re.search(r'initializeDeckComponents\([^,]+,\s*[^,]+,\s*"([^"]+)"', page.text)
-    if not match:
-        logger.error(f"Could not find deck data for deck {deck_num}")
-        raise ValueError(f"Could not parse deck data for deck {deck_num}")
+    from navigators.mtggoldfish_visual import fetch_deck_text_from_visual_page
 
-    encoded_deck = match.group(1)
-    deck_text = unquote(encoded_deck)
+    try:
+        deck_text = fetch_deck_text_from_visual_page(deck_num)
+    except Exception as exc:
+        logger.error(f"Visual-page fetch failed for deck {deck_num}: {exc}")
+        raise ValueError(f"Could not parse deck data for deck {deck_num}") from exc
 
-    # Store in cache with mtggoldfish source
     cache.set(deck_num, deck_text, source="mtggoldfish")
 
     return deck_text

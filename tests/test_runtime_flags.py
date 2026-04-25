@@ -44,7 +44,8 @@ _requires_wx = pytest.mark.skipif(
 
 def _call_restore_session_state(is_automation: bool, tutorial_shown: bool):
     """Invoke AppFrame._restore_session_state unbound with mocked collaborators."""
-    from widgets import app_frame as app_frame_module
+    from widgets.frames.app_frame import AppFrame
+    from widgets.frames.app_frame.handlers import app_frame as handlers_module
 
     frame = MagicMock()
     frame.controller.zone_cards = {"main": [], "side": [], "out": []}
@@ -55,10 +56,10 @@ def _call_restore_session_state(is_automation: bool, tutorial_shown: bool):
     frame.controller.card_repo.is_card_data_ready.return_value = True
 
     with (
-        patch.object(app_frame_module, "is_automation_enabled", return_value=is_automation),
-        patch.object(app_frame_module, "wx") as wx_mock,
+        patch.object(handlers_module, "is_automation_enabled", return_value=is_automation),
+        patch.object(handlers_module, "wx") as wx_mock,
     ):
-        app_frame_module.AppFrame._restore_session_state(frame)
+        AppFrame._restore_session_state(frame)
         return wx_mock, frame
 
 

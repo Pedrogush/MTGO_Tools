@@ -6,12 +6,14 @@ from importlib import import_module
 
 _EXPORTS = {
     "CardBoxPanel": "widgets.panels.card_box_panel",
+    "CardImageDisplay": "widgets.panels.card_image_display",
     "CardInspectorPanel": "widgets.panels.card_inspector_panel",
     "CardTablePanel": "widgets.panels.card_table_panel",
     "DeckBuilderPanel": "widgets.panels.deck_builder_panel",
     "DeckNotesPanel": "widgets.panels.deck_notes_panel",
     "DeckResearchPanel": "widgets.panels.deck_research_panel",
     "DeckStatsPanel": "widgets.panels.deck_stats_panel",
+    "ManaSymbolRichCtrl": "widgets.panels.mana_rich_text_ctrl",
     "SideboardGuidePanel": "widgets.panels.sideboard_guide_panel",
 }
 

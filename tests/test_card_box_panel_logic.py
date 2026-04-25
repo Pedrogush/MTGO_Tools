@@ -2,27 +2,11 @@
 
 from __future__ import annotations
 
-import importlib.util
-import sys
 from typing import Any
 
 import pytest
 
-
-def _load_card_box_panel_module():
-    """Load widgets/panels/card_box_panel.py directly, bypassing the package __init__."""
-    import pathlib
-
-    src = pathlib.Path(__file__).parent.parent / "widgets" / "panels" / "card_box_panel.py"
-    spec = importlib.util.spec_from_file_location("widgets.panels.card_box_panel", src)
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules["widgets.panels.card_box_panel"] = mod
-    spec.loader.exec_module(mod)
-    return mod
-
-
-_cbp_mod = _load_card_box_panel_module()
-CardBoxPanel = _cbp_mod.CardBoxPanel
+from widgets.panels.card_box_panel import CardBoxPanel
 
 
 class _CardEntryStub:
