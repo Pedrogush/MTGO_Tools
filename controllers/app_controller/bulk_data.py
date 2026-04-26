@@ -99,7 +99,7 @@ class BulkDataMixin(_Base):
         )
 
         if not started:
-            on_status(self._t("app.status.ready"))
+            on_status("app.status.ready")
 
     def force_bulk_data_update(self) -> None:
         if self._bulk_check_worker_active:
@@ -113,7 +113,7 @@ class BulkDataMixin(_Base):
         )
         on_download_failed = callbacks.on_bulk_download_failed if callbacks else lambda msg: None
 
-        on_status(self._t("bulk.status.downloading"))
+        on_status("bulk.status.downloading")
         self._bulk_check_worker_active = True
 
         def _on_download_complete(msg: str) -> None:
@@ -124,7 +124,7 @@ class BulkDataMixin(_Base):
         def _on_download_failed(msg: str) -> None:
             self._bulk_check_worker_active = False
             on_download_failed(msg)
-            on_status(self._t("app.status.ready"))
+            on_status("app.status.ready")
 
         self.image_service.download_bulk_metadata_async(
             on_success=_on_download_complete,
