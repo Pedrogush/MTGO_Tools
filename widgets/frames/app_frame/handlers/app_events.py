@@ -42,7 +42,6 @@ def _simple_summary_html(text: str) -> str:
 
 
 class AppEventHandlers(_Base):
-
     # ------------------------------------------------------------------ Properties for state delegation ---------------------------------------
     @property
     def current_format(self) -> str:
@@ -164,6 +163,8 @@ class AppEventHandlers(_Base):
     # UI Event Handlers
     def on_format_changed(self: AppFrame) -> None:
         self.current_format = self.research_panel.get_selected_format()
+        self.card_panel.update_format(self.current_format)
+        self.card_panel.update_archetype(None)
         self.fetch_archetypes(force=True)
 
     def on_archetype_filter(self: AppFrame) -> None:
@@ -184,9 +185,11 @@ class AppEventHandlers(_Base):
         if idx < 0:
             return
         if idx == 0:  # "Any" — load all cached decks sorted by date
+            self.card_panel.update_archetype(None)
             self._load_decks(scope="all")
             return
         archetype = self.filtered_archetypes[idx - 1]
+        self.card_panel.update_archetype(archetype, radar_data=None)
         self._load_decks(scope="archetype", archetype=archetype)
         self._load_radar_in_background(archetype)
 
@@ -601,7 +604,7 @@ class AppEventHandlers(_Base):
         if idx is None:
             if self.card_inspector_panel.active_zone is None:
                 self.card_inspector_panel.reset()
-                self.oracle_text_ctrl.ChangeValue("")
+                self.card_panel.clear()
             return
         meta = self.builder_panel.get_result_at_index(idx)
         if not meta:
@@ -609,8 +612,7 @@ class AppEventHandlers(_Base):
         self._clear_zone_selections()
         faux_card = {"name": meta.get("name", "Unknown"), "qty": 1}
         self.card_inspector_panel.update_card(faux_card, zone=None, meta=meta)
-        oracle_text = meta.get("oracle_text") if meta is not None else None
-        self.oracle_text_ctrl.ChangeValue(oracle_text or "")
+        self._push_card_panel(faux_card, meta)
 
     def _on_daily_average_success(self, deck_text: str) -> None:
         self.daily_average_button.Enable()
@@ -762,6 +764,7 @@ class AppEventHandlers(_Base):
     def _apply_background_radar(self: AppFrame, radar) -> None:
         if self.builder_panel:
             self.builder_panel.set_active_radar(radar)
+        self.card_panel.update_radar(radar)
 
     def _open_feedback_dialog(self) -> None:
         show_feedback_dialog(

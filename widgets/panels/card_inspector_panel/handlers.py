@@ -46,6 +46,7 @@ class CardInspectorPanelHandlersMixin(_Base):
         self._loading_printing = False
         self._has_selection = False
         self._image_request_name = None
+        self._emit_printing_changed()
         self._set_display_mode(False, show_image_column=True)
 
     def update_card(
@@ -113,6 +114,41 @@ class CardInspectorPanelHandlersMixin(_Base):
     def set_printings_request_handler(self, handler: Callable[[str], None] | None) -> None:
         self._printings_request_handler = handler
 
+    def set_printing_changed_handler(
+        self, handler: Callable[[dict[str, Any] | None], None] | None
+    ) -> None:
+        """Register a callback fired whenever the displayed printing changes."""
+        self._printing_changed_handler = handler
+
+    def _emit_printing_changed(self) -> None:
+        if not self._printing_changed_handler:
+            return
+        printings = self.inspector_printings
+        if not printings:
+            self._printing_changed_handler(None)
+            return
+        try:
+            entry = printings[self.inspector_current_printing]
+        except IndexError:
+            self._printing_changed_handler(None)
+            return
+        if isinstance(entry, dict):
+            self._printing_changed_handler(entry)
+            return
+        if hasattr(entry, "get"):
+            keys = (
+                "id",
+                "set",
+                "set_name",
+                "collector_number",
+                "released_at",
+                "flavor_text",
+                "artist",
+            )
+            self._printing_changed_handler({key: entry.get(key) for key in keys})
+            return
+        self._printing_changed_handler(None)
+
     def handle_image_downloaded(self, request: CardImageRequest) -> None:
         self._failed_image_requests.discard(self._failure_key(request))
         if not self.inspector_current_card_name:
@@ -140,6 +176,7 @@ class CardInspectorPanelHandlersMixin(_Base):
             return
         self.inspector_printings = printings
         self.inspector_current_printing = 0
+        self._emit_printing_changed()
         self._load_current_printing_image()
 
     # ============= Private Methods =============
@@ -328,11 +365,13 @@ class CardInspectorPanelHandlersMixin(_Base):
     def _on_prev_printing(self, _event: wx.Event) -> None:
         if self.inspector_current_printing > 0:
             self.inspector_current_printing -= 1
+            self._emit_printing_changed()
             self._load_current_printing_image()
 
     def _on_next_printing(self, _event: wx.Event) -> None:
         if self.inspector_current_printing < len(self.inspector_printings) - 1:
             self.inspector_current_printing += 1
+            self._emit_printing_changed()
             self._load_current_printing_image()
 
     def _set_printing_label(self, text: str) -> None:

@@ -247,15 +247,14 @@ class CardTablesHandler(_Base):
         if card is None:
             if self.card_inspector_panel.active_zone == zone:
                 self.card_inspector_panel.reset()
-                self.oracle_text_ctrl.ChangeValue("")
+                self.card_panel.clear()
             return
         if self.builder_panel:
             self.builder_panel.clear_result_selection()
         self._collapse_other_zone_tables(zone)
         meta = self.controller.card_repo.get_card_metadata(card["name"])
         self.card_inspector_panel.update_card(card, zone=zone, meta=meta)
-        oracle_text = meta.oracle_text if meta is not None else None
-        self.oracle_text_ctrl.ChangeValue(oracle_text or "")
+        self._push_card_panel(card, meta)
 
     def _handle_card_hover(self: AppFrame, zone: str, card: dict[str, Any]) -> None:
         if self._has_selected_card():
@@ -279,5 +278,36 @@ class CardTablesHandler(_Base):
         self._pending_hover = None
         meta = self.controller.card_repo.get_card_metadata(card["name"])
         self.card_inspector_panel.update_card(card, zone=zone, meta=meta)
-        oracle_text = meta.oracle_text if meta is not None else None
-        self.oracle_text_ctrl.ChangeValue(oracle_text or "")
+        self._push_card_panel(card, meta)
+
+    def _push_card_panel(self: AppFrame, card: dict[str, Any], meta: Any) -> None:
+        """Forward the current card+printing+context to :attr:`card_panel`."""
+        printing = self._current_inspector_printing()
+        # Pass meta verbatim — both dicts and ``CardEntry`` work with the
+        # panel's renderer (it only uses ``.get(key)``).
+        self.card_panel.update_card(meta, printing=printing)
+
+    def _current_inspector_printing(self: AppFrame) -> dict[str, Any] | None:
+        printings = getattr(self.card_inspector_panel, "inspector_printings", None) or []
+        idx = getattr(self.card_inspector_panel, "inspector_current_printing", 0)
+        if not printings:
+            return None
+        try:
+            entry = printings[idx]
+        except IndexError:
+            return None
+        # Entries may be msgspec PrintingEntry structs or plain dicts.
+        if isinstance(entry, dict):
+            return entry
+        if hasattr(entry, "get"):
+            keys = (
+                "id",
+                "set",
+                "set_name",
+                "collector_number",
+                "released_at",
+                "flavor_text",
+                "artist",
+            )
+            return {key: entry.get(key) for key in keys}
+        return None

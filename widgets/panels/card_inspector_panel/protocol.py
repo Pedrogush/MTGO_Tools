@@ -31,6 +31,7 @@ class CardInspectorPanelProto(Protocol):
     _image_request_handler: Callable[[CardImageRequest], None] | None
     _selected_card_handler: Callable[[CardImageRequest | None], None] | None
     _printings_request_handler: Callable[[str], None] | None
+    _printing_changed_handler: Callable[[dict[str, Any] | None], None] | None
     _printings_request_inflight: str | None
     _has_selection: bool
     _failed_image_requests: set[tuple[str, str]]
