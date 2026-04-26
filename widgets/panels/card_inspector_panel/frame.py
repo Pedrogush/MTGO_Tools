@@ -68,6 +68,7 @@ class CardInspectorPanel(
         self._image_request_handler: Callable[[CardImageRequest], None] | None = None
         self._selected_card_handler: Callable[[CardImageRequest | None], None] | None = None
         self._printings_request_handler: Callable[[str], None] | None = None
+        self._printing_changed_handler: Callable[[dict[str, Any] | None], None] | None = None
         self._printings_request_inflight: str | None = None
         self._has_selection = False
         self._failed_image_requests: set[tuple[str, str]] = set()

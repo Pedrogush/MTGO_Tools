@@ -1,4 +1,4 @@
-"""Right column construction (toolbar, card inspector, oracle text) for :class:`AppFrame`."""
+"""Right column construction (toolbar, card inspector, card panel) for :class:`AppFrame`."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ import wx
 from utils.constants import DARK_PANEL, LIGHT_TEXT, PADDING_SM
 from widgets.buttons.toolbar_buttons import ToolbarButtons
 from widgets.panels.card_inspector_panel import CardInspectorPanel
-from widgets.panels.mana_rich_text_ctrl import ManaSymbolRichCtrl
+from widgets.panels.card_panel import CardPanel
 
 if TYPE_CHECKING:
     from widgets.frames.app_frame.protocol import AppFrameProto
@@ -92,19 +92,23 @@ class RightPanelBuilderMixin(_Base):
 
         return inspector_sizer
 
-    def _build_oracle_text_panel(self, parent: wx.Window) -> wx.StaticBoxSizer:
-        oracle_box = wx.StaticBox(parent, label=self._t("app.label.oracle_text"))
-        oracle_box.SetForegroundColour(LIGHT_TEXT)
-        oracle_box.SetBackgroundColour(DARK_PANEL)
-        oracle_sizer = wx.StaticBoxSizer(oracle_box, wx.VERTICAL)
+    def _build_card_panel(self, parent: wx.Window) -> wx.StaticBoxSizer:
+        card_box = wx.StaticBox(parent, label=self._t("app.label.card_panel"))
+        card_box.SetForegroundColour(LIGHT_TEXT)
+        card_box.SetBackgroundColour(DARK_PANEL)
+        card_sizer = wx.StaticBoxSizer(card_box, wx.VERTICAL)
 
-        self.oracle_text_ctrl = ManaSymbolRichCtrl(
-            oracle_box,
-            self.mana_icons,
-            readonly=True,
-            multiline=True,
+        self.card_panel = CardPanel(
+            card_box,
+            mana_icons=self.mana_icons,
+            t=self._t,
         )
-        self.oracle_text_ctrl.SetMinSize((-1, 200))
+        self.card_panel.SetMinSize((-1, 240))
 
-        oracle_sizer.Add(self.oracle_text_ctrl, 1, wx.EXPAND | wx.ALL, PADDING_SM)
-        return oracle_sizer
+        # Mirror printing changes (caused by prev/next clicks or async loads)
+        # from the inspector into the card panel so flavor/artist/edition stay
+        # in sync with the printing actually shown.
+        self.card_inspector_panel.set_printing_changed_handler(self.card_panel.update_printing)
+
+        card_sizer.Add(self.card_panel, 1, wx.EXPAND | wx.ALL, PADDING_SM)
+        return card_sizer

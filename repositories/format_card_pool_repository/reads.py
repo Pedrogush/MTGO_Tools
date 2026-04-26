@@ -48,6 +48,21 @@ class ReadsMixin(_Base):
             ).fetchall()
         return {str(row[0]) for row in rows}
 
+    def get_card_total(self, format_name: str, card_name: str) -> int:
+        fmt = format_name.strip().lower()
+        if not fmt or not card_name:
+            return 0
+        with self._connect() as conn:
+            row = conn.execute(
+                """
+                SELECT copies_played
+                FROM format_card_pool_cards
+                WHERE format_name = ? AND card_name = ?
+                """,
+                (fmt, card_name),
+            ).fetchone()
+        return int(row[0]) if row else 0
+
     def get_top_cards(self, format_name: str, limit: int = 100) -> list[FormatCardPoolCardTotal]:
         fmt = format_name.strip().lower()
         if not fmt:
