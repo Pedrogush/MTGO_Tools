@@ -2,12 +2,19 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
+if TYPE_CHECKING:
+    from repositories.card_repository.protocol import CardRepositoryProto
 
-class MetadataMixin:
+    _Base = CardRepositoryProto
+else:
+    _Base = object
+
+
+class MetadataMixin(_Base):
     """Card metadata lookup and search backed by ``CardDataManager``."""
 
     def get_card_metadata(self, card_name: str) -> dict[str, Any] | None:

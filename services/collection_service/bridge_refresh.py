@@ -6,6 +6,7 @@ import threading
 from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from loguru import logger
 
@@ -14,8 +15,15 @@ from utils.constants import (
     COLLECTION_CACHE_MAX_AGE_SECONDS,
 )
 
+if TYPE_CHECKING:
+    from services.collection_service.protocol import CollectionServiceProto
 
-class BridgeRefreshMixin:
+    _Base = CollectionServiceProto
+else:
+    _Base = object
+
+
+class BridgeRefreshMixin(_Base):
     """Fetch collection data from the MTGO bridge and write a cache file."""
 
     def refresh_from_bridge_async(

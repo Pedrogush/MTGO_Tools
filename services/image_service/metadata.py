@@ -4,14 +4,21 @@ from __future__ import annotations
 
 import threading
 from collections.abc import Callable
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
 from utils.card_images import BulkImageDownloader
 
+if TYPE_CHECKING:
+    from services.image_service.protocol import ImageServiceProto
 
-class PrintingsFetchMixin:
+    _Base = ImageServiceProto
+else:
+    _Base = object
+
+
+class PrintingsFetchMixin(_Base):
     """Fetch printings metadata for individual cards on demand."""
 
     def fetch_printings_by_name_async(self, card_name: str) -> None:

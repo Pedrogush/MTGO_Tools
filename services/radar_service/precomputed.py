@@ -2,11 +2,20 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from repositories.radar_repository import StoredRadar
 from services.radar_service.models import CardFrequency, RadarData
 
+if TYPE_CHECKING:
+    from services.radar_service.protocol import RadarServiceProto
 
-class PrecomputedMixin:
+    _Base = RadarServiceProto
+else:
+    _Base = object
+
+
+class PrecomputedMixin(_Base):
     """Look up cached radar snapshots and convert them into :class:`RadarData`."""
 
     def _get_precomputed_radar(

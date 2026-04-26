@@ -2,10 +2,17 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from repositories.deck_repository.protocol import DeckRepositoryProto
+
+    _Base = DeckRepositoryProto
+else:
+    _Base = object
 
 
-class UIStateMixin:
+class UIStateMixin(_Base):
     """In-memory deck list, current deck, averaging buffer, and derived helpers."""
 
     def get_decks_list(self) -> list[dict[str, Any]]:

@@ -5,12 +5,19 @@ from __future__ import annotations
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
+if TYPE_CHECKING:
+    from services.collection_service.protocol import CollectionServiceProto
 
-class ExporterMixin:
+    _Base = CollectionServiceProto
+else:
+    _Base = object
+
+
+class ExporterMixin(_Base):
     """Export collection card lists to timestamped JSON files."""
 
     def export_to_file(

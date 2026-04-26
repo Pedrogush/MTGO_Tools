@@ -2,14 +2,21 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
 from utils.constants import DEFAULT_SEARCH_LIMIT, DEFAULT_SUGGESTION_LIMIT, MIN_PARTIAL_NAME_LENGTH
 
+if TYPE_CHECKING:
+    from services.search_service.protocol import SearchServiceProto
 
-class BasicSearchMixin:
+    _Base = SearchServiceProto
+else:
+    _Base = object
+
+
+class BasicSearchMixin(_Base):
     """Name search and suggestion lookups against the card repository."""
 
     def search_cards_by_name(

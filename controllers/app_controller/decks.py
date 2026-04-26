@@ -5,12 +5,19 @@ from __future__ import annotations
 from collections.abc import Callable
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
+if TYPE_CHECKING:
+    from controllers.app_controller.protocol import AppControllerProto
 
-class DeckManagementMixin:
+    _Base = AppControllerProto
+else:
+    _Base = object
+
+
+class DeckManagementMixin(_Base):
     """Per-deck download/save/build plus daily-average orchestration."""
 
     def download_deck_text(

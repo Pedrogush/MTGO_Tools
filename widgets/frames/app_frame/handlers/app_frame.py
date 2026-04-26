@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import wx
 from loguru import logger
@@ -11,56 +11,27 @@ from loguru import logger
 from utils.card_images import CardImageRequest
 from utils.constants import APP_FRAME_MIN_SIZE
 from utils.i18n import LOCALE_LABELS
-from utils.mana_icon_factory import ManaIconFactory
 from utils.runtime_flags import is_automation_enabled
 from widgets.dialogs.help_dialog import show_help
 from widgets.dialogs.image_download_dialog import show_image_download_dialog
 from widgets.dialogs.tutorial_dialog import show_tutorial
 from widgets.frames.app_frame.handlers.app_events import _simple_summary_html
-from widgets.frames.mana_keyboard import ManaKeyboardFrame, open_mana_keyboard
-from widgets.panels.card_inspector_panel import CardInspectorPanel
-from widgets.panels.card_table_panel import CardTablePanel
-from widgets.panels.deck_notes_panel import DeckNotesPanel
-from widgets.panels.deck_stats_panel import DeckStatsPanel
-from widgets.panels.sideboard_guide_panel import SideboardGuidePanel
+from widgets.frames.mana_keyboard import open_mana_keyboard
 
 if TYPE_CHECKING:
-    from controllers.app_controller import AppController
+    from widgets.frames.app_frame.protocol import AppFrameProto
+
+    _Base = AppFrameProto
+else:
+    _Base = object
 
 
-class AppFrameHandlersMixin:
+class AppFrameHandlersMixin(_Base):
     """Menu, session, window, filter, and deck-rendering handlers for :class:`AppFrame`.
 
     Kept as a mixin (no ``__init__``) so :class:`AppFrame` remains the single
     source of truth for instance-state initialization.
     """
-
-    controller: AppController
-    locale: str | None
-    mana_icons: ManaIconFactory
-    image_cache: Any
-    image_downloader: Any
-    card_inspector_panel: CardInspectorPanel
-    main_table: CardTablePanel
-    side_table: CardTablePanel
-    out_table: CardTablePanel | None
-    deck_stats_panel: DeckStatsPanel
-    deck_notes_panel: DeckNotesPanel
-    sideboard_guide_panel: SideboardGuidePanel
-    research_panel: Any
-    left_stack: wx.Simplebook | None
-    left_mode: str
-    mana_keyboard_window: ManaKeyboardFrame | None
-    root_panel: wx.Panel | None
-    zone_cards: dict[str, list[Any]]
-    filtered_archetypes: list[dict[str, Any]]
-    copy_button: wx.Button
-    save_button: wx.Button
-    daily_average_button: wx.Button
-    _save_timer: wx.Timer | None
-    _filter_debounce_timer: wx.Timer | None
-    _language_values: list[str]
-    _pending_deck_restore: bool
 
     def _open_toolbar_settings_menu(self, anchor: wx.Window) -> None:
         menu = wx.Menu()

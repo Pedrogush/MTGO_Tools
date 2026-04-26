@@ -2,32 +2,21 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
-from typing import Any
-
-import wx
-import wx.lib.scrolledpanel as scrolled
+from typing import TYPE_CHECKING, Any
 
 from utils.perf import timed
 from widgets.panels.card_box_panel import CardBoxPanel
 
+if TYPE_CHECKING:
+    from widgets.panels.card_table_panel.protocol import CardTablePanelProto
 
-class CardTablePanelHandlersMixin:
+    _Base = CardTablePanelProto
+else:
+    _Base = object
+
+
+class CardTablePanelHandlersMixin(_Base):
     """Event callbacks, setters, and UI populators for :class:`CardTablePanel`."""
-
-    zone: str
-    cards: list[dict[str, Any]]
-    card_widgets: list[CardBoxPanel]
-    _pool: list[CardBoxPanel]
-    active_panel: CardBoxPanel | None
-    selected_name: str | None
-    count_label: wx.StaticText
-    scroller: scrolled.ScrolledPanel
-    grid_sizer: wx.WrapSizer
-    _content_book: wx.Simplebook
-    _loading_state: wx.Panel
-    _get_metadata: Callable[[str], dict[str, Any] | None]
-    _on_select: Callable[[str, dict[str, Any] | None], None]
 
     def show_loading(self, label: str) -> None:
         self._loading_state._label.SetLabel(label)  # type: ignore[attr-defined]

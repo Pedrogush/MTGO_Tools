@@ -11,10 +11,15 @@ from utils.constants import ZONE_TITLES
 
 if TYPE_CHECKING:
     from widgets.frames.app_frame import AppFrame
+    from widgets.frames.app_frame.protocol import AppFrameProto
     from widgets.panels.card_table_panel import CardTablePanel
 
+    _Base = AppFrameProto
+else:
+    _Base = object
 
-class CardTablesHandler:
+
+class CardTablesHandler(_Base):
     """Mixin containing zone editing and card focus handlers."""
 
     def _after_zone_change(self, zone: str) -> None:

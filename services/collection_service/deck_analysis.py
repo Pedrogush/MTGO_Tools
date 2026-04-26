@@ -2,10 +2,17 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from services.collection_service.protocol import CollectionServiceProto
+
+    _Base = CollectionServiceProto
+else:
+    _Base = object
 
 
-class DeckAnalysisMixin:
+class DeckAnalysisMixin(_Base):
     """Compare deck requirements against owned inventory."""
 
     def analyze_deck_ownership(self, deck_text: str) -> dict[str, Any]:

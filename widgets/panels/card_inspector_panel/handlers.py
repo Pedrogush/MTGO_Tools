@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from pathlib import Path
 from threading import Thread
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import wx
 from loguru import logger
@@ -13,53 +13,19 @@ from loguru import logger
 from utils.card_data import CardDataManager
 from utils.card_images import BULK_DATA_CACHE, CardImageRequest, get_card_image
 from utils.constants import SUBDUED_TEXT, ZONE_TITLES
-from utils.mana_icon_factory import ManaIconFactory
-from widgets.panels.card_image_display import CardImageDisplay
-from widgets.panels.mana_rich_text_ctrl import ManaSymbolRichCtrl
+
+if TYPE_CHECKING:
+    from widgets.panels.card_inspector_panel.protocol import CardInspectorPanelProto
+
+    _Base = CardInspectorPanelProto
+else:
+    _Base = object
 
 
-class CardInspectorPanelHandlersMixin:
+class CardInspectorPanelHandlersMixin(_Base):
     """Event callbacks, public state setters, workers, and UI populators for
     :class:`CardInspectorPanel`.
     """
-
-    # Attributes supplied by :class:`CardInspectorPanel` / the properties mixin.
-    card_manager: CardDataManager | None
-    mana_icons: ManaIconFactory
-    active_zone: str | None
-    inspector_printings: list[dict[str, Any]]
-    inspector_current_printing: int
-    inspector_current_card_name: str | None
-    printing_label_width: int
-    image_cache: Any
-    bulk_data_by_name: dict[str, list[dict[str, Any]]] | None
-    _image_available: bool
-    _loading_printing: bool
-    _image_request_handler: Callable[[CardImageRequest], None] | None
-    _selected_card_handler: Callable[[CardImageRequest | None], None] | None
-    _printings_request_handler: Callable[[str], None] | None
-    _printings_request_inflight: str | None
-    _has_selection: bool
-    _failed_image_requests: set[tuple[str, str]]
-    _image_request_name: str | None
-    _image_lookup_gen: int
-
-    card_image_display: CardImageDisplay
-    image_column_panel: wx.Panel
-    image_text_panel: wx.Panel
-    image_text_ctrl: ManaSymbolRichCtrl
-    nav_panel: wx.Panel
-    prev_btn: wx.Button
-    next_btn: wx.Button
-    printing_label: wx.StaticText
-    loading_label: wx.StaticText
-    details_panel: wx.Panel
-    name_label: wx.StaticText
-    cost_container: wx.Panel
-    cost_sizer: wx.BoxSizer
-    type_label: wx.StaticText
-    stats_label: wx.StaticText
-    text_ctrl: ManaSymbolRichCtrl
 
     # ============= Public API =============
 

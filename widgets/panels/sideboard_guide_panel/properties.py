@@ -2,22 +2,24 @@
 
 from __future__ import annotations
 
-import wx.dataview as dv
+from typing import TYPE_CHECKING
 
 from utils.i18n import translate
 
+if TYPE_CHECKING:
+    from widgets.panels.sideboard_guide_panel.protocol import SideboardGuidePanelProto
 
-class SideboardGuidePanelPropertiesMixin:
+    _Base = SideboardGuidePanelProto
+else:
+    _Base = object
+
+
+class SideboardGuidePanelPropertiesMixin(_Base):
     """Getters, translation helper, and pure-data formatters for :class:`SideboardGuidePanel`.
 
     Kept as a mixin (no ``__init__``) so :class:`SideboardGuidePanel` remains
     the single source of truth for instance-state initialization.
     """
-
-    _locale: str | None
-    entries: list[dict[str, str]]
-    exclusions: list[str]
-    guide_view: dv.DataViewListCtrl
 
     def _t(self, key: str, **kwargs: object) -> str:
         return translate(self._locale, key, **kwargs)

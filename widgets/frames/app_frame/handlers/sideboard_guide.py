@@ -20,9 +20,14 @@ from widgets.dialogs.guide_entry_dialog import GuideEntryDialog
 
 if TYPE_CHECKING:
     from widgets.frames.app_frame import AppFrame
+    from widgets.frames.app_frame.protocol import AppFrameProto
+
+    _Base = AppFrameProto
+else:
+    _Base = object
 
 
-class SideboardGuideHandlers:
+class SideboardGuideHandlers(_Base):
     """Mixin that centralizes guide/outboard interactions for the deck selector."""
 
     def _persist_outboard_for_current(self: AppFrame) -> None:

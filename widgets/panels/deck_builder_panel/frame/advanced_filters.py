@@ -19,26 +19,19 @@ from utils.stylize import stylize_button, stylize_choice, stylize_label, stylize
 from widgets.panels.mana_rich_text_ctrl import ManaSymbolRichCtrl
 
 if TYPE_CHECKING:
-    from utils.mana_icon_factory import ManaIconFactory
+    from widgets.panels.deck_builder_panel.protocol import DeckBuilderPanelProto
+
+    _Base = DeckBuilderPanelProto
+else:
+    _Base = object
 
 
-class AdvancedFiltersBuilderMixin:
+class AdvancedFiltersBuilderMixin(_Base):
     """Builds the toggle button and the collapsible advanced filters panel.
 
     Kept as a mixin (no ``__init__``) so :class:`DeckBuilderPanel` remains the
     single source of truth for instance-state initialization.
     """
-
-    mana_icons: ManaIconFactory
-    inputs: dict[str, wx.TextCtrl]
-    mv_comparator: wx.Choice | None
-    mv_value: wx.TextCtrl | None
-    format_choice: wx.Choice | None
-    color_checks: dict[str, wx.ToggleButton]
-    color_mode_choice: wx.Choice | None
-    text_mode_choice: wx.Choice | None
-    _adv_panel: wx.Panel | None
-    _adv_toggle_btn: wx.Button | None
 
     def _build_advanced_filters(self, parent_sizer: wx.Sizer) -> None:
         adv_toggle_btn = wx.Button(self, label=self._t("builder.btn.adv_filters_show"))

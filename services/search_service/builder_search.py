@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
@@ -10,8 +10,15 @@ from utils.card_data import CardDataManager
 from utils.mana_query import normalize_mana_query
 from utils.search_filters import matches_color_filter, matches_mana_cost, matches_mana_value
 
+if TYPE_CHECKING:
+    from services.search_service.protocol import SearchServiceProto
 
-class BuilderSearchMixin:
+    _Base = SearchServiceProto
+else:
+    _Base = object
+
+
+class BuilderSearchMixin(_Base):
     """Combined filter pipeline used by the Deck Builder search panel."""
 
     def search_with_builder_filters(

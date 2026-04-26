@@ -3,6 +3,14 @@
 from __future__ import annotations
 
 from enum import Enum
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from widgets.panels.compact_radar_panel.protocol import CompactRadarPanelProto
+
+    _Base = CompactRadarPanelProto
+else:
+    _Base = object
 
 
 class RadarViewMode(Enum):
@@ -16,14 +24,12 @@ _TOP_MAINBOARD_LIMIT = 15
 _TOP_SIDEBOARD_LIMIT = 8
 
 
-class CompactRadarPropertiesMixin:
+class CompactRadarPropertiesMixin(_Base):
     """Read-only accessors for :class:`CompactRadarPanel`.
 
     Kept as a mixin (no ``__init__``) so :class:`CompactRadarPanel` remains
     the single source of truth for instance-state initialization.
     """
-
-    _view_mode: RadarViewMode
 
     @property
     def view_mode(self) -> RadarViewMode:

@@ -20,24 +20,19 @@ from utils.stylize import stylize_button, stylize_choice
 from widgets.panels.deck_builder_panel.frame.search_results_view import _SearchResultsView
 
 if TYPE_CHECKING:
-    from utils.mana_icon_factory import ManaIconFactory
+    from widgets.panels.deck_builder_panel.protocol import DeckBuilderPanelProto
+
+    _Base = DeckBuilderPanelProto
+else:
+    _Base = object
 
 
-class ResultsPaneBuilderMixin:
+class ResultsPaneBuilderMixin(_Base):
     """Builds the action controls, results list, add-to-zone buttons, and status label.
 
     Kept as a mixin (no ``__init__``) so :class:`DeckBuilderPanel` remains the
     single source of truth for instance-state initialization.
     """
-
-    mana_icons: ManaIconFactory
-    results_ctrl: _SearchResultsView | None
-    status_label: wx.StaticText | None
-    _add_main_btn: wx.Button | None
-    _add_side_btn: wx.Button | None
-    format_pool_cb: wx.CheckBox | None
-    radar_cb: wx.CheckBox
-    radar_zone_choice: wx.Choice
 
     def _build_action_controls(self, parent_sizer: wx.Sizer) -> None:
         controls = wx.BoxSizer(wx.HORIZONTAL)

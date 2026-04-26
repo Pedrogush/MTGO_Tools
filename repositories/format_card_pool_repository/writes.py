@@ -2,12 +2,21 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
+if TYPE_CHECKING:
+    from repositories.format_card_pool_repository.protocol import (
+        FormatCardPoolRepositoryProto,
+    )
 
-class WritesMixin:
+    _Base = FormatCardPoolRepositoryProto
+else:
+    _Base = object
+
+
+class WritesMixin(_Base):
     """Bulk and per-format snapshot replacement."""
 
     def replace_format_pool(self, entry: dict[str, Any]) -> bool:

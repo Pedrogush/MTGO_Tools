@@ -3,12 +3,19 @@
 from __future__ import annotations
 
 import json
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
+if TYPE_CHECKING:
+    from repositories.radar_repository.protocol import RadarRepositoryProto
 
-class WritesMixin:
+    _Base = RadarRepositoryProto
+else:
+    _Base = object
+
+
+class WritesMixin(_Base):
     """Bulk and per-archetype snapshot replacement."""
 
     def replace_radar(self, entry: dict[str, Any]) -> bool:

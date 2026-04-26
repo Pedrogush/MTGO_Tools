@@ -3,14 +3,21 @@
 from __future__ import annotations
 
 import json
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
 from utils.atomic_io import atomic_write_json, locked_path
 
+if TYPE_CHECKING:
+    from services.bundle_snapshot_client.protocol import BundleSnapshotClientProto
 
-class ArchetypeCacheMixin:
+    _Base = BundleSnapshotClientProto
+else:
+    _Base = object
+
+
+class ArchetypeCacheMixin(_Base):
     """Hydrate archetype-list, archetype-deck, MTGO decklist, and deck-text caches."""
 
     def _hydrate_archetype_lists(self, archetype_entries: list[dict[str, Any]], now: float) -> None:

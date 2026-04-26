@@ -12,11 +12,14 @@ from widgets.panels.card_inspector_panel import CardInspectorPanel
 from widgets.panels.mana_rich_text_ctrl import ManaSymbolRichCtrl
 
 if TYPE_CHECKING:
-    from controllers.app_controller import AppController
-    from utils.mana_icon_factory import ManaIconFactory
+    from widgets.frames.app_frame.protocol import AppFrameProto
+
+    _Base = AppFrameProto
+else:
+    _Base = object
 
 
-class RightPanelBuilderMixin:
+class RightPanelBuilderMixin(_Base):
     """Builds the toolbar plus the inspector column (card inspector + oracle text).
 
     The toolbar lives at the top of the right-side container, while the
@@ -25,14 +28,6 @@ class RightPanelBuilderMixin:
     Kept as a mixin (no ``__init__``) so :class:`AppFrame` remains the single
     source of truth for instance-state initialization.
     """
-
-    controller: AppController
-    mana_icons: ManaIconFactory
-    toolbar: ToolbarButtons
-    card_inspector_panel: CardInspectorPanel
-    oracle_text_ctrl: ManaSymbolRichCtrl
-    image_cache: object
-    image_downloader: object
 
     def _build_toolbar(self, parent: wx.Window) -> ToolbarButtons:
         return ToolbarButtons(

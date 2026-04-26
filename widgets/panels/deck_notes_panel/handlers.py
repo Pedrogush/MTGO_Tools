@@ -2,33 +2,22 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 import wx
 from loguru import logger
 
 if TYPE_CHECKING:
-    from repositories.deck_repository import DeckRepository
-    from services.store_service import StoreService
     from widgets.panels.deck_notes_panel.frame import _NoteCardWidget
+    from widgets.panels.deck_notes_panel.protocol import DeckNotesPanelProto
+
+    _Base = DeckNotesPanelProto
+else:
+    _Base = object
 
 
-class DeckNotesPanelHandlersMixin:
+class DeckNotesPanelHandlersMixin(_Base):
     """Public setters, event callbacks, and card-list population for :class:`DeckNotesPanel`."""
-
-    deck_repo: DeckRepository
-    store_service: StoreService
-    notes_store: dict
-    notes_store_path: Path
-    on_status_update: Callable[[str], None]
-    _locale: str | None
-    _cards: list[dict[str, str]]
-    _card_widgets: list[_NoteCardWidget]
-    scroll_win: wx.ScrolledWindow
-    cards_sizer: wx.BoxSizer
-    empty_state_panel: wx.Panel
 
     # ═══════════════════════════════════════════════════════════════════════
     # Public API

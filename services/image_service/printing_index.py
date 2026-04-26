@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
@@ -15,8 +15,15 @@ from utils.card_images import (
 )
 from utils.card_images_workers import build_printing_index_worker
 
+if TYPE_CHECKING:
+    from services.image_service.protocol import ImageServiceProto
 
-class PrintingIndexMixin:
+    _Base = ImageServiceProto
+else:
+    _Base = object
+
+
+class PrintingIndexMixin(_Base):
     """Load and track the printing index in the background."""
 
     def load_printing_index_async(
