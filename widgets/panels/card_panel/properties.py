@@ -12,10 +12,28 @@ else:
     _Base = object
 
 
+def _stats_lookup_names(card_name: str) -> list[str]:
+    """Lookup-name candidates ordered by likelihood of matching stored data.
+
+    Decklist sources (Goldfish, MTGO) typically key DFC/MDFC cards by their
+    front-face name only, while ``card_name`` here may be the canonical
+    ``"Front // Back"`` form. Try the front face first, then the full name.
+    """
+    candidates: list[str] = []
+    name = card_name.strip()
+    if "//" in name:
+        front = name.split("//", 1)[0].strip()
+        if front:
+            candidates.append(front)
+    if name and name not in candidates:
+        candidates.append(name)
+    return candidates
+
+
 def _find_card_frequency(cards: list[Any], card_name: str) -> Any | None:
-    name_lower = card_name.lower()
+    candidates = {n.lower() for n in _stats_lookup_names(card_name)}
     for entry in cards:
-        if str(getattr(entry, "card_name", "")).lower() == name_lower:
+        if str(getattr(entry, "card_name", "")).lower() in candidates:
             return entry
     return None
 

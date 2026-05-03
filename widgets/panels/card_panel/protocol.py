@@ -9,12 +9,14 @@ import wx
 import wx.html
 
 from utils.mana_icon_factory import ManaIconFactory
+from widgets.panels.card_panel.mana_rasterizer import CardPanelManaRasterizer
 
 
 class CardPanelProto(Protocol):
     """Cross-mixin ``self`` surface for ``CardPanel``."""
 
     mana_icons: ManaIconFactory
+    mana_rasterizer: CardPanelManaRasterizer
     _t: Callable[..., str]
 
     # State

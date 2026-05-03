@@ -48,10 +48,18 @@ class ReadsMixin(_Base):
             ).fetchall()
         return {str(row[0]) for row in rows}
 
-    def get_card_total(self, format_name: str, card_name: str) -> int:
+    def get_card_total(self, format_name: str, card_name: str) -> int | None:
+        """Return the recorded copies-played for a card, or ``None`` when the
+        card isn't tracked in the snapshot for that format.
+
+        ``0`` means "tracked, but never played in the analyzed decks"; ``None``
+        means "the snapshot didn't include this card at all" — the upstream
+        bundle's pool sample is a filtered subset of legal cards, so missing
+        rows are normal.
+        """
         fmt = format_name.strip().lower()
         if not fmt or not card_name:
-            return 0
+            return None
         with self._connect() as conn:
             row = conn.execute(
                 """
@@ -61,7 +69,7 @@ class ReadsMixin(_Base):
                 """,
                 (fmt, card_name),
             ).fetchone()
-        return int(row[0]) if row else 0
+        return int(row[0]) if row else None
 
     def get_top_cards(self, format_name: str, limit: int = 100) -> list[FormatCardPoolCardTotal]:
         fmt = format_name.strip().lower()

@@ -105,6 +105,60 @@ def test_build_card_html_works_with_dict_like_struct() -> None:
     assert "Artifact" in html
 
 
+def test_build_card_html_renders_back_face_when_present() -> None:
+    meta = {
+        "name": "Ajani, Nacatl Pariah // Ajani, Nacatl Avenger",
+        "mana_cost": "{1}{W}",
+        "type_line": "Legendary Creature — Cat Warrior",
+        "oracle_text": "{T}: Draw a card.",
+        "power": "1",
+        "toughness": "3",
+        "back_name": "Ajani, Nacatl Avenger",
+        "back_mana_cost": "",
+        "back_type_line": "Legendary Planeswalker — Ajani",
+        "back_oracle_text": "+1: target creature gets +1/+1 until end of turn.",
+        "back_loyalty": "4",
+    }
+    html = build_card_html(meta, None, _no_png)
+    assert "Ajani, Nacatl Pariah" in html
+    assert "Ajani, Nacatl Avenger" in html
+    assert "Legendary Planeswalker" in html
+    assert "Draw a card" in html
+    assert "target creature gets +1/+1" in html
+    # Front face P/T and back-face loyalty both present.
+    assert ">1/3<" in html
+    assert ">4<" in html
+
+
+def test_build_card_html_back_face_falls_back_to_canonical_split() -> None:
+    """If ``back_name`` is missing but the canonical name has ``//``, derive it."""
+    meta = {
+        "name": "Fire // Ice",
+        "mana_cost": "{1}{R}",
+        "type_line": "Instant",
+        "oracle_text": "Fire deals 2 damage divided as you choose.",
+        "back_type_line": "Instant",
+        "back_oracle_text": "Tap target permanent. Draw a card.",
+        "back_mana_cost": "{1}{U}",
+    }
+    html = build_card_html(meta, None, _no_png)
+    assert ">Fire<" in html
+    assert ">Ice<" in html
+    assert "Tap target permanent" in html
+
+
+def test_build_card_html_single_face_card_does_not_render_back_block() -> None:
+    meta = {
+        "name": "Lightning Bolt",
+        "mana_cost": "{R}",
+        "type_line": "Instant",
+        "oracle_text": "Deal 3 damage.",
+    }
+    html = build_card_html(meta, None, _no_png)
+    # Two <table> blocks: one for the front face, one for the footer.
+    assert html.count("<table") == 2
+
+
 def test_build_card_html_escapes_user_text() -> None:
     meta = {
         "name": "Evil <script>",

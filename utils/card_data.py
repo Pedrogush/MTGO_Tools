@@ -41,11 +41,18 @@ class CardEntry(msgspec.Struct, gc=False):
     mana_cost: str | None = None
     mana_value: float | None = None
     type_line: str | None = None
-    back_type_line: str | None = None
     oracle_text: str | None = None
     power: str | None = None
     toughness: str | None = None
     loyalty: str | None = None
+    # Back-face fields populated for double-faced/split/MDFC/adventure cards.
+    back_name: str | None = None
+    back_mana_cost: str | None = None
+    back_type_line: str | None = None
+    back_oracle_text: str | None = None
+    back_power: str | None = None
+    back_toughness: str | None = None
+    back_loyalty: str | None = None
 
     # ------------------------------------------------------------------
     # Dict-compatible accessors so that existing callers that treat the
@@ -88,7 +95,8 @@ class CardDataManager:
     def __init__(self, data_dir: Path | str = CARD_DATA_DIR):
         self.data_dir = Path(data_dir)
         self.data_dir.mkdir(parents=True, exist_ok=True)
-        self.index_path = self.data_dir / "atomic_cards_index.json"
+        # ``_v2`` filename invalidates pre-double-faced-aware caches.
+        self.index_path = self.data_dir / "atomic_cards_index_v2.json"
         self.meta_path = self.data_dir / "atomic_cards_meta.json"
         self._cards: list[CardEntry] | None = None
         self._cards_by_name: dict[str, CardEntry] | None = None
@@ -261,39 +269,31 @@ class CardDataManager:
         cards: dict[str, dict[str, Any]] = {}
         alias_map: dict[str, dict[str, Any]] = {}
         for variations in atomic_cards.values():
-            if not isinstance(variations, list):
+            if not isinstance(variations, list) or not variations:
                 continue
-            for printing in variations:
-                if printing.get("isToken") or printing.get("layout") == "token":
-                    continue
-                canonical_name = (printing.get("name") or printing.get("faceName") or "").strip()
-                if not canonical_name:
-                    continue
-                key = canonical_name.lower()
-                existing = cards.get(key)
-                candidate = self._simplify_printing(printing, canonical_name)
-                if not existing:
-                    cards[key] = candidate
-                else:
-                    existing["legalities"] = self._merge_legalities(
-                        existing.get("legalities"), candidate.get("legalities")
-                    )
-                    # For MDFCs, detect which face this printing represents and
-                    # store the back-face type so callers can identify land backs.
-                    face_name = (printing.get("faceName") or "").strip()
-                    if face_name and "//" in canonical_name:
-                        front_name = canonical_name.split("//", 1)[0].strip()
-                        face_type = printing.get("type")
-                        if face_name.lower() == front_name.lower():
-                            # This printing is the front face; existing entry holds
-                            # the back-face type — swap so front is canonical.
-                            existing["back_type_line"] = existing.get("type_line")
-                            existing["type_line"] = face_type
-                        else:
-                            # This printing is the back face.
-                            existing["back_type_line"] = face_type
-                aliases = candidate.setdefault("aliases", set())
+            printings = [
+                p
+                for p in variations
+                if not p.get("isToken") and p.get("layout") != "token"
+            ]
+            if not printings:
+                continue
+            canonical_name = (
+                printings[0].get("name") or printings[0].get("faceName") or ""
+            ).strip()
+            if not canonical_name:
+                continue
+            front_printing, back_printing = self._select_front_back(canonical_name, printings)
+            entry = self._simplify_printing(front_printing, canonical_name)
+            if back_printing is not None:
+                self._apply_back_face(entry, back_printing, canonical_name)
+            for printing in printings:
+                other = {k.lower(): v for k, v in (printing.get("legalities") or {}).items()}
+                entry["legalities"] = self._merge_legalities(entry.get("legalities"), other)
+            aliases = entry.setdefault("aliases", set())
+            for printing in printings:
                 aliases.update(self._collect_name_aliases(canonical_name, printing))
+            cards[canonical_name.lower()] = entry
         card_list = sorted(cards.values(), key=lambda c: c["name_lower"])
         for card in card_list:
             alias_set = card.pop("aliases", set()) or set()
@@ -306,6 +306,52 @@ class CardDataManager:
             "cards": card_list,
             "cards_by_name": alias_map,
         }
+
+    @staticmethod
+    def _select_front_back(
+        canonical_name: str,
+        printings: list[dict[str, Any]],
+    ) -> tuple[dict[str, Any], dict[str, Any] | None]:
+        """Pick which printing is the front face and which (if any) is the back.
+
+        Uses ``faceName`` matched against the part of ``canonical_name`` before
+        ``//``. Falls back to printings order when faceNames are missing.
+        """
+        if "//" not in canonical_name or len(printings) < 2:
+            return printings[0], None
+        front_part = canonical_name.split("//", 1)[0].strip().lower()
+        front_printing: dict[str, Any] | None = None
+        back_printing: dict[str, Any] | None = None
+        for printing in printings:
+            face_name = (printing.get("faceName") or "").strip().lower()
+            if face_name == front_part and front_printing is None:
+                front_printing = printing
+            elif back_printing is None:
+                back_printing = printing
+        if front_printing is None:
+            front_printing = printings[0]
+            if back_printing is None:
+                back_printing = printings[1]
+        return front_printing, back_printing
+
+    @staticmethod
+    def _apply_back_face(
+        entry: dict[str, Any],
+        printing: dict[str, Any],
+        canonical_name: str,
+    ) -> None:
+        face_name = (printing.get("faceName") or "").strip()
+        if not face_name and "//" in canonical_name:
+            parts = [p.strip() for p in canonical_name.split("//", 1)]
+            if len(parts) == 2:
+                face_name = parts[1]
+        entry["back_name"] = face_name or None
+        entry["back_mana_cost"] = printing.get("manaCost")
+        entry["back_type_line"] = printing.get("type")
+        entry["back_oracle_text"] = printing.get("text")
+        entry["back_power"] = printing.get("power")
+        entry["back_toughness"] = printing.get("toughness")
+        entry["back_loyalty"] = printing.get("loyalty")
 
     def _simplify_printing(self, printing: dict[str, Any], canonical_name: str) -> dict[str, Any]:
         legalities = printing.get("legalities") or {}

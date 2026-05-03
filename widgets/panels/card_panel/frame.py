@@ -17,6 +17,7 @@ import wx.html
 from utils.constants import DARK_PANEL, LIGHT_TEXT, PADDING_MD, PADDING_SM, SUBDUED_TEXT
 from utils.mana_icon_factory import ManaIconFactory
 from widgets.panels.card_panel.handlers import CardPanelHandlersMixin
+from widgets.panels.card_panel.mana_rasterizer import CardPanelManaRasterizer
 from widgets.panels.card_panel.properties import CardPanelPropertiesMixin
 
 
@@ -40,6 +41,7 @@ class CardPanel(
         super().__init__(parent)
         self.SetBackgroundColour(DARK_PANEL)
         self.mana_icons = mana_icons or ManaIconFactory()
+        self.mana_rasterizer = CardPanelManaRasterizer()
         self._t = t or _default_t
 
         self._current_meta: Any = None

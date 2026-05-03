@@ -11,6 +11,7 @@ from services.format_card_pool_service import (
     get_format_card_pool_service,
 )
 from widgets.panels.card_panel.html_renderer import build_card_html
+from widgets.panels.card_panel.properties import _stats_lookup_names
 
 if TYPE_CHECKING:
     from widgets.panels.card_panel.protocol import CardPanelProto
@@ -86,7 +87,7 @@ class CardPanelHandlersMixin(_Base):
 
     def _png_resolver(self, token: str) -> Any:
         try:
-            return self.mana_icons.png_path_for_symbol(token, height=14)
+            return self.mana_rasterizer.png_path(token, height=18)
         except Exception:
             logger.debug(f"Could not resolve PNG for mana symbol '{token}'")
             return None
@@ -122,12 +123,24 @@ class CardPanelHandlersMixin(_Base):
 
         try:
             service: FormatCardPoolService = get_format_card_pool_service()
-            total = service.get_card_total(format_name, card_name)
+            total: int | None = None
+            for candidate in _stats_lookup_names(card_name):
+                n = service.get_card_total(format_name, candidate)
+                if n is None:
+                    continue
+                total = n
+                if n > 0:
+                    break
             summary = service.get_summary(format_name)
         except Exception as exc:
             logger.warning(f"Failed to fetch format stats: {exc}")
-            total = 0
+            total = None
             summary = None
+
+        if total is None:
+            self.stats_format_total.SetLabel(self._t("card_panel.stats.no_data"))
+            self.stats_format_avg.SetLabel(self._t("card_panel.stats.no_data"))
+            return
 
         self.stats_format_total.SetLabel(
             self._t("card_panel.stats.total_copies", value=self._format_number(total))
