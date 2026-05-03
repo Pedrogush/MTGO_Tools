@@ -42,7 +42,7 @@ _FALLBACK_COLORS: dict[str, tuple[int, int, int]] = {
     "multicolor": (246, 223, 138),
 }
 
-_GLYPH_COLOR = wx.Colour(60, 60, 60)
+_GLYPH_COLOR = wx.Colour(0, 0, 0)
 _GLYPH_COLOR_ON_DARK = wx.Colour(235, 235, 235)
 _OUTLINE_COLOR = wx.Colour(20, 20, 20, 180)
 
@@ -329,8 +329,9 @@ class CardPanelManaRasterizer:
     ) -> None:
         size_px = max(1, int(round(target)))
         bmp = svg.ConvertToScaledBitmap(wx.Size(size_px, size_px))
-        if on_dark:
-            bmp = self._recolor_glyph(bmp, _GLYPH_COLOR_ON_DARK)
+        # The vendored SVGs are filled with #444 — recolor unconditionally so
+        # the glyph renders as pure black (or _GLYPH_COLOR_ON_DARK on dark bg).
+        bmp = self._recolor_glyph(bmp, _GLYPH_COLOR_ON_DARK if on_dark else _GLYPH_COLOR)
         gctx.DrawBitmap(bmp, cx - size_px / 2, cy - size_px / 2, size_px, size_px)
 
     def _recolor_glyph(self, bmp: wx.Bitmap, color: wx.Colour) -> wx.Bitmap:
