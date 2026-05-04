@@ -180,9 +180,9 @@ class CardPanelManaRasterizer:
             return
 
         color_key = (
-            key[0] if _is_phyrexian(key)
-            else key if key in {"tap", "untap"}
-            else self._color_key_for(key)
+            key[0]
+            if _is_phyrexian(key)
+            else key if key in {"tap", "untap"} else self._color_key_for(key)
         )
         self._draw_filled_circle(gctx, cx, cy, radius, self._color_for(color_key))
 

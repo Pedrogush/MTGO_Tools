@@ -272,9 +272,7 @@ class CardDataManager:
             if not isinstance(variations, list) or not variations:
                 continue
             printings = [
-                p
-                for p in variations
-                if not p.get("isToken") and p.get("layout") != "token"
+                p for p in variations if not p.get("isToken") and p.get("layout") != "token"
             ]
             if not printings:
                 continue
