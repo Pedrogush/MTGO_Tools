@@ -243,6 +243,14 @@ MESSAGES: dict[str, str] = {
     "window.title.metagame_analysis": "Metagame Analysis",
     "window.title.top_cards": "Top Cards",
     "window.title.radar": "Archetype Radar - {format}",
+    "window.title.rules_browser": "Comprehensive Rules",
+    "rules_browser.tree.empty": "(rules cache not yet populated)",
+    "rules_browser.body.empty": (
+        "The Comprehensive Rules cache has not been populated yet. "
+        "Try again in a moment — the cache refreshes in the background "
+        "shortly after the app starts."
+    ),
+    "toolbar.comp_rules": "Comprehensive Rules",
     "top_cards.label.format": "Format",
     "top_cards.btn.refresh": "Refresh",
     "top_cards.status.no_data": "No local top-card data available for {format}.",
