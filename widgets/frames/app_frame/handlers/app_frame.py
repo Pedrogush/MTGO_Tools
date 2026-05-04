@@ -307,6 +307,7 @@ class AppFrameHandlersMixin(_Base):
         self.deck_notes_panel.clear()
         self.sideboard_guide_panel.clear()
         self.card_inspector_panel.reset()
+        self.card_panel.clear()
 
     def _render_current_deck(self) -> None:
         self.main_table.set_cards(self.zone_cards["main"])

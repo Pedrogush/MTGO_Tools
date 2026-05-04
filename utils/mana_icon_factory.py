@@ -1,4 +1,5 @@
 import sys
+import tempfile
 from pathlib import Path
 
 import wx
@@ -68,6 +69,8 @@ class ManaIconFactory:
         self._cache: dict[str, wx.Bitmap] = {}
         self._hires_cache: dict[str, wx.Bitmap] = {}  # pre-downscale, render-scale resolution
         self._cost_cache: dict[str, wx.Bitmap] = {}
+        self._png_cache: dict[tuple[str, int], Path] = {}
+        self._png_dir: Path | None = None
         assets_root = self._assets_root()
         self._glyph_map, self._color_map = ManaIconResources.load_css_resources(
             assets_root,
@@ -122,6 +125,40 @@ class ManaIconFactory:
         if token.startswith("{") and token.endswith("}"):
             token = token[1:-1]
         return self._get_bitmap(token or "")
+
+    def png_path_for_symbol(self, symbol: str, height: int = 0) -> Path | None:
+        """Return a Path to a PNG file rendering ``symbol``, suitable for HTML.
+
+        Bitmaps are persisted lazily to a per-process temp directory and cached
+        by token + height. ``height=0`` writes the symbol at its native size.
+        """
+        token = symbol.strip()
+        if token.startswith("{") and token.endswith("}"):
+            token = token[1:-1]
+        if not token:
+            return None
+        cache_key = (token, height)
+        cached = self._png_cache.get(cache_key)
+        if cached is not None and cached.exists():
+            return cached
+        bmp = self._get_bitmap(token)
+        if bmp is None:
+            return None
+        if height > 0 and bmp.GetHeight() != height:
+            img = bmp.ConvertToImage()
+            ratio = height / max(1, bmp.GetHeight())
+            new_w = max(1, int(round(bmp.GetWidth() * ratio)))
+            img = img.Scale(new_w, height, wx.IMAGE_QUALITY_HIGH)
+        else:
+            img = bmp.ConvertToImage()
+        if self._png_dir is None:
+            self._png_dir = Path(tempfile.mkdtemp(prefix="mtgo_mana_icons_"))
+        safe = "".join(c if c.isalnum() else "_" for c in token).lower() or "sym"
+        suffix = f"_{height}" if height > 0 else ""
+        path = self._png_dir / f"{safe}{suffix}.png"
+        img.SaveFile(str(path), wx.BITMAP_TYPE_PNG)
+        self._png_cache[cache_key] = path
+        return path
 
     def bitmap_for_cost(self, mana_cost: str) -> wx.Bitmap | None:
         tokens = self._tokenize(mana_cost)

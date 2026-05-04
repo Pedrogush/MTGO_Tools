@@ -936,8 +936,10 @@ class AutomationServer:
         inspector = getattr(self.frame, "card_inspector_panel", None)
         if inspector:
             extra["oracle_display"] = getattr(inspector, "text_ctrl", None)
-        oracle_panel = getattr(self.frame, "oracle_text_ctrl", None)
-        extra["oracle_panel"] = oracle_panel
+        card_panel = getattr(self.frame, "card_panel", None)
+        if card_panel is not None:
+            extra["card_panel"] = card_panel
+            extra["oracle_panel"] = getattr(card_panel, "oracle_html", None)
         return extra.get(name)
 
     def _handle_add_lorem_mana_card(self) -> dict[str, Any]:

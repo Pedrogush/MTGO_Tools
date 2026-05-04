@@ -25,6 +25,9 @@ class FormatCardPoolService:
     def get_top_cards(self, format_name: str, limit: int = 100) -> list[FormatCardPoolCardTotal]:
         return self.repository.get_top_cards(format_name, limit=limit)
 
+    def get_card_total(self, format_name: str, card_name: str) -> int | None:
+        return self.repository.get_card_total(format_name, card_name)
+
     def get_summary(self, format_name: str) -> FormatCardPoolSummary | None:
         return self.repository.get_summary(format_name)
 

@@ -114,6 +114,11 @@ class AppFrame(
         self._apply_min_size()
         self.Centre(wx.BOTH)
 
+        # Seed the card panel with the active format so the Stats tab can
+        # render format-level totals before the user touches any selectors.
+        if hasattr(self, "card_panel"):
+            self.card_panel.update_format(getattr(self, "current_format", None))
+
         self.Bind(wx.EVT_CLOSE, self.on_close)
         self.Bind(wx.EVT_SIZE, self.on_window_change)
         self.Bind(wx.EVT_MOVE, self.on_window_change)
@@ -162,8 +167,8 @@ class AppFrame(
         inspector_box = self._build_card_inspector(right_panel)
         inspector_column.Add(inspector_box, 0, wx.EXPAND)
 
-        oracle_box = self._build_oracle_text_panel(right_panel)
-        inspector_column.Add(oracle_box, 1, wx.EXPAND | wx.TOP, PADDING_MD)
+        card_panel_box = self._build_card_panel(right_panel)
+        inspector_column.Add(card_panel_box, 1, wx.EXPAND | wx.TOP, PADDING_MD)
 
         return right_panel
 
