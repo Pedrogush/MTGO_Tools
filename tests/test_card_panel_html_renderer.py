@@ -5,8 +5,11 @@ These exercise rendering without a wx dependency, so they run under WSL Python.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from widgets.panels.card_panel.html_renderer import (
     build_card_html,
+    linkify_keywords,
     render_oracle_body,
     replace_mana_symbols,
 )
@@ -14,6 +17,16 @@ from widgets.panels.card_panel.html_renderer import (
 
 def _no_png(token: str):  # noqa: ARG001
     return None
+
+
+@dataclass(frozen=True)
+class _KW:
+    title: str
+    rule_id: str
+
+
+def _kw_lookup(*pairs: tuple[str, str]) -> dict[str, _KW]:
+    return {title.lower(): _KW(title=title, rule_id=rule_id) for title, rule_id in pairs}
 
 
 def test_replace_mana_symbols_falls_back_to_braced_text() -> None:
@@ -170,3 +183,86 @@ def test_build_card_html_escapes_user_text() -> None:
     assert "<script>" not in html
     assert "&lt;script&gt;" in html
     assert "&amp; destroy" in html
+
+
+# ============================ keyword linkifier ============================
+
+
+def test_linkify_keywords_wraps_keyword_in_anchor_with_rule_href() -> None:
+    lookup = _kw_lookup(("Flying", "702.9"))
+    out = linkify_keywords("<p>Flying</p>", lookup)
+    assert '<a href="rule:702.9">' in out
+    assert ">Flying</font></a>" in out
+
+
+def test_linkify_keywords_is_case_insensitive() -> None:
+    lookup = _kw_lookup(("Flying", "702.9"))
+    out = linkify_keywords("<p>flying</p>", lookup)
+    assert '<a href="rule:702.9">' in out
+    # Original casing of the matched token is preserved.
+    assert "flying</font></a>" in out
+
+
+def test_linkify_keywords_picks_longest_match_first() -> None:
+    lookup = _kw_lookup(("Strike", "999.1"), ("Double Strike", "702.4"))
+    out = linkify_keywords("<p>Double Strike</p>", lookup)
+    # "Double Strike" should resolve to the multi-word entry, not "Strike".
+    assert '<a href="rule:702.4">' in out
+    assert "rule:999.1" not in out
+
+
+def test_linkify_keywords_skips_inside_reminder_italics() -> None:
+    """Keywords inside ``<i>...</i>`` (reminder text) must NOT be linked."""
+    lookup = _kw_lookup(("Flying", "702.9"))
+    out = linkify_keywords(
+        "<p>Flying <i>(Flying creatures cant be blocked.)</i></p>",
+        lookup,
+    )
+    # The leading "Flying" outside the italics gets linked.
+    assert out.count('<a href="rule:702.9">') == 1
+
+
+def test_linkify_keywords_does_not_nest_anchors() -> None:
+    lookup = _kw_lookup(("Flying", "702.9"))
+    pre_linked = '<p><a href="rule:702.9">Flying</a></p>'
+    out = linkify_keywords(pre_linked, lookup)
+    # Pass should be a no-op — already-linked text must not get a second anchor.
+    assert out == pre_linked
+
+
+def test_linkify_keywords_respects_word_boundaries() -> None:
+    lookup = _kw_lookup(("Trample", "702.19"))
+    out = linkify_keywords("<p>The trampled grass.</p>", lookup)
+    # ``trampled`` must not be linked.
+    assert '<a href="rule:702.19">' not in out
+
+
+def test_linkify_keywords_no_lookup_returns_input_unchanged() -> None:
+    html = "<p>Flying</p>"
+    assert linkify_keywords(html, {}) == html
+
+
+def test_render_oracle_body_links_keywords_when_lookup_present() -> None:
+    lookup = _kw_lookup(("Flying", "702.9"), ("Trample", "702.19"))
+    out = render_oracle_body("Flying, trample", _no_png, keyword_lookup=lookup)
+    assert '<a href="rule:702.9">' in out
+    assert '<a href="rule:702.19">' in out
+
+
+def test_render_oracle_body_without_lookup_renders_no_anchors() -> None:
+    out = render_oracle_body("Flying", _no_png, keyword_lookup=None)
+    assert "<a " not in out
+
+
+def test_build_card_html_threads_keyword_lookup_through() -> None:
+    lookup = _kw_lookup(("Flying", "702.9"))
+    meta = {
+        "name": "Serra Angel",
+        "mana_cost": "{3}{W}{W}",
+        "type_line": "Creature — Angel",
+        "oracle_text": "Flying, vigilance",
+        "power": "4",
+        "toughness": "4",
+    }
+    html = build_card_html(meta, None, _no_png, keyword_lookup=lookup)
+    assert '<a href="rule:702.9">' in html
