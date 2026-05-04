@@ -172,3 +172,9 @@ CURR_DECK_FILE = DECKS_DIR / "curr_deck.txt"
 REMOTE_SNAPSHOT_CACHE_DIR = CACHE_DIR / "remote_snapshots"
 REMOTE_SNAPSHOT_MANIFEST_FILE = REMOTE_SNAPSHOT_CACHE_DIR / "manifest.json"
 REMOTE_SNAPSHOT_BUNDLE_STAMP_FILE = REMOTE_SNAPSHOT_CACHE_DIR / "bundle_stamp.json"
+
+# Comprehensive Rules cache — Wizards publishes a dated .txt; we cache it locally
+# and re-download only when the upstream filename changes.
+COMP_RULES_DIR = CACHE_DIR / "comp_rules"
+COMP_RULES_TXT_FILE = COMP_RULES_DIR / "comp_rules.txt"
+COMP_RULES_STAMP_FILE = COMP_RULES_DIR / "stamp.json"
