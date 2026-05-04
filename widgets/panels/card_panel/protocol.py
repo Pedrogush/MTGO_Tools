@@ -31,6 +31,7 @@ class CardPanelProto(Protocol):
     # UI widgets
     notebook: wx.Notebook
     oracle_html: wx.html.HtmlWindow
+    stats_panel: wx.ScrolledWindow
     stats_card_label: wx.StaticText
     stats_format_header: wx.StaticText
     stats_format_total: wx.StaticText

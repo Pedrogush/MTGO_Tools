@@ -98,12 +98,13 @@ class CardPanelHandlersMixin(_Base):
             self.stats_card_label.SetLabel(self._t("card_panel.stats.no_card"))
             self._set_format_stats(None, None)
             self._set_archetype_stats(None)
-            return
-
-        card_name = str(meta.get("name") or "")
-        self.stats_card_label.SetLabel(card_name)
-        self._set_format_stats(self._current_format, card_name)
-        self._set_archetype_stats(card_name)
+        else:
+            card_name = str(meta.get("name") or "")
+            self.stats_card_label.SetLabel(card_name)
+            self._set_format_stats(self._current_format, card_name)
+            self._set_archetype_stats(card_name)
+        self.stats_panel.Layout()
+        self.stats_panel.FitInside()
 
     def _set_format_stats(self, format_name: str | None, card_name: str | None) -> None:
         if not format_name:

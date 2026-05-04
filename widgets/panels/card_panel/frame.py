@@ -82,10 +82,12 @@ class CardPanel(
         self.notebook.AddPage(oracle_panel, self._t("card_panel.tab.oracle_text"))
 
     def _build_stats_tab(self) -> None:
-        stats_panel = wx.Panel(self.notebook)
+        stats_panel = wx.ScrolledWindow(self.notebook, style=wx.VSCROLL)
         stats_panel.SetBackgroundColour(DARK_PANEL)
+        stats_panel.SetScrollRate(0, 10)
         sizer = wx.BoxSizer(wx.VERTICAL)
         stats_panel.SetSizer(sizer)
+        self.stats_panel = stats_panel
 
         self.stats_card_label = wx.StaticText(stats_panel, label="")
         font = self.stats_card_label.GetFont()
