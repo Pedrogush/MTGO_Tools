@@ -12,6 +12,7 @@ from utils.i18n._en_us.metagame import MESSAGES as _METAGAME
 from utils.i18n._en_us.notes import MESSAGES as _NOTES
 from utils.i18n._en_us.radar import MESSAGES as _RADAR
 from utils.i18n._en_us.research import MESSAGES as _RESEARCH
+from utils.i18n._en_us.rules_browser import MESSAGES as _RULES_BROWSER
 from utils.i18n._en_us.tabs import MESSAGES as _TABS
 from utils.i18n._en_us.timer import MESSAGES as _TIMER
 from utils.i18n._en_us.toolbar import MESSAGES as _TOOLBAR
@@ -33,6 +34,7 @@ MESSAGES: dict[str, str] = {
     **_NOTES,
     **_RADAR,
     **_RESEARCH,
+    **_RULES_BROWSER,
     **_TABS,
     **_TIMER,
     **_TOOLBAR,
