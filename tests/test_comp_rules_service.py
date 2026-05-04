@@ -16,7 +16,9 @@ import pytest
 from services.comp_rules_service import (
     CompRulesService,
     find_latest_rules_url,
+    linkify_cross_refs,
     parse_keywords,
+    parse_outline,
 )
 
 # A minimal-but-faithful fixture: TOC at top (which must be skipped), then the
@@ -27,14 +29,37 @@ _FIXTURE_TXT = """\
 Contents
 
 1. Game Concepts
+2. Parts of a Card
 700. General
 701. Keyword Actions
 702. Keyword Abilities
 703. Turn-Based Actions
 
+Glossary
+
+Credits
+
+1. Game Concepts
+
+100. General
+
+100.1. These rules apply to any Magic game.
+
+100.1a A two-player game has only two players.
+
+101. The Magic Golden Rules
+
+101.1. Whenever a card's text contradicts these rules, the card takes precedence.
+
+2. Parts of a Card
+
+200. General
+
+200.1. The parts of a card are name, mana cost, illustration, color indicator, type line, expansion symbol, text box, power and toughness, loyalty, defense, hand modifier, life modifier, illustration credit, legal text, and collector number.
+
 700. General
 
-700.1. Some preamble text.
+700.1. Anything that happens in a game is an event.
 
 701. Keyword Actions
 
@@ -77,6 +102,18 @@ Contents
 703. Turn-Based Actions
 
 703.1. Turn-based actions are game actions that happen automatically when certain steps or phases begin.
+
+Glossary
+
+Flying
+A keyword ability that restricts which creatures can block a creature. See rule 702.9, "Flying."
+
+Trample
+A keyword ability that allows excess combat damage to be dealt to defending player.
+
+Credits
+
+Magic: The Gathering was designed by Richard Garfield, with contributions from many others.
 """
 
 
@@ -260,3 +297,117 @@ def test_refresh_returns_false_when_landing_unreachable(tmp_path: Path) -> None:
 def test_refresh_returns_false_when_no_url_on_landing(tmp_path: Path) -> None:
     svc = _make_service_with_stub_http(tmp_path, "<p>no link</p>", b"unused")
     assert svc.refresh() is False
+
+
+# ============================== parse_outline ==============================
+
+
+def test_parse_outline_returns_a_section_per_top_level_heading() -> None:
+    outline = parse_outline(_FIXTURE_TXT)
+    numbers = [s.number for s in outline]
+    # Section 1 + section 2 + section 7 (via "700. General") — but the fixture
+    # only has "1. Game Concepts" and "2. Parts of a Card" as top-level headers.
+    # Section 7 doesn't have a "7. Additional Rules" header in the fixture so
+    # it's skipped — that's the expected behaviour.
+    assert 1 in numbers
+    assert 2 in numbers
+    # Glossary always appears as the synthetic number=0 section when present.
+    assert 0 in numbers
+
+
+def test_parse_outline_subsections_under_their_section() -> None:
+    outline = parse_outline(_FIXTURE_TXT)
+    by_num = {s.number: s for s in outline}
+    sec1_subs = {sub.rule_id: sub for sub in by_num[1].subsections}
+    assert "100" in sec1_subs
+    assert "101" in sec1_subs
+    assert sec1_subs["100"].title == "General"
+    assert sec1_subs["101"].title == "The Magic Golden Rules"
+
+
+def test_parse_outline_subsection_body_includes_lettered_subrules() -> None:
+    outline = parse_outline(_FIXTURE_TXT)
+    by_num = {s.number: s for s in outline}
+    sec1 = by_num[1]
+    rule_100 = next(sub for sub in sec1.subsections if sub.rule_id == "100")
+    assert "100.1." in rule_100.body
+    assert "100.1a" in rule_100.body
+    # Body must stop before the next subsection.
+    assert "Magic Golden Rules" not in rule_100.body
+
+
+def test_parse_outline_glossary_appended_as_section_zero() -> None:
+    outline = parse_outline(_FIXTURE_TXT)
+    glossary = next(s for s in outline if s.number == 0)
+    assert glossary.title == "Glossary"
+    assert len(glossary.subsections) == 1
+    body = glossary.subsections[0].body
+    assert "Flying" in body
+    assert "Trample" in body
+    # Glossary body must stop at "Credits".
+    assert "Richard Garfield" not in body
+
+
+def test_parse_outline_skips_toc_section_headers() -> None:
+    """``1. Game Concepts`` appears in the TOC at the top of the fixture and
+    again as the body header. The parser must use the latter."""
+    outline = parse_outline(_FIXTURE_TXT)
+    # If we accidentally took the TOC occurrence, "1. Game Concepts"'s body
+    # would include "2. Parts of a Card" and beyond, swallowing 200.x rules.
+    by_num = {s.number: s for s in outline}
+    sec1 = by_num[1]
+    sec1_rule_ids = {sub.rule_id for sub in sec1.subsections}
+    assert "200" not in sec1_rule_ids
+
+
+def test_get_outline_memoizes_until_mtime_changes(tmp_path: Path) -> None:
+    import time
+
+    cache = tmp_path / "comp_rules.txt"
+    cache.write_text(_FIXTURE_TXT, encoding="utf-8")
+    svc = CompRulesService(cache_path=cache, stamp_path=tmp_path / "stamp.json")
+    first = svc.get_outline()
+    second = svc.get_outline()
+    assert first is second  # memoized
+    time.sleep(0.01)
+    cache.write_text(
+        _FIXTURE_TXT.replace("100. General", "100. Modified Title"),
+        encoding="utf-8",
+    )
+    third = svc.get_outline()
+    assert third is not first
+    rule_100_titles = {sub.title for s in third for sub in s.subsections if sub.rule_id == "100"}
+    assert "Modified Title" in rule_100_titles
+
+
+# ============================ linkify_cross_refs ==========================
+
+
+def test_linkify_cross_refs_wraps_rule_with_subsection_anchor() -> None:
+    out = linkify_cross_refs("See rule 702.9 for details.")
+    assert out == 'See rule <a href="#702">702.9</a> for details.'
+
+
+def test_linkify_cross_refs_handles_lettered_subrule() -> None:
+    out = linkify_cross_refs("As described in rule 100.1b.")
+    assert '<a href="#100">100.1b</a>' in out
+
+
+def test_linkify_cross_refs_handles_plural_rules_keyword() -> None:
+    out = linkify_cross_refs("See rules 702.9 and rule 702.18.")
+    # First "rules 702.9" gets linkified; the trailing "rule 702.18" gets its
+    # own link too.
+    assert '<a href="#702">702.9</a>' in out
+    assert '<a href="#702">702.18</a>' in out
+
+
+def test_linkify_cross_refs_does_not_match_bare_numbers() -> None:
+    """``702.9`` without the ``rule`` prefix shouldn't link — too many false
+    positives from collector numbers, dates, and version strings."""
+    out = linkify_cross_refs("Score is 702.9 right now.")
+    assert "<a href=" not in out
+
+
+def test_linkify_cross_refs_is_case_insensitive() -> None:
+    assert '<a href="#702">' in linkify_cross_refs("See Rule 702.9.")
+    assert '<a href="#702">' in linkify_cross_refs("RULES 702.9 apply.")
