@@ -29,6 +29,22 @@ BUFFER_SIZE = 65536
 # result.  PrintWindow asks DWM to render the window's own composition
 # buffer directly into a supplied HDC.
 _PW_RENDERFULLCONTENT = 0x00000002
+
+# DWM only composites windows that are currently shown and not minimized, so
+# capturing a Hide()-d or Iconize()-d frame requires temporarily parking it on
+# the virtual desktop where DWM will allocate a composition buffer for it.
+_GWL_EXSTYLE = -20
+_WS_EX_TOOLWINDOW = 0x00000080
+_SWP_NOSIZE = 0x0001
+_SWP_NOZORDER = 0x0004
+_SWP_NOACTIVATE = 0x0010
+_SM_XVIRTUALSCREEN = 76
+_SM_YVIRTUALSCREEN = 77
+_SM_CXVIRTUALSCREEN = 78
+_SM_CYVIRTUALSCREEN = 79
+_SW_HIDE = 0
+_SW_SHOWNOACTIVATE = 4  # restore from minimized to most-recent rect, no activate
+
 _user32 = ctypes.windll.user32 if _os.name == "nt" else None  # type: ignore[attr-defined]
 if _user32 is not None:
     _user32.PrintWindow.argtypes = [
@@ -37,6 +53,28 @@ if _user32 is not None:
         ctypes.c_uint,  # flags
     ]
     _user32.PrintWindow.restype = ctypes.c_int
+    _user32.SetWindowPos.argtypes = [
+        ctypes.c_void_p,  # HWND
+        ctypes.c_void_p,  # HWND insert-after
+        ctypes.c_int,  # X
+        ctypes.c_int,  # Y
+        ctypes.c_int,  # cx
+        ctypes.c_int,  # cy
+        ctypes.c_uint,  # flags
+    ]
+    _user32.SetWindowPos.restype = ctypes.c_int
+    _user32.GetWindowLongW.argtypes = [ctypes.c_void_p, ctypes.c_int]
+    _user32.GetWindowLongW.restype = ctypes.c_long
+    _user32.SetWindowLongW.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_long]
+    _user32.SetWindowLongW.restype = ctypes.c_long
+    _user32.GetSystemMetrics.argtypes = [ctypes.c_int]
+    _user32.GetSystemMetrics.restype = ctypes.c_int
+    _user32.IsWindowVisible.argtypes = [ctypes.c_void_p]
+    _user32.IsWindowVisible.restype = ctypes.c_int
+    _user32.IsIconic.argtypes = [ctypes.c_void_p]
+    _user32.IsIconic.restype = ctypes.c_int
+    _user32.ShowWindow.argtypes = [ctypes.c_void_p, ctypes.c_int]
+    _user32.ShowWindow.restype = ctypes.c_int
 
 
 class AutomationServer:
@@ -263,44 +301,113 @@ class AutomationServer:
         window.  Must be called on the wx main thread.  Performs a layout +
         repaint pass and drains the event queue before capturing so DWM has
         finished compositing the window contents.
+
+        If the window is iconized or hidden, it is parked off-screen with the
+        WS_EX_TOOLWINDOW style (no taskbar / Alt-Tab entry) and shown there
+        with SWP_NOACTIVATE so DWM allocates a composition buffer without the
+        user seeing a flash.  Original visibility, position and ex-style are
+        restored after the capture.
         """
         if _user32 is None:
             raise RuntimeError("PrintWindow is only available on Windows")
 
-        # DWM cannot composite a minimized (iconized) window — restore it first.
-        if window.IsIconized():
-            window.Iconize(False)
-
-        # Force a fresh layout and an immediate repaint of the whole widget tree.
-        window.Layout()
-        window.SendSizeEvent()
-
-        def _refresh_tree(w: wx.Window) -> None:
-            w.Refresh(eraseBackground=False)
-            w.Update()
-            for child in w.GetChildren():
-                _refresh_tree(child)
-
-        _refresh_tree(window)
-
-        # Drain the event queue, sleep for DWM composite, then drain again.
-        # Values tuned empirically — shorter sleeps produced half-painted captures.
-        for _ in range(5):
-            wx.Yield()
-        time.sleep(0.15)
-        for _ in range(3):
-            wx.Yield()
-
-        w, h = window.GetSize()
-        bmp = wx.Bitmap(w, h, depth=32)
-        mdc = wx.MemoryDC(bmp)
-        hdc = mdc.GetHDC()
         hwnd = window.GetHandle()
-        ok = _user32.PrintWindow(hwnd, hdc, _PW_RENDERFULLCONTENT)
-        mdc.SelectObject(wx.NullBitmap)
-        if not ok:
-            raise RuntimeError("PrintWindow returned 0 (DWM not compositing?)")
-        return bmp
+        # Detect via Win32 rather than wx.IsShown()/IsIconized() because the
+        # caller may have toggled visibility outside of wx (raw ShowWindow,
+        # parent-app coordination, etc.); wx caches its own state and won't
+        # reflect those changes.
+        was_iconized = bool(_user32.IsIconic(hwnd))
+        was_hidden = not bool(_user32.IsWindowVisible(hwnd))
+        needs_offscreen = was_iconized or was_hidden
+
+        saved_pos: tuple[int, int] | None = None
+        saved_exstyle: int | None = None
+        if needs_offscreen:
+            saved_pos = tuple(window.GetScreenPosition())
+            saved_exstyle = _user32.GetWindowLongW(hwnd, _GWL_EXSTYLE)
+            _user32.SetWindowLongW(hwnd, _GWL_EXSTYLE, saved_exstyle | _WS_EX_TOOLWINDOW)
+            # Park 100px past the bottom-right of the virtual screen.  Using
+            # virtual-screen metrics handles multi-monitor layouts where a
+            # hard-coded (-32000, -32000) could land on an actual display.
+            x_off = (
+                _user32.GetSystemMetrics(_SM_XVIRTUALSCREEN)
+                + _user32.GetSystemMetrics(_SM_CXVIRTUALSCREEN)
+                + 100
+            )
+            y_off = (
+                _user32.GetSystemMetrics(_SM_YVIRTUALSCREEN)
+                + _user32.GetSystemMetrics(_SM_CYVIRTUALSCREEN)
+                + 100
+            )
+            # SetWindowPos on an iconized window updates the restore rect, so
+            # the subsequent ShowWindow(SW_SHOWNOACTIVATE) brings it up
+            # off-screen rather than at its previous on-screen location.
+            _user32.SetWindowPos(
+                hwnd,
+                0,
+                x_off,
+                y_off,
+                0,
+                0,
+                _SWP_NOSIZE | _SWP_NOZORDER | _SWP_NOACTIVATE,
+            )
+            # SW_SHOWNOACTIVATE handles both restore-from-minimized and
+            # show-from-hidden without stealing focus.  Going through Win32
+            # rather than wx.Frame.Show()/Iconize(False) ensures the window
+            # state actually flips even if wx's cached IsShown() disagrees.
+            _user32.ShowWindow(hwnd, _SW_SHOWNOACTIVATE)
+
+        try:
+            # Force a fresh layout and an immediate repaint of the whole widget tree.
+            window.Layout()
+            window.SendSizeEvent()
+
+            def _refresh_tree(w: wx.Window) -> None:
+                w.Refresh(eraseBackground=False)
+                w.Update()
+                for child in w.GetChildren():
+                    _refresh_tree(child)
+
+            _refresh_tree(window)
+
+            # Drain the event queue, sleep for DWM composite, then drain again.
+            # Values tuned empirically — shorter sleeps produced half-painted captures.
+            for _ in range(5):
+                wx.Yield()
+            time.sleep(0.15)
+            for _ in range(3):
+                wx.Yield()
+
+            w, h = window.GetSize()
+            bmp = wx.Bitmap(w, h, depth=32)
+            mdc = wx.MemoryDC(bmp)
+            hdc = mdc.GetHDC()
+            ok = _user32.PrintWindow(hwnd, hdc, _PW_RENDERFULLCONTENT)
+            mdc.SelectObject(wx.NullBitmap)
+            if not ok:
+                raise RuntimeError("PrintWindow returned 0 (DWM not compositing?)")
+            return bmp
+        finally:
+            if needs_offscreen:
+                # Restore in reverse: original position first (so the
+                # restore-rect is correct before we re-iconize/hide), then
+                # the visibility state, then the ex-style.
+                if saved_pos is not None:
+                    _user32.SetWindowPos(
+                        hwnd,
+                        0,
+                        saved_pos[0],
+                        saved_pos[1],
+                        0,
+                        0,
+                        _SWP_NOSIZE | _SWP_NOZORDER | _SWP_NOACTIVATE,
+                    )
+                if was_iconized:
+                    window.Iconize(True)
+                if was_hidden:
+                    _user32.ShowWindow(hwnd, _SW_HIDE)
+                if saved_exstyle is not None:
+                    _user32.SetWindowLongW(hwnd, _GWL_EXSTYLE, saved_exstyle)
 
     def _resolve_secondary_window(self, window_name: str) -> wx.Frame | None:
         """Return the live wx.Frame for a named secondary window, or None."""
