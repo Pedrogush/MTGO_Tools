@@ -15,6 +15,7 @@ from services.format_card_pool_service import (
     FormatCardPoolService,
     get_format_card_pool_service,
 )
+from services.radar_service import RadarService, get_radar_service
 from utils.constants import DARK_ALT, DARK_BG, DARK_PANEL, FORMAT_OPTIONS, LIGHT_TEXT, SUBDUED_TEXT
 from utils.i18n import translate
 from widgets.frames.top_cards.handlers import TopCardsHandlersMixin
@@ -34,16 +35,18 @@ class TopCardsFrame(TopCardsHandlersMixin, TopCardsPropertiesMixin, wx.Frame):
         parent: wx.Window | None = None,
         locale: str | None = None,
         format_card_pool_service: FormatCardPoolService | None = None,
+        radar_service: RadarService | None = None,
     ) -> None:
         style = wx.DEFAULT_FRAME_STYLE | wx.STAY_ON_TOP
         super().__init__(
             parent,
             title=translate(locale, "window.title.top_cards"),
-            size=(760, 700),
+            size=(1200, 700),
             style=style,
         )
         self._locale = locale
         self._service = format_card_pool_service or get_format_card_pool_service()
+        self._radar_service = radar_service or get_radar_service()
         self.current_format = "modern"
 
         self._build_ui()
@@ -83,9 +86,17 @@ class TopCardsFrame(TopCardsHandlersMixin, TopCardsPropertiesMixin, wx.Frame):
         toolbar.Add(self.status_label, 0, wx.ALIGN_CENTER_VERTICAL)
 
         self.card_list = wx.ListCtrl(panel, style=wx.LC_REPORT | wx.LC_SINGLE_SEL)
-        self.card_list.InsertColumn(0, self._t("top_cards.col.rank"), width=60)
-        self.card_list.InsertColumn(1, self._t("top_cards.col.card"), width=450)
-        self.card_list.InsertColumn(2, self._t("top_cards.col.copies"), width=120)
+        self.card_list.InsertColumn(0, self._t("top_cards.col.rank"), width=50)
+        self.card_list.InsertColumn(1, self._t("top_cards.col.card"), width=240)
+        self.card_list.InsertColumn(2, self._t("top_cards.col.copies"), width=80)
+        self.card_list.InsertColumn(3, self._t("top_cards.col.mb_decks"), width=80)
+        self.card_list.InsertColumn(4, self._t("top_cards.col.mb_avg"), width=80)
+        self.card_list.InsertColumn(5, self._t("top_cards.col.mb_avg_karsten"), width=85)
+        self.card_list.InsertColumn(6, self._t("top_cards.col.sb_decks"), width=80)
+        self.card_list.InsertColumn(7, self._t("top_cards.col.sb_avg"), width=80)
+        self.card_list.InsertColumn(8, self._t("top_cards.col.sb_avg_karsten"), width=85)
+        self.card_list.InsertColumn(9, self._t("top_cards.col.archetypes"), width=95)
+        self.card_list.InsertColumn(10, self._t("top_cards.col.formats"), width=160)
         self.card_list.SetBackgroundColour(DARK_PANEL)
         self.card_list.SetForegroundColour(LIGHT_TEXT)
         main_sizer.Add(self.card_list, 1, wx.ALL | wx.EXPAND, 10)
