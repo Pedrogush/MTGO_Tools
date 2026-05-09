@@ -1,0 +1,28 @@
+"""Timer alert UI strings. (English (United States))"""
+
+MESSAGES: dict[str, str] = {
+    "timer.section.thresholds": "Alert Thresholds",
+    "timer.section.challenge": "Active Challenge Timer",
+    "timer.label.sound": "Alert Sound:",
+    "timer.label.check_interval": "Check interval (ms):",
+    "timer.label.repeat_interval": "Repeat interval (seconds):",
+    "timer.check.start_alert": "Alert when timer starts counting down",
+    "timer.check.repeat_alarm": "Repeat alarm at interval",
+    "timer.btn.start": "Start Monitoring",
+    "timer.btn.stop": "Stop",
+    "timer.btn.test": "Test Alert",
+    "timer.no_challenge": "No active challenge timer detected.",
+    "timer.configure": "Configure thresholds and click Start to begin monitoring.",
+    "timer.status.one_threshold_required": "At least one timer threshold is required.",
+    "timer.status.already_monitoring": "Already monitoring the timer.",
+    "timer.status.no_thresholds": "No valid thresholds configured.",
+    "timer.status.invalid_poll_interval": "Invalid poll interval.",
+    "timer.status.monitoring": "Monitoring MTGO challenge timer…",
+    "timer.status.stopped": "Monitoring stopped.",
+    "timer.status.waiting_data": "Waiting for MTGO data…",
+    "timer.status.bridge_error": "Bridge error: {error}",
+    "timer.status.no_timer": "No active challenge timer detected. Join an event to monitor.",
+    "timer.status.invalid_value": "Unable to read challenge timer value.",
+    "timer.status.challenge_timer": "Challenge timer: {value}",
+    "timer.status.bridge_missing": "Bridge missing. Build the MTGO bridge executable.",
+}
