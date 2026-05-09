@@ -6,6 +6,7 @@ from repositories.metagame_repository import MetagameRepository, get_metagame_re
 from repositories.radar_repository import RadarRepository, get_radar_repository
 from services.deck_service import DeckService, get_deck_service
 from services.radar_service.analysis import AnalysisMixin
+from services.radar_service.card_stats import CardStatsMixin
 from services.radar_service.export import ExportMixin
 from services.radar_service.precomputed import PrecomputedMixin
 
@@ -13,6 +14,7 @@ from services.radar_service.precomputed import PrecomputedMixin
 class RadarService(
     PrecomputedMixin,
     AnalysisMixin,
+    CardStatsMixin,
     ExportMixin,
 ):
     """Service for calculating archetype radar (card frequency analysis)."""

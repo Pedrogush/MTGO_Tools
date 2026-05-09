@@ -32,3 +32,17 @@ class StoredRadar:
     decks_failed: int
     mainboard_cards: list[StoredRadarCard]
     sideboard_cards: list[StoredRadarCard]
+
+
+@dataclass(frozen=True)
+class CardAggregateStats:
+    """Per-format aggregation of a card's usage across all archetype radars."""
+
+    card_name: str
+    format_name: str
+    mainboard_archetypes: int
+    sideboard_archetypes: int
+    mainboard_copies: int
+    sideboard_copies: int
+    mainboard_appearances: int
+    sideboard_appearances: int

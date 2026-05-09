@@ -252,6 +252,37 @@ MESSAGES: dict[str, str] = {
     "top_cards.col.rank": "#",
     "top_cards.col.card": "Card",
     "top_cards.col.copies": "Copies",
+    "top_cards.col.mb_decks": "MB decks",
+    "top_cards.col.mb_avg": "MB avg",
+    "top_cards.col.mb_avg_karsten": "MB avg-K",
+    "top_cards.col.sb_decks": "SB decks",
+    "top_cards.col.sb_avg": "SB avg",
+    "top_cards.col.sb_avg_karsten": "SB avg-K",
+    "top_cards.col.archetypes": "Archs (MB/SB)",
+    "top_cards.col.formats": "Formats",
+    "top_cards.tooltip.rank": "Rank by total copies played in the selected format",
+    "top_cards.tooltip.card": "Card name",
+    "top_cards.tooltip.copies": "Total copies of this card played across every deck in the format",
+    "top_cards.tooltip.mb_decks": "Decks running this card in the mainboard",
+    "top_cards.tooltip.mb_avg": (
+        "Mean mainboard copies across every deck in the format " "(mainboard copies ÷ total decks)"
+    ),
+    "top_cards.tooltip.mb_avg_karsten": (
+        "Mean mainboard copies among decks that include the card "
+        "(Karsten method: mainboard copies ÷ decks running it main)"
+    ),
+    "top_cards.tooltip.sb_decks": "Decks running this card in the sideboard",
+    "top_cards.tooltip.sb_avg": (
+        "Mean sideboard copies across every deck in the format " "(sideboard copies ÷ total decks)"
+    ),
+    "top_cards.tooltip.sb_avg_karsten": (
+        "Mean sideboard copies among decks that include the card "
+        "(Karsten method: sideboard copies ÷ decks running it side)"
+    ),
+    "top_cards.tooltip.archetypes": (
+        "Number of archetypes that include this card — mainboard / sideboard"
+    ),
+    "top_cards.tooltip.formats": "Formats whose cached radars include this card",
     "app.status.loading_decks": "Loading decks for {name}\u2026",
     "deck.loading": "Loading deck\u2026",
     "tracker.status.no_active_match": "No active match detected",

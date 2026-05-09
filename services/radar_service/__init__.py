@@ -5,12 +5,14 @@ Split by responsibility into internal modules:
 - ``models``: :class:`CardFrequency` and :class:`RadarData` dataclasses
 - ``precomputed``: precomputed-snapshot resolution from :class:`RadarRepository`
 - ``analysis``: live deck-fetch + per-card frequency calculation
+- ``card_stats``: cross-archetype card-usage rollups for one format
 - ``export``: decklist export and card-name extraction helpers
 - ``service``: :class:`RadarService` composed from the above mixins
 """
 
 from __future__ import annotations
 
+from services.radar_service.card_stats import CardUsageStats
 from services.radar_service.models import CardFrequency, RadarData
 from services.radar_service.service import RadarService
 
@@ -33,6 +35,7 @@ def reset_radar_service() -> None:
 
 __all__ = [
     "CardFrequency",
+    "CardUsageStats",
     "RadarData",
     "RadarService",
     "get_radar_service",
