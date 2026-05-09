@@ -7,17 +7,35 @@ so the helpers are unit-testable without a wx App.
 from __future__ import annotations
 
 import re
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from html import escape
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
 
 # Match either {SYMBOL} or a bare token previously normalized.
 _MANA_TOKEN_RE = re.compile(r"\{([^{}]+)\}")
 # Reminder text in MTG oracle text is parenthetical and italicized.
 _REMINDER_RE = re.compile(r"\(([^)]+)\)")
 
+# Colour used for keyword hyperlinks in the oracle text — picked to contrast
+# against the dark panel background while staying close to the existing
+# DARK_ACCENT in ``utils.constants.colors``.
+_KEYWORD_LINK_COLOR = "#7AA2F7"
+
 PngResolver = Callable[[str], Path | None]
+
+
+class _KeywordEntryLike(Protocol):
+    """Protocol mirroring ``services.comp_rules_service.KeywordEntry``.
+
+    Defined locally so this renderer stays free of service-layer imports.
+    """
+
+    title: str
+    rule_id: str
+
+
+KeywordLookup = Mapping[str, _KeywordEntryLike]
 
 
 def replace_mana_symbols(
@@ -65,8 +83,102 @@ def _italicize_reminder_text(html: str) -> str:
     return _REMINDER_RE.sub(lambda m: f"<i>({m.group(1)})</i>", html)
 
 
-def render_oracle_body(text: str, png_resolver: PngResolver) -> str:
-    """Render an oracle text block. Newlines become paragraph breaks."""
+# Tags whose text content should NOT be linkified. ``<i>`` covers reminder
+# text (already a parenthetical explanation, no need to link the keyword
+# inside its own gloss); ``<a>`` prevents nesting links.
+_LINKIFY_SKIP_TAGS = frozenset({"i", "a"})
+# Splits an HTML string into alternating text and tag tokens. The capture
+# group keeps the tags themselves in the result of ``re.split``.
+_TAG_SPLIT_RE = re.compile(r"(<[^>]+>)")
+_TAG_NAME_RE = re.compile(r"<\s*(/?)\s*([a-zA-Z][a-zA-Z0-9]*)")
+
+
+def _build_keyword_pattern(lookup: KeywordLookup) -> re.Pattern[str] | None:
+    """Compile a single regex matching any keyword title (longest-first).
+
+    Returns None when the lookup is empty so callers can short-circuit.
+    """
+    titles = sorted({entry.title for entry in lookup.values()}, key=len, reverse=True)
+    if not titles:
+        return None
+    # Word-boundary lookarounds keep ``trample`` from matching inside
+    # ``trampled``; ``re.IGNORECASE`` lets ``Flying`` and ``flying`` both link.
+    return re.compile(
+        r"(?<!\w)(" + "|".join(re.escape(t) for t in titles) + r")(?!\w)",
+        re.IGNORECASE,
+    )
+
+
+def _replace_keywords_in_text(
+    text: str,
+    pattern: re.Pattern[str],
+    lookup: KeywordLookup,
+) -> str:
+    def _repl(match: re.Match[str]) -> str:
+        matched = match.group(1)
+        entry = lookup.get(matched.lower())
+        if entry is None:
+            return matched
+        # ``<font>`` inside ``<a>`` so the link picks up our colour — wx.html
+        # ignores ``color`` attrs on ``<a>`` but honours ``<font color>``.
+        return (
+            f'<a href="rule:{entry.rule_id}">'
+            f'<font color="{_KEYWORD_LINK_COLOR}">{matched}</font>'
+            f"</a>"
+        )
+
+    return pattern.sub(_repl, text)
+
+
+def linkify_keywords(html: str, lookup: KeywordLookup) -> str:
+    """Wrap keyword occurrences in ``<a href="rule:NNN">`` anchors.
+
+    The pass walks the HTML token-by-token so it can skip text inside
+    ``<i>`` (reminder text) and ``<a>`` (already a link) — those would
+    either over-link the gloss or nest anchors.
+    """
+    if not lookup:
+        return html
+    pattern = _build_keyword_pattern(lookup)
+    if pattern is None:
+        return html
+
+    parts = _TAG_SPLIT_RE.split(html)
+    out: list[str] = []
+    skip_depth = 0
+    for part in parts:
+        if not part:
+            continue
+        if part.startswith("<"):
+            tag_match = _TAG_NAME_RE.match(part)
+            if tag_match is not None:
+                is_close = bool(tag_match.group(1))
+                tag_name = tag_match.group(2).lower()
+                if tag_name in _LINKIFY_SKIP_TAGS:
+                    if is_close:
+                        skip_depth = max(0, skip_depth - 1)
+                    else:
+                        skip_depth += 1
+            out.append(part)
+        else:
+            if skip_depth == 0:
+                out.append(_replace_keywords_in_text(part, pattern, lookup))
+            else:
+                out.append(part)
+    return "".join(out)
+
+
+def render_oracle_body(
+    text: str,
+    png_resolver: PngResolver,
+    keyword_lookup: KeywordLookup | None = None,
+) -> str:
+    """Render an oracle text block. Newlines become paragraph breaks.
+
+    When ``keyword_lookup`` is provided, keyword titles found in the text are
+    wrapped in ``<a href="rule:NNN">`` anchors after mana/reminder passes so
+    the link spans don't get clipped by reminder ``<i>`` tags.
+    """
     if not text:
         return ""
     paragraphs = [p.strip() for p in text.split("\n") if p.strip()]
@@ -74,6 +186,8 @@ def render_oracle_body(text: str, png_resolver: PngResolver) -> str:
     for para in paragraphs:
         body = replace_mana_symbols(para, png_resolver)
         body = _italicize_reminder_text(body)
+        if keyword_lookup:
+            body = linkify_keywords(body, keyword_lookup)
         rendered.append(f"<p>{body}</p>")
     return "".join(rendered)
 
@@ -140,6 +254,7 @@ def build_card_html(
     png_resolver: PngResolver,
     *,
     empty_text: str = "Select a card to inspect.",
+    keyword_lookup: KeywordLookup | None = None,
 ) -> str:
     """Build the full card-view HTML.
 
@@ -162,7 +277,11 @@ def build_card_html(
     front_name = escape(front_name_str)
     front_mana = replace_mana_symbols(str(_meta_get(meta, "mana_cost") or ""), png_resolver)
     front_type = escape(str(_meta_get(meta, "type_line") or ""))
-    front_oracle = render_oracle_body(str(_meta_get(meta, "oracle_text") or ""), png_resolver)
+    front_oracle = render_oracle_body(
+        str(_meta_get(meta, "oracle_text") or ""),
+        png_resolver,
+        keyword_lookup=keyword_lookup,
+    )
     front_pt = _format_pt_from(meta)
 
     set_name = ""
@@ -207,7 +326,9 @@ def build_card_html(
             ),
             type_line=escape(back_type_line),
             edition_label="",
-            oracle_html=render_oracle_body(back_oracle_text, png_resolver),
+            oracle_html=render_oracle_body(
+                back_oracle_text, png_resolver, keyword_lookup=keyword_lookup
+            ),
             flavor_html="",
             pt=_format_pt_from(meta, prefix="back_"),
         )

@@ -8,7 +8,7 @@ art (full-art promos, foreign-language printings).
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from typing import Any
 
 import wx
@@ -19,10 +19,25 @@ from utils.mana_icon_factory import ManaIconFactory
 from widgets.panels.card_panel.handlers import CardPanelHandlersMixin
 from widgets.panels.card_panel.mana_rasterizer import CardPanelManaRasterizer
 from widgets.panels.card_panel.properties import CardPanelPropertiesMixin
+from widgets.panels.card_panel.rule_popup import RulePopupFrame
 
 
 def _default_t(key: str, **fmt: Any) -> str:
     return key.format(**fmt) if fmt else key
+
+
+def _default_keyword_lookup_source() -> Mapping[str, Any]:
+    """Default lookup source — pulls from the ``CompRulesService`` singleton.
+
+    Returns an empty mapping when the cache has not been populated yet so the
+    renderer falls back to plain (non-linkified) oracle text.
+    """
+    try:
+        from services.comp_rules_service import get_comp_rules_service
+
+        return get_comp_rules_service().get_keyword_lookup()
+    except Exception:
+        return {}
 
 
 class CardPanel(
@@ -37,12 +52,15 @@ class CardPanel(
         parent: wx.Window,
         mana_icons: ManaIconFactory | None = None,
         t: Callable[..., str] | None = None,
+        keyword_lookup_source: Callable[[], Mapping[str, Any]] | None = None,
     ):
         super().__init__(parent)
         self.SetBackgroundColour(DARK_PANEL)
         self.mana_icons = mana_icons or ManaIconFactory()
         self.mana_rasterizer = CardPanelManaRasterizer()
         self._t = t or _default_t
+        self._keyword_lookup_source = keyword_lookup_source or _default_keyword_lookup_source
+        self._rule_popup: RulePopupFrame | None = None
 
         self._current_meta: Any = None
         self._current_printing: dict[str, Any] | None = None
@@ -77,6 +95,7 @@ class CardPanel(
         self.oracle_html.SetBackgroundColour(DARK_PANEL)
         self.oracle_html.SetBorders(2)
         self.oracle_html.SetMinSize((-1, 200))
+        self.oracle_html.Bind(wx.html.EVT_HTML_LINK_CLICKED, self._on_oracle_link_clicked)
         sizer.Add(self.oracle_html, 1, wx.EXPAND | wx.ALL, PADDING_SM)
 
         self.notebook.AddPage(oracle_panel, self._t("card_panel.tab.oracle_text"))

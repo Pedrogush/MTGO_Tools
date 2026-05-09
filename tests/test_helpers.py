@@ -48,12 +48,16 @@ reset_search_service = _optional_reset("services.search_service", "reset_search_
 reset_collection_service = _optional_reset(
     "services.collection_service", "reset_collection_service"
 )
+reset_comp_rules_service = _optional_reset(
+    "services.comp_rules_service", "reset_comp_rules_service"
+)
 
 
 def reset_all_services() -> None:
     """Reset all global service instances."""
     reset_bundle_snapshot_client()
     reset_collection_service()
+    reset_comp_rules_service()
     reset_deck_service()
     reset_format_card_pool_service()
     reset_search_service()

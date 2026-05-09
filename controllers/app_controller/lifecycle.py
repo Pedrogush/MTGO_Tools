@@ -91,6 +91,27 @@ class LifecycleMixin(_Base):
             on_status=callbacks.on_status if callbacks else lambda *a, **kw: None,
         )
 
+        # Step 6: Refresh the Comprehensive Rules cache. Cheap and offline-safe
+        # — checks the upstream filename and only downloads when it changes,
+        # so the typical cost is a single landing-page HTTP fetch.
+        def _refresh_comp_rules() -> bool:
+            from services.comp_rules_service import get_comp_rules_service
+
+            return get_comp_rules_service().refresh()
+
+        def _on_comp_rules_done(updated: bool) -> None:
+            if updated:
+                logger.info("Comprehensive Rules cache refreshed")
+
+        def _on_comp_rules_error(exc: Exception) -> None:
+            logger.debug(f"Comp rules refresh failed: {exc}")
+
+        self._worker.submit(
+            _refresh_comp_rules,
+            on_success=_on_comp_rules_done,
+            on_error=_on_comp_rules_error,
+        )
+
     def create_frame(self, parent: wx.Window | None = None) -> AppFrame:
         import wx
 

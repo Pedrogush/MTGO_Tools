@@ -67,6 +67,11 @@ class AppFrameHandlersMixin(_Base):
             self._t("toolbar.help"),
             self._open_help,
         )
+        self._append_menu_item(
+            menu,
+            self._t("toolbar.comp_rules"),
+            self._open_rules_browser,
+        )
         menu.AppendSeparator()
         self._append_radio_submenu(
             menu,
@@ -180,6 +185,21 @@ class AppFrameHandlersMixin(_Base):
 
     def _open_help(self, topic: str | None = None) -> None:
         show_help(self, topic=topic)
+
+    def _open_rules_browser(self) -> None:
+        # Lazily imported so launching the rest of the app stays cheap when
+        # the user never opens the browser.
+        from utils.ui_helpers import open_child_window
+        from widgets.frames.rules_browser import RulesBrowserFrame
+
+        open_child_window(
+            self,
+            "_rules_browser_window",
+            RulesBrowserFrame,
+            "Comprehensive Rules",
+            self._handle_child_close,
+            locale=self.locale,
+        )
 
     def _restore_session_state(self) -> None:
         state = self.controller.session_manager.restore_session_state(self.controller.zone_cards)

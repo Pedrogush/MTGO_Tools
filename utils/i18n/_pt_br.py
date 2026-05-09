@@ -239,6 +239,14 @@ MESSAGES: dict[str, str] = {
     "window.title.timer_alert": "Alerta de Tempo MTGO",
     "window.title.metagame_analysis": "Análise de Metagame",
     "window.title.radar": "Radar do Arquétipo - {format}",
+    "window.title.rules_browser": "Regras Compreensivas",
+    "rules_browser.tree.empty": "(cache de regras ainda não populado)",
+    "rules_browser.body.empty": (
+        "O cache de Regras Compreensivas ainda não foi populado. "
+        "Tente novamente em instantes — o cache é atualizado em segundo plano "
+        "logo após o início do aplicativo."
+    ),
+    "toolbar.comp_rules": "Regras Compreensivas",
     "app.status.loading_decks": "Carregando decks para {name}\u2026",
     "deck.loading": "Carregando deck\u2026",
     "tracker.status.no_active_match": "Nenhuma partida ativa detectada",

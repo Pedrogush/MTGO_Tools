@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+import wx
 from loguru import logger
 
 from services.format_card_pool_service import (
@@ -12,6 +13,7 @@ from services.format_card_pool_service import (
 )
 from widgets.panels.card_panel.html_renderer import build_card_html
 from widgets.panels.card_panel.properties import _stats_lookup_names
+from widgets.panels.card_panel.rule_popup import RulePopupFrame
 
 if TYPE_CHECKING:
     from widgets.panels.card_panel.protocol import CardPanelProto
@@ -19,6 +21,9 @@ if TYPE_CHECKING:
     _Base = CardPanelProto
 else:
     _Base = object
+
+
+_RULE_LINK_PREFIX = "rule:"
 
 
 class CardPanelHandlersMixin(_Base):
@@ -79,11 +84,45 @@ class CardPanelHandlersMixin(_Base):
                 self._current_printing,
                 self._png_resolver,
                 empty_text=empty_text,
+                keyword_lookup=self._fetch_keyword_lookup(),
             )
         except Exception as exc:
             logger.exception(f"Failed to build card HTML: {exc}")
             html = f'<html><body bgcolor="#22272E" text="#E6EDF3"><p>{empty_text}</p></body></html>'
         self.oracle_html.SetPage(html)
+
+    def _fetch_keyword_lookup(self) -> dict[str, Any]:
+        source = getattr(self, "_keyword_lookup_source", None)
+        if source is None:
+            return {}
+        try:
+            return dict(source())
+        except Exception as exc:
+            logger.debug(f"keyword lookup source failed: {exc}")
+            return {}
+
+    def _on_oracle_link_clicked(self, event: wx.html.HtmlLinkEvent) -> None:
+        info = event.GetLinkInfo()
+        href = info.GetHref()
+        if not href.startswith(_RULE_LINK_PREFIX):
+            event.Skip()
+            return
+        rule_id = href[len(_RULE_LINK_PREFIX) :].strip()
+        lookup = self._fetch_keyword_lookup()
+        entry = next(
+            (e for e in lookup.values() if getattr(e, "rule_id", None) == rule_id),
+            None,
+        )
+        if entry is None:
+            logger.debug(f"rule popup: no entry found for rule_id={rule_id!r}")
+            return
+        if self._rule_popup is None or not self._rule_popup:  # destroyed → recreate
+            self._rule_popup = RulePopupFrame(parent=self.GetTopLevelParent())
+        self._rule_popup.show_rule(
+            title=getattr(entry, "title", rule_id),
+            rule_id=rule_id,
+            body=getattr(entry, "body", ""),
+        )
 
     def _png_resolver(self, token: str) -> Any:
         try:
