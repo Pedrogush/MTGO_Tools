@@ -24,6 +24,19 @@ def test_translate_formats_params_when_present() -> None:
     )
 
 
+def test_all_locales_have_identical_key_sets() -> None:
+    reference = set(MESSAGES[DEFAULT_LOCALE])
+    for locale in SUPPORTED_LOCALES:
+        keys = set(MESSAGES[locale])
+        assert len(keys) == len(
+            reference
+        ), f"{locale} has {len(keys)} keys; {DEFAULT_LOCALE} has {len(reference)}"
+        assert keys == reference, (
+            f"{locale} key set diverges from {DEFAULT_LOCALE}: "
+            f"missing={reference - keys}, extra={keys - reference}"
+        )
+
+
 def test_core_ui_translation_keys_exist_for_all_supported_locales() -> None:
     required_keys = {
         "app.status.ready",

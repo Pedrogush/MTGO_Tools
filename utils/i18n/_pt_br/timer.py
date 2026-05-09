@@ -1,0 +1,28 @@
+"""Timer alert UI strings. (Portuguese (Brazil))"""
+
+MESSAGES: dict[str, str] = {
+    "timer.section.thresholds": "Limites de Alerta",
+    "timer.section.challenge": "Cronômetro de Desafio Ativo",
+    "timer.label.sound": "Som do Alerta:",
+    "timer.label.check_interval": "Intervalo de verificação (ms):",
+    "timer.label.repeat_interval": "Intervalo de repetição (segundos):",
+    "timer.check.start_alert": "Alertar quando o cronômetro iniciar contagem regressiva",
+    "timer.check.repeat_alarm": "Repetir alarme no intervalo",
+    "timer.btn.start": "Iniciar Monitoramento",
+    "timer.btn.stop": "Parar",
+    "timer.btn.test": "Testar Alerta",
+    "timer.no_challenge": "Nenhum cronômetro de desafio ativo detectado.",
+    "timer.configure": "Configure os limites e clique em Iniciar para começar a monitorar.",
+    "timer.status.one_threshold_required": "É necessário ao menos um limite de temporizador.",
+    "timer.status.already_monitoring": "Já monitorando o temporizador.",
+    "timer.status.no_thresholds": "Nenhum limite válido configurado.",
+    "timer.status.invalid_poll_interval": "Intervalo de verificação inválido.",
+    "timer.status.monitoring": "Monitorando o cronômetro de desafio MTGO…",
+    "timer.status.stopped": "Monitoramento interrompido.",
+    "timer.status.waiting_data": "Aguardando dados do MTGO…",
+    "timer.status.bridge_error": "Erro de bridge: {error}",
+    "timer.status.no_timer": "Nenhum cronômetro de desafio ativo detectado. Participe de um evento para monitorar.",
+    "timer.status.invalid_value": "Não foi possível ler o valor do cronômetro de desafio.",
+    "timer.status.challenge_timer": "Cronômetro de desafio: {value}",
+    "timer.status.bridge_missing": "Bridge ausente. Compile o executável do MTGO bridge.",
+}
