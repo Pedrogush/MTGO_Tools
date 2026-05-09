@@ -161,7 +161,7 @@ class ReadsMixin(_Base):
                   AND appearances > 0
                   AND card_name IN ({placeholders})
                 GROUP BY card_name, zone
-                """,
+                """,  # nosec B608 - placeholders is only "?,?,..."; values are bound params
                 (fmt, *names),
             ).fetchall()
 
@@ -216,7 +216,7 @@ class ReadsMixin(_Base):
                 WHERE appearances > 0
                   AND card_name IN ({placeholders})
                 ORDER BY card_name ASC, format_name ASC
-                """,
+                """,  # nosec B608 - placeholders is only "?,?,..."; values are bound params
                 tuple(names),
             ).fetchall()
         for row in rows:

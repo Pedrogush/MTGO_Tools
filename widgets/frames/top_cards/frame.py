@@ -104,7 +104,9 @@ class TopCardsFrame(TopCardsHandlersMixin, TopCardsPropertiesMixin, wx.Frame):
         self.card_list.InsertColumn(
             9, self._t("top_cards.col.sb_avg_karsten"), format=center, width=85
         )
-        self.card_list.InsertColumn(10, self._t("top_cards.col.archetypes"), format=center, width=95)
+        self.card_list.InsertColumn(
+            10, self._t("top_cards.col.archetypes"), format=center, width=95
+        )
         self.card_list.InsertColumn(11, self._t("top_cards.col.formats"), format=center, width=160)
         self.card_list.SetBackgroundColour(DARK_PANEL)
         self.card_list.SetForegroundColour(LIGHT_TEXT)

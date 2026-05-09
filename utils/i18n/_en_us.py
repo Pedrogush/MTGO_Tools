@@ -265,8 +265,7 @@ MESSAGES: dict[str, str] = {
     "top_cards.tooltip.copies": "Total copies of this card played across every deck in the format",
     "top_cards.tooltip.mb_decks": "Decks running this card in the mainboard",
     "top_cards.tooltip.mb_avg": (
-        "Mean mainboard copies across every deck in the format "
-        "(mainboard copies ÷ total decks)"
+        "Mean mainboard copies across every deck in the format " "(mainboard copies ÷ total decks)"
     ),
     "top_cards.tooltip.mb_avg_karsten": (
         "Mean mainboard copies among decks that include the card "
@@ -274,8 +273,7 @@ MESSAGES: dict[str, str] = {
     ),
     "top_cards.tooltip.sb_decks": "Decks running this card in the sideboard",
     "top_cards.tooltip.sb_avg": (
-        "Mean sideboard copies across every deck in the format "
-        "(sideboard copies ÷ total decks)"
+        "Mean sideboard copies across every deck in the format " "(sideboard copies ÷ total decks)"
     ),
     "top_cards.tooltip.sb_avg_karsten": (
         "Mean sideboard copies among decks that include the card "
