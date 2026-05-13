@@ -7,13 +7,13 @@ from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
+from services.image_service.workers import build_printing_index_worker
 from utils.card_images import (
     BULK_DATA_CACHE,
     PRINTING_INDEX_CACHE,
     PRINTING_INDEX_VERSION,
     load_printing_index_payload,
 )
-from services.image_service.workers import build_printing_index_worker
 
 if TYPE_CHECKING:
     from services.image_service.protocol import ImageServiceProto

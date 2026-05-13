@@ -13,8 +13,8 @@ from utils.card_data import CardDataManager
 from utils.constants import LOGS_DIR
 from utils.deck import sanitize_filename
 from utils.deck_results_filter import _classify_event_type, _normalize_date, filter_decks
-from widgets.frames.app_frame.handlers.ui_helpers import open_child_window, widget_exists
 from widgets.dialogs.feedback_dialog import show_feedback_dialog
+from widgets.frames.app_frame.handlers.ui_helpers import open_child_window, widget_exists
 from widgets.frames.identify_opponent import MTGOpponentDeckSpy
 from widgets.frames.match_history import MatchHistoryFrame
 from widgets.frames.metagame_analysis import MetagameAnalysisFrame
