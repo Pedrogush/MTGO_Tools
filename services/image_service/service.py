@@ -11,8 +11,8 @@ from services.image_service.cache import ImageCacheMixin
 from services.image_service.download_queue import CardImageDownloadQueue
 from services.image_service.metadata import PrintingsFetchMixin
 from services.image_service.printing_index import PrintingIndexMixin
+from services.image_service.process_worker import ProcessHandle, ProcessWorker
 from utils.card_images import BulkImageDownloader, CardImageRequest, get_cache
-from utils.process_worker import ProcessHandle, ProcessWorker
 
 
 class ImageService(

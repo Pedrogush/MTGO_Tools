@@ -13,7 +13,7 @@ from utils.card_images import (
     PRINTING_INDEX_VERSION,
     load_printing_index_payload,
 )
-from utils.card_images_workers import build_printing_index_worker
+from services.image_service.workers import build_printing_index_worker
 
 if TYPE_CHECKING:
     from services.image_service.protocol import ImageServiceProto

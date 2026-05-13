@@ -7,8 +7,8 @@ from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
+from services.image_service.workers import download_bulk_metadata_worker
 from utils.card_images import BULK_DATA_CACHE
-from utils.card_images_workers import download_bulk_metadata_worker
 
 if TYPE_CHECKING:
     from services.image_service.protocol import ImageServiceProto

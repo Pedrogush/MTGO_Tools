@@ -7,8 +7,8 @@ from collections.abc import Callable
 from typing import Any, Protocol
 
 from services.image_service.download_queue import CardImageDownloadQueue
+from services.image_service.process_worker import ProcessHandle, ProcessWorker
 from utils.card_images import BulkImageDownloader, CardImageCache, CardImageRequest
-from utils.process_worker import ProcessHandle, ProcessWorker
 
 
 class ImageServiceProto(Protocol):
