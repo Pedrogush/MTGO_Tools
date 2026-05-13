@@ -142,7 +142,7 @@ graph TB
 
 **UI/Widgets**: wxPython panels in `widgets/panels/`, dialogs in `widgets/dialogs/`, and standalone overlay windows (`MTGOpponentDeckSpy`, `MatchHistory`, `TimerAlert`).
 
-**Utils**: Card data management (`card_data.py`, `card_images.py`), atomic I/O (`atomic_io.py`), archetype classification, gamelog parsing, mana icon rendering, and search filter helpers.
+**Utils**: Cross-cutting helpers only. Card data management (`card_data.py`, `card_images.py`), atomic I/O (`atomic_io.py`), archetype classification, gamelog parsing, mana icon rendering, and other reusable functions. Single-consumer modules have been colocated with their callers: search filter helpers live in `services/search_service/`, image worker entrypoints in `services/image_service/`, wx styling helpers in `widgets/stylize.py`, and small widget-specific helpers inside their respective `widgets/.../` packages.
 
 **Navigators**: `mtggoldfish.py` scrapes metagame data and deck lists. MTGO.com decklists are consumed from the published metagame bundle rather than scraped live.
 
