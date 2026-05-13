@@ -9,7 +9,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from utils.gamelog_parser import (
+from services.gamelog_service import (
     detect_format_from_cards,
     find_gamelog_files,
     infer_username_from_matches,
