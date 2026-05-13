@@ -29,6 +29,7 @@ from services.gamelog_service.parser import (
     parse_mulligan_data,
     parse_timestamp,
 )
+from services.gamelog_service.protocol import GamelogServiceProto
 from services.gamelog_service.service import parse_all_gamelogs, parse_gamelog_file
 from services.gamelog_service.usernames import (
     get_current_username,
@@ -37,6 +38,7 @@ from services.gamelog_service.usernames import (
 )
 
 __all__ = [
+    "GamelogServiceProto",
     "detect_archetype",
     "detect_format_from_cards",
     "extract_cards_played",

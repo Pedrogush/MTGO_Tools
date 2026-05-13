@@ -10,18 +10,18 @@ from collections.abc import Callable
 import wx
 
 from utils.constants import DARK_ALT, LIGHT_TEXT
-from services.mana_icon_service import ManaIconFactory
+from services.mana_icon_service import ManaIconFactory, ManaIconResources
 
 
 def get_mana_font(size: int = 14, parent_font: wx.Font | None = None) -> wx.Font:
-    if ManaIconFactory._FONT_LOADED:
+    if ManaIconResources.font_loaded():
         return wx.Font(
             size,
             wx.FONTFAMILY_DEFAULT,
             wx.FONTSTYLE_NORMAL,
             wx.FONTWEIGHT_NORMAL,
             False,
-            ManaIconFactory._FONT_NAME,
+            ManaIconResources.FONT_NAME,
         )
     # Fallback to parent font or system default
     if parent_font:

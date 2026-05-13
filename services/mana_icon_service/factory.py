@@ -20,6 +20,7 @@ from utils.constants.ui_images import (
 from services.mana_icon_service.bitmap_renderer import BitmapRendererMixin
 from services.mana_icon_service.cache import ManaBitmapCache
 from services.mana_icon_service.resources import ManaIconResources
+from services.mana_icon_service.svg_renderer import SvgRendererMixin
 
 
 def _split_mana_cost_tokens(cost: str, *, uppercase: bool) -> list[str]:
@@ -34,7 +35,7 @@ def _split_mana_cost_tokens(cost: str, *, uppercase: bool) -> list[str]:
     return tokens
 
 
-class ManaIconFactory(BitmapRendererMixin):
+class ManaIconFactory(BitmapRendererMixin, SvgRendererMixin):
     def __init__(self, icon_size: int = MANA_ICON_DEFAULT_SIZE) -> None:
         self._cache = ManaBitmapCache()
         assets_root = self._assets_root()
@@ -44,6 +45,12 @@ class ManaIconFactory(BitmapRendererMixin):
         )
         ManaIconResources.ensure_font_loaded(assets_root)
         self._icon_size = max(MANA_ICON_MIN_SIZE, icon_size)
+        # SVG renderer state — separate color map preserves the lighter palette
+        # that reads better on the dark Card-panel HTML background.
+        self._svg_color_map = SvgRendererMixin._load_svg_color_map(assets_root)
+        self._svg_cache = {}
+        self._png_cache = {}
+        self._rasterizer_cache_dir = None
 
     def render(self, parent: wx.Window, mana_cost: str) -> wx.Window:
         panel = wx.Panel(parent)

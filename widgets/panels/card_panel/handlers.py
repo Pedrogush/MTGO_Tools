@@ -126,7 +126,7 @@ class CardPanelHandlersMixin(_Base):
 
     def _png_resolver(self, token: str) -> Any:
         try:
-            return self.mana_rasterizer.png_path(token, height=18)
+            return self.mana_icons.transparent_png_path(token, 18)
         except Exception:
             logger.debug(f"Could not resolve PNG for mana symbol '{token}'")
             return None
