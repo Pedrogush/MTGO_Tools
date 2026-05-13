@@ -189,7 +189,7 @@ class AppFrameHandlersMixin(_Base):
     def _open_rules_browser(self) -> None:
         # Lazily imported so launching the rest of the app stays cheap when
         # the user never opens the browser.
-        from utils.ui_helpers import open_child_window
+        from widgets.frames.app_frame.handlers.ui_helpers import open_child_window
         from widgets.frames.rules_browser import RulesBrowserFrame
 
         open_child_window(
