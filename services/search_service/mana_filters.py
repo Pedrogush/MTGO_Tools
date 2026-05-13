@@ -1,7 +1,11 @@
+"""Pure mana-cost / color / mana-value predicate filters used by search."""
+
+from __future__ import annotations
+
 from collections import Counter
 from typing import Any
 
-from utils.mana_query import tokenize_mana_symbols
+from services.search_service.mana_query import tokenize_mana_symbols
 
 
 def matches_mana_cost(card_cost: str, query: str, mode: str) -> bool:
