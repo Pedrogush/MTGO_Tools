@@ -7,4 +7,5 @@ MESSAGES: dict[str, str] = {
     "window.title.metagame_analysis": "Análise de Metagame",
     "window.title.top_cards": "Top Cartas",
     "window.title.radar": "Radar do Arquétipo - {format}",
+    "window.title.rules_browser": "Regras Compreensivas",
 }

@@ -14,6 +14,7 @@ MESSAGES: dict[str, str] = {
     "toolbar.export_diagnostics": "Export Diagnostics",
     "toolbar.show_tutorial": "Show Tutorial",
     "toolbar.help": "Help (F1)",
+    "toolbar.comp_rules": "Comprehensive Rules",
     "toolbar.tooltip.opponent_tracker": "Detect your current MTGO opponent and look up their most-played archetypes",
     "toolbar.tooltip.timer_alert": "Set a countdown timer alert to warn you before round time runs out",
     "toolbar.tooltip.match_history": "Parse your MTGO GameLog files and view recent match results",

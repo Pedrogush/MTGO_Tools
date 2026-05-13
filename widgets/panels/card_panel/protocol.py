@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from typing import Any, Protocol
 
 import wx
@@ -10,6 +10,7 @@ import wx.html
 
 from utils.mana_icon_factory import ManaIconFactory
 from widgets.panels.card_panel.mana_rasterizer import CardPanelManaRasterizer
+from widgets.panels.card_panel.rule_popup import RulePopupFrame
 
 
 class CardPanelProto(Protocol):
@@ -18,6 +19,12 @@ class CardPanelProto(Protocol):
     mana_icons: ManaIconFactory
     mana_rasterizer: CardPanelManaRasterizer
     _t: Callable[..., str]
+    # Optional callable returning a fresh keyword lookup; the panel calls this
+    # on each render so updates from a background refresh are picked up.
+    # The mapping value type matches ``services.comp_rules_service.KeywordEntry``
+    # but is loose-typed here so the protocol stays free of service imports.
+    _keyword_lookup_source: Callable[[], Mapping[str, Any]] | None
+    _rule_popup: RulePopupFrame | None
 
     # State
     # ``_current_meta`` may be a plain dict or a ``CardEntry`` Struct — both
