@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from utils.card_images import CardImageRequest
+from services.image_service import CardImageRequest
 
 if TYPE_CHECKING:
     from widgets.panels.card_inspector_panel.protocol import CardInspectorPanelProto

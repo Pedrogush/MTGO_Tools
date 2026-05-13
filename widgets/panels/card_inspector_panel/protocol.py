@@ -7,8 +7,8 @@ from typing import Any, Protocol
 
 import wx
 
+from services.image_service import CardImageRequest
 from utils.card_data import CardDataManager
-from utils.card_images import CardImageRequest
 from utils.mana_icon_factory import ManaIconFactory
 from widgets.panels.card_image_display import CardImageDisplay
 from widgets.panels.mana_rich_text_ctrl import ManaSymbolRichCtrl

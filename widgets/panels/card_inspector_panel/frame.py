@@ -11,8 +11,8 @@ from typing import Any
 
 import wx
 
+from services.image_service import CardImageRequest, get_cache
 from utils.card_data import CardDataManager
-from utils.card_images import CardImageRequest, get_cache
 from utils.constants import (
     CARD_IMAGE_COST_MIN_HEIGHT,
     CARD_IMAGE_DISPLAY_HEIGHT,

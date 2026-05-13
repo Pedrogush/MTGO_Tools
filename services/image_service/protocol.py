@@ -6,9 +6,11 @@ import threading
 from collections.abc import Callable
 from typing import Any, Protocol
 
+from services.image_service.disk_cache import CardImageCache
 from services.image_service.download_queue import CardImageDownloadQueue
+from services.image_service.downloader import BulkImageDownloader
 from services.image_service.process_worker import ProcessHandle, ProcessWorker
-from utils.card_images import BulkImageDownloader, CardImageCache, CardImageRequest
+from services.image_service.schemas import CardImageRequest
 
 
 class ImageServiceProto(Protocol):

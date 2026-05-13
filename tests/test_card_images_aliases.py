@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import json
 
-from utils import card_images
+from services import image_service as card_images
+from services.image_service import schemas as card_images_schemas
 
 
 def test_ensure_printing_index_cache_includes_face_aliases(tmp_path, monkeypatch):
@@ -29,9 +30,9 @@ def test_ensure_printing_index_cache_includes_face_aliases(tmp_path, monkeypatch
     ]
     bulk_path.write_text(json.dumps(payload), encoding="utf-8")
 
-    monkeypatch.setattr(card_images, "IMAGE_CACHE_DIR", cache_dir, raising=False)
-    monkeypatch.setattr(card_images, "BULK_DATA_CACHE", bulk_path, raising=False)
-    monkeypatch.setattr(card_images, "PRINTING_INDEX_CACHE", printings_path, raising=False)
+    monkeypatch.setattr(card_images_schemas, "IMAGE_CACHE_DIR", cache_dir, raising=False)
+    monkeypatch.setattr(card_images_schemas, "BULK_DATA_CACHE", bulk_path, raising=False)
+    monkeypatch.setattr(card_images_schemas, "PRINTING_INDEX_CACHE", printings_path, raising=False)
 
     data = card_images.ensure_printing_index_cache(force=True)["data"]
 

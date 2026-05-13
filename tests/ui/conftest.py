@@ -11,7 +11,8 @@ if sys.platform != "win32":
     pytest.skip("wxPython UI tests must run on Windows", allow_module_level=True)
 
 import navigators.mtggoldfish as mtggoldfish
-import utils.card_images as card_images
+import services.image_service as card_images
+import services.image_service.schemas as card_images_schemas
 import utils.constants as constants
 import widgets.frames.app_frame as app_frame
 import widgets.frames.identify_opponent as identify_opponent
@@ -112,13 +113,18 @@ def ui_environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     for attr, value in replacements.items():
         monkeypatch.setattr(constants, attr, value, raising=False)
 
-    monkeypatch.setattr(card_images, "IMAGE_CACHE_DIR", image_cache, raising=False)
-    monkeypatch.setattr(card_images, "IMAGE_DB_PATH", image_cache / "images.db", raising=False)
+    monkeypatch.setattr(card_images_schemas, "IMAGE_CACHE_DIR", image_cache, raising=False)
     monkeypatch.setattr(
-        card_images, "BULK_DATA_CACHE", image_cache / "bulk_data.json", raising=False
+        card_images_schemas, "IMAGE_DB_PATH", image_cache / "images.db", raising=False
     )
     monkeypatch.setattr(
-        card_images, "PRINTING_INDEX_CACHE", image_cache / "printings_v3.json", raising=False
+        card_images_schemas, "BULK_DATA_CACHE", image_cache / "bulk_data.json", raising=False
+    )
+    monkeypatch.setattr(
+        card_images_schemas,
+        "PRINTING_INDEX_CACHE",
+        image_cache / "printings_v3.json",
+        raising=False,
     )
 
     def fake_ensure_latest(self: CardDataManager, force: bool = False) -> None:

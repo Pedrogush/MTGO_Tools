@@ -27,7 +27,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from loguru import logger
 
-from utils.card_images import (
+from services.image_service import (
     BulkImageDownloader,
     download_bulk_images,
     get_cache,

@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 import wx
 from loguru import logger
 
-from utils.card_images import CardImageRequest
+from services.image_service import CardImageRequest
 from utils.constants import APP_FRAME_MIN_SIZE
 from utils.i18n import LOCALE_LABELS
 from utils.runtime_flags import is_automation_enabled

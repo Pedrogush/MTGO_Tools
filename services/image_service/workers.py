@@ -12,13 +12,11 @@ except ImportError:  # Python 3.10
 
     UTC = timezone.utc  # noqa: F811,UP017
 
+from services.image_service.disk_cache import CardImageCache
+from services.image_service.downloader import BulkImageDownloader
+from services.image_service.printing_index import build_printing_index
+from services.image_service.schemas import _bulk_cards_decoder
 from utils.atomic_io import atomic_write_json, locked_path
-from utils.card_images import (
-    BulkImageDownloader,
-    CardImageCache,
-    _bulk_cards_decoder,
-    build_printing_index,
-)
 
 __all__ = ["build_printing_index_worker", "download_bulk_metadata_worker"]
 

@@ -10,8 +10,8 @@ from typing import TYPE_CHECKING, Any
 import wx
 from loguru import logger
 
+from services.image_service import BULK_DATA_CACHE, CardImageRequest, get_card_image
 from utils.card_data import CardDataManager
-from utils.card_images import BULK_DATA_CACHE, CardImageRequest, get_card_image
 from utils.constants import SUBDUED_TEXT, ZONE_TITLES
 
 if TYPE_CHECKING:

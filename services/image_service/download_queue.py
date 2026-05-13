@@ -10,7 +10,8 @@ from concurrent.futures import ThreadPoolExecutor
 
 from loguru import logger
 
-from utils.card_images import BulkImageDownloader, CardImageRequest
+from services.image_service.downloader import BulkImageDownloader
+from services.image_service.schemas import CardImageRequest
 from utils.constants.timing import (
     IMAGE_DOWNLOAD_INITIAL_BACKOFF_SECONDS,
     IMAGE_DOWNLOAD_MAX_RETRIES,
