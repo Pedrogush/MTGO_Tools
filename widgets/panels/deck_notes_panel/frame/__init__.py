@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING
 import wx
 
 from utils.constants import DARK_ALT, DARK_PANEL, SUBDUED_TEXT
-from utils.stylize import stylize_button
+from widgets.stylize import stylize_button
 from widgets.panels.deck_notes_panel.frame.note_card_widget import (
     NOTE_TYPES,
     _migrate,

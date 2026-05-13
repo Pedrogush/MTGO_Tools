@@ -12,7 +12,7 @@ import wx
 
 from utils.constants import PADDING_MD
 from utils.deck_results_filter import PLACEMENT_FIELDS, PLACEMENT_OPERATORS
-from utils.stylize import stylize_button, stylize_choice, stylize_label, stylize_textctrl
+from widgets.stylize import stylize_button, stylize_choice, stylize_label, stylize_textctrl
 from widgets.panels.deck_research_panel.frame.centered_choice import _CenteredChoice
 
 if TYPE_CHECKING:

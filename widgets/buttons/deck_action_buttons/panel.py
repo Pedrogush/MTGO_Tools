@@ -8,7 +8,7 @@ from collections.abc import Callable
 
 import wx
 
-from utils.stylize import stylize_button
+from widgets.stylize import stylize_button
 from widgets.buttons.deck_action_buttons.handlers import DeckActionButtonsHandlersMixin
 from widgets.buttons.deck_action_buttons.properties import DeckActionButtonsPropertiesMixin
 

@@ -16,7 +16,7 @@ from utils.constants import (
     PADDING_SM,
     SUBDUED_TEXT,
 )
-from utils.stylize import stylize_button, stylize_choice
+from widgets.stylize import stylize_button, stylize_choice
 from widgets.panels.deck_builder_panel.frame.search_results_view import _SearchResultsView
 
 if TYPE_CHECKING:

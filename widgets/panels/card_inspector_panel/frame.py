@@ -29,7 +29,7 @@ from utils.constants import (
     SUBDUED_TEXT,
 )
 from utils.mana_icon_factory import ManaIconFactory
-from utils.stylize import stylize_button
+from widgets.stylize import stylize_button
 from widgets.panels.card_image_display import CardImageDisplay
 from widgets.panels.card_inspector_panel.handlers import CardInspectorPanelHandlersMixin
 from widgets.panels.card_inspector_panel.properties import CardInspectorPanelPropertiesMixin

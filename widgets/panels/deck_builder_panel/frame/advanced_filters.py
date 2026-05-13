@@ -15,7 +15,7 @@ from utils.constants import (
     PADDING_SM,
     PADDING_XS,
 )
-from utils.stylize import stylize_button, stylize_choice, stylize_label, stylize_textctrl
+from widgets.stylize import stylize_button, stylize_choice, stylize_label, stylize_textctrl
 from widgets.panels.mana_rich_text_ctrl import ManaSymbolRichCtrl
 
 if TYPE_CHECKING:
