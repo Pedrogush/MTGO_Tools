@@ -15,7 +15,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any, Protocol
 
 if TYPE_CHECKING:
-    from utils.card_data import CardDataManager
+    from services.card_data_service import CardDataManager
 
 
 class GamelogServiceProto(Protocol):

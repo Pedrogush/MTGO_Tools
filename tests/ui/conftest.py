@@ -20,7 +20,7 @@ from controllers.app_controller import (
     get_deck_selector_controller,
     reset_deck_selector_controller,
 )
-from utils.card_data import CardDataManager
+from services.card_data_service import CardDataManager
 from utils.constants import METAGAME_CACHE_TTL_SECONDS
 from widgets.frames.app_frame import AppFrame
 

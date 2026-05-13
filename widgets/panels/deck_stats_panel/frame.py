@@ -13,7 +13,7 @@ import wx
 import wx.html2
 
 from services.deck_service import DeckService, get_deck_service
-from utils.card_data import CardDataManager
+from services.card_data_service import CardDataManager
 from utils.constants import DARK_PANEL
 from widgets.panels.deck_stats_panel.handlers import DeckStatsPanelHandlersMixin
 from widgets.panels.deck_stats_panel.properties import (

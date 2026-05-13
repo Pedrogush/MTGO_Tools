@@ -5,7 +5,7 @@ from __future__ import annotations
 from repositories.card_repository.collection import CollectionMixin
 from repositories.card_repository.metadata import MetadataMixin
 from repositories.card_repository.state import StateMixin
-from utils.card_data import CardDataManager
+from services.card_data_service import CardDataManager
 
 
 class CardRepository(

@@ -20,7 +20,7 @@ from services.gamelog_service.parser import (
 from services.gamelog_service.usernames import normalize_player_name
 
 if TYPE_CHECKING:
-    from utils.card_data import CardDataManager
+    from services.card_data_service import CardDataManager
 
 
 def parse_gamelog_file(

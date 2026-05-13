@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 import wx
 from loguru import logger
 
-from utils.card_data import CardDataManager
+from services.card_data_service import CardDataManager
 from utils.constants import LOGS_DIR
 from utils.deck import sanitize_filename
 from utils.deck_results_filter import _classify_event_type, _normalize_date, filter_decks

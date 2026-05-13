@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 from loguru import logger
 
-from utils.card_data import CardDataManager
+from services.card_data_service import CardDataManager
 
 if TYPE_CHECKING:
     from controllers.app_controller.protocol import AppControllerProto

@@ -12,7 +12,7 @@ from services.search_service.mana_filters import (
     matches_mana_value,
 )
 from services.search_service.mana_query import normalize_mana_query
-from utils.card_data import CardDataManager
+from services.card_data_service import CardDataManager
 
 if TYPE_CHECKING:
     from services.search_service.protocol import SearchServiceProto

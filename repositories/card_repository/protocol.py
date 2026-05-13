@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from utils.card_data import CardDataManager
+from services.card_data_service import CardDataManager
 
 
 class CardRepositoryProto(Protocol):

@@ -41,6 +41,7 @@ graph TB
         DWS[DeckWorkflowService]
         BSC[BundleSnapshotClient]
         RSC[RemoteSnapshotClient]
+        CDS[CardDataService<br/>CardDataManager / MTGJson]
     end
 
     subgraph "Repositories Layer"
@@ -52,7 +53,6 @@ graph TB
     end
 
     subgraph "Utilities"
-        CD[card_data.py<br/>CardDataManager / MTGJson]
         CI[card_images.py<br/>Image Downloader]
         AC_CLASS[archetype_classifier.py]
         DECK[deck.py<br/>Deck Parser]
@@ -103,7 +103,7 @@ graph TB
     CS --> CR
     RS --> RR
     FCPS --> FCPR
-    CR --> CD
+    CR --> CDS
     DR --> DECK
     MR --> AC_CLASS
     IS --> CI
@@ -113,7 +113,7 @@ graph TB
     MR --> RSC
     MTG_GF --> GOLDFISH
     CI --> SCRYFALL
-    CD --> MTGJSON
+    CDS --> MTGJSON
     MBC --> BRIDGE
     BRIDGE --> MTGO_CLIENT
 
@@ -125,10 +125,10 @@ graph TB
     classDef external fill:#ffff99,stroke:#333,stroke-width:2px
 
     class AC,ACH,SM,BDH controller
-    class DS,CS,SS,IS,StS,RS,FCPS,DWS,BSC,RSC service
+    class DS,CS,SS,IS,StS,RS,FCPS,DWS,BSC,RSC,CDS service
     class CR,DR,MR,RR,FCPR repo
     class AF,DRP,DBP,CTP,CIP,SGP,RP,ODS,MH,TA ui
-    class CD,CI,AC_CLASS,DECK,MBC,AIO,GP util
+    class CI,AC_CLASS,DECK,MBC,AIO,GP util
     class SCRYFALL,MTGJSON,GOLDFISH,MTGO_CLIENT,BRIDGE external
 ```
 
@@ -142,7 +142,7 @@ graph TB
 
 **UI/Widgets**: wxPython panels in `widgets/panels/`, dialogs in `widgets/dialogs/`, and standalone overlay windows (`MTGOpponentDeckSpy`, `MatchHistory`, `TimerAlert`).
 
-**Utils**: Cross-cutting helpers only. Card data management (`card_data.py`, `card_images.py`), atomic I/O (`atomic_io.py`), archetype classification, gamelog parsing, mana icon rendering, and other reusable functions. Single-consumer modules have been colocated with their callers: search filter helpers live in `services/search_service/`, image worker entrypoints in `services/image_service/`, wx styling helpers in `widgets/stylize.py`, and small widget-specific helpers inside their respective `widgets/.../` packages.
+**Utils**: Cross-cutting helpers only. Card image downloading (`card_images.py`), atomic I/O (`atomic_io.py`), archetype classification, mana icon rendering, and other reusable functions. Single-consumer modules have been colocated with their callers: search filter helpers live in `services/search_service/`, image worker entrypoints in `services/image_service/`, wx styling helpers in `widgets/stylize.py`, and small widget-specific helpers inside their respective `widgets/.../` packages. The MTGJSON atomic-cards dataset is owned by `services/card_data_service/`, and gamelog parsing by `services/gamelog_service/`.
 
 **Navigators**: `mtggoldfish.py` scrapes metagame data and deck lists. MTGO.com decklists are consumed from the published metagame bundle rather than scraped live.
 
