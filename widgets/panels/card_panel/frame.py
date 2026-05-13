@@ -15,7 +15,7 @@ import wx
 import wx.html
 
 from utils.constants import DARK_PANEL, LIGHT_TEXT, PADDING_MD, PADDING_SM, SUBDUED_TEXT
-from utils.mana_icon_factory import ManaIconFactory
+from services.mana_icon_service import ManaIconFactory
 from widgets.panels.card_panel.handlers import CardPanelHandlersMixin
 from widgets.panels.card_panel.mana_rasterizer import CardPanelManaRasterizer
 from widgets.panels.card_panel.properties import CardPanelPropertiesMixin

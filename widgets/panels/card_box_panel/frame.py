@@ -16,7 +16,7 @@ from utils.constants import (
     DECK_CARD_WIDTH,
     LIGHT_TEXT,
 )
-from utils.mana_icon_factory import ManaIconFactory
+from services.mana_icon_service import ManaIconFactory
 from widgets.panels.card_box_panel.handlers import CardBoxPanelHandlersMixin
 from widgets.panels.card_box_panel.properties import CardBoxPanelPropertiesMixin
 

@@ -7,7 +7,7 @@ from typing import Any, Protocol
 
 import wx
 
-from utils.mana_icon_factory import ManaIconFactory
+from services.mana_icon_service import ManaIconFactory
 
 
 class CardBoxPanelProto(Protocol):

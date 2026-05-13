@@ -15,7 +15,7 @@ import wx
 
 from services.radar_service import RadarData
 from utils.constants import DARK_PANEL
-from utils.mana_icon_factory import ManaIconFactory
+from services.mana_icon_service import ManaIconFactory
 from widgets.panels.deck_builder_panel.frame.advanced_filters import AdvancedFiltersBuilderMixin
 from widgets.panels.deck_builder_panel.frame.basic_filters import BasicFiltersBuilderMixin
 from widgets.panels.deck_builder_panel.frame.results_pane import ResultsPaneBuilderMixin

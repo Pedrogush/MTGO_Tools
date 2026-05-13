@@ -9,7 +9,7 @@ import wx
 import wx.lib.scrolledpanel as scrolled
 
 from utils.constants import DARK_PANEL, SUBDUED_TEXT
-from utils.mana_icon_factory import ManaIconFactory
+from services.mana_icon_service import ManaIconFactory
 from widgets.panels.card_box_panel import CardBoxPanel
 from widgets.panels.card_table_panel.handlers import CardTablePanelHandlersMixin
 from widgets.panels.card_table_panel.properties import CardTablePanelPropertiesMixin

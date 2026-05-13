@@ -22,7 +22,7 @@ from pathlib import Path
 import wx
 import wx.svg
 
-from utils.mana_resources import ManaIconResources
+from services.mana_icon_service import ManaIconResources
 
 _RENDER_SCALE = 4
 _GLYPH_INSET_RATIO = 0.30

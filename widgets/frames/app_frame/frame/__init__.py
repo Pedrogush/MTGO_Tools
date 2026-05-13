@@ -22,7 +22,7 @@ from utils.constants import (
     PADDING_MD,
 )
 from utils.i18n import SUPPORTED_LOCALES, translate
-from utils.mana_icon_factory import ManaIconFactory
+from services.mana_icon_service import ManaIconFactory
 from widgets.frames.app_frame.frame.center_panel import CenterPanelBuilderMixin
 from widgets.frames.app_frame.frame.left_panel import LeftPanelBuilderMixin
 from widgets.frames.app_frame.frame.right_panel import RightPanelBuilderMixin
