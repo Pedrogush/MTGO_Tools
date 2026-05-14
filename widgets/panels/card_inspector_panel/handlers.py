@@ -261,11 +261,6 @@ class CardInspectorPanelHandlersMixin(_Base):
                     name_printing_path = image_cache.get_image_path_for_printing(
                         active_request.card_name, active_request.set_code, active_request.size
                     )
-                need_double_face = (
-                    len(image_paths) == 1
-                    and image_request_name is not None
-                    and "//" in image_request_name
-                )
                 wx.CallAfter(
                     self._apply_printings_image,
                     gen,
@@ -274,7 +269,6 @@ class CardInspectorPanelHandlersMixin(_Base):
                     active_request,
                     image_paths,
                     name_printing_path,
-                    need_double_face,
                 )
 
         Thread(target=_lookup, daemon=True).start()
@@ -315,7 +309,6 @@ class CardInspectorPanelHandlersMixin(_Base):
         active_request: CardImageRequest | None,
         image_paths: list[Path],
         name_printing_path: Path | None,
-        need_double_face: bool,
     ) -> None:
         try:
             if not self:
@@ -331,8 +324,6 @@ class CardInspectorPanelHandlersMixin(_Base):
             else:
                 image_available = self.card_image_display.show_image(image_paths[0])
             self._loading_printing = not image_available
-            if need_double_face:
-                self._request_missing_image(active_request)
         elif name_printing_path and name_printing_path.exists():
             image_available = self.card_image_display.show_image(name_printing_path)
             self._loading_printing = not image_available
