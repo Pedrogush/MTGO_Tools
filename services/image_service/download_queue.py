@@ -152,7 +152,7 @@ class CardImageDownloadQueue:
             except Exception as exc:
                 success = False
                 msg = str(exc)
-            if not success and self._is_not_found_message(msg):
+            if not success and self._is_permanent_failure_message(msg):
                 logger.error(f"Card image download failed for {request.card_name}: {msg}")
                 self._add_not_found_key(self._not_found_key(request))
                 self._notify_failed(request, msg)
@@ -181,11 +181,31 @@ class CardImageDownloadQueue:
             backoff_seconds *= 2
 
     @staticmethod
-    def _is_not_found_message(message: str) -> bool:
+    def _is_permanent_failure_message(message: str) -> bool:
+        """Identify failures that won't resolve on retry.
+
+        Retrying is wasteful (and on shutdown, blocks for the full backoff
+        schedule) when the underlying problem is deterministic: Scryfall
+        returned a card but it has no usable image, the name doesn't exist,
+        the response is missing required fields, etc.
+        """
         if not message:
             return False
         lowered = message.lower()
-        return "404" in lowered and "not found" in lowered
+        if "404" in lowered and "not found" in lowered:
+            return True
+        permanent_markers = (
+            "no uuid for",
+            "missing uuid for multi-face",
+            "no downloadable faces",
+            "no normal image for",
+            "no small image for",
+            "no large image for",
+            "no png image for",
+            "no border_crop image for",
+            "no art_crop image for",
+        )
+        return any(marker in lowered for marker in permanent_markers)
 
     @staticmethod
     def _not_found_key(request: CardImageRequest) -> tuple[str, str]:
