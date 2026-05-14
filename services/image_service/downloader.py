@@ -222,6 +222,15 @@ class BulkImageDownloader:
         if not uuid:
             return False, "Missing UUID for multi-face card"
 
+        # Single-image layouts (split, flip, adventure, prepare) carry one
+        # physical image at the top level; per-face image_uris are empty.
+        # Two-image layouts (transform, modal_dfc, reversible_card) put the
+        # image_uris on each face. Dispatch by presence rather than by layout
+        # name so future Scryfall layouts with the same shape work without code
+        # changes.
+        if not any((face.get("image_uris") or {}) for face in faces):
+            return self._download_single_image_multi_face(card, size)
+
         downloaded = 0
         front_path: Path | None = None
         for idx, face in enumerate(faces):
@@ -258,6 +267,23 @@ class BulkImageDownloader:
         if downloaded == 0:
             return False, f"No downloadable faces for {card.get('name', 'Unknown')}"
         return True, f"Downloaded {downloaded} faces for {card.get('name', 'Unknown')}"
+
+    def _download_single_image_multi_face(
+        self, card: dict[str, Any], size: str
+    ) -> tuple[bool, str]:
+        uuid = card.get("id") or ""
+        combined_name = card.get("name", "Unknown")
+        image_uris = card.get("image_uris") or {}
+
+        success, message, _ = self._download_face_asset(
+            uuid=uuid,
+            face_index=0,
+            name=combined_name,
+            image_uris=image_uris,
+            size=size,
+            card=card,
+        )
+        return success, message
 
     def _download_face_asset(
         self,
