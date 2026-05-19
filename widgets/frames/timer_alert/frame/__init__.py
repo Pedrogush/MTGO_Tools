@@ -29,7 +29,7 @@ from utils.constants import (
     TIMER_ALERT_WATCH_INTERVAL_MS,
 )
 from utils.i18n import translate
-from utils.mtgo_bridge_client import BridgeWatcher
+from services.mtgo_bridge_service.client import BridgeWatcher
 from widgets.frames.timer_alert.frame.sections import SectionsBuilderMixin
 from widgets.frames.timer_alert.frame.styling import StylingMixin
 from widgets.frames.timer_alert.frame.threshold_panel import SOUND_OPTIONS, ThresholdPanel

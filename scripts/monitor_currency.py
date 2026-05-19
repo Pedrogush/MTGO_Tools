@@ -13,7 +13,7 @@ try:
 except ImportError:  # pragma: no cover - Python 3.10 fallback
     UTC = UTC
 
-from utils import mtgo_bridge
+from services import mtgo_bridge_service as mtgo_bridge
 
 
 def _coerce_int(value: Any) -> int | None:

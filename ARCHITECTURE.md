@@ -41,12 +41,14 @@ graph TB
         DWS[DeckWorkflowService]
         BSC[BundleSnapshotClient]
         RSC[RemoteSnapshotClient]
+        MBS[MtgoBridgeService<br/>client + facade]
         CDS[CardDataService<br/>CardDataManager / MTGJson]
     end
 
     subgraph "Repositories Layer"
         CR[CardRepository]
         DR[DeckRepository]
+        DTC[DeckTextCache<br/>SQLite]
         MR[MetagameRepository]
         RR[RadarRepository<br/>SQLite]
         FCPR[FormatCardPoolRepository<br/>SQLite]
@@ -55,7 +57,6 @@ graph TB
     subgraph "Utilities"
         CI[card_images.py<br/>Image Downloader]
         DECK[deck.py<br/>Deck Parser]
-        MBC[mtgo_bridge_client.py]
         AIO[atomic_io.py]
         GP[gamelog_parser.py]
     end
@@ -105,14 +106,14 @@ graph TB
     CR --> CDS
     DR --> DECK
     IS --> CI
-    CS --> MBC
+    CS --> MBS
     MR --> MTG_GF
     MR --> BSC
     MR --> RSC
     MTG_GF --> GOLDFISH
     CI --> SCRYFALL
     CDS --> MTGJSON
-    MBC --> BRIDGE
+    MBS --> BRIDGE
     BRIDGE --> MTGO_CLIENT
 
     classDef controller fill:#ff9999,stroke:#333,stroke-width:2px
@@ -123,10 +124,10 @@ graph TB
     classDef external fill:#ffff99,stroke:#333,stroke-width:2px
 
     class AC,ACH,SM,BDH controller
-    class DS,CS,SS,IS,StS,RS,FCPS,DWS,BSC,RSC,CDS service
-    class CR,DR,MR,RR,FCPR repo
+    class DS,CS,SS,IS,StS,RS,FCPS,DWS,BSC,RSC,MBS,CDS service
+    class CR,DR,DTC,MR,RR,FCPR repo
     class AF,DRP,DBP,CTP,CIP,SGP,RP,ODS,MH,TA ui
-    class CI,DECK,MBC,AIO,GP util
+    class CI,DECK,AIO,GP util
     class SCRYFALL,MTGJSON,GOLDFISH,MTGO_CLIENT,BRIDGE external
 ```
 
@@ -134,13 +135,13 @@ graph TB
 
 **Controllers**: Central coordination and state management via `AppController`. Helper modules (`app_controller_helpers`, `bulk_data_helpers`, `session_manager`) handle specific subsystems to keep the main controller lean.
 
-**Services**: Business logic. Image, collection, and deck services are each Python packages whose main class inherits from (or composes) focused mixins/helpers. For example `services/collection_service/` contains `cache`, `parsing`, `ownership`, `deck_analysis`, `stats`, `bridge_refresh`, and `exporter` modules; `services/image_service/` splits into `bulk_data`, `metadata`, `printing_index`, `cache`, and `download_queue`; `services/deck_service/` contains `parser`, `averager`, and `text_builder`. Radar, format card pool, and deck workflow each have their own service.
+**Services**: Business logic. Image, collection, and deck services are each Python packages whose main class inherits from (or composes) focused mixins/helpers. For example `services/collection_service/` contains `cache`, `parsing`, `ownership`, `deck_analysis`, `stats`, `bridge_refresh`, and `exporter` modules; `services/image_service/` splits into `bulk_data`, `metadata`, `printing_index`, `cache`, and `download_queue`; `services/deck_service/` contains `parser`, `averager`, and `text_builder`. Radar, format card pool, and deck workflow each have their own service. `services/mtgo_bridge_service/` wraps the external CLI bridge: `client` is the subprocess/multiprocessing transport, and the package facade exposes collection/history/trade snapshots and the challenge watcher.
 
-**Repositories**: Data access with caching. `DeckRepository` and `MetagameRepository` use JSON file caches. `RadarRepository` and `FormatCardPoolRepository` use SQLite. `CardRepository` wraps `CardDataManager` for the MTGJson atomic-cards index.
+**Repositories**: Data access with caching. `DeckRepository` and `MetagameRepository` use JSON file caches. `RadarRepository`, `FormatCardPoolRepository`, and `DeckTextCache` use SQLite. `CardRepository` wraps `CardDataManager` for the MTGJson atomic-cards index.
 
 **UI/Widgets**: wxPython panels in `widgets/panels/`, dialogs in `widgets/dialogs/`, and standalone overlay windows (`MTGOpponentDeckSpy`, `MatchHistory`, `TimerAlert`).
 
-**Utils**: Cross-cutting helpers only. Card image downloading (`card_images.py`), atomic I/O (`atomic_io.py`), archetype classification, mana icon rendering, and other reusable functions. Single-consumer modules have been colocated with their callers: search filter helpers live in `services/search_service/`, image worker entrypoints in `services/image_service/`, wx styling helpers in `widgets/stylize.py`, and small widget-specific helpers inside their respective `widgets/.../` packages. The MTGJSON atomic-cards dataset is owned by `services/card_data_service/`, and gamelog parsing by `services/gamelog_service/`.
+**Utils**: Cross-cutting helpers only. Card image downloading (`card_images.py`), atomic I/O (`atomic_io.py`), mana icon rendering, and other reusable functions. Single-consumer modules have been colocated with their callers: search filter helpers live in `services/search_service/`, image worker entrypoints in `services/image_service/`, deck-results filtering in `widgets/panels/deck_research_panel/results_filter.py`, wx styling helpers in `widgets/stylize.py`, and small widget-specific helpers inside their respective `widgets/.../` packages. The MTGJSON atomic-cards dataset is owned by `services/card_data_service/`, gamelog parsing by `services/gamelog_service/`, the deck-text SQLite cache by `repositories/deck_text_cache.py`, and the MTGO CLI bridge by `services/mtgo_bridge_service/`.
 
 **Navigators**: `mtggoldfish.py` scrapes metagame data and deck lists. MTGO.com decklists are consumed from the published metagame bundle rather than scraped live.
 
@@ -150,6 +151,6 @@ graph TB
 
 - **Metagame research**: MTGGoldfish scrape → `MetagameRepository` (JSON cache, stale-while-revalidate) → UI display. Remote bundle snapshots can bypass live scraping.
 - **Deck building**: Card search via `SearchService` → `DeckService` parsing → `CardTablePanel` rendering
-- **Collection sync**: MTGO Bridge → `CollectionService` → ownership marking across UI
+- **Collection sync**: MTGO Bridge → `MtgoBridgeService` → `CollectionService` → ownership marking across UI
 - **Card images**: Scryfall bulk data + CDN → `ImageService` caching → display
 - **Radar analysis**: Cached deck lists → `RadarService` aggregation → `RadarRepository` (SQLite) → `RadarPanel`

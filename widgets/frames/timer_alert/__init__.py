@@ -12,8 +12,8 @@ from typing import TYPE_CHECKING
 
 import wx  # noqa: F401 - re-exported for tests that monkeypatch timer_alert.wx
 
-from utils import (
-    mtgo_bridge,  # noqa: F401 - re-exported for tests that monkeypatch timer_alert.mtgo_bridge  # noqa: E501
+from services import (
+    mtgo_bridge_service as mtgo_bridge,  # noqa: F401 - re-exported for tests that monkeypatch timer_alert.mtgo_bridge  # noqa: E501
 )
 from widgets.frames.timer_alert.frame import TimerAlertFrame, main
 

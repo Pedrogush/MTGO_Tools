@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from utils import mtgo_bridge
+from services import mtgo_bridge_service as mtgo_bridge
 
 
 def dump_collection(limit_cards: int = 15) -> None:

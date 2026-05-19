@@ -92,10 +92,10 @@ def generate_mermaid(categories: dict, dependencies: dict, modules: dict) -> str
 
     key_modules = {
         "Controllers": "app_controller",
-        "Services": ["deck_service", "collection_service", "search_service"],
+        "Services": ["deck_service", "collection_service", "search_service", "mtgo_bridge_service"],
         "Repositories": ["card_repository", "deck_repository", "metagame_repository"],
         "UI": ["app_frame", "deck_builder_panel", "card_table_panel"],
-        "Utils": ["deck", "mtgo_bridge_client", "atomic_io"],
+        "Utils": ["deck", "atomic_io", "card_images"],
         "Navigators": ["mtggoldfish"],
     }
 
