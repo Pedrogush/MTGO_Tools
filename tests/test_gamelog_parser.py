@@ -11,6 +11,7 @@ import pytest
 
 from services.gamelog_service import (
     detect_format_from_cards,
+    find_all_gamelog_dirs,
     find_gamelog_files,
     infer_username_from_matches,
     parse_gamelog_file,
@@ -22,21 +23,16 @@ from services.gamelog_service import (
 
 SCREENSHOTS_TRUTH = Path(__file__).parent / "fixtures" / "match_history_screenshots.json"
 
-_GAMELOG_DIR_WINDOWS = (
-    r"C:\Users\Pedro\AppData\Local\Apps\2.0\Data\OVGXG70W.D8K\9MANX5J8.5ON"
-    r"\mtgo..tion_a7d96b15d2cce030_0003.0004_b5d581d94d59763e\Data\AppFiles"
-    r"\5929ED80F66B48FAC53C5D4BF7742305"
-)
-_GAMELOG_DIR_WSL = (
-    "/mnt/c/Users/Pedro/AppData/Local/Apps/2.0/Data/OVGXG70W.D8K/9MANX5J8.5ON"
-    "/mtgo..tion_a7d96b15d2cce030_0003.0004_b5d581d94d59763e/Data/AppFiles"
-    "/5929ED80F66B48FAC53C5D4BF7742305"
-)
-GAMELOG_DIR = _GAMELOG_DIR_WSL if os.path.isdir(_GAMELOG_DIR_WSL) else _GAMELOG_DIR_WINDOWS
+# Discover the MTGO GameLog directory dynamically rather than hard-coding a
+# ClickOnce install-hash path (which goes stale on every MTGO update). This
+# reuses the production filesystem scan, which auto-detects Windows and WSL
+# AppData bases and returns dirs newest-first.
+_GAMELOG_DIRS = find_all_gamelog_dirs()
+GAMELOG_DIR = _GAMELOG_DIRS[0] if _GAMELOG_DIRS else None
 
 
 def _gamelogs_available() -> bool:
-    return os.path.isdir(GAMELOG_DIR)
+    return GAMELOG_DIR is not None and os.path.isdir(GAMELOG_DIR)
 
 
 def _load_truth() -> list[dict]:
