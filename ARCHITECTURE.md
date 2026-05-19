@@ -54,7 +54,6 @@ graph TB
 
     subgraph "Utilities"
         CI[card_images.py<br/>Image Downloader]
-        AC_CLASS[archetype_classifier.py]
         DECK[deck.py<br/>Deck Parser]
         MBC[mtgo_bridge_client.py]
         AIO[atomic_io.py]
@@ -105,7 +104,6 @@ graph TB
     FCPS --> FCPR
     CR --> CDS
     DR --> DECK
-    MR --> AC_CLASS
     IS --> CI
     CS --> MBC
     MR --> MTG_GF
@@ -128,7 +126,7 @@ graph TB
     class DS,CS,SS,IS,StS,RS,FCPS,DWS,BSC,RSC,CDS service
     class CR,DR,MR,RR,FCPR repo
     class AF,DRP,DBP,CTP,CIP,SGP,RP,ODS,MH,TA ui
-    class CI,AC_CLASS,DECK,MBC,AIO,GP util
+    class CI,DECK,MBC,AIO,GP util
     class SCRYFALL,MTGJSON,GOLDFISH,MTGO_CLIENT,BRIDGE external
 ```
 
