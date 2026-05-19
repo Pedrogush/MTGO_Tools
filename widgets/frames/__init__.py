@@ -22,7 +22,8 @@ __all__ = list(_EXPORTS)
 
 
 def __getattr__(name: str):
-    """Lazily import frame modules so headless tests avoid unrelated wx deps."""
+    """Lazily import frame modules so importing this package stays cheap and
+    only loads the wx submodule actually requested."""
     module_name = _EXPORTS.get(name)
     if module_name is None:
         raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

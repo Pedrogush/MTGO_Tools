@@ -5,13 +5,13 @@ This package contains service classes that handle all business logic,
 orchestrating between repositories and the UI layer.
 """
 
-try:  # wxPython may be missing in headless environments
+try:  # defensive: surface a clear error if the wx UI stack fails to import
     from services.collection_service import (
         CollectionService,
         CollectionStatus,
         get_collection_service,
     )
-except Exception:  # pragma: no cover - collection service not available without wx
+except Exception:  # pragma: no cover - only hit if the wx import chain is broken
     CollectionService = None
     CollectionStatus = None
 
