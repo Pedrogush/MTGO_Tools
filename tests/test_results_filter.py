@@ -1,6 +1,6 @@
-"""Unit tests for the pure deck results filter logic in utils.deck_results_filter."""
+"""Unit tests for the pure deck results filter logic in widgets.panels.deck_research_panel.results_filter."""
 
-from utils.deck_results_filter import (
+from widgets.panels.deck_research_panel.results_filter import (
     _classify_event_type,
     _normalize_date,
     filter_decks,

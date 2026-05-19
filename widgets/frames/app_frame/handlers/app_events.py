@@ -12,7 +12,7 @@ from loguru import logger
 from services.card_data_service import CardDataManager
 from utils.constants import LOGS_DIR
 from utils.deck import sanitize_filename
-from utils.deck_results_filter import _classify_event_type, _normalize_date, filter_decks
+from widgets.panels.deck_research_panel.results_filter import _classify_event_type, _normalize_date, filter_decks
 from widgets.dialogs.feedback_dialog import show_feedback_dialog
 from widgets.frames.app_frame.handlers.ui_helpers import open_child_window, widget_exists
 from widgets.frames.identify_opponent import MTGOpponentDeckSpy
