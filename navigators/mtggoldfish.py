@@ -24,7 +24,7 @@ from utils.constants import (
     MTGGOLDFISH_STATS_LOOKBACK_DAYS,
     ONE_DAY_SECONDS,
 )
-from utils.deck_text_cache import get_deck_cache
+from repositories.deck_text_cache import get_deck_cache
 from utils.json_io import fast_load
 
 
