@@ -19,9 +19,9 @@ from utils.constants.ui_layout import (
     GUIDE_COL_NOTES_WIDTH,
     PADDING_MD,
 )
-from utils.stylize import stylize_button
 from widgets.panels.sideboard_guide_panel.handlers import SideboardGuidePanelHandlersMixin
 from widgets.panels.sideboard_guide_panel.properties import SideboardGuidePanelPropertiesMixin
+from widgets.stylize import stylize_button
 
 
 class SideboardGuidePanel(

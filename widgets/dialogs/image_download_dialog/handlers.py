@@ -9,7 +9,7 @@ from typing import Any
 import wx
 from loguru import logger
 
-from utils.card_images import BULK_DATA_CACHE, BulkImageDownloader
+from services.image_service import BULK_DATA_CACHE, BulkImageDownloader
 
 
 class ImageDownloadDialogHandlersMixin:

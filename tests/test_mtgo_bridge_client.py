@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from utils import mtgo_bridge_client
+from services.mtgo_bridge_service import client as mtgo_bridge_client
 
 
 def test_missing_bridge_path_raises(tmp_path: Path) -> None:

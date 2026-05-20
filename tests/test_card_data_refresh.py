@@ -8,8 +8,8 @@ from typing import Any
 
 import pytest
 
-from utils import card_data
-from utils.card_data import CardDataManager
+from services.card_data_service import CardDataManager
+from services.card_data_service import remote as card_data_remote
 
 
 class _StubResponse:
@@ -48,8 +48,8 @@ def _patch_requests(monkeypatch: pytest.MonkeyPatch, headers: dict[str, str], co
     def fake_get(*_: Any, **__: Any) -> _StubResponse:
         return _StubResponse(headers=headers, content=content)
 
-    monkeypatch.setattr(card_data.requests, "head", fake_head, raising=False)
-    monkeypatch.setattr(card_data.requests, "get", fake_get, raising=False)
+    monkeypatch.setattr(card_data_remote.requests, "head", fake_head, raising=False)
+    monkeypatch.setattr(card_data_remote.requests, "get", fake_get, raising=False)
 
 
 def test_ensure_latest_downloads_when_cache_missing(tmp_path: Path, monkeypatch):
@@ -94,8 +94,8 @@ def test_ensure_latest_skips_download_when_meta_matches(tmp_path: Path, monkeypa
     def fake_head(*_: Any, **__: Any) -> _StubResponse:
         return _StubResponse(headers=headers)
 
-    monkeypatch.setattr(card_data.requests, "head", fake_head, raising=False)
-    monkeypatch.setattr(card_data.requests, "get", fake_get, raising=False)
+    monkeypatch.setattr(card_data_remote.requests, "head", fake_head, raising=False)
+    monkeypatch.setattr(card_data_remote.requests, "get", fake_get, raising=False)
 
     second_manager = CardDataManager(tmp_path)
     second_manager.ensure_latest()
@@ -135,8 +135,8 @@ def test_ensure_latest_downloads_when_meta_differs(tmp_path: Path, monkeypatch):
     def fake_head(*_: Any, **__: Any) -> _StubResponse:
         return _StubResponse(headers=new_headers)
 
-    monkeypatch.setattr(card_data.requests, "head", fake_head, raising=False)
-    monkeypatch.setattr(card_data.requests, "get", fake_get, raising=False)
+    monkeypatch.setattr(card_data_remote.requests, "head", fake_head, raising=False)
+    monkeypatch.setattr(card_data_remote.requests, "get", fake_get, raising=False)
 
     manager = CardDataManager(tmp_path)
     manager.ensure_latest()
@@ -176,8 +176,8 @@ def test_ensure_latest_skips_download_when_only_etag_changes(tmp_path: Path, mon
     def fake_head(*_: Any, **__: Any) -> _StubResponse:
         return _StubResponse(headers=new_headers)
 
-    monkeypatch.setattr(card_data.requests, "head", fake_head, raising=False)
-    monkeypatch.setattr(card_data.requests, "get", fake_get, raising=False)
+    monkeypatch.setattr(card_data_remote.requests, "head", fake_head, raising=False)
+    monkeypatch.setattr(card_data_remote.requests, "get", fake_get, raising=False)
 
     second_manager = CardDataManager(tmp_path)
     second_manager.ensure_latest()

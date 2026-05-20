@@ -14,8 +14,8 @@ from typing import TYPE_CHECKING, Any
 import wx
 from loguru import logger
 
-from utils import mtgo_bridge
-from utils.mtgo_bridge_client import BridgeWatcher
+from services import mtgo_bridge_service as mtgo_bridge
+from services.mtgo_bridge_service.client import BridgeWatcher
 
 if TYPE_CHECKING:
     from widgets.frames.timer_alert.frame import ThresholdPanel

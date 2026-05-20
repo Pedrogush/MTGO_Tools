@@ -16,9 +16,11 @@ from pathlib import Path
 
 from loguru import logger
 
-from utils.card_images import (
+from services.image_service import (
     BULK_DATA_CACHE,
     PRINTING_INDEX_CACHE,
+)
+from services.image_service.schemas import (
     _bulk_cards_decoder,
     _printing_index_decoder,
 )

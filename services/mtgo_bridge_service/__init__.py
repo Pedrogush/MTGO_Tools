@@ -1,4 +1,8 @@
-"""Compatibility helpers bridging the CLI-based MTGO bridge into Python."""
+"""MTGO bridge service: Python-facing facade over the CLI bridge.
+
+Wraps the subprocess/multiprocessing transport in :mod:`.client` and
+exposes collection/history/trade snapshots and the challenge watcher.
+"""
 
 from __future__ import annotations
 
@@ -7,7 +11,7 @@ from typing import Any
 
 from loguru import logger
 
-from . import mtgo_bridge_client
+from . import client as mtgo_bridge_client
 
 
 def _bridge_available(bridge_path: str | None = None) -> tuple[bool, str | None]:

@@ -8,8 +8,7 @@ from typing import Any, Protocol
 import wx
 import wx.html
 
-from utils.mana_icon_factory import ManaIconFactory
-from widgets.panels.card_panel.mana_rasterizer import CardPanelManaRasterizer
+from services.mana_icon_service import ManaIconFactory
 from widgets.panels.card_panel.rule_popup import RulePopupFrame
 
 
@@ -17,7 +16,6 @@ class CardPanelProto(Protocol):
     """Cross-mixin ``self`` surface for ``CardPanel``."""
 
     mana_icons: ManaIconFactory
-    mana_rasterizer: CardPanelManaRasterizer
     _t: Callable[..., str]
     # Optional callable returning a fresh keyword lookup; the panel calls this
     # on each render so updates from a background refresh are picked up.

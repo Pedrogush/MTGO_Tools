@@ -5,7 +5,7 @@ from typing import Any
 
 import wx
 
-from utils.card_images import BulkImageDownloader
+from services.image_service import BulkImageDownloader
 from utils.constants import DARK_BG, LIGHT_TEXT, SUBDUED_TEXT
 from widgets.dialogs.image_download_dialog.handlers import ImageDownloadDialogHandlersMixin
 from widgets.dialogs.image_download_dialog.properties import ImageDownloadDialogPropertiesMixin

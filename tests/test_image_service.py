@@ -1,8 +1,7 @@
 """Tests for ImageService business logic."""
 
 import services.image_service as image_service
-from services.image_service import CardImageDownloadQueue, ImageService
-from utils.card_images import CardImageRequest
+from services.image_service import CardImageDownloadQueue, CardImageRequest, ImageService
 
 
 def test_image_service_initialization():

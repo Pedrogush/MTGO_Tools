@@ -14,10 +14,9 @@ from typing import Any
 import wx
 import wx.html
 
+from services.mana_icon_service import ManaIconFactory
 from utils.constants import DARK_PANEL, LIGHT_TEXT, PADDING_MD, PADDING_SM, SUBDUED_TEXT
-from utils.mana_icon_factory import ManaIconFactory
 from widgets.panels.card_panel.handlers import CardPanelHandlersMixin
-from widgets.panels.card_panel.mana_rasterizer import CardPanelManaRasterizer
 from widgets.panels.card_panel.properties import CardPanelPropertiesMixin
 from widgets.panels.card_panel.rule_popup import RulePopupFrame
 
@@ -57,7 +56,6 @@ class CardPanel(
         super().__init__(parent)
         self.SetBackgroundColour(DARK_PANEL)
         self.mana_icons = mana_icons or ManaIconFactory()
-        self.mana_rasterizer = CardPanelManaRasterizer()
         self._t = t or _default_t
         self._keyword_lookup_source = keyword_lookup_source or _default_keyword_lookup_source
         self._rule_popup: RulePopupFrame | None = None

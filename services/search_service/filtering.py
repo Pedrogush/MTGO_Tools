@@ -4,7 +4,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from utils.search_filters import matches_color_filter, matches_mana_cost, matches_mana_value
+from services.search_service.mana_filters import (
+    matches_color_filter,
+    matches_mana_cost,
+    matches_mana_value,
+)
 
 if TYPE_CHECKING:
     from services.search_service.protocol import SearchServiceProto

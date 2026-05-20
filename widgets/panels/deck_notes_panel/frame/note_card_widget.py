@@ -10,7 +10,7 @@ import wx
 
 from utils.constants import DARK_ALT, DARK_BG, LIGHT_TEXT, SUBDUED_TEXT
 from utils.i18n import translate
-from utils.stylize import stylize_textctrl
+from widgets.stylize import stylize_textctrl
 
 NOTE_TYPES = ["General", "Matchup", "Sideboard Plan", "Custom"]
 

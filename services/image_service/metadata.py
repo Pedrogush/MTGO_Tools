@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
-from utils.card_images import BulkImageDownloader
+from services.image_service.downloader import BulkImageDownloader
 
 if TYPE_CHECKING:
     from services.image_service.protocol import ImageServiceProto

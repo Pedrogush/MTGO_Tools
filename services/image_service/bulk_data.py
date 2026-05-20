@@ -7,8 +7,7 @@ from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
-from utils.card_images import BULK_DATA_CACHE
-from utils.card_images_workers import download_bulk_metadata_worker
+from services.image_service.workers import download_bulk_metadata_worker
 
 if TYPE_CHECKING:
     from services.image_service.protocol import ImageServiceProto
@@ -22,7 +21,9 @@ class BulkDataMixin(_Base):
     """Bulk data freshness + download handling."""
 
     def check_bulk_data_exists(self) -> tuple[bool, str]:
-        if not BULK_DATA_CACHE.exists():
+        from services.image_service import schemas as _schemas
+
+        if not _schemas.BULK_DATA_CACHE.exists():
             return False, "Bulk data cache not found"
 
         return True, "Bulk data cache exists"

@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 import wx
 from PIL import Image as PilImage
 
-from utils.card_images import get_card_image
+from services.image_service import get_card_image
 from utils.constants import (
     DARK_ACCENT,
     DARK_ALT,

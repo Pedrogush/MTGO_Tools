@@ -83,7 +83,7 @@ class ArchetypeCacheMixin(_Base):
         if not deck_texts:
             return 0
         try:
-            from utils.deck_text_cache import get_deck_cache
+            from repositories.deck_text_cache import get_deck_cache
 
             inserted = get_deck_cache().bulk_set(deck_texts, skip_existing=True)
             logger.debug(f"Hydrated {inserted}/{len(deck_texts)} deck texts into SQLite cache")
@@ -145,7 +145,7 @@ class ArchetypeCacheMixin(_Base):
 
         if deck_texts:
             try:
-                from utils.deck_text_cache import get_deck_cache
+                from repositories.deck_text_cache import get_deck_cache
 
                 get_deck_cache().bulk_set(deck_texts, skip_existing=True)
             except Exception as exc:

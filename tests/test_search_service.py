@@ -468,7 +468,7 @@ def test_filter_cards_text_mode_any():
 
 def test_search_with_builder_filters_text_mode_any():
     """search_with_builder_filters 'any' mode requires all words to appear."""
-    from utils.card_data import CardDataManager
+    from services.card_data_service import CardDataManager
 
     mock_repo = SimpleNamespace()
     service = SearchService(card_repository=mock_repo)

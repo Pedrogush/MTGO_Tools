@@ -9,7 +9,7 @@ import wx
 import wx.dataview as dv
 from loguru import logger
 
-from utils.gamelog_parser import infer_username_from_matches, parse_all_gamelogs
+from services.gamelog_service import infer_username_from_matches, parse_all_gamelogs
 
 
 class MatchHistoryHandlersMixin:
@@ -35,7 +35,7 @@ class MatchHistoryHandlersMixin:
     # ------------------------------------------------------------------ worker bootstraps
     def _init_username(self) -> None:
         def worker() -> None:
-            from utils.gamelog_parser import get_current_username
+            from services.gamelog_service import get_current_username
 
             username = get_current_username()
             wx.CallAfter(self._set_username, username)

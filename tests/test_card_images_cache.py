@@ -6,7 +6,8 @@ import sqlite3
 import threading
 from datetime import datetime
 
-from utils import card_images
+from services import image_service as card_images
+from services.image_service import schemas as card_images_schemas
 
 
 def test_card_image_cache_migrates_face_index_column(tmp_path):
@@ -44,7 +45,7 @@ def test_card_image_cache_migrates_face_index_column(tmp_path):
                 "001",
                 "normal",
                 "legacy/path.jpg",
-                datetime.now(card_images.UTC).isoformat(),
+                datetime.now(card_images_schemas.UTC).isoformat(),
                 None,
                 None,
             ),
@@ -88,7 +89,7 @@ def test_resolves_windows_style_relative_paths(tmp_path):
                 "007",
                 "normal",
                 "normal\\uuid-win.png",
-                datetime.now(card_images.UTC).isoformat(),
+                datetime.now(card_images_schemas.UTC).isoformat(),
                 None,
                 None,
             ),
@@ -106,7 +107,7 @@ def test_is_bulk_data_outdated_respects_cached_metadata(tmp_path, monkeypatch):
     bulk_path.parent.mkdir(parents=True, exist_ok=True)
     bulk_path.write_text("[]", encoding="utf-8")
 
-    monkeypatch.setattr(card_images, "BULK_DATA_CACHE", bulk_path, raising=False)
+    monkeypatch.setattr(card_images_schemas, "BULK_DATA_CACHE", bulk_path, raising=False)
 
     cache = card_images.CardImageCache(cache_dir=cache_dir, db_path=cache_dir / "images.db")
     downloader = card_images.BulkImageDownloader(cache)

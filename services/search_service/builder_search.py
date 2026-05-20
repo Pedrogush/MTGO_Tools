@@ -6,9 +6,13 @@ from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
-from utils.card_data import CardDataManager
-from utils.mana_query import normalize_mana_query
-from utils.search_filters import matches_color_filter, matches_mana_cost, matches_mana_value
+from services.card_data_service import CardDataManager
+from services.search_service.mana_filters import (
+    matches_color_filter,
+    matches_mana_cost,
+    matches_mana_value,
+)
+from services.search_service.mana_query import normalize_mana_query
 
 if TYPE_CHECKING:
     from services.search_service.protocol import SearchServiceProto

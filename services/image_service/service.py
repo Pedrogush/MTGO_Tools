@@ -9,10 +9,11 @@ from typing import Any
 from services.image_service.bulk_data import BulkDataMixin
 from services.image_service.cache import ImageCacheMixin
 from services.image_service.download_queue import CardImageDownloadQueue
+from services.image_service.downloader import BulkImageDownloader, get_cache
 from services.image_service.metadata import PrintingsFetchMixin
 from services.image_service.printing_index import PrintingIndexMixin
-from utils.card_images import BulkImageDownloader, CardImageRequest, get_cache
-from utils.process_worker import ProcessHandle, ProcessWorker
+from services.image_service.process_worker import ProcessHandle, ProcessWorker
+from services.image_service.schemas import CardImageRequest
 
 
 class ImageService(

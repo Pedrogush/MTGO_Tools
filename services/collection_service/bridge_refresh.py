@@ -38,7 +38,7 @@ class BridgeRefreshMixin(_Base):
         # Runs in a background thread; reports results via on_success/on_error callbacks.
         # Returns False without fetching if a recent cached file exists (unless force=True).
         if fetch_collection is None:
-            from utils import mtgo_bridge
+            from services import mtgo_bridge_service as mtgo_bridge
 
             fetch_collection = mtgo_bridge.get_collection_snapshot
 

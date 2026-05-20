@@ -110,9 +110,8 @@ Configuration in `pyproject.toml`.
 │   ├── card_images.py              # Scryfall bulk image downloader
 │   ├── atomic_io.py                # Atomic file writes
 │   ├── gamelog_parser.py           # MTGO game log parser
-│   ├── archetype_classifier.py     # Deck → archetype classification
-│   ├── deck.py                     # Deck text parsing helpers
-│   └── mtgo_bridge_client.py       # IPC client for .NET bridge
+│   └── deck.py                     # Deck text parsing helpers
+├── services/mtgo_bridge_service/   # Python facade + transport for the .NET bridge
 ├── dotnet/MTGOBridge/              # .NET bridge (MTGOSDK)
 ├── automation/                     # Automation CLI, server, and E2E helpers
 └── tests/                          # pytest test suite

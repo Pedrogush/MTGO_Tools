@@ -11,8 +11,9 @@ from typing import Any
 
 import wx
 
-from utils.card_data import CardDataManager
-from utils.card_images import CardImageRequest, get_cache
+from services.card_data_service import CardDataManager
+from services.image_service import CardImageRequest, get_cache
+from services.mana_icon_service import ManaIconFactory
 from utils.constants import (
     CARD_IMAGE_COST_MIN_HEIGHT,
     CARD_IMAGE_DISPLAY_HEIGHT,
@@ -28,12 +29,11 @@ from utils.constants import (
     PADDING_XL,
     SUBDUED_TEXT,
 )
-from utils.mana_icon_factory import ManaIconFactory
-from utils.stylize import stylize_button
 from widgets.panels.card_image_display import CardImageDisplay
 from widgets.panels.card_inspector_panel.handlers import CardInspectorPanelHandlersMixin
 from widgets.panels.card_inspector_panel.properties import CardInspectorPanelPropertiesMixin
 from widgets.panels.mana_rich_text_ctrl import ManaSymbolRichCtrl
+from widgets.stylize import stylize_button
 
 
 class CardInspectorPanel(

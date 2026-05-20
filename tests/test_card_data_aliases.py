@@ -1,8 +1,8 @@
-"""Unit tests for CardDataManager multi-face alias handling."""
+"""Unit tests for the atomic-cards builder's multi-face alias handling."""
 
 from __future__ import annotations
 
-from utils.card_data import CardDataManager
+from services.card_data_service.builder import build_index
 
 
 def _sample_atomic_payload():
@@ -35,10 +35,9 @@ def _sample_atomic_payload():
     }
 
 
-def test_build_index_groups_double_faced_cards(tmp_path):
+def test_build_index_groups_double_faced_cards():
     """Double-faced cards should be indexed once with aliases for each face."""
-    manager = CardDataManager(data_dir=tmp_path)
-    index = manager._build_index(_sample_atomic_payload())
+    index = build_index(_sample_atomic_payload())
 
     assert len(index["cards"]) == 1
     entry = index["cards"][0]
@@ -53,10 +52,9 @@ def test_build_index_groups_double_faced_cards(tmp_path):
     assert lookup["jace, telepath unbound"]["name"] == entry["name"]
 
 
-def test_build_index_populates_back_face_fields(tmp_path):
+def test_build_index_populates_back_face_fields():
     """Front-face data sits on the canonical fields; back-face on ``back_*``."""
-    manager = CardDataManager(data_dir=tmp_path)
-    index = manager._build_index(_sample_atomic_payload())
+    index = build_index(_sample_atomic_payload())
     entry = index["cards"][0]
 
     assert entry["type_line"] == "Legendary Creature — Human Wizard"
@@ -68,7 +66,7 @@ def test_build_index_populates_back_face_fields(tmp_path):
     assert "+1:" in (entry["back_oracle_text"] or "")
 
 
-def test_build_index_back_face_when_back_listed_first(tmp_path):
+def test_build_index_back_face_when_back_listed_first():
     """Order of variations should not affect which face is treated as front."""
     canonical = "Jace, Vryn's Prodigy // Jace, Telepath Unbound"
     payload = {
@@ -95,8 +93,7 @@ def test_build_index_back_face_when_back_listed_first(tmp_path):
             },
         ]
     }
-    manager = CardDataManager(data_dir=tmp_path)
-    index = manager._build_index(payload)
+    index = build_index(payload)
     entry = index["cards"][0]
 
     assert entry["type_line"] == "Legendary Creature — Human Wizard"

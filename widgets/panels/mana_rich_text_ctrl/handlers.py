@@ -14,10 +14,10 @@ from utils.constants import (
     MANA_TRAILING_SYMBOL_PATTERN,
     NAVIGATION_KEYS,
 )
-from utils.keyboard_evts import key_char
+from widgets.panels.mana_rich_text_ctrl.keyboard_evts import key_char
 
 if TYPE_CHECKING:
-    from utils.mana_icon_factory import ManaIconFactory
+    from services.mana_icon_service import ManaIconFactory
 
 
 class ManaRichTextInnerHandlersMixin:

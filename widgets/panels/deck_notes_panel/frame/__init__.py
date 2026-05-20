@@ -19,7 +19,6 @@ from typing import TYPE_CHECKING
 import wx
 
 from utils.constants import DARK_ALT, DARK_PANEL, SUBDUED_TEXT
-from utils.stylize import stylize_button
 from widgets.panels.deck_notes_panel.frame.note_card_widget import (
     NOTE_TYPES,
     _migrate,
@@ -28,6 +27,7 @@ from widgets.panels.deck_notes_panel.frame.note_card_widget import (
 )
 from widgets.panels.deck_notes_panel.handlers import DeckNotesPanelHandlersMixin
 from widgets.panels.deck_notes_panel.properties import DeckNotesPanelPropertiesMixin
+from widgets.stylize import stylize_button
 
 if TYPE_CHECKING:
     from repositories.deck_repository import DeckRepository

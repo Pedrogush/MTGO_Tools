@@ -14,9 +14,9 @@ from utils.constants import (
     PADDING_SM,
     PADDING_XS,
 )
-from utils.stylize import stylize_button, stylize_label, stylize_textctrl
 from widgets.buttons.mana_button import create_mana_button
 from widgets.panels.mana_rich_text_ctrl import ManaSymbolRichCtrl
+from widgets.stylize import stylize_button, stylize_label, stylize_textctrl
 
 if TYPE_CHECKING:
     from widgets.panels.deck_builder_panel.protocol import DeckBuilderPanelProto

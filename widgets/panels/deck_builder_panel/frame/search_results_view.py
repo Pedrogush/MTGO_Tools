@@ -6,6 +6,7 @@ from typing import Any
 
 import wx
 
+from services.mana_icon_service import ManaIconFactory
 from utils.constants import (
     BUILDER_MANA_CANVAS_WIDTH,
     BUILDER_MANA_ICON_GAP,
@@ -13,7 +14,6 @@ from utils.constants import (
     BUILDER_NAME_COL_MIN_WIDTH,
     DARK_ALT,
 )
-from utils.mana_icon_factory import ManaIconFactory
 
 
 class _SearchResultsView(wx.ListCtrl):
@@ -57,7 +57,7 @@ class _SearchResultsView(wx.ListCtrl):
         Only costs absent from the cache require bitmap rendering, making
         repeated searches (including empty-filter / browse-all) O(new_costs).
         """
-        from utils.mana_icon_factory import tokenize_mana_symbols
+        from services.mana_icon_service import tokenize_mana_symbols
 
         assert self._mana_icons is not None
         assert self._mana_img_list is not None

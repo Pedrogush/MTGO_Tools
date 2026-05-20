@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 import wx
 from loguru import logger
 
-from utils.card_images import CardImageRequest
+from services.image_service import CardImageRequest
 from utils.constants import APP_FRAME_MIN_SIZE
 from utils.i18n import LOCALE_LABELS
 from utils.runtime_flags import is_automation_enabled
@@ -189,7 +189,7 @@ class AppFrameHandlersMixin(_Base):
     def _open_rules_browser(self) -> None:
         # Lazily imported so launching the rest of the app stays cheap when
         # the user never opens the browser.
-        from utils.ui_helpers import open_child_window
+        from widgets.frames.app_frame.handlers.ui_helpers import open_child_window
         from widgets.frames.rules_browser import RulesBrowserFrame
 
         open_child_window(

@@ -396,7 +396,7 @@ def test_deck_entry_missing_href_skipped(tmp_client: BundleSnapshotClient) -> No
 
 
 def test_apply_hydrates_deck_text_cache(tmp_client: BundleSnapshotClient, tmp_path: Path) -> None:
-    from utils.deck_text_cache import DeckTextCache
+    from repositories.deck_text_cache import DeckTextCache
 
     db_path = tmp_path / "deck_cache.db"
     cache = DeckTextCache(db_path=db_path)
@@ -404,7 +404,7 @@ def test_apply_hydrates_deck_text_cache(tmp_client: BundleSnapshotClient, tmp_pa
     bundle = _make_bundle()
     with (
         patch.object(tmp_client, "_http_get_bytes", return_value=bundle),
-        patch("utils.deck_text_cache.get_deck_cache", return_value=cache),
+        patch("repositories.deck_text_cache.get_deck_cache", return_value=cache),
     ):
         tmp_client.apply()
 
@@ -416,7 +416,7 @@ def test_apply_hydrates_deck_text_cache(tmp_client: BundleSnapshotClient, tmp_pa
 def test_deck_text_hydration_skips_existing(
     tmp_client: BundleSnapshotClient, tmp_path: Path
 ) -> None:
-    from utils.deck_text_cache import DeckTextCache
+    from repositories.deck_text_cache import DeckTextCache
 
     db_path = tmp_path / "deck_cache.db"
     cache = DeckTextCache(db_path=db_path)
@@ -425,7 +425,7 @@ def test_deck_text_hydration_skips_existing(
     bundle = _make_bundle()
     with (
         patch.object(tmp_client, "_http_get_bytes", return_value=bundle),
-        patch("utils.deck_text_cache.get_deck_cache", return_value=cache),
+        patch("repositories.deck_text_cache.get_deck_cache", return_value=cache),
     ):
         tmp_client._hydrate_deck_texts([("1234", "4 Lightning Bolt\n", "mtggoldfish")])
 
@@ -575,14 +575,14 @@ def test_apply_merges_mtgo_decklists_into_archetype_cache(
     tmp_client: BundleSnapshotClient, tmp_path: Path
 ) -> None:
     """MTGO decks with matching archetype names are merged into the deck cache."""
-    from utils.deck_text_cache import DeckTextCache
+    from repositories.deck_text_cache import DeckTextCache
 
     db_path = tmp_path / "deck_cache.db"
     cache = DeckTextCache(db_path=db_path)
     bundle = _make_bundle(mtgo_decklists=[_MTGO_DECKLIST_ENTRY])
 
     with patch.object(tmp_client, "_http_get_bytes", return_value=bundle):
-        with patch("utils.deck_text_cache.get_deck_cache", return_value=cache):
+        with patch("repositories.deck_text_cache.get_deck_cache", return_value=cache):
             tmp_client.apply()
 
     data = json.loads(tmp_client.archetype_decks_cache_file.read_text())
@@ -600,14 +600,14 @@ def test_apply_mtgo_deck_text_stored_in_cache(
     tmp_client: BundleSnapshotClient, tmp_path: Path
 ) -> None:
     """Inline deck_text from MTGO bundle entries is stored in the deck text cache."""
-    from utils.deck_text_cache import DeckTextCache
+    from repositories.deck_text_cache import DeckTextCache
 
     db_path = tmp_path / "deck_cache.db"
     cache = DeckTextCache(db_path=db_path)
     bundle = _make_bundle(mtgo_decklists=[_MTGO_DECKLIST_ENTRY])
 
     with patch.object(tmp_client, "_http_get_bytes", return_value=bundle):
-        with patch("utils.deck_text_cache.get_deck_cache", return_value=cache):
+        with patch("repositories.deck_text_cache.get_deck_cache", return_value=cache):
             tmp_client.apply()
 
     text = cache.get("9001")
@@ -619,14 +619,14 @@ def test_apply_mtgo_unmatched_archetype_skipped(
     tmp_client: BundleSnapshotClient, tmp_path: Path
 ) -> None:
     """MTGO decks whose archetype name has no match in the archetype list are skipped."""
-    from utils.deck_text_cache import DeckTextCache
+    from repositories.deck_text_cache import DeckTextCache
 
     db_path = tmp_path / "deck_cache.db"
     cache = DeckTextCache(db_path=db_path)
     bundle = _make_bundle(mtgo_decklists=[_MTGO_DECKLIST_ENTRY])
 
     with patch.object(tmp_client, "_http_get_bytes", return_value=bundle):
-        with patch("utils.deck_text_cache.get_deck_cache", return_value=cache):
+        with patch("repositories.deck_text_cache.get_deck_cache", return_value=cache):
             tmp_client.apply()
 
     # "Unknown Archetype" (deck 9002) should not be stored
@@ -638,14 +638,14 @@ def test_apply_mtgo_preserves_goldfish_decks(
     tmp_client: BundleSnapshotClient, tmp_path: Path
 ) -> None:
     """MTGGoldfish decks in the cache are preserved alongside merged MTGO decks."""
-    from utils.deck_text_cache import DeckTextCache
+    from repositories.deck_text_cache import DeckTextCache
 
     db_path = tmp_path / "deck_cache.db"
     cache = DeckTextCache(db_path=db_path)
     bundle = _make_bundle(mtgo_decklists=[_MTGO_DECKLIST_ENTRY])
 
     with patch.object(tmp_client, "_http_get_bytes", return_value=bundle):
-        with patch("utils.deck_text_cache.get_deck_cache", return_value=cache):
+        with patch("repositories.deck_text_cache.get_deck_cache", return_value=cache):
             tmp_client.apply()
 
     data = json.loads(tmp_client.archetype_decks_cache_file.read_text())
@@ -660,14 +660,14 @@ def test_apply_mtgo_deduplicates_on_re_hydration(
     tmp_client: BundleSnapshotClient, tmp_path: Path
 ) -> None:
     """Re-applying the bundle replaces previous MTGO entries rather than duplicating them."""
-    from utils.deck_text_cache import DeckTextCache
+    from repositories.deck_text_cache import DeckTextCache
 
     db_path = tmp_path / "deck_cache.db"
     cache = DeckTextCache(db_path=db_path)
     bundle = _make_bundle(mtgo_decklists=[_MTGO_DECKLIST_ENTRY])
 
     with patch.object(tmp_client, "_http_get_bytes", return_value=bundle):
-        with patch("utils.deck_text_cache.get_deck_cache", return_value=cache):
+        with patch("repositories.deck_text_cache.get_deck_cache", return_value=cache):
             tmp_client.apply()
             # Force a second apply by clearing the stamp
             tmp_client.stamp_file.unlink()
