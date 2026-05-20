@@ -16,14 +16,10 @@ def build_index(atomic_cards: dict[str, list[dict[str, Any]]]) -> dict[str, Any]
     for variations in atomic_cards.values():
         if not isinstance(variations, list) or not variations:
             continue
-        printings = [
-            p for p in variations if not p.get("isToken") and p.get("layout") != "token"
-        ]
+        printings = [p for p in variations if not p.get("isToken") and p.get("layout") != "token"]
         if not printings:
             continue
-        canonical_name = (
-            printings[0].get("name") or printings[0].get("faceName") or ""
-        ).strip()
+        canonical_name = (printings[0].get("name") or printings[0].get("faceName") or "").strip()
         if not canonical_name:
             continue
         front_printing, back_printing = _select_front_back(canonical_name, printings)

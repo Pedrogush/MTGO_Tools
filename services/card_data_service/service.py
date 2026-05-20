@@ -22,9 +22,7 @@ from services.card_data_service.schemas import CardEntry
 from utils.constants import CARD_DATA_DIR
 
 
-def load_card_manager(
-    data_dir: Path | str = CARD_DATA_DIR, force: bool = False
-) -> CardDataManager:
+def load_card_manager(data_dir: Path | str = CARD_DATA_DIR, force: bool = False) -> CardDataManager:
     # Synchronous – call from a background thread. Downloads/updates card data if needed.
     manager = CardDataManager(data_dir)
     manager.ensure_latest(force=force)

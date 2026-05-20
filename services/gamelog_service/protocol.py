@@ -25,14 +25,14 @@ class GamelogServiceProto(Protocol):
     def parse_gamelog_file(
         self,
         file_path: str,
-        card_manager: "CardDataManager | None" = ...,
+        card_manager: CardDataManager | None = ...,
     ) -> dict[str, Any] | None: ...
     def parse_all_gamelogs(
         self,
         directory: str | list[str] | None = ...,
         limit: int | None = ...,
         progress_callback: Any = ...,
-        card_manager: "CardDataManager | None" = ...,
+        card_manager: CardDataManager | None = ...,
     ) -> list[dict[str, Any]]: ...
 
     # Discovery
@@ -46,7 +46,7 @@ class GamelogServiceProto(Protocol):
     def detect_format_from_cards(
         self,
         cards: list[str],
-        card_manager: "CardDataManager | None" = ...,
+        card_manager: CardDataManager | None = ...,
         last_parsed_format: str = ...,
     ) -> str: ...
     def detect_archetype(self, cards: list[str]) -> str: ...

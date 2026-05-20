@@ -105,7 +105,7 @@ class SvgRendererMixin:
     """
 
     _svg_color_map: dict[str, tuple[int, int, int]]
-    _svg_cache: dict[str, "wx.svg.SVGimage | None"]
+    _svg_cache: dict[str, wx.svg.SVGimage | None]
     _png_cache: dict[tuple[str, int], Path]
     _rasterizer_cache_dir: Path | None
 
@@ -369,7 +369,7 @@ class SvgRendererMixin:
         new_img.SetAlpha(img.GetAlpha())
         return wx.Bitmap(new_img)
 
-    def _load_svg(self, glyph_key: str) -> "wx.svg.SVGimage | None":
+    def _load_svg(self, glyph_key: str) -> wx.svg.SVGimage | None:
         if glyph_key in self._svg_cache:
             return self._svg_cache[glyph_key]
         svg_dir = self._assets_root() / "assets" / "mana" / "svg"

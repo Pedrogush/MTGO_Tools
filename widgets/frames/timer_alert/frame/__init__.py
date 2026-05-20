@@ -20,6 +20,7 @@ if str(_project_root) not in sys.path:
 import wx
 from loguru import logger
 
+from services.mtgo_bridge_service.client import BridgeWatcher
 from utils.constants import (
     DARK_BG,
     PADDING_SM,
@@ -29,7 +30,6 @@ from utils.constants import (
     TIMER_ALERT_WATCH_INTERVAL_MS,
 )
 from utils.i18n import translate
-from services.mtgo_bridge_service.client import BridgeWatcher
 from widgets.frames.timer_alert.frame.sections import SectionsBuilderMixin
 from widgets.frames.timer_alert.frame.styling import StylingMixin
 from widgets.frames.timer_alert.frame.threshold_panel import SOUND_OPTIONS, ThresholdPanel

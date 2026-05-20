@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 
 import wx
 
+from services.mana_icon_service.resources import ManaIconResources
 from utils.constants import DARK_ALT
 from utils.constants.ui_images import (
     MANA_GLYPH_FONT_SIZE_BASE,
@@ -19,7 +20,6 @@ from utils.constants.ui_images import (
     MANA_OUTLINE_DARK_RGB,
     MANA_TEXT_DARK_RGB,
 )
-from services.mana_icon_service.resources import ManaIconResources
 
 if TYPE_CHECKING:
     from services.mana_icon_service.cache import ManaBitmapCache
@@ -64,7 +64,7 @@ class BitmapRendererMixin:
     }
 
     # Attributes supplied by the composing class's __init__.
-    _cache: "ManaBitmapCache"
+    _cache: ManaBitmapCache
     _icon_size: int
     _glyph_map: dict[str, str]
     _color_map: dict[str, tuple[int, int, int]]

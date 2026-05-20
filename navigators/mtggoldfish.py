@@ -6,6 +6,7 @@ import bs4
 from curl_cffi import requests
 from loguru import logger
 
+from repositories.deck_text_cache import get_deck_cache
 from utils.atomic_io import atomic_write_json, locked_path
 from utils.constants import (
     ARCHETYPE_CACHE_FILE,
@@ -24,7 +25,6 @@ from utils.constants import (
     MTGGOLDFISH_STATS_LOOKBACK_DAYS,
     ONE_DAY_SECONDS,
 )
-from repositories.deck_text_cache import get_deck_cache
 from utils.json_io import fast_load
 
 

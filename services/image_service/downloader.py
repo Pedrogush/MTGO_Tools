@@ -117,9 +117,7 @@ class BulkImageDownloader:
         # Fallback to age-based check when the vendor metadata lacks timestamps/URIs
         threshold = max_staleness_seconds or BULK_DATA_CACHE_FRESHNESS_SECONDS
         try:
-            age_seconds = (
-                datetime.now().timestamp() - _schemas.BULK_DATA_CACHE.stat().st_mtime
-            )
+            age_seconds = datetime.now().timestamp() - _schemas.BULK_DATA_CACHE.stat().st_mtime
             if age_seconds < threshold:
                 return False, metadata
         except OSError:

@@ -28,7 +28,7 @@ class ManaIconFactoryProto(Protocol):
 
     # SVG-renderer-only state.
     _svg_color_map: dict[str, tuple[int, int, int]]
-    _svg_cache: dict[str, "wx.svg.SVGimage | None"]
+    _svg_cache: dict[str, wx.svg.SVGimage | None]
     _png_cache: dict[tuple[str, int], Path]
     _rasterizer_cache_dir: Path | None
 

@@ -7,8 +7,8 @@ from typing import Any, Protocol
 
 import wx
 
-from services.radar_service import RadarData
 from services.mana_icon_service import ManaIconFactory
+from services.radar_service import RadarData
 
 
 class DeckBuilderPanelProto(Protocol):

@@ -210,9 +210,7 @@ class PrintingIndexMixin(_Base):
 
         existing = None if force else load_printing_index_payload()
         bulk_mtime = (
-            _schemas.BULK_DATA_CACHE.stat().st_mtime
-            if _schemas.BULK_DATA_CACHE.exists()
-            else None
+            _schemas.BULK_DATA_CACHE.stat().st_mtime if _schemas.BULK_DATA_CACHE.exists() else None
         )
         if existing and (bulk_mtime is None or existing.get("bulk_mtime", 0) >= bulk_mtime):
             data = existing.get("data", {})
