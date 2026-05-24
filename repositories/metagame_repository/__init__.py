@@ -20,7 +20,7 @@ from __future__ import annotations
 
 # These re-exports must come first so submodules can pick them up via
 # ``repositories.metagame_repository.<attr>`` during their own import.
-from navigators.mtggoldfish import (  # noqa: F401
+from services.scrapers.mtggoldfish import (  # noqa: F401
     fetch_deck_text,
     get_archetype_decks,
     get_archetypes,

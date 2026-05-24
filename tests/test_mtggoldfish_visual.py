@@ -1,4 +1,4 @@
-"""Integration test for navigators/mtggoldfish_visual.py against live MTGGoldfish.
+"""Integration test for services/scrapers/mtggoldfish_visual.py against live MTGGoldfish.
 
 This intentionally hits the real /deck/visual/ endpoint — the whole point of
 the fallback is to exercise an unprotected URL, so mocking it would tell us
@@ -7,7 +7,7 @@ nothing about whether it still works.
 
 import pytest
 
-from navigators.mtggoldfish_visual import fetch_deck_text_from_visual_page
+from services.scrapers.mtggoldfish_visual import fetch_deck_text_from_visual_page
 
 # Modern Affinity decklist sourced from a real MTGO Challenge result. Picked
 # because it exercises both mainboard and sideboard parsing.

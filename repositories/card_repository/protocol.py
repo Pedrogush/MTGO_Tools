@@ -8,9 +8,10 @@ and methods that one mixin reads from ``self`` but which are defined on
 
 from __future__ import annotations
 
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 
-from services.card_data_service import CardDataManager
+if TYPE_CHECKING:
+    from services.card_data_service import CardDataManager
 
 
 class CardRepositoryProto(Protocol):

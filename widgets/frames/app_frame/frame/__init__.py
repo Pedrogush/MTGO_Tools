@@ -12,7 +12,6 @@ from typing import TYPE_CHECKING, Any
 
 import wx
 
-from controllers.app_controller import get_deck_selector_controller
 from services.mana_icon_service import ManaIconFactory
 from utils.constants import (
     APP_FRAME_SIZE,
@@ -173,11 +172,4 @@ class AppFrame(
         return right_panel
 
 
-def launch_app() -> None:
-    app = wx.App(False)
-    controller = get_deck_selector_controller()
-    controller.frame.Show()
-    app.MainLoop()
-
-
-__all__ = ["AppFrame", "launch_app"]
+__all__ = ["AppFrame"]

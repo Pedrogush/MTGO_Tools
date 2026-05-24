@@ -18,7 +18,7 @@ from loguru import logger
 
 from repositories.metagame_repository import MetagameRepository
 from services.radar_service import RadarData, RadarService
-from utils.archetype_resolver import find_archetype_by_name
+from services.archetype_resolver import find_archetype_by_name
 from utils.atomic_io import atomic_write_json, locked_path
 from utils.background_worker import BackgroundWorker
 from utils.constants import (

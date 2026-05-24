@@ -5,7 +5,7 @@ from typing import Any, Literal
 
 from loguru import logger
 
-from navigators.mtggoldfish import download_deck, get_archetypes
+from services.scrapers.mtggoldfish import download_deck, get_archetypes
 from utils.deck import read_curr_deck_file
 
 DeckLoadScope = Literal["all", "archetype"]

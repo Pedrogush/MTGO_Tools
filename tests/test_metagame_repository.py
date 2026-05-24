@@ -893,7 +893,7 @@ def test_get_stats_falls_back_to_live_when_remote_returns_none(tmp_path, monkeyp
         called.append(fmt)
         return live_stats
 
-    monkeypatch.setattr("navigators.mtggoldfish.get_archetype_stats", fake_live_stats)
+    monkeypatch.setattr("services.scrapers.mtggoldfish.get_archetype_stats", fake_live_stats)
 
     repo = _make_repo(tmp_path, remote_client=_FakeRemoteClient(stats=None))
     result = repo.get_stats_for_format("modern")

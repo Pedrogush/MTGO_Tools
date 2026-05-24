@@ -30,6 +30,7 @@ from __future__ import annotations
 import argparse
 import ast
 import json
+import math
 import shutil
 import subprocess
 import sys
@@ -42,7 +43,6 @@ from pathlib import Path
 INTERNAL_PACKAGES = (
     "automation",
     "controllers",
-    "navigators",
     "repositories",
     "services",
     "utils",
@@ -116,8 +116,49 @@ def _resolve_relative(source_file: Path, root: Path, level: int, module: str | N
     return ".".join(base_parts) if base_parts else None
 
 
+def _is_type_checking_test(test: ast.expr) -> bool:
+    """True if ``test`` is ``TYPE_CHECKING`` or ``typing.TYPE_CHECKING``.
+
+    Imports inside such guards are evaluated only by type checkers, never at
+    runtime, so they should not contribute edges to the dependency graph.
+    """
+    if isinstance(test, ast.Name) and test.id == "TYPE_CHECKING":
+        return True
+    if (
+        isinstance(test, ast.Attribute)
+        and test.attr == "TYPE_CHECKING"
+        and isinstance(test.value, ast.Name)
+        and test.value.id == "typing"
+    ):
+        return True
+    return False
+
+
+def _walk_runtime(tree: ast.AST):
+    """Like :func:`ast.walk` but skip bodies of ``if TYPE_CHECKING:`` blocks.
+
+    The ``else`` branch of such an ``if`` *is* runtime-reachable (it's the
+    fallback when the type checker is not active), so it's still descended into.
+    """
+    stack: list[ast.AST] = [tree]
+    while stack:
+        node = stack.pop()
+        yield node
+        if isinstance(node, ast.If) and _is_type_checking_test(node.test):
+            stack.extend(node.orelse)
+        else:
+            stack.extend(ast.iter_child_nodes(node))
+
+
 def extract_edges(source_file: Path, source_module: str, root: Path, all_modules: set[str]) -> set[tuple[str, str]]:
-    """Return the set of (source_module, target_module) edges from this file."""
+    """Return the set of (source_module, target_module) edges from this file.
+
+    Edges reflect *runtime* imports: imports inside ``if TYPE_CHECKING:`` blocks
+    are excluded because they don't execute at module load time. Lazy
+    intra-function imports are still counted as edges (the file does depend on
+    the target, just deferred), matching the issue tracker's convention of
+    distinguishing "eager" from "lazy" but not from "type-only".
+    """
     try:
         tree = ast.parse(source_file.read_text(encoding="utf-8"))
     except (SyntaxError, UnicodeDecodeError):
@@ -130,7 +171,7 @@ def extract_edges(source_file: Path, source_module: str, root: Path, all_modules
             return
         edges.add((source_module, target))
 
-    for node in ast.walk(tree):
+    for node in _walk_runtime(tree):
         if isinstance(node, ast.Import):
             # ``import a.b.c, x.y`` → targets are a.b.c and x.y
             for alias in node.names:
@@ -206,7 +247,6 @@ PACKAGE_COLOURS = {
     "repositories": "#99ff99",
     "widgets": "#ffcc99",
     "utils": "#cc99ff",
-    "navigators": "#ffff99",
     "automation": "#ffb3d9",
     "main": "#d9d9d9",
 }
@@ -224,15 +264,20 @@ LAYER_RANKS: tuple[tuple[str, ...], ...] = (
     ("widgets", "automation"),
     ("controllers",),
     ("services",),
-    ("repositories", "navigators"),
+    ("repositories",),
     ("utils",),
 )
 SPINE = ("main", "widgets", "controllers", "services", "repositories", "utils")
 CYCLE_EDGE_COLOUR = "#cc3333"
-# Columns per cluster grid at level 2. 3 keeps the biggest cluster (services,
-# 14 modules) at ~5 rows — close to square. Larger values produce wider
-# clusters, smaller produce taller; 3 hits the best aspect ratio empirically.
-CLUSTER_COLUMNS = 3
+
+# F6 (level 2 only): leaf modules imported by so many others that their edges
+# dominate the diagram. utils.constants alone has ~30 inbound edges. They still
+# appear in graph.json — only the SVG hides them.
+HIDDEN_AT_LEVEL2: frozenset[str] = frozenset({
+    "utils.constants",
+    "utils.atomic_io",
+    "utils.i18n",
+})
 
 
 def _top_layer(module: str) -> str:
@@ -312,7 +357,8 @@ def filter_edges_for_display(
     edges: list[list[str]], *, level: int, excluded: frozenset[str]
 ) -> list[tuple[str, str]]:
     """Apply visual filters F1 (drop ``__init__`` re-exports), F4 (drop intra-layer
-    edges at level >= 2), and F5 (drop edges touching an excluded layer).
+    edges at level >= 2), F5 (drop edges touching an excluded layer), and F6
+    (hide god-leaves at level 2).
 
     The committed ``graph.json`` keeps every edge — filtering only affects how
     SVGs are drawn, so the CI freshness gate stays stable.
@@ -328,6 +374,9 @@ def filter_edges_for_display(
                 continue
             # F4: same-layer edges are interior wiring, not cross-layer flow.
             if _top_layer(s) == _top_layer(d):
+                continue
+            # F6: hide leaves that everything imports — their edges drown the diagram.
+            if s in HIDDEN_AT_LEVEL2 or d in HIDDEN_AT_LEVEL2:
                 continue
         out.append((s, d))
     return out
@@ -353,14 +402,19 @@ def render_dot_layered(
     for v in by_layer.values():
         v.sort()
 
+    label_extra = (
+        f"\\nhidden: {', '.join(sorted(HIDDEN_AT_LEVEL2))} (imported by most modules)"
+        if level >= 2
+        else ""
+    )
     lines = [
         f'digraph "Dependencies — level {level}" {{',
         '  rankdir=TB;',
         '  compound=true;',
         '  newrank=true;',
         '  concentrate=true;',
-        '  graph [fontname="Helvetica", labelloc="t", ranksep=0.4, nodesep=0.25];',
-        f'  label="Dependencies — level {level}  (red = participates in a cycle)";',
+        '  graph [fontname="Helvetica", labelloc="t", ranksep=0.6, nodesep=0.35];',
+        f'  label="Dependencies — level {level}  (red = participates in a cycle){label_extra}";',
         '  node  [shape=box, style="rounded,filled", fontname="Helvetica", fontsize=10];',
         '  edge  [color="#555555", arrowsize=0.7];',
         '',
@@ -389,32 +443,25 @@ def render_dot_layered(
                     f'    style="rounded,filled"; fillcolor="{node_colour(layer)}55";'
                 )
                 lines.append('    fontname="Helvetica"; fontsize=11;')
-                # Arrange nodes in a grid of CLUSTER_COLUMNS columns: emit each
-                # row as `{rank=same; …}` and chain consecutive rows with one
-                # invisible edge. Without this, layers like ``services`` (14
-                # nodes) and ``utils`` (13) sprawl horizontally and balloon the
-                # diagram to thousands of pt wide.
                 nodes_in_layer = by_layer[layer]
-                rows = [
-                    nodes_in_layer[i : i + CLUSTER_COLUMNS]
-                    for i in range(0, len(nodes_in_layer), CLUSTER_COLUMNS)
-                ]
                 for n in nodes_in_layer:
                     sub_label = n.split(".", 1)[1] if "." in n else n
                     lines.append(
                         f'    "{n}" [label="{sub_label}", fillcolor="{node_colour(layer)}"];'
                     )
-                for row in rows:
-                    if len(row) >= 2:
-                        lines.append(
-                            '    {rank=same; '
-                            + '; '.join(_quote(n) for n in row)
-                            + ';}'
-                        )
-                for upper, lower in zip(rows, rows[1:]):
-                    lines.append(
-                        f'    "{upper[0]}" -> "{lower[0]}" [style=invis, weight=10];'
-                    )
+                # For big clusters (≥ 6 nodes), break peer-nodes into rows of
+                # ~ceil(sqrt(N)) using rank=same. No inter-row forcing edges —
+                # rows can drift to minimize crossings.
+                if len(nodes_in_layer) >= 6:
+                    width = max(3, math.ceil(math.sqrt(len(nodes_in_layer))))
+                    for i in range(0, len(nodes_in_layer), width):
+                        row = nodes_in_layer[i : i + width]
+                        if len(row) >= 2:
+                            lines.append(
+                                '    {rank=same; '
+                                + '; '.join(_quote(n) for n in row)
+                                + ';}'
+                            )
                 lines.append('  }')
                 lines.append('')
         # Same-rank constraints across sidecars: use one representative node
@@ -426,15 +473,22 @@ def render_dot_layered(
                 reps = [by_layer[layer][0] for layer in present_layers]
                 lines.append('  {rank=same; ' + '; '.join(_quote(r) for r in reps) + ';}')
 
-    # Invisible ordering edges along the spine so layers stack in the requested
-    # order regardless of how dot would have ordered them from the real edges.
-    spine_present = [layer for layer in SPINE if layer in by_layer]
-    for a, b in zip(spine_present, spine_present[1:]):
-        if level == 1:
+    # Level-1 spine: keep the high-weight invisible chain so the 6-node
+    # summary stacks in architectural order.
+    if level == 1:
+        spine_present = [layer for layer in SPINE if layer in by_layer]
+        for a, b in zip(spine_present, spine_present[1:]):
             lines.append(f'  "{a}" -> "{b}" [style=invis, weight=100];')
-        else:
-            rep_a, rep_b = by_layer[a][0], by_layer[b][0]
-            lines.append(f'  "{rep_a}" -> "{rep_b}" [style=invis, weight=100];')
+    else:
+        # Pin only the extremes — main at the top, utils at the bottom — and
+        # let dot rank the middle from real edges. Lighter than a full
+        # invisible spine but prevents the layout from collapsing horizontally.
+        if "main" in by_layer:
+            lines.append('  { rank=min; "main"; }')
+        if "utils" in by_layer:
+            lines.append(
+                '  { rank=max; ' + '; '.join(_quote(n) for n in by_layer["utils"]) + '; }'
+            )
 
     lines.append('')
     for s, d in edges:

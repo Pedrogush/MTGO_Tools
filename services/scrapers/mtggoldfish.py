@@ -6,7 +6,6 @@ import bs4
 from curl_cffi import requests
 from loguru import logger
 
-from repositories.deck_text_cache import get_deck_cache
 from utils.atomic_io import atomic_write_json, locked_path
 from utils.constants import (
     ARCHETYPE_CACHE_FILE,
@@ -235,6 +234,8 @@ def _ensure_cache_migration():
         return
 
     _migration_attempted = True
+    from repositories.deck_text_cache import get_deck_cache
+
     cache = get_deck_cache()
 
     # Try to migrate from old JSON cache
@@ -273,6 +274,8 @@ def fetch_deck_text(deck_num: str, source_filter: str | None = None) -> str:
     _ensure_cache_migration()
 
     # Get SQLite cache instance
+    from repositories.deck_text_cache import get_deck_cache
+
     cache = get_deck_cache()
 
     # Check cache first, applying source filter
@@ -292,7 +295,7 @@ def fetch_deck_text(deck_num: str, source_filter: str | None = None) -> str:
     # The /deck/{id} endpoint sits behind Cloudflare's managed challenge, so we
     # fetch from /deck/visual/{id} which is served unprotected.
     logger.info(f"Downloading deck {deck_num} from MTGGoldfish")
-    from navigators.mtggoldfish_visual import fetch_deck_text_from_visual_page
+    from services.scrapers.mtggoldfish_visual import fetch_deck_text_from_visual_page
 
     try:
         deck_text = fetch_deck_text_from_visual_page(deck_num)

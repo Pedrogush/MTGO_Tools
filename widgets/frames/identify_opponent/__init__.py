@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import wx  # noqa: F401 - re-exported for tests that patch identify_opponent.wx
 
-from utils.archetype_resolver import (
+from services.archetype_resolver import (
     find_archetype_by_name,  # noqa: F401 - re-exported for tests that patch this name
 )
 from widgets.frames.identify_opponent.frame import (

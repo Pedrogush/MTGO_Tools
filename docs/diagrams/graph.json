@@ -6,10 +6,6 @@
         "utils"
       ],
       [
-        "automation",
-        "widgets"
-      ],
-      [
         "controllers",
         "repositories"
       ],
@@ -42,18 +38,6 @@
         "widgets"
       ],
       [
-        "navigators",
-        "repositories"
-      ],
-      [
-        "navigators",
-        "utils"
-      ],
-      [
-        "repositories",
-        "navigators"
-      ],
-      [
         "repositories",
         "services"
       ],
@@ -63,23 +47,11 @@
       ],
       [
         "services",
-        "navigators"
-      ],
-      [
-        "services",
         "repositories"
       ],
       [
         "services",
         "utils"
-      ],
-      [
-        "utils",
-        "repositories"
-      ],
-      [
-        "widgets",
-        "controllers"
       ],
       [
         "widgets",
@@ -130,10 +102,6 @@
       [
         "automation.server",
         "utils.constants"
-      ],
-      [
-        "automation.server",
-        "widgets.frames"
       ],
       [
         "automation.test_runner",
@@ -256,30 +224,6 @@
         "widgets.frames"
       ],
       [
-        "navigators.mtggoldfish",
-        "navigators.mtggoldfish_visual"
-      ],
-      [
-        "navigators.mtggoldfish",
-        "repositories.deck_text_cache"
-      ],
-      [
-        "navigators.mtggoldfish",
-        "utils.atomic_io"
-      ],
-      [
-        "navigators.mtggoldfish",
-        "utils.constants"
-      ],
-      [
-        "navigators.mtggoldfish",
-        "utils.json_io"
-      ],
-      [
-        "navigators.mtggoldfish_visual",
-        "utils.constants"
-      ],
-      [
         "repositories",
         "repositories.card_repository"
       ],
@@ -333,11 +277,11 @@
       ],
       [
         "repositories.metagame_repository",
-        "navigators.mtggoldfish"
+        "services.remote_snapshot_client"
       ],
       [
         "repositories.metagame_repository",
-        "services.remote_snapshot_client"
+        "services.scrapers"
       ],
       [
         "repositories.metagame_repository",
@@ -350,6 +294,10 @@
       [
         "repositories.radar_repository",
         "utils.constants"
+      ],
+      [
+        "services.archetype_resolver",
+        "repositories.metagame_repository"
       ],
       [
         "services.bundle_snapshot_client",
@@ -413,7 +361,7 @@
       ],
       [
         "services.deck_workflow_service",
-        "navigators.mtggoldfish"
+        "services.scrapers"
       ],
       [
         "services.deck_workflow_service",
@@ -422,10 +370,6 @@
       [
         "services.format_card_pool_service",
         "repositories.format_card_pool_repository"
-      ],
-      [
-        "services.gamelog_service",
-        "services.card_data_service"
       ],
       [
         "services.gamelog_service",
@@ -476,6 +420,22 @@
         "utils.constants"
       ],
       [
+        "services.scrapers",
+        "repositories.deck_text_cache"
+      ],
+      [
+        "services.scrapers",
+        "utils.atomic_io"
+      ],
+      [
+        "services.scrapers",
+        "utils.constants"
+      ],
+      [
+        "services.scrapers",
+        "utils.json_io"
+      ],
+      [
         "services.search_service",
         "repositories.card_repository"
       ],
@@ -498,10 +458,6 @@
       [
         "services.store_service",
         "utils.json_io"
-      ],
-      [
-        "utils.archetype_resolver",
-        "repositories.metagame_repository"
       ],
       [
         "utils.deck",
@@ -549,11 +505,11 @@
       ],
       [
         "widgets.frames",
-        "controllers.app_controller"
+        "repositories.metagame_repository"
       ],
       [
         "widgets.frames",
-        "repositories.metagame_repository"
+        "services.archetype_resolver"
       ],
       [
         "widgets.frames",
@@ -586,10 +542,6 @@
       [
         "widgets.frames",
         "services.radar_service"
-      ],
-      [
-        "widgets.frames",
-        "utils.archetype_resolver"
       ],
       [
         "widgets.frames",
@@ -645,10 +597,6 @@
       ],
       [
         "widgets.panels",
-        "repositories.deck_repository"
-      ],
-      [
-        "widgets.panels",
         "services.card_data_service"
       ],
       [
@@ -674,10 +622,6 @@
       [
         "widgets.panels",
         "services.radar_service"
-      ],
-      [
-        "widgets.panels",
-        "services.store_service"
       ],
       [
         "widgets.panels",
@@ -710,13 +654,12 @@
     ]
   },
   "metadata": {
-    "commit": "beab4be83e80fa44359ed857ff99dc26a564d63a",
-    "commit_date": "2026-05-24T17:30:46-03:00",
-    "generated_at": "2026-05-24T20:41:34Z",
+    "commit": "17d1c22879f458b352bfbe4f0f069f9ff8212c40",
+    "commit_date": "2026-05-24T17:43:39-03:00",
+    "generated_at": "2026-05-24T21:26:02Z",
     "internal_packages": [
       "automation",
       "controllers",
-      "navigators",
       "repositories",
       "services",
       "utils",

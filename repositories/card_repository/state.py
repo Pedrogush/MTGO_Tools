@@ -4,10 +4,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from services.card_data_service import CardDataManager
-
 if TYPE_CHECKING:
     from repositories.card_repository.protocol import CardRepositoryProto
+    from services.card_data_service import CardDataManager
 
     _Base = CardRepositoryProto
 else:
