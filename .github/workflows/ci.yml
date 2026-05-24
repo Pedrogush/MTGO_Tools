@@ -192,10 +192,22 @@ jobs:
       - name: Verify LOC_REPORT.md is up to date
         run: python scripts/generate_loc_report.py --check
 
+  dep-graph:
+    name: Dependency Graph Freshness
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Verify docs/diagrams/graph.json is up to date
+        run: python scripts/generate_dependency_diagrams.py --check
+
   validation-summary:
     name: Validation Summary
     runs-on: ubuntu-latest
-    needs: [lint-and-format, type-check, security-scan, compile-check, dotnet-build, loc-report]
+    needs: [lint-and-format, type-check, security-scan, compile-check, dotnet-build, loc-report, dep-graph]
     if: always()
     steps:
       - name: Check job results
@@ -208,11 +220,13 @@ jobs:
           echo "Compilation Check: ${{ needs.compile-check.result }}"
           echo ".NET Build: ${{ needs.dotnet-build.result }}"
           echo "LOC Report: ${{ needs.loc-report.result }}"
+          echo "Dependency Graph: ${{ needs.dep-graph.result }}"
 
           if [ "${{ needs.lint-and-format.result }}" != "success" ] || \
              [ "${{ needs.compile-check.result }}" != "success" ] || \
              [ "${{ needs.dotnet-build.result }}" != "success" ] || \
-             [ "${{ needs.loc-report.result }}" != "success" ]; then
+             [ "${{ needs.loc-report.result }}" != "success" ] || \
+             [ "${{ needs.dep-graph.result }}" != "success" ]; then
             echo "❌ Critical validation checks failed"
             exit 1
           fi
