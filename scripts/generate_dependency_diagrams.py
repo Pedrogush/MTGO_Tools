@@ -35,7 +35,7 @@ import shutil
 import subprocess
 import sys
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 # Source dirs whose imports we chart. ``tests`` and ``scripts`` are intentionally
@@ -150,7 +150,9 @@ def _walk_runtime(tree: ast.AST):
             stack.extend(ast.iter_child_nodes(node))
 
 
-def extract_edges(source_file: Path, source_module: str, root: Path, all_modules: set[str]) -> set[tuple[str, str]]:
+def extract_edges(
+    source_file: Path, source_module: str, root: Path, all_modules: set[str]
+) -> set[tuple[str, str]]:
     """Return the set of (source_module, target_module) edges from this file.
 
     Edges reflect *runtime* imports: imports inside ``if TYPE_CHECKING:`` blocks
@@ -230,7 +232,7 @@ def build_payload(root: Path) -> dict:
         "metadata": {
             "commit": commit,
             "commit_date": _git("show", "-s", "--format=%cI", "HEAD", cwd=root),
-            "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "generated_at": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
             "internal_packages": list(INTERNAL_PACKAGES),
             "top_level_modules": list(TOP_LEVEL_MODULES),
         },
@@ -273,11 +275,13 @@ CYCLE_EDGE_COLOUR = "#cc3333"
 # F6 (level 2 only): leaf modules imported by so many others that their edges
 # dominate the diagram. utils.constants alone has ~30 inbound edges. They still
 # appear in graph.json — only the SVG hides them.
-HIDDEN_AT_LEVEL2: frozenset[str] = frozenset({
-    "utils.constants",
-    "utils.atomic_io",
-    "utils.i18n",
-})
+HIDDEN_AT_LEVEL2: frozenset[str] = frozenset(
+    {
+        "utils.constants",
+        "utils.atomic_io",
+        "utils.i18n",
+    }
+)
 
 
 def _top_layer(module: str) -> str:
@@ -409,27 +413,25 @@ def render_dot_layered(
     )
     lines = [
         f'digraph "Dependencies — level {level}" {{',
-        '  rankdir=TB;',
-        '  compound=true;',
-        '  newrank=true;',
-        '  concentrate=true;',
+        "  rankdir=TB;",
+        "  compound=true;",
+        "  newrank=true;",
+        "  concentrate=true;",
         '  graph [fontname="Helvetica", labelloc="t", ranksep=0.6, nodesep=0.35];',
         f'  label="Dependencies — level {level}  (red = participates in a cycle){label_extra}";',
         '  node  [shape=box, style="rounded,filled", fontname="Helvetica", fontsize=10];',
         '  edge  [color="#555555", arrowsize=0.7];',
-        '',
+        "",
     ]
 
     if level == 1:
         for layer in nodes:
             lines.append(f'  "{layer}" [fillcolor="{node_colour(layer)}"];')
-        lines.append('')
+        lines.append("")
         for rank in LAYER_RANKS:
             present = [layer for layer in rank if layer in by_layer]
             if len(present) >= 2:
-                lines.append(
-                    '  {rank=same; ' + '; '.join(_quote(n) for n in present) + ';}'
-                )
+                lines.append("  {rank=same; " + "; ".join(_quote(n) for n in present) + ";}")
     else:
         for rank in LAYER_RANKS:
             for layer in rank:
@@ -437,11 +439,9 @@ def render_dot_layered(
                     continue
                 # cluster fill is the layer colour at ~33% alpha so nodes stand
                 # out against the cluster background.
-                lines.append(f'  subgraph cluster_{layer} {{')
+                lines.append(f"  subgraph cluster_{layer} {{")
                 lines.append(f'    label="{layer}";')
-                lines.append(
-                    f'    style="rounded,filled"; fillcolor="{node_colour(layer)}55";'
-                )
+                lines.append(f'    style="rounded,filled"; fillcolor="{node_colour(layer)}55";')
                 lines.append('    fontname="Helvetica"; fontsize=11;')
                 nodes_in_layer = by_layer[layer]
                 for n in nodes_in_layer:
@@ -458,12 +458,10 @@ def render_dot_layered(
                         row = nodes_in_layer[i : i + width]
                         if len(row) >= 2:
                             lines.append(
-                                '    {rank=same; '
-                                + '; '.join(_quote(n) for n in row)
-                                + ';}'
+                                "    {rank=same; " + "; ".join(_quote(n) for n in row) + ";}"
                             )
-                lines.append('  }')
-                lines.append('')
+                lines.append("  }")
+                lines.append("")
         # Same-rank constraints across sidecars: use one representative node
         # from each layer in the rank. newrank=true makes this work across
         # cluster boundaries.
@@ -471,7 +469,7 @@ def render_dot_layered(
             present_layers = [layer for layer in rank if layer in by_layer]
             if len(present_layers) >= 2:
                 reps = [by_layer[layer][0] for layer in present_layers]
-                lines.append('  {rank=same; ' + '; '.join(_quote(r) for r in reps) + ';}')
+                lines.append("  {rank=same; " + "; ".join(_quote(r) for r in reps) + ";}")
 
     # Level-1 spine: keep the high-weight invisible chain so the 6-node
     # summary stacks in architectural order.
@@ -486,19 +484,17 @@ def render_dot_layered(
         if "main" in by_layer:
             lines.append('  { rank=min; "main"; }')
         if "utils" in by_layer:
-            lines.append(
-                '  { rank=max; ' + '; '.join(_quote(n) for n in by_layer["utils"]) + '; }'
-            )
+            lines.append("  { rank=max; " + "; ".join(_quote(n) for n in by_layer["utils"]) + "; }")
 
-    lines.append('')
+    lines.append("")
     for s, d in edges:
         attrs: list[str] = []
         if (s, d) in cycle_edges:
             attrs.append(f'color="{CYCLE_EDGE_COLOUR}"')
-            attrs.append('penwidth=2')
-        attr_str = f' [{", ".join(attrs)}]' if attrs else ''
+            attrs.append("penwidth=2")
+        attr_str = f' [{", ".join(attrs)}]' if attrs else ""
         lines.append(f'  "{s}" -> "{d}"{attr_str};')
-    lines.append('}')
+    lines.append("}")
     return "\n".join(lines) + "\n"
 
 
@@ -561,7 +557,10 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.check:
         if not graph_path.exists():
-            print(f"{graph_path.relative_to(root)} missing; run scripts/generate_dependency_diagrams.py", file=sys.stderr)
+            print(
+                f"{graph_path.relative_to(root)} missing; run scripts/generate_dependency_diagrams.py",
+                file=sys.stderr,
+            )
             return 1
         current = json.loads(graph_path.read_text())
         fresh = build_payload(root)
@@ -577,7 +576,9 @@ def main(argv: list[str] | None = None) -> int:
     payload = build_payload(root)
     graph_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
     edge_total = sum(len(v) for v in payload["edges"].values())
-    print(f"Wrote {graph_path.relative_to(root)} ({edge_total} edges across {len(GRAPH_LEVELS)} levels)")
+    print(
+        f"Wrote {graph_path.relative_to(root)} ({edge_total} edges across {len(GRAPH_LEVELS)} levels)"
+    )
 
     if args.json_only:
         return 0

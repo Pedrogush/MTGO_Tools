@@ -20,7 +20,7 @@ from __future__ import annotations
 import argparse
 import subprocess
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 SECTIONS = [
@@ -72,7 +72,7 @@ def build_report(root: Path) -> str:
     commit = _git("rev-parse", "HEAD", cwd=root)
     commit_short = commit[:7]
     commit_date = _git("show", "-s", "--format=%cI", "HEAD", cwd=root)
-    generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%SZ")
+    generated_at = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%SZ")
     total_loc = sum(loc for loc, _ in rows)
 
     out: list[str] = []
@@ -149,9 +149,7 @@ def main(argv: list[str] | None = None) -> int:
         volatile_prefixes = ("- Commit:", "- Commit date:", "- Generated (UTC):")
 
         def _canonical(text: str) -> str:
-            return "\n".join(
-                ln for ln in text.splitlines() if not ln.startswith(volatile_prefixes)
-            )
+            return "\n".join(ln for ln in text.splitlines() if not ln.startswith(volatile_prefixes))
 
         if _canonical(current) != _canonical(content):
             print(f"{REPORT_NAME} is stale; run scripts/generate_loc_report.py", file=sys.stderr)

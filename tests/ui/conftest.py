@@ -10,9 +10,9 @@ import pytest
 if sys.platform != "win32":
     pytest.skip("wxPython UI tests must run on Windows", allow_module_level=True)
 
-import services.scrapers.mtggoldfish as mtggoldfish
 import services.image_service as card_images
 import services.image_service.schemas as card_images_schemas
+import services.scrapers.mtggoldfish as mtggoldfish
 import utils.constants as constants
 import widgets.frames.app_frame as app_frame
 import widgets.frames.identify_opponent as identify_opponent

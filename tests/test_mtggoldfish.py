@@ -103,14 +103,18 @@ class TestCacheLoading:
 
     def test_load_cached_archetypes_missing_file(self, temp_archetype_list_file):
         """Test loading archetypes when cache file doesn't exist."""
-        with patch("services.scrapers.mtggoldfish.ARCHETYPE_LIST_CACHE_FILE", temp_archetype_list_file):
+        with patch(
+            "services.scrapers.mtggoldfish.ARCHETYPE_LIST_CACHE_FILE", temp_archetype_list_file
+        ):
             result = _load_cached_archetypes("modern", max_age=3600)
         assert result is None
 
     def test_load_cached_archetypes_invalid_json(self, temp_archetype_list_file):
         """Test loading archetypes with invalid JSON."""
         temp_archetype_list_file.write_text("invalid json{{{")
-        with patch("services.scrapers.mtggoldfish.ARCHETYPE_LIST_CACHE_FILE", temp_archetype_list_file):
+        with patch(
+            "services.scrapers.mtggoldfish.ARCHETYPE_LIST_CACHE_FILE", temp_archetype_list_file
+        ):
             result = _load_cached_archetypes("modern", max_age=3600)
             assert result is None
 
@@ -119,7 +123,9 @@ class TestCacheLoading:
         temp_archetype_list_file.write_text(
             json.dumps({"pioneer": {"timestamp": time.time(), "items": []}})
         )
-        with patch("services.scrapers.mtggoldfish.ARCHETYPE_LIST_CACHE_FILE", temp_archetype_list_file):
+        with patch(
+            "services.scrapers.mtggoldfish.ARCHETYPE_LIST_CACHE_FILE", temp_archetype_list_file
+        ):
             result = _load_cached_archetypes("modern", max_age=3600)
             assert result is None
 
@@ -128,7 +134,9 @@ class TestCacheLoading:
         old_timestamp = time.time() - 7200  # 2 hours ago
         data = {"modern": {"timestamp": old_timestamp, "items": [{"name": "Test", "href": "test"}]}}
         temp_archetype_list_file.write_text(json.dumps(data))
-        with patch("services.scrapers.mtggoldfish.ARCHETYPE_LIST_CACHE_FILE", temp_archetype_list_file):
+        with patch(
+            "services.scrapers.mtggoldfish.ARCHETYPE_LIST_CACHE_FILE", temp_archetype_list_file
+        ):
             result = _load_cached_archetypes("modern", max_age=3600)  # 1 hour max age
             assert result is None
 
@@ -137,7 +145,9 @@ class TestCacheLoading:
         items = [{"name": "Rakdos Midrange", "href": "modern-rakdos-midrange"}]
         data = {"modern": {"timestamp": time.time(), "items": items}}
         temp_archetype_list_file.write_text(json.dumps(data))
-        with patch("services.scrapers.mtggoldfish.ARCHETYPE_LIST_CACHE_FILE", temp_archetype_list_file):
+        with patch(
+            "services.scrapers.mtggoldfish.ARCHETYPE_LIST_CACHE_FILE", temp_archetype_list_file
+        ):
             result = _load_cached_archetypes("modern", max_age=3600)
             assert result == items
 
@@ -148,7 +158,9 @@ class TestCacheSaving:
     def test_save_cached_archetypes_new_file(self, temp_archetype_list_file):
         """Test saving archetypes to a new cache file."""
         items = [{"name": "Rakdos Midrange", "href": "modern-rakdos-midrange"}]
-        with patch("services.scrapers.mtggoldfish.ARCHETYPE_LIST_CACHE_FILE", temp_archetype_list_file):
+        with patch(
+            "services.scrapers.mtggoldfish.ARCHETYPE_LIST_CACHE_FILE", temp_archetype_list_file
+        ):
             _save_cached_archetypes("modern", items)
 
         assert temp_archetype_list_file.exists()
@@ -170,7 +182,9 @@ class TestCacheSaving:
 
         # Save modern data
         modern_items = [{"name": "Modern Deck", "href": "modern-deck"}]
-        with patch("services.scrapers.mtggoldfish.ARCHETYPE_LIST_CACHE_FILE", temp_archetype_list_file):
+        with patch(
+            "services.scrapers.mtggoldfish.ARCHETYPE_LIST_CACHE_FILE", temp_archetype_list_file
+        ):
             _save_cached_archetypes("modern", modern_items)
 
         data = json.loads(temp_archetype_list_file.read_text())
@@ -183,7 +197,9 @@ class TestCacheSaving:
         temp_archetype_list_file.write_text("invalid json")
 
         items = [{"name": "Test", "href": "test"}]
-        with patch("services.scrapers.mtggoldfish.ARCHETYPE_LIST_CACHE_FILE", temp_archetype_list_file):
+        with patch(
+            "services.scrapers.mtggoldfish.ARCHETYPE_LIST_CACHE_FILE", temp_archetype_list_file
+        ):
             _save_cached_archetypes("modern", items)
 
         data = json.loads(temp_archetype_list_file.read_text())
@@ -199,7 +215,9 @@ class TestGetArchetypes:
         data = {"modern": {"timestamp": time.time(), "items": items}}
         temp_archetype_list_file.write_text(json.dumps(data))
 
-        with patch("services.scrapers.mtggoldfish.ARCHETYPE_LIST_CACHE_FILE", temp_archetype_list_file):
+        with patch(
+            "services.scrapers.mtggoldfish.ARCHETYPE_LIST_CACHE_FILE", temp_archetype_list_file
+        ):
             result = get_archetypes("modern")
             assert result == items
 
@@ -211,7 +229,9 @@ class TestGetArchetypes:
         mock_response.raise_for_status = Mock()
         mock_get.return_value = mock_response
 
-        with patch("services.scrapers.mtggoldfish.ARCHETYPE_LIST_CACHE_FILE", temp_archetype_list_file):
+        with patch(
+            "services.scrapers.mtggoldfish.ARCHETYPE_LIST_CACHE_FILE", temp_archetype_list_file
+        ):
             result = get_archetypes("modern", cache_ttl=0)  # Force cache miss
 
         assert len(result) == 2
@@ -237,7 +257,9 @@ class TestGetArchetypes:
         # Mock request failure
         mock_get.side_effect = Exception("Network error")
 
-        with patch("services.scrapers.mtggoldfish.ARCHETYPE_LIST_CACHE_FILE", temp_archetype_list_file):
+        with patch(
+            "services.scrapers.mtggoldfish.ARCHETYPE_LIST_CACHE_FILE", temp_archetype_list_file
+        ):
             result = get_archetypes("modern", cache_ttl=3600, allow_stale=True)
 
         assert result == items
@@ -249,7 +271,9 @@ class TestGetArchetypes:
         """Test that exception is raised when request fails and no stale cache exists."""
         mock_get.side_effect = Exception("Network error")
 
-        with patch("services.scrapers.mtggoldfish.ARCHETYPE_LIST_CACHE_FILE", temp_archetype_list_file):
+        with patch(
+            "services.scrapers.mtggoldfish.ARCHETYPE_LIST_CACHE_FILE", temp_archetype_list_file
+        ):
             with pytest.raises(Exception, match="Network error"):
                 get_archetypes("modern", cache_ttl=0, allow_stale=True)
 
@@ -266,7 +290,9 @@ class TestGetArchetypes:
 
         mock_get.side_effect = Exception("Network error")
 
-        with patch("services.scrapers.mtggoldfish.ARCHETYPE_LIST_CACHE_FILE", temp_archetype_list_file):
+        with patch(
+            "services.scrapers.mtggoldfish.ARCHETYPE_LIST_CACHE_FILE", temp_archetype_list_file
+        ):
             with pytest.raises(Exception, match="Network error"):
                 get_archetypes("modern", cache_ttl=0, allow_stale=False)
 
@@ -278,7 +304,9 @@ class TestGetArchetypes:
         mock_response.raise_for_status = Mock()
         mock_get.return_value = mock_response
 
-        with patch("services.scrapers.mtggoldfish.ARCHETYPE_LIST_CACHE_FILE", temp_archetype_list_file):
+        with patch(
+            "services.scrapers.mtggoldfish.ARCHETYPE_LIST_CACHE_FILE", temp_archetype_list_file
+        ):
             with pytest.raises(RuntimeError, match="Failed to locate metagame deck container"):
                 get_archetypes("modern", cache_ttl=0)
 
@@ -288,7 +316,9 @@ class TestGetArchetypes:
         data = {"modern": {"timestamp": time.time(), "items": items}}
         temp_archetype_list_file.write_text(json.dumps(data))
 
-        with patch("services.scrapers.mtggoldfish.ARCHETYPE_LIST_CACHE_FILE", temp_archetype_list_file):
+        with patch(
+            "services.scrapers.mtggoldfish.ARCHETYPE_LIST_CACHE_FILE", temp_archetype_list_file
+        ):
             result = get_archetypes("MODERN")
             assert result == items
 
@@ -304,7 +334,9 @@ class TestGetArchetypeDecks:
         mock_response.raise_for_status = Mock()
         mock_get.return_value = mock_response
 
-        with patch("services.scrapers.mtggoldfish.ARCHETYPE_DECKS_CACHE_FILE", temp_archetype_decks_file):
+        with patch(
+            "services.scrapers.mtggoldfish.ARCHETYPE_DECKS_CACHE_FILE", temp_archetype_decks_file
+        ):
             result = get_archetype_decks("modern-rakdos-midrange")
 
         assert len(result) == 2
@@ -324,7 +356,9 @@ class TestGetArchetypeDecks:
         mock_get.side_effect = Exception("Network error")
 
         # Should return cached data from previous successful test
-        with patch("services.scrapers.mtggoldfish.ARCHETYPE_DECKS_CACHE_FILE", temp_archetype_decks_file):
+        with patch(
+            "services.scrapers.mtggoldfish.ARCHETYPE_DECKS_CACHE_FILE", temp_archetype_decks_file
+        ):
             result = get_archetype_decks("modern-rakdos-midrange")
         assert len(result) == 2  # Returns cached data as fallback
         assert result[0]["number"] == "123456"
@@ -338,7 +372,9 @@ class TestGetArchetypeDecks:
         mock_get.return_value = mock_response
 
         # Should return cached data from previous successful test
-        with patch("services.scrapers.mtggoldfish.ARCHETYPE_DECKS_CACHE_FILE", temp_archetype_decks_file):
+        with patch(
+            "services.scrapers.mtggoldfish.ARCHETYPE_DECKS_CACHE_FILE", temp_archetype_decks_file
+        ):
             result = get_archetype_decks("modern-rakdos-midrange")
         assert len(result) == 2  # Returns cached data as fallback
         assert result[0]["number"] == "123456"
