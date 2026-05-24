@@ -358,10 +358,7 @@ def render_dot_layered(
         '  rankdir=TB;',
         '  compound=true;',
         '  newrank=true;',
-        # F2 (concentrate=true) intentionally disabled: it segfaults in
-        # Graphviz 2.43.0 (Ubuntu 20.04's apt package) on graphs with the
-        # cluster + rank-same combination we use. Re-enable if you upgrade to
-        # graphviz >= 2.45 or hand-bundle in Python instead.
+        '  concentrate=true;',
         '  graph [fontname="Helvetica", labelloc="t", ranksep=0.4, nodesep=0.25];',
         f'  label="Dependencies — level {level}  (red = participates in a cycle)";',
         '  node  [shape=box, style="rounded,filled", fontname="Helvetica", fontsize=10];',
