@@ -472,10 +472,15 @@ def render_dot_layered(
                 lines.append("  {rank=same; " + "; ".join(_quote(r) for r in reps) + ";}")
 
     # Level-1 spine: keep the high-weight invisible chain so the 6-node
-    # summary stacks in architectural order.
+    # summary stacks in architectural order. Skip pairs that already have a
+    # real edge — ``concentrate=true`` would otherwise merge the visible and
+    # invisible edges and keep the result invisible.
     if level == 1:
         spine_present = [layer for layer in SPINE if layer in by_layer]
+        edge_set = {(s, d) for s, d in edges}
         for a, b in zip(spine_present, spine_present[1:]):
+            if (a, b) in edge_set:
+                continue
             lines.append(f'  "{a}" -> "{b}" [style=invis, weight=100];')
     else:
         # Pin only the extremes — main at the top, utils at the bottom — and
