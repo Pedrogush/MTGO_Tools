@@ -1,14 +1,18 @@
 """Dialog for downloading card images from Scryfall with progress tracking."""
 
+from __future__ import annotations
+
 from collections.abc import Callable
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import wx
 
-from services.image_service import BulkImageDownloader
 from utils.constants import DARK_BG, LIGHT_TEXT, SUBDUED_TEXT
 from widgets.dialogs.image_download_dialog.handlers import ImageDownloadDialogHandlersMixin
 from widgets.dialogs.image_download_dialog.properties import ImageDownloadDialogPropertiesMixin
+
+if TYPE_CHECKING:
+    from services.image_service import BulkImageDownloader
 
 
 class ImageDownloadDialog(

@@ -8,7 +8,6 @@ from typing import TYPE_CHECKING
 import wx
 from loguru import logger
 
-from services.image_service import CardImageRequest
 from utils.constants import APP_FRAME_MIN_SIZE
 from utils.i18n import LOCALE_LABELS
 from utils.runtime_flags import is_automation_enabled
@@ -19,6 +18,7 @@ from widgets.frames.app_frame.handlers.app_events import _simple_summary_html
 from widgets.frames.mana_keyboard import open_mana_keyboard
 
 if TYPE_CHECKING:
+    from services.image_service import CardImageRequest
     from widgets.frames.app_frame.protocol import AppFrameProto
 
     _Base = AppFrameProto

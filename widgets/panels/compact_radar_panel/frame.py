@@ -6,15 +6,19 @@ in the opponent tracker overlay.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import wx
 
-from services.radar_service import RadarData
 from utils.constants import DARK_BG, DARK_PANEL, LIGHT_TEXT, SUBDUED_TEXT
 from widgets.panels.compact_radar_panel.handlers import CompactRadarHandlersMixin
 from widgets.panels.compact_radar_panel.properties import (
     CompactRadarPropertiesMixin,
     RadarViewMode,
 )
+
+if TYPE_CHECKING:
+    from services.radar_service import RadarData
 
 
 class CompactRadarPanel(CompactRadarHandlersMixin, CompactRadarPropertiesMixin, wx.Panel):

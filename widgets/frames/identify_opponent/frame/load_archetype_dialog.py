@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import wx
 from loguru import logger
 
-from services.metagame_service import MetagameService
 from utils.constants import DARK_BG, FORMAT_OPTIONS, LIGHT_TEXT
+
+if TYPE_CHECKING:
+    from services.metagame_service import MetagameService
 
 
 class _LoadArchetypeDialog(wx.Dialog):

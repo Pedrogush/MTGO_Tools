@@ -7,13 +7,13 @@ from typing import TYPE_CHECKING, Any, Protocol
 
 import wx
 
-from services.image_service import CardImageRequest
 from widgets.mana_icon_service import ManaIconFactory
 from widgets.panels.card_image_display import CardImageDisplay
 from widgets.panels.mana_rich_text_ctrl import ManaSymbolRichCtrl
 
 if TYPE_CHECKING:
     from repositories.card_repository import CardDataManager
+    from services.image_service import CardImageRequest
 
 
 class CardInspectorPanelProto(Protocol):

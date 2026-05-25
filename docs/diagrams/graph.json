@@ -473,10 +473,6 @@
       ],
       [
         "widgets.frames",
-        "services.image_service"
-      ],
-      [
-        "widgets.frames",
         "services.metagame_service"
       ],
       [
@@ -602,9 +598,9 @@
     ]
   },
   "metadata": {
-    "commit": "8a0f907d956d40b1bf02d32292c24c52f4a25292",
-    "commit_date": "2026-05-25T17:49:50-03:00",
-    "generated_at": "2026-05-25T20:51:56Z",
+    "commit": "186f9c60e2166951f3e6851d8e3d22a73956af09",
+    "commit_date": "2026-05-25T17:52:59-03:00",
+    "generated_at": "2026-05-25T20:59:30Z",
     "internal_packages": [
       "automation",
       "controllers",

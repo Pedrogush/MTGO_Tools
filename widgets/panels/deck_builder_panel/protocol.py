@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
 import wx
 
 from widgets.mana_icon_service import ManaIconFactory
-from services.radar_service import RadarData
+
+if TYPE_CHECKING:
+    from services.radar_service import RadarData
 
 
 class DeckBuilderPanelProto(Protocol):

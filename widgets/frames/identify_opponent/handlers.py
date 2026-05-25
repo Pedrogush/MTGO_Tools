@@ -11,14 +11,16 @@ from __future__ import annotations
 import json
 import threading
 import time
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import wx
 from loguru import logger
 
 from services.archetype_resolver import find_archetype_by_name
-from services.metagame_service import MetagameService
-from services.radar_service import RadarData, RadarService
+
+if TYPE_CHECKING:
+    from services.metagame_service import MetagameService
+    from services.radar_service import RadarData, RadarService
 from utils.atomic_io import atomic_write_json, locked_path
 from utils.background_worker import BackgroundWorker
 from utils.constants import (

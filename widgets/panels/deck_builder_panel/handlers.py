@@ -6,10 +6,10 @@ from typing import TYPE_CHECKING, Any
 
 import wx
 
-from services.radar_service import RadarData
 from utils.constants import BUILDER_SEARCH_DEBOUNCE_MS
 
 if TYPE_CHECKING:
+    from services.radar_service import RadarData
     from widgets.panels.deck_builder_panel.protocol import DeckBuilderPanelProto
 
     _Base = DeckBuilderPanelProto

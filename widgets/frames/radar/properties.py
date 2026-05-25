@@ -4,11 +4,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from services.radar_service import CardFrequency, RadarData
 from utils.i18n import translate
 
 if TYPE_CHECKING:
-    pass
+    from services.radar_service import CardFrequency, RadarData
 
 
 class RadarPanelPropertiesMixin:
