@@ -14,7 +14,7 @@ from matplotlib.axes import Axes
 from matplotlib.backends.backend_wxagg import FigureCanvasWxAgg as FigureCanvas
 from matplotlib.figure import Figure
 
-from repositories.metagame_repository import get_metagame_repository
+from services.metagame_service import get_metagame_service
 
 
 class MetagameAnalysisHandlersMixin:
@@ -86,7 +86,7 @@ class MetagameAnalysisHandlersMixin:
         def worker() -> None:
             try:
                 logger.debug(f"Worker thread started for {self.current_format}")
-                stats = get_metagame_repository().get_stats_for_format(self.current_format)
+                stats = get_metagame_service().get_stats_for_format(self.current_format)
                 logger.info(f"Successfully loaded archetype stats for {self.current_format}")
                 logger.debug(f"Stats keys: {list(stats.keys())}")
                 wx.CallAfter(self._populate_data, stats)
