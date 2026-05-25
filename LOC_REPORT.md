@@ -1,10 +1,10 @@
 # Lines of Code by File (.py only)
 
-- Commit: `2533087` (253308701a556e928acff7a5b2e4977ea4227d45)
-- Commit date: 2026-05-25T09:39:39-03:00
-- Generated (UTC): 2026-05-25 14:57:52Z
+- Commit: `4380c12` (4380c126a21dacb9401d84a1495ea9f6d7eae4b0)
+- Commit date: 2026-05-25T11:59:54-03:00
+- Generated (UTC): 2026-05-25 20:17:46Z
 - Files counted: **463** (all git-tracked `*.py` files)
-- Total lines: **51,345**
+- Total lines: **51,344**
 
 Counts are raw `wc -l` (newline count). Files are grouped by top-level directory and sorted descending within each section. Regenerate with `python scripts/generate_loc_report.py`.
 
@@ -12,7 +12,7 @@ Counts are raw `wc -l` (newline count). Files are grouped by top-level directory
 
 | Section | Files | LOC |
 |:--------|------:|----:|
-| controllers | 13 | 1,347 |
+| controllers | 13 | 1,346 |
 | repositories | 51 | 4,057 |
 | widgets | 166 | 17,623 |
 | services | 79 | 8,726 |
@@ -21,7 +21,7 @@ Counts are raw `wc -l` (newline count). Files are grouped by top-level directory
 | utils | 70 | 2,956 |
 | other | 16 | 2,614 |
 
-## controllers (13 files, 1,347 LOC)
+## controllers (13 files, 1,346 LOC)
 
 | LOC | File |
 |----:|:-----|
@@ -34,7 +34,7 @@ Counts are raw `wc -l` (newline count). Files are grouped by top-level directory
 | 98 | `controllers/app_controller/protocol.py` |
 | 95 | `controllers/app_controller/settings.py` |
 | 72 | `controllers/app_controller/ui_callbacks.py` |
-| 51 | `controllers/app_controller/card_data.py` |
+| 50 | `controllers/app_controller/card_data.py` |
 | 49 | `controllers/app_controller/collection.py` |
 | 43 | `controllers/app_controller/__init__.py` |
 | 13 | `controllers/__init__.py` |

@@ -113,10 +113,6 @@
       ],
       [
         "controllers.app_controller",
-        "repositories.card_repository"
-      ],
-      [
-        "controllers.app_controller",
         "services.bundle_snapshot_client"
       ],
       [
@@ -634,9 +630,9 @@
     ]
   },
   "metadata": {
-    "commit": "253308701a556e928acff7a5b2e4977ea4227d45",
-    "commit_date": "2026-05-25T09:39:39-03:00",
-    "generated_at": "2026-05-25T14:57:48Z",
+    "commit": "4380c126a21dacb9401d84a1495ea9f6d7eae4b0",
+    "commit_date": "2026-05-25T11:59:54-03:00",
+    "generated_at": "2026-05-25T20:17:42Z",
     "internal_packages": [
       "automation",
       "controllers",

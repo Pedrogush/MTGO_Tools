@@ -7,10 +7,9 @@ from typing import TYPE_CHECKING
 
 from loguru import logger
 
-from repositories.card_repository import CardDataManager
-
 if TYPE_CHECKING:
     from controllers.app_controller.protocol import AppControllerProto
+    from repositories.card_repository import CardDataManager
 
     _Base = AppControllerProto
 else:
