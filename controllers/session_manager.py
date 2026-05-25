@@ -17,7 +17,7 @@ class DeckSelectorSessionManager:
 
     def __init__(
         self,
-        deck_repo,
+        deck_repo=None,
         settings_file: Path | None = None,
         config_file: Path | None = None,
         default_deck_dir: Path | None = None,
@@ -33,6 +33,10 @@ class DeckSelectorSessionManager:
             DECKS_DIR as _DD,
         )
 
+        if deck_repo is None:
+            from repositories.deck_repository import get_deck_repository  # noqa: PLC0415
+
+            deck_repo = get_deck_repository()
         self.deck_repo = deck_repo
         self.settings_file = settings_file if settings_file is not None else _SF
         self.config_file = config_file if config_file is not None else _CF
