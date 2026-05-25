@@ -112,13 +112,12 @@ class LifecycleMixin(_Base):
             on_error=_on_comp_rules_error,
         )
 
-    def create_frame(self, parent: wx.Window | None = None) -> AppFrame:
+    def attach_frame(self, frame: AppFrame) -> AppFrame:
         import wx
 
         from controllers.app_controller.ui_callbacks import AppControllerUIHelpers
-        from widgets.frames.app_frame import AppFrame
 
-        frame = AppFrame(controller=self, parent=parent)
+        self.frame = frame
         self._ui_callbacks = AppControllerUIHelpers(self, frame).build_callbacks()
 
         wx.CallAfter(frame._restore_session_state)

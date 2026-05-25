@@ -115,8 +115,6 @@ class AppController(
         self.frame: AppFrame | None = None
         self._bulk_check_worker_active = False
 
-        self.frame = self.create_frame()
-
     # ----- Backward-compat repository accessors -----
     # Widgets, handlers, and a few tests still reach for ``controller.card_repo``,
     # ``controller.deck_repo`` and ``controller.metagame_repo``. Cleaning those

@@ -14,10 +14,6 @@
         "utils"
       ],
       [
-        "controllers",
-        "widgets"
-      ],
-      [
         "main",
         "automation"
       ],
@@ -158,10 +154,6 @@
       [
         "controllers.app_controller",
         "utils.i18n"
-      ],
-      [
-        "controllers.app_controller",
-        "widgets.frames"
       ],
       [
         "controllers.session_manager",
@@ -610,9 +602,9 @@
     ]
   },
   "metadata": {
-    "commit": "70bba1515a4e642f57d7e22320799f03475e3a8b",
-    "commit_date": "2026-05-25T17:44:41-03:00",
-    "generated_at": "2026-05-25T20:45:55Z",
+    "commit": "ac5e70ab931404e4ba64345e0cda9ff29a41b483",
+    "commit_date": "2026-05-25T17:46:45-03:00",
+    "generated_at": "2026-05-25T20:48:52Z",
     "internal_packages": [
       "automation",
       "controllers",

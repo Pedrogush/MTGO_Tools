@@ -302,6 +302,7 @@ def deck_selector_factory(wx_app) -> AppFrame:
 
         reset_deck_selector_controller()
         controller = get_deck_selector_controller()
+        controller.attach_frame(AppFrame(controller=controller))
         frame = controller.frame
         # Expose controller-backed repos/services for legacy tests
         frame.card_repo = controller.card_repo
