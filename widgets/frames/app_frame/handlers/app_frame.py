@@ -44,7 +44,11 @@ class AppFrameHandlersMixin(_Base):
             menu,
             self._t("toolbar.download_card_images"),
             lambda: show_image_download_dialog(
-                self, self.image_cache, self.image_downloader, self._set_status
+                self,
+                self.image_cache,
+                self.image_downloader,
+                self.controller.BULK_DATA_CACHE,
+                self._set_status,
             ),
         )
         self._append_menu_item(
@@ -198,6 +202,7 @@ class AppFrameHandlersMixin(_Base):
             RulesBrowserFrame,
             "Comprehensive Rules",
             self._handle_child_close,
+            controller=self.controller,
             locale=self.locale,
         )
 

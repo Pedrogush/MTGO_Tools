@@ -59,7 +59,7 @@ class TestRadarIntegration:
         self, mock_wx, mock_radar_service, mock_metagame_repo
     ):
         """Test that radar loading is triggered when opponent has known deck."""
-        with patch("widgets.frames.identify_opponent.find_archetype_by_name") as mock_find:
+        with patch("services.archetype_resolver.find_archetype_by_name") as mock_find:
             mock_find.return_value = {
                 "name": "UR Murktide",
                 "href": "/archetype/ur-murktide",

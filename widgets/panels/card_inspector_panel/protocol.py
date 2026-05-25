@@ -19,6 +19,7 @@ if TYPE_CHECKING:
 class CardInspectorPanelProto(Protocol):
     """Cross-mixin ``self`` surface for ``CardInspectorPanel``."""
 
+    controller: Any
     card_manager: CardDataManager | None
     mana_icons: ManaIconFactory
     active_zone: str | None

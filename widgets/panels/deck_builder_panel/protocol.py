@@ -17,6 +17,7 @@ class DeckBuilderPanelProto(Protocol):
     """Cross-mixin ``self`` surface for ``DeckBuilderPanel``."""
 
     _locale: str | None
+    controller: Any
     mana_icons: ManaIconFactory
 
     _on_switch_to_research: Callable[[], None]

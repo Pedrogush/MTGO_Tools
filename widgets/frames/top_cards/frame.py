@@ -9,17 +9,18 @@ _project_root = Path(__file__).resolve().parent.parent.parent.parent
 if str(_project_root) not in sys.path:
     sys.path.insert(0, str(_project_root))
 
+from typing import TYPE_CHECKING
+
 import wx
 
-from services.format_card_pool_service import (
-    FormatCardPoolService,
-    get_format_card_pool_service,
-)
-from services.radar_service import RadarService, get_radar_service
 from utils.constants import DARK_ALT, DARK_BG, DARK_PANEL, FORMAT_OPTIONS, LIGHT_TEXT, SUBDUED_TEXT
 from utils.i18n import translate
 from widgets.frames.top_cards.handlers import TopCardsHandlersMixin
 from widgets.frames.top_cards.properties import TopCardsPropertiesMixin
+
+if TYPE_CHECKING:
+    from services.format_card_pool_service import FormatCardPoolService
+    from services.radar_service import RadarService
 
 TOP_CARDS_EXCLUDED_FORMATS = {"Commander", "Brawl", "Historic"}
 TOP_CARDS_FORMAT_OPTIONS = [
@@ -33,9 +34,8 @@ class TopCardsFrame(TopCardsHandlersMixin, TopCardsPropertiesMixin, wx.Frame):
     def __init__(
         self,
         parent: wx.Window | None = None,
+        controller=None,
         locale: str | None = None,
-        format_card_pool_service: FormatCardPoolService | None = None,
-        radar_service: RadarService | None = None,
     ) -> None:
         style = wx.DEFAULT_FRAME_STYLE | wx.STAY_ON_TOP
         super().__init__(
@@ -45,8 +45,9 @@ class TopCardsFrame(TopCardsHandlersMixin, TopCardsPropertiesMixin, wx.Frame):
             style=style,
         )
         self._locale = locale
-        self._service = format_card_pool_service or get_format_card_pool_service()
-        self._radar_service = radar_service or get_radar_service()
+        self.controller = controller
+        self._service: FormatCardPoolService = controller.format_card_pool_service
+        self._radar_service: RadarService = controller.radar_service
         self.current_format = "modern"
 
         self._build_ui()

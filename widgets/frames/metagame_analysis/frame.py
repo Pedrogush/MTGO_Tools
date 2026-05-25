@@ -26,7 +26,12 @@ class MetagameAnalysisFrame(
 ):
     """Widget for displaying metagame archetype distribution and changes over time."""
 
-    def __init__(self, parent: wx.Window | None = None, locale: str | None = None) -> None:
+    def __init__(
+        self,
+        parent: wx.Window | None = None,
+        controller=None,
+        locale: str | None = None,
+    ) -> None:
         style = wx.DEFAULT_FRAME_STYLE | wx.STAY_ON_TOP
         super().__init__(
             parent,
@@ -35,6 +40,7 @@ class MetagameAnalysisFrame(
             style=style,
         )
         self._locale = locale
+        self.controller = controller
 
         self.current_format: str = "modern"
         self.current_days: int = 1

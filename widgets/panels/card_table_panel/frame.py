@@ -44,6 +44,7 @@ class CardTablePanel(CardTablePanelHandlersMixin, CardTablePanelPropertiesMixin,
         on_remove: Callable[[str, str], None],
         on_add: Callable[[str], None],
         on_select: Callable[[str, dict[str, Any] | None], None],
+        get_card_image: Callable[[str, str], Any],
         on_hover: Callable[[str, dict[str, Any]], None] | None = None,
     ) -> None:
         super().__init__(parent)
@@ -55,6 +56,7 @@ class CardTablePanel(CardTablePanelHandlersMixin, CardTablePanelPropertiesMixin,
         self._on_remove = on_remove
         self._on_add = on_add
         self._on_select = on_select
+        self._get_card_image = get_card_image
         self._on_hover = on_hover
         self.cards: list[dict[str, Any]] = []
         self.card_widgets: list[CardBoxPanel] = []
@@ -97,6 +99,7 @@ class CardTablePanel(CardTablePanelHandlersMixin, CardTablePanelPropertiesMixin,
                 on_delta,
                 on_remove,
                 self._handle_card_click,
+                get_card_image,
                 on_hover,
             )
             self.grid_sizer.Add(cell, 0, wx.RIGHT | wx.BOTTOM, self.GRID_GAP)

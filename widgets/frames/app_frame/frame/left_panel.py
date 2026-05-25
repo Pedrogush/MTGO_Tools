@@ -84,6 +84,7 @@ class LeftPanelBuilderMixin(_Base):
 
         self.builder_panel = DeckBuilderPanel(
             parent=self.left_stack,
+            controller=self.controller,
             mana_icons=self.mana_icons,
             on_switch_to_research=lambda: self._show_left_panel("research"),
             on_ensure_card_data=self.ensure_card_data_loaded,

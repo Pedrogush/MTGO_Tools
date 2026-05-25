@@ -20,6 +20,7 @@ def _make_frame() -> TimerAlertFrame:
     frame._monitor_timer = MagicMock()
     frame._repeat_timer = MagicMock()
     frame._set_status = MagicMock()
+    frame.controller = MagicMock()
     return frame
 
 
@@ -45,7 +46,7 @@ def test_start_watch_loop_runs_bridge_start_in_background(monkeypatch) -> None:
         def start(self) -> None:
             self.started = True
 
-    monkeypatch.setattr(timer_alert.mtgo_bridge, "start_watch", fake_start_watch)
+    frame.controller.mtgo_bridge_service.start_watch = fake_start_watch
     monkeypatch.setattr(
         timer_alert.wx,
         "CallAfter",

@@ -16,8 +16,6 @@ from typing import TYPE_CHECKING, Any
 import wx
 from loguru import logger
 
-from services.archetype_resolver import find_archetype_by_name
-
 if TYPE_CHECKING:
     from services.metagame_service import MetagameService
     from services.radar_service import RadarData, RadarService
@@ -285,7 +283,7 @@ class MTGOpponentDeckSpyHandlersMixin:
             return
 
         # Resolve archetype name to archetype dict
-        archetype_dict = find_archetype_by_name(
+        archetype_dict = self.controller.find_archetype_by_name(
             archetype_name, format_name, self.metagame_service.metagame_repo
         )
 

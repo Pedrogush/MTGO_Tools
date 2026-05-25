@@ -43,7 +43,7 @@
       ],
       [
         "widgets",
-        "services"
+        "controllers"
       ],
       [
         "widgets",
@@ -101,6 +101,10 @@
       ],
       [
         "controllers.app_controller",
+        "services.archetype_resolver"
+      ],
+      [
+        "controllers.app_controller",
         "services.bundle_snapshot_client"
       ],
       [
@@ -125,11 +129,27 @@
       ],
       [
         "controllers.app_controller",
+        "services.format_card_pool_service"
+      ],
+      [
+        "controllers.app_controller",
+        "services.gamelog_service"
+      ],
+      [
+        "controllers.app_controller",
         "services.image_service"
       ],
       [
         "controllers.app_controller",
         "services.metagame_service"
+      ],
+      [
+        "controllers.app_controller",
+        "services.mtgo_bridge_service"
+      ],
+      [
+        "controllers.app_controller",
+        "services.radar_service"
       ],
       [
         "controllers.app_controller",
@@ -437,10 +457,6 @@
       ],
       [
         "widgets.dialogs",
-        "services.image_service"
-      ],
-      [
-        "widgets.dialogs",
         "utils.constants"
       ],
       [
@@ -457,31 +473,7 @@
       ],
       [
         "widgets.frames",
-        "services.archetype_resolver"
-      ],
-      [
-        "widgets.frames",
-        "services.comp_rules_service"
-      ],
-      [
-        "widgets.frames",
-        "services.format_card_pool_service"
-      ],
-      [
-        "widgets.frames",
-        "services.gamelog_service"
-      ],
-      [
-        "widgets.frames",
-        "services.metagame_service"
-      ],
-      [
-        "widgets.frames",
-        "services.mtgo_bridge_service"
-      ],
-      [
-        "widgets.frames",
-        "services.radar_service"
+        "controllers.app_controller"
       ],
       [
         "widgets.frames",
@@ -545,26 +537,6 @@
       ],
       [
         "widgets.panels",
-        "services.comp_rules_service"
-      ],
-      [
-        "widgets.panels",
-        "services.deck_service"
-      ],
-      [
-        "widgets.panels",
-        "services.format_card_pool_service"
-      ],
-      [
-        "widgets.panels",
-        "services.image_service"
-      ],
-      [
-        "widgets.panels",
-        "services.radar_service"
-      ],
-      [
-        "widgets.panels",
         "utils.constants"
       ],
       [
@@ -598,9 +570,9 @@
     ]
   },
   "metadata": {
-    "commit": "186f9c60e2166951f3e6851d8e3d22a73956af09",
-    "commit_date": "2026-05-25T17:52:59-03:00",
-    "generated_at": "2026-05-25T20:59:30Z",
+    "commit": "9c9eedde77fa5080d02ce8782b6ce2faf401255a",
+    "commit_date": "2026-05-25T18:00:26-03:00",
+    "generated_at": "2026-05-25T21:20:43Z",
     "internal_packages": [
       "automation",
       "controllers",

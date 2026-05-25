@@ -35,6 +35,7 @@ class CardBoxPanel(CardBoxPanelHandlersMixin, CardBoxPanelPropertiesMixin, wx.Pa
         on_delta: Callable[[str, str, int], None],
         on_remove: Callable[[str, str], None],
         on_select: Callable[[str, dict[str, Any], CardBoxPanel], None],
+        get_card_image: Callable[[str, str], str | None],
         on_hover: Callable[[str, dict[str, Any]], None] | None = None,
     ) -> None:
         super().__init__(parent)
@@ -46,6 +47,7 @@ class CardBoxPanel(CardBoxPanelHandlersMixin, CardBoxPanelPropertiesMixin, wx.Pa
         self._on_delta = on_delta
         self._on_remove = on_remove
         self._on_select = on_select
+        self._get_card_image = get_card_image
         self._on_hover = on_hover
         self._active = False
         self._mana_cost = ""

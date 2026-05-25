@@ -15,6 +15,7 @@ from widgets.panels.card_panel.rule_popup import RulePopupFrame
 class CardPanelProto(Protocol):
     """Cross-mixin ``self`` surface for ``CardPanel``."""
 
+    controller: Any
     mana_icons: ManaIconFactory
     _t: Callable[..., str]
     # Optional callable returning a fresh keyword lookup; the panel calls this

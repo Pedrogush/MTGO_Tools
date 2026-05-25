@@ -14,10 +14,8 @@ from typing import TYPE_CHECKING, Any
 import wx
 from loguru import logger
 
-from services import mtgo_bridge_service as mtgo_bridge
-from services.mtgo_bridge_service.client import BridgeWatcher
-
 if TYPE_CHECKING:
+    from services.mtgo_bridge_service.client import BridgeWatcher
     from widgets.frames.timer_alert.frame import ThresholdPanel
 
 try:
@@ -181,7 +179,9 @@ class TimerAlertHandlersMixin:
 
     def _watch_start_worker(self) -> None:
         try:
-            watcher = mtgo_bridge.start_watch(interval_ms=self.WATCH_INTERVAL_MS)
+            watcher = self.controller.mtgo_bridge_service.start_watch(
+                interval_ms=self.WATCH_INTERVAL_MS
+            )
         except FileNotFoundError as exc:
             logger.error("Bridge executable not found: {}", exc)
             if not self._closed:

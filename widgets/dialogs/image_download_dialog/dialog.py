@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import wx
@@ -39,7 +40,8 @@ class ImageDownloadDialog(
         self,
         parent: wx.Window,
         image_cache: Any,
-        image_downloader: BulkImageDownloader | None,
+        image_downloader: BulkImageDownloader,
+        bulk_data_cache_path: Path,
         on_status_update: Callable[[str], None] | None = None,
     ):
         super().__init__(parent, title="Download Card Images", size=(450, 320))
@@ -47,6 +49,7 @@ class ImageDownloadDialog(
 
         self.image_cache = image_cache
         self.image_downloader = image_downloader
+        self.bulk_data_cache_path = bulk_data_cache_path
         self.on_status_update = on_status_update
 
         self._build_ui()
@@ -118,10 +121,13 @@ class ImageDownloadDialog(
 def show_image_download_dialog(
     parent: wx.Window,
     image_cache: Any,
-    image_downloader: BulkImageDownloader | None,
+    image_downloader: BulkImageDownloader,
+    bulk_data_cache_path: Path,
     on_status_update: Callable[[str], None] | None = None,
 ) -> None:
-    dialog = ImageDownloadDialog(parent, image_cache, image_downloader, on_status_update)
+    dialog = ImageDownloadDialog(
+        parent, image_cache, image_downloader, bulk_data_cache_path, on_status_update
+    )
 
     if dialog.ShowModal() == wx.ID_OK:
         quality, max_cards = dialog.get_selected_options()

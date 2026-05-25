@@ -39,6 +39,7 @@ class DeckBuilderPanel(
     def __init__(
         self,
         parent: wx.Window,
+        controller: Any,
         mana_icons: ManaIconFactory,
         on_switch_to_research: Callable[[], None],
         on_ensure_card_data: Callable[[], None],
@@ -54,6 +55,7 @@ class DeckBuilderPanel(
         super().__init__(parent)
 
         self._locale = locale
+        self.controller = controller
 
         # Store dependencies
         self.mana_icons = mana_icons

@@ -58,10 +58,7 @@ class DeckBuilderPanelPropertiesMixin(_Base):
         # Add radar filter if enabled
         filters["radar_enabled"] = self.radar_enabled
         if self.radar_enabled and self.active_radar:
-            from services.radar_service import get_radar_service
-
-            radar_service = get_radar_service()
-            filters["radar_cards"] = radar_service.get_radar_card_names(
+            filters["radar_cards"] = self.controller.radar_service.get_radar_card_names(
                 self.active_radar, self.radar_zone
             )
         else:

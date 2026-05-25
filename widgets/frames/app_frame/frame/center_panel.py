@@ -112,8 +112,8 @@ class CenterPanelBuilderMixin(_Base):
         # Stats panel kept hidden; stats_summary preserved for callers.
         self.deck_stats_panel = DeckStatsPanel(
             detail_box,
+            controller=self.controller,
             card_manager=self.controller.card_repo.get_card_manager(),
-            deck_service=self.controller.deck_service,
         )
         self.deck_stats_panel.Hide()
         self.stats_summary = self.deck_stats_panel.summary_label
@@ -143,6 +143,7 @@ class CenterPanelBuilderMixin(_Base):
             self._handle_zone_remove,
             self._handle_zone_add,
             self._handle_card_focus,
+            self.controller.get_card_image,
             self._handle_card_hover,
         )
         self.deck_tabs.AddPage(table, tab_name)

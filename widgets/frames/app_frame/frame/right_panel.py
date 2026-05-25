@@ -65,6 +65,7 @@ class RightPanelBuilderMixin(_Base):
 
         self.card_inspector_panel = CardInspectorPanel(
             inspector_box,
+            controller=self.controller,
             card_manager=self.controller.card_repo.get_card_manager(),
             mana_icons=self.mana_icons,
         )
@@ -100,6 +101,7 @@ class RightPanelBuilderMixin(_Base):
 
         self.card_panel = CardPanel(
             card_box,
+            controller=self.controller,
             mana_icons=self.mana_icons,
             t=self._t,
         )

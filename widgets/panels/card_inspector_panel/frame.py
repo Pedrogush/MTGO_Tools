@@ -11,7 +11,6 @@ from typing import TYPE_CHECKING, Any
 
 import wx
 
-from services.image_service import CardImageRequest, get_cache
 from widgets.mana_icon_service import ManaIconFactory
 from utils.constants import (
     CARD_IMAGE_COST_MIN_HEIGHT,
@@ -36,6 +35,7 @@ from widgets.stylize import stylize_button
 
 if TYPE_CHECKING:
     from repositories.card_repository import CardDataManager
+    from services.image_service import CardImageRequest
 
 
 class CardInspectorPanel(
@@ -48,12 +48,14 @@ class CardInspectorPanel(
     def __init__(
         self,
         parent: wx.Window,
+        controller: Any,
         card_manager: CardDataManager | None = None,
         mana_icons: ManaIconFactory | None = None,
     ):
         super().__init__(parent)
         self.SetBackgroundColour(DARK_PANEL)
 
+        self.controller = controller
         self.card_manager = card_manager
         self.mana_icons = mana_icons or ManaIconFactory()
 
@@ -63,7 +65,7 @@ class CardInspectorPanel(
         self.inspector_current_printing: int = 0
         self.inspector_current_card_name: str | None = None
         self.printing_label_width: int = 0
-        self.image_cache = get_cache()
+        self.image_cache = controller.get_image_cache()
         self.bulk_data_by_name: dict[str, list[dict[str, Any]]] | None = None
         self._image_available = False
         self._loading_printing = False

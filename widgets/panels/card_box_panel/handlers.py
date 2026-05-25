@@ -8,7 +8,6 @@ from typing import TYPE_CHECKING, Any
 import wx
 from PIL import Image as PilImage
 
-from services.image_service import get_card_image
 from utils.constants import (
     DARK_ACCENT,
     DARK_ALT,
@@ -87,7 +86,7 @@ class CardBoxPanelHandlersMixin(_Base):
     def _image_load_worker(self, gen: int, candidates: list[str]) -> None:
         image_path = None
         for name in candidates:
-            path = get_card_image(name, "normal")
+            path = self._get_card_image(name, "normal")
             if path and path.exists():
                 image_path = path
                 break
@@ -208,7 +207,7 @@ class CardBoxPanelHandlersMixin(_Base):
         self._image_attempted = True
         image_path = None
         for name in self._image_name_candidates:
-            image_path = get_card_image(name, "normal")
+            image_path = self._get_card_image(name, "normal")
             if image_path and image_path.exists():
                 break
         if image_path and image_path.exists():

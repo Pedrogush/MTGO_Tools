@@ -32,7 +32,12 @@ class MatchHistoryFrame(MatchHistoryHandlersMixin, MatchHistoryPropertiesMixin, 
     _FIXED_WIDTH = 850
     _COL_WIDTHS = [100, 90, 140]  # Result, Mulligans, Date (pixels)
 
-    def __init__(self, parent: wx.Window | None = None, locale: str | None = None) -> None:
+    def __init__(
+        self,
+        parent: wx.Window | None = None,
+        controller=None,
+        locale: str | None = None,
+    ) -> None:
         style = wx.DEFAULT_FRAME_STYLE | wx.STAY_ON_TOP
         super().__init__(
             parent,
@@ -41,6 +46,7 @@ class MatchHistoryFrame(MatchHistoryHandlersMixin, MatchHistoryPropertiesMixin, 
             style=style,
         )
         self._locale = locale
+        self.controller = controller
         # Lock horizontal size; allow vertical resize only
         self.SetSizeHints(self._FIXED_WIDTH, 300, self._FIXED_WIDTH, -1)
 
@@ -207,6 +213,7 @@ class MatchHistoryFrame(MatchHistoryHandlersMixin, MatchHistoryPropertiesMixin, 
 
 def main() -> None:
     """Launch the match history viewer as a standalone application."""
+    from controllers.app_controller import get_deck_selector_controller
     from utils.constants import LOGS_DIR, ensure_base_dirs
     from utils.logging_config import configure_logging
 
@@ -216,7 +223,7 @@ def main() -> None:
         logger.info(f"Writing logs to {log_file}")
 
     app = wx.App(False)
-    frame = MatchHistoryFrame()
+    frame = MatchHistoryFrame(controller=get_deck_selector_controller())
     frame.Show()
     app.MainLoop()
 
