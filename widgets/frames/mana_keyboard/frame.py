@@ -6,8 +6,8 @@ from collections.abc import Callable
 
 import wx
 
-from widgets.mana_icon_service import ManaIconFactory, type_global_mana_symbol
 from utils.constants import DARK_BG, FULL_MANA_SYMBOLS, LIGHT_TEXT
+from widgets.mana_icon_service import ManaIconFactory, type_global_mana_symbol
 
 
 class ManaKeyboardFrame(wx.Frame):

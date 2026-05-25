@@ -1,10 +1,10 @@
 # Lines of Code by File (.py only)
 
-- Commit: `9b641bf` (9b641bf2a0ac79175a245475f458894968d08fb0)
-- Commit date: 2026-05-25T18:24:25-03:00
-- Generated (UTC): 2026-05-25 21:25:37Z
+- Commit: `5e5e9c2` (5e5e9c2ed9b81868894b6a57321b421e279039fc)
+- Commit date: 2026-05-25T20:01:35-03:00
+- Generated (UTC): 2026-05-25 23:20:09Z
 - Files counted: **463** (all git-tracked `*.py` files)
-- Total lines: **51,454**
+- Total lines: **51,460**
 
 Counts are raw `wc -l` (newline count). Files are grouped by top-level directory and sorted descending within each section. Regenerate with `python scripts/generate_loc_report.py`.
 
@@ -12,22 +12,22 @@ Counts are raw `wc -l` (newline count). Files are grouped by top-level directory
 
 | Section | Files | LOC |
 |:--------|------:|----:|
-| controllers | 13 | 1,378 |
+| controllers | 13 | 1,377 |
 | repositories | 51 | 4,057 |
-| widgets | 173 | 18,898 |
+| widgets | 173 | 18,900 |
 | services | 72 | 7,525 |
 | tests | 49 | 10,802 |
 | automation | 19 | 3,223 |
 | utils | 70 | 2,956 |
-| other | 16 | 2,615 |
+| other | 16 | 2,620 |
 
-## controllers (13 files, 1,378 LOC)
+## controllers (13 files, 1,377 LOC)
 
 | LOC | File |
 |----:|:-----|
 | 274 | `controllers/session_manager.py` |
 | 173 | `controllers/app_controller/controller.py` |
-| 136 | `controllers/app_controller/lifecycle.py` |
+| 135 | `controllers/app_controller/lifecycle.py` |
 | 133 | `controllers/app_controller/bulk_data.py` |
 | 121 | `controllers/app_controller/archetypes.py` |
 | 121 | `controllers/app_controller/decks.py` |
@@ -95,7 +95,7 @@ Counts are raw `wc -l` (newline count). Files are grouped by top-level directory
 | 15 | `repositories/radar_repository/protocol.py` |
 | 14 | `repositories/scrapers/__init__.py` |
 
-## widgets (173 files, 18,898 LOC)
+## widgets (173 files, 18,900 LOC)
 
 | LOC | File |
 |----:|:-----|
@@ -108,10 +108,10 @@ Counts are raw `wc -l` (newline count). Files are grouped by top-level directory
 | 396 | `widgets/mana_icon_service/bitmap_renderer.py` |
 | 367 | `widgets/frames/app_frame/handlers/app_frame.py` |
 | 358 | `widgets/panels/card_panel/html_renderer.py` |
-| 348 | `widgets/frames/metagame_analysis/handlers.py` |
+| 349 | `widgets/frames/metagame_analysis/handlers.py` |
 | 343 | `widgets/panels/card_image_display/handlers.py` |
 | 331 | `widgets/panels/mana_rich_text_ctrl/handlers.py` |
-| 328 | `widgets/frames/match_history/handlers.py` |
+| 329 | `widgets/frames/match_history/handlers.py` |
 | 313 | `widgets/frames/app_frame/handlers/card_tables.py` |
 | 307 | `widgets/frames/radar/handlers.py` |
 | 305 | `widgets/panels/card_box_panel/handlers.py` |
@@ -503,12 +503,12 @@ Counts are raw `wc -l` (newline count). Files are grouped by top-level directory
 | 7 | `utils/constants/app.py` |
 | 3 | `utils/constants/images.py` |
 
-## other (16 files, 2,615 LOC)
+## other (16 files, 2,620 LOC)
 
 | LOC | File |
 |----:|:-----|
 | 615 | `scripts/mtgosdk_repl.py` |
-| 603 | `scripts/generate_dependency_diagrams.py` |
+| 608 | `scripts/generate_dependency_diagrams.py` |
 | 238 | `scripts/test_card_images.py` |
 | 168 | `scripts/benchmark_json_caches.py` |
 | 165 | `scripts/generate_loc_report.py` |

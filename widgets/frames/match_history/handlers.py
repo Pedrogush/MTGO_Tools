@@ -9,6 +9,7 @@ import wx
 import wx.dataview as dv
 from loguru import logger
 
+
 class MatchHistoryHandlersMixin:
     """Callbacks and worker-thread bridges for :class:`MatchHistoryFrame`."""
 

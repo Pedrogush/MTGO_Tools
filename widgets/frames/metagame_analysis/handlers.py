@@ -14,6 +14,7 @@ from matplotlib.axes import Axes
 from matplotlib.backends.backend_wxagg import FigureCanvasWxAgg as FigureCanvas
 from matplotlib.figure import Figure
 
+
 class MetagameAnalysisHandlersMixin:
     """Callbacks, data workers, and UI-mutation helpers for :class:`MetagameAnalysisFrame`."""
 

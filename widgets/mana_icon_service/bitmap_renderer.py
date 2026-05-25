@@ -11,7 +11,6 @@ from typing import TYPE_CHECKING
 
 import wx
 
-from widgets.mana_icon_service.resources import ManaIconResources
 from utils.constants import DARK_ALT
 from utils.constants.ui_images import (
     MANA_GLYPH_FONT_SIZE_BASE,
@@ -20,6 +19,7 @@ from utils.constants.ui_images import (
     MANA_OUTLINE_DARK_RGB,
     MANA_TEXT_DARK_RGB,
 )
+from widgets.mana_icon_service.resources import ManaIconResources
 
 if TYPE_CHECKING:
     from widgets.mana_icon_service.cache import ManaBitmapCache

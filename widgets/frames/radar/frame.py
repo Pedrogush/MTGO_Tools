@@ -16,12 +16,12 @@ import wx
 import wx.dataview as dv
 
 from utils.constants import DARK_ALT, DARK_PANEL, LIGHT_TEXT
-
-if TYPE_CHECKING:
-    from services.radar_service import RadarData, RadarService
 from utils.i18n import translate
 from widgets.frames.radar.handlers import RadarFrameHandlersMixin, RadarPanelHandlersMixin
 from widgets.frames.radar.properties import RadarFramePropertiesMixin, RadarPanelPropertiesMixin
+
+if TYPE_CHECKING:
+    from services.radar_service import RadarData
 
 
 class RadarPanel(RadarPanelHandlersMixin, RadarPanelPropertiesMixin, wx.Panel):

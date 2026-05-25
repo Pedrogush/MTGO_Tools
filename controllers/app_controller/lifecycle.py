@@ -10,7 +10,6 @@ from loguru import logger
 from utils.constants import MTGO_BRIDGE_SHUTDOWN_TIMEOUT_SECONDS
 
 if TYPE_CHECKING:
-    import wx
 
     from controllers.app_controller.protocol import AppControllerProto
     from widgets.frames.app_frame import AppFrame

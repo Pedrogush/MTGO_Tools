@@ -7,7 +7,6 @@ from typing import Any
 
 import wx
 
-from widgets.mana_icon_service import ManaIconFactory
 from utils.constants import (
     DARK_ALT,
     DECK_CARD_BADGE_PADDING,
@@ -17,6 +16,7 @@ from utils.constants import (
     DECK_CARD_WIDTH,
     LIGHT_TEXT,
 )
+from widgets.mana_icon_service import ManaIconFactory
 from widgets.panels.card_box_panel.handlers import CardBoxPanelHandlersMixin
 from widgets.panels.card_box_panel.properties import CardBoxPanelPropertiesMixin
 

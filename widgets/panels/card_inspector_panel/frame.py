@@ -11,7 +11,6 @@ from typing import TYPE_CHECKING, Any
 
 import wx
 
-from widgets.mana_icon_service import ManaIconFactory
 from utils.constants import (
     CARD_IMAGE_COST_MIN_HEIGHT,
     CARD_IMAGE_DISPLAY_HEIGHT,
@@ -27,6 +26,7 @@ from utils.constants import (
     PADDING_XL,
     SUBDUED_TEXT,
 )
+from widgets.mana_icon_service import ManaIconFactory
 from widgets.panels.card_image_display import CardImageDisplay
 from widgets.panels.card_inspector_panel.handlers import CardInspectorPanelHandlersMixin
 from widgets.panels.card_inspector_panel.properties import CardInspectorPanelPropertiesMixin

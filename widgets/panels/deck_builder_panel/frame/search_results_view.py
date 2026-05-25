@@ -6,7 +6,6 @@ from typing import Any
 
 import wx
 
-from widgets.mana_icon_service import ManaIconFactory
 from utils.constants import (
     BUILDER_MANA_CANVAS_WIDTH,
     BUILDER_MANA_ICON_GAP,
@@ -14,6 +13,7 @@ from utils.constants import (
     BUILDER_NAME_COL_MIN_WIDTH,
     DARK_ALT,
 )
+from widgets.mana_icon_service import ManaIconFactory
 
 
 class _SearchResultsView(wx.ListCtrl):
