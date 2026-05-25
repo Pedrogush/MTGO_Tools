@@ -14,13 +14,12 @@ from controllers.app_controller.lifecycle import LifecycleMixin
 from controllers.app_controller.settings import SettingsMixin
 from controllers.app_controller.ui_callbacks import UICallbacks
 from controllers.session_manager import DeckSelectorSessionManager
-from repositories.card_repository import get_card_repository
-from repositories.deck_repository import get_deck_repository
-from repositories.metagame_repository import get_metagame_repository
+from services.card_service import get_card_service
 from services.collection_service import get_collection_service
 from services.deck_service import get_deck_service
 from services.deck_workflow_service import DeckWorkflowService
 from services.image_service import get_image_service
+from services.metagame_service import get_metagame_service
 from services.search_service import get_search_service
 from services.store_service import get_store_service
 from utils.background_worker import BackgroundWorker
@@ -50,10 +49,9 @@ class AppController(
     def __init__(
         self,
         *,
-        deck_repo=None,
-        metagame_repo=None,
-        card_repo=None,
+        card_service=None,
         deck_service=None,
+        metagame_service=None,
         search_service=None,
         collection_service=None,
         image_service=None,
@@ -63,19 +61,16 @@ class AppController(
     ):
         ensure_base_dirs()
 
-        self.deck_repo = deck_repo or get_deck_repository()
-        self.metagame_repo = metagame_repo or get_metagame_repository()
-        self.card_repo = card_repo or get_card_repository()
+        self.card_service = card_service or get_card_service()
         self.deck_service = deck_service or get_deck_service()
+        self.metagame_service = metagame_service or get_metagame_service()
         self.search_service = search_service or get_search_service()
         self.collection_service = collection_service or get_collection_service()
         self.image_service = image_service or get_image_service()
         self.store_service = store_service or get_store_service()
 
-        self.session_manager = session_manager or DeckSelectorSessionManager(self.deck_repo)
+        self.session_manager = session_manager or DeckSelectorSessionManager()
         self.workflow_service = deck_workflow_service or DeckWorkflowService(
-            deck_repo=self.deck_repo,
-            metagame_repo=self.metagame_repo,
             deck_service=self.deck_service,
         )
 
@@ -119,3 +114,23 @@ class AppController(
         self._bulk_check_worker_active = False
 
         self.frame = self.create_frame()
+
+    # ----- Backward-compat repository accessors -----
+    # Widgets, handlers, and a few tests still reach for ``controller.card_repo``,
+    # ``controller.deck_repo`` and ``controller.metagame_repo``. Cleaning those
+    # call sites is tracked by sibling issues (widgets-no-repo-direct, etc.).
+    # Until that cascade is complete, expose the underlying repositories via the
+    # owning services so the controller no longer imports ``repositories.*``
+    # directly while keeping the existing API working.
+
+    @property
+    def card_repo(self):
+        return self.card_service.card_repo
+
+    @property
+    def deck_repo(self):
+        return self.workflow_service.deck_repo
+
+    @property
+    def metagame_repo(self):
+        return self.metagame_service.metagame_repo

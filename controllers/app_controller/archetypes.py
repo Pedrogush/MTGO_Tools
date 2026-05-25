@@ -39,7 +39,7 @@ class ArchetypesMixin(_Base):
             on_success(fresh_archetypes)
 
         def loader(fmt: str):
-            return self.metagame_repo.get_archetypes_for_format(
+            return self.metagame_service.get_archetypes_for_format(
                 fmt, force_refresh=force, on_background_refresh=_on_bg_refresh
             )
 

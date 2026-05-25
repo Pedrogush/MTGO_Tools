@@ -27,10 +27,7 @@ if str(_project_root) not in sys.path:
 import wx
 from loguru import logger
 
-from repositories.metagame_repository import (
-    MetagameRepository,
-    get_metagame_repository,
-)
+from services.metagame_service import MetagameService, get_metagame_service
 from services.radar_service import RadarData, RadarService, get_radar_service
 from utils.background_worker import BackgroundWorker
 from utils.constants import (
@@ -71,7 +68,7 @@ class MTGOpponentDeckSpy(
         self,
         parent: wx.Window | None = None,
         radar_service: RadarService | None = None,
-        metagame_repository: MetagameRepository | None = None,
+        metagame_service: MetagameService | None = None,
         locale: str | None = None,
     ) -> None:
         style = (
@@ -102,7 +99,7 @@ class MTGOpponentDeckSpy(
 
         # Radar integration
         self.radar_service: RadarService = radar_service or get_radar_service()
-        self.metagame_repo: MetagameRepository = metagame_repository or get_metagame_repository()
+        self.metagame_service: MetagameService = metagame_service or get_metagame_service()
         self.current_radar: RadarData | None = None
         self._radar_worker_thread: threading.Thread | None = None
         self._radar_cancel_requested: bool = False
