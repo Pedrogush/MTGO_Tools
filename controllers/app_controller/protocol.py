@@ -8,13 +8,12 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol
 
 from controllers.session_manager import DeckSelectorSessionManager
-from repositories.card_repository import CardRepository
-from repositories.deck_repository import DeckRepository
-from repositories.metagame_repository import MetagameRepository
+from services.card_service import CardService
 from services.collection_service import CollectionService
 from services.deck_service import DeckService
 from services.deck_workflow_service import DeckWorkflowService
 from services.image_service import ImageService
+from services.metagame_service import MetagameService
 from services.search_service import SearchService
 from utils.background_worker import BackgroundWorker
 from utils.diagnostics import EventLogger
@@ -27,11 +26,10 @@ if TYPE_CHECKING:
 class AppControllerProto(Protocol):
     """Cross-mixin ``self`` surface for ``AppController``."""
 
-    # Repositories and services
-    deck_repo: DeckRepository
-    metagame_repo: MetagameRepository
-    card_repo: CardRepository
+    # Services
+    card_service: CardService
     deck_service: DeckService
+    metagame_service: MetagameService
     search_service: SearchService
     collection_service: CollectionService
     image_service: ImageService
