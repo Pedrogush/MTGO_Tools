@@ -7,10 +7,6 @@
       ],
       [
         "controllers",
-        "repositories"
-      ],
-      [
-        "controllers",
         "services"
       ],
       [
@@ -166,10 +162,6 @@
       [
         "controllers.app_controller",
         "widgets.frames"
-      ],
-      [
-        "controllers.session_manager",
-        "repositories.deck_repository"
       ],
       [
         "controllers.session_manager",
@@ -618,9 +610,9 @@
     ]
   },
   "metadata": {
-    "commit": "ebec0c9c6f73e929cc19bebbb51c99fa3d6184af",
-    "commit_date": "2026-05-25T17:24:46-03:00",
-    "generated_at": "2026-05-25T20:41:50Z",
+    "commit": "70bba1515a4e642f57d7e22320799f03475e3a8b",
+    "commit_date": "2026-05-25T17:44:41-03:00",
+    "generated_at": "2026-05-25T20:45:55Z",
     "internal_packages": [
       "automation",
       "controllers",

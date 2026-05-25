@@ -69,9 +69,11 @@ class AppController(
         self.image_service = image_service or get_image_service()
         self.store_service = store_service or get_store_service()
 
-        self.session_manager = session_manager or DeckSelectorSessionManager()
         self.workflow_service = deck_workflow_service or DeckWorkflowService(
             deck_service=self.deck_service,
+        )
+        self.session_manager = session_manager or DeckSelectorSessionManager(
+            deck_repo=self.workflow_service.deck_repo,
         )
 
         self.current_format = self.session_manager.get_current_format()
