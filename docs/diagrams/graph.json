@@ -19,10 +19,6 @@
       ],
       [
         "main",
-        "controllers"
-      ],
-      [
-        "main",
         "utils"
       ],
       [
@@ -194,10 +190,6 @@
       [
         "main",
         "automation.server"
-      ],
-      [
-        "main",
-        "controllers.app_controller"
       ],
       [
         "main",
@@ -570,9 +562,9 @@
     ]
   },
   "metadata": {
-    "commit": "9c9eedde77fa5080d02ce8782b6ce2faf401255a",
-    "commit_date": "2026-05-25T18:00:26-03:00",
-    "generated_at": "2026-05-25T21:20:43Z",
+    "commit": "fdc8bec95b2972417a0828e84dc9204cf0997652",
+    "commit_date": "2026-05-25T18:22:26-03:00",
+    "generated_at": "2026-05-25T21:24:05Z",
     "internal_packages": [
       "automation",
       "controllers",

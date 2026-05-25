@@ -8,11 +8,10 @@ import argparse
 import wx
 from loguru import logger
 
-from controllers.app_controller import get_deck_selector_controller
 from utils.constants import BASE_DATA_DIR, LOGS_DIR, ensure_base_dirs
 from utils.logging_config import configure_logging
 from utils.runtime_flags import set_automation_enabled
-from widgets.frames.app_frame import AppFrame
+from widgets.frames.app_frame import make_app_frame
 from widgets.frames.splash_frame import LoadingFrame
 
 # Global flag for automation mode
@@ -36,10 +35,10 @@ class MetagameWxApp(wx.App):
         return True
 
     def _build_main_window(self) -> None:
-        controller = get_deck_selector_controller()
-        controller.attach_frame(AppFrame(controller=controller))
+        frame = make_app_frame()
+        controller = frame.controller
         self.controller = controller
-        self.SetTopWindow(controller.frame)
+        self.SetTopWindow(frame)
 
         # Start automation server if enabled
         self._automation_server = None
