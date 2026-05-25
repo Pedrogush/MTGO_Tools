@@ -40,7 +40,6 @@ graph TB
         FCPS[FormatCardPoolService]
         DWS[DeckWorkflowService]
         BSC[BundleSnapshotClient]
-        RSC[RemoteSnapshotClient]
         MBS[MtgoBridgeService<br/>client + facade]
     end
 
@@ -52,6 +51,7 @@ graph TB
         RR[RadarRepository<br/>SQLite]
         FCPR[FormatCardPoolRepository<br/>SQLite]
         MTG_GF[mtggoldfish.py<br/>scraper]
+        RSC[RemoteSnapshotClient]
     end
 
     subgraph "Utilities"
@@ -119,8 +119,8 @@ graph TB
     classDef external fill:#ffff99,stroke:#333,stroke-width:2px
 
     class AC,ACH,SM,BDH controller
-    class DS,CS,SS,IS,StS,RS,FCPS,DWS,BSC,RSC,MBS service
-    class CR,DR,DTC,MR,RR,FCPR,MTG_GF repo
+    class DS,CS,SS,IS,StS,RS,FCPS,DWS,BSC,MBS service
+    class CR,DR,DTC,MR,RR,FCPR,MTG_GF,RSC repo
     class AF,DRP,DBP,CTP,CIP,SGP,RP,ODS,MH,TA ui
     class CI,DECK,AIO,GP util
     class SCRYFALL,MTGJSON,GOLDFISH,MTGO_CLIENT,BRIDGE external
@@ -132,7 +132,7 @@ graph TB
 
 **Services**: Business logic. Image, collection, and deck services are each Python packages whose main class inherits from (or composes) focused mixins/helpers. For example `services/collection_service/` contains `cache`, `parsing`, `ownership`, `deck_analysis`, `stats`, `bridge_refresh`, and `exporter` modules; `services/image_service/` splits into `bulk_data`, `metadata`, `printing_index`, `cache`, and `download_queue`; `services/deck_service/` contains `parser`, `averager`, and `text_builder`. Radar, format card pool, and deck workflow each have their own service. `services/mtgo_bridge_service/` wraps the external CLI bridge: `client` is the subprocess/multiprocessing transport, and the package facade exposes collection/history/trade snapshots and the challenge watcher.
 
-**Repositories**: Data access with caching. `DeckRepository` and `MetagameRepository` use JSON file caches. `RadarRepository`, `FormatCardPoolRepository`, and `DeckTextCache` use SQLite. `CardRepository` is a single package that combines the collection-file repo with `CardDataManager`, owning the MTGJSON AtomicCards download, on-disk index format, and in-memory query API (`builder`, `remote`, `storage`, `schemas`, `card_data_manager`). `repositories/scrapers/` (`mtggoldfish.py`, `mtggoldfish_visual.py`) is the source side of `MetagameRepository` and `DeckTextCache` — these scrapers live under `repositories/` because owning a data source and shaping it into domain records is a repository's job, not a service's.
+**Repositories**: Data access with caching. `DeckRepository` and `MetagameRepository` use JSON file caches. `RadarRepository`, `FormatCardPoolRepository`, and `DeckTextCache` use SQLite. `CardRepository` is a single package that combines the collection-file repo with `CardDataManager`, owning the MTGJSON AtomicCards download, on-disk index format, and in-memory query API (`builder`, `remote`, `storage`, `schemas`, `card_data_manager`). `repositories/scrapers/` (`mtggoldfish.py`, `mtggoldfish_visual.py`) is the source side of `MetagameRepository` and `DeckTextCache`, and `repositories/remote_snapshot_client/` provides remote-bundle archetype/stats snapshots as a source for `MetagameRepository` — these data sources live under `repositories/` because owning a data source and shaping it into domain records is a repository's job, not a service's.
 
 **UI/Widgets**: wxPython panels in `widgets/panels/`, dialogs in `widgets/dialogs/`, and standalone overlay windows (`MTGOpponentDeckSpy`, `MatchHistory`, `TimerAlert`).
 

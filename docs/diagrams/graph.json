@@ -39,10 +39,6 @@
       ],
       [
         "repositories",
-        "services"
-      ],
-      [
-        "repositories",
         "utils"
       ],
       [
@@ -253,11 +249,11 @@
       ],
       [
         "repositories.metagame_repository",
-        "repositories.scrapers"
+        "repositories.remote_snapshot_client"
       ],
       [
         "repositories.metagame_repository",
-        "services.remote_snapshot_client"
+        "repositories.scrapers"
       ],
       [
         "repositories.metagame_repository",
@@ -269,6 +265,10 @@
       ],
       [
         "repositories.radar_repository",
+        "utils.constants"
+      ],
+      [
+        "repositories.remote_snapshot_client",
         "utils.constants"
       ],
       [
@@ -417,10 +417,6 @@
       ],
       [
         "services.radar_service",
-        "utils.constants"
-      ],
-      [
-        "services.remote_snapshot_client",
         "utils.constants"
       ],
       [
@@ -638,9 +634,9 @@
     ]
   },
   "metadata": {
-    "commit": "79ebe0057f9f0c89c3aa2586f1b417bbc4ddd993",
-    "commit_date": "2026-05-25T00:06:40-03:00",
-    "generated_at": "2026-05-25T12:36:51Z",
+    "commit": "253308701a556e928acff7a5b2e4977ea4227d45",
+    "commit_date": "2026-05-25T09:39:39-03:00",
+    "generated_at": "2026-05-25T14:57:48Z",
     "internal_packages": [
       "automation",
       "controllers",

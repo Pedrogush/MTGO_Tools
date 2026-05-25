@@ -8,10 +8,11 @@ from typing import TYPE_CHECKING, Any
 from loguru import logger
 
 import repositories.metagame_repository as _pkg
+from repositories.remote_snapshot_client import get_remote_snapshot_client
 
 if TYPE_CHECKING:
     from repositories.metagame_repository.protocol import MetagameRepositoryProto
-    from services.remote_snapshot_client import RemoteSnapshotClient
+    from repositories.remote_snapshot_client import RemoteSnapshotClient
 
     _Base = MetagameRepositoryProto
 else:
@@ -105,6 +106,4 @@ class ArchetypeResolutionMixin(_Base):
         # ``repositories.metagame_repository.REMOTE_SNAPSHOTS_ENABLED`` take effect.
         if not _pkg.REMOTE_SNAPSHOTS_ENABLED:
             return None
-        from services.remote_snapshot_client import get_remote_snapshot_client
-
         return get_remote_snapshot_client()

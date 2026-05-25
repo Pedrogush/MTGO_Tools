@@ -8,9 +8,9 @@ from typing import Any
 
 from loguru import logger
 
-from services.remote_snapshot_client.artifact import ArtifactMixin
-from services.remote_snapshot_client.http import HttpMixin, RemoteSnapshotError
-from services.remote_snapshot_client.manifest import ManifestMixin
+from repositories.remote_snapshot_client.artifact import ArtifactMixin
+from repositories.remote_snapshot_client.http import HttpMixin, RemoteSnapshotError
+from repositories.remote_snapshot_client.manifest import ManifestMixin
 from utils.constants import (
     REMOTE_SNAPSHOT_BASE_URL,
     REMOTE_SNAPSHOT_CACHE_DIR,
