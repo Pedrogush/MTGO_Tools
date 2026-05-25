@@ -7,7 +7,7 @@ import time
 
 import pytest
 
-from services.remote_snapshot_client import RemoteSnapshotClient, reset_remote_snapshot_client
+from repositories.remote_snapshot_client import RemoteSnapshotClient, reset_remote_snapshot_client
 
 # ---------------------------------------------------------------------------
 # Helpers / fixtures

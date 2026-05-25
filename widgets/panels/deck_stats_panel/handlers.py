@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from services.card_data_service import CardDataManager
+from repositories.card_repository import CardDataManager
 from widgets.panels.deck_stats_panel.properties import _EMPTY_HTML, _build_html
 
 if TYPE_CHECKING:

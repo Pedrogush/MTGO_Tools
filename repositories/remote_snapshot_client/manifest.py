@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 from loguru import logger
 
 if TYPE_CHECKING:
-    from services.remote_snapshot_client.protocol import RemoteSnapshotClientProto
+    from repositories.remote_snapshot_client.protocol import RemoteSnapshotClientProto
 
     _Base = RemoteSnapshotClientProto
 else:

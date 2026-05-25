@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from services.card_data_service.builder import build_index
+from repositories.card_repository.builder import build_index
 
 
 def _sample_atomic_payload():

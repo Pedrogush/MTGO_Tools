@@ -5,8 +5,8 @@ This package contains service classes that handle all business logic,
 orchestrating between repositories and the UI layer.
 
 Service classes are imported lazily via :func:`__getattr__` so that importing
-the package (or any single submodule, e.g. ``services.card_data_service``)
-does not eagerly pull in every sibling service. Eager imports here created a
+the package (or any single submodule, e.g. ``services.deck_service``) does
+not eagerly pull in every sibling service. Eager imports here created a
 ``repositories.card_repository -> services -> services.search_service ->
 repositories.card_repository`` import cycle; lazy loading keeps the package
 import cheap and cycle-free. Mirrors ``widgets/panels/__init__.py``.

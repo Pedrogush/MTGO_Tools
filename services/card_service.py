@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 from repositories.card_repository import CardRepository, get_card_repository
 
 if TYPE_CHECKING:
-    from services.card_data_service import CardDataManager
+    from repositories.card_repository import CardDataManager
 
 
 class CardService:

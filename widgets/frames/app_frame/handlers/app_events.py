@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 import wx
 from loguru import logger
 
-from services.card_data_service import CardDataManager
+from repositories.card_repository import CardDataManager
 from utils.constants import LOGS_DIR
 from utils.deck import sanitize_filename
 from widgets.dialogs.feedback_dialog import show_feedback_dialog

@@ -14,8 +14,8 @@ Split by responsibility into internal modules:
 
 from __future__ import annotations
 
-from services.remote_snapshot_client.http import RemoteSnapshotError
-from services.remote_snapshot_client.service import RemoteSnapshotClient
+from repositories.remote_snapshot_client.http import RemoteSnapshotError
+from repositories.remote_snapshot_client.service import RemoteSnapshotClient
 
 _default_client: RemoteSnapshotClient | None = None
 

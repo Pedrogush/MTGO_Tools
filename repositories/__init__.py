@@ -9,8 +9,8 @@ Repository classes are imported lazily via :func:`__getattr__` so that
 importing the package (or any single submodule, e.g.
 ``repositories.deck_text_cache``) does not eagerly pull in every sibling
 repository. Eager aggregation here was responsible for the
-``navigators -> repositories -> services.scrapers -> repositories`` cycle
-risk flagged in #449; lazy loading keeps the package import cheap and
+``repositories -> repositories.scrapers -> repositories`` cycle risk
+flagged in #449; lazy loading keeps the package import cheap and
 cycle-free. Mirrors ``services/__init__.py``.
 """
 

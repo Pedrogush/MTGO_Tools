@@ -8,8 +8,8 @@ from typing import Any
 
 import pytest
 
-from services.card_data_service import CardDataManager
-from services.card_data_service import remote as card_data_remote
+from repositories.card_repository import CardDataManager
+from repositories.card_repository import remote as card_data_remote
 
 
 class _StubResponse:

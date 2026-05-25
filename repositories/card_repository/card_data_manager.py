@@ -1,4 +1,4 @@
-"""Top-level orchestrator for the card data service.
+"""Top-level orchestrator for the card-data side of :mod:`repositories.card_repository`.
 
 ``CardDataManager`` ties the remote, builder, and storage modules together
 and exposes the in-memory query API (``search_cards``, ``get_card``,
@@ -16,9 +16,9 @@ from typing import Any
 
 from loguru import logger
 
-from services.card_data_service import remote, storage
-from services.card_data_service.builder import build_index
-from services.card_data_service.schemas import CardEntry
+from repositories.card_repository import remote, storage
+from repositories.card_repository.builder import build_index
+from repositories.card_repository.schemas import CardEntry
 from utils.constants import CARD_DATA_DIR
 
 

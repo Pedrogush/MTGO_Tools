@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from services.card_data_service import CardDataManager
+    from repositories.card_repository import CardDataManager
 
 # MTGO competitive formats in priority order (most → least restrictive card pool)
 _COMPETITIVE_FORMATS: list[str] = ["standard", "pioneer", "modern", "legacy", "vintage", "pauper"]

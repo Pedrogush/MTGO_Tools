@@ -7,7 +7,7 @@ from typing import Any, Protocol
 
 import wx
 
-from services.card_data_service import CardDataManager
+from repositories.card_repository import CardDataManager
 from services.image_service import CardImageRequest
 from services.mana_icon_service import ManaIconFactory
 from widgets.panels.card_image_display import CardImageDisplay
