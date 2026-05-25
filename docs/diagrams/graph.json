@@ -55,10 +55,6 @@
       ],
       [
         "widgets",
-        "repositories"
-      ],
-      [
-        "widgets",
         "services"
       ],
       [
@@ -117,23 +113,15 @@
       ],
       [
         "controllers.app_controller",
-        "repositories.card_repository"
-      ],
-      [
-        "controllers.app_controller",
-        "repositories.deck_repository"
-      ],
-      [
-        "controllers.app_controller",
-        "repositories.metagame_repository"
-      ],
-      [
-        "controllers.app_controller",
         "services.bundle_snapshot_client"
       ],
       [
         "controllers.app_controller",
         "services.card_data_service"
+      ],
+      [
+        "controllers.app_controller",
+        "services.card_service"
       ],
       [
         "controllers.app_controller",
@@ -154,6 +142,10 @@
       [
         "controllers.app_controller",
         "services.image_service"
+      ],
+      [
+        "controllers.app_controller",
+        "services.metagame_service"
       ],
       [
         "controllers.app_controller",
@@ -182,6 +174,10 @@
       [
         "controllers.app_controller",
         "widgets.frames"
+      ],
+      [
+        "controllers.session_manager",
+        "repositories.deck_repository"
       ],
       [
         "controllers.session_manager",
@@ -222,30 +218,6 @@
       [
         "main",
         "widgets.frames"
-      ],
-      [
-        "repositories",
-        "repositories.card_repository"
-      ],
-      [
-        "repositories",
-        "repositories.deck_repository"
-      ],
-      [
-        "repositories",
-        "repositories.deck_text_cache"
-      ],
-      [
-        "repositories",
-        "repositories.format_card_pool_repository"
-      ],
-      [
-        "repositories",
-        "repositories.metagame_repository"
-      ],
-      [
-        "repositories",
-        "repositories.radar_repository"
       ],
       [
         "repositories.card_repository",
@@ -328,6 +300,10 @@
         "utils.constants"
       ],
       [
+        "services.card_service",
+        "repositories.card_repository"
+      ],
+      [
         "services.collection_service",
         "repositories.card_repository"
       ],
@@ -358,6 +334,18 @@
       [
         "services.deck_service",
         "utils.constants"
+      ],
+      [
+        "services.deck_workflow_service",
+        "repositories.deck_repository"
+      ],
+      [
+        "services.deck_workflow_service",
+        "repositories.metagame_repository"
+      ],
+      [
+        "services.deck_workflow_service",
+        "services.deck_service"
       ],
       [
         "services.deck_workflow_service",
@@ -394,6 +382,10 @@
       [
         "services.mana_icon_service",
         "utils.constants"
+      ],
+      [
+        "services.metagame_service",
+        "repositories.metagame_repository"
       ],
       [
         "services.mtgo_bridge_service",
@@ -505,10 +497,6 @@
       ],
       [
         "widgets.frames",
-        "repositories.metagame_repository"
-      ],
-      [
-        "widgets.frames",
         "services.archetype_resolver"
       ],
       [
@@ -534,6 +522,10 @@
       [
         "widgets.frames",
         "services.mana_icon_service"
+      ],
+      [
+        "widgets.frames",
+        "services.metagame_service"
       ],
       [
         "widgets.frames",
@@ -654,9 +646,9 @@
     ]
   },
   "metadata": {
-    "commit": "17d1c22879f458b352bfbe4f0f069f9ff8212c40",
-    "commit_date": "2026-05-24T17:43:39-03:00",
-    "generated_at": "2026-05-24T21:26:02Z",
+    "commit": "0293869a577a7cbe083626a3d747e6c7f9659abb",
+    "commit_date": "2026-05-25T00:04:37-03:00",
+    "generated_at": "2026-05-25T03:06:00Z",
     "internal_packages": [
       "automation",
       "controllers",
