@@ -68,7 +68,9 @@ class DeckManagementMixin(_Base):
     ) -> tuple[bool, str]:
         cutoff_date = (datetime.now() - timedelta(hours=self._average_hours)).strftime("%Y-%m-%d")
         todays_decks = [
-            deck for deck in self.deck_repo.get_decks_list() if deck.get("date", "") >= cutoff_date
+            deck
+            for deck in self.workflow_service.get_decks_list()
+            if deck.get("date", "") >= cutoff_date
         ]
 
         if not todays_decks:
