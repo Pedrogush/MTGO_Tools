@@ -39,10 +39,6 @@
       ],
       [
         "repositories",
-        "services"
-      ],
-      [
-        "repositories",
         "utils"
       ],
       [
@@ -221,10 +217,6 @@
       ],
       [
         "repositories.card_repository",
-        "services.card_data_service"
-      ],
-      [
-        "repositories.card_repository",
         "utils.constants"
       ],
       [
@@ -246,14 +238,6 @@
       [
         "repositories.format_card_pool_repository",
         "utils.constants"
-      ],
-      [
-        "repositories.metagame_repository",
-        "services.remote_snapshot_client"
-      ],
-      [
-        "repositories.metagame_repository",
-        "services.scrapers"
       ],
       [
         "repositories.metagame_repository",
@@ -646,9 +630,9 @@
     ]
   },
   "metadata": {
-    "commit": "0293869a577a7cbe083626a3d747e6c7f9659abb",
-    "commit_date": "2026-05-25T00:04:37-03:00",
-    "generated_at": "2026-05-25T03:06:00Z",
+    "commit": "79ebe0057f9f0c89c3aa2586f1b417bbc4ddd993",
+    "commit_date": "2026-05-25T00:06:40-03:00",
+    "generated_at": "2026-05-25T03:18:44Z",
     "internal_packages": [
       "automation",
       "controllers",

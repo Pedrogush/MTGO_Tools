@@ -1,10 +1,10 @@
 # Lines of Code by File (.py only)
 
-- Commit: `0293869` (0293869a577a7cbe083626a3d747e6c7f9659abb)
-- Commit date: 2026-05-25T00:04:37-03:00
-- Generated (UTC): 2026-05-25 03:05:55Z
+- Commit: `79ebe00` (79ebe0057f9f0c89c3aa2586f1b417bbc4ddd993)
+- Commit date: 2026-05-25T00:06:40-03:00
+- Generated (UTC): 2026-05-25 03:19:01Z
 - Files counted: **465** (all git-tracked `*.py` files)
-- Total lines: **51,345**
+- Total lines: **51,403**
 
 Counts are raw `wc -l` (newline count). Files are grouped by top-level directory and sorted descending within each section. Regenerate with `python scripts/generate_loc_report.py`.
 
@@ -13,7 +13,7 @@ Counts are raw `wc -l` (newline count). Files are grouped by top-level directory
 | Section | Files | LOC |
 |:--------|------:|----:|
 | controllers | 13 | 1,347 |
-| repositories | 37 | 2,716 |
+| repositories | 37 | 2,774 |
 | widgets | 166 | 17,623 |
 | services | 95 | 10,070 |
 | tests | 49 | 10,796 |
@@ -39,7 +39,7 @@ Counts are raw `wc -l` (newline count). Files are grouped by top-level directory
 | 43 | `controllers/app_controller/__init__.py` |
 | 13 | `controllers/__init__.py` |
 
-## repositories (37 files, 2,716 LOC)
+## repositories (37 files, 2,774 LOC)
 
 | LOC | File |
 |----:|:-----|
@@ -50,27 +50,27 @@ Counts are raw `wc -l` (newline count). Files are grouped by top-level directory
 | 137 | `repositories/format_card_pool_repository/reads.py` |
 | 126 | `repositories/metagame_repository/deck_operations.py` |
 | 125 | `repositories/radar_repository/writes.py` |
-| 110 | `repositories/metagame_repository/archetype_resolution.py` |
+| 109 | `repositories/metagame_repository/archetype_resolution.py` |
 | 108 | `repositories/card_repository/collection.py` |
 | 93 | `repositories/deck_repository/ui_state.py` |
 | 88 | `repositories/format_card_pool_repository/writes.py` |
+| 80 | `repositories/metagame_repository/__init__.py` |
 | 76 | `repositories/deck_repository/filesystem.py` |
 | 67 | `repositories/deck_repository/metadata_store.py` |
 | 66 | `repositories/radar_repository/schema.py` |
-| 54 | `repositories/metagame_repository/__init__.py` |
+| 65 | `repositories/card_repository/__init__.py` |
 | 51 | `repositories/card_repository/metadata.py` |
 | 51 | `repositories/format_card_pool_repository/schema.py` |
 | 51 | `repositories/metagame_repository/background.py` |
+| 49 | `repositories/card_repository/state.py` |
 | 48 | `repositories/radar_repository/models.py` |
 | 47 | `repositories/__init__.py` |
-| 47 | `repositories/card_repository/state.py` |
 | 45 | `repositories/metagame_repository/protocol.py` |
 | 44 | `repositories/radar_repository/__init__.py` |
 | 42 | `repositories/format_card_pool_repository/__init__.py` |
 | 41 | `repositories/metagame_repository/repository.py` |
 | 36 | `repositories/deck_repository/__init__.py` |
-| 35 | `repositories/card_repository/__init__.py` |
-| 34 | `repositories/card_repository/repository.py` |
+| 35 | `repositories/card_repository/repository.py` |
 | 31 | `repositories/deck_repository/repository.py` |
 | 25 | `repositories/card_repository/protocol.py` |
 | 25 | `repositories/format_card_pool_repository/models.py` |

@@ -92,19 +92,18 @@ class ArchetypeResolutionMixin(_Base):
                 except Exception as exc:
                     logger.warning(f"Remote snapshot stats failed for {mtg_format}: {exc}")
 
-        from services.scrapers.mtggoldfish import get_archetype_stats
-
         logger.info(f"[live-scrape] metagame stats for {mtg_format}")
-        return get_archetype_stats(mtg_format)
+        # Dynamic attribute lookup so tests that monkeypatch
+        # ``repositories.metagame_repository.get_archetype_stats`` take effect.
+        return _pkg.get_archetype_stats(mtg_format)
 
     def _remote_client_or_default(self) -> RemoteSnapshotClient | None:
         """Return the remote snapshot client when remote snapshots are enabled."""
         if self._remote_client is not None:
             return self._remote_client
         # Dynamic attribute lookup so tests that monkeypatch
-        # ``repositories.metagame_repository.REMOTE_SNAPSHOTS_ENABLED`` take effect.
+        # ``repositories.metagame_repository.REMOTE_SNAPSHOTS_ENABLED`` (and
+        # ``get_remote_snapshot_client``) take effect.
         if not _pkg.REMOTE_SNAPSHOTS_ENABLED:
             return None
-        from services.remote_snapshot_client import get_remote_snapshot_client
-
-        return get_remote_snapshot_client()
+        return _pkg.get_remote_snapshot_client()

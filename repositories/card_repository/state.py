@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+import repositories.card_repository as _pkg
+
 if TYPE_CHECKING:
     from repositories.card_repository.protocol import CardRepositoryProto
     from services.card_data_service import CardDataManager
@@ -40,8 +42,8 @@ class StateMixin(_Base):
         if not force and self._card_data_manager is not None and self._card_data_manager.is_loaded:
             return self._card_data_manager
 
-        from services.card_data_service import load_card_manager
-
-        manager = load_card_manager()
+        # Resolved lazily through the package namespace so the
+        # ``repositories → services`` import only happens on first use.
+        manager = _pkg.load_card_manager()
         self.set_card_manager(manager)
         return manager

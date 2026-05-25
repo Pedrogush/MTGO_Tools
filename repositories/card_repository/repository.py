@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+import repositories.card_repository as _pkg
 from repositories.card_repository.collection import CollectionMixin
 from repositories.card_repository.metadata import MetadataMixin
 from repositories.card_repository.state import StateMixin
@@ -28,7 +29,7 @@ class CardRepository(
     @property
     def card_data_manager(self) -> CardDataManager:
         if self._card_data_manager is None:
-            from services.card_data_service import CardDataManager as _CardDataManager
-
-            self._card_data_manager = _CardDataManager()
+            # Resolved lazily through the package namespace so the
+            # ``repositories → services`` import only happens on first use.
+            self._card_data_manager = _pkg.CardDataManager()
         return self._card_data_manager
