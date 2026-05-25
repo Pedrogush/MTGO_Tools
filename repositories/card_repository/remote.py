@@ -4,7 +4,7 @@ Owns the single external integration (HEAD for metadata, GET for the zip
 payload) so the rest of the service can stay offline-testable.
 
 ``requests`` is re-exported at module scope so tests can monkeypatch
-``services.card_data_service.remote.requests.head`` / ``.get``.
+``repositories.card_repository.remote.requests.head`` / ``.get``.
 """
 
 from __future__ import annotations

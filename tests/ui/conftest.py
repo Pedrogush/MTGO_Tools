@@ -10,9 +10,9 @@ import pytest
 if sys.platform != "win32":
     pytest.skip("wxPython UI tests must run on Windows", allow_module_level=True)
 
+import repositories.scrapers.mtggoldfish as mtggoldfish
 import services.image_service as card_images
 import services.image_service.schemas as card_images_schemas
-import services.scrapers.mtggoldfish as mtggoldfish
 import utils.constants as constants
 import widgets.frames.app_frame as app_frame
 import widgets.frames.identify_opponent as identify_opponent
@@ -20,7 +20,7 @@ from controllers.app_controller import (
     get_deck_selector_controller,
     reset_deck_selector_controller,
 )
-from services.card_data_service import CardDataManager
+from repositories.card_repository import CardDataManager
 from utils.constants import METAGAME_CACHE_TTL_SECONDS
 from widgets.frames.app_frame import AppFrame
 

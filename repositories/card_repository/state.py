@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from repositories.card_repository.card_data_manager import CardDataManager, load_card_manager
+
 if TYPE_CHECKING:
     from repositories.card_repository.protocol import CardRepositoryProto
-    from services.card_data_service import CardDataManager
 
     _Base = CardRepositoryProto
 else:
@@ -39,8 +40,6 @@ class StateMixin(_Base):
     def ensure_card_data_loaded(self, force: bool = False) -> CardDataManager:
         if not force and self._card_data_manager is not None and self._card_data_manager.is_loaded:
             return self._card_data_manager
-
-        from services.card_data_service import load_card_manager
 
         manager = load_card_manager()
         self.set_card_manager(manager)

@@ -12,7 +12,7 @@ from typing import Any
 import wx
 import wx.html2
 
-from services.card_data_service import CardDataManager
+from repositories.card_repository import CardDataManager
 from services.deck_service import DeckService, get_deck_service
 from utils.constants import DARK_PANEL
 from widgets.panels.deck_stats_panel.handlers import DeckStatsPanelHandlersMixin

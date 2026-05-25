@@ -11,7 +11,7 @@ from typing import Any
 
 import wx
 
-from services.card_data_service import CardDataManager
+from repositories.card_repository import CardDataManager
 from services.image_service import CardImageRequest, get_cache
 from services.mana_icon_service import ManaIconFactory
 from utils.constants import (

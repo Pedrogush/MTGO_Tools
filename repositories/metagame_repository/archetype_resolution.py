@@ -92,7 +92,7 @@ class ArchetypeResolutionMixin(_Base):
                 except Exception as exc:
                     logger.warning(f"Remote snapshot stats failed for {mtg_format}: {exc}")
 
-        from services.scrapers.mtggoldfish import get_archetype_stats
+        from repositories.scrapers.mtggoldfish import get_archetype_stats
 
         logger.info(f"[live-scrape] metagame stats for {mtg_format}")
         return get_archetype_stats(mtg_format)

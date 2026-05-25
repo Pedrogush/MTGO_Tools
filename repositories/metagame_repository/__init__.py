@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from repositories.metagame_repository.date_utils import _parse_deck_date
 from repositories.metagame_repository.repository import MetagameRepository
-from services.scrapers.mtggoldfish import (  # noqa: F401
+from repositories.scrapers.mtggoldfish import (  # noqa: F401
     fetch_deck_text,
     get_archetype_decks,
     get_archetypes,

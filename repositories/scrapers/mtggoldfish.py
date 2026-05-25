@@ -295,7 +295,7 @@ def fetch_deck_text(deck_num: str, source_filter: str | None = None) -> str:
     # The /deck/{id} endpoint sits behind Cloudflare's managed challenge, so we
     # fetch from /deck/visual/{id} which is served unprotected.
     logger.info(f"Downloading deck {deck_num} from MTGGoldfish")
-    from services.scrapers.mtggoldfish_visual import fetch_deck_text_from_visual_page
+    from repositories.scrapers.mtggoldfish_visual import fetch_deck_text_from_visual_page
 
     try:
         deck_text = fetch_deck_text_from_visual_page(deck_num)

@@ -7,7 +7,7 @@ nothing about whether it still works.
 
 import pytest
 
-from services.scrapers.mtggoldfish_visual import fetch_deck_text_from_visual_page
+from repositories.scrapers.mtggoldfish_visual import fetch_deck_text_from_visual_page
 
 # Modern Affinity decklist sourced from a real MTGO Challenge result. Picked
 # because it exercises both mainboard and sideboard parsing.

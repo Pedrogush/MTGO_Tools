@@ -42,16 +42,16 @@ graph TB
         BSC[BundleSnapshotClient]
         RSC[RemoteSnapshotClient]
         MBS[MtgoBridgeService<br/>client + facade]
-        CDS[CardDataService<br/>CardDataManager / MTGJson]
     end
 
     subgraph "Repositories Layer"
-        CR[CardRepository]
+        CR[CardRepository<br/>+ CardDataManager / MTGJson]
         DR[DeckRepository]
         DTC[DeckTextCache<br/>SQLite]
         MR[MetagameRepository]
         RR[RadarRepository<br/>SQLite]
         FCPR[FormatCardPoolRepository<br/>SQLite]
+        MTG_GF[mtggoldfish.py<br/>scraper]
     end
 
     subgraph "Utilities"
@@ -59,10 +59,6 @@ graph TB
         DECK[deck.py<br/>Deck Parser]
         AIO[atomic_io.py]
         GP[gamelog_parser.py]
-    end
-
-    subgraph "Web Scrapers"
-        MTG_GF[mtggoldfish.py]
     end
 
     subgraph "External Bridge"
@@ -103,7 +99,6 @@ graph TB
     CS --> CR
     RS --> RR
     FCPS --> FCPR
-    CR --> CDS
     DR --> DECK
     IS --> CI
     CS --> MBS
@@ -112,7 +107,7 @@ graph TB
     MR --> RSC
     MTG_GF --> GOLDFISH
     CI --> SCRYFALL
-    CDS --> MTGJSON
+    CR --> MTGJSON
     MBS --> BRIDGE
     BRIDGE --> MTGO_CLIENT
 
@@ -124,8 +119,8 @@ graph TB
     classDef external fill:#ffff99,stroke:#333,stroke-width:2px
 
     class AC,ACH,SM,BDH controller
-    class DS,CS,SS,IS,StS,RS,FCPS,DWS,BSC,RSC,MBS,CDS service
-    class CR,DR,DTC,MR,RR,FCPR repo
+    class DS,CS,SS,IS,StS,RS,FCPS,DWS,BSC,RSC,MBS service
+    class CR,DR,DTC,MR,RR,FCPR,MTG_GF repo
     class AF,DRP,DBP,CTP,CIP,SGP,RP,ODS,MH,TA ui
     class CI,DECK,AIO,GP util
     class SCRYFALL,MTGJSON,GOLDFISH,MTGO_CLIENT,BRIDGE external
@@ -137,13 +132,11 @@ graph TB
 
 **Services**: Business logic. Image, collection, and deck services are each Python packages whose main class inherits from (or composes) focused mixins/helpers. For example `services/collection_service/` contains `cache`, `parsing`, `ownership`, `deck_analysis`, `stats`, `bridge_refresh`, and `exporter` modules; `services/image_service/` splits into `bulk_data`, `metadata`, `printing_index`, `cache`, and `download_queue`; `services/deck_service/` contains `parser`, `averager`, and `text_builder`. Radar, format card pool, and deck workflow each have their own service. `services/mtgo_bridge_service/` wraps the external CLI bridge: `client` is the subprocess/multiprocessing transport, and the package facade exposes collection/history/trade snapshots and the challenge watcher.
 
-**Repositories**: Data access with caching. `DeckRepository` and `MetagameRepository` use JSON file caches. `RadarRepository`, `FormatCardPoolRepository`, and `DeckTextCache` use SQLite. `CardRepository` wraps `CardDataManager` for the MTGJson atomic-cards index.
+**Repositories**: Data access with caching. `DeckRepository` and `MetagameRepository` use JSON file caches. `RadarRepository`, `FormatCardPoolRepository`, and `DeckTextCache` use SQLite. `CardRepository` is a single package that combines the collection-file repo with `CardDataManager`, owning the MTGJSON AtomicCards download, on-disk index format, and in-memory query API (`builder`, `remote`, `storage`, `schemas`, `card_data_manager`). `repositories/scrapers/` (`mtggoldfish.py`, `mtggoldfish_visual.py`) is the source side of `MetagameRepository` and `DeckTextCache` — these scrapers live under `repositories/` because owning a data source and shaping it into domain records is a repository's job, not a service's.
 
 **UI/Widgets**: wxPython panels in `widgets/panels/`, dialogs in `widgets/dialogs/`, and standalone overlay windows (`MTGOpponentDeckSpy`, `MatchHistory`, `TimerAlert`).
 
-**Utils**: Cross-cutting helpers only. Card image downloading (`card_images.py`), atomic I/O (`atomic_io.py`), mana icon rendering, and other reusable functions. Single-consumer modules have been colocated with their callers: search filter helpers live in `services/search_service/`, image worker entrypoints in `services/image_service/`, deck-results filtering in `widgets/panels/deck_research_panel/results_filter.py`, wx styling helpers in `widgets/stylize.py`, and small widget-specific helpers inside their respective `widgets/.../` packages. The MTGJSON atomic-cards dataset is owned by `services/card_data_service/`, gamelog parsing by `services/gamelog_service/`, the deck-text SQLite cache by `repositories/deck_text_cache.py`, and the MTGO CLI bridge by `services/mtgo_bridge_service/`.
-
-**Navigators**: `mtggoldfish.py` scrapes metagame data and deck lists. MTGO.com decklists are consumed from the published metagame bundle rather than scraped live.
+**Utils**: Cross-cutting helpers only. Card image downloading (`card_images.py`), atomic I/O (`atomic_io.py`), mana icon rendering, and other reusable functions. Single-consumer modules have been colocated with their callers: search filter helpers live in `services/search_service/`, image worker entrypoints in `services/image_service/`, deck-results filtering in `widgets/panels/deck_research_panel/results_filter.py`, wx styling helpers in `widgets/stylize.py`, and small widget-specific helpers inside their respective `widgets/.../` packages. The MTGJSON atomic-cards dataset is owned by `repositories/card_repository/`, gamelog parsing by `services/gamelog_service/`, the deck-text SQLite cache by `repositories/deck_text_cache.py`, the MTGGoldfish scrapers by `repositories/scrapers/`, and the MTGO CLI bridge by `services/mtgo_bridge_service/`.
 
 **External Bridge**: .NET 9.0 application using MTGOSDK to read collection and match data directly from the running MTGO client.
 

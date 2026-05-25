@@ -14,7 +14,7 @@ import msgspec
 import msgspec.json
 from loguru import logger
 
-from services.card_data_service.schemas import CardIndex
+from repositories.card_repository.schemas import CardIndex
 from utils.atomic_io import atomic_write_json
 from utils.constants import CARD_DATA_DIR
 

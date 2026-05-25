@@ -10,7 +10,7 @@ from widgets.panels.card_box_panel import CardBoxPanel
 
 
 class _CardEntryStub:
-    """Minimal stand-in for services.card_data_service.CardEntry (a msgspec.Struct).
+    """Minimal stand-in for repositories.card_repository.CardEntry (a msgspec.Struct).
 
     isinstance(stub, dict) is False, but stub.get(key) works — mirroring the
     real CardEntry behaviour.

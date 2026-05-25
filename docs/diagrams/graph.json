@@ -55,6 +55,10 @@
       ],
       [
         "widgets",
+        "repositories"
+      ],
+      [
+        "widgets",
         "services"
       ],
       [
@@ -113,11 +117,11 @@
       ],
       [
         "controllers.app_controller",
-        "services.bundle_snapshot_client"
+        "repositories.card_repository"
       ],
       [
         "controllers.app_controller",
-        "services.card_data_service"
+        "services.bundle_snapshot_client"
       ],
       [
         "controllers.app_controller",
@@ -221,7 +225,7 @@
       ],
       [
         "repositories.card_repository",
-        "services.card_data_service"
+        "utils.atomic_io"
       ],
       [
         "repositories.card_repository",
@@ -249,11 +253,11 @@
       ],
       [
         "repositories.metagame_repository",
-        "services.remote_snapshot_client"
+        "repositories.scrapers"
       ],
       [
         "repositories.metagame_repository",
-        "services.scrapers"
+        "services.remote_snapshot_client"
       ],
       [
         "repositories.metagame_repository",
@@ -266,6 +270,22 @@
       [
         "repositories.radar_repository",
         "utils.constants"
+      ],
+      [
+        "repositories.scrapers",
+        "repositories.deck_text_cache"
+      ],
+      [
+        "repositories.scrapers",
+        "utils.atomic_io"
+      ],
+      [
+        "repositories.scrapers",
+        "utils.constants"
+      ],
+      [
+        "repositories.scrapers",
+        "utils.json_io"
       ],
       [
         "services.archetype_resolver",
@@ -289,14 +309,6 @@
       ],
       [
         "services.bundle_snapshot_client",
-        "utils.constants"
-      ],
-      [
-        "services.card_data_service",
-        "utils.atomic_io"
-      ],
-      [
-        "services.card_data_service",
         "utils.constants"
       ],
       [
@@ -345,11 +357,11 @@
       ],
       [
         "services.deck_workflow_service",
-        "services.deck_service"
+        "repositories.scrapers"
       ],
       [
         "services.deck_workflow_service",
-        "services.scrapers"
+        "services.deck_service"
       ],
       [
         "services.deck_workflow_service",
@@ -412,28 +424,8 @@
         "utils.constants"
       ],
       [
-        "services.scrapers",
-        "repositories.deck_text_cache"
-      ],
-      [
-        "services.scrapers",
-        "utils.atomic_io"
-      ],
-      [
-        "services.scrapers",
-        "utils.constants"
-      ],
-      [
-        "services.scrapers",
-        "utils.json_io"
-      ],
-      [
         "services.search_service",
         "repositories.card_repository"
-      ],
-      [
-        "services.search_service",
-        "services.card_data_service"
       ],
       [
         "services.search_service",
@@ -497,11 +489,11 @@
       ],
       [
         "widgets.frames",
-        "services.archetype_resolver"
+        "repositories.card_repository"
       ],
       [
         "widgets.frames",
-        "services.card_data_service"
+        "services.archetype_resolver"
       ],
       [
         "widgets.frames",
@@ -589,7 +581,7 @@
       ],
       [
         "widgets.panels",
-        "services.card_data_service"
+        "repositories.card_repository"
       ],
       [
         "widgets.panels",
@@ -646,9 +638,9 @@
     ]
   },
   "metadata": {
-    "commit": "0293869a577a7cbe083626a3d747e6c7f9659abb",
-    "commit_date": "2026-05-25T00:04:37-03:00",
-    "generated_at": "2026-05-25T03:06:00Z",
+    "commit": "79ebe0057f9f0c89c3aa2586f1b417bbc4ddd993",
+    "commit_date": "2026-05-25T00:06:40-03:00",
+    "generated_at": "2026-05-25T12:36:51Z",
     "internal_packages": [
       "automation",
       "controllers",
