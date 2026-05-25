@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any, Protocol
 import wx
 
 from services.image_service import CardImageRequest
-from services.mana_icon_service import ManaIconFactory
+from widgets.mana_icon_service import ManaIconFactory
 from widgets.panels.card_image_display import CardImageDisplay
 from widgets.panels.mana_rich_text_ctrl import ManaSymbolRichCtrl
 

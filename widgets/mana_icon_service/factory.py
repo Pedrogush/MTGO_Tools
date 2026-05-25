@@ -8,10 +8,10 @@ from pathlib import Path
 
 import wx
 
-from services.mana_icon_service.bitmap_renderer import BitmapRendererMixin
-from services.mana_icon_service.cache import ManaBitmapCache
-from services.mana_icon_service.resources import ManaIconResources
-from services.mana_icon_service.svg_renderer import SvgRendererMixin
+from widgets.mana_icon_service.bitmap_renderer import BitmapRendererMixin
+from widgets.mana_icon_service.cache import ManaBitmapCache
+from widgets.mana_icon_service.resources import ManaIconResources
+from widgets.mana_icon_service.svg_renderer import SvgRendererMixin
 from utils.constants import SUBDUED_TEXT
 from utils.constants.ui_images import (
     BUILDER_MANA_ICON_GAP,

@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any
 
 import wx
 
-from services.mana_icon_service import ManaIconFactory
+from widgets.mana_icon_service import ManaIconFactory
 from utils.constants import (
     APP_FRAME_SIZE,
     DARK_BG,

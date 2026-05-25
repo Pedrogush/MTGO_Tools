@@ -368,10 +368,6 @@
         "utils.perf"
       ],
       [
-        "services.mana_icon_service",
-        "utils.constants"
-      ],
-      [
         "services.metagame_service",
         "repositories.metagame_repository"
       ],
@@ -429,11 +425,11 @@
       ],
       [
         "widgets.buttons",
-        "services.mana_icon_service"
+        "utils.constants"
       ],
       [
         "widgets.buttons",
-        "utils.constants"
+        "widgets.mana_icon_service"
       ],
       [
         "widgets.buttons",
@@ -478,10 +474,6 @@
       [
         "widgets.frames",
         "services.image_service"
-      ],
-      [
-        "widgets.frames",
-        "services.mana_icon_service"
       ],
       [
         "widgets.frames",
@@ -541,10 +533,18 @@
       ],
       [
         "widgets.frames",
+        "widgets.mana_icon_service"
+      ],
+      [
+        "widgets.frames",
         "widgets.panels"
       ],
       [
         "widgets.lists",
+        "utils.constants"
+      ],
+      [
+        "widgets.mana_icon_service",
         "utils.constants"
       ],
       [
@@ -562,10 +562,6 @@
       [
         "widgets.panels",
         "services.image_service"
-      ],
-      [
-        "widgets.panels",
-        "services.mana_icon_service"
       ],
       [
         "widgets.panels",
@@ -593,6 +589,10 @@
       ],
       [
         "widgets.panels",
+        "widgets.mana_icon_service"
+      ],
+      [
+        "widgets.panels",
         "widgets.stylize"
       ],
       [
@@ -602,9 +602,9 @@
     ]
   },
   "metadata": {
-    "commit": "ac5e70ab931404e4ba64345e0cda9ff29a41b483",
-    "commit_date": "2026-05-25T17:46:45-03:00",
-    "generated_at": "2026-05-25T20:48:52Z",
+    "commit": "8a0f907d956d40b1bf02d32292c24c52f4a25292",
+    "commit_date": "2026-05-25T17:49:50-03:00",
+    "generated_at": "2026-05-25T20:51:56Z",
     "internal_packages": [
       "automation",
       "controllers",

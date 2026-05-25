@@ -13,7 +13,7 @@ from typing import Any
 
 import wx
 
-from services.mana_icon_service import ManaIconFactory
+from widgets.mana_icon_service import ManaIconFactory
 from services.radar_service import RadarData
 from utils.constants import DARK_PANEL
 from widgets.panels.deck_builder_panel.frame.advanced_filters import AdvancedFiltersBuilderMixin

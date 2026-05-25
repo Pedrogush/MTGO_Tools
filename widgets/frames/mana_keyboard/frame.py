@@ -6,7 +6,7 @@ from collections.abc import Callable
 
 import wx
 
-from services.mana_icon_service import ManaIconFactory, type_global_mana_symbol
+from widgets.mana_icon_service import ManaIconFactory, type_global_mana_symbol
 from utils.constants import DARK_BG, FULL_MANA_SYMBOLS, LIGHT_TEXT
 
 

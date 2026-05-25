@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any
 import wx
 
 from services.image_service import CardImageRequest, get_cache
-from services.mana_icon_service import ManaIconFactory
+from widgets.mana_icon_service import ManaIconFactory
 from utils.constants import (
     CARD_IMAGE_COST_MIN_HEIGHT,
     CARD_IMAGE_DISPLAY_HEIGHT,

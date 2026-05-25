@@ -7,7 +7,7 @@ from typing import Any
 
 import wx
 
-from services.mana_icon_service import ManaIconFactory
+from widgets.mana_icon_service import ManaIconFactory
 from utils.constants import (
     DARK_ALT,
     DECK_CARD_BADGE_PADDING,

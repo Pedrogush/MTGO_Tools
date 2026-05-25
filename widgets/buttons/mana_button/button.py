@@ -9,7 +9,7 @@ from collections.abc import Callable
 
 import wx
 
-from services.mana_icon_service import ManaIconFactory, ManaIconResources
+from widgets.mana_icon_service import ManaIconFactory, ManaIconResources
 from utils.constants import DARK_ALT, LIGHT_TEXT
 
 

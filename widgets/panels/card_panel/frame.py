@@ -14,7 +14,7 @@ from typing import Any
 import wx
 import wx.html
 
-from services.mana_icon_service import ManaIconFactory
+from widgets.mana_icon_service import ManaIconFactory
 from utils.constants import DARK_PANEL, LIGHT_TEXT, PADDING_MD, PADDING_SM, SUBDUED_TEXT
 from widgets.panels.card_panel.handlers import CardPanelHandlersMixin
 from widgets.panels.card_panel.properties import CardPanelPropertiesMixin
