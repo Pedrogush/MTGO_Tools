@@ -7,11 +7,10 @@ navigation through different printings.
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import wx
 
-from repositories.card_repository import CardDataManager
 from services.image_service import CardImageRequest, get_cache
 from services.mana_icon_service import ManaIconFactory
 from utils.constants import (
@@ -34,6 +33,9 @@ from widgets.panels.card_inspector_panel.handlers import CardInspectorPanelHandl
 from widgets.panels.card_inspector_panel.properties import CardInspectorPanelPropertiesMixin
 from widgets.panels.mana_rich_text_ctrl import ManaSymbolRichCtrl
 from widgets.stylize import stylize_button
+
+if TYPE_CHECKING:
+    from repositories.card_repository import CardDataManager
 
 
 class CardInspectorPanel(

@@ -51,10 +51,6 @@
       ],
       [
         "widgets",
-        "repositories"
-      ],
-      [
-        "widgets",
         "services"
       ],
       [
@@ -481,10 +477,6 @@
       ],
       [
         "widgets.frames",
-        "repositories.card_repository"
-      ],
-      [
-        "widgets.frames",
         "services.archetype_resolver"
       ],
       [
@@ -573,10 +565,6 @@
       ],
       [
         "widgets.panels",
-        "repositories.card_repository"
-      ],
-      [
-        "widgets.panels",
         "services.comp_rules_service"
       ],
       [
@@ -630,9 +618,9 @@
     ]
   },
   "metadata": {
-    "commit": "4380c126a21dacb9401d84a1495ea9f6d7eae4b0",
-    "commit_date": "2026-05-25T11:59:54-03:00",
-    "generated_at": "2026-05-25T20:17:42Z",
+    "commit": "ebec0c9c6f73e929cc19bebbb51c99fa3d6184af",
+    "commit_date": "2026-05-25T17:24:46-03:00",
+    "generated_at": "2026-05-25T20:41:50Z",
     "internal_packages": [
       "automation",
       "controllers",

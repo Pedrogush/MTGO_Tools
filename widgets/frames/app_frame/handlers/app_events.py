@@ -9,7 +9,6 @@ from typing import TYPE_CHECKING, Any
 import wx
 from loguru import logger
 
-from repositories.card_repository import CardDataManager
 from utils.constants import LOGS_DIR
 from utils.deck import sanitize_filename
 from widgets.dialogs.feedback_dialog import show_feedback_dialog
@@ -27,6 +26,7 @@ from widgets.panels.deck_research_panel.results_filter import (
 )
 
 if TYPE_CHECKING:
+    from repositories.card_repository import CardDataManager
     from widgets.frames.app_frame import AppFrame
     from widgets.frames.app_frame.protocol import AppFrameProto
 

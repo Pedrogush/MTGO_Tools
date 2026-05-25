@@ -3,15 +3,17 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
 import wx
 
-from repositories.card_repository import CardDataManager
 from services.image_service import CardImageRequest
 from services.mana_icon_service import ManaIconFactory
 from widgets.panels.card_image_display import CardImageDisplay
 from widgets.panels.mana_rich_text_ctrl import ManaSymbolRichCtrl
+
+if TYPE_CHECKING:
+    from repositories.card_repository import CardDataManager
 
 
 class CardInspectorPanelProto(Protocol):

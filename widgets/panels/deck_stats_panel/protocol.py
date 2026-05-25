@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
-from typing import Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
 import wx
 import wx.html2
 
-from repositories.card_repository import CardDataManager
 from services.deck_service import DeckService
+
+if TYPE_CHECKING:
+    from repositories.card_repository import CardDataManager
 
 
 class DeckStatsPanelProto(Protocol):

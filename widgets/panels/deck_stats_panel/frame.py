@@ -7,12 +7,11 @@ distribution, type counts, and opening-hand land probability analysis.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import wx
 import wx.html2
 
-from repositories.card_repository import CardDataManager
 from services.deck_service import DeckService, get_deck_service
 from utils.constants import DARK_PANEL
 from widgets.panels.deck_stats_panel.handlers import DeckStatsPanelHandlersMixin
@@ -20,6 +19,9 @@ from widgets.panels.deck_stats_panel.properties import (
     _EMPTY_HTML,
     DeckStatsPanelPropertiesMixin,
 )
+
+if TYPE_CHECKING:
+    from repositories.card_repository import CardDataManager
 
 
 class DeckStatsPanel(DeckStatsPanelHandlersMixin, DeckStatsPanelPropertiesMixin, wx.Panel):
