@@ -119,6 +119,10 @@ class DeckPileView(wx.ScrolledWindow):
         self._image_gen = 0
 
         self.SetBackgroundColour(DARK_PANEL)
+        # AutoBufferedPaintDC requires the window to use BG_STYLE_PAINT so
+        # wx skips its own erase-background draw and the custom _on_paint owns
+        # the whole client area.
+        self.SetBackgroundStyle(wx.BG_STYLE_PAINT)
         self.SetScrollRate(20, 20)
         self.SetDoubleBuffered(True)
 
