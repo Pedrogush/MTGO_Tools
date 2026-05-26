@@ -398,9 +398,10 @@ class DeckTableView(wx.Panel):
         self.grid.SetSelectionBackground(wx.Colour(*DARK_ACCENT))
         self.grid.SetSelectionForeground(wx.Colour(*LIGHT_TEXT))
 
-        # Text icons match the cell-font line height so they sit on the text
-        # baseline inside the Text column. Mana/color icons get a small bonus
-        # so they fully fill the row height — no visible top/bottom padding.
+        # All mana symbols (mana/color cells and inline-in-text) share one
+        # icon size that fills the row height — no visible top/bottom padding.
+        # That size is the cell-font line height plus a small bonus so the
+        # symbols look consistent across columns.
         self._icon_size = _font_height(self.grid.GetDefaultCellFont())
         self._cell_icon_size = self._icon_size + _CELL_ICON_SIZE_BONUS
         self.grid.SetDefaultRowSize(self._cell_icon_size)
@@ -411,7 +412,7 @@ class DeckTableView(wx.Panel):
             if col_id in (COL_MANA, COL_COLOR):
                 renderer = _ManaIconCellRenderer(icon_factory, self._cell_icon_size)
             elif col_id == COL_TEXT:
-                renderer = _InlineSymbolStringRenderer(icon_factory, self._icon_size)
+                renderer = _InlineSymbolStringRenderer(icon_factory, self._cell_icon_size)
             elif col_id == COL_TYPE:
                 renderer = _EllipsisStringRenderer()
             else:
