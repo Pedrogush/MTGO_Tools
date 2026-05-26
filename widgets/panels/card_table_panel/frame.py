@@ -165,6 +165,7 @@ class CardTablePanel(CardTablePanelHandlersMixin, CardTablePanelPropertiesMixin,
             get_metadata,
             on_select=self._handle_view_select,
             on_hover=self._handle_view_hover,
+            icon_factory=icon_factory,
             label_for_column=self._column_label,
         )
         self._content_book.AddPage(self.table_view, "table")
