@@ -37,6 +37,8 @@ from utils.constants import (
     DARK_ALT,
     DARK_BG,
     DARK_PANEL,
+    DECK_CARD_HEIGHT,
+    DECK_CARD_WIDTH,
     LIGHT_TEXT,
     SUBDUED_TEXT,
 )
@@ -45,12 +47,12 @@ from widgets.panels.card_table_panel.sorting import (
     group_into_piles,
 )
 
-# Card visual dimensions used by the pile view. Smaller than the grid view's
-# cards so we can fit several piles side by side.
-_CARD_WIDTH = 110
-_CARD_HEIGHT = 154
-_NAME_STRIP_HEIGHT = 22  # visible portion of stacked-above cards
-_PILE_GAP = 16  # gap between piles
+# Match the grid view's card size and inter-card gap so the two views feel
+# visually consistent.
+_CARD_WIDTH = DECK_CARD_WIDTH
+_CARD_HEIGHT = DECK_CARD_HEIGHT
+_NAME_STRIP_HEIGHT = 32  # visible portion of stacked-above cards
+_PILE_GAP = 8  # gap between piles (matches grid view's GRID_GAP)
 _PILE_TOP = 26  # space for pile header label
 _PILE_PAD = 6  # padding inside a pile column
 
