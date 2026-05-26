@@ -401,10 +401,11 @@ class DeckTableView(wx.Panel):
         # All mana symbols (mana/color cells and inline-in-text) share one
         # icon size that fills the row height — no visible top/bottom padding.
         # That size is the cell-font line height plus a small bonus so the
-        # symbols look consistent across columns.
+        # symbols look consistent across columns. The row is 1 px taller than
+        # the icon so the top pixel row isn't clipped against the grid line.
         self._icon_size = _font_height(self.grid.GetDefaultCellFont())
         self._cell_icon_size = self._icon_size + _CELL_ICON_SIZE_BONUS
-        self.grid.SetDefaultRowSize(self._cell_icon_size)
+        self.grid.SetDefaultRowSize(self._cell_icon_size + 1)
 
         for idx, col_id in enumerate(TABLE_COLUMNS):
             self.grid.SetColLabelValue(idx, self._label(col_id))
