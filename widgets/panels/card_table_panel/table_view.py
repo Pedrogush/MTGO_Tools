@@ -27,7 +27,6 @@ import wx
 import wx.grid as gridlib
 
 from utils.constants import DARK_ACCENT, DARK_ALT, DARK_BG, DARK_PANEL, LIGHT_TEXT, SUBDUED_TEXT
-from utils.constants.ui_images import MANA_COST_BITMAP_GAP
 from widgets.mana_icon_service import ManaIconFactory, tokenize_mana_symbols
 from widgets.panels.card_table_panel.sorting import (
     COL_COLOR,
@@ -49,6 +48,12 @@ _MAX_TEXT_CHARS = 400
 
 _MANA_CELL_PADDING = 4
 _CELL_TEXT_PADDING = 4
+
+# Mana/color icons are sized larger than text icons (by 4px) so they fill the
+# row height without top/bottom padding, and rendered with no inter-icon gap
+# so adjacent symbols sit flush against each other.
+_CELL_ICON_SIZE_BONUS = 4
+_MANA_ICON_GAP = 0
 
 # Natural-width caps applied during AutoSize. _fit_to_width then shrinks
 # further so the whole row fits the visible viewport.
@@ -135,11 +140,16 @@ def _font_height(font: wx.Font) -> int:
 class _ManaIconCellRenderer(gridlib.GridCellRenderer):
     """Draws a cell as a horizontal row of mana-symbol bitmaps."""
 
-    def __init__(self, icon_factory: ManaIconFactory, icon_size: int) -> None:
+    def __init__(
+        self,
+        icon_factory: ManaIconFactory,
+        icon_size: int,
+        gap: int = _MANA_ICON_GAP,
+    ) -> None:
         super().__init__()
         self._factory = icon_factory
         self._icon_size = icon_size
-        self._gap = MANA_COST_BITMAP_GAP
+        self._gap = gap
 
     def Draw(
         self,
@@ -196,7 +206,7 @@ class _ManaIconCellRenderer(gridlib.GridCellRenderer):
         return wx.Size(width, self._icon_size)
 
     def Clone(self) -> "_ManaIconCellRenderer":
-        return _ManaIconCellRenderer(self._factory, self._icon_size)
+        return _ManaIconCellRenderer(self._factory, self._icon_size, self._gap)
 
 
 class _EllipsisStringRenderer(gridlib.GridCellStringRenderer):
@@ -388,15 +398,18 @@ class DeckTableView(wx.Panel):
         self.grid.SetSelectionBackground(wx.Colour(*DARK_ACCENT))
         self.grid.SetSelectionForeground(wx.Colour(*LIGHT_TEXT))
 
-        # Icons match the cell-font line height so they sit on the text baseline.
+        # Text icons match the cell-font line height so they sit on the text
+        # baseline inside the Text column. Mana/color icons get a small bonus
+        # so they fully fill the row height — no visible top/bottom padding.
         self._icon_size = _font_height(self.grid.GetDefaultCellFont())
-        self.grid.SetDefaultRowSize(self._icon_size + 6)
+        self._cell_icon_size = self._icon_size + _CELL_ICON_SIZE_BONUS
+        self.grid.SetDefaultRowSize(self._cell_icon_size)
 
         for idx, col_id in enumerate(TABLE_COLUMNS):
             self.grid.SetColLabelValue(idx, self._label(col_id))
             renderer: gridlib.GridCellRenderer | None
             if col_id in (COL_MANA, COL_COLOR):
-                renderer = _ManaIconCellRenderer(icon_factory, self._icon_size)
+                renderer = _ManaIconCellRenderer(icon_factory, self._cell_icon_size)
             elif col_id == COL_TEXT:
                 renderer = _InlineSymbolStringRenderer(icon_factory, self._icon_size)
             elif col_id == COL_TYPE:
