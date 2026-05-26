@@ -11,6 +11,7 @@ from PIL import Image as PilImage
 from utils.constants import (
     DARK_ACCENT,
     DARK_ALT,
+    DARK_PANEL,
     DECK_CARD_ACTION_BUTTON_FG,
     DECK_CARD_ACTION_BUTTON_SIZE,
     DECK_CARD_ACTIVE_BORDER_WIDTH,
@@ -24,6 +25,7 @@ from utils.constants import (
     DECK_CARD_WIDTH,
     LIGHT_TEXT,
 )
+from utils.image_effects import apply_rounded_corner_alpha
 from utils.perf import timed
 
 if TYPE_CHECKING:
@@ -189,7 +191,10 @@ class CardBoxPanelHandlersMixin(_Base):
     def _on_paint(self, _event: wx.PaintEvent) -> None:
         dc = wx.AutoBufferedPaintDC(self)
         rect = self.GetClientRect()
-        dc.SetBackground(wx.Brush(wx.Colour(*self._card_color)))
+        # Fill the panel with the surrounding deck-panel colour so the
+        # rounded-corner cutouts of the card bitmap blend with the grid
+        # background instead of leaving black/coloured squares.
+        dc.SetBackground(wx.Brush(wx.Colour(*DARK_PANEL)))
         dc.Clear()
 
         if self._image_available and self._card_bitmap:
@@ -245,7 +250,10 @@ class CardBoxPanelHandlersMixin(_Base):
         y = (DECK_CARD_HEIGHT - image.GetHeight()) // 2
         dc.DrawBitmap(wx.Bitmap(image), x, y, True)
         dc.SelectObject(wx.NullBitmap)
-        return bitmap
+        rounded = apply_rounded_corner_alpha(
+            bitmap.ConvertToImage(), DECK_CARD_CORNER_RADIUS
+        )
+        return rounded.ConvertToBitmap()
 
     @timed
     def _build_template_bitmap(self) -> wx.Bitmap:
@@ -270,6 +278,10 @@ class CardBoxPanelHandlersMixin(_Base):
         dc.DrawRoundedRectangle(rect, DECK_CARD_CORNER_RADIUS)
         self._draw_placeholder_details(dc, rect)
         dc.SelectObject(wx.NullBitmap)
+        rounded = apply_rounded_corner_alpha(
+            bitmap.ConvertToImage(), DECK_CARD_CORNER_RADIUS
+        )
+        bitmap = rounded.ConvertToBitmap()
         CardBoxPanel._template_cache[key] = bitmap
         return bitmap
 

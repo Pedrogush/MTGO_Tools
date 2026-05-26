@@ -37,11 +37,13 @@ from utils.constants import (
     DARK_ALT,
     DARK_BG,
     DARK_PANEL,
+    DECK_CARD_CORNER_RADIUS,
     DECK_CARD_HEIGHT,
     DECK_CARD_WIDTH,
     LIGHT_TEXT,
     SUBDUED_TEXT,
 )
+from utils.image_effects import apply_rounded_corner_alpha
 from widgets.panels.card_table_panel.sorting import (
     PILE_SORT_MV,
     group_into_piles,
@@ -266,6 +268,7 @@ class DeckPileView(wx.ScrolledWindow):
             w, h = pil_img.size
             wx_img = wx.Image(w, h)
             wx_img.SetData(pil_img.tobytes())
+            wx_img = apply_rounded_corner_alpha(wx_img, DECK_CARD_CORNER_RADIUS)
             self._image_cache.put(name, wx_img.ConvertToBitmap())
         self.Refresh()
 
@@ -325,7 +328,9 @@ class DeckPileView(wx.ScrolledWindow):
                 # Placeholder + name fallback while the image loads.
                 dc.SetBrush(wx.Brush(wx.Colour(*DARK_ALT)))
                 dc.SetPen(wx.Pen(wx.Colour(*DARK_BG), 1))
-                dc.DrawRectangle(rect.x, rect.y, rect.width, rect.height)
+                dc.DrawRoundedRectangle(
+                    rect.x, rect.y, rect.width, rect.height, DECK_CARD_CORNER_RADIUS
+                )
                 dc.SetTextForeground(wx.Colour(*LIGHT_TEXT))
                 dc.SetFont(
                     wx.Font(9, wx.FONTFAMILY_SWISS, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD)
@@ -361,11 +366,11 @@ class DeckPileView(wx.ScrolledWindow):
         if is_selected:
             dc.SetPen(wx.Pen(wx.Colour(*DARK_ACCENT), 3))
             dc.SetBrush(wx.TRANSPARENT_BRUSH)
-            dc.DrawRectangle(rect)
+            dc.DrawRoundedRectangle(rect, DECK_CARD_CORNER_RADIUS)
         elif is_hover:
             dc.SetPen(wx.Pen(wx.Colour(*SUBDUED_TEXT), 1, wx.PENSTYLE_DOT))
             dc.SetBrush(wx.TRANSPARENT_BRUSH)
-            dc.DrawRectangle(rect)
+            dc.DrawRoundedRectangle(rect, DECK_CARD_CORNER_RADIUS)
 
     @staticmethod
     def _fit_text(dc: wx.DC, text: str, max_width: int) -> str:
@@ -402,7 +407,9 @@ class DeckPileView(wx.ScrolledWindow):
             else:
                 dc.SetBrush(wx.Brush(wx.Colour(*DARK_ALT)))
                 dc.SetPen(wx.Pen(wx.Colour(*DARK_ACCENT), 2))
-                dc.DrawRectangle(x, y, _CARD_WIDTH, _CARD_HEIGHT)
+                dc.DrawRoundedRectangle(
+                    x, y, _CARD_WIDTH, _CARD_HEIGHT, DECK_CARD_CORNER_RADIUS
+                )
             offset += 4
 
     # ----- event handlers -----
