@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import wx
 from loguru import logger
 
-from repositories.metagame_repository import MetagameRepository
 from utils.constants import DARK_BG, FORMAT_OPTIONS, LIGHT_TEXT
+
+if TYPE_CHECKING:
+    from services.metagame_service import MetagameService
 
 
 class _LoadArchetypeDialog(wx.Dialog):
@@ -20,12 +22,12 @@ class _LoadArchetypeDialog(wx.Dialog):
         title: str,
         format_label: str,
         archetype_label: str,
-        metagame_repository: MetagameRepository,
+        metagame_service: MetagameService,
         locale: str | None = None,
     ) -> None:
         super().__init__(parent, title=title, style=wx.DEFAULT_DIALOG_STYLE)
         self.SetBackgroundColour(DARK_BG)
-        self._metagame_repo = metagame_repository
+        self._metagame_service = metagame_service
         self._archetypes_by_format: dict[str, list[dict[str, Any]]] = {}
 
         sizer = wx.BoxSizer(wx.VERTICAL)
@@ -70,7 +72,7 @@ class _LoadArchetypeDialog(wx.Dialog):
         archetypes = self._archetypes_by_format.get(fmt)
         if archetypes is None:
             try:
-                archetypes = self._metagame_repo.get_archetypes_for_format(fmt)
+                archetypes = self._metagame_service.get_archetypes_for_format(fmt)
             except Exception as exc:
                 logger.warning(f"Failed to load archetype choices for {fmt}: {exc}")
                 archetypes = []

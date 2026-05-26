@@ -7,10 +7,9 @@ from typing import TYPE_CHECKING
 
 from loguru import logger
 
-from services.card_data_service import CardDataManager
-
 if TYPE_CHECKING:
     from controllers.app_controller.protocol import AppControllerProto
+    from repositories.card_repository import CardDataManager
 
     _Base = AppControllerProto
 else:
@@ -26,24 +25,24 @@ class CardDataMixin(_Base):
         on_error: Callable[[Exception], None],
         on_status: Callable[..., None],
     ) -> None:
-        if self.card_repo.is_card_data_loaded() or self.card_repo.is_card_data_loading():
+        if self.card_service.is_card_data_loaded() or self.card_service.is_card_data_loading():
             return
 
-        self.card_repo.set_card_data_loading(True)
+        self.card_service.set_card_data_loading(True)
         on_status("app.status.card_db_loading")
 
         def worker():
-            return self.card_repo.ensure_card_data_loaded()
+            return self.card_service.ensure_card_data_loaded()
 
         def success_handler(manager: CardDataManager):
-            self.card_repo.set_card_manager(manager)
-            self.card_repo.set_card_data_loading(False)
-            self.card_repo.set_card_data_ready(True)
+            self.card_service.set_card_manager(manager)
+            self.card_service.set_card_data_loading(False)
+            self.card_service.set_card_data_ready(True)
             on_status("app.status.card_db_loaded")
             on_success(manager)
 
         def error_handler(error: Exception):
-            self.card_repo.set_card_data_loading(False)
+            self.card_service.set_card_data_loading(False)
             logger.error(f"Failed to load card data: {error}")
             on_status("app.status.card_db_failed", error=error)
             on_error(error)

@@ -7,8 +7,8 @@ from typing import TYPE_CHECKING, Any, Protocol
 import wx
 import wx.lib.agw.flatnotebook as fnb
 
-from services.mana_icon_service import ManaIconFactory
 from widgets.buttons.toolbar_buttons import ToolbarButtons
+from widgets.mana_icon_service import ManaIconFactory
 from widgets.panels.card_inspector_panel import CardInspectorPanel
 from widgets.panels.card_panel import CardPanel
 from widgets.panels.card_table_panel import CardTablePanel

@@ -4,7 +4,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from utils.archetype_resolver import find_archetype_by_name, normalize_archetype_name
+from services.archetype_resolver import find_archetype_by_name, normalize_archetype_name
 
 
 class TestNormalizeArchetypeName:

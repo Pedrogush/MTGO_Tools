@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
-from services.card_data_service import CardDataManager
+from repositories.card_repository import CardDataManager
 from services.search_service.mana_filters import (
     matches_color_filter,
     matches_mana_cost,

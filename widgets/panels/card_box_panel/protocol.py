@@ -7,7 +7,7 @@ from typing import Any, Protocol
 
 import wx
 
-from services.mana_icon_service import ManaIconFactory
+from widgets.mana_icon_service import ManaIconFactory
 
 
 class CardBoxPanelProto(Protocol):
@@ -23,6 +23,7 @@ class CardBoxPanelProto(Protocol):
     _on_delta: Callable[[str, str, int], None]
     _on_remove: Callable[[str, str], None]
     _on_select: Callable[[str, dict[str, Any], Any], None]
+    _get_card_image: Callable[[str, str], Any]
     _on_hover: Callable[[str, dict[str, Any]], None] | None
     _active: bool
     _mana_cost: str

@@ -24,15 +24,16 @@ _project_root = Path(__file__).resolve().parent.parent.parent.parent.parent
 if str(_project_root) not in sys.path:
     sys.path.insert(0, str(_project_root))
 
+from typing import TYPE_CHECKING
+
 import wx
 from loguru import logger
 
-from repositories.metagame_repository import (
-    MetagameRepository,
-    get_metagame_repository,
-)
-from services.radar_service import RadarData, RadarService, get_radar_service
 from utils.background_worker import BackgroundWorker
+
+if TYPE_CHECKING:
+    from services.metagame_service import MetagameService
+    from services.radar_service import RadarData, RadarService
 from utils.constants import (
     DARK_BG,
     OPPONENT_TRACKER_CACHE_TTL_SECONDS,
@@ -70,8 +71,7 @@ class MTGOpponentDeckSpy(
     def __init__(
         self,
         parent: wx.Window | None = None,
-        radar_service: RadarService | None = None,
-        metagame_repository: MetagameRepository | None = None,
+        controller=None,
         locale: str | None = None,
     ) -> None:
         style = (
@@ -101,8 +101,9 @@ class MTGOpponentDeckSpy(
         self._manual_archetype_loaded: bool = False
 
         # Radar integration
-        self.radar_service: RadarService = radar_service or get_radar_service()
-        self.metagame_repo: MetagameRepository = metagame_repository or get_metagame_repository()
+        self.controller = controller
+        self.radar_service: RadarService = controller.radar_service
+        self.metagame_service: MetagameService = controller.metagame_service
         self.current_radar: RadarData | None = None
         self._radar_worker_thread: threading.Thread | None = None
         self._radar_cancel_requested: bool = False
@@ -170,6 +171,7 @@ class MTGOpponentDeckSpy(
 
 def main() -> None:
     """Launch the opponent tracker as a standalone application."""
+    from controllers.app_controller import get_deck_selector_controller
     from utils.constants import LOGS_DIR, ensure_base_dirs
     from utils.logging_config import configure_logging
 
@@ -179,7 +181,7 @@ def main() -> None:
         logger.info(f"Writing logs to {log_file}")
 
     app = wx.App(False)
-    frame = MTGOpponentDeckSpy()
+    frame = MTGOpponentDeckSpy(controller=get_deck_selector_controller())
     frame.Show()
     app.MainLoop()
 

@@ -59,7 +59,7 @@ class TestRadarIntegration:
         self, mock_wx, mock_radar_service, mock_metagame_repo
     ):
         """Test that radar loading is triggered when opponent has known deck."""
-        with patch("widgets.frames.identify_opponent.find_archetype_by_name") as mock_find:
+        with patch("services.archetype_resolver.find_archetype_by_name") as mock_find:
             mock_find.return_value = {
                 "name": "UR Murktide",
                 "href": "/archetype/ur-murktide",
@@ -125,7 +125,7 @@ class TestRadarIntegration:
 
     def test_archetype_resolver_exact_match(self):
         """Test archetype name resolution with exact match."""
-        from utils.archetype_resolver import normalize_archetype_name
+        from services.archetype_resolver import normalize_archetype_name
 
         result = normalize_archetype_name("UR Murktide")
         assert result == "ur murktide"
@@ -139,7 +139,7 @@ class TestRadarIntegration:
 
     def test_archetype_resolver_partial_match(self, mock_metagame_repo):
         """Test archetype name resolution with partial match."""
-        from utils.archetype_resolver import find_archetype_by_name
+        from services.archetype_resolver import find_archetype_by_name
 
         result = find_archetype_by_name("Murktide", "Modern", mock_metagame_repo)
         assert result is not None

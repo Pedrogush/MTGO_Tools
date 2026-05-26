@@ -10,11 +10,11 @@ from typing import TYPE_CHECKING, Any
 import wx
 from loguru import logger
 
-from services.card_data_service import CardDataManager
-from services.image_service import BULK_DATA_CACHE, CardImageRequest, get_card_image
 from utils.constants import SUBDUED_TEXT, ZONE_TITLES
 
 if TYPE_CHECKING:
+    from repositories.card_repository import CardDataManager
+    from services.image_service import CardImageRequest
     from widgets.panels.card_inspector_panel.protocol import CardInspectorPanelProto
 
     _Base = CardInspectorPanelProto
@@ -203,7 +203,7 @@ class CardInspectorPanelHandlersMixin(_Base):
         if self.bulk_data_by_name:
             printings = self.bulk_data_by_name.get(card_name.lower(), [])
             self.inspector_printings = printings
-        elif BULK_DATA_CACHE.exists():
+        elif self.controller.BULK_DATA_CACHE.exists():
             logger.debug(f"Bulk data not loaded yet for {card_name}")
 
         # Load the image
@@ -229,7 +229,7 @@ class CardInspectorPanelHandlersMixin(_Base):
         active_request: CardImageRequest | None = None
         if not printings:
             if card_name:
-                active_request = CardImageRequest(
+                active_request = self.controller.CardImageRequest(
                     card_name=image_request_name or card_name,
                     uuid=None,
                     set_code=None,
@@ -239,7 +239,7 @@ class CardInspectorPanelHandlersMixin(_Base):
         else:
             printing = printings[current_idx]
             uuid = printing.get("id")
-            active_request = CardImageRequest(
+            active_request = self.controller.CardImageRequest(
                 card_name=image_request_name or card_name or "",
                 uuid=uuid,
                 set_code=printing.get("set"),
@@ -249,9 +249,9 @@ class CardInspectorPanelHandlersMixin(_Base):
 
         def _lookup() -> None:
             if not printings:
-                path = get_card_image(card_name, "normal") if card_name else None
+                path = self.controller.get_card_image(card_name, "normal") if card_name else None
                 if not path and image_request_name:
-                    path = get_card_image(image_request_name, "normal")
+                    path = self.controller.get_card_image(image_request_name, "normal")
                 wx.CallAfter(self._apply_no_printings_image, gen, card_name, active_request, path)
             else:
                 uuid = active_request.uuid if active_request else None

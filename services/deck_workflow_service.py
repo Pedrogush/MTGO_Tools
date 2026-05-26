@@ -5,7 +5,7 @@ from typing import Any, Literal
 
 from loguru import logger
 
-from navigators.mtggoldfish import download_deck, get_archetypes
+from repositories.scrapers.mtggoldfish import download_deck, get_archetypes
 from utils.deck import read_curr_deck_file
 
 DeckLoadScope = Literal["all", "archetype"]
@@ -17,13 +17,25 @@ class DeckWorkflowService:
     def __init__(
         self,
         *,
-        deck_repo,
-        metagame_repo,
-        deck_service,
+        deck_repo=None,
+        metagame_repo=None,
+        deck_service=None,
         archetype_provider: Callable[..., list[dict[str, Any]]] | None = None,
         deck_downloader: Callable[[str, str | None], None] | None = None,
         deck_reader: Callable[[], str] | None = None,
     ) -> None:
+        if deck_repo is None:
+            from repositories.deck_repository import get_deck_repository
+
+            deck_repo = get_deck_repository()
+        if metagame_repo is None:
+            from repositories.metagame_repository import get_metagame_repository
+
+            metagame_repo = get_metagame_repository()
+        if deck_service is None:
+            from services.deck_service import get_deck_service
+
+            deck_service = get_deck_service()
         self.deck_repo = deck_repo
         self.metagame_repo = metagame_repo
         self.deck_service = deck_service
@@ -70,6 +82,9 @@ class DeckWorkflowService:
 
     def set_decks_list(self, decks: list[dict[str, Any]]) -> None:
         self.deck_repo.set_decks_list(decks)
+
+    def get_decks_list(self) -> list[dict[str, Any]]:
+        return self.deck_repo.get_decks_list()
 
     # ------------------------------------------------------------------ deck text helpers ------------------------------------------------------------------
     def build_deck_text(self, zone_cards: dict[str, list[dict[str, Any]]] | None = None) -> str:

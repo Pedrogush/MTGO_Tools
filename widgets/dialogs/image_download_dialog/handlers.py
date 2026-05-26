@@ -4,19 +4,22 @@ from __future__ import annotations
 
 import threading
 from collections.abc import Callable
-from typing import Any
+from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 import wx
 from loguru import logger
 
-from services.image_service import BULK_DATA_CACHE, BulkImageDownloader
+if TYPE_CHECKING:
+    from services.image_service import BulkImageDownloader
 
 
 class ImageDownloadDialogHandlersMixin:
     """Threaded download worker and progress/completion handlers."""
 
     image_cache: Any
-    image_downloader: BulkImageDownloader | None
+    image_downloader: BulkImageDownloader
+    bulk_data_cache_path: Path
     on_status_update: Callable[[str], None] | None
 
     def start_download(self, quality: str, max_cards: int | None) -> None:
@@ -45,12 +48,8 @@ class ImageDownloadDialogHandlersMixin:
 
         def worker():
             try:
-                # Ensure downloader exists
-                if self.image_downloader is None:
-                    self.image_downloader = BulkImageDownloader(self.image_cache)
-
                 # Ensure bulk data is downloaded
-                if not BULK_DATA_CACHE.exists():
+                if not self.bulk_data_cache_path.exists():
                     wx.CallAfter(progress_dialog.Update, 0, "Downloading bulk metadata first...")
                     success, msg = self.image_downloader.download_bulk_metadata(force=False)
                     if not success:

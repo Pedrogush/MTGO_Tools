@@ -18,15 +18,13 @@ Submodules look them up dynamically off this package for the same reason.
 
 from __future__ import annotations
 
-# These re-exports must come first so submodules can pick them up via
-# ``repositories.metagame_repository.<attr>`` during their own import.
-from navigators.mtggoldfish import (  # noqa: F401
+from repositories.metagame_repository.date_utils import _parse_deck_date
+from repositories.metagame_repository.repository import MetagameRepository
+from repositories.scrapers.mtggoldfish import (  # noqa: F401
     fetch_deck_text,
     get_archetype_decks,
     get_archetypes,
 )
-from repositories.metagame_repository.date_utils import _parse_deck_date
-from repositories.metagame_repository.repository import MetagameRepository
 from utils.constants import REMOTE_SNAPSHOTS_ENABLED  # noqa: F401
 
 _default_repository: MetagameRepository | None = None

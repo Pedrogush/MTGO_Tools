@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING
 import wx
 from loguru import logger
 
-from services.radar_service import RadarData
 from widgets.panels.compact_radar_panel.properties import (
     _TOP_MAINBOARD_LIMIT,
     _TOP_SIDEBOARD_LIMIT,
@@ -15,6 +14,7 @@ from widgets.panels.compact_radar_panel.properties import (
 )
 
 if TYPE_CHECKING:
+    from services.radar_service import RadarData
     from widgets.panels.compact_radar_panel.protocol import CompactRadarPanelProto
 
     _Base = CompactRadarPanelProto

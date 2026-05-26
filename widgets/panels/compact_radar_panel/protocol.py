@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 
 import wx
 
-from services.radar_service import RadarData
 from widgets.panels.compact_radar_panel.properties import RadarViewMode
+
+if TYPE_CHECKING:
+    from services.radar_service import RadarData
 
 
 class CompactRadarPanelProto(Protocol):

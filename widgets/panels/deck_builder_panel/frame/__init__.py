@@ -9,19 +9,21 @@ responsible for constructing a specific section of the UI.
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import wx
 
-from services.mana_icon_service import ManaIconFactory
-from services.radar_service import RadarData
 from utils.constants import DARK_PANEL
+from widgets.mana_icon_service import ManaIconFactory
 from widgets.panels.deck_builder_panel.frame.advanced_filters import AdvancedFiltersBuilderMixin
 from widgets.panels.deck_builder_panel.frame.basic_filters import BasicFiltersBuilderMixin
 from widgets.panels.deck_builder_panel.frame.results_pane import ResultsPaneBuilderMixin
 from widgets.panels.deck_builder_panel.frame.search_results_view import _SearchResultsView
 from widgets.panels.deck_builder_panel.handlers import DeckBuilderPanelHandlersMixin
 from widgets.panels.deck_builder_panel.properties import DeckBuilderPanelPropertiesMixin
+
+if TYPE_CHECKING:
+    from services.radar_service import RadarData
 
 
 class DeckBuilderPanel(
@@ -37,6 +39,7 @@ class DeckBuilderPanel(
     def __init__(
         self,
         parent: wx.Window,
+        controller: Any,
         mana_icons: ManaIconFactory,
         on_switch_to_research: Callable[[], None],
         on_ensure_card_data: Callable[[], None],
@@ -52,6 +55,7 @@ class DeckBuilderPanel(
         super().__init__(parent)
 
         self._locale = locale
+        self.controller = controller
 
         # Store dependencies
         self.mana_icons = mana_icons

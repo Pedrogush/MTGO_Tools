@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import wx
 
-from services.format_card_pool_service import FormatCardPoolService
-from services.radar_service import RadarService
-from services.radar_service.card_stats import CardUsageStats
+if TYPE_CHECKING:
+    from services.format_card_pool_service import FormatCardPoolService
+    from services.radar_service import RadarService
+    from services.radar_service.card_stats import CardUsageStats
 
 FORMATS_COLUMN_INDEX = 11
 
@@ -93,7 +96,7 @@ class TopCardsHandlersMixin:
 
             stats = usage_by_name.get(
                 entry.card_name,
-                CardUsageStats(
+                self.controller.CardUsageStats(
                     card_name=entry.card_name,
                     format_name=format_name.lower(),
                     total_decks=0,

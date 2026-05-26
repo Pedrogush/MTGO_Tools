@@ -123,6 +123,7 @@ def test_builder_radar_zone_choices_are_localized_for_pt_br(
     try:
         panel = DeckBuilderPanel(
             parent=frame,
+            controller=frame.controller,
             mana_icons=frame.mana_icons,
             on_switch_to_research=lambda: None,
             on_ensure_card_data=lambda: None,

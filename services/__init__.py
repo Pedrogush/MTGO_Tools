@@ -5,8 +5,8 @@ This package contains service classes that handle all business logic,
 orchestrating between repositories and the UI layer.
 
 Service classes are imported lazily via :func:`__getattr__` so that importing
-the package (or any single submodule, e.g. ``services.card_data_service``)
-does not eagerly pull in every sibling service. Eager imports here created a
+the package (or any single submodule, e.g. ``services.deck_service``) does
+not eagerly pull in every sibling service. Eager imports here created a
 ``repositories.card_repository -> services -> services.search_service ->
 repositories.card_repository`` import cycle; lazy loading keeps the package
 import cheap and cycle-free. Mirrors ``widgets/panels/__init__.py``.
@@ -26,6 +26,9 @@ _EXPORTS = {
     "BundleSnapshotError": "services.bundle_snapshot_client",
     "get_bundle_snapshot_client": "services.bundle_snapshot_client",
     "reset_bundle_snapshot_client": "services.bundle_snapshot_client",
+    "CardService": "services.card_service",
+    "get_card_service": "services.card_service",
+    "reset_card_service": "services.card_service",
     "DeckService": "services.deck_service",
     "ZoneUpdateResult": "services.deck_service",
     "get_deck_service": "services.deck_service",
@@ -33,6 +36,9 @@ _EXPORTS = {
     "get_format_card_pool_service": "services.format_card_pool_service",
     "ImageService": "services.image_service",
     "get_image_service": "services.image_service",
+    "MetagameService": "services.metagame_service",
+    "get_metagame_service": "services.metagame_service",
+    "reset_metagame_service": "services.metagame_service",
     "SearchService": "services.search_service",
     "get_search_service": "services.search_service",
     "StoreService": "services.store_service",

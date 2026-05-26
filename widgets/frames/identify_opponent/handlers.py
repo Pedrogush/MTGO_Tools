@@ -11,14 +11,14 @@ from __future__ import annotations
 import json
 import threading
 import time
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import wx
 from loguru import logger
 
-from repositories.metagame_repository import MetagameRepository
-from services.radar_service import RadarData, RadarService
-from utils.archetype_resolver import find_archetype_by_name
+if TYPE_CHECKING:
+    from services.metagame_service import MetagameService
+    from services.radar_service import RadarData, RadarService
 from utils.atomic_io import atomic_write_json, locked_path
 from utils.background_worker import BackgroundWorker
 from utils.constants import (
@@ -69,7 +69,7 @@ class MTGOpponentDeckSpyHandlersMixin:
     _manual_archetype_loaded: bool
 
     radar_service: RadarService
-    metagame_repo: MetagameRepository
+    metagame_service: MetagameService
     current_radar: RadarData | None
     _radar_worker_thread: threading.Thread | None
     _radar_cancel_requested: bool
@@ -101,7 +101,7 @@ class MTGOpponentDeckSpyHandlersMixin:
             title=self._t("tracker.dlg.load_archetype.title"),
             format_label=self._t("tracker.dlg.load_archetype.format"),
             archetype_label=self._t("tracker.dlg.load_archetype.archetype"),
-            metagame_repository=self.metagame_repo,
+            metagame_service=self.metagame_service,
             locale=self._locale,
         )
         if dlg.ShowModal() == wx.ID_OK:
@@ -283,7 +283,9 @@ class MTGOpponentDeckSpyHandlersMixin:
             return
 
         # Resolve archetype name to archetype dict
-        archetype_dict = find_archetype_by_name(archetype_name, format_name, self.metagame_repo)
+        archetype_dict = self.controller.find_archetype_by_name(
+            archetype_name, format_name, self.metagame_service.metagame_repo
+        )
 
         if not archetype_dict:
             logger.warning(f"Could not resolve archetype: {archetype_name} in {format_name}")

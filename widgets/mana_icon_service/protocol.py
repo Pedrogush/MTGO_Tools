@@ -14,7 +14,7 @@ from typing import Protocol
 import wx
 import wx.svg
 
-from services.mana_icon_service.cache import ManaBitmapCache
+from widgets.mana_icon_service.cache import ManaBitmapCache
 
 
 class ManaIconFactoryProto(Protocol):

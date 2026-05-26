@@ -2,17 +2,15 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import wx
 import wx.html
 
-from services.comp_rules_service import (
-    CompRulesService,
-    Section,
-    Subsection,
-    get_comp_rules_service,
-    linkify_cross_refs,
-)
 from utils.constants import DARK_PANEL, LIGHT_TEXT, PADDING_SM
+
+if TYPE_CHECKING:
+    from services.comp_rules_service import CompRulesService, Section, Subsection
 from utils.i18n import translate
 from widgets.frames.rules_browser.html_render import render_outline_to_html
 
@@ -30,8 +28,8 @@ class RulesBrowserFrame(wx.Frame):
         self,
         parent: wx.Window | None = None,
         *,
+        controller=None,
         locale: str | None = None,
-        service: CompRulesService | None = None,
     ) -> None:
         super().__init__(
             parent,
@@ -40,7 +38,8 @@ class RulesBrowserFrame(wx.Frame):
             style=wx.DEFAULT_FRAME_STYLE,
         )
         self._locale = locale
-        self._service = service or get_comp_rules_service()
+        self.controller = controller
+        self._service: CompRulesService = controller.comp_rules_service
         self.SetBackgroundColour(DARK_PANEL)
 
         self._sections: list[Section] = self._service.get_outline()
@@ -109,7 +108,7 @@ class RulesBrowserFrame(wx.Frame):
             return
         html = render_outline_to_html(
             self._sections,
-            cross_ref_linkifier=linkify_cross_refs,
+            cross_ref_linkifier=self.controller.linkify_cross_refs,
         )
         self.doc.SetPage(html)
 

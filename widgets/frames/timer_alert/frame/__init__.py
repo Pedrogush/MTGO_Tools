@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 _project_root = Path(__file__).resolve().parent.parent.parent.parent.parent
 if str(_project_root) not in sys.path:
@@ -20,7 +20,6 @@ if str(_project_root) not in sys.path:
 import wx
 from loguru import logger
 
-from services.mtgo_bridge_service.client import BridgeWatcher
 from utils.constants import (
     DARK_BG,
     PADDING_SM,
@@ -36,6 +35,9 @@ from widgets.frames.timer_alert.frame.threshold_panel import SOUND_OPTIONS, Thre
 from widgets.frames.timer_alert.handlers import TimerAlertHandlersMixin
 from widgets.frames.timer_alert.properties import TimerAlertPropertiesMixin
 
+if TYPE_CHECKING:
+    from services.mtgo_bridge_service.client import BridgeWatcher
+
 
 class TimerAlertFrame(
     TimerAlertHandlersMixin,
@@ -50,7 +52,12 @@ class TimerAlertFrame(
     WATCH_RETRY_DELAY_MS = 5000
     POLL_INTERVAL_MS = TIMER_ALERT_POLL_INTERVAL_MS
 
-    def __init__(self, parent: wx.Window | None = None, locale: str | None = None) -> None:
+    def __init__(
+        self,
+        parent: wx.Window | None = None,
+        controller=None,
+        locale: str | None = None,
+    ) -> None:
         style = wx.CAPTION | wx.CLOSE_BOX | wx.MINIMIZE_BOX | wx.STAY_ON_TOP | wx.RESIZE_BORDER
         super().__init__(
             parent,
@@ -59,6 +66,7 @@ class TimerAlertFrame(
             style=style,
         )
         self._locale = locale
+        self.controller = controller
 
         self._watcher: BridgeWatcher | None = None
         self._watch_start_pending = False
@@ -122,6 +130,7 @@ class TimerAlertFrame(
 
 def main() -> None:
     """Launch the timer alert widget as a standalone application."""
+    from controllers.app_controller import get_deck_selector_controller
     from utils.constants import LOGS_DIR, ensure_base_dirs
     from utils.logging_config import configure_logging
 
@@ -131,7 +140,7 @@ def main() -> None:
         logger.info(f"Writing logs to {log_file}")
 
     app = wx.App(False)
-    frame = TimerAlertFrame()
+    frame = TimerAlertFrame(controller=get_deck_selector_controller())
     frame.Show()
     app.MainLoop()
 

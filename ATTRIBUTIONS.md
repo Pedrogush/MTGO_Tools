@@ -120,7 +120,7 @@ The Tracker application provided excellent examples of how to structure an MTGOS
 We scrape MTGGoldfish in compliance with their `robots.txt` file. Our scraping is rate-limited and respects their terms of service. We do not republish or redistribute their data commercially.
 
 **Files influenced:**
-- `navigators/mtggoldfish.py` - Web scraping implementation
+- `services/scrapers/mtggoldfish.py` - Web scraping implementation
 - `widgets/deck_selector.py` - Deck browser using scraped data
 
 **Credit:**

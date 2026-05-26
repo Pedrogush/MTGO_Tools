@@ -9,7 +9,6 @@ from typing import TYPE_CHECKING, Any
 import wx
 from loguru import logger
 
-from services.card_data_service import CardDataManager
 from utils.constants import LOGS_DIR
 from utils.deck import sanitize_filename
 from widgets.dialogs.feedback_dialog import show_feedback_dialog
@@ -27,6 +26,7 @@ from widgets.panels.deck_research_panel.results_filter import (
 )
 
 if TYPE_CHECKING:
+    from repositories.card_repository import CardDataManager
     from widgets.frames.app_frame import AppFrame
     from widgets.frames.app_frame.protocol import AppFrameProto
 
@@ -683,6 +683,7 @@ class AppEventHandlers(_Base):
             MTGOpponentDeckSpy,
             "Opponent Tracker",
             on_tracker_close,
+            controller=self.controller,
             locale=self.locale,
         )
         if window is not None:
@@ -695,6 +696,7 @@ class AppEventHandlers(_Base):
             TimerAlertFrame,
             "Timer Alert",
             self._handle_child_close,
+            controller=self.controller,
             locale=self.locale,
         )
 
@@ -705,6 +707,7 @@ class AppEventHandlers(_Base):
             MatchHistoryFrame,
             "Match History",
             self._handle_child_close,
+            controller=self.controller,
             locale=self.locale,
         )
 
@@ -715,6 +718,7 @@ class AppEventHandlers(_Base):
             MetagameAnalysisFrame,
             "Metagame Analysis",
             self._handle_child_close,
+            controller=self.controller,
             locale=self.locale,
         )
 
@@ -725,6 +729,7 @@ class AppEventHandlers(_Base):
             TopCardsFrame,
             "Top Cards",
             self._handle_child_close,
+            controller=self.controller,
             locale=self.locale,
         )
 
@@ -735,6 +740,7 @@ class AppEventHandlers(_Base):
             RadarFrame,
             "Radar",
             self._handle_child_close,
+            controller=self.controller,
             metagame_repo=self.controller.metagame_repo,
             format_name=self.current_format,
             on_use_for_search=self._on_radar_use_for_search,
@@ -750,9 +756,7 @@ class AppEventHandlers(_Base):
         self._show_left_panel("builder")
 
     def _load_radar_in_background(self: AppFrame, archetype: dict[str, Any]) -> None:
-        from services.radar_service import get_radar_service
-
-        radar_service = get_radar_service()
+        radar_service = self.controller.radar_service
         format_name = self.current_format
 
         def worker() -> None:

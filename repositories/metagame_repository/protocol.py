@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol
 
 if TYPE_CHECKING:
-    from services.remote_snapshot_client import RemoteSnapshotClient
+    from repositories.remote_snapshot_client import RemoteSnapshotClient
 
 
 class MetagameRepositoryProto(Protocol):

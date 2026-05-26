@@ -8,13 +8,14 @@ from typing import Any, Protocol
 import wx
 import wx.html
 
-from services.mana_icon_service import ManaIconFactory
+from widgets.mana_icon_service import ManaIconFactory
 from widgets.panels.card_panel.rule_popup import RulePopupFrame
 
 
 class CardPanelProto(Protocol):
     """Cross-mixin ``self`` surface for ``CardPanel``."""
 
+    controller: Any
     mana_icons: ManaIconFactory
     _t: Callable[..., str]
     # Optional callable returning a fresh keyword lookup; the panel calls this

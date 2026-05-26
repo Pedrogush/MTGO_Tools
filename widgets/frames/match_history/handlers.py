@@ -9,8 +9,6 @@ import wx
 import wx.dataview as dv
 from loguru import logger
 
-from services.gamelog_service import infer_username_from_matches, parse_all_gamelogs
-
 
 class MatchHistoryHandlersMixin:
     """Callbacks and worker-thread bridges for :class:`MatchHistoryFrame`."""
@@ -35,9 +33,7 @@ class MatchHistoryHandlersMixin:
     # ------------------------------------------------------------------ worker bootstraps
     def _init_username(self) -> None:
         def worker() -> None:
-            from services.gamelog_service import get_current_username
-
-            username = get_current_username()
+            username = self.controller.get_current_username()
             wx.CallAfter(self._set_username, username)
 
         threading.Thread(target=worker, daemon=True).start()
@@ -56,7 +52,9 @@ class MatchHistoryHandlersMixin:
 
         def worker() -> None:
             try:
-                matches = parse_all_gamelogs(limit=None, progress_callback=progress_callback)
+                matches = self.controller.parse_all_gamelogs(
+                    limit=None, progress_callback=progress_callback
+                )
                 logger.debug("Loaded {} matches from GameLog files", len(matches))
             except Exception as exc:  # noqa: BLE001
                 logger.exception("Failed to load match history from GameLogs")
@@ -85,7 +83,7 @@ class MatchHistoryHandlersMixin:
         self.history_items = matches
 
         if not self.current_username:
-            self.current_username = infer_username_from_matches(matches)
+            self.current_username = self.controller.infer_username_from_matches(matches)
             if self.current_username:
                 logger.debug(f"Using inferred username: {self.current_username}")
 

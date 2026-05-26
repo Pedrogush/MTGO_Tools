@@ -13,7 +13,7 @@ Split by responsibility into internal modules:
 - ``bulk_data``: Scryfall bulk metadata check, download, and memory load
   (``BulkDataMixin``, folded from the former ``bulk_data_helpers`` module)
 - ``settings``: persistent session preferences (``SettingsMixin``)
-- ``lifecycle``: startup orchestration, frame factory, shutdown (``LifecycleMixin``)
+- ``lifecycle``: startup orchestration, frame attachment, shutdown (``LifecycleMixin``)
 - ``controller``: :class:`AppController` composed from the above mixins
 """
 

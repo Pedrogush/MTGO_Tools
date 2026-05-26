@@ -5,14 +5,16 @@ from __future__ import annotations
 import threading
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import wx
 import wx.dataview as dv
 from loguru import logger
 
-from services.radar_service import CardFrequency, RadarData, RadarService
 from utils.atomic_io import atomic_write_text
+
+if TYPE_CHECKING:
+    from services.radar_service import CardFrequency, RadarData, RadarService
 
 
 class RadarPanelHandlersMixin:

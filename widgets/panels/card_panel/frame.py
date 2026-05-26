@@ -14,8 +14,8 @@ from typing import Any
 import wx
 import wx.html
 
-from services.mana_icon_service import ManaIconFactory
 from utils.constants import DARK_PANEL, LIGHT_TEXT, PADDING_MD, PADDING_SM, SUBDUED_TEXT
+from widgets.mana_icon_service import ManaIconFactory
 from widgets.panels.card_panel.handlers import CardPanelHandlersMixin
 from widgets.panels.card_panel.properties import CardPanelPropertiesMixin
 from widgets.panels.card_panel.rule_popup import RulePopupFrame
@@ -23,20 +23,6 @@ from widgets.panels.card_panel.rule_popup import RulePopupFrame
 
 def _default_t(key: str, **fmt: Any) -> str:
     return key.format(**fmt) if fmt else key
-
-
-def _default_keyword_lookup_source() -> Mapping[str, Any]:
-    """Default lookup source — pulls from the ``CompRulesService`` singleton.
-
-    Returns an empty mapping when the cache has not been populated yet so the
-    renderer falls back to plain (non-linkified) oracle text.
-    """
-    try:
-        from services.comp_rules_service import get_comp_rules_service
-
-        return get_comp_rules_service().get_keyword_lookup()
-    except Exception:
-        return {}
 
 
 class CardPanel(
@@ -49,14 +35,23 @@ class CardPanel(
     def __init__(
         self,
         parent: wx.Window,
+        controller: Any,
         mana_icons: ManaIconFactory | None = None,
         t: Callable[..., str] | None = None,
         keyword_lookup_source: Callable[[], Mapping[str, Any]] | None = None,
     ):
         super().__init__(parent)
         self.SetBackgroundColour(DARK_PANEL)
+        self.controller = controller
         self.mana_icons = mana_icons or ManaIconFactory()
         self._t = t or _default_t
+
+        def _default_keyword_lookup_source() -> Mapping[str, Any]:
+            try:
+                return controller.comp_rules_service.get_keyword_lookup()
+            except Exception:
+                return {}
+
         self._keyword_lookup_source = keyword_lookup_source or _default_keyword_lookup_source
         self._rule_popup: RulePopupFrame | None = None
 

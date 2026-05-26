@@ -7,15 +7,12 @@ from typing import TYPE_CHECKING, Any
 import wx
 from loguru import logger
 
-from services.format_card_pool_service import (
-    FormatCardPoolService,
-    get_format_card_pool_service,
-)
 from widgets.panels.card_panel.html_renderer import build_card_html
 from widgets.panels.card_panel.properties import _stats_lookup_names
 from widgets.panels.card_panel.rule_popup import RulePopupFrame
 
 if TYPE_CHECKING:
+    from services.format_card_pool_service import FormatCardPoolService
     from widgets.panels.card_panel.protocol import CardPanelProto
 
     _Base = CardPanelProto
@@ -162,7 +159,7 @@ class CardPanelHandlersMixin(_Base):
             return
 
         try:
-            service: FormatCardPoolService = get_format_card_pool_service()
+            service: FormatCardPoolService = self.controller.format_card_pool_service
             total: int | None = None
             for candidate in _stats_lookup_names(card_name):
                 n = service.get_card_total(format_name, candidate)

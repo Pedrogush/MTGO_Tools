@@ -19,7 +19,7 @@ setuptools.setup(
     author="yochi",
     author_email="pedrogush@gmail.com",
     description="MTG Metagame Analysis: Opponent tracking and deck research tools for MTGO",
-    packages=["widgets", "navigators", "utils"],
+    packages=["widgets", "services", "utils"],
     classifiers=["Programming Language :: Python :: 3", "Operating System :: Windows"],
     python_requires=">=3.11",
     install_requires=load_requirements("requirements.txt"),

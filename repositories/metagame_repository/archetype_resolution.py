@@ -8,10 +8,11 @@ from typing import TYPE_CHECKING, Any
 from loguru import logger
 
 import repositories.metagame_repository as _pkg
+from repositories.remote_snapshot_client import get_remote_snapshot_client
 
 if TYPE_CHECKING:
     from repositories.metagame_repository.protocol import MetagameRepositoryProto
-    from services.remote_snapshot_client import RemoteSnapshotClient
+    from repositories.remote_snapshot_client import RemoteSnapshotClient
 
     _Base = MetagameRepositoryProto
 else:
@@ -92,7 +93,7 @@ class ArchetypeResolutionMixin(_Base):
                 except Exception as exc:
                     logger.warning(f"Remote snapshot stats failed for {mtg_format}: {exc}")
 
-        from navigators.mtggoldfish import get_archetype_stats
+        from repositories.scrapers.mtggoldfish import get_archetype_stats
 
         logger.info(f"[live-scrape] metagame stats for {mtg_format}")
         return get_archetype_stats(mtg_format)
@@ -105,6 +106,4 @@ class ArchetypeResolutionMixin(_Base):
         # ``repositories.metagame_repository.REMOTE_SNAPSHOTS_ENABLED`` take effect.
         if not _pkg.REMOTE_SNAPSHOTS_ENABLED:
             return None
-        from services.remote_snapshot_client import get_remote_snapshot_client
-
         return get_remote_snapshot_client()

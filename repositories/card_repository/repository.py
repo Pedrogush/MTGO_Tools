@@ -2,10 +2,15 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+from repositories.card_repository.card_data_manager import CardDataManager
 from repositories.card_repository.collection import CollectionMixin
 from repositories.card_repository.metadata import MetadataMixin
 from repositories.card_repository.state import StateMixin
-from services.card_data_service import CardDataManager
+
+if TYPE_CHECKING:
+    pass
 
 
 class CardRepository(

@@ -6,7 +6,7 @@ import sys
 import threading
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 _project_root = Path(__file__).resolve().parent.parent.parent.parent
 if str(_project_root) not in sys.path:
@@ -15,11 +15,13 @@ if str(_project_root) not in sys.path:
 import wx
 import wx.dataview as dv
 
-from services.radar_service import RadarData, RadarService, get_radar_service
 from utils.constants import DARK_ALT, DARK_PANEL, LIGHT_TEXT
 from utils.i18n import translate
 from widgets.frames.radar.handlers import RadarFrameHandlersMixin, RadarPanelHandlersMixin
 from widgets.frames.radar.properties import RadarFramePropertiesMixin, RadarPanelPropertiesMixin
+
+if TYPE_CHECKING:
+    from services.radar_service import RadarData
 
 
 class RadarPanel(RadarPanelHandlersMixin, RadarPanelPropertiesMixin, wx.Panel):
@@ -28,7 +30,7 @@ class RadarPanel(RadarPanelHandlersMixin, RadarPanelPropertiesMixin, wx.Panel):
     def __init__(
         self,
         parent: wx.Window,
-        radar_service: RadarService | None = None,
+        controller: Any,
         on_export: Callable[[RadarData], None] | None = None,
         on_use_for_search: Callable[[RadarData], None] | None = None,
         locale: str | None = None,
@@ -37,7 +39,8 @@ class RadarPanel(RadarPanelHandlersMixin, RadarPanelPropertiesMixin, wx.Panel):
         self.SetBackgroundColour(DARK_PANEL)
         self._locale = locale
 
-        self.radar_service = radar_service or get_radar_service()
+        self.controller = controller
+        self.radar_service = controller.radar_service
         self.on_export = on_export
         self.on_use_for_search = on_use_for_search
         self.current_radar: RadarData | None = None
@@ -115,9 +118,9 @@ class RadarFrame(RadarFrameHandlersMixin, RadarFramePropertiesMixin, wx.Frame):
     def __init__(
         self,
         parent: wx.Window | None = None,
+        controller: Any = None,
         metagame_repo: Any = None,
         format_name: str = "",
-        radar_service: RadarService | None = None,
         on_use_for_search: Callable[[RadarData], None] | None = None,
         locale: str | None = None,
     ):
@@ -131,9 +134,10 @@ class RadarFrame(RadarFrameHandlersMixin, RadarFramePropertiesMixin, wx.Frame):
         self.SetBackgroundColour(DARK_PANEL)
         self._locale = locale
 
+        self.controller = controller
         self.metagame_repo = metagame_repo
         self.format_name = format_name
-        self.radar_service = radar_service or get_radar_service()
+        self.radar_service = controller.radar_service
         self._on_use_for_search_cb = on_use_for_search
         self.archetypes: list[dict[str, Any]] = []
         self.current_radar: RadarData | None = None
@@ -180,7 +184,7 @@ class RadarFrame(RadarFrameHandlersMixin, RadarFramePropertiesMixin, wx.Frame):
 
         self.radar_panel = RadarPanel(
             panel,
-            radar_service=self.radar_service,
+            controller=self.controller,
             on_export=self._export_radar,
             on_use_for_search=self._use_radar_for_search,
             locale=self._locale,

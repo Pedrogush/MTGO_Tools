@@ -7,19 +7,21 @@ distribution, type counts, and opening-hand land probability analysis.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import wx
 import wx.html2
 
-from services.card_data_service import CardDataManager
-from services.deck_service import DeckService, get_deck_service
 from utils.constants import DARK_PANEL
 from widgets.panels.deck_stats_panel.handlers import DeckStatsPanelHandlersMixin
 from widgets.panels.deck_stats_panel.properties import (
     _EMPTY_HTML,
     DeckStatsPanelPropertiesMixin,
 )
+
+if TYPE_CHECKING:
+    from repositories.card_repository import CardDataManager
+    from services.deck_service import DeckService
 
 
 class DeckStatsPanel(DeckStatsPanelHandlersMixin, DeckStatsPanelPropertiesMixin, wx.Panel):
@@ -28,14 +30,15 @@ class DeckStatsPanel(DeckStatsPanelHandlersMixin, DeckStatsPanelPropertiesMixin,
     def __init__(
         self,
         parent: wx.Window,
+        controller: Any,
         card_manager: CardDataManager | None = None,
-        deck_service: DeckService | None = None,
     ):
         super().__init__(parent)
         self.SetBackgroundColour(DARK_PANEL)
 
+        self.controller = controller
         self.card_manager = card_manager
-        self.deck_service = deck_service or get_deck_service()
+        self.deck_service: DeckService = controller.deck_service
         self.zone_cards: dict[str, list[dict[str, Any]]] = {}
 
         self._webview = wx.html2.WebView.New(self)

@@ -7,13 +7,10 @@ navigation through different printings.
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import wx
 
-from services.card_data_service import CardDataManager
-from services.image_service import CardImageRequest, get_cache
-from services.mana_icon_service import ManaIconFactory
 from utils.constants import (
     CARD_IMAGE_COST_MIN_HEIGHT,
     CARD_IMAGE_DISPLAY_HEIGHT,
@@ -29,11 +26,16 @@ from utils.constants import (
     PADDING_XL,
     SUBDUED_TEXT,
 )
+from widgets.mana_icon_service import ManaIconFactory
 from widgets.panels.card_image_display import CardImageDisplay
 from widgets.panels.card_inspector_panel.handlers import CardInspectorPanelHandlersMixin
 from widgets.panels.card_inspector_panel.properties import CardInspectorPanelPropertiesMixin
 from widgets.panels.mana_rich_text_ctrl import ManaSymbolRichCtrl
 from widgets.stylize import stylize_button
+
+if TYPE_CHECKING:
+    from repositories.card_repository import CardDataManager
+    from services.image_service import CardImageRequest
 
 
 class CardInspectorPanel(
@@ -46,12 +48,14 @@ class CardInspectorPanel(
     def __init__(
         self,
         parent: wx.Window,
+        controller: Any,
         card_manager: CardDataManager | None = None,
         mana_icons: ManaIconFactory | None = None,
     ):
         super().__init__(parent)
         self.SetBackgroundColour(DARK_PANEL)
 
+        self.controller = controller
         self.card_manager = card_manager
         self.mana_icons = mana_icons or ManaIconFactory()
 
@@ -61,7 +65,7 @@ class CardInspectorPanel(
         self.inspector_current_printing: int = 0
         self.inspector_current_card_name: str | None = None
         self.printing_label_width: int = 0
-        self.image_cache = get_cache()
+        self.image_cache = controller.get_image_cache()
         self.bulk_data_by_name: dict[str, list[dict[str, Any]]] | None = None
         self._image_available = False
         self._loading_printing = False

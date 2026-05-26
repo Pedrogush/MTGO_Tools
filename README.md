@@ -103,7 +103,7 @@ Configuration in `pyproject.toml`.
 │   ├── metagame_repository.py      # Archetype/deck cache (JSON)
 │   ├── radar_repository.py         # Radar snapshots (SQLite)
 │   └── format_card_pool_repository.py  # Format pools (SQLite)
-├── navigators/                     # Web scrapers
+├── services/scrapers/              # Web scrapers
 │   └── mtggoldfish.py              # MTGGoldfish metagame + decklists
 ├── utils/                          # Shared utilities
 │   ├── card_data.py                # CardDataManager (MTGJson atomic-cards)

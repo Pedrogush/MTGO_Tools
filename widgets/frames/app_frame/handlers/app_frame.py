@@ -8,7 +8,6 @@ from typing import TYPE_CHECKING
 import wx
 from loguru import logger
 
-from services.image_service import CardImageRequest
 from utils.constants import APP_FRAME_MIN_SIZE
 from utils.i18n import LOCALE_LABELS
 from utils.runtime_flags import is_automation_enabled
@@ -19,6 +18,7 @@ from widgets.frames.app_frame.handlers.app_events import _simple_summary_html
 from widgets.frames.mana_keyboard import open_mana_keyboard
 
 if TYPE_CHECKING:
+    from services.image_service import CardImageRequest
     from widgets.frames.app_frame.protocol import AppFrameProto
 
     _Base = AppFrameProto
@@ -44,7 +44,11 @@ class AppFrameHandlersMixin(_Base):
             menu,
             self._t("toolbar.download_card_images"),
             lambda: show_image_download_dialog(
-                self, self.image_cache, self.image_downloader, self._set_status
+                self,
+                self.image_cache,
+                self.image_downloader,
+                self.controller.BULK_DATA_CACHE,
+                self._set_status,
             ),
         )
         self._append_menu_item(
@@ -198,6 +202,7 @@ class AppFrameHandlersMixin(_Base):
             RulesBrowserFrame,
             "Comprehensive Rules",
             self._handle_child_close,
+            controller=self.controller,
             locale=self.locale,
         )
 
