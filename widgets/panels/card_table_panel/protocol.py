@@ -9,6 +9,8 @@ import wx
 import wx.lib.scrolledpanel as scrolled
 
 from widgets.panels.card_box_panel import CardBoxPanel
+from widgets.panels.card_table_panel.pile_view import DeckPileView
+from widgets.panels.card_table_panel.table_view import DeckTableView
 
 
 class CardTablePanelProto(Protocol):
@@ -30,3 +32,9 @@ class CardTablePanelProto(Protocol):
     _loading_state: wx.Panel
     _get_metadata: Callable[[str], dict[str, Any] | None]
     _on_select: Callable[[str, dict[str, Any] | None], None]
+    view_mode: str
+    pile_sort: str
+    table_view: DeckTableView
+    pile_view: DeckPileView
+
+    def _switch_content_page(self) -> None: ...
