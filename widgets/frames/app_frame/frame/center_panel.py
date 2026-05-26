@@ -109,11 +109,13 @@ class CenterPanelBuilderMixin(_Base):
         self.deck_notes_panel.SetToolTip(self._t("tabs.tooltip.deck_notes"))
         self.deck_tabs.AddPage(self.deck_notes_panel, self._t("tabs.deck_notes"))
 
-        # Stats panel kept hidden; stats_summary preserved for callers.
+        # Stats panel kept hidden; avoid starting WebView2 just to maintain
+        # the compatibility summary label.
         self.deck_stats_panel = DeckStatsPanel(
             detail_box,
             controller=self.controller,
             card_manager=self.controller.card_repo.get_card_manager(),
+            create_webview=False,
         )
         self.deck_stats_panel.Hide()
         self.stats_summary = self.deck_stats_panel.summary_label

@@ -23,7 +23,7 @@ class DeckStatsPanelHandlersMixin(_Base):
 
         if not deck_text.strip():
             self.summary_label.SetLabel("No deck loaded.")
-            self._webview.SetPage(_EMPTY_HTML, "")
+            self._set_webview_page(_EMPTY_HTML)
             return
 
         stats = self.deck_service.analyze_deck(deck_text)
@@ -48,11 +48,16 @@ class DeckStatsPanelHandlersMixin(_Base):
             self._type_items(),
             self._hand_items(stats["mainboard_count"], total_land_count),
         )
-        self._webview.SetPage(html, "")
+        self._set_webview_page(html)
 
     def set_card_manager(self, card_manager: CardDataManager) -> None:
         self.card_manager = card_manager
 
     def clear(self) -> None:
         self.summary_label.SetLabel("No deck loaded.")
-        self._webview.SetPage(_EMPTY_HTML, "")
+        self._set_webview_page(_EMPTY_HTML)
+
+    def _set_webview_page(self, html: str) -> None:
+        self._webview_html = html
+        if self._webview is not None:
+            self._webview.SetPage(html, "")
