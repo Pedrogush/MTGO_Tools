@@ -1,10 +1,10 @@
 # Lines of Code by File (.py only)
 
-- Commit: `5e5e9c2` (5e5e9c2ed9b81868894b6a57321b421e279039fc)
-- Commit date: 2026-05-25T20:01:35-03:00
-- Generated (UTC): 2026-05-25 23:20:09Z
+- Commit: `5560fde` (5560fde2876130f4134ccfcd30ade591a95d06f6)
+- Commit date: 2026-05-25T20:20:25-03:00
+- Generated (UTC): 2026-05-26 10:07:18Z
 - Files counted: **463** (all git-tracked `*.py` files)
-- Total lines: **51,460**
+- Total lines: **51,420**
 
 Counts are raw `wc -l` (newline count). Files are grouped by top-level directory and sorted descending within each section. Regenerate with `python scripts/generate_loc_report.py`.
 
@@ -19,7 +19,7 @@ Counts are raw `wc -l` (newline count). Files are grouped by top-level directory
 | tests | 49 | 10,802 |
 | automation | 19 | 3,223 |
 | utils | 70 | 2,956 |
-| other | 16 | 2,620 |
+| other | 16 | 2,580 |
 
 ## controllers (13 files, 1,377 LOC)
 
@@ -503,12 +503,12 @@ Counts are raw `wc -l` (newline count). Files are grouped by top-level directory
 | 7 | `utils/constants/app.py` |
 | 3 | `utils/constants/images.py` |
 
-## other (16 files, 2,620 LOC)
+## other (16 files, 2,580 LOC)
 
 | LOC | File |
 |----:|:-----|
 | 615 | `scripts/mtgosdk_repl.py` |
-| 608 | `scripts/generate_dependency_diagrams.py` |
+| 568 | `scripts/generate_dependency_diagrams.py` |
 | 238 | `scripts/test_card_images.py` |
 | 168 | `scripts/benchmark_json_caches.py` |
 | 165 | `scripts/generate_loc_report.py` |

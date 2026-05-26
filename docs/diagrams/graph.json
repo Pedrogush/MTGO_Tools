@@ -562,9 +562,9 @@
     ]
   },
   "metadata": {
-    "commit": "29f06d873f9f22824b079023efe7bf3ca34f112f",
-    "commit_date": "2026-05-25T18:25:46-03:00",
-    "generated_at": "2026-05-25T23:01:23Z",
+    "commit": "5560fde2876130f4134ccfcd30ade591a95d06f6",
+    "commit_date": "2026-05-25T20:20:25-03:00",
+    "generated_at": "2026-05-26T10:06:19Z",
     "internal_packages": [
       "automation",
       "controllers",

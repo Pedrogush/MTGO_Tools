@@ -11,7 +11,7 @@ as too dense to visually parse).
 Outputs (all under ``docs/diagrams/``):
 
 - ``graph.json``                       — canonical, sorted edge sets + metadata
-- ``dependencies_level_<N>.dot``       — Graphviz source (gitignored)
+- ``dependencies_level_<N>.d2``        — D2 source (gitignored)
 - ``dependencies_level_<N>.svg``       — rendered diagram (committed)
 
 Usage::
@@ -21,8 +21,13 @@ Usage::
     python scripts/generate_dependency_diagrams.py --json-only  # skip SVG render
 
 The ``--check`` mode compares only the ``edges`` section of ``graph.json`` and
-is stdlib-only — CI doesn't need ``pydeps``, ``graphviz``, or wxPython. SVG
-rendering needs the ``dot`` binary on PATH (``apt install graphviz`` on Linux).
+is stdlib-only — CI doesn't need ``d2`` or wxPython. SVG rendering needs the
+``d2`` binary on PATH; install it with::
+
+    curl -fsSL https://d2lang.com/install.sh | sh -s --
+
+The default install drops ``d2`` into ``/usr/local/bin``; for a user-local
+install pass ``env PREFIX="$HOME/.local" sh -s --``.
 """
 
 from __future__ import annotations
@@ -30,7 +35,6 @@ from __future__ import annotations
 import argparse
 import ast
 import json
-import math
 import shutil
 import subprocess
 import sys
@@ -239,7 +243,7 @@ def build_payload(root: Path) -> dict:
     }
 
 
-# ---------- Graphviz emission -------------------------------------------------
+# ---------- D2 emission -------------------------------------------------------
 
 # Stable colour palette per top-level package. Anything not listed falls
 # through to a neutral grey.
@@ -252,24 +256,18 @@ PACKAGE_COLOURS = {
     "automation": "#ffb3d9",
     "main": "#d9d9d9",
 }
-
-
-def node_colour(name: str) -> str:
-    return PACKAGE_COLOURS.get(name.split(".", 1)[0], "#e0e0e0")
-
-
-# Layered "spine + sidecars" layout. Each row is a rank in the rendered diagram;
-# layers in the same row sit side-by-side (sidecars). The spine (linear flow
-# through the request path) is enforced via invisible ordering edges.
-LAYER_RANKS: tuple[tuple[str, ...], ...] = (
-    ("main",),
-    ("widgets", "automation"),
-    ("controllers",),
-    ("services",),
-    ("repositories",),
-    ("utils",),
+# Layered architectural order — ``main`` at top, ``utils`` at bottom. Only used
+# to give the D2 source a stable, readable container declaration order; ELK
+# does the actual layout.
+LAYER_ORDER = (
+    "main",
+    "widgets",
+    "automation",
+    "controllers",
+    "services",
+    "repositories",
+    "utils",
 )
-SPINE = ("main", "widgets", "controllers", "services", "repositories", "utils")
 CYCLE_EDGE_COLOUR = "#cc3333"
 
 # F6 (level 2 only): leaf modules imported by so many others that their edges
@@ -286,6 +284,31 @@ HIDDEN_AT_LEVEL2: frozenset[str] = frozenset(
 
 def _top_layer(module: str) -> str:
     return module.split(".", 1)[0]
+
+
+def _label(name: str) -> str:
+    return name.split(".", 1)[1] if "." in name else name
+
+
+def _d2_id(name: str) -> str:
+    """Inside-container ID: just the leaf, with ``-`` swapped for ``_``."""
+    return _label(name).replace("-", "_").replace(".", "_")
+
+
+def _d2_path(name: str) -> str:
+    """Container-qualified D2 path for referencing the node in connections."""
+    if "." in name:
+        return f"{_top_layer(name)}.{_d2_id(name)}"
+    return name
+
+
+def _lighten(hex6: str, blend: float = 0.6) -> str:
+    """Blend a 6-char hex colour toward white. Used for container fills."""
+    r, g, b = int(hex6[1:3], 16), int(hex6[3:5], 16), int(hex6[5:7], 16)
+    r = int(r + (255 - r) * blend)
+    g = int(g + (255 - g) * blend)
+    b = int(b + (255 - b) * blend)
+    return f"#{r:02x}{g:02x}{b:02x}"
 
 
 def detect_cycle_edges(edges: list[tuple[str, str]]) -> set[tuple[str, str]]:
@@ -372,134 +395,68 @@ def filter_edges_for_display(
         if _top_layer(s) in excluded or _top_layer(d) in excluded:
             continue
         if level >= 2:
-            # F1: a → a.submodule re-exports come from package __init__.py and
-            # don't carry architectural information the node list doesn't already.
             if d.startswith(s + "."):
                 continue
-            # F4: same-layer edges are interior wiring, not cross-layer flow.
             if _top_layer(s) == _top_layer(d):
                 continue
-            # F6: hide leaves that everything imports — their edges drown the diagram.
             if s in HIDDEN_AT_LEVEL2 or d in HIDDEN_AT_LEVEL2:
                 continue
         out.append((s, d))
     return out
 
 
-def _quote(name: str) -> str:
-    return f'"{name}"'
-
-
-def render_dot_layered(
+def render_d2_layered(
     level: int, edges: list[tuple[str, str]], cycle_edges: set[tuple[str, str]]
 ) -> str:
-    """Emit dot source with spine + sidecar rank constraints.
+    """Emit a D2 source file with one container per top-level package.
 
-    - Level 1: one node per layer, ranks enforced directly on nodes.
-    - Level >= 2: each layer wrapped in a ``cluster_<layer>`` subgraph;
-      same-rank constraints applied to representative nodes inside clusters.
+    ELK (the layout engine selected at render time) handles ranks, orthogonal
+    routing, and bend-point minimization — no spine/rank hints needed here.
+    Cycle edges are tinted red so they pop out of the picture.
     """
     nodes = sorted({n for e in edges for n in e})
     by_layer: dict[str, list[str]] = defaultdict(list)
     for n in nodes:
         by_layer[_top_layer(n)].append(n)
-    for v in by_layer.values():
-        v.sort()
 
     label_extra = (
         f"\\nhidden: {', '.join(sorted(HIDDEN_AT_LEVEL2))} (imported by most modules)"
         if level >= 2
         else ""
     )
-    lines = [
-        f'digraph "Dependencies — level {level}" {{',
-        "  rankdir=TB;",
-        "  compound=true;",
-        "  newrank=true;",
-        "  concentrate=true;",
-        '  graph [fontname="Helvetica", labelloc="t", ranksep=0.6, nodesep=0.35];',
-        f'  label="Dependencies — level {level}  (red = participates in a cycle){label_extra}";',
-        '  node  [shape=box, style="rounded,filled", fontname="Helvetica", fontsize=10];',
-        '  edge  [color="#555555", arrowsize=0.7];',
+
+    lines: list[str] = [
+        f"# Dependencies — level {level} (generated, do not edit)",
+        f'title: "Dependencies — level {level}  (red = participates in a cycle){label_extra}" {{',
+        "  shape: text",
+        "  near: top-center",
+        "  style.font-size: 14",
+        "}",
+        "direction: down",
         "",
     ]
 
-    if level == 1:
-        for layer in nodes:
-            lines.append(f'  "{layer}" [fillcolor="{node_colour(layer)}"];')
+    for layer in LAYER_ORDER:
+        if layer not in by_layer:
+            continue
+        colour = PACKAGE_COLOURS.get(layer, "#e0e0e0")
+        lines.append(f"{layer}: {{")
+        lines.append(f'  style.fill: "{_lighten(colour)}"')
+        lines.append('  style.stroke: "#333333"')
+        lines.append("  style.border-radius: 8")
+        for n in by_layer[layer]:
+            lines.append(f'  {_d2_id(n)}: "{_label(n)}" {{ style.fill: "{colour}" }}')
+        lines.append("}")
         lines.append("")
-        for rank in LAYER_RANKS:
-            present = [layer for layer in rank if layer in by_layer]
-            if len(present) >= 2:
-                lines.append("  {rank=same; " + "; ".join(_quote(n) for n in present) + ";}")
-    else:
-        for rank in LAYER_RANKS:
-            for layer in rank:
-                if layer not in by_layer:
-                    continue
-                # cluster fill is the layer colour at ~33% alpha so nodes stand
-                # out against the cluster background.
-                lines.append(f"  subgraph cluster_{layer} {{")
-                lines.append(f'    label="{layer}";')
-                lines.append(f'    style="rounded,filled"; fillcolor="{node_colour(layer)}55";')
-                lines.append('    fontname="Helvetica"; fontsize=11;')
-                nodes_in_layer = by_layer[layer]
-                for n in nodes_in_layer:
-                    sub_label = n.split(".", 1)[1] if "." in n else n
-                    lines.append(
-                        f'    "{n}" [label="{sub_label}", fillcolor="{node_colour(layer)}"];'
-                    )
-                # For big clusters (≥ 6 nodes), break peer-nodes into rows of
-                # ~ceil(sqrt(N)) using rank=same. No inter-row forcing edges —
-                # rows can drift to minimize crossings.
-                if len(nodes_in_layer) >= 6:
-                    width = max(3, math.ceil(math.sqrt(len(nodes_in_layer))))
-                    for i in range(0, len(nodes_in_layer), width):
-                        row = nodes_in_layer[i : i + width]
-                        if len(row) >= 2:
-                            lines.append(
-                                "    {rank=same; " + "; ".join(_quote(n) for n in row) + ";}"
-                            )
-                lines.append("  }")
-                lines.append("")
-        # Same-rank constraints across sidecars: use one representative node
-        # from each layer in the rank. newrank=true makes this work across
-        # cluster boundaries.
-        for rank in LAYER_RANKS:
-            present_layers = [layer for layer in rank if layer in by_layer]
-            if len(present_layers) >= 2:
-                reps = [by_layer[layer][0] for layer in present_layers]
-                lines.append("  {rank=same; " + "; ".join(_quote(r) for r in reps) + ";}")
 
-    # Level-1 spine: keep the high-weight invisible chain so the 6-node
-    # summary stacks in architectural order. Skip pairs that already have a
-    # real edge — ``concentrate=true`` would otherwise merge the visible and
-    # invisible edges and keep the result invisible.
-    if level == 1:
-        spine_present = [layer for layer in SPINE if layer in by_layer]
-        edge_set = {(s, d) for s, d in edges}
-        for a, b in zip(spine_present, spine_present[1:]):
-            if (a, b) in edge_set:
-                continue
-            lines.append(f'  "{a}" -> "{b}" [style=invis, weight=100];')
-    else:
-        # Pin only the extremes — main at the top, utils at the bottom — and
-        # let dot rank the middle from real edges. Lighter than a full
-        # invisible spine but prevents the layout from collapsing horizontally.
-        if "main" in by_layer:
-            lines.append('  { rank=min; "main"; }')
-        if "utils" in by_layer:
-            lines.append("  { rank=max; " + "; ".join(_quote(n) for n in by_layer["utils"]) + "; }")
-
-    lines.append("")
     for s, d in edges:
-        attrs: list[str] = []
         if (s, d) in cycle_edges:
-            attrs.append(f'color="{CYCLE_EDGE_COLOUR}"')
-            attrs.append("penwidth=2")
-        attr_str = f' [{", ".join(attrs)}]' if attrs else ""
-        lines.append(f'  "{s}" -> "{d}"{attr_str};')
-    lines.append("}")
+            lines.append(
+                f"{_d2_path(s)} -> {_d2_path(d)}: {{ "
+                f'style.stroke: "{CYCLE_EDGE_COLOUR}"; style.stroke-width: 2 }}'
+            )
+        else:
+            lines.append(f"{_d2_path(s)} -> {_d2_path(d)}")
     return "\n".join(lines) + "\n"
 
 
@@ -508,20 +465,23 @@ def render_svgs(
     edges_by_level: dict[str, list[list[str]]],
     excluded: frozenset[str],
 ) -> bool:
-    """Write .dot + .svg for every level. Returns False if ``dot`` is missing."""
-    dot_bin = shutil.which("dot")
-    if not dot_bin:
+    """Write .d2 + .svg for every level via ``d2 --layout=elk``.
+
+    Returns False if the ``d2`` binary is missing; caller prints install hint.
+    """
+    d2_bin = shutil.which("d2")
+    if not d2_bin:
         return False
     for level in GRAPH_LEVELS:
         raw = edges_by_level[f"level_{level}"]
         filtered = filter_edges_for_display(raw, level=level, excluded=excluded)
         cycle_edges = detect_cycle_edges(filtered)
-        dot_src = render_dot_layered(level, filtered, cycle_edges)
-        dot_file = out_dir / f"dependencies_level_{level}.dot"
+        d2_src = render_d2_layered(level, filtered, cycle_edges)
+        d2_file = out_dir / f"dependencies_level_{level}.d2"
         svg_file = out_dir / f"dependencies_level_{level}.svg"
-        dot_file.write_text(dot_src)
+        d2_file.write_text(d2_src)
         subprocess.run(
-            [dot_bin, "-Tsvg", str(dot_file), "-o", str(svg_file)],
+            [d2_bin, "--layout=elk", str(d2_file), str(svg_file)],
             check=True,
         )
     return True
@@ -541,7 +501,7 @@ def main(argv: list[str] | None = None) -> int:
     mode.add_argument(
         "--json-only",
         action="store_true",
-        help="Write graph.json but skip .dot/.svg rendering.",
+        help="Write graph.json but skip .d2/.svg rendering.",
     )
     parser.add_argument(
         "--exclude",
@@ -591,9 +551,9 @@ def main(argv: list[str] | None = None) -> int:
     rendered = render_svgs(out_dir, payload["edges"], frozenset(args.exclude))
     if not rendered:
         print(
-            "Skipped SVG rendering: 'dot' not found on PATH. "
-            "Install Graphviz (`sudo apt install graphviz` on Linux, "
-            "`brew install graphviz` on macOS) and rerun without --json-only.",
+            "Skipped SVG rendering: 'd2' not found on PATH. "
+            "Install with `curl -fsSL https://d2lang.com/install.sh | sh -s --` "
+            "and rerun without --json-only.",
             file=sys.stderr,
         )
         return 0

@@ -47,6 +47,8 @@ dist/
 build/
 *.spec.bak
 *.svg
+# The dependency-graph SVGs are committed artifacts (see docs/diagrams/.gitignore).
+!docs/diagrams/*.svg
 *.mmd
 # git worktrees
 .worktrees/

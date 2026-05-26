@@ -1,2 +1,2 @@
-# Intermediate Graphviz source; SVGs and graph.json are the committed artifacts.
-*.dot
+# Intermediate D2 source; SVGs and graph.json are the committed artifacts.
+*.d2
