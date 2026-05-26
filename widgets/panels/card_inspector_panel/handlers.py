@@ -58,8 +58,9 @@ class CardInspectorPanelHandlersMixin(_Base):
         header = f"{card['name']}  ×{card['qty']}  ({zone_title})"
         self.name_label.SetLabel(header)
 
-        # Get or use metadata
-        if meta is None and self.card_manager:
+        # Get or use metadata. Skip the manager fallback unless it has finished
+        # loading — calling get_card on an unloaded CardDataManager raises.
+        if meta is None and self.card_manager and self.card_manager.is_loaded:
             meta = self.card_manager.get_card(card["name"]) or {}
         else:
             meta = meta or {}
