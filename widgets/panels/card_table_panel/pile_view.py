@@ -314,33 +314,46 @@ class DeckPileView(wx.ScrolledWindow):
         is_hover = entry["_uid"] == self._hover_uid
 
         bitmap = self._image_cache.get(name)
-        if bitmap is not None and is_bottom:
-            x = rect.x + (rect.width - bitmap.GetWidth()) // 2
-            y = rect.y + (rect.height - bitmap.GetHeight()) // 2
-            dc.DrawBitmap(bitmap, x, y, True)
-        else:
-            # Placeholder fill + border.
-            dc.SetBrush(wx.Brush(wx.Colour(*DARK_ALT)))
-            dc.SetPen(wx.Pen(wx.Colour(*DARK_BG), 1))
-            dc.DrawRectangle(rect.x, rect.y, rect.width, rect.height)
-
-        if not is_bottom:
-            # Draw the visible name strip on top of stacked-above cards.
-            strip = wx.Rect(rect.x, rect.y, rect.width, _NAME_STRIP_HEIGHT)
-            dc.SetBrush(wx.Brush(wx.Colour(*DARK_BG)))
-            dc.SetPen(wx.Pen(wx.Colour(*DARK_ACCENT), 1))
-            dc.DrawRectangle(strip)
-            dc.SetTextForeground(wx.Colour(*LIGHT_TEXT))
-            dc.SetFont(wx.Font(8, wx.FONTFAMILY_SWISS, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
-            text = self._fit_text(dc, name, rect.width - 6)
-            dc.DrawText(text, strip.x + 3, strip.y + 4)
-        else:
-            # Bottom card without image yet: still draw the name as a fallback.
-            if bitmap is None:
+        if is_bottom:
+            if bitmap is not None:
+                x = rect.x + (rect.width - bitmap.GetWidth()) // 2
+                y = rect.y + (rect.height - bitmap.GetHeight()) // 2
+                dc.DrawBitmap(bitmap, x, y, True)
+            else:
+                # Placeholder + name fallback while the image loads.
+                dc.SetBrush(wx.Brush(wx.Colour(*DARK_ALT)))
+                dc.SetPen(wx.Pen(wx.Colour(*DARK_BG), 1))
+                dc.DrawRectangle(rect.x, rect.y, rect.width, rect.height)
                 dc.SetTextForeground(wx.Colour(*LIGHT_TEXT))
-                dc.SetFont(wx.Font(9, wx.FONTFAMILY_SWISS, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
+                dc.SetFont(
+                    wx.Font(9, wx.FONTFAMILY_SWISS, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD)
+                )
                 text = self._fit_text(dc, name, rect.width - 8)
                 dc.DrawText(text, rect.x + 4, rect.y + 8)
+        else:
+            # Only the top strip of stacked-above cards is visible — draw the
+            # full bitmap clipped to that strip so the actual card top (name +
+            # mana cost in MTG card layout) shows through.
+            strip = wx.Rect(rect.x, rect.y, rect.width, _NAME_STRIP_HEIGHT)
+            if bitmap is not None:
+                x = rect.x + (rect.width - bitmap.GetWidth()) // 2
+                y = rect.y + (rect.height - bitmap.GetHeight()) // 2
+                dc.SetClippingRegion(strip)
+                dc.DrawBitmap(bitmap, x, y, True)
+                dc.DestroyClippingRegion()
+                dc.SetBrush(wx.TRANSPARENT_BRUSH)
+                dc.SetPen(wx.Pen(wx.Colour(*DARK_ACCENT), 1))
+                dc.DrawRectangle(strip)
+            else:
+                dc.SetBrush(wx.Brush(wx.Colour(*DARK_BG)))
+                dc.SetPen(wx.Pen(wx.Colour(*DARK_ACCENT), 1))
+                dc.DrawRectangle(strip)
+                dc.SetTextForeground(wx.Colour(*LIGHT_TEXT))
+                dc.SetFont(
+                    wx.Font(8, wx.FONTFAMILY_SWISS, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL)
+                )
+                text = self._fit_text(dc, name, rect.width - 6)
+                dc.DrawText(text, strip.x + 3, strip.y + 4)
 
         # Highlight selection / hover.
         if is_selected:
