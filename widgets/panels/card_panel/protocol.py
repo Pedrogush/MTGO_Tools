@@ -8,7 +8,7 @@ from typing import Any, Protocol
 import wx
 import wx.html
 
-from widgets.mana_icon_service import ManaIconFactory
+from widgets.mana_icon_factory import ManaIconFactory
 from widgets.panels.card_panel.rule_popup import RulePopupFrame
 
 

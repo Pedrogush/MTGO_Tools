@@ -114,7 +114,7 @@ class SvgRendererMixin:
     @staticmethod
     def _load_svg_color_map(assets_root: Path) -> dict[str, tuple[int, int, int]]:
         """Build the SVG-renderer color map: CSS values + lighter fallbacks."""
-        from widgets.mana_icon_service.resources import ManaIconResources
+        from widgets.mana_icon_factory.resources import ManaIconResources
 
         _, colors = ManaIconResources.load_css_resources(assets_root, _FALLBACK_COLORS)
         for k, v in _FALLBACK_COLORS.items():

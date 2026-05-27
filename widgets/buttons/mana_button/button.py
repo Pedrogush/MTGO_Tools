@@ -10,7 +10,7 @@ from collections.abc import Callable
 import wx
 
 from utils.constants import DARK_ALT, LIGHT_TEXT
-from widgets.mana_icon_service import ManaIconFactory, ManaIconResources
+from widgets.mana_icon_factory import ManaIconFactory, ManaIconResources
 
 
 def get_mana_font(size: int = 14, parent_font: wx.Font | None = None) -> wx.Font:

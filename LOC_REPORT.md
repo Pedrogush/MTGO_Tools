@@ -1,10 +1,10 @@
 # Lines of Code by File (.py only)
 
-- Commit: `5560fde` (5560fde2876130f4134ccfcd30ade591a95d06f6)
-- Commit date: 2026-05-25T20:20:25-03:00
-- Generated (UTC): 2026-05-26 10:07:18Z
-- Files counted: **463** (all git-tracked `*.py` files)
-- Total lines: **51,420**
+- Commit: `6acfd38` (6acfd384f55a6644e014dfea3cf12b2f43ec93b4)
+- Commit date: 2026-05-27T16:06:57-03:00
+- Generated (UTC): 2026-05-27 19:57:16Z
+- Files counted: **468** (all git-tracked `*.py` files)
+- Total lines: **53,500**
 
 Counts are raw `wc -l` (newline count). Files are grouped by top-level directory and sorted descending within each section. Regenerate with `python scripts/generate_loc_report.py`.
 
@@ -12,20 +12,20 @@ Counts are raw `wc -l` (newline count). Files are grouped by top-level directory
 
 | Section | Files | LOC |
 |:--------|------:|----:|
-| controllers | 13 | 1,377 |
+| controllers | 13 | 1,412 |
 | repositories | 51 | 4,057 |
-| widgets | 173 | 18,900 |
+| widgets | 176 | 20,672 |
 | services | 72 | 7,525 |
-| tests | 49 | 10,802 |
+| tests | 50 | 11,016 |
 | automation | 19 | 3,223 |
-| utils | 70 | 2,956 |
+| utils | 71 | 3,015 |
 | other | 16 | 2,580 |
 
-## controllers (13 files, 1,377 LOC)
+## controllers (13 files, 1,412 LOC)
 
 | LOC | File |
 |----:|:-----|
-| 274 | `controllers/session_manager.py` |
+| 309 | `controllers/session_manager.py` |
 | 173 | `controllers/app_controller/controller.py` |
 | 135 | `controllers/app_controller/lifecycle.py` |
 | 133 | `controllers/app_controller/bulk_data.py` |
@@ -95,17 +95,20 @@ Counts are raw `wc -l` (newline count). Files are grouped by top-level directory
 | 15 | `repositories/radar_repository/protocol.py` |
 | 14 | `repositories/scrapers/__init__.py` |
 
-## widgets (173 files, 18,900 LOC)
+## widgets (176 files, 20,672 LOC)
 
 | LOC | File |
 |----:|:-----|
 | 896 | `widgets/frames/app_frame/handlers/app_events.py` |
 | 673 | `widgets/panels/deck_stats_panel/properties.py` |
+| 657 | `widgets/panels/card_table_panel/table_view.py` |
 | 651 | `widgets/frames/identify_opponent/handlers.py` |
+| 620 | `widgets/panels/card_table_panel/pile_view.py` |
 | 585 | `widgets/frames/app_frame/handlers/sideboard_guide.py` |
-| 410 | `widgets/mana_icon_service/svg_renderer.py` |
-| 407 | `widgets/panels/card_inspector_panel/handlers.py` |
-| 396 | `widgets/mana_icon_service/bitmap_renderer.py` |
+| 410 | `widgets/mana_icon_factory/svg_renderer.py` |
+| 408 | `widgets/panels/card_inspector_panel/handlers.py` |
+| 396 | `widgets/mana_icon_factory/bitmap_renderer.py` |
+| 381 | `widgets/panels/card_table_panel/frame.py` |
 | 367 | `widgets/frames/app_frame/handlers/app_frame.py` |
 | 358 | `widgets/panels/card_panel/html_renderer.py` |
 | 349 | `widgets/frames/metagame_analysis/handlers.py` |
@@ -113,34 +116,34 @@ Counts are raw `wc -l` (newline count). Files are grouped by top-level directory
 | 331 | `widgets/panels/mana_rich_text_ctrl/handlers.py` |
 | 329 | `widgets/frames/match_history/handlers.py` |
 | 313 | `widgets/frames/app_frame/handlers/card_tables.py` |
+| 313 | `widgets/panels/card_box_panel/handlers.py` |
 | 307 | `widgets/frames/radar/handlers.py` |
-| 305 | `widgets/panels/card_box_panel/handlers.py` |
 | 273 | `widgets/frames/timer_alert/handlers.py` |
 | 269 | `widgets/panels/card_panel/handlers.py` |
 | 245 | `widgets/lists/deck_results_list/handlers.py` |
-| 239 | `widgets/mana_icon_service/factory.py` |
+| 239 | `widgets/mana_icon_factory/factory.py` |
 | 232 | `widgets/frames/match_history/frame.py` |
 | 231 | `widgets/panels/deck_builder_panel/handlers.py` |
 | 227 | `widgets/panels/card_inspector_panel/frame.py` |
+| 222 | `widgets/panels/card_table_panel/sorting.py` |
 | 220 | `widgets/frames/metagame_analysis/frame.py` |
 | 213 | `widgets/frames/identify_opponent/frame/calculator_panel.py` |
 | 205 | `widgets/panels/deck_builder_panel/frame/advanced_filters.py` |
+| 198 | `widgets/panels/card_table_panel/handlers.py` |
 | 194 | `widgets/frames/radar/frame.py` |
 | 193 | `widgets/frames/identify_opponent/frame/__init__.py` |
 | 185 | `widgets/panels/mana_rich_text_ctrl/frame.py` |
-| 184 | `widgets/panels/card_table_panel/handlers.py` |
-| 183 | `widgets/panels/card_table_panel/frame.py` |
 | 175 | `widgets/frames/app_frame/frame/__init__.py` |
 | 175 | `widgets/panels/sideboard_guide_panel/frame.py` |
 | 172 | `widgets/frames/timer_alert/frame/sections.py` |
 | 172 | `widgets/frames/top_cards/handlers.py` |
 | 172 | `widgets/panels/deck_builder_panel/frame/search_results_view.py` |
 | 169 | `widgets/panels/card_panel/frame.py` |
+| 166 | `widgets/frames/app_frame/frame/center_panel.py` |
 | 166 | `widgets/panels/deck_research_panel/frame/filters.py` |
 | 163 | `widgets/dialogs/guide_entry_dialog/dialog.py` |
 | 155 | `widgets/dialogs/image_download_dialog/handlers.py` |
 | 152 | `widgets/frames/timer_alert/frame/__init__.py` |
-| 150 | `widgets/frames/app_frame/frame/center_panel.py` |
 | 147 | `widgets/panels/deck_research_panel/results_filter.py` |
 | 142 | `widgets/panels/compact_radar_panel/handlers.py` |
 | 137 | `widgets/dialogs/feedback_dialog/dialog.py` |
@@ -180,21 +183,21 @@ Counts are raw `wc -l` (newline count). Files are grouped by top-level directory
 | 75 | `widgets/panels/card_box_panel/properties.py` |
 | 73 | `widgets/buttons/mana_button/button.py` |
 | 73 | `widgets/panels/card_image_display/properties.py` |
+| 73 | `widgets/panels/deck_stats_panel/frame.py` |
 | 72 | `widgets/panels/card_panel/properties.py` |
 | 70 | `widgets/panels/card_panel/rule_popup.py` |
-| 68 | `widgets/mana_icon_service/resources.py` |
+| 68 | `widgets/mana_icon_factory/resources.py` |
 | 68 | `widgets/panels/compact_radar_panel/frame.py` |
 | 65 | `widgets/panels/card_inspector_panel/protocol.py` |
 | 64 | `widgets/frames/app_frame/properties.py` |
 | 63 | `widgets/frames/mana_keyboard/frame.py` |
+| 63 | `widgets/panels/deck_stats_panel/handlers.py` |
 | 62 | `widgets/frames/splash_frame/frame.py` |
 | 60 | `widgets/panels/deck_builder_panel/protocol.py` |
-| 58 | `widgets/panels/deck_stats_panel/handlers.py` |
 | 58 | `widgets/panels/sideboard_card_selector/handlers.py` |
 | 56 | `widgets/panels/compact_sideboard_panel/frame.py` |
 | 55 | `widgets/panels/card_panel/protocol.py` |
 | 54 | `widgets/panels/deck_research_panel/protocol.py` |
-| 53 | `widgets/panels/deck_stats_panel/frame.py` |
 | 52 | `widgets/panels/card_inspector_panel/properties.py` |
 | 52 | `widgets/panels/sideboard_guide_panel/properties.py` |
 | 48 | `widgets/frames/app_frame/handlers/ui_helpers.py` |
@@ -207,30 +210,30 @@ Counts are raw `wc -l` (newline count). Files are grouped by top-level directory
 | 43 | `widgets/panels/card_box_panel/protocol.py` |
 | 42 | `widgets/buttons/deck_action_buttons/properties.py` |
 | 41 | `widgets/stylize.py` |
+| 40 | `widgets/panels/card_table_panel/protocol.py` |
 | 39 | `widgets/panels/card_table_panel/properties.py` |
 | 37 | `widgets/dialogs/tutorial_dialog/handlers.py` |
 | 37 | `widgets/frames/identify_opponent/__init__.py` |
 | 36 | `widgets/panels/compact_radar_panel/properties.py` |
 | 35 | `widgets/frames/splash_frame/handlers.py` |
-| 35 | `widgets/mana_icon_service/protocol.py` |
+| 35 | `widgets/mana_icon_factory/protocol.py` |
 | 35 | `widgets/panels/deck_research_panel/frame/centered_choice.py` |
 | 34 | `widgets/panels/sideboard_guide_panel/protocol.py` |
 | 33 | `widgets/dialogs/help_dialog/dialog.py` |
 | 33 | `widgets/panels/deck_notes_panel/protocol.py` |
+| 33 | `widgets/panels/deck_stats_panel/protocol.py` |
 | 32 | `widgets/buttons/deck_action_buttons/handlers.py` |
 | 32 | `widgets/lists/deck_results_list/frame.py` |
-| 32 | `widgets/panels/card_table_panel/protocol.py` |
 | 31 | `widgets/frames/__init__.py` |
-| 31 | `widgets/mana_icon_service/__init__.py` |
+| 31 | `widgets/mana_icon_factory/__init__.py` |
 | 30 | `widgets/panels/__init__.py` |
-| 30 | `widgets/panels/deck_stats_panel/protocol.py` |
 | 28 | `widgets/panels/deck_notes_panel/properties.py` |
 | 27 | `widgets/panels/sideboard_card_selector/properties.py` |
 | 26 | `widgets/frames/splash_frame/properties.py` |
 | 26 | `widgets/frames/splash_frame/protocol.py` |
 | 23 | `widgets/panels/compact_radar_panel/__init__.py` |
 | 23 | `widgets/panels/compact_radar_panel/protocol.py` |
-| 22 | `widgets/mana_icon_service/cache.py` |
+| 22 | `widgets/mana_icon_factory/cache.py` |
 | 21 | `widgets/dialogs/image_download_dialog/properties.py` |
 | 21 | `widgets/frames/app_frame/__init__.py` |
 | 18 | `widgets/frames/top_cards/properties.py` |
@@ -350,7 +353,7 @@ Counts are raw `wc -l` (newline count). Files are grouped by top-level directory
 | 24 | `services/bundle_snapshot_client/protocol.py` |
 | 20 | `services/deck_service/protocol.py` |
 
-## tests (49 files, 10,802 LOC)
+## tests (50 files, 11,016 LOC)
 
 | LOC | File |
 |----:|:-----|
@@ -373,6 +376,7 @@ Counts are raw `wc -l` (newline count). Files are grouped by top-level directory
 | 242 | `tests/test_card_image_display_logic.py` |
 | 233 | `tests/test_search_filters.py` |
 | 221 | `tests/test_deck_workflow_service.py` |
+| 214 | `tests/test_card_table_panel_sorting.py` |
 | 212 | `tests/test_diagnostics.py` |
 | 209 | `tests/test_math_utils.py` |
 | 186 | `tests/test_card_data_refresh.py` |
@@ -428,7 +432,7 @@ Counts are raw `wc -l` (newline count). Files are grouped by top-level directory
 | 8 | `automation/__main__.py` |
 | 5 | `automation/e2e_tests/__main__.py` |
 
-## utils (70 files, 2,956 LOC)
+## utils (71 files, 3,015 LOC)
 
 | LOC | File |
 |----:|:-----|
@@ -461,8 +465,11 @@ Counts are raw `wc -l` (newline count). Files are grouped by top-level directory
 | 30 | `utils/perf.py` |
 | 29 | `utils/i18n/_en_us/match.py` |
 | 29 | `utils/i18n/_pt_br/match.py` |
+| 29 | `utils/image_effects.py` |
 | 28 | `utils/i18n/_en_us/timer.py` |
 | 28 | `utils/i18n/_pt_br/timer.py` |
+| 27 | `utils/i18n/_en_us/tabs.py` |
+| 27 | `utils/i18n/_pt_br/tabs.py` |
 | 24 | `utils/i18n/_en_us/toolbar.py` |
 | 24 | `utils/i18n/_pt_br/toolbar.py` |
 | 23 | `utils/constants/keyboard.py` |
@@ -487,11 +494,9 @@ Counts are raw `wc -l` (newline count). Files are grouped by top-level directory
 | 12 | `utils/i18n/_en_us/deck_actions.py` |
 | 12 | `utils/i18n/_en_us/deck_results.py` |
 | 12 | `utils/i18n/_en_us/notes.py` |
-| 12 | `utils/i18n/_en_us/tabs.py` |
 | 12 | `utils/i18n/_pt_br/deck_actions.py` |
 | 12 | `utils/i18n/_pt_br/deck_results.py` |
 | 12 | `utils/i18n/_pt_br/notes.py` |
-| 12 | `utils/i18n/_pt_br/tabs.py` |
 | 11 | `utils/i18n/_en_us/window.py` |
 | 11 | `utils/i18n/_pt_br/window.py` |
 | 10 | `utils/constants/radar.py` |

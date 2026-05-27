@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Any
 import wx
 
 from utils.constants import DARK_PANEL
-from widgets.mana_icon_service import ManaIconFactory
+from widgets.mana_icon_factory import ManaIconFactory
 from widgets.panels.deck_builder_panel.frame.advanced_filters import AdvancedFiltersBuilderMixin
 from widgets.panels.deck_builder_panel.frame.basic_filters import BasicFiltersBuilderMixin
 from widgets.panels.deck_builder_panel.frame.results_pane import ResultsPaneBuilderMixin

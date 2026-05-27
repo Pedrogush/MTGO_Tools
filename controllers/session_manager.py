@@ -109,6 +109,41 @@ class DeckSelectorSessionManager:
     def update_event_logging_enabled(self, enabled: bool) -> None:
         self.settings["event_logging_enabled"] = bool(enabled)
 
+    _VALID_DECK_VIEW_MODES = {"grid", "table", "pile"}
+    _VALID_PILE_SORTS = {"mv", "color", "type"}
+
+    def get_deck_view_mode(self, zone: str, default: str = "grid") -> str:
+        modes = self.settings.get("deck_view_modes")
+        if isinstance(modes, dict):
+            value = modes.get(zone, default)
+            if isinstance(value, str) and value in self._VALID_DECK_VIEW_MODES:
+                return value
+        return default
+
+    def update_deck_view_mode(self, zone: str, mode: str) -> None:
+        mode = mode if mode in self._VALID_DECK_VIEW_MODES else "grid"
+        modes = self.settings.get("deck_view_modes")
+        if not isinstance(modes, dict):
+            modes = {}
+        modes[zone] = mode
+        self.settings["deck_view_modes"] = modes
+
+    def get_pile_sort_mode(self, zone: str, default: str = "mv") -> str:
+        sorts = self.settings.get("deck_pile_sort_modes")
+        if isinstance(sorts, dict):
+            value = sorts.get(zone, default)
+            if isinstance(value, str) and value in self._VALID_PILE_SORTS:
+                return value
+        return default
+
+    def update_pile_sort_mode(self, zone: str, sort_mode: str) -> None:
+        sort_mode = sort_mode if sort_mode in self._VALID_PILE_SORTS else "mv"
+        sorts = self.settings.get("deck_pile_sort_modes")
+        if not isinstance(sorts, dict):
+            sorts = {}
+        sorts[zone] = sort_mode
+        self.settings["deck_pile_sort_modes"] = sorts
+
     _VALID_EVENT_TYPE_FILTERS = {"All", "Challenge", "League", "Showcase", "Last Chance"}
 
     def get_deck_event_type_filter(self, default: str = "All") -> str:

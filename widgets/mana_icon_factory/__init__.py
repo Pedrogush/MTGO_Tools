@@ -12,14 +12,14 @@ Split by responsibility into internal modules:
 
 from __future__ import annotations
 
-from widgets.mana_icon_service.factory import (
+from widgets.mana_icon_factory.factory import (
     ManaIconFactory,
     normalize_mana_query,
     tokenize_mana_symbols,
     type_global_mana_symbol,
 )
-from widgets.mana_icon_service.protocol import ManaIconFactoryProto
-from widgets.mana_icon_service.resources import ManaIconResources
+from widgets.mana_icon_factory.protocol import ManaIconFactoryProto
+from widgets.mana_icon_factory.resources import ManaIconResources
 
 __all__ = [
     "ManaIconFactory",

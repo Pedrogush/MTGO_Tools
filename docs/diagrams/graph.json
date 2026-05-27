@@ -441,7 +441,7 @@
       ],
       [
         "widgets.buttons",
-        "widgets.mana_icon_service"
+        "widgets.mana_icon_factory"
       ],
       [
         "widgets.buttons",
@@ -513,7 +513,7 @@
       ],
       [
         "widgets.frames",
-        "widgets.mana_icon_service"
+        "widgets.mana_icon_factory"
       ],
       [
         "widgets.frames",
@@ -524,7 +524,7 @@
         "utils.constants"
       ],
       [
-        "widgets.mana_icon_service",
+        "widgets.mana_icon_factory",
         "utils.constants"
       ],
       [
@@ -534,6 +534,10 @@
       [
         "widgets.panels",
         "utils.i18n"
+      ],
+      [
+        "widgets.panels",
+        "utils.image_effects"
       ],
       [
         "widgets.panels",
@@ -549,7 +553,7 @@
       ],
       [
         "widgets.panels",
-        "widgets.mana_icon_service"
+        "widgets.mana_icon_factory"
       ],
       [
         "widgets.panels",
@@ -562,9 +566,9 @@
     ]
   },
   "metadata": {
-    "commit": "5560fde2876130f4134ccfcd30ade591a95d06f6",
-    "commit_date": "2026-05-25T20:20:25-03:00",
-    "generated_at": "2026-05-26T10:06:19Z",
+    "commit": "e3b6a8741789d1c678f476d9af0445aaff8e3d41",
+    "commit_date": "2026-05-27T16:00:43-03:00",
+    "generated_at": "2026-05-27T19:01:12Z",
     "internal_packages": [
       "automation",
       "controllers",

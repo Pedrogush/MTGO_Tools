@@ -109,11 +109,13 @@ class CenterPanelBuilderMixin(_Base):
         self.deck_notes_panel.SetToolTip(self._t("tabs.tooltip.deck_notes"))
         self.deck_tabs.AddPage(self.deck_notes_panel, self._t("tabs.deck_notes"))
 
-        # Stats panel kept hidden; stats_summary preserved for callers.
+        # Stats panel kept hidden; avoid starting WebView2 just to maintain
+        # the compatibility summary label.
         self.deck_stats_panel = DeckStatsPanel(
             detail_box,
             controller=self.controller,
             card_manager=self.controller.card_repo.get_card_manager(),
+            create_webview=False,
         )
         self.deck_stats_panel.Hide()
         self.stats_summary = self.deck_stats_panel.summary_label
@@ -133,6 +135,7 @@ class CenterPanelBuilderMixin(_Base):
         if owned_status_func is None:
             owned_status_func = self.controller.collection_service.get_owned_status
 
+        session = self.controller.session_manager
         table = CardTablePanel(
             self.deck_tabs,
             zone,
@@ -145,6 +148,19 @@ class CenterPanelBuilderMixin(_Base):
             self._handle_card_focus,
             self.controller.get_card_image,
             self._handle_card_hover,
+            locale=self.locale,
+            initial_view_mode=session.get_deck_view_mode(zone),
+            initial_pile_sort=session.get_pile_sort_mode(zone),
+            on_view_mode_change=self._persist_deck_view_mode,
+            on_pile_sort_change=self._persist_pile_sort_mode,
         )
         self.deck_tabs.AddPage(table, tab_name)
         return table
+
+    def _persist_deck_view_mode(self, zone: str, mode: str) -> None:
+        self.controller.session_manager.update_deck_view_mode(zone, mode)
+        self._schedule_settings_save()
+
+    def _persist_pile_sort_mode(self, zone: str, sort_mode: str) -> None:
+        self.controller.session_manager.update_pile_sort_mode(zone, sort_mode)
+        self._schedule_settings_save()

@@ -14,14 +14,20 @@ if TYPE_CHECKING:
 else:
     _Base = object
 
+_PAGE_EMPTY = 0
+_PAGE_GRID = 1
+_PAGE_TABLE = 2
+_PAGE_PILE = 3
+_PAGE_LOADING = 4
+
 
 class CardTablePanelHandlersMixin(_Base):
     """Event callbacks, setters, and UI populators for :class:`CardTablePanel`."""
 
     def show_loading(self, label: str) -> None:
         self._loading_state._label.SetLabel(label)  # type: ignore[attr-defined]
-        if self._content_book.GetSelection() != 2:
-            self._content_book.ChangeSelection(2)
+        if self._content_book.GetSelection() != _PAGE_LOADING:
+            self._content_book.ChangeSelection(_PAGE_LOADING)
 
     def set_cards(self, cards: list[dict[str, Any]], preserve_scroll: bool = False) -> None:
         self.cards = cards
@@ -34,9 +40,7 @@ class CardTablePanelHandlersMixin(_Base):
         try:
             self.scroller.Freeze()
             try:
-                if self.active_panel:
-                    self.active_panel.set_active(False)
-                self.active_panel = None
+                # Always refresh the count label irrespective of active view.
                 total = lands = mdfcs = 0
                 for card in cards:
                     qty = card["qty"]
@@ -58,13 +62,15 @@ class CardTablePanelHandlersMixin(_Base):
                     label += " | " + " + ".join(parts)
                 self.count_label.SetLabel(label)
 
+                # Refresh the grid-view widget pool (still needed even when not
+                # the active page, so the next switch is instant).
+                if self.active_panel:
+                    self.active_panel.set_active(False)
+                self.active_panel = None
                 for i, panel in enumerate(self._pool):
                     if i < len(cards):
                         card = cards[i]
                         if panel.card is card:
-                            # Same dict object: the card identity is unchanged, only qty
-                            # may have been modified in-place.  Refresh the label only —
-                            # no image invalidation or reload needed.
                             panel.update_qty()
                         else:
                             panel.assign_card(card, self.zone)
@@ -72,9 +78,7 @@ class CardTablePanelHandlersMixin(_Base):
                         self.grid_sizer.Show(panel, True)
                     else:
                         self.grid_sizer.Show(panel, False)
-
                 self.card_widgets = self._pool[: len(cards)]
-
                 self.grid_sizer.Layout()
                 self.scroller.Layout()
                 self.scroller.FitInside()
@@ -86,20 +90,20 @@ class CardTablePanelHandlersMixin(_Base):
                     scrollToTop=not preserve_scroll,
                 )
 
-                # Switch between the empty-state hint (page 0) and the card
-                # grid (page 1) so the workspace always shows something
-                # intentional rather than a blank area.
-                target_page = 1 if cards else 0
-                if self._content_book.GetSelection() != target_page:
-                    self._content_book.ChangeSelection(target_page)
+                # Populate the new views with the same data so a switch is
+                # instant. The pile view is expensive (kicks off image loads)
+                # so only update it when it is or will be the active page.
+                self.table_view.set_cards(cards)
+                if self.view_mode == "pile":
+                    self.pile_view.set_cards(cards)
 
+                self._switch_content_page()
                 self._restore_selection()
             finally:
                 self.scroller.Thaw()
         finally:
             self.Thaw()
 
-        # Fire image loads only for panels whose card assignment changed.
         for panel in needs_image_load:
             panel.load_image_async()
 
@@ -113,22 +117,32 @@ class CardTablePanelHandlersMixin(_Base):
         self.active_panel = panel
         self.selected_name = card["name"]
         panel.set_active(True)
+        self._sync_table_pile_selection()
         self._notify_selection(card)
 
     def _restore_selection(self) -> None:
         if not self.selected_name:
+            self._sync_table_pile_selection()
             self._notify_selection(None)
             return
         for widget in self.card_widgets:
             if widget.card["name"].lower() == self.selected_name.lower():
                 self.active_panel = widget
                 widget.set_active(True)
+                self._sync_table_pile_selection()
                 self._notify_selection(widget.card)
                 return
         previously_had_selection = self.selected_name is not None
         self.selected_name = None
+        self._sync_table_pile_selection()
         if previously_had_selection:
             self._notify_selection(None)
+
+    def _sync_table_pile_selection(self) -> None:
+        # Mirror selection state into the table view and pile view so the
+        # highlighted row/card matches no matter which view is on top.
+        self.table_view.set_selected(self.selected_name)
+        self.pile_view.set_selected(self.selected_name)
 
     def focus_card(self, card_name: str) -> bool:
         if not card_name:
@@ -146,6 +160,7 @@ class CardTablePanelHandlersMixin(_Base):
         self.selected_name = match.card["name"]
         match.set_active(True)
         self.scroller.ScrollChildIntoView(match)
+        self._sync_table_pile_selection()
         self._notify_selection(match.card)
         return True
 
@@ -154,6 +169,7 @@ class CardTablePanelHandlersMixin(_Base):
             self.active_panel.set_active(False)
         self.active_panel = None
         self.selected_name = None
+        self._sync_table_pile_selection()
         self._notify_selection(None)
 
     def collapse_active(self) -> None:
@@ -161,14 +177,12 @@ class CardTablePanelHandlersMixin(_Base):
             self.active_panel.set_active(False)
         self.active_panel = None
         self.selected_name = None
+        self._sync_table_pile_selection()
 
     def refresh_card_image(self, card_name: str) -> None:
         if not card_name:
             return
         key = card_name.lower()
-        # For DFCs the downloaded name is the combined form "A // B".  Cards in
-        # the deck may be stored under the individual face name ("A" or "B"), so
-        # build a set of all name variants to match against.
         face_keys: set[str] = {key}
         if "//" in key:
             for part in key.split("//"):

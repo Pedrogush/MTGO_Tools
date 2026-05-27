@@ -17,10 +17,10 @@ from utils.constants.ui_images import (
     MANA_ICON_PANEL_HEIGHT_PADDING,
     MANA_ICON_SPAN_PADDING,
 )
-from widgets.mana_icon_service.bitmap_renderer import BitmapRendererMixin
-from widgets.mana_icon_service.cache import ManaBitmapCache
-from widgets.mana_icon_service.resources import ManaIconResources
-from widgets.mana_icon_service.svg_renderer import SvgRendererMixin
+from widgets.mana_icon_factory.bitmap_renderer import BitmapRendererMixin
+from widgets.mana_icon_factory.cache import ManaBitmapCache
+from widgets.mana_icon_factory.resources import ManaIconResources
+from widgets.mana_icon_factory.svg_renderer import SvgRendererMixin
 
 
 def _split_mana_cost_tokens(cost: str, *, uppercase: bool) -> list[str]:
