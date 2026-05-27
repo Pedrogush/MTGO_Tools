@@ -83,9 +83,7 @@ _COLUMN_LABELS: dict[str, str] = {
 _SCALED_BITMAP_CACHE: dict[tuple[str, int], wx.Bitmap | None] = {}
 
 
-def _scaled_bitmap(
-    factory: ManaIconFactory, token: str, size: int
-) -> wx.Bitmap | None:
+def _scaled_bitmap(factory: ManaIconFactory, token: str, size: int) -> wx.Bitmap | None:
     """Return a bitmap for ``token`` rescaled to ``size`` px, cached."""
     key = (token.lower(), size)
     if key in _SCALED_BITMAP_CACHE:
@@ -229,7 +227,7 @@ class _ManaIconCellRenderer(gridlib.GridCellRenderer):
         )
         return wx.Size(width, self._icon_size)
 
-    def Clone(self) -> "_ManaIconCellRenderer":
+    def Clone(self) -> _ManaIconCellRenderer:
         return _ManaIconCellRenderer(self._factory, self._icon_size, self._gap)
 
 
@@ -268,7 +266,7 @@ class _EllipsisStringRenderer(gridlib.GridCellStringRenderer):
         y = rect.y + max(0, (rect.height - dc.GetCharHeight()) // 2)
         dc.DrawText(text, rect.x + _CELL_TEXT_PADDING, y)
 
-    def Clone(self) -> "_EllipsisStringRenderer":
+    def Clone(self) -> _EllipsisStringRenderer:
         return _EllipsisStringRenderer()
 
 
@@ -356,7 +354,7 @@ class _InlineSymbolStringRenderer(gridlib.GridCellRenderer):
         char_h = dc.GetCharHeight()
         return wx.Size(width, max(char_h, self._icon_size))
 
-    def Clone(self) -> "_InlineSymbolStringRenderer":
+    def Clone(self) -> _InlineSymbolStringRenderer:
         return _InlineSymbolStringRenderer(self._factory, self._icon_size)
 
 

@@ -250,9 +250,7 @@ class CardBoxPanelHandlersMixin(_Base):
         y = (DECK_CARD_HEIGHT - image.GetHeight()) // 2
         dc.DrawBitmap(wx.Bitmap(image), x, y, True)
         dc.SelectObject(wx.NullBitmap)
-        rounded = apply_rounded_corner_alpha(
-            bitmap.ConvertToImage(), DECK_CARD_CORNER_RADIUS
-        )
+        rounded = apply_rounded_corner_alpha(bitmap.ConvertToImage(), DECK_CARD_CORNER_RADIUS)
         return rounded.ConvertToBitmap()
 
     @timed
@@ -278,9 +276,7 @@ class CardBoxPanelHandlersMixin(_Base):
         dc.DrawRoundedRectangle(rect, DECK_CARD_CORNER_RADIUS)
         self._draw_placeholder_details(dc, rect)
         dc.SelectObject(wx.NullBitmap)
-        rounded = apply_rounded_corner_alpha(
-            bitmap.ConvertToImage(), DECK_CARD_CORNER_RADIUS
-        )
+        rounded = apply_rounded_corner_alpha(bitmap.ConvertToImage(), DECK_CARD_CORNER_RADIUS)
         bitmap = rounded.ConvertToBitmap()
         CardBoxPanel._template_cache[key] = bitmap
         return bitmap

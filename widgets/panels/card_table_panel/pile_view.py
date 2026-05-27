@@ -341,13 +341,9 @@ class DeckPileView(wx.ScrolledWindow):
 
         dc.SetBrush(wx.Brush(wx.Colour(*DARK_ALT)))
         dc.SetPen(wx.Pen(wx.Colour(*DARK_BG), 1))
-        dc.DrawRoundedRectangle(
-            rect.x, rect.y, rect.width, rect.height, DECK_CARD_CORNER_RADIUS
-        )
+        dc.DrawRoundedRectangle(rect.x, rect.y, rect.width, rect.height, DECK_CARD_CORNER_RADIUS)
         dc.SetTextForeground(wx.Colour(*LIGHT_TEXT))
-        dc.SetFont(
-            wx.Font(9, wx.FONTFAMILY_SWISS, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD)
-        )
+        dc.SetFont(wx.Font(9, wx.FONTFAMILY_SWISS, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
         text = self._fit_text(dc, name, rect.width - 8)
         dc.DrawText(text, rect.x + 4, rect.y + 8)
 
