@@ -17,7 +17,7 @@ from utils.constants import (
 from widgets.panels.mana_rich_text_ctrl.keyboard_evts import key_char
 
 if TYPE_CHECKING:
-    from widgets.mana_icon_service import ManaIconFactory
+    from widgets.mana_icon_factory import ManaIconFactory
 
 
 class ManaRichTextInnerHandlersMixin:

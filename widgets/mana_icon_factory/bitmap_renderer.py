@@ -19,10 +19,10 @@ from utils.constants.ui_images import (
     MANA_OUTLINE_DARK_RGB,
     MANA_TEXT_DARK_RGB,
 )
-from widgets.mana_icon_service.resources import ManaIconResources
+from widgets.mana_icon_factory.resources import ManaIconResources
 
 if TYPE_CHECKING:
-    from widgets.mana_icon_service.cache import ManaBitmapCache
+    from widgets.mana_icon_factory.cache import ManaBitmapCache
 
 
 class BitmapRendererMixin:

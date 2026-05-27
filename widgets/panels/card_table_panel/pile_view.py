@@ -55,8 +55,8 @@ _CARD_WIDTH = DECK_CARD_WIDTH
 _CARD_HEIGHT = DECK_CARD_HEIGHT
 _NAME_STRIP_HEIGHT = 32  # visible portion of stacked-above cards
 _PILE_GAP = 8  # gap between piles (matches grid view's GRID_GAP)
-_PILE_TOP = 26  # space for pile header label
 _PILE_PAD = 6  # padding inside a pile column
+_PILE_TOP = _PILE_PAD  # top inset for the first card in a pile
 
 
 class _ImageCache:
@@ -279,8 +279,8 @@ class DeckPileView(wx.ScrolledWindow):
         dc.SetBackground(wx.Brush(wx.Colour(*DARK_PANEL)))
         dc.Clear()
 
-        for pile_idx, (label, members) in enumerate(self._piles):
-            self._draw_pile(dc, pile_idx, label, members)
+        for pile_idx, (_label, members) in enumerate(self._piles):
+            self._draw_pile(dc, pile_idx, members)
 
         if self._rubber_start and self._rubber_end:
             self._draw_rubber_band(dc)
@@ -292,29 +292,20 @@ class DeckPileView(wx.ScrolledWindow):
         self,
         dc: wx.DC,
         pile_idx: int,
-        label: str,
         members: list[dict[str, Any]],
     ) -> None:
-        x = self._pile_x(pile_idx)
-        # Pile header label
-        dc.SetTextForeground(wx.Colour(*SUBDUED_TEXT))
-        dc.SetFont(wx.Font(9, wx.FONTFAMILY_SWISS, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
-        dc.DrawText(f"{label} ({len(members)})", x, _PILE_PAD)
-
         total = len(members)
         for member_idx, entry in enumerate(members):
             rect = self._card_rect(pile_idx, member_idx, total)
-            is_bottom = member_idx == total - 1
-            self._draw_card(dc, rect, entry, is_bottom)
+            self._draw_card(dc, rect, entry)
 
     def _draw_card(
         self,
         dc: wx.DC,
         rect: wx.Rect,
         entry: dict[str, Any],
-        is_bottom: bool,
     ) -> None:
-        self._draw_card_art(dc, rect, entry, is_bottom)
+        self._draw_card_art(dc, rect, entry)
 
         is_selected = entry["_uid"] in self._selected_uids
         is_hover = entry["_uid"] == self._hover_uid
@@ -332,54 +323,33 @@ class DeckPileView(wx.ScrolledWindow):
         dc: wx.DC,
         rect: wx.Rect,
         entry: dict[str, Any],
-        is_bottom: bool,
     ) -> None:
-        """Render just the card art for ``entry`` at ``rect``.
+        """Render the full card art for ``entry`` at ``rect``.
 
-        Bottom cards get the full bitmap; stacked-above cards get only the
-        top strip (the card's own name + mana cost area in the MTG layout) so
-        the user can identify each card by its visible top edge. No outline is
-        drawn around stacked strips — the underlying card art has its own dark
-        border which already separates one strip from the next.
+        Cards are drawn in stack order from top of pile to bottom, so each
+        successive draw paints over the body of the card beneath it, leaving
+        only the visible top strip of earlier cards. There is no clipping —
+        every card lays down its full bitmap.
         """
         name = entry["name"]
         bitmap = self._image_cache.get(name)
-        if is_bottom:
-            if bitmap is not None:
-                x = rect.x + (rect.width - bitmap.GetWidth()) // 2
-                y = rect.y + (rect.height - bitmap.GetHeight()) // 2
-                dc.DrawBitmap(bitmap, x, y, True)
-            else:
-                dc.SetBrush(wx.Brush(wx.Colour(*DARK_ALT)))
-                dc.SetPen(wx.Pen(wx.Colour(*DARK_BG), 1))
-                dc.DrawRoundedRectangle(
-                    rect.x, rect.y, rect.width, rect.height, DECK_CARD_CORNER_RADIUS
-                )
-                dc.SetTextForeground(wx.Colour(*LIGHT_TEXT))
-                dc.SetFont(
-                    wx.Font(9, wx.FONTFAMILY_SWISS, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD)
-                )
-                text = self._fit_text(dc, name, rect.width - 8)
-                dc.DrawText(text, rect.x + 4, rect.y + 8)
-            return
-
-        strip = wx.Rect(rect.x, rect.y, rect.width, _NAME_STRIP_HEIGHT)
         if bitmap is not None:
             x = rect.x + (rect.width - bitmap.GetWidth()) // 2
             y = rect.y + (rect.height - bitmap.GetHeight()) // 2
-            dc.SetClippingRegion(strip)
             dc.DrawBitmap(bitmap, x, y, True)
-            dc.DestroyClippingRegion()
-        else:
-            dc.SetBrush(wx.Brush(wx.Colour(*DARK_BG)))
-            dc.SetPen(wx.TRANSPARENT_PEN)
-            dc.DrawRectangle(strip)
-            dc.SetTextForeground(wx.Colour(*LIGHT_TEXT))
-            dc.SetFont(
-                wx.Font(8, wx.FONTFAMILY_SWISS, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL)
-            )
-            text = self._fit_text(dc, name, rect.width - 6)
-            dc.DrawText(text, strip.x + 3, strip.y + 4)
+            return
+
+        dc.SetBrush(wx.Brush(wx.Colour(*DARK_ALT)))
+        dc.SetPen(wx.Pen(wx.Colour(*DARK_BG), 1))
+        dc.DrawRoundedRectangle(
+            rect.x, rect.y, rect.width, rect.height, DECK_CARD_CORNER_RADIUS
+        )
+        dc.SetTextForeground(wx.Colour(*LIGHT_TEXT))
+        dc.SetFont(
+            wx.Font(9, wx.FONTFAMILY_SWISS, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD)
+        )
+        text = self._fit_text(dc, name, rect.width - 8)
+        dc.DrawText(text, rect.x + 4, rect.y + 8)
 
     @staticmethod
     def _fit_text(dc: wx.DC, text: str, max_width: int) -> str:
@@ -420,7 +390,7 @@ class DeckPileView(wx.ScrolledWindow):
                 continue
             y = bottom_y - (total - 1 - member_idx) * _NAME_STRIP_HEIGHT
             rect = wx.Rect(origin_x, y, _CARD_WIDTH, _CARD_HEIGHT)
-            self._draw_card_art(dc, rect, entry, is_bottom=member_idx == total - 1)
+            self._draw_card_art(dc, rect, entry)
 
     # ----- event handlers -----
     def _on_left_down(self, event: wx.MouseEvent) -> None:

@@ -47,7 +47,7 @@ from widgets.panels.mana_rich_text_ctrl.properties import (
 )
 
 if TYPE_CHECKING:
-    from widgets.mana_icon_service import ManaIconFactory
+    from widgets.mana_icon_factory import ManaIconFactory
 
 
 # Three-tone frame matching the native Win11 dark-mode TextCtrl outline,

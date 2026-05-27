@@ -10,7 +10,7 @@ import wx.lib.scrolledpanel as scrolled
 
 from utils.constants import DARK_ACCENT, DARK_ALT, DARK_PANEL, LIGHT_TEXT, SUBDUED_TEXT
 from utils.i18n import translate as _i18n_translate
-from widgets.mana_icon_service import ManaIconFactory
+from widgets.mana_icon_factory import ManaIconFactory
 from widgets.panels.card_box_panel import CardBoxPanel
 from widgets.panels.card_table_panel.handlers import CardTablePanelHandlersMixin
 from widgets.panels.card_table_panel.pile_view import DeckPileView

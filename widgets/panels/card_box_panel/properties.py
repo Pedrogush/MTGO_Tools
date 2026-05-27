@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 import wx
 
-from widgets.mana_icon_service import ManaIconFactory
+from widgets.mana_icon_factory import ManaIconFactory
 
 if TYPE_CHECKING:
     from widgets.panels.card_box_panel.protocol import CardBoxPanelProto

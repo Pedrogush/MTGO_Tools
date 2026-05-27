@@ -26,7 +26,7 @@ from utils.constants import (
     PADDING_XL,
     SUBDUED_TEXT,
 )
-from widgets.mana_icon_service import ManaIconFactory
+from widgets.mana_icon_factory import ManaIconFactory
 from widgets.panels.card_image_display import CardImageDisplay
 from widgets.panels.card_inspector_panel.handlers import CardInspectorPanelHandlersMixin
 from widgets.panels.card_inspector_panel.properties import CardInspectorPanelPropertiesMixin

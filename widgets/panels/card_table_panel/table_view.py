@@ -27,7 +27,7 @@ import wx
 import wx.grid as gridlib
 
 from utils.constants import DARK_ACCENT, DARK_ALT, DARK_BG, DARK_PANEL, LIGHT_TEXT, SUBDUED_TEXT
-from widgets.mana_icon_service import ManaIconFactory, tokenize_mana_symbols
+from widgets.mana_icon_factory import ManaIconFactory, tokenize_mana_symbols
 from widgets.panels.card_table_panel.sorting import (
     COL_COLOR,
     COL_MANA,
