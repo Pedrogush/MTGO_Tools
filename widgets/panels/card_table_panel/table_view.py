@@ -49,6 +49,13 @@ _MAX_TEXT_CHARS = 400
 _MANA_CELL_PADDING = 4
 _CELL_TEXT_PADDING = 4
 
+# Width of the colored bar painted on the leftmost cell of a selected row.
+# The bar is the only visible selection signal — cell backgrounds stay at
+# DARK_ALT so the mana/color icons (which bake DARK_ALT into their bitmap
+# corners) don't end up reading as "circle on top of a gray square on top of
+# a blue row".
+_SELECTION_BAR_WIDTH = 3
+
 # Mana/color icons are sized larger than text icons (by 4px) so they fill the
 # row height without top/bottom padding, and rendered with no inter-icon gap
 # so adjacent symbols sit flush against each other.
@@ -137,6 +144,28 @@ def _font_height(font: wx.Font) -> int:
     return max(10, h)
 
 
+def _paint_row_background(
+    grid: gridlib.Grid,
+    dc: wx.DC,
+    rect: wx.Rect,
+    col: int,
+    is_selected: bool,
+) -> None:
+    """Fill ``rect`` with the cell background, then overlay the selection bar.
+
+    The cell background is always ``DARK_ALT`` regardless of selection state,
+    so the mana/color icon bitmaps (which fill their corners with ``DARK_ALT``)
+    blend cleanly into the row in both states. Selection is signalled by a
+    vertical accent bar on the leftmost visible cell only.
+    """
+    dc.SetBrush(wx.Brush(grid.GetDefaultCellBackgroundColour()))
+    dc.SetPen(wx.TRANSPARENT_PEN)
+    dc.DrawRectangle(rect)
+    if is_selected and grid.GetColPos(col) == 0:
+        dc.SetBrush(wx.Brush(wx.Colour(*DARK_ACCENT)))
+        dc.DrawRectangle(rect.x, rect.y, _SELECTION_BAR_WIDTH, rect.height)
+
+
 class _ManaIconCellRenderer(gridlib.GridCellRenderer):
     """Draws a cell as a horizontal row of mana-symbol bitmaps."""
 
@@ -161,12 +190,7 @@ class _ManaIconCellRenderer(gridlib.GridCellRenderer):
         col: int,
         isSelected: bool,
     ) -> None:
-        bg = (
-            grid.GetSelectionBackground() if isSelected else grid.GetDefaultCellBackgroundColour()
-        )
-        dc.SetBrush(wx.Brush(bg))
-        dc.SetPen(wx.TRANSPARENT_PEN)
-        dc.DrawRectangle(rect)
+        _paint_row_background(grid, dc, rect, col, isSelected)
 
         tokens = tokenize_mana_symbols(grid.GetCellValue(row, col))
         if not tokens:
@@ -224,18 +248,13 @@ class _EllipsisStringRenderer(gridlib.GridCellStringRenderer):
         col: int,
         isSelected: bool,
     ) -> None:
-        if isSelected:
-            bg = grid.GetSelectionBackground()
-            fg = grid.GetSelectionForeground()
-        else:
-            bg = grid.GetDefaultCellBackgroundColour()
-            fg = grid.GetDefaultCellTextColour()
-        dc.SetBrush(wx.Brush(bg))
-        dc.SetPen(wx.TRANSPARENT_PEN)
-        dc.DrawRectangle(rect)
+        _paint_row_background(grid, dc, rect, col, isSelected)
 
-        dc.SetFont(grid.GetDefaultCellFont())
-        dc.SetTextForeground(fg)
+        font = grid.GetDefaultCellFont()
+        if isSelected:
+            font = font.Bold()
+        dc.SetFont(font)
+        dc.SetTextForeground(grid.GetDefaultCellTextColour())
 
         text = grid.GetCellValue(row, col)
         available = rect.width - _CELL_TEXT_PADDING * 2
@@ -277,17 +296,12 @@ class _InlineSymbolStringRenderer(gridlib.GridCellRenderer):
         col: int,
         isSelected: bool,
     ) -> None:
+        _paint_row_background(grid, dc, rect, col, isSelected)
+        font = grid.GetDefaultCellFont()
         if isSelected:
-            bg = grid.GetSelectionBackground()
-            fg = grid.GetSelectionForeground()
-        else:
-            bg = grid.GetDefaultCellBackgroundColour()
-            fg = grid.GetDefaultCellTextColour()
-        dc.SetBrush(wx.Brush(bg))
-        dc.SetPen(wx.TRANSPARENT_PEN)
-        dc.DrawRectangle(rect)
-        dc.SetFont(grid.GetDefaultCellFont())
-        dc.SetTextForeground(fg)
+            font = font.Bold()
+        dc.SetFont(font)
+        dc.SetTextForeground(grid.GetDefaultCellTextColour())
 
         runs = _split_inline_symbols(grid.GetCellValue(row, col))
 
@@ -395,8 +409,14 @@ class DeckTableView(wx.Panel):
         self.grid.SetLabelBackgroundColour(wx.Colour(*DARK_BG))
         self.grid.SetLabelTextColour(wx.Colour(*SUBDUED_TEXT))
         self.grid.SetGridLineColour(wx.Colour(*DARK_BG))
-        self.grid.SetSelectionBackground(wx.Colour(*DARK_ACCENT))
+        # Selection background matches the cell background so the native row
+        # fill is invisible; renderers paint the accent bar themselves. The
+        # cell-highlight pen is what would otherwise draw a black focus rect
+        # around the current cell (most visibly cell (0,0) at startup).
+        self.grid.SetSelectionBackground(wx.Colour(*DARK_ALT))
         self.grid.SetSelectionForeground(wx.Colour(*LIGHT_TEXT))
+        self.grid.SetCellHighlightPenWidth(0)
+        self.grid.SetCellHighlightROPenWidth(0)
 
         # All mana symbols (mana/color cells and inline-in-text) share one
         # icon size that fills the row height — no visible top/bottom padding.
@@ -409,19 +429,18 @@ class DeckTableView(wx.Panel):
 
         for idx, col_id in enumerate(TABLE_COLUMNS):
             self.grid.SetColLabelValue(idx, self._label(col_id))
-            renderer: gridlib.GridCellRenderer | None
+            renderer: gridlib.GridCellRenderer
             if col_id in (COL_MANA, COL_COLOR):
                 renderer = _ManaIconCellRenderer(icon_factory, self._cell_icon_size)
             elif col_id == COL_TEXT:
                 renderer = _InlineSymbolStringRenderer(icon_factory, self._cell_icon_size)
-            elif col_id == COL_TYPE:
-                renderer = _EllipsisStringRenderer()
             else:
-                renderer = None
-            if renderer is not None:
-                attr = gridlib.GridCellAttr()
-                attr.SetRenderer(renderer)
-                self.grid.SetColAttr(idx, attr)
+                # Name + Type share the same ellipsis-truncating renderer so
+                # they participate in the selection bar / bold-text styling.
+                renderer = _EllipsisStringRenderer()
+            attr = gridlib.GridCellAttr()
+            attr.SetRenderer(renderer)
+            self.grid.SetColAttr(idx, attr)
 
         sizer.Add(self.grid, 1, wx.EXPAND)
 

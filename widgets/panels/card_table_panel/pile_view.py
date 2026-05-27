@@ -314,10 +314,35 @@ class DeckPileView(wx.ScrolledWindow):
         entry: dict[str, Any],
         is_bottom: bool,
     ) -> None:
-        name = entry["name"]
+        self._draw_card_art(dc, rect, entry, is_bottom)
+
         is_selected = entry["_uid"] in self._selected_uids
         is_hover = entry["_uid"] == self._hover_uid
+        if is_selected:
+            dc.SetPen(wx.Pen(wx.Colour(*DARK_ACCENT), 3))
+            dc.SetBrush(wx.TRANSPARENT_BRUSH)
+            dc.DrawRoundedRectangle(rect, DECK_CARD_CORNER_RADIUS)
+        elif is_hover:
+            dc.SetPen(wx.Pen(wx.Colour(*SUBDUED_TEXT), 1, wx.PENSTYLE_DOT))
+            dc.SetBrush(wx.TRANSPARENT_BRUSH)
+            dc.DrawRoundedRectangle(rect, DECK_CARD_CORNER_RADIUS)
 
+    def _draw_card_art(
+        self,
+        dc: wx.DC,
+        rect: wx.Rect,
+        entry: dict[str, Any],
+        is_bottom: bool,
+    ) -> None:
+        """Render just the card art for ``entry`` at ``rect``.
+
+        Bottom cards get the full bitmap; stacked-above cards get only the
+        top strip (the card's own name + mana cost area in the MTG layout) so
+        the user can identify each card by its visible top edge. No outline is
+        drawn around stacked strips — the underlying card art has its own dark
+        border which already separates one strip from the next.
+        """
+        name = entry["name"]
         bitmap = self._image_cache.get(name)
         if is_bottom:
             if bitmap is not None:
@@ -325,7 +350,6 @@ class DeckPileView(wx.ScrolledWindow):
                 y = rect.y + (rect.height - bitmap.GetHeight()) // 2
                 dc.DrawBitmap(bitmap, x, y, True)
             else:
-                # Placeholder + name fallback while the image loads.
                 dc.SetBrush(wx.Brush(wx.Colour(*DARK_ALT)))
                 dc.SetPen(wx.Pen(wx.Colour(*DARK_BG), 1))
                 dc.DrawRoundedRectangle(
@@ -337,40 +361,25 @@ class DeckPileView(wx.ScrolledWindow):
                 )
                 text = self._fit_text(dc, name, rect.width - 8)
                 dc.DrawText(text, rect.x + 4, rect.y + 8)
-        else:
-            # Only the top strip of stacked-above cards is visible — draw the
-            # full bitmap clipped to that strip so the actual card top (name +
-            # mana cost in MTG card layout) shows through.
-            strip = wx.Rect(rect.x, rect.y, rect.width, _NAME_STRIP_HEIGHT)
-            if bitmap is not None:
-                x = rect.x + (rect.width - bitmap.GetWidth()) // 2
-                y = rect.y + (rect.height - bitmap.GetHeight()) // 2
-                dc.SetClippingRegion(strip)
-                dc.DrawBitmap(bitmap, x, y, True)
-                dc.DestroyClippingRegion()
-                dc.SetBrush(wx.TRANSPARENT_BRUSH)
-                dc.SetPen(wx.Pen(wx.Colour(*DARK_ACCENT), 1))
-                dc.DrawRectangle(strip)
-            else:
-                dc.SetBrush(wx.Brush(wx.Colour(*DARK_BG)))
-                dc.SetPen(wx.Pen(wx.Colour(*DARK_ACCENT), 1))
-                dc.DrawRectangle(strip)
-                dc.SetTextForeground(wx.Colour(*LIGHT_TEXT))
-                dc.SetFont(
-                    wx.Font(8, wx.FONTFAMILY_SWISS, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL)
-                )
-                text = self._fit_text(dc, name, rect.width - 6)
-                dc.DrawText(text, strip.x + 3, strip.y + 4)
+            return
 
-        # Highlight selection / hover.
-        if is_selected:
-            dc.SetPen(wx.Pen(wx.Colour(*DARK_ACCENT), 3))
-            dc.SetBrush(wx.TRANSPARENT_BRUSH)
-            dc.DrawRoundedRectangle(rect, DECK_CARD_CORNER_RADIUS)
-        elif is_hover:
-            dc.SetPen(wx.Pen(wx.Colour(*SUBDUED_TEXT), 1, wx.PENSTYLE_DOT))
-            dc.SetBrush(wx.TRANSPARENT_BRUSH)
-            dc.DrawRoundedRectangle(rect, DECK_CARD_CORNER_RADIUS)
+        strip = wx.Rect(rect.x, rect.y, rect.width, _NAME_STRIP_HEIGHT)
+        if bitmap is not None:
+            x = rect.x + (rect.width - bitmap.GetWidth()) // 2
+            y = rect.y + (rect.height - bitmap.GetHeight()) // 2
+            dc.SetClippingRegion(strip)
+            dc.DrawBitmap(bitmap, x, y, True)
+            dc.DestroyClippingRegion()
+        else:
+            dc.SetBrush(wx.Brush(wx.Colour(*DARK_BG)))
+            dc.SetPen(wx.TRANSPARENT_PEN)
+            dc.DrawRectangle(strip)
+            dc.SetTextForeground(wx.Colour(*LIGHT_TEXT))
+            dc.SetFont(
+                wx.Font(8, wx.FONTFAMILY_SWISS, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL)
+            )
+            text = self._fit_text(dc, name, rect.width - 6)
+            dc.DrawText(text, strip.x + 3, strip.y + 4)
 
     @staticmethod
     def _fit_text(dc: wx.DC, text: str, max_width: int) -> str:
@@ -392,25 +401,26 @@ class DeckPileView(wx.ScrolledWindow):
         dc.DrawRectangle(rect)
 
     def _draw_drag_ghost(self, dc: wx.DC) -> None:
-        if not self._drag_pos:
+        """Render the dragged cards as a real pile anchored near the cursor.
+
+        The ghost mirrors how the source pile is laid out: cards stack with
+        ``_NAME_STRIP_HEIGHT`` offsets, the last entry rendered full-height at
+        the bottom and earlier entries showing only their top strip above it.
+        Members are taken from ``_drag_uids`` in visual order (top-to-bottom
+        as they appeared in the source pile).
+        """
+        if not self._drag_pos or not self._drag_uids:
             return
-        offset = 0
-        for uid in self._drag_uids:
+        total = len(self._drag_uids)
+        origin_x = self._drag_pos.x + 6
+        bottom_y = self._drag_pos.y + 6 + (total - 1) * _NAME_STRIP_HEIGHT
+        for member_idx, uid in enumerate(self._drag_uids):
             entry = self._find_entry(uid)
             if entry is None:
                 continue
-            bitmap = self._image_cache.get(entry["name"])
-            x = self._drag_pos.x + 6 + offset
-            y = self._drag_pos.y + 6 + offset
-            if bitmap is not None:
-                dc.DrawBitmap(bitmap, x, y, True)
-            else:
-                dc.SetBrush(wx.Brush(wx.Colour(*DARK_ALT)))
-                dc.SetPen(wx.Pen(wx.Colour(*DARK_ACCENT), 2))
-                dc.DrawRoundedRectangle(
-                    x, y, _CARD_WIDTH, _CARD_HEIGHT, DECK_CARD_CORNER_RADIUS
-                )
-            offset += 4
+            y = bottom_y - (total - 1 - member_idx) * _NAME_STRIP_HEIGHT
+            rect = wx.Rect(origin_x, y, _CARD_WIDTH, _CARD_HEIGHT)
+            self._draw_card_art(dc, rect, entry, is_bottom=member_idx == total - 1)
 
     # ----- event handlers -----
     def _on_left_down(self, event: wx.MouseEvent) -> None:
@@ -449,8 +459,11 @@ class DeckPileView(wx.ScrolledWindow):
                 self._notify_selection_changed()
 
         # Prime a potential drag: the actual drag starts in motion handler.
+        # Drag uids are taken in visual top-to-bottom order so the ghost stack
+        # matches the source pile and so dropped cards land in the same
+        # relative order in the target pile.
         self._drag_press = point
-        self._drag_uids = sorted(self._selected_uids)
+        self._drag_uids = self._uids_in_visual_order(self._selected_uids)
         if not self.HasCapture():
             self.CaptureMouse()
         self.Refresh()
@@ -564,6 +577,15 @@ class DeckPileView(wx.ScrolledWindow):
                 if entry["_uid"] == uid:
                     return entry
         return None
+
+    def _uids_in_visual_order(self, uids: set[int]) -> list[int]:
+        """Return ``uids`` in top-to-bottom-of-pile order across all piles."""
+        ordered: list[int] = []
+        for _label, members in self._piles:
+            for entry in members:
+                if entry["_uid"] in uids:
+                    ordered.append(entry["_uid"])
+        return ordered
 
     # ----- drop handling -----
     def _drop_at(self, point: wx.Point) -> None:
