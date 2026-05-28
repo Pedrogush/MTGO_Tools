@@ -19,7 +19,32 @@ setuptools.setup(
     author="yochi",
     author_email="pedrogush@gmail.com",
     description="MTG Metagame Analysis: Opponent tracking and deck research tools for MTGO",
-    packages=["widgets", "services", "utils"],
+    # Discover every application package (including PEP 420 namespace packages such as
+    # ``widgets``, ``utils`` and ``navigators`` which intentionally omit ``__init__.py``)
+    # so that ``pip install .`` and wheel builds ship the full runtime, not just the
+    # three top-level packages that used to be listed explicitly.
+    packages=setuptools.find_namespace_packages(
+        include=[
+            "automation*",
+            "controllers*",
+            "navigators*",
+            "repositories*",
+            "services*",
+            "utils*",
+            "widgets*",
+        ],
+        exclude=[
+            "tests",
+            "tests.*",
+            "*.tests",
+            "*.tests.*",
+            "build*",
+            "dist*",
+            "env*",
+            "venv*",
+        ],
+    ),
+    include_package_data=True,
     classifiers=["Programming Language :: Python :: 3", "Operating System :: Windows"],
     python_requires=">=3.11",
     install_requires=load_requirements("requirements.txt"),
