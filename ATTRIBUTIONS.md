@@ -12,25 +12,35 @@ This project incorporates ideas, techniques, and code patterns from various open
 
 **Author:** Chris Erickson (cderickson)
 
-**License:** Not explicitly stated (assumed open source)
+**License:** None published (no `LICENSE` file in the upstream repo as of
+2026-05). Under default copyright this means "all rights reserved" and we
+treat the upstream source as **non-reusable**. See
+`docs/license_audit.md` for the full audit.
 
 **What we use:**
-- GameLog parsing logic from `modo.py`
-- Player name extraction patterns
-- Match winner determination algorithms
-- Log file format understanding
+- Conceptual understanding of the MTGO `GameLog.txt` binary format
+  (record separators, `@P` player markers, verb/object grammar of
+  action lines). These are factual observations about a third-party
+  file format, not copyrightable expression.
 
-**Files influenced:**
-- `services/gamelog_service/parser.py` - Core parsing logic adapted from `modo.py`
+**What we do NOT use:**
+- No source code, functions, regular expressions, data tables, or
+  control flow are copied or translated from `modo.py` or any other
+  file in MTGO-Tracker. `services/gamelog_service/parser.py` is an
+  independent clean-room Python implementation.
 
-**Key modifications:**
-- Simplified for opponent extraction focus (removed deck analysis, play-by-play tracking)
-- Integrated with MTGOSDK for log file location
-- Refactored for Python 3.11+ with type hints
-- Adapted for MongoDB storage instead of SQLite
+**Files informed (not copied):**
+- `services/gamelog_service/parser.py` — independently written from log
+  observation; MTGO-Tracker confirmed the format is parseable but no
+  code was reused.
 
 **Credit:**
-The MTGO log file format is complex and undocumented. Chris Erickson's MTGO-Tracker project provided invaluable insights into parsing these files correctly. The pattern matching logic, player name normalization, and winner detection algorithms are directly adapted from his work.
+The MTGO log file format is complex and undocumented. Chris Erickson's
+MTGO-Tracker project demonstrated that the format could be parsed
+programmatically and is gratefully acknowledged as prior art in the
+problem space. If the upstream author publishes a license that would
+require attribution beyond this note, please open an issue and we will
+update accordingly.
 
 ---
 
@@ -171,11 +181,20 @@ This project was developed with assistance from **Claude** (Anthropic), an AI as
 
 ## License Compatibility
 
-This project is released under [LICENSE NAME TBD]. We have ensured compatibility with all dependencies:
+This project is released under the **MIT License** (see `LICENSE` in the
+repo root). We have audited adapted code and dependencies:
 
-- **MTGOSDK**: MIT License ✅ Compatible
-- **Python libraries**: Various OSI-approved licenses ✅ Compatible
-- **Adapted code**: Properly attributed and modified ✅ Compliant
+- **MTGOSDK** (videre-project): MIT License — compatible.
+- **videre-project/Tracker**: MIT License — compatible (architecture
+  inspiration only, no source reuse).
+- **Python libraries**: All declared deps in `requirements.txt` /
+  `requirements-dev.txt` are under OSI-approved permissive licenses
+  (MIT, BSD, Apache-2.0, PSF). See `docs/license_audit.md` for the
+  per-dependency table.
+- **cderickson/MTGO-Tracker**: No published license. Treated as
+  non-reusable; only factual observations about the MTGO log format
+  were used (see entry above and `docs/license_audit.md`).
+- **MTGGoldfish data**: Scraped per `robots.txt`; not redistributed.
 
 ---
 
@@ -204,8 +223,8 @@ This is a fan-made tool for personal use and metagame research. We respect all i
 
 ---
 
-**Last Updated:** 2025-01-15
+**Last Updated:** 2026-05-28
 
-**Maintained By:** Pedro (https://github.com/Pedro)
+**Maintained By:** Pedro (https://github.com/Pedrogush)
 
 If you notice any attributions are missing or incorrect, please let us know!
