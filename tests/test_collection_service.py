@@ -211,6 +211,50 @@ def test_get_owned_count(collection_service):
     assert collection_service.get_owned_count("Mountain") == 0
 
 
+def test_get_owned_count_mixed_case_lookup(collection_service):
+    """Ownership lookups must be case-insensitive regardless of inventory casing.
+
+    Regression test for issue #469: cached collections with title-cased keys
+    used to under-report ownership when callers queried with a different casing.
+    """
+    # Inventory stored with title-case keys (legacy cached file shape).
+    collection_service.set_inventory({"Lightning Bolt": 4, "Force of Will": 1})
+
+    # Queries in any casing should resolve to the same count.
+    assert collection_service.get_owned_count("Lightning Bolt") == 4
+    assert collection_service.get_owned_count("lightning bolt") == 4
+    assert collection_service.get_owned_count("LIGHTNING BOLT") == 4
+    assert collection_service.get_owned_count("Force of Will") == 1
+    assert collection_service.get_owned_count("force of will") == 1
+
+    # Inventory stored with lowercase keys (canonical load-path shape).
+    collection_service.set_inventory({"lightning bolt": 4})
+    assert collection_service.get_owned_count("Lightning Bolt") == 4
+    assert collection_service.get_owned_count("LIGHTNING BOLT") == 4
+    assert collection_service.get_owned_count("lightning bolt") == 4
+
+
+def test_load_collection_normalizes_mixed_case_keys(
+    collection_service, mock_card_repo, temp_collection_file
+):
+    """load_collection must normalize keys so later lookups are case-insensitive (#469)."""
+    mock_card_repo.load_collection_from_file = Mock(
+        return_value=[
+            {"name": "Lightning Bolt", "quantity": 4},
+            {"name": "Force of Will", "quantity": 1},
+        ]
+    )
+
+    success = collection_service.load_collection(temp_collection_file)
+
+    assert success is True
+    # Any casing should resolve to the loaded counts.
+    assert collection_service.get_owned_count("Lightning Bolt") == 4
+    assert collection_service.get_owned_count("lightning bolt") == 4
+    assert collection_service.get_owned_count("LIGHTNING BOLT") == 4
+    assert collection_service.get_owned_count("force of will") == 1
+
+
 def test_get_ownership_status_fully_owned(collection_service):
     """Test ownership status for fully owned cards."""
     collection_service.set_inventory({"Lightning Bolt": 4})

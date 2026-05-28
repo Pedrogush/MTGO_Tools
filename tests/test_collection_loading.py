@@ -47,7 +47,10 @@ def test_collection_service_loads_inventory_from_export(tmp_path):
 
     assert service.load_collection(temp_file)
 
-    inventory = service.get_inventory()
-    assert inventory["Lightning Bolt"] == 5  # 4 + 1 duplicate entry
-    assert inventory["Island"] == 12
-    assert inventory["Spell Pierce"] == 2
+    # Inventory keys are normalized to lowercase across all load paths so
+    # that ownership lookups are case-insensitive (issue #469).
+    assert service.get_owned_count("Lightning Bolt") == 5  # 4 + 1 duplicate entry
+    assert service.get_owned_count("Island") == 12
+    assert service.get_owned_count("Spell Pierce") == 2
+    # Lookups are case-insensitive regardless of caller casing.
+    assert service.get_owned_count("lightning bolt") == 5
