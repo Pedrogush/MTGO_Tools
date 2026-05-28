@@ -1,4 +1,6 @@
+import json
 import tempfile
+import threading
 from pathlib import Path
 
 import pytest
@@ -114,3 +116,26 @@ def test_save_deck_creates_directory(deck_repo, temp_dir):
 
     assert nested_dir.exists()
     assert result_path.exists()
+
+
+def test_concurrent_save_notes_does_not_lose_updates(deck_repo, temp_dir, monkeypatch):
+    """Concurrent save_notes calls for different decks must all persist (issue #470)."""
+    notes_path = temp_dir / "deck_notes.json"
+    # Route the notes store at every import site to our temp file.
+    monkeypatch.setattr("repositories.deck_repository.metadata_store.NOTES_STORE", notes_path)
+
+    deck_keys = [f"deck_{i}" for i in range(20)]
+    barrier = threading.Barrier(len(deck_keys))
+
+    def writer(key: str) -> None:
+        barrier.wait()
+        deck_repo.save_notes(key, f"notes for {key}")
+
+    threads = [threading.Thread(target=writer, args=(k,)) for k in deck_keys]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    data = json.loads(notes_path.read_text(encoding="utf-8"))
+    assert data == {k: f"notes for {k}" for k in deck_keys}

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -27,27 +28,45 @@ class MetadataStoreMixin(_Base):
         return data.get(deck_key, "")
 
     def save_notes(self, deck_key: str, notes: str) -> None:
-        data = self._load_json_store(NOTES_STORE)
-        data[deck_key] = notes
-        self._save_json_store(NOTES_STORE, data)
+        def _set(data: dict[str, Any]) -> None:
+            data[deck_key] = notes
+
+        self._update_json_store(NOTES_STORE, _set)
 
     def load_outboard(self, deck_key: str) -> list[dict[str, Any]]:
         data = self._load_json_store(OUTBOARD_STORE)
         return data.get(deck_key, [])
 
     def save_outboard(self, deck_key: str, outboard: list[dict[str, Any]]) -> None:
-        data = self._load_json_store(OUTBOARD_STORE)
-        data[deck_key] = outboard
-        self._save_json_store(OUTBOARD_STORE, data)
+        def _set(data: dict[str, Any]) -> None:
+            data[deck_key] = outboard
+
+        self._update_json_store(OUTBOARD_STORE, _set)
 
     def load_sideboard_guide(self, deck_key: str) -> list[dict[str, Any]]:
         data = self._load_json_store(GUIDE_STORE)
         return data.get(deck_key, [])
 
     def save_sideboard_guide(self, deck_key: str, guide: list[dict[str, Any]]) -> None:
-        data = self._load_json_store(GUIDE_STORE)
-        data[deck_key] = guide
-        self._save_json_store(GUIDE_STORE, data)
+        def _set(data: dict[str, Any]) -> None:
+            data[deck_key] = guide
+
+        self._update_json_store(GUIDE_STORE, _set)
+
+    def _update_json_store(
+        self,
+        path: Path,
+        mutate: Callable[[dict[str, Any]], None],
+    ) -> None:
+        """Read-modify-write a JSON store under a single lock.
+
+        Holds the per-path lock across the load, mutation, and save so that
+        concurrent updates cannot interleave and overwrite each other.
+        """
+        with locked_path(path):
+            data = self._load_json_store(path)
+            mutate(data)
+            self._save_json_store(path, data)
 
     def _load_json_store(self, path: Path) -> dict[str, Any]:
         if not path.exists():
