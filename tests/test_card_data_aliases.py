@@ -48,8 +48,11 @@ def test_build_index_groups_double_faced_cards():
         "Jace, Telepath Unbound",
     }
     lookup = index["cards_by_name"]
-    assert lookup["jace, vryn's prodigy"]["name"] == entry["name"]
-    assert lookup["jace, telepath unbound"]["name"] == entry["name"]
+    cards = index["cards"]
+    # ``cards_by_name`` now maps an alias to an index into ``cards`` rather than
+    # to a duplicated card object.
+    assert cards[lookup["jace, vryn's prodigy"]]["name"] == entry["name"]
+    assert cards[lookup["jace, telepath unbound"]]["name"] == entry["name"]
 
 
 def test_build_index_populates_back_face_fields():

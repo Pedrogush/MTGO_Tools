@@ -1,8 +1,8 @@
 """Pure transformation of raw MTGJSON ``data`` into the local index shape.
 
 No I/O, no network — just the normalization rules that turn the upstream
-``atomicCards.json`` ``data`` map into ``cards`` / ``cards_by_name`` dicts
-ready for msgspec encoding.
+``atomicCards.json`` ``data`` map into a ``cards`` list and a ``cards_by_name``
+alias -> index map ready for msgspec encoding.
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ from typing import Any
 
 def build_index(atomic_cards: dict[str, list[dict[str, Any]]]) -> dict[str, Any]:
     cards: dict[str, dict[str, Any]] = {}
-    alias_map: dict[str, dict[str, Any]] = {}
+    alias_map: dict[str, int] = {}
     for variations in atomic_cards.values():
         if not isinstance(variations, list) or not variations:
             continue
@@ -34,15 +34,18 @@ def build_index(atomic_cards: dict[str, list[dict[str, Any]]]) -> dict[str, Any]
             aliases.update(_collect_name_aliases(canonical_name, printing))
         cards[canonical_name.lower()] = entry
     card_list = sorted(cards.values(), key=lambda c: c["name_lower"])
-    for card in card_list:
+    for position, card in enumerate(card_list):
         alias_set = card.pop("aliases", set()) or set()
         alias_set.add(card["name"])
         cleaned_aliases = sorted({alias.strip() for alias in alias_set if alias})
         card["aliases"] = cleaned_aliases
         for alias in cleaned_aliases:
-            alias_map.setdefault(alias.lower(), card)
+            alias_map.setdefault(alias.lower(), position)
     return {
         "cards": card_list,
+        # Map of alias (lowercased) -> index into ``cards``. Storing indices
+        # rather than duplicated card objects roughly halves the on-disk index
+        # size and decode time; the dict-of-references is rebuilt on load.
         "cards_by_name": alias_map,
     }
 

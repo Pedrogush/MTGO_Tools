@@ -26,11 +26,13 @@ _card_index_decoder: msgspec.json.Decoder[CardIndex] = msgspec.json.Decoder(Card
 def resolve_paths(data_dir: Path | str = CARD_DATA_DIR) -> tuple[Path, Path, Path]:
     """Return ``(data_dir, index_path, meta_path)`` after ensuring ``data_dir`` exists.
 
-    The ``_v2`` filename invalidates pre-double-faced-aware caches.
+    The ``_v3`` filename invalidates older caches: ``_v2`` added
+    double-faced-aware records, ``_v3`` stores ``cards_by_name`` as a
+    name -> index map instead of duplicated card objects.
     """
     base = Path(data_dir)
     base.mkdir(parents=True, exist_ok=True)
-    return base, base / "atomic_cards_index_v2.json", base / "atomic_cards_meta.json"
+    return base, base / "atomic_cards_index_v3.json", base / "atomic_cards_meta.json"
 
 
 def load_index(index_path: Path) -> CardIndex:

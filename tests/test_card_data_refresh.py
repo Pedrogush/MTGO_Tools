@@ -147,6 +147,36 @@ def test_ensure_latest_downloads_when_meta_differs(tmp_path: Path, monkeypatch):
     assert manager.get_card("Lightning Bolt") is not None
 
 
+def test_index_persists_name_map_as_indices(tmp_path: Path, monkeypatch):
+    cards = {"Opt": [_card("Opt", "{U}", "Scry 1, draw a card.", "U")]}
+    headers = {"etag": "v1", "last-modified": "x", "content-length": "1"}
+    _patch_requests(monkeypatch, headers, _build_bulk_zip(cards))
+
+    CardDataManager(tmp_path).ensure_latest()
+
+    index_path = tmp_path / "atomic_cards_index_v3.json"
+    raw = json.loads(index_path.read_text(encoding="utf-8"))
+    # cards_by_name is persisted as alias -> int index, not duplicated objects.
+    assert all(isinstance(v, int) for v in raw["cards_by_name"].values())
+    assert raw["cards"][raw["cards_by_name"]["opt"]]["name"] == "Opt"
+
+
+def test_reloaded_get_card_shares_card_objects(tmp_path: Path, monkeypatch):
+    cards = {"Opt": [_card("Opt", "{U}", "Scry 1, draw a card.", "U")]}
+    headers = {"etag": "v1", "last-modified": "x", "content-length": "1"}
+    _patch_requests(monkeypatch, headers, _build_bulk_zip(cards))
+
+    CardDataManager(tmp_path).ensure_latest()
+
+    # Fresh manager loads from disk and resolves the index map back to the same
+    # CardEntry instance held in the cards list (no duplicated objects).
+    reloaded = CardDataManager(tmp_path)
+    reloaded.ensure_latest()
+    card = reloaded.get_card("Opt")
+    assert card is not None
+    assert any(card is entry for entry in reloaded._cards or [])
+
+
 def test_ensure_latest_skips_download_when_only_etag_changes(tmp_path: Path, monkeypatch):
     cards = {"Opt": [_card("Opt", "{U}", "", "U")]}
     initial_headers = {
