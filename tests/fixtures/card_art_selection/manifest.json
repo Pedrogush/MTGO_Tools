@@ -1,0 +1,127 @@
+{
+  "fixture": "card_art_selection",
+  "generated_at": "2026-05-28T12:02:58.091862+00:00",
+  "source_bulk_cache": "/mnt/c/Claude/MTGO_Tools/cache/card_images/bulk_data.json",
+  "source_image_cache": "/mnt/c/Claude/MTGO_Tools/cache/card_images",
+  "image_sizes": {
+    "small": {
+      "width": 146,
+      "height": 204,
+      "extension": "jpg"
+    },
+    "normal": {
+      "width": 488,
+      "height": 680,
+      "extension": "jpg"
+    },
+    "large": {
+      "width": 672,
+      "height": 936,
+      "extension": "jpg"
+    },
+    "png": {
+      "width": 745,
+      "height": 1040,
+      "extension": "png"
+    },
+    "art_crop": {
+      "width": 626,
+      "height": 457,
+      "extension": "jpg"
+    },
+    "border_crop": {
+      "width": 480,
+      "height": 680,
+      "extension": "jpg"
+    }
+  },
+  "categories": {
+    "mono": {
+      "W": "Apothecary White",
+      "U": "Blind Phantasm",
+      "B": "Mastermind Plum",
+      "R": "Duelist's Flame",
+      "G": "Emissary Green"
+    },
+    "dual": {
+      "WU": "Miles \"Tails\" Prower",
+      "WB": "Killian, Decisive Mentor",
+      "WR": "Amy Rose",
+      "WG": "Black Panther, Wakandan King",
+      "UB": "Doc Ock, Evil Inventor",
+      "UR": "Iron Man, Titan of Innovation",
+      "UG": "Aloy, Savior of Meridian",
+      "BR": "Green Goblin, Nemesis",
+      "BG": "Dina, Essence Brewer",
+      "RG": "Toph, Greatest Earthbender"
+    },
+    "tri": {
+      "WUB": "Aminatou, Veil Piercer",
+      "WUR": "Captain America, First Avenger",
+      "WUG": "Aang and Katara",
+      "WBR": "Neriv, Crackling Vanguard",
+      "WBG": "Betor, Ancestor's Voice",
+      "WRG": "Yuma, Proud Protector",
+      "UBR": "Dr. Eggman",
+      "UBG": "Gonti, Canny Acquisitor",
+      "URG": "Eshki, Temur's Roar",
+      "BRG": "Auntie Ool, Cursewretch"
+    },
+    "quad": {
+      "WUBR": "Yore-Tiller Nephilim",
+      "WUBG": "Sol, Advocate Eternal",
+      "WURG": "The Fourteenth Doctor",
+      "WBRG": "Dune-Brood Nephilim",
+      "UBRG": "Yidris, Maelstrom Wielder"
+    },
+    "five_color": {
+      "WUBRG": "Ashling, the Limitless"
+    },
+    "colorless": {
+      "C": "Big Mother Mouser"
+    },
+    "nonbasic_land": {
+      "LAND": "Eden, Seat of the Sanctum"
+    }
+  },
+  "card_names": [
+    "Aang and Katara",
+    "Aloy, Savior of Meridian",
+    "Aminatou, Veil Piercer",
+    "Amy Rose",
+    "Apothecary White",
+    "Ashling, the Limitless",
+    "Auntie Ool, Cursewretch",
+    "Betor, Ancestor's Voice",
+    "Big Mother Mouser",
+    "Black Panther, Wakandan King",
+    "Blind Phantasm",
+    "Captain America, First Avenger",
+    "Dina, Essence Brewer",
+    "Doc Ock, Evil Inventor",
+    "Dr. Eggman",
+    "Duelist's Flame",
+    "Dune-Brood Nephilim",
+    "Eden, Seat of the Sanctum",
+    "Emissary Green",
+    "Eshki, Temur's Roar",
+    "Gonti, Canny Acquisitor",
+    "Green Goblin, Nemesis",
+    "Iron Man, Titan of Innovation",
+    "Killian, Decisive Mentor",
+    "Mastermind Plum",
+    "Miles \"Tails\" Prower",
+    "Neriv, Crackling Vanguard",
+    "Sol, Advocate Eternal",
+    "The Fourteenth Doctor",
+    "Toph, Greatest Earthbender",
+    "Yidris, Maelstrom Wielder",
+    "Yore-Tiller Nephilim",
+    "Yuma, Proud Protector"
+  ],
+  "printing_count": 40,
+  "full_art_printing_count": 31,
+  "image_file_count": 240,
+  "copied_cached_image_count": 40,
+  "generated_placeholder_image_count": 200
+}

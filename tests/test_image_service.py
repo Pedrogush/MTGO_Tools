@@ -86,11 +86,13 @@ def _build_queue(downloader, *, on_failed=None):
 
 
 def test_download_request_retries_with_backoff(monkeypatch):
-    sleeps = []
-    monkeypatch.setattr(image_service.time, "sleep", lambda seconds: sleeps.append(seconds))
     monkeypatch.setattr(image_service.time, "monotonic", lambda: 0.0)
     downloader = _FakeDownloader([(False, "429 Too Many Requests"), (True, "ok")])
     queue = _build_queue(downloader)
+    sleeps = []
+    # Capture backoff durations without actually waiting; the queue now uses
+    # the stop event's wait() so it can be interrupted on shutdown.
+    monkeypatch.setattr(queue._stop_event, "wait", lambda seconds: sleeps.append(seconds) or False)
     try:
         request = CardImageRequest(
             card_name="Mirrorpool",
@@ -105,6 +107,59 @@ def test_download_request_retries_with_backoff(monkeypatch):
 
     assert downloader.calls == 2
     assert sleeps == [0.5]
+
+
+def test_download_request_stop_event_interrupts_backoff(monkeypatch):
+    """Setting the stop event during backoff should abort retries promptly."""
+    monkeypatch.setattr(image_service.time, "monotonic", lambda: 0.0)
+    downloader = _FakeDownloader([(False, "429 Too Many Requests"), (True, "ok")])
+    queue = _build_queue(downloader)
+    waits = []
+
+    def fake_wait(seconds):
+        waits.append(seconds)
+        # Simulate shutdown happening during the backoff sleep.
+        queue._stop_event.set()
+        return True
+
+    monkeypatch.setattr(queue._stop_event, "wait", fake_wait)
+    try:
+        request = CardImageRequest(
+            card_name="Mirrorpool",
+            uuid=None,
+            set_code="aeoe",
+            collector_number=None,
+            size="normal",
+        )
+        # Should return False (giving up) instead of retrying after the wait
+        # was interrupted by the stop event.
+        assert queue._download_request(request) is False
+    finally:
+        queue.stop()
+
+    # Downloader was only called once; the retry loop bailed out after the
+    # interrupted backoff instead of issuing a second request.
+    assert downloader.calls == 1
+    assert waits == [0.5]
+
+
+def test_download_request_stop_event_skips_first_attempt():
+    """If stop is already signaled, the download loop should exit immediately."""
+    downloader = _FakeDownloader([(True, "ok")])
+    queue = _build_queue(downloader)
+    queue._stop_event.set()
+    try:
+        request = CardImageRequest(
+            card_name="Mirrorpool",
+            uuid=None,
+            set_code="aeoe",
+            collector_number=None,
+            size="normal",
+        )
+        assert queue._download_request(request) is False
+    finally:
+        queue.stop()
+    assert downloader.calls == 0
 
 
 def test_download_request_404_no_retry(monkeypatch):

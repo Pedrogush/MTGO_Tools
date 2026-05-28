@@ -113,15 +113,24 @@ def _command_worker(
     bridge_path: str,
     args: Sequence[str],
     queue: mp.Queue,
+    timeout: float | None = None,
 ) -> None:
     try:
-        completed = subprocess.run(
-            [bridge_path, *args],
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            check=False,
-        )  # nosec B603 - arguments are constructed internally
+        try:
+            completed = subprocess.run(
+                [bridge_path, *args],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                check=False,
+                timeout=timeout,
+            )  # nosec B603 - arguments are constructed internally
+        except subprocess.TimeoutExpired as exc:
+            # subprocess.run already terminates the child on TimeoutExpired,
+            # but surface an actionable error to the parent.
+            raise BridgeCommandError(
+                f"Bridge command {list(args)!r} timed out after {timeout} seconds."
+            ) from exc
         if completed.returncode != 0:
             raise BridgeCommandError(
                 f"Bridge exited with code {completed.returncode}: {completed.stderr.strip()}"
@@ -139,7 +148,15 @@ class BridgeCommandFuture:
         self._queue = queue
 
     def result(self, timeout: float | None = None) -> Any:
-        status, payload = self._queue.get(timeout=timeout)
+        try:
+            status, payload = self._queue.get(timeout=timeout)
+        except Empty as exc:
+            # Wrapper thread timed out waiting on the bridge worker. Make sure
+            # the child process is torn down so it can't outlive the request.
+            self.cancel()
+            raise BridgeCommandError(
+                f"Bridge command did not produce a result within {timeout} seconds."
+            ) from exc
         self._queue.close()
         self._process.join(timeout)
         if status == "ok":
@@ -149,7 +166,12 @@ class BridgeCommandFuture:
     def cancel(self) -> None:
         if self._process.is_alive():
             self._process.terminate()
-            self._process.join()
+            self._process.join(BRIDGE_PROCESS_TERMINATE_TIMEOUT_SECONDS)
+            if self._process.is_alive():
+                # On Windows ``terminate`` may not kill grandchildren; ``kill``
+                # sends SIGKILL/TerminateProcess to guarantee teardown.
+                self._process.kill()
+                self._process.join(BRIDGE_PROCESS_TERMINATE_TIMEOUT_SECONDS)
         self._queue.close()
 
 
@@ -159,15 +181,20 @@ def submit_bridge_command(
     bridge_path: str | os.PathLike[str] | None = None,
     extra_args: Sequence[str] | None = None,
     context: mp.context.BaseContext | None = None,
+    timeout: float | None = None,
 ) -> BridgeCommandFuture:
-    """Run ``MTGOBridge.exe <mode>`` in a worker process and return a future."""
+    """Run ``MTGOBridge.exe <mode>`` in a worker process and return a future.
+
+    ``timeout`` is passed through to ``subprocess.run`` inside the worker so
+    the bridge subprocess itself is bounded, not just the wrapper wait.
+    """
     executable = _require_bridge_path(bridge_path)
     ctx = context or mp.get_context("spawn")
     queue: mp.Queue = ctx.Queue()
     args: list[str] = [mode]
     if extra_args:
         args.extend(extra_args)
-    process = ctx.Process(target=_command_worker, args=(str(executable), args, queue))
+    process = ctx.Process(target=_command_worker, args=(str(executable), args, queue, timeout))
     process.start()
     return BridgeCommandFuture(process, queue)
 
@@ -179,7 +206,9 @@ def run_bridge_command(
     extra_args: Sequence[str] | None = None,
     timeout: float | None = None,
 ) -> Any:
-    future = submit_bridge_command(mode, bridge_path=bridge_path, extra_args=extra_args)
+    future = submit_bridge_command(
+        mode, bridge_path=bridge_path, extra_args=extra_args, timeout=timeout
+    )
     try:
         return future.result(timeout=timeout)
     finally:

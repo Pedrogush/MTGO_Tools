@@ -100,7 +100,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--automation",
         action="store_true",
-        help="Enable automation server for CLI control",
+        help=(
+            "Enable automation server for CLI control. Dev/test-only: binds to "
+            "127.0.0.1 with no auth. Disabled by default; never enabled in "
+            "packaged builds. See automation/README.md for the security boundary."
+        ),
     )
     parser.add_argument(
         "--automation-port",

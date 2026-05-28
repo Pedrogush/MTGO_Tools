@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-import os
-
 import wx
 import wx.html
 
-_HELP_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "help")
-_HHP_FILE = os.path.join(_HELP_DIR, "mtgo_tools.hhp")
+from utils.constants.paths import resource_path
+
+_HHP_FILE = resource_path("help", "mtgo_tools.hhp")
 
 _controller: wx.html.HtmlHelpController | None = None
 
@@ -18,9 +17,8 @@ def _get_controller() -> wx.html.HtmlHelpController:
     global _controller
     if _controller is None:
         _controller = wx.html.HtmlHelpController(style=wx.html.HF_DEFAULT_STYLE)
-        hhp = os.path.normpath(_HHP_FILE)
-        if os.path.isfile(hhp):
-            _controller.AddBook(hhp, False)
+        if _HHP_FILE.is_file():
+            _controller.AddBook(str(_HHP_FILE), False)
     return _controller
 
 

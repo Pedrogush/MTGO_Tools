@@ -30,16 +30,28 @@ python main.py
 
 ## Development
 
+Day-to-day development happens in WSL, while the app runtime target is Windows
+(wxPython, MTGOSDK bridge, packaging). Linting, formatting, and most tests run
+fine inside WSL; the full pytest suite (including wx-dependent tests) is run
+against Windows Python via WSL interop:
+
 ```bash
-# Format and lint
+# Format and lint (WSL or Windows)
 black .
 ruff check --fix .
 
-# Run tests
+# Run tests on the Windows-side Python from WSL
+/init /mnt/c/Windows/System32/cmd.exe /c "pytest"
+
+# Or, from Windows directly
 pytest
 ```
 
-CI uses **black 26.3.1**. If formatting locally, match with `pip install black==26.3.1`.
+CI installs the same pinned `black`, `ruff`, and `mypy` versions used locally
+by reading `requirements-dev.txt`, so `pip install -r requirements-dev.txt`
+already gives you the exact tool versions CI runs. See
+`.github/VALIDATION_QUICKSTART.md` for the pre-commit validation flow that
+mirrors CI (lint, format, compile, security).
 
 ### Automation CLI
 
@@ -68,12 +80,17 @@ behavior.
 
 ### Code Quality
 
-- **Black**: formatting (line length 100)
-- **Ruff**: linting
-- **mypy**: type checking (permissive mode)
-- **Bandit**: security linting
+- **Black**: formatting (line length 100) — required, CI fails on diff
+- **Ruff**: linting — required, CI fails on errors
+- **mypy**: type checking (permissive mode) — **advisory only**; CI reports
+  findings but does not block merges while typing coverage is incrementally
+  improved
+- **Bandit**: security linting — required, CI fails on issues
+- **pip-audit**: dependency vulnerability scanning — advisory; audits
+  `requirements.txt` and `requirements-dev.txt` explicitly
 
-Configuration in `pyproject.toml`.
+Tool versions are pinned in `requirements-dev.txt`; tool configuration lives
+in `pyproject.toml`.
 
 ### Repo Reports
 
@@ -89,43 +106,69 @@ Both scripts support `--check` for CI drift detection.
 ## Project Structure
 
 ```
-├── main.py                         # Entry point (MetagameWxApp)
-├── controllers/                    # AppController + helper modules
-│   ├── app_controller.py
-│   ├── app_controller_helpers.py
-│   ├── bulk_data_helpers.py
+├── main.py                            # Entry point (MetagameWxApp)
+├── controllers/                       # Application coordination
+│   ├── app_controller/                # AppController package (mixins: lifecycle,
+│   │                                  # archetypes, decks, collection, bulk_data,
+│   │                                  # card_data, settings, ui_callbacks)
 │   └── session_manager.py
-├── widgets/                        # wxPython UI
-│   ├── app_frame.py                # Main window
-│   ├── panels/                     # DeckResearchPanel, DeckBuilderPanel, RadarPanel, etc.
-│   ├── dialogs/                    # Modal dialogs
-│   └── buttons/                    # Custom button widgets
-├── services/                       # Business logic
-│   ├── deck_service.py             # Parsing, averaging, text building
-│   ├── collection_service.py       # Collection loading and ownership
-│   ├── search_service.py           # Card search and filtering
-│   ├── image_service.py            # Card image caching
-│   ├── radar_service.py            # Radar aggregation
-│   ├── format_card_pool_service.py # Format card pool cache
-│   └── store_service.py            # App state persistence
-├── repositories/                   # Data access
-│   ├── deck_repository.py          # Deck DB + file + state
-│   ├── card_repository.py          # Card metadata + collection files
-│   ├── metagame_repository.py      # Archetype/deck cache (JSON)
-│   ├── radar_repository.py         # Radar snapshots (SQLite)
-│   └── format_card_pool_repository.py  # Format pools (SQLite)
-├── services/scrapers/              # Web scrapers
-│   └── mtggoldfish.py              # MTGGoldfish metagame + decklists
-├── utils/                          # Shared utilities
-│   ├── card_data.py                # CardDataManager (MTGJson atomic-cards)
-│   ├── card_images.py              # Scryfall bulk image downloader
-│   ├── atomic_io.py                # Atomic file writes
-│   ├── gamelog_parser.py           # MTGO game log parser
-│   └── deck.py                     # Deck text parsing helpers
-├── services/mtgo_bridge_service/   # Python facade + transport for the .NET bridge
-├── dotnet/MTGOBridge/              # .NET bridge (MTGOSDK)
-├── automation/                     # Automation CLI, server, and E2E helpers
-└── tests/                          # pytest test suite
+├── widgets/                           # wxPython UI
+│   ├── frames/                        # Main window + standalone frames
+│   │   ├── app_frame/                 # Main window
+│   │   ├── match_history/             # Match history viewer
+│   │   ├── metagame_analysis/         # Metagame analysis frame
+│   │   ├── radar/                     # Radar analysis frame
+│   │   ├── identify_opponent/         # Opponent identification
+│   │   └── ...                        # splash, rules_browser, top_cards, etc.
+│   ├── panels/                        # DeckResearchPanel, DeckBuilderPanel, etc.
+│   ├── dialogs/                       # Modal dialogs (feedback, help, tutorial, ...)
+│   ├── buttons/                       # Custom button widgets
+│   ├── lists/                         # List/grid widgets
+│   ├── mana_icon_factory/             # Mana symbol bitmap/SVG renderer + cache
+│   └── stylize.py                     # wx styling helpers
+├── services/                          # Business logic
+│   ├── deck_service/                  # Parsing, averaging, text building
+│   ├── collection_service/            # Cache, parsing, ownership, stats, exporter
+│   ├── search_service/                # Basic/builder/deck search, filtering, mana
+│   ├── image_service/                 # Bulk data, metadata, cache, download queue
+│   ├── radar_service/                 # Radar aggregation + precomputed snapshots
+│   ├── gamelog_service/               # MTGO game log discovery + parsing
+│   ├── mtgo_bridge_service/           # Python facade + transport for the .NET bridge
+│   ├── bundle_snapshot_client/        # Remote bundle snapshot HTTP client
+│   ├── format_card_pool_service.py    # Format card pool cache
+│   ├── archetype_resolver.py          # Archetype name normalization
+│   ├── card_service.py                # Card lookup facade
+│   ├── deck_workflow_service.py       # Deck save/load workflow
+│   ├── metagame_service.py            # Metagame queries
+│   ├── comp_rules_service.py          # Comprehensive rules text
+│   └── store_service.py               # App state persistence
+├── repositories/                      # Data access
+│   ├── card_repository/               # MTGJSON atomic-cards + collection files
+│   ├── deck_repository/               # Deck DB + filesystem + UI state
+│   ├── metagame_repository/           # Archetype/deck cache (JSON)
+│   ├── radar_repository/              # Radar snapshots (SQLite)
+│   ├── format_card_pool_repository/   # Format pools (SQLite)
+│   ├── remote_snapshot_client/        # Remote bundle snapshot fetcher
+│   ├── scrapers/                      # MTGGoldfish scrapers (text + visual)
+│   └── deck_text_cache.py             # Deck text SQLite cache
+├── utils/                             # Cross-cutting helpers
+│   ├── atomic_io.py                   # Atomic file writes
+│   ├── deck.py                        # Deck text parsing helpers
+│   ├── background_worker.py           # Thread-pool helpers
+│   ├── image_effects.py               # PIL image effects
+│   ├── json_io.py                     # JSON read/write helpers
+│   ├── logging_config.py              # Logging setup
+│   ├── math_utils.py                  # Numeric helpers
+│   ├── perf.py                        # Perf timers
+│   ├── runtime_flags.py               # Runtime feature flags
+│   ├── diagnostics.py                 # Diagnostic dumps
+│   ├── find_opponent_names.py         # Opponent-name OCR helper
+│   ├── constants/                     # Shared constants
+│   └── i18n/                          # Translation helpers
+├── dotnet/MTGOBridge/                 # .NET bridge (MTGOSDK)
+├── automation/                        # Automation CLI, server, and E2E helpers
+├── scripts/                           # Maintenance scripts (LOC + dep-graph reports, etc.)
+└── tests/                             # pytest test suite
 ```
 
 ## MTGO Bridge

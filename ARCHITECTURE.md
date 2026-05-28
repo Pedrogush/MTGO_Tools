@@ -11,10 +11,8 @@ graph TB
     end
 
     subgraph "Controllers Layer"
-        AC[AppController<br/>Central State & Coordination]
-        ACH[app_controller_helpers.py]
+        AC[AppController<br/>Central State & Coordination<br/>package: controllers/app_controller/]
         SM[SessionManager]
-        BDH[bulk_data_helpers.py]
     end
 
     subgraph "UI Layer (wxPython Widgets)"
@@ -55,10 +53,10 @@ graph TB
     end
 
     subgraph "Utilities"
-        CI[card_images.py<br/>Image Downloader]
         DECK[deck.py<br/>Deck Parser]
         AIO[atomic_io.py]
-        GP[gamelog_parser.py]
+        BW[background_worker.py]
+        LOG[logging_config.py]
     end
 
     subgraph "External Bridge"
@@ -74,9 +72,7 @@ graph TB
 
     MAIN --> AC
     AC --> AF
-    AC --> ACH
     AC --> SM
-    AC --> BDH
     AF --> DRP
     AF --> DBP
     AF --> CTP
@@ -100,13 +96,12 @@ graph TB
     RS --> RR
     FCPS --> FCPR
     DR --> DECK
-    IS --> CI
     CS --> MBS
     MR --> MTG_GF
     MR --> BSC
     MR --> RSC
     MTG_GF --> GOLDFISH
-    CI --> SCRYFALL
+    IS --> SCRYFALL
     CR --> MTGJSON
     MBS --> BRIDGE
     BRIDGE --> MTGO_CLIENT
@@ -118,17 +113,17 @@ graph TB
     classDef util fill:#cc99ff,stroke:#333,stroke-width:2px
     classDef external fill:#ffff99,stroke:#333,stroke-width:2px
 
-    class AC,ACH,SM,BDH controller
+    class AC,SM controller
     class DS,CS,SS,IS,StS,RS,FCPS,DWS,BSC,MBS service
     class CR,DR,DTC,MR,RR,FCPR,MTG_GF,RSC repo
     class AF,DRP,DBP,CTP,CIP,SGP,RP,ODS,MH,TA ui
-    class CI,DECK,AIO,GP util
+    class DECK,AIO,BW,LOG util
     class SCRYFALL,MTGJSON,GOLDFISH,MTGO_CLIENT,BRIDGE external
 ```
 
 ## Layer Responsibilities
 
-**Controllers**: Central coordination and state management via `AppController`. Helper modules (`app_controller_helpers`, `bulk_data_helpers`, `session_manager`) handle specific subsystems to keep the main controller lean.
+**Controllers**: Central coordination and state management via `AppController`. The controller is a package (`controllers/app_controller/`) composed of focused mixins (`lifecycle`, `archetypes`, `decks`, `collection`, `bulk_data`, `card_data`, `settings`, `ui_callbacks`) plus a small `SessionManager` for per-run state. Each mixin owns one subsystem to keep the composed controller class lean.
 
 **Services**: Business logic. Image, collection, and deck services are each Python packages whose main class inherits from (or composes) focused mixins/helpers. For example `services/collection_service/` contains `cache`, `parsing`, `ownership`, `deck_analysis`, `stats`, `bridge_refresh`, and `exporter` modules; `services/image_service/` splits into `bulk_data`, `metadata`, `printing_index`, `cache`, and `download_queue`; `services/deck_service/` contains `parser`, `averager`, and `text_builder`. Radar, format card pool, and deck workflow each have their own service. `services/mtgo_bridge_service/` wraps the external CLI bridge: `client` is the subprocess/multiprocessing transport, and the package facade exposes collection/history/trade snapshots and the challenge watcher.
 
@@ -136,7 +131,7 @@ graph TB
 
 **UI/Widgets**: wxPython panels in `widgets/panels/`, dialogs in `widgets/dialogs/`, and standalone overlay windows (`MTGOpponentDeckSpy`, `MatchHistory`, `TimerAlert`).
 
-**Utils**: Cross-cutting helpers only. Card image downloading (`card_images.py`), atomic I/O (`atomic_io.py`), mana icon rendering, and other reusable functions. Single-consumer modules have been colocated with their callers: search filter helpers live in `services/search_service/`, image worker entrypoints in `services/image_service/`, deck-results filtering in `widgets/panels/deck_research_panel/results_filter.py`, wx styling helpers in `widgets/stylize.py`, and small widget-specific helpers inside their respective `widgets/.../` packages. The MTGJSON atomic-cards dataset is owned by `repositories/card_repository/`, gamelog parsing by `services/gamelog_service/`, the deck-text SQLite cache by `repositories/deck_text_cache.py`, the MTGGoldfish scrapers by `repositories/scrapers/`, and the MTGO CLI bridge by `services/mtgo_bridge_service/`.
+**Utils**: Cross-cutting helpers only — atomic I/O (`atomic_io.py`), deck text parsing (`deck.py`), background workers (`background_worker.py`), logging setup (`logging_config.py`), JSON helpers, perf timers, runtime flags, diagnostics, image effects, math, constants, and i18n. Single-consumer modules have been colocated with their callers: search filter helpers live in `services/search_service/`, image worker entrypoints and Scryfall bulk image downloading in `services/image_service/`, deck-results filtering in `widgets/panels/deck_research_panel/results_filter.py`, wx styling helpers in `widgets/stylize.py`, mana icon rendering in `widgets/mana_icon_factory/`, and small widget-specific helpers inside their respective `widgets/.../` packages. The MTGJSON atomic-cards dataset is owned by `repositories/card_repository/`, gamelog parsing by `services/gamelog_service/`, the deck-text SQLite cache by `repositories/deck_text_cache.py`, the MTGGoldfish scrapers by `repositories/scrapers/`, and the MTGO CLI bridge by `services/mtgo_bridge_service/`.
 
 **External Bridge**: .NET 9.0 application using MTGOSDK to read collection and match data directly from the running MTGO client.
 
@@ -147,3 +142,16 @@ graph TB
 - **Collection sync**: MTGO Bridge → `MtgoBridgeService` → `CollectionService` → ownership marking across UI
 - **Card images**: Scryfall bulk data + CDN → `ImageService` caching → display
 - **Radar analysis**: Cached deck lists → `RadarService` aggregation → `RadarRepository` (SQLite) → `RadarPanel`
+
+## Development Environment
+
+The project is **developed from WSL** but the application itself **runs on
+Windows**: wxPython, the MTGO Bridge subprocess, the Scryfall image cache layout,
+and the packaging/installer pipeline all target Windows. Linting, formatting,
+type-checking, and most non-wx tests work in either environment, but the full
+pytest suite is intended to run against the Windows-side Python interpreter
+(where `wx` is installed) — from WSL this is invoked via the Windows interop
+shim (`/init /mnt/c/Windows/System32/cmd.exe /c "pytest ..."`). CI runs the
+test job on `windows-latest` and lint/type/security/compile jobs on
+`ubuntu-latest`; see `.github/workflows/ci.yml` and
+`.github/VALIDATION_QUICKSTART.md`.

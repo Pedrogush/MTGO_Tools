@@ -530,6 +530,20 @@ def test_parse_deck_date_supports_common_formats():
     assert _parse_deck_date("not a date") == (0, 0, 0)
 
 
+def test_parse_deck_date_handles_yyyy_dd_mm_fallback():
+    """YYYY-DD-MM rows should sort by their true date, not collapse to (0, 0, 0).
+
+    Regression test for #475: misformatted upstream dates caused decks to
+    appear as the oldest in the list, instead of being placed correctly.
+    """
+    # day > 12 → unambiguously YYYY-DD-MM
+    assert _parse_deck_date("2024-25-03") == (2024, 3, 25)
+    # Invalid in both YYYY-MM-DD and YYYY-DD-MM → safe fallback
+    assert _parse_deck_date("2024-32-13") == (0, 0, 0)
+    # YYYY-MM-DD remains canonical when both interpretations are valid
+    assert _parse_deck_date("2024-03-09") == (2024, 3, 9)
+
+
 def test_sort_decks_by_date_is_deterministic(metagame_repo):
     """Sorted decks should order by date while remaining stable for ties."""
     decks = [

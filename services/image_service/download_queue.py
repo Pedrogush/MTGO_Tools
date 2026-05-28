@@ -60,7 +60,11 @@ class CardImageDownloadQueue:
         with self._condition:
             self._condition.notify_all()
         self._thread.join(timeout=timeout)
-        self._executor.shutdown(wait=True, cancel_futures=True)
+        # Do not block the caller (typically the UI close path) waiting for
+        # in-flight HTTP downloads to finish. Pending futures are cancelled and
+        # the stop event is checked between retries and during backoff sleeps
+        # in _download_request, so running workers exit promptly on their own.
+        self._executor.shutdown(wait=False, cancel_futures=True)
 
     def set_selected_request(self, request: CardImageRequest | None) -> None:
         with self._condition:
@@ -144,6 +148,8 @@ class CardImageDownloadQueue:
         backoff_seconds = IMAGE_DOWNLOAD_INITIAL_BACKOFF_SECONDS
         attempt = 0
         while True:
+            if self._stop_event.is_set():
+                return False
             started_at = time.monotonic()
             try:
                 success, msg = self._downloader.download_card_image_by_name(
@@ -177,7 +183,11 @@ class CardImageDownloadQueue:
                 f"Retrying card image download for {request.card_name} in "
                 f"{backoff_seconds:.1f}s ({attempt}/{max_retries})."
             )
-            time.sleep(backoff_seconds)
+            # Wait on the stop event so shutdown can interrupt the backoff
+            # immediately instead of blocking the UI close path for the full
+            # backoff schedule.
+            if self._stop_event.wait(backoff_seconds):
+                return False
             backoff_seconds *= 2
 
     @staticmethod

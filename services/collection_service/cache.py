@@ -52,8 +52,9 @@ class CollectionCacheMixin(_Base):
             # Load collection data
             cards = self.card_repo.load_collection_from_file(filepath)
 
-            # Convert to dictionary for quick lookup
-            self._collection = build_inventory(cards, normalize_names=False)
+            # Convert to dictionary for quick lookup. Normalize names so
+            # lookups are consistent across all load paths (see issue #469).
+            self._collection = build_inventory(cards)
 
             self._collection_path = filepath
             self._collection_loaded = True

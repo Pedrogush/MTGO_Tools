@@ -29,9 +29,20 @@ class OwnershipMixin(_Base):
         return owned >= required_count
 
     def get_owned_count(self, card_name: str) -> int:
+        # Inventories from the canonical load paths are normalized to
+        # lowercase keys, but legacy cached files may still contain
+        # title-cased keys. Probe both forms so ownership is never
+        # underreported regardless of how the inventory was built (#469).
         if card_name in self._collection:
             return self._collection[card_name]
-        return self._collection.get(card_name.lower(), 0)
+        lowered = card_name.lower()
+        if lowered in self._collection:
+            return self._collection[lowered]
+        # Fall back to a case-insensitive scan for legacy mixed-case keys.
+        for key, value in self._collection.items():
+            if key.lower() == lowered:
+                return value
+        return 0
 
     def get_owned_status(self, name: str, required: int) -> tuple[str, tuple[int, int, int]]:
         if not self.get_inventory():
