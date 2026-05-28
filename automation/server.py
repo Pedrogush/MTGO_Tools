@@ -77,6 +77,36 @@ if _user32 is not None:
     _user32.ShowWindow.restype = ctypes.c_int
 
 
+def _save_png_via_pil(image: "wx.Image | wx.Bitmap", path: str) -> bool:
+    """Save *image* as a PNG to *path* via Pillow.
+
+    wxPython's ``Image.SaveFile`` / ``Bitmap.SaveFile`` on MSW opens the
+    target file through the wxImage handler chain; on some wxWidgets builds
+    that handle is kept alive by the running ``wx.App``, so the file can't
+    be unlinked until the app exits (issue #436).  Routing the bytes through
+    Pillow's plain ``open()`` avoids the leaked handle.
+    """
+    from PIL import Image as PilImage
+
+    if isinstance(image, wx.Bitmap):
+        wx_img = image.ConvertToImage()
+    else:
+        wx_img = image
+    w, h = wx_img.GetWidth(), wx_img.GetHeight()
+    rgb = bytes(wx_img.GetData())
+    if wx_img.HasAlpha():
+        alpha = bytes(wx_img.GetAlpha())
+        pil = PilImage.frombytes("RGB", (w, h), rgb).convert("RGBA")
+        pil.putalpha(PilImage.frombytes("L", (w, h), alpha))
+    else:
+        pil = PilImage.frombytes("RGB", (w, h), rgb)
+    try:
+        pil.save(path, format="PNG")
+    except OSError:
+        return False
+    return True
+
+
 class AutomationServer:
     """Socket server for receiving automation commands."""
 
@@ -278,10 +308,7 @@ class AutomationServer:
         width, height = bmp.GetWidth(), bmp.GetHeight()
 
         os.makedirs(os.path.dirname(os.path.abspath(path)) or ".", exist_ok=True)
-        log_null = wx.LogNull()
-        ok = bmp.SaveFile(path, wx.BITMAP_TYPE_PNG)
-        del log_null
-        if not ok:
+        if not _save_png_via_pil(bmp, path):
             raise RuntimeError(f"Failed to save screenshot to {path!r}")
 
         # Best-effort fsync so the WSL side sees the full file immediately.
@@ -461,10 +488,7 @@ class AutomationServer:
         width, height = bmp.GetWidth(), bmp.GetHeight()
 
         os.makedirs(os.path.dirname(os.path.abspath(path)) or ".", exist_ok=True)
-        log_null = wx.LogNull()
-        ok = bmp.SaveFile(path, wx.BITMAP_TYPE_PNG)
-        del log_null
-        if not ok:
+        if not _save_png_via_pil(bmp, path):
             raise RuntimeError(f"Failed to save window screenshot to {path!r}")
 
         try:
@@ -1014,10 +1038,7 @@ class AutomationServer:
         cropped = img.GetSubImage(wx.Rect(cx, cy, cw, ch))
 
         os.makedirs(os.path.dirname(os.path.abspath(path)) or ".", exist_ok=True)
-        log_null = wx.LogNull()
-        ok = cropped.SaveFile(path, wx.BITMAP_TYPE_PNG)
-        del log_null
-        if not ok:
+        if not _save_png_via_pil(cropped, path):
             raise RuntimeError(f"Failed to save widget screenshot to {path!r}")
 
         try:
