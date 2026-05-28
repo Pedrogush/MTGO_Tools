@@ -148,10 +148,12 @@ begin
 
   // Get-FileHash exits 0 regardless; we let PowerShell perform the comparison
   // and translate the result into the process exit code.
+  // Keep the args array on the same line as the format string: Inno Setup reads
+  // any line beginning with '[' (even inside [Code]) as a section header, so a
+  // line that starts with '[FilePath, ExpectedHash]' aborts compilation.
   Script := Format(
     '$h = (Get-FileHash -Algorithm SHA256 -Path ''%s'').Hash; '
-    + 'if ($h -ieq ''%s'') { exit 0 } else { Write-Error "SHA256 mismatch: $h"; exit 1 }',
-    [FilePath, ExpectedHash]);
+    + 'if ($h -ieq ''%s'') { exit 0 } else { Write-Error "SHA256 mismatch: $h"; exit 1 }', [FilePath, ExpectedHash]);
   Result := Exec('powershell.exe',
     '-NoProfile -NonInteractive -Command "' + Script + '"',
     '', SW_HIDE, ewWaitUntilTerminated, ResultCode) and (ResultCode = 0);
