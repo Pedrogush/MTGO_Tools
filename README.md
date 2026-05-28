@@ -47,8 +47,10 @@ ruff check --fix .
 pytest
 ```
 
-CI uses **black 26.3.1**. If formatting locally, match with `pip install black==26.3.1`.
-See `.github/VALIDATION_QUICKSTART.md` for the pre-commit validation flow that
+CI installs the same pinned `black`, `ruff`, and `mypy` versions used locally
+by reading `requirements-dev.txt`, so `pip install -r requirements-dev.txt`
+already gives you the exact tool versions CI runs. See
+`.github/VALIDATION_QUICKSTART.md` for the pre-commit validation flow that
 mirrors CI (lint, format, compile, security).
 
 ### Automation CLI
@@ -78,12 +80,17 @@ behavior.
 
 ### Code Quality
 
-- **Black**: formatting (line length 100)
-- **Ruff**: linting
-- **mypy**: type checking (permissive mode)
-- **Bandit**: security linting
+- **Black**: formatting (line length 100) — required, CI fails on diff
+- **Ruff**: linting — required, CI fails on errors
+- **mypy**: type checking (permissive mode) — **advisory only**; CI reports
+  findings but does not block merges while typing coverage is incrementally
+  improved
+- **Bandit**: security linting — required, CI fails on issues
+- **pip-audit**: dependency vulnerability scanning — advisory; audits
+  `requirements.txt` and `requirements-dev.txt` explicitly
 
-Configuration in `pyproject.toml`.
+Tool versions are pinned in `requirements-dev.txt`; tool configuration lives
+in `pyproject.toml`.
 
 ### Repo Reports
 
