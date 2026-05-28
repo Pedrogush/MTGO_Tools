@@ -34,7 +34,6 @@ from widgets.frames.app_frame.properties import AppFramePropertiesMixin
 from widgets.frames.identify_opponent import MTGOpponentDeckSpy
 from widgets.frames.mana_keyboard import ManaKeyboardFrame
 from widgets.frames.match_history import MatchHistoryFrame
-from widgets.frames.metagame_analysis import MetagameAnalysisFrame
 from widgets.frames.radar import RadarFrame
 from widgets.frames.timer_alert import TimerAlertFrame
 from widgets.frames.top_cards import TopCardsFrame
@@ -45,6 +44,7 @@ from widgets.panels.deck_research_panel import DeckResearchPanel
 
 if TYPE_CHECKING:
     from controllers.app_controller import AppController
+    from widgets.frames.metagame_analysis import MetagameAnalysisFrame
 
 
 class AppFrame(

@@ -15,7 +15,6 @@ from widgets.dialogs.feedback_dialog import show_feedback_dialog
 from widgets.frames.app_frame.handlers.ui_helpers import open_child_window, widget_exists
 from widgets.frames.identify_opponent import MTGOpponentDeckSpy
 from widgets.frames.match_history import MatchHistoryFrame
-from widgets.frames.metagame_analysis import MetagameAnalysisFrame
 from widgets.frames.radar import RadarFrame
 from widgets.frames.timer_alert import TimerAlertFrame
 from widgets.frames.top_cards import TopCardsFrame
@@ -712,6 +711,11 @@ class AppEventHandlers(_Base):
         )
 
     def open_metagame_analysis(self) -> None:
+        # Imported lazily: pulling in MetagameAnalysisFrame eagerly drags
+        # matplotlib (a heavy cold-import) onto the startup path. It is only
+        # needed when the user deliberately opens this chart.
+        from widgets.frames.metagame_analysis import MetagameAnalysisFrame
+
         open_child_window(
             self,
             "metagame_window",
