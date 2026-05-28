@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from collections.abc import Callable
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from typing import TYPE_CHECKING, Any
 
 from loguru import logger
@@ -13,6 +14,7 @@ from utils.constants import (
     RADAR_AVG_COPIES_ROUND_DIGITS,
     RADAR_EXPECTED_COPIES_ROUND_DIGITS,
     RADAR_INCLUSION_RATE_ROUND_DIGITS,
+    RADAR_MAX_DOWNLOAD_WORKERS,
 )
 
 if TYPE_CHECKING:
@@ -64,30 +66,56 @@ class AnalysisMixin(_Base):
             successful_decks = 0
             failed_decks = 0
 
-            for i, deck in enumerate(decks):
-                deck_name = deck.get("name", f"Deck {i+1}")
-
-                if progress_callback:
-                    progress_callback(i + 1, len(decks), deck_name)
-
+            # Deck downloads are network-bound (a cache miss is a 30s-timeout
+            # curl_cffi GET each), so fetch them through a bounded thread pool.
+            # Cached decks return instantly, so only misses actually parallelize.
+            # The CPU-only analysis and the (possibly UI-bound, cancellation-
+            # raising) progress callback stay on this thread, so the shared stats
+            # dicts are never touched concurrently.
+            total = len(decks)
+            completed = 0
+            workers = min(RADAR_MAX_DOWNLOAD_WORKERS, total)
+            with ThreadPoolExecutor(max_workers=workers) as executor:
+                future_to_deck = {
+                    executor.submit(self.metagame_repo.download_deck_content, deck): (i, deck)
+                    for i, deck in enumerate(decks)
+                }
+                pending = set(future_to_deck)
                 try:
-                    deck_content = self.metagame_repo.download_deck_content(deck)
-                    analysis = self.deck_service.analyze_deck(deck_content)
+                    while pending:
+                        done, pending = wait(pending, return_when=FIRST_COMPLETED)
+                        for future in done:
+                            i, deck = future_to_deck[future]
+                            deck_name = deck.get("name", f"Deck {i+1}")
+                            completed += 1
 
-                    for card_name, count in analysis["mainboard_cards"]:
-                        count_int = int(count) if isinstance(count, float) else count
-                        mainboard_stats[card_name].append(count_int)
+                            # May raise InterruptedError to cancel generation.
+                            if progress_callback:
+                                progress_callback(completed, total, deck_name)
 
-                    for card_name, count in analysis["sideboard_cards"]:
-                        count_int = int(count) if isinstance(count, float) else count
-                        sideboard_stats[card_name].append(count_int)
+                            try:
+                                deck_content = future.result()
+                                analysis = self.deck_service.analyze_deck(deck_content)
 
-                    successful_decks += 1
+                                for card_name, count in analysis["mainboard_cards"]:
+                                    count_int = int(count) if isinstance(count, float) else count
+                                    mainboard_stats[card_name].append(count_int)
 
-                except Exception as exc:
-                    logger.warning(f"Failed to analyze deck {deck_name}: {exc}")
-                    failed_decks += 1
-                    continue
+                                for card_name, count in analysis["sideboard_cards"]:
+                                    count_int = int(count) if isinstance(count, float) else count
+                                    sideboard_stats[card_name].append(count_int)
+
+                                successful_decks += 1
+
+                            except Exception as exc:
+                                logger.warning(f"Failed to analyze deck {deck_name}: {exc}")
+                                failed_decks += 1
+                except BaseException:
+                    # Cancellation or unexpected error — drop pending downloads so
+                    # the pool does not keep blocking on outstanding network calls.
+                    for future in pending:
+                        future.cancel()
+                    raise
 
             if successful_decks == 0:
                 logger.error(f"Failed to analyze any decks for {archetype_name}")

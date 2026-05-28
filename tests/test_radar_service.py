@@ -414,3 +414,79 @@ def test_calculate_radar_with_max_decks(
     # Should only process 5 decks
     assert radar.total_decks_analyzed == 5
     assert mock_metagame_repo.download_deck_content.call_count == 5
+
+
+def test_calculate_radar_downloads_decks_concurrently(
+    radar_service, mock_metagame_repo, mock_deck_service, sample_archetype
+):
+    """Cache-missing deck downloads should run in parallel, not one at a time."""
+    import threading
+    import time
+
+    many_decks = [{"name": f"Deck {i}", "url": f"https://example.com/deck{i}"} for i in range(8)]
+    mock_metagame_repo.get_decks_for_archetype.return_value = many_decks
+
+    active = 0
+    max_active = 0
+    lock = threading.Lock()
+
+    def slow_download(deck):
+        nonlocal active, max_active
+        with lock:
+            active += 1
+            max_active = max(max_active, active)
+        time.sleep(0.05)
+        with lock:
+            active -= 1
+        return "4 Lightning Bolt"
+
+    mock_metagame_repo.download_deck_content.side_effect = slow_download
+    mock_deck_service.analyze_deck.return_value = {
+        "mainboard_cards": [("Lightning Bolt", 4)],
+        "sideboard_cards": [],
+    }
+
+    progress_calls = []
+
+    def progress_callback(current, total, deck_name):
+        progress_calls.append((current, total, deck_name))
+
+    radar = radar_service.calculate_radar(
+        sample_archetype, "Modern", progress_callback=progress_callback
+    )
+
+    assert radar.total_decks_analyzed == 8
+    # Downloads overlapped (serial execution would never exceed 1 in flight).
+    assert max_active > 1
+    # Progress fired once per deck with a monotonically increasing counter.
+    assert len(progress_calls) == 8
+    assert [c[0] for c in progress_calls] == list(range(1, 9))
+    assert all(c[1] == 8 for c in progress_calls)
+
+
+def test_calculate_radar_progress_callback_can_cancel(
+    radar_service, mock_metagame_repo, mock_deck_service, sample_archetype
+):
+    """A progress callback raising should abort generation and propagate."""
+    many_decks = [{"name": f"Deck {i}", "url": f"https://example.com/deck{i}"} for i in range(8)]
+    mock_metagame_repo.get_decks_for_archetype.return_value = many_decks
+
+    mock_metagame_repo.download_deck_content.return_value = "4 Lightning Bolt"
+    mock_deck_service.analyze_deck.return_value = {
+        "mainboard_cards": [("Lightning Bolt", 4)],
+        "sideboard_cards": [],
+    }
+
+    calls = []
+
+    def cancelling_callback(current, total, deck_name):
+        calls.append(current)
+        raise InterruptedError("cancelled by user")
+
+    with pytest.raises(InterruptedError):
+        radar_service.calculate_radar(
+            sample_archetype, "Modern", progress_callback=cancelling_callback
+        )
+
+    # Cancelling on the first completed deck must not keep analyzing the rest.
+    assert len(calls) == 1
