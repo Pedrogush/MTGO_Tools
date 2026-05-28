@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import io
 import json
+import time
 import zipfile
 from pathlib import Path
 from typing import Any
@@ -19,7 +20,7 @@ from loguru import logger
 from repositories.card_repository import remote, storage
 from repositories.card_repository.builder import build_index
 from repositories.card_repository.schemas import CardEntry
-from utils.constants import CARD_DATA_DIR
+from utils.constants import ATOMIC_DATA_HEAD_TTL_SECONDS, CARD_DATA_DIR
 
 
 def load_card_manager(data_dir: Path | str = CARD_DATA_DIR, force: bool = False) -> CardDataManager:
@@ -36,9 +37,19 @@ class CardDataManager:
         self._cards_by_name: dict[str, CardEntry] | None = None
 
     def ensure_latest(self, force: bool = False) -> None:
-        remote_meta = remote.fetch_dataset_headers()
         local_meta = storage.load_meta(self.meta_path) or {}
         missing_index = not self.index_path.exists()
+
+        # Warm-cache fast path: when a present, valid index is recent enough we
+        # load it immediately and skip the remote HEAD entirely. This keeps
+        # card-data readiness off the network so a slow/offline/captive-portal
+        # connection cannot stall it on the HEAD timeout. The HEAD only runs on
+        # a TTL (see ATOMIC_DATA_HEAD_TTL_SECONDS) or when forced.
+        if not force and not missing_index and self._head_is_fresh(local_meta):
+            self._load_index()
+            return
+
+        remote_meta = remote.fetch_dataset_headers()
         needs_refresh = force or missing_index
         if not needs_refresh and remote_meta:
             remote_size = remote_meta.get("content_length")
@@ -47,6 +58,11 @@ class CardDataManager:
                 logger.warning(f"File size changed: local={local_size}, remote={remote_size}")
                 logger.warning("Forcing a refresh")
                 needs_refresh = True
+        if not needs_refresh and not missing_index:
+            # Cache is still current (HEAD matched, or HEAD failed offline and we
+            # fall back to the cache). Stamp the TTL so subsequent readiness
+            # checks skip the network until the TTL elapses.
+            self._touch_head_checked(local_meta)
 
         if needs_refresh:
             logger.warning("No atomic card index found or force refresh requested")
@@ -127,6 +143,19 @@ class CardDataManager:
         if self._cards is None:
             raise RuntimeError("Card data not loaded; call ensure_latest first")
 
+    @staticmethod
+    def _head_is_fresh(local_meta: dict[str, Any]) -> bool:
+        """Whether the last remote HEAD is recent enough to skip another one."""
+        checked_at = local_meta.get("head_checked_at")
+        if not isinstance(checked_at, (int, float)):
+            return False
+        return (time.time() - checked_at) < ATOMIC_DATA_HEAD_TTL_SECONDS
+
+    def _touch_head_checked(self, local_meta: dict[str, Any]) -> None:
+        """Record the time of the latest HEAD so the TTL fast-path can engage."""
+        local_meta["head_checked_at"] = time.time()
+        storage.write_meta(self.meta_path, local_meta)
+
     def _download_and_rebuild(self, remote_meta: dict[str, Any] | None) -> None:
         content, headers = remote.download_atomic_cards_zip()
         digest = hashlib.sha512(content).hexdigest()
@@ -143,6 +172,7 @@ class CardDataManager:
             meta_to_store.setdefault("last_modified", headers["last-modified"])
         if "content-length" in headers:
             meta_to_store.setdefault("content_length", headers["content-length"])
+        meta_to_store["head_checked_at"] = time.time()
         storage.write_meta(self.meta_path, meta_to_store)
         self._cards = index["cards"]
         self._cards_by_name = index["cards_by_name"]
