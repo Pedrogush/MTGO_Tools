@@ -3,6 +3,31 @@
 The automation package exposes a local socket server inside the wxPython app and
 a CLI for manual testing, E2E scripts, and debugging UI regressions.
 
+## Scope: Dev/Test Only
+
+The automation server is intended **strictly for local development, E2E tests,
+and debugging UI regressions**. It is **not** a supported runtime feature for
+end users and is **not** enabled in packaged/installed builds.
+
+Security boundary:
+
+- The server is **disabled by default**. It only starts when `main.py` is
+  launched with the explicit `--automation` flag (see `main.py`'s
+  `parse_args()`).
+- The packaged Inno Setup installer (`packaging/installer.iss`) and PyInstaller
+  spec (`packaging/magic_online_metagame_crawler.spec`) do **not** pass
+  `--automation`, so end-user installs never expose this surface.
+- When enabled, the server binds to `127.0.0.1` only (loopback), so it is not
+  reachable from other machines on the network.
+- The server has **no authentication**. Any local process on the developer
+  machine can connect and drive the UI, take screenshots to arbitrary paths,
+  and close the app. Do not enable `--automation` on a multi-user machine or
+  while running untrusted local processes.
+- If the automation surface is ever exposed beyond a developer workstation
+  (e.g. as a runtime feature for users), it should first gain a local auth
+  token (shared secret negotiated at launch) and a path-allowlist for
+  screenshot destinations.
+
 ## Common Workflow
 
 ```bash
