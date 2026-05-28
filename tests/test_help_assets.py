@@ -18,7 +18,11 @@ def test_help_index_is_loadable():
     assert "Default topic=" in text
 
     default_topic = next(
-        (line.split("=", 1)[1].strip() for line in text.splitlines() if line.startswith("Default topic=")),
+        (
+            line.split("=", 1)[1].strip()
+            for line in text.splitlines()
+            if line.startswith("Default topic=")
+        ),
         None,
     )
     assert default_topic, "help project file missing Default topic"

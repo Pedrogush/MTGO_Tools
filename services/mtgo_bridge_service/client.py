@@ -194,9 +194,7 @@ def submit_bridge_command(
     args: list[str] = [mode]
     if extra_args:
         args.extend(extra_args)
-    process = ctx.Process(
-        target=_command_worker, args=(str(executable), args, queue, timeout)
-    )
+    process = ctx.Process(target=_command_worker, args=(str(executable), args, queue, timeout))
     process.start()
     return BridgeCommandFuture(process, queue)
 
