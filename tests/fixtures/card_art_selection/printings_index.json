@@ -1,0 +1,2105 @@
+{
+  "version": 1,
+  "generated_at": "2026-05-28T12:02:58.091862+00:00",
+  "categories": {
+    "mono": {
+      "W": "Apothecary White",
+      "U": "Blind Phantasm",
+      "B": "Mastermind Plum",
+      "R": "Duelist's Flame",
+      "G": "Emissary Green"
+    },
+    "dual": {
+      "WU": "Miles \"Tails\" Prower",
+      "WB": "Killian, Decisive Mentor",
+      "WR": "Amy Rose",
+      "WG": "Black Panther, Wakandan King",
+      "UB": "Doc Ock, Evil Inventor",
+      "UR": "Iron Man, Titan of Innovation",
+      "UG": "Aloy, Savior of Meridian",
+      "BR": "Green Goblin, Nemesis",
+      "BG": "Dina, Essence Brewer",
+      "RG": "Toph, Greatest Earthbender"
+    },
+    "tri": {
+      "WUB": "Aminatou, Veil Piercer",
+      "WUR": "Captain America, First Avenger",
+      "WUG": "Aang and Katara",
+      "WBR": "Neriv, Crackling Vanguard",
+      "WBG": "Betor, Ancestor's Voice",
+      "WRG": "Yuma, Proud Protector",
+      "UBR": "Dr. Eggman",
+      "UBG": "Gonti, Canny Acquisitor",
+      "URG": "Eshki, Temur's Roar",
+      "BRG": "Auntie Ool, Cursewretch"
+    },
+    "quad": {
+      "WUBR": "Yore-Tiller Nephilim",
+      "WUBG": "Sol, Advocate Eternal",
+      "WURG": "The Fourteenth Doctor",
+      "WBRG": "Dune-Brood Nephilim",
+      "UBRG": "Yidris, Maelstrom Wielder"
+    },
+    "five_color": {
+      "WUBRG": "Ashling, the Limitless"
+    },
+    "colorless": {
+      "C": "Big Mother Mouser"
+    },
+    "nonbasic_land": {
+      "LAND": "Eden, Seat of the Sanctum"
+    }
+  },
+  "data": {
+    "aang and katara": [
+      {
+        "id": "f333ea01-124f-4125-87ab-609be40e774c",
+        "oracle_id": "481c3e14-b670-4fab-aa9f-6ce5b514096d",
+        "name": "Aang and Katara",
+        "mana_cost": "{3}{G}{W}{U}",
+        "type_line": "Legendary Creature \u2014 Human Avatar Ally",
+        "colors": [
+          "G",
+          "U",
+          "W"
+        ],
+        "color_identity": [
+          "G",
+          "U",
+          "W"
+        ],
+        "set": "TLE",
+        "set_name": "Avatar: The Last Airbender Eternal",
+        "collector_number": "69",
+        "released_at": "2025-11-21",
+        "artist": "Brian Yuen",
+        "rarity": "rare",
+        "layout": "normal",
+        "games": [
+          "paper",
+          "arena",
+          "mtgo"
+        ],
+        "full_art": true,
+        "textless": false,
+        "promo": false,
+        "digital": false,
+        "variation": false,
+        "border_color": "borderless",
+        "frame": "2015",
+        "image_uris": {
+          "small": "images/small/aang-and-katara-f333ea01-124f-4125-87ab-609be40e774c.jpg",
+          "normal": "images/normal/aang-and-katara-f333ea01-124f-4125-87ab-609be40e774c.jpg",
+          "large": "images/large/aang-and-katara-f333ea01-124f-4125-87ab-609be40e774c.jpg",
+          "png": "images/png/aang-and-katara-f333ea01-124f-4125-87ab-609be40e774c.png",
+          "art_crop": "images/art_crop/aang-and-katara-f333ea01-124f-4125-87ab-609be40e774c.jpg",
+          "border_crop": "images/border_crop/aang-and-katara-f333ea01-124f-4125-87ab-609be40e774c.jpg"
+        },
+        "fixture_image_sources": {
+          "small": "generated_placeholder",
+          "normal": "cache/card_images/normal/f333ea01-124f-4125-87ab-609be40e774c.jpg",
+          "large": "generated_placeholder",
+          "png": "generated_placeholder",
+          "art_crop": "generated_placeholder",
+          "border_crop": "generated_placeholder"
+        }
+      }
+    ],
+    "aloy, savior of meridian": [
+      {
+        "id": "90dee895-037c-45f9-ac4f-b2277da85459",
+        "oracle_id": "f0554a8f-32de-4069-9f47-5e06ceb3f09d",
+        "name": "Aloy, Savior of Meridian",
+        "mana_cost": "{3}{G}{U}",
+        "type_line": "Legendary Creature \u2014 Human Warrior",
+        "colors": [
+          "G",
+          "U"
+        ],
+        "color_identity": [
+          "G",
+          "U"
+        ],
+        "set": "SLD",
+        "set_name": "Secret Lair Drop",
+        "collector_number": "2221",
+        "released_at": "2025-10-27",
+        "artist": "Crystal Fae",
+        "rarity": "mythic",
+        "layout": "normal",
+        "games": [
+          "paper"
+        ],
+        "full_art": true,
+        "textless": false,
+        "promo": false,
+        "digital": false,
+        "variation": false,
+        "border_color": "borderless",
+        "frame": "2015",
+        "image_uris": {
+          "small": "images/small/aloy-savior-of-meridian-90dee895-037c-45f9-ac4f-b2277da85459.jpg",
+          "normal": "images/normal/aloy-savior-of-meridian-90dee895-037c-45f9-ac4f-b2277da85459.jpg",
+          "large": "images/large/aloy-savior-of-meridian-90dee895-037c-45f9-ac4f-b2277da85459.jpg",
+          "png": "images/png/aloy-savior-of-meridian-90dee895-037c-45f9-ac4f-b2277da85459.png",
+          "art_crop": "images/art_crop/aloy-savior-of-meridian-90dee895-037c-45f9-ac4f-b2277da85459.jpg",
+          "border_crop": "images/border_crop/aloy-savior-of-meridian-90dee895-037c-45f9-ac4f-b2277da85459.jpg"
+        },
+        "fixture_image_sources": {
+          "small": "generated_placeholder",
+          "normal": "cache/card_images/normal/90dee895-037c-45f9-ac4f-b2277da85459.jpg",
+          "large": "generated_placeholder",
+          "png": "generated_placeholder",
+          "art_crop": "generated_placeholder",
+          "border_crop": "generated_placeholder"
+        }
+      }
+    ],
+    "aminatou, veil piercer": [
+      {
+        "id": "9f868023-6035-403d-ba91-7a4840c6c392",
+        "oracle_id": "bf45f5ee-4d5f-4920-b612-b5492c2f035d",
+        "name": "Aminatou, Veil Piercer",
+        "mana_cost": "{1}{W}{U}{B}",
+        "type_line": "Legendary Creature \u2014 Human Wizard",
+        "colors": [
+          "B",
+          "U",
+          "W"
+        ],
+        "color_identity": [
+          "B",
+          "U",
+          "W"
+        ],
+        "set": "DSC",
+        "set_name": "Duskmourn: House of Horror Commander",
+        "collector_number": "1",
+        "released_at": "2024-09-27",
+        "artist": "David Palumbo",
+        "rarity": "mythic",
+        "layout": "normal",
+        "games": [
+          "paper",
+          "mtgo"
+        ],
+        "full_art": true,
+        "textless": false,
+        "promo": false,
+        "digital": false,
+        "variation": false,
+        "border_color": "borderless",
+        "frame": "2015",
+        "image_uris": {
+          "small": "images/small/aminatou-veil-piercer-9f868023-6035-403d-ba91-7a4840c6c392.jpg",
+          "normal": "images/normal/aminatou-veil-piercer-9f868023-6035-403d-ba91-7a4840c6c392.jpg",
+          "large": "images/large/aminatou-veil-piercer-9f868023-6035-403d-ba91-7a4840c6c392.jpg",
+          "png": "images/png/aminatou-veil-piercer-9f868023-6035-403d-ba91-7a4840c6c392.png",
+          "art_crop": "images/art_crop/aminatou-veil-piercer-9f868023-6035-403d-ba91-7a4840c6c392.jpg",
+          "border_crop": "images/border_crop/aminatou-veil-piercer-9f868023-6035-403d-ba91-7a4840c6c392.jpg"
+        },
+        "fixture_image_sources": {
+          "small": "generated_placeholder",
+          "normal": "cache/card_images/normal/9f868023-6035-403d-ba91-7a4840c6c392.jpg",
+          "large": "generated_placeholder",
+          "png": "generated_placeholder",
+          "art_crop": "generated_placeholder",
+          "border_crop": "generated_placeholder"
+        }
+      }
+    ],
+    "amy rose": [
+      {
+        "id": "6ac0c02f-6428-4ed0-bd1a-bf9f4af9c3c1",
+        "oracle_id": "b2d597b4-f9ba-44b0-a947-0c2ecda2d308",
+        "name": "Amy Rose",
+        "mana_cost": "{2}{R}{W}",
+        "type_line": "Legendary Creature \u2014 Hedgehog Warrior",
+        "colors": [
+          "R",
+          "W"
+        ],
+        "color_identity": [
+          "R",
+          "W"
+        ],
+        "set": "SLD",
+        "set_name": "Secret Lair Drop",
+        "collector_number": "2083",
+        "released_at": "2025-07-14",
+        "artist": "Evan Stanley",
+        "rarity": "mythic",
+        "layout": "normal",
+        "games": [
+          "paper"
+        ],
+        "full_art": true,
+        "textless": false,
+        "promo": false,
+        "digital": false,
+        "variation": false,
+        "border_color": "borderless",
+        "frame": "2015",
+        "image_uris": {
+          "small": "images/small/amy-rose-6ac0c02f-6428-4ed0-bd1a-bf9f4af9c3c1.jpg",
+          "normal": "images/normal/amy-rose-6ac0c02f-6428-4ed0-bd1a-bf9f4af9c3c1.jpg",
+          "large": "images/large/amy-rose-6ac0c02f-6428-4ed0-bd1a-bf9f4af9c3c1.jpg",
+          "png": "images/png/amy-rose-6ac0c02f-6428-4ed0-bd1a-bf9f4af9c3c1.png",
+          "art_crop": "images/art_crop/amy-rose-6ac0c02f-6428-4ed0-bd1a-bf9f4af9c3c1.jpg",
+          "border_crop": "images/border_crop/amy-rose-6ac0c02f-6428-4ed0-bd1a-bf9f4af9c3c1.jpg"
+        },
+        "fixture_image_sources": {
+          "small": "generated_placeholder",
+          "normal": "cache/card_images/normal/6ac0c02f-6428-4ed0-bd1a-bf9f4af9c3c1.jpg",
+          "large": "generated_placeholder",
+          "png": "generated_placeholder",
+          "art_crop": "generated_placeholder",
+          "border_crop": "generated_placeholder"
+        }
+      }
+    ],
+    "apothecary white": [
+      {
+        "id": "4fedf84e-55ca-4334-a2c1-6e991112bb68",
+        "oracle_id": "7bf8bb41-6f46-492c-b6cf-5cfb29f973a4",
+        "name": "Apothecary White",
+        "mana_cost": "{3}{W}",
+        "type_line": "Legendary Creature \u2014 Human Cleric",
+        "colors": [
+          "W"
+        ],
+        "color_identity": [
+          "W"
+        ],
+        "set": "CLU",
+        "set_name": "Ravnica: Clue Edition",
+        "collector_number": "1",
+        "released_at": "2024-02-23",
+        "artist": "Anna Steinbauer",
+        "rarity": "rare",
+        "layout": "normal",
+        "games": [
+          "paper",
+          "mtgo"
+        ],
+        "full_art": true,
+        "textless": false,
+        "promo": false,
+        "digital": false,
+        "variation": false,
+        "border_color": "borderless",
+        "frame": "2015",
+        "image_uris": {
+          "small": "images/small/apothecary-white-4fedf84e-55ca-4334-a2c1-6e991112bb68.jpg",
+          "normal": "images/normal/apothecary-white-4fedf84e-55ca-4334-a2c1-6e991112bb68.jpg",
+          "large": "images/large/apothecary-white-4fedf84e-55ca-4334-a2c1-6e991112bb68.jpg",
+          "png": "images/png/apothecary-white-4fedf84e-55ca-4334-a2c1-6e991112bb68.png",
+          "art_crop": "images/art_crop/apothecary-white-4fedf84e-55ca-4334-a2c1-6e991112bb68.jpg",
+          "border_crop": "images/border_crop/apothecary-white-4fedf84e-55ca-4334-a2c1-6e991112bb68.jpg"
+        },
+        "fixture_image_sources": {
+          "small": "generated_placeholder",
+          "normal": "cache/card_images/normal/4fedf84e-55ca-4334-a2c1-6e991112bb68.jpg",
+          "large": "generated_placeholder",
+          "png": "generated_placeholder",
+          "art_crop": "generated_placeholder",
+          "border_crop": "generated_placeholder"
+        }
+      }
+    ],
+    "ashling, the limitless": [
+      {
+        "id": "5924c01f-2815-4e37-b700-3ba6cc81e0e4",
+        "oracle_id": "77a9e7cf-76e9-4323-8504-a5b831de00be",
+        "name": "Ashling, the Limitless",
+        "mana_cost": "{2}{R}",
+        "type_line": "Legendary Creature \u2014 Elemental Sorcerer",
+        "colors": [
+          "R"
+        ],
+        "color_identity": [
+          "B",
+          "G",
+          "R",
+          "U",
+          "W"
+        ],
+        "set": "ECC",
+        "set_name": "Lorwyn Eclipsed Commander",
+        "collector_number": "1",
+        "released_at": "2026-01-23",
+        "artist": "Kai Carpenter",
+        "rarity": "mythic",
+        "layout": "normal",
+        "games": [
+          "paper",
+          "mtgo",
+          "arena"
+        ],
+        "full_art": true,
+        "textless": false,
+        "promo": false,
+        "digital": false,
+        "variation": false,
+        "border_color": "borderless",
+        "frame": "2015",
+        "image_uris": {
+          "small": "images/small/ashling-the-limitless-5924c01f-2815-4e37-b700-3ba6cc81e0e4.jpg",
+          "normal": "images/normal/ashling-the-limitless-5924c01f-2815-4e37-b700-3ba6cc81e0e4.jpg",
+          "large": "images/large/ashling-the-limitless-5924c01f-2815-4e37-b700-3ba6cc81e0e4.jpg",
+          "png": "images/png/ashling-the-limitless-5924c01f-2815-4e37-b700-3ba6cc81e0e4.png",
+          "art_crop": "images/art_crop/ashling-the-limitless-5924c01f-2815-4e37-b700-3ba6cc81e0e4.jpg",
+          "border_crop": "images/border_crop/ashling-the-limitless-5924c01f-2815-4e37-b700-3ba6cc81e0e4.jpg"
+        },
+        "fixture_image_sources": {
+          "small": "generated_placeholder",
+          "normal": "cache/card_images/normal/5924c01f-2815-4e37-b700-3ba6cc81e0e4.jpg",
+          "large": "generated_placeholder",
+          "png": "generated_placeholder",
+          "art_crop": "generated_placeholder",
+          "border_crop": "generated_placeholder"
+        }
+      }
+    ],
+    "auntie ool, cursewretch": [
+      {
+        "id": "9a2e4252-9fbc-4d43-8935-db2cafaa7b5f",
+        "oracle_id": "e3cd53c1-86bd-4177-adb0-a1fa693b44c6",
+        "name": "Auntie Ool, Cursewretch",
+        "mana_cost": "{1}{B}{R}{G}",
+        "type_line": "Legendary Creature \u2014 Goblin Warlock",
+        "colors": [
+          "B",
+          "G",
+          "R"
+        ],
+        "color_identity": [
+          "B",
+          "G",
+          "R"
+        ],
+        "set": "ECC",
+        "set_name": "Lorwyn Eclipsed Commander",
+        "collector_number": "2",
+        "released_at": "2026-01-23",
+        "artist": "Daniel Zrom",
+        "rarity": "mythic",
+        "layout": "normal",
+        "games": [
+          "paper",
+          "mtgo",
+          "arena"
+        ],
+        "full_art": true,
+        "textless": false,
+        "promo": false,
+        "digital": false,
+        "variation": false,
+        "border_color": "borderless",
+        "frame": "2015",
+        "image_uris": {
+          "small": "images/small/auntie-ool-cursewretch-9a2e4252-9fbc-4d43-8935-db2cafaa7b5f.jpg",
+          "normal": "images/normal/auntie-ool-cursewretch-9a2e4252-9fbc-4d43-8935-db2cafaa7b5f.jpg",
+          "large": "images/large/auntie-ool-cursewretch-9a2e4252-9fbc-4d43-8935-db2cafaa7b5f.jpg",
+          "png": "images/png/auntie-ool-cursewretch-9a2e4252-9fbc-4d43-8935-db2cafaa7b5f.png",
+          "art_crop": "images/art_crop/auntie-ool-cursewretch-9a2e4252-9fbc-4d43-8935-db2cafaa7b5f.jpg",
+          "border_crop": "images/border_crop/auntie-ool-cursewretch-9a2e4252-9fbc-4d43-8935-db2cafaa7b5f.jpg"
+        },
+        "fixture_image_sources": {
+          "small": "generated_placeholder",
+          "normal": "cache/card_images/normal/9a2e4252-9fbc-4d43-8935-db2cafaa7b5f.jpg",
+          "large": "generated_placeholder",
+          "png": "generated_placeholder",
+          "art_crop": "generated_placeholder",
+          "border_crop": "generated_placeholder"
+        }
+      }
+    ],
+    "betor, ancestor's voice": [
+      {
+        "id": "2e261489-8dde-4594-8868-69f432f03d03",
+        "oracle_id": "990b5e12-6e04-4832-9d64-87278f12cbda",
+        "name": "Betor, Ancestor's Voice",
+        "mana_cost": "{2}{W}{B}{G}",
+        "type_line": "Legendary Creature \u2014 Spirit Dragon",
+        "colors": [
+          "B",
+          "G",
+          "W"
+        ],
+        "color_identity": [
+          "B",
+          "G",
+          "W"
+        ],
+        "set": "TDC",
+        "set_name": "Tarkir: Dragonstorm Commander",
+        "collector_number": "1",
+        "released_at": "2025-04-11",
+        "artist": "Lius Lasahido",
+        "rarity": "mythic",
+        "layout": "normal",
+        "games": [
+          "paper",
+          "mtgo",
+          "arena"
+        ],
+        "full_art": true,
+        "textless": false,
+        "promo": false,
+        "digital": false,
+        "variation": false,
+        "border_color": "borderless",
+        "frame": "2015",
+        "image_uris": {
+          "small": "images/small/betor-ancestor-s-voice-2e261489-8dde-4594-8868-69f432f03d03.jpg",
+          "normal": "images/normal/betor-ancestor-s-voice-2e261489-8dde-4594-8868-69f432f03d03.jpg",
+          "large": "images/large/betor-ancestor-s-voice-2e261489-8dde-4594-8868-69f432f03d03.jpg",
+          "png": "images/png/betor-ancestor-s-voice-2e261489-8dde-4594-8868-69f432f03d03.png",
+          "art_crop": "images/art_crop/betor-ancestor-s-voice-2e261489-8dde-4594-8868-69f432f03d03.jpg",
+          "border_crop": "images/border_crop/betor-ancestor-s-voice-2e261489-8dde-4594-8868-69f432f03d03.jpg"
+        },
+        "fixture_image_sources": {
+          "small": "generated_placeholder",
+          "normal": "cache/card_images/normal/2e261489-8dde-4594-8868-69f432f03d03.jpg",
+          "large": "generated_placeholder",
+          "png": "generated_placeholder",
+          "art_crop": "generated_placeholder",
+          "border_crop": "generated_placeholder"
+        }
+      }
+    ],
+    "big mother mouser": [
+      {
+        "id": "8f586a85-f9b7-49c4-bfb0-e348b9088841",
+        "oracle_id": "94751968-e006-45d0-970b-0ed45d28e6cc",
+        "name": "Big Mother Mouser",
+        "mana_cost": "{4}",
+        "type_line": "Artifact Creature \u2014 Robot",
+        "colors": [],
+        "color_identity": [],
+        "set": "TMC",
+        "set_name": "Teenage Mutant Ninja Turtles Eternal",
+        "collector_number": "97",
+        "released_at": "2026-03-06",
+        "artist": "Kirokaze",
+        "rarity": "rare",
+        "layout": "normal",
+        "games": [
+          "paper",
+          "mtgo"
+        ],
+        "full_art": true,
+        "textless": false,
+        "promo": false,
+        "digital": false,
+        "variation": false,
+        "border_color": "borderless",
+        "frame": "2015",
+        "image_uris": {
+          "small": "images/small/big-mother-mouser-8f586a85-f9b7-49c4-bfb0-e348b9088841.jpg",
+          "normal": "images/normal/big-mother-mouser-8f586a85-f9b7-49c4-bfb0-e348b9088841.jpg",
+          "large": "images/large/big-mother-mouser-8f586a85-f9b7-49c4-bfb0-e348b9088841.jpg",
+          "png": "images/png/big-mother-mouser-8f586a85-f9b7-49c4-bfb0-e348b9088841.png",
+          "art_crop": "images/art_crop/big-mother-mouser-8f586a85-f9b7-49c4-bfb0-e348b9088841.jpg",
+          "border_crop": "images/border_crop/big-mother-mouser-8f586a85-f9b7-49c4-bfb0-e348b9088841.jpg"
+        },
+        "fixture_image_sources": {
+          "small": "generated_placeholder",
+          "normal": "cache/card_images/normal/8f586a85-f9b7-49c4-bfb0-e348b9088841.jpg",
+          "large": "generated_placeholder",
+          "png": "generated_placeholder",
+          "art_crop": "generated_placeholder",
+          "border_crop": "generated_placeholder"
+        }
+      },
+      {
+        "id": "c9ae6898-6b5a-43bd-8c84-4d8add285f7d",
+        "oracle_id": "94751968-e006-45d0-970b-0ed45d28e6cc",
+        "name": "Big Mother Mouser",
+        "mana_cost": "{4}",
+        "type_line": "Artifact Creature \u2014 Robot",
+        "colors": [],
+        "color_identity": [],
+        "set": "TMC",
+        "set_name": "Teenage Mutant Ninja Turtles Eternal",
+        "collector_number": "37",
+        "released_at": "2026-03-06",
+        "artist": "Mikl\u00f3s Ligeti",
+        "rarity": "rare",
+        "layout": "normal",
+        "games": [
+          "paper",
+          "mtgo"
+        ],
+        "full_art": false,
+        "textless": false,
+        "promo": false,
+        "digital": false,
+        "variation": false,
+        "border_color": "black",
+        "frame": "2015",
+        "image_uris": {
+          "small": "images/small/big-mother-mouser-c9ae6898-6b5a-43bd-8c84-4d8add285f7d.jpg",
+          "normal": "images/normal/big-mother-mouser-c9ae6898-6b5a-43bd-8c84-4d8add285f7d.jpg",
+          "large": "images/large/big-mother-mouser-c9ae6898-6b5a-43bd-8c84-4d8add285f7d.jpg",
+          "png": "images/png/big-mother-mouser-c9ae6898-6b5a-43bd-8c84-4d8add285f7d.png",
+          "art_crop": "images/art_crop/big-mother-mouser-c9ae6898-6b5a-43bd-8c84-4d8add285f7d.jpg",
+          "border_crop": "images/border_crop/big-mother-mouser-c9ae6898-6b5a-43bd-8c84-4d8add285f7d.jpg"
+        },
+        "fixture_image_sources": {
+          "small": "generated_placeholder",
+          "normal": "cache/card_images/normal/c9ae6898-6b5a-43bd-8c84-4d8add285f7d.jpg",
+          "large": "generated_placeholder",
+          "png": "generated_placeholder",
+          "art_crop": "generated_placeholder",
+          "border_crop": "generated_placeholder"
+        }
+      }
+    ],
+    "black panther, wakandan king": [
+      {
+        "id": "3a93a12d-6913-4d9e-8e9c-8067147e37f2",
+        "oracle_id": "48deff27-b421-430b-a484-55b4a593010a",
+        "name": "Black Panther, Wakandan King",
+        "mana_cost": "{G}{W}",
+        "type_line": "Legendary Creature \u2014 Human Noble Hero",
+        "colors": [
+          "G",
+          "W"
+        ],
+        "color_identity": [
+          "G",
+          "W"
+        ],
+        "set": "SLD",
+        "set_name": "Secret Lair Drop",
+        "collector_number": "1747",
+        "released_at": "2024-11-04",
+        "artist": "Tyler Jacobson",
+        "rarity": "mythic",
+        "layout": "normal",
+        "games": [
+          "paper"
+        ],
+        "full_art": true,
+        "textless": false,
+        "promo": false,
+        "digital": false,
+        "variation": false,
+        "border_color": "borderless",
+        "frame": "2015",
+        "image_uris": {
+          "small": "images/small/black-panther-wakandan-king-3a93a12d-6913-4d9e-8e9c-8067147e37f2.jpg",
+          "normal": "images/normal/black-panther-wakandan-king-3a93a12d-6913-4d9e-8e9c-8067147e37f2.jpg",
+          "large": "images/large/black-panther-wakandan-king-3a93a12d-6913-4d9e-8e9c-8067147e37f2.jpg",
+          "png": "images/png/black-panther-wakandan-king-3a93a12d-6913-4d9e-8e9c-8067147e37f2.png",
+          "art_crop": "images/art_crop/black-panther-wakandan-king-3a93a12d-6913-4d9e-8e9c-8067147e37f2.jpg",
+          "border_crop": "images/border_crop/black-panther-wakandan-king-3a93a12d-6913-4d9e-8e9c-8067147e37f2.jpg"
+        },
+        "fixture_image_sources": {
+          "small": "generated_placeholder",
+          "normal": "cache/card_images/normal/3a93a12d-6913-4d9e-8e9c-8067147e37f2.jpg",
+          "large": "generated_placeholder",
+          "png": "generated_placeholder",
+          "art_crop": "generated_placeholder",
+          "border_crop": "generated_placeholder"
+        }
+      }
+    ],
+    "blind phantasm": [
+      {
+        "id": "6b26ee7b-de1a-4a39-9580-89941c3d0f21",
+        "oracle_id": "3b91be0e-0683-48df-91b0-25e90b492796",
+        "name": "Blind Phantasm",
+        "mana_cost": "{2}{U}",
+        "type_line": "Creature \u2014 Illusion",
+        "colors": [
+          "U"
+        ],
+        "color_identity": [
+          "U"
+        ],
+        "set": "FUT",
+        "set_name": "Future Sight",
+        "collector_number": "49",
+        "released_at": "2007-05-04",
+        "artist": "Khang Le",
+        "rarity": "common",
+        "layout": "normal",
+        "games": [
+          "paper",
+          "mtgo"
+        ],
+        "full_art": true,
+        "textless": false,
+        "promo": false,
+        "digital": false,
+        "variation": false,
+        "border_color": "black",
+        "frame": "future",
+        "image_uris": {
+          "small": "images/small/blind-phantasm-6b26ee7b-de1a-4a39-9580-89941c3d0f21.jpg",
+          "normal": "images/normal/blind-phantasm-6b26ee7b-de1a-4a39-9580-89941c3d0f21.jpg",
+          "large": "images/large/blind-phantasm-6b26ee7b-de1a-4a39-9580-89941c3d0f21.jpg",
+          "png": "images/png/blind-phantasm-6b26ee7b-de1a-4a39-9580-89941c3d0f21.png",
+          "art_crop": "images/art_crop/blind-phantasm-6b26ee7b-de1a-4a39-9580-89941c3d0f21.jpg",
+          "border_crop": "images/border_crop/blind-phantasm-6b26ee7b-de1a-4a39-9580-89941c3d0f21.jpg"
+        },
+        "fixture_image_sources": {
+          "small": "generated_placeholder",
+          "normal": "cache/card_images/normal/6b26ee7b-de1a-4a39-9580-89941c3d0f21.jpg",
+          "large": "generated_placeholder",
+          "png": "generated_placeholder",
+          "art_crop": "generated_placeholder",
+          "border_crop": "generated_placeholder"
+        }
+      }
+    ],
+    "captain america, first avenger": [
+      {
+        "id": "bba7e9c8-c24c-4bd3-b398-fe42b1fcfb5d",
+        "oracle_id": "7d038055-035d-4698-b6b6-e2859bf2f1d1",
+        "name": "Captain America, First Avenger",
+        "mana_cost": "{R}{W}{U}",
+        "type_line": "Legendary Creature \u2014 Human Soldier Hero",
+        "colors": [
+          "R",
+          "U",
+          "W"
+        ],
+        "color_identity": [
+          "R",
+          "U",
+          "W"
+        ],
+        "set": "SLD",
+        "set_name": "Secret Lair Drop",
+        "collector_number": "1726",
+        "released_at": "2024-11-04",
+        "artist": "Ryan Pancoast",
+        "rarity": "mythic",
+        "layout": "normal",
+        "games": [
+          "paper"
+        ],
+        "full_art": true,
+        "textless": false,
+        "promo": false,
+        "digital": false,
+        "variation": false,
+        "border_color": "borderless",
+        "frame": "2015",
+        "image_uris": {
+          "small": "images/small/captain-america-first-avenger-bba7e9c8-c24c-4bd3-b398-fe42b1fcfb5d.jpg",
+          "normal": "images/normal/captain-america-first-avenger-bba7e9c8-c24c-4bd3-b398-fe42b1fcfb5d.jpg",
+          "large": "images/large/captain-america-first-avenger-bba7e9c8-c24c-4bd3-b398-fe42b1fcfb5d.jpg",
+          "png": "images/png/captain-america-first-avenger-bba7e9c8-c24c-4bd3-b398-fe42b1fcfb5d.png",
+          "art_crop": "images/art_crop/captain-america-first-avenger-bba7e9c8-c24c-4bd3-b398-fe42b1fcfb5d.jpg",
+          "border_crop": "images/border_crop/captain-america-first-avenger-bba7e9c8-c24c-4bd3-b398-fe42b1fcfb5d.jpg"
+        },
+        "fixture_image_sources": {
+          "small": "generated_placeholder",
+          "normal": "cache/card_images/normal/bba7e9c8-c24c-4bd3-b398-fe42b1fcfb5d.jpg",
+          "large": "generated_placeholder",
+          "png": "generated_placeholder",
+          "art_crop": "generated_placeholder",
+          "border_crop": "generated_placeholder"
+        }
+      }
+    ],
+    "dina, essence brewer": [
+      {
+        "id": "9fe237b8-c02c-41ea-9fc4-b771b91d2157",
+        "oracle_id": "f61c1dc4-2f09-4b50-957f-ee656c659072",
+        "name": "Dina, Essence Brewer",
+        "mana_cost": "{1}{B}{G}",
+        "type_line": "Legendary Creature \u2014 Dryad Druid",
+        "colors": [
+          "B",
+          "G"
+        ],
+        "color_identity": [
+          "B",
+          "G"
+        ],
+        "set": "SOC",
+        "set_name": "Secrets of Strixhaven Commander",
+        "collector_number": "1",
+        "released_at": "2026-04-24",
+        "artist": "Pauline Voss",
+        "rarity": "mythic",
+        "layout": "normal",
+        "games": [
+          "paper",
+          "mtgo",
+          "arena"
+        ],
+        "full_art": true,
+        "textless": false,
+        "promo": false,
+        "digital": false,
+        "variation": false,
+        "border_color": "borderless",
+        "frame": "2015",
+        "image_uris": {
+          "small": "images/small/dina-essence-brewer-9fe237b8-c02c-41ea-9fc4-b771b91d2157.jpg",
+          "normal": "images/normal/dina-essence-brewer-9fe237b8-c02c-41ea-9fc4-b771b91d2157.jpg",
+          "large": "images/large/dina-essence-brewer-9fe237b8-c02c-41ea-9fc4-b771b91d2157.jpg",
+          "png": "images/png/dina-essence-brewer-9fe237b8-c02c-41ea-9fc4-b771b91d2157.png",
+          "art_crop": "images/art_crop/dina-essence-brewer-9fe237b8-c02c-41ea-9fc4-b771b91d2157.jpg",
+          "border_crop": "images/border_crop/dina-essence-brewer-9fe237b8-c02c-41ea-9fc4-b771b91d2157.jpg"
+        },
+        "fixture_image_sources": {
+          "small": "generated_placeholder",
+          "normal": "cache/card_images/normal/9fe237b8-c02c-41ea-9fc4-b771b91d2157.jpg",
+          "large": "generated_placeholder",
+          "png": "generated_placeholder",
+          "art_crop": "generated_placeholder",
+          "border_crop": "generated_placeholder"
+        }
+      }
+    ],
+    "doc ock, evil inventor": [
+      {
+        "id": "ad287357-9602-4090-8feb-6f658f2a47b0",
+        "oracle_id": "3e0738af-00ec-4707-a56d-85b5a5ce4529",
+        "name": "Doc Ock, Evil Inventor",
+        "mana_cost": "{5}{U}{B}",
+        "type_line": "Legendary Creature \u2014 Human Scientist Villain",
+        "colors": [
+          "B",
+          "U"
+        ],
+        "color_identity": [
+          "B",
+          "U"
+        ],
+        "set": "SPE",
+        "set_name": "Marvel's Spider-Man Eternal",
+        "collector_number": "24",
+        "released_at": "2025-09-26",
+        "artist": "Dan Dos Santos",
+        "rarity": "rare",
+        "layout": "normal",
+        "games": [
+          "paper"
+        ],
+        "full_art": true,
+        "textless": false,
+        "promo": false,
+        "digital": false,
+        "variation": false,
+        "border_color": "borderless",
+        "frame": "2015",
+        "image_uris": {
+          "small": "images/small/doc-ock-evil-inventor-ad287357-9602-4090-8feb-6f658f2a47b0.jpg",
+          "normal": "images/normal/doc-ock-evil-inventor-ad287357-9602-4090-8feb-6f658f2a47b0.jpg",
+          "large": "images/large/doc-ock-evil-inventor-ad287357-9602-4090-8feb-6f658f2a47b0.jpg",
+          "png": "images/png/doc-ock-evil-inventor-ad287357-9602-4090-8feb-6f658f2a47b0.png",
+          "art_crop": "images/art_crop/doc-ock-evil-inventor-ad287357-9602-4090-8feb-6f658f2a47b0.jpg",
+          "border_crop": "images/border_crop/doc-ock-evil-inventor-ad287357-9602-4090-8feb-6f658f2a47b0.jpg"
+        },
+        "fixture_image_sources": {
+          "small": "generated_placeholder",
+          "normal": "cache/card_images/normal/ad287357-9602-4090-8feb-6f658f2a47b0.jpg",
+          "large": "generated_placeholder",
+          "png": "generated_placeholder",
+          "art_crop": "generated_placeholder",
+          "border_crop": "generated_placeholder"
+        }
+      }
+    ],
+    "dr. eggman": [
+      {
+        "id": "18602e92-69be-4626-a28a-463913108f42",
+        "oracle_id": "fb68c1ae-a129-4c17-81fa-be5da2c32ec5",
+        "name": "Dr. Eggman",
+        "mana_cost": "{2}{U}{B}{R}",
+        "type_line": "Legendary Creature \u2014 Human Scientist",
+        "colors": [
+          "B",
+          "R",
+          "U"
+        ],
+        "color_identity": [
+          "B",
+          "R",
+          "U"
+        ],
+        "set": "SLD",
+        "set_name": "Secret Lair Drop",
+        "collector_number": "2084",
+        "released_at": "2025-07-14",
+        "artist": "Nathalie Fourdraine",
+        "rarity": "mythic",
+        "layout": "normal",
+        "games": [
+          "paper"
+        ],
+        "full_art": true,
+        "textless": false,
+        "promo": false,
+        "digital": false,
+        "variation": false,
+        "border_color": "borderless",
+        "frame": "2015",
+        "image_uris": {
+          "small": "images/small/dr-eggman-18602e92-69be-4626-a28a-463913108f42.jpg",
+          "normal": "images/normal/dr-eggman-18602e92-69be-4626-a28a-463913108f42.jpg",
+          "large": "images/large/dr-eggman-18602e92-69be-4626-a28a-463913108f42.jpg",
+          "png": "images/png/dr-eggman-18602e92-69be-4626-a28a-463913108f42.png",
+          "art_crop": "images/art_crop/dr-eggman-18602e92-69be-4626-a28a-463913108f42.jpg",
+          "border_crop": "images/border_crop/dr-eggman-18602e92-69be-4626-a28a-463913108f42.jpg"
+        },
+        "fixture_image_sources": {
+          "small": "generated_placeholder",
+          "normal": "cache/card_images/normal/18602e92-69be-4626-a28a-463913108f42.jpg",
+          "large": "generated_placeholder",
+          "png": "generated_placeholder",
+          "art_crop": "generated_placeholder",
+          "border_crop": "generated_placeholder"
+        }
+      }
+    ],
+    "duelist's flame": [
+      {
+        "id": "230e997e-3736-4afd-8571-1cc1b1d6ed96",
+        "oracle_id": "bbc990e4-1601-498f-9031-0cd663139367",
+        "name": "Duelist's Flame",
+        "mana_cost": "{X}{R}{R}",
+        "type_line": "Instant",
+        "colors": [
+          "R"
+        ],
+        "color_identity": [
+          "R"
+        ],
+        "set": "FIC",
+        "set_name": "Final Fantasy Commander",
+        "collector_number": "452",
+        "released_at": "2025-12-05",
+        "artist": "Lius Lasahido",
+        "rarity": "rare",
+        "layout": "normal",
+        "games": [
+          "mtgo",
+          "paper"
+        ],
+        "full_art": true,
+        "textless": false,
+        "promo": false,
+        "digital": false,
+        "variation": false,
+        "border_color": "borderless",
+        "frame": "2015",
+        "image_uris": {
+          "small": "images/small/duelist-s-flame-230e997e-3736-4afd-8571-1cc1b1d6ed96.jpg",
+          "normal": "images/normal/duelist-s-flame-230e997e-3736-4afd-8571-1cc1b1d6ed96.jpg",
+          "large": "images/large/duelist-s-flame-230e997e-3736-4afd-8571-1cc1b1d6ed96.jpg",
+          "png": "images/png/duelist-s-flame-230e997e-3736-4afd-8571-1cc1b1d6ed96.png",
+          "art_crop": "images/art_crop/duelist-s-flame-230e997e-3736-4afd-8571-1cc1b1d6ed96.jpg",
+          "border_crop": "images/border_crop/duelist-s-flame-230e997e-3736-4afd-8571-1cc1b1d6ed96.jpg"
+        },
+        "fixture_image_sources": {
+          "small": "generated_placeholder",
+          "normal": "cache/card_images/normal/230e997e-3736-4afd-8571-1cc1b1d6ed96.jpg",
+          "large": "generated_placeholder",
+          "png": "generated_placeholder",
+          "art_crop": "generated_placeholder",
+          "border_crop": "generated_placeholder"
+        }
+      }
+    ],
+    "dune-brood nephilim": [
+      {
+        "id": "15b4ee44-28c4-4a39-9c06-aca43787954f",
+        "oracle_id": "634bd800-8caa-47ae-8b70-2c66baf9a355",
+        "name": "Dune-Brood Nephilim",
+        "mana_cost": "{B}{R}{G}{W}",
+        "type_line": "Creature \u2014 Nephilim",
+        "colors": [
+          "B",
+          "G",
+          "R",
+          "W"
+        ],
+        "color_identity": [
+          "B",
+          "G",
+          "R",
+          "W"
+        ],
+        "set": "GPT",
+        "set_name": "Guildpact",
+        "collector_number": "110",
+        "released_at": "2006-02-03",
+        "artist": "Jim Murray",
+        "rarity": "rare",
+        "layout": "normal",
+        "games": [
+          "paper",
+          "mtgo"
+        ],
+        "full_art": false,
+        "textless": false,
+        "promo": false,
+        "digital": false,
+        "variation": false,
+        "border_color": "black",
+        "frame": "2003",
+        "image_uris": {
+          "small": "images/small/dune-brood-nephilim-15b4ee44-28c4-4a39-9c06-aca43787954f.jpg",
+          "normal": "images/normal/dune-brood-nephilim-15b4ee44-28c4-4a39-9c06-aca43787954f.jpg",
+          "large": "images/large/dune-brood-nephilim-15b4ee44-28c4-4a39-9c06-aca43787954f.jpg",
+          "png": "images/png/dune-brood-nephilim-15b4ee44-28c4-4a39-9c06-aca43787954f.png",
+          "art_crop": "images/art_crop/dune-brood-nephilim-15b4ee44-28c4-4a39-9c06-aca43787954f.jpg",
+          "border_crop": "images/border_crop/dune-brood-nephilim-15b4ee44-28c4-4a39-9c06-aca43787954f.jpg"
+        },
+        "fixture_image_sources": {
+          "small": "generated_placeholder",
+          "normal": "cache/card_images/normal/15b4ee44-28c4-4a39-9c06-aca43787954f.jpg",
+          "large": "generated_placeholder",
+          "png": "generated_placeholder",
+          "art_crop": "generated_placeholder",
+          "border_crop": "generated_placeholder"
+        }
+      },
+      {
+        "id": "eabffca8-7810-4e8e-b3fe-7f8a14dcbf14",
+        "oracle_id": "634bd800-8caa-47ae-8b70-2c66baf9a355",
+        "name": "Dune-Brood Nephilim",
+        "mana_cost": "{B}{R}{G}{W}",
+        "type_line": "Creature \u2014 Nephilim",
+        "colors": [
+          "B",
+          "G",
+          "R",
+          "W"
+        ],
+        "color_identity": [
+          "B",
+          "G",
+          "R",
+          "W"
+        ],
+        "set": "PLST",
+        "set_name": "The List",
+        "collector_number": "GPT-110",
+        "released_at": "2020-09-01",
+        "artist": "Jim Murray",
+        "rarity": "rare",
+        "layout": "normal",
+        "games": [
+          "paper"
+        ],
+        "full_art": false,
+        "textless": false,
+        "promo": false,
+        "digital": false,
+        "variation": false,
+        "border_color": "black",
+        "frame": "2003",
+        "image_uris": {
+          "small": "images/small/dune-brood-nephilim-eabffca8-7810-4e8e-b3fe-7f8a14dcbf14.jpg",
+          "normal": "images/normal/dune-brood-nephilim-eabffca8-7810-4e8e-b3fe-7f8a14dcbf14.jpg",
+          "large": "images/large/dune-brood-nephilim-eabffca8-7810-4e8e-b3fe-7f8a14dcbf14.jpg",
+          "png": "images/png/dune-brood-nephilim-eabffca8-7810-4e8e-b3fe-7f8a14dcbf14.png",
+          "art_crop": "images/art_crop/dune-brood-nephilim-eabffca8-7810-4e8e-b3fe-7f8a14dcbf14.jpg",
+          "border_crop": "images/border_crop/dune-brood-nephilim-eabffca8-7810-4e8e-b3fe-7f8a14dcbf14.jpg"
+        },
+        "fixture_image_sources": {
+          "small": "generated_placeholder",
+          "normal": "cache/card_images/normal/eabffca8-7810-4e8e-b3fe-7f8a14dcbf14.jpg",
+          "large": "generated_placeholder",
+          "png": "generated_placeholder",
+          "art_crop": "generated_placeholder",
+          "border_crop": "generated_placeholder"
+        }
+      }
+    ],
+    "eden, seat of the sanctum": [
+      {
+        "id": "4786e79c-1e64-41bd-87f6-9a33110afa71",
+        "oracle_id": "84856b92-5ce8-47f3-9a1c-78d6a3e26aca",
+        "name": "Eden, Seat of the Sanctum",
+        "mana_cost": "",
+        "type_line": "Land \u2014 Town",
+        "colors": [],
+        "color_identity": [],
+        "set": "FIN",
+        "set_name": "Final Fantasy",
+        "collector_number": "355",
+        "released_at": "2025-06-13",
+        "artist": "Minoru",
+        "rarity": "uncommon",
+        "layout": "normal",
+        "games": [
+          "paper",
+          "arena",
+          "mtgo"
+        ],
+        "full_art": true,
+        "textless": false,
+        "promo": false,
+        "digital": false,
+        "variation": false,
+        "border_color": "borderless",
+        "frame": "2015",
+        "image_uris": {
+          "small": "images/small/eden-seat-of-the-sanctum-4786e79c-1e64-41bd-87f6-9a33110afa71.jpg",
+          "normal": "images/normal/eden-seat-of-the-sanctum-4786e79c-1e64-41bd-87f6-9a33110afa71.jpg",
+          "large": "images/large/eden-seat-of-the-sanctum-4786e79c-1e64-41bd-87f6-9a33110afa71.jpg",
+          "png": "images/png/eden-seat-of-the-sanctum-4786e79c-1e64-41bd-87f6-9a33110afa71.png",
+          "art_crop": "images/art_crop/eden-seat-of-the-sanctum-4786e79c-1e64-41bd-87f6-9a33110afa71.jpg",
+          "border_crop": "images/border_crop/eden-seat-of-the-sanctum-4786e79c-1e64-41bd-87f6-9a33110afa71.jpg"
+        },
+        "fixture_image_sources": {
+          "small": "generated_placeholder",
+          "normal": "cache/card_images/normal/4786e79c-1e64-41bd-87f6-9a33110afa71.jpg",
+          "large": "generated_placeholder",
+          "png": "generated_placeholder",
+          "art_crop": "generated_placeholder",
+          "border_crop": "generated_placeholder"
+        }
+      },
+      {
+        "id": "e28eac1e-adc7-4f8d-b206-bef09ba07d38",
+        "oracle_id": "84856b92-5ce8-47f3-9a1c-78d6a3e26aca",
+        "name": "Eden, Seat of the Sanctum",
+        "mana_cost": "",
+        "type_line": "Land \u2014 Town",
+        "colors": [],
+        "color_identity": [],
+        "set": "FIN",
+        "set_name": "Final Fantasy",
+        "collector_number": "277",
+        "released_at": "2025-06-13",
+        "artist": "Leon Tukker",
+        "rarity": "uncommon",
+        "layout": "normal",
+        "games": [
+          "paper",
+          "arena",
+          "mtgo"
+        ],
+        "full_art": false,
+        "textless": false,
+        "promo": false,
+        "digital": false,
+        "variation": false,
+        "border_color": "black",
+        "frame": "2015",
+        "image_uris": {
+          "small": "images/small/eden-seat-of-the-sanctum-e28eac1e-adc7-4f8d-b206-bef09ba07d38.jpg",
+          "normal": "images/normal/eden-seat-of-the-sanctum-e28eac1e-adc7-4f8d-b206-bef09ba07d38.jpg",
+          "large": "images/large/eden-seat-of-the-sanctum-e28eac1e-adc7-4f8d-b206-bef09ba07d38.jpg",
+          "png": "images/png/eden-seat-of-the-sanctum-e28eac1e-adc7-4f8d-b206-bef09ba07d38.png",
+          "art_crop": "images/art_crop/eden-seat-of-the-sanctum-e28eac1e-adc7-4f8d-b206-bef09ba07d38.jpg",
+          "border_crop": "images/border_crop/eden-seat-of-the-sanctum-e28eac1e-adc7-4f8d-b206-bef09ba07d38.jpg"
+        },
+        "fixture_image_sources": {
+          "small": "generated_placeholder",
+          "normal": "cache/card_images/normal/e28eac1e-adc7-4f8d-b206-bef09ba07d38.jpg",
+          "large": "generated_placeholder",
+          "png": "generated_placeholder",
+          "art_crop": "generated_placeholder",
+          "border_crop": "generated_placeholder"
+        }
+      }
+    ],
+    "emissary green": [
+      {
+        "id": "323e9430-b87c-4b02-9ade-c4c65343147b",
+        "oracle_id": "c43e7fa5-ff93-42d9-af79-ee417a8e41a7",
+        "name": "Emissary Green",
+        "mana_cost": "{4}{G}",
+        "type_line": "Legendary Creature \u2014 Human Advisor",
+        "colors": [
+          "G"
+        ],
+        "color_identity": [
+          "G"
+        ],
+        "set": "CLU",
+        "set_name": "Ravnica: Clue Edition",
+        "collector_number": "5",
+        "released_at": "2024-02-23",
+        "artist": "Heonhwa",
+        "rarity": "rare",
+        "layout": "normal",
+        "games": [
+          "paper",
+          "mtgo"
+        ],
+        "full_art": true,
+        "textless": false,
+        "promo": false,
+        "digital": false,
+        "variation": false,
+        "border_color": "borderless",
+        "frame": "2015",
+        "image_uris": {
+          "small": "images/small/emissary-green-323e9430-b87c-4b02-9ade-c4c65343147b.jpg",
+          "normal": "images/normal/emissary-green-323e9430-b87c-4b02-9ade-c4c65343147b.jpg",
+          "large": "images/large/emissary-green-323e9430-b87c-4b02-9ade-c4c65343147b.jpg",
+          "png": "images/png/emissary-green-323e9430-b87c-4b02-9ade-c4c65343147b.png",
+          "art_crop": "images/art_crop/emissary-green-323e9430-b87c-4b02-9ade-c4c65343147b.jpg",
+          "border_crop": "images/border_crop/emissary-green-323e9430-b87c-4b02-9ade-c4c65343147b.jpg"
+        },
+        "fixture_image_sources": {
+          "small": "generated_placeholder",
+          "normal": "cache/card_images/normal/323e9430-b87c-4b02-9ade-c4c65343147b.jpg",
+          "large": "generated_placeholder",
+          "png": "generated_placeholder",
+          "art_crop": "generated_placeholder",
+          "border_crop": "generated_placeholder"
+        }
+      }
+    ],
+    "eshki, temur's roar": [
+      {
+        "id": "ff9aa863-8773-452d-946c-ae334c632e11",
+        "oracle_id": "1b162dd3-3be6-406d-bf86-f7cc9eff098d",
+        "name": "Eshki, Temur's Roar",
+        "mana_cost": "{G}{U}{R}",
+        "type_line": "Legendary Creature \u2014 Human Warrior",
+        "colors": [
+          "G",
+          "R",
+          "U"
+        ],
+        "color_identity": [
+          "G",
+          "R",
+          "U"
+        ],
+        "set": "TDC",
+        "set_name": "Tarkir: Dragonstorm Commander",
+        "collector_number": "3",
+        "released_at": "2025-04-11",
+        "artist": "Billy Christian",
+        "rarity": "mythic",
+        "layout": "normal",
+        "games": [
+          "paper",
+          "mtgo",
+          "arena"
+        ],
+        "full_art": true,
+        "textless": false,
+        "promo": false,
+        "digital": false,
+        "variation": false,
+        "border_color": "borderless",
+        "frame": "2015",
+        "image_uris": {
+          "small": "images/small/eshki-temur-s-roar-ff9aa863-8773-452d-946c-ae334c632e11.jpg",
+          "normal": "images/normal/eshki-temur-s-roar-ff9aa863-8773-452d-946c-ae334c632e11.jpg",
+          "large": "images/large/eshki-temur-s-roar-ff9aa863-8773-452d-946c-ae334c632e11.jpg",
+          "png": "images/png/eshki-temur-s-roar-ff9aa863-8773-452d-946c-ae334c632e11.png",
+          "art_crop": "images/art_crop/eshki-temur-s-roar-ff9aa863-8773-452d-946c-ae334c632e11.jpg",
+          "border_crop": "images/border_crop/eshki-temur-s-roar-ff9aa863-8773-452d-946c-ae334c632e11.jpg"
+        },
+        "fixture_image_sources": {
+          "small": "generated_placeholder",
+          "normal": "cache/card_images/normal/ff9aa863-8773-452d-946c-ae334c632e11.jpg",
+          "large": "generated_placeholder",
+          "png": "generated_placeholder",
+          "art_crop": "generated_placeholder",
+          "border_crop": "generated_placeholder"
+        }
+      }
+    ],
+    "gonti, canny acquisitor": [
+      {
+        "id": "03a7e79f-625a-49ac-9cb1-e1fe5f51f5a0",
+        "oracle_id": "7923ef4a-b1be-4f6a-b17b-4eab101390de",
+        "name": "Gonti, Canny Acquisitor",
+        "mana_cost": "{2}{B}{G}{U}",
+        "type_line": "Legendary Creature \u2014 Aetherborn Rogue",
+        "colors": [
+          "B",
+          "G",
+          "U"
+        ],
+        "color_identity": [
+          "B",
+          "G",
+          "U"
+        ],
+        "set": "OTC",
+        "set_name": "Outlaws of Thunder Junction Commander",
+        "collector_number": "1",
+        "released_at": "2024-04-19",
+        "artist": "Anna Podedworna",
+        "rarity": "mythic",
+        "layout": "normal",
+        "games": [
+          "paper",
+          "arena",
+          "mtgo"
+        ],
+        "full_art": true,
+        "textless": false,
+        "promo": false,
+        "digital": false,
+        "variation": false,
+        "border_color": "borderless",
+        "frame": "2015",
+        "image_uris": {
+          "small": "images/small/gonti-canny-acquisitor-03a7e79f-625a-49ac-9cb1-e1fe5f51f5a0.jpg",
+          "normal": "images/normal/gonti-canny-acquisitor-03a7e79f-625a-49ac-9cb1-e1fe5f51f5a0.jpg",
+          "large": "images/large/gonti-canny-acquisitor-03a7e79f-625a-49ac-9cb1-e1fe5f51f5a0.jpg",
+          "png": "images/png/gonti-canny-acquisitor-03a7e79f-625a-49ac-9cb1-e1fe5f51f5a0.png",
+          "art_crop": "images/art_crop/gonti-canny-acquisitor-03a7e79f-625a-49ac-9cb1-e1fe5f51f5a0.jpg",
+          "border_crop": "images/border_crop/gonti-canny-acquisitor-03a7e79f-625a-49ac-9cb1-e1fe5f51f5a0.jpg"
+        },
+        "fixture_image_sources": {
+          "small": "generated_placeholder",
+          "normal": "cache/card_images/normal/03a7e79f-625a-49ac-9cb1-e1fe5f51f5a0.jpg",
+          "large": "generated_placeholder",
+          "png": "generated_placeholder",
+          "art_crop": "generated_placeholder",
+          "border_crop": "generated_placeholder"
+        }
+      }
+    ],
+    "green goblin, nemesis": [
+      {
+        "id": "b2860277-5b9e-444a-81f9-58e23355a722",
+        "oracle_id": "d1f1e48f-f1f4-497f-9112-79159d2f443b",
+        "name": "Green Goblin, Nemesis",
+        "mana_cost": "{2}{B}{R}",
+        "type_line": "Legendary Creature \u2014 Goblin Human Villain",
+        "colors": [
+          "B",
+          "R"
+        ],
+        "color_identity": [
+          "B",
+          "R"
+        ],
+        "set": "SPE",
+        "set_name": "Marvel's Spider-Man Eternal",
+        "collector_number": "23",
+        "released_at": "2025-09-26",
+        "artist": "Dan Dos Santos",
+        "rarity": "rare",
+        "layout": "normal",
+        "games": [
+          "paper"
+        ],
+        "full_art": true,
+        "textless": false,
+        "promo": false,
+        "digital": false,
+        "variation": false,
+        "border_color": "borderless",
+        "frame": "2015",
+        "image_uris": {
+          "small": "images/small/green-goblin-nemesis-b2860277-5b9e-444a-81f9-58e23355a722.jpg",
+          "normal": "images/normal/green-goblin-nemesis-b2860277-5b9e-444a-81f9-58e23355a722.jpg",
+          "large": "images/large/green-goblin-nemesis-b2860277-5b9e-444a-81f9-58e23355a722.jpg",
+          "png": "images/png/green-goblin-nemesis-b2860277-5b9e-444a-81f9-58e23355a722.png",
+          "art_crop": "images/art_crop/green-goblin-nemesis-b2860277-5b9e-444a-81f9-58e23355a722.jpg",
+          "border_crop": "images/border_crop/green-goblin-nemesis-b2860277-5b9e-444a-81f9-58e23355a722.jpg"
+        },
+        "fixture_image_sources": {
+          "small": "generated_placeholder",
+          "normal": "cache/card_images/normal/b2860277-5b9e-444a-81f9-58e23355a722.jpg",
+          "large": "generated_placeholder",
+          "png": "generated_placeholder",
+          "art_crop": "generated_placeholder",
+          "border_crop": "generated_placeholder"
+        }
+      }
+    ],
+    "iron man, titan of innovation": [
+      {
+        "id": "7542b1d1-e34d-46dc-af24-1b718034c0e4",
+        "oracle_id": "67ab82de-1167-42f5-90bd-21c63edcc712",
+        "name": "Iron Man, Titan of Innovation",
+        "mana_cost": "{3}{U}{R}",
+        "type_line": "Legendary Artifact Creature \u2014 Human Hero",
+        "colors": [
+          "R",
+          "U"
+        ],
+        "color_identity": [
+          "R",
+          "U"
+        ],
+        "set": "SLD",
+        "set_name": "Secret Lair Drop",
+        "collector_number": "1731",
+        "released_at": "2024-11-04",
+        "artist": "Justyna Dura",
+        "rarity": "mythic",
+        "layout": "normal",
+        "games": [
+          "paper"
+        ],
+        "full_art": true,
+        "textless": false,
+        "promo": false,
+        "digital": false,
+        "variation": false,
+        "border_color": "borderless",
+        "frame": "2015",
+        "image_uris": {
+          "small": "images/small/iron-man-titan-of-innovation-7542b1d1-e34d-46dc-af24-1b718034c0e4.jpg",
+          "normal": "images/normal/iron-man-titan-of-innovation-7542b1d1-e34d-46dc-af24-1b718034c0e4.jpg",
+          "large": "images/large/iron-man-titan-of-innovation-7542b1d1-e34d-46dc-af24-1b718034c0e4.jpg",
+          "png": "images/png/iron-man-titan-of-innovation-7542b1d1-e34d-46dc-af24-1b718034c0e4.png",
+          "art_crop": "images/art_crop/iron-man-titan-of-innovation-7542b1d1-e34d-46dc-af24-1b718034c0e4.jpg",
+          "border_crop": "images/border_crop/iron-man-titan-of-innovation-7542b1d1-e34d-46dc-af24-1b718034c0e4.jpg"
+        },
+        "fixture_image_sources": {
+          "small": "generated_placeholder",
+          "normal": "cache/card_images/normal/7542b1d1-e34d-46dc-af24-1b718034c0e4.jpg",
+          "large": "generated_placeholder",
+          "png": "generated_placeholder",
+          "art_crop": "generated_placeholder",
+          "border_crop": "generated_placeholder"
+        }
+      }
+    ],
+    "killian, decisive mentor": [
+      {
+        "id": "76b6c35a-bb92-4ad3-8f85-88b9bafc6266",
+        "oracle_id": "9c54bd34-667d-415c-ad26-82e0eb0ff409",
+        "name": "Killian, Decisive Mentor",
+        "mana_cost": "{1}{W}{B}",
+        "type_line": "Legendary Creature \u2014 Human Warlock",
+        "colors": [
+          "B",
+          "W"
+        ],
+        "color_identity": [
+          "B",
+          "W"
+        ],
+        "set": "SOC",
+        "set_name": "Secrets of Strixhaven Commander",
+        "collector_number": "4",
+        "released_at": "2026-04-24",
+        "artist": "Billy Christian",
+        "rarity": "mythic",
+        "layout": "normal",
+        "games": [
+          "paper",
+          "mtgo",
+          "arena"
+        ],
+        "full_art": true,
+        "textless": false,
+        "promo": false,
+        "digital": false,
+        "variation": false,
+        "border_color": "borderless",
+        "frame": "2015",
+        "image_uris": {
+          "small": "images/small/killian-decisive-mentor-76b6c35a-bb92-4ad3-8f85-88b9bafc6266.jpg",
+          "normal": "images/normal/killian-decisive-mentor-76b6c35a-bb92-4ad3-8f85-88b9bafc6266.jpg",
+          "large": "images/large/killian-decisive-mentor-76b6c35a-bb92-4ad3-8f85-88b9bafc6266.jpg",
+          "png": "images/png/killian-decisive-mentor-76b6c35a-bb92-4ad3-8f85-88b9bafc6266.png",
+          "art_crop": "images/art_crop/killian-decisive-mentor-76b6c35a-bb92-4ad3-8f85-88b9bafc6266.jpg",
+          "border_crop": "images/border_crop/killian-decisive-mentor-76b6c35a-bb92-4ad3-8f85-88b9bafc6266.jpg"
+        },
+        "fixture_image_sources": {
+          "small": "generated_placeholder",
+          "normal": "cache/card_images/normal/76b6c35a-bb92-4ad3-8f85-88b9bafc6266.jpg",
+          "large": "generated_placeholder",
+          "png": "generated_placeholder",
+          "art_crop": "generated_placeholder",
+          "border_crop": "generated_placeholder"
+        }
+      }
+    ],
+    "mastermind plum": [
+      {
+        "id": "df81568b-c66a-49c6-bd48-7df98ea00117",
+        "oracle_id": "4605d8b3-b714-4717-8ff3-155fabfc1999",
+        "name": "Mastermind Plum",
+        "mana_cost": "{2}{B}",
+        "type_line": "Legendary Creature \u2014 Human Wizard",
+        "colors": [
+          "B"
+        ],
+        "color_identity": [
+          "B"
+        ],
+        "set": "CLU",
+        "set_name": "Ravnica: Clue Edition",
+        "collector_number": "3",
+        "released_at": "2024-02-23",
+        "artist": "Bryan Sola",
+        "rarity": "rare",
+        "layout": "normal",
+        "games": [
+          "paper",
+          "mtgo"
+        ],
+        "full_art": true,
+        "textless": false,
+        "promo": false,
+        "digital": false,
+        "variation": false,
+        "border_color": "borderless",
+        "frame": "2015",
+        "image_uris": {
+          "small": "images/small/mastermind-plum-df81568b-c66a-49c6-bd48-7df98ea00117.jpg",
+          "normal": "images/normal/mastermind-plum-df81568b-c66a-49c6-bd48-7df98ea00117.jpg",
+          "large": "images/large/mastermind-plum-df81568b-c66a-49c6-bd48-7df98ea00117.jpg",
+          "png": "images/png/mastermind-plum-df81568b-c66a-49c6-bd48-7df98ea00117.png",
+          "art_crop": "images/art_crop/mastermind-plum-df81568b-c66a-49c6-bd48-7df98ea00117.jpg",
+          "border_crop": "images/border_crop/mastermind-plum-df81568b-c66a-49c6-bd48-7df98ea00117.jpg"
+        },
+        "fixture_image_sources": {
+          "small": "generated_placeholder",
+          "normal": "cache/card_images/normal/df81568b-c66a-49c6-bd48-7df98ea00117.jpg",
+          "large": "generated_placeholder",
+          "png": "generated_placeholder",
+          "art_crop": "generated_placeholder",
+          "border_crop": "generated_placeholder"
+        }
+      }
+    ],
+    "miles \"tails\" prower": [
+      {
+        "id": "7d4bd7e1-9861-4f8a-9ad5-a41aeaee1928",
+        "oracle_id": "98dd8231-5679-404a-b976-0bbfa6a8493c",
+        "name": "Miles \"Tails\" Prower",
+        "mana_cost": "{1}{W}{U}",
+        "type_line": "Legendary Creature \u2014 Fox Artificer",
+        "colors": [
+          "U",
+          "W"
+        ],
+        "color_identity": [
+          "U",
+          "W"
+        ],
+        "set": "SLD",
+        "set_name": "Secret Lair Drop",
+        "collector_number": "2085",
+        "released_at": "2025-07-14",
+        "artist": "John Thacker",
+        "rarity": "mythic",
+        "layout": "normal",
+        "games": [
+          "paper"
+        ],
+        "full_art": true,
+        "textless": false,
+        "promo": false,
+        "digital": false,
+        "variation": false,
+        "border_color": "borderless",
+        "frame": "2015",
+        "image_uris": {
+          "small": "images/small/miles-tails-prower-7d4bd7e1-9861-4f8a-9ad5-a41aeaee1928.jpg",
+          "normal": "images/normal/miles-tails-prower-7d4bd7e1-9861-4f8a-9ad5-a41aeaee1928.jpg",
+          "large": "images/large/miles-tails-prower-7d4bd7e1-9861-4f8a-9ad5-a41aeaee1928.jpg",
+          "png": "images/png/miles-tails-prower-7d4bd7e1-9861-4f8a-9ad5-a41aeaee1928.png",
+          "art_crop": "images/art_crop/miles-tails-prower-7d4bd7e1-9861-4f8a-9ad5-a41aeaee1928.jpg",
+          "border_crop": "images/border_crop/miles-tails-prower-7d4bd7e1-9861-4f8a-9ad5-a41aeaee1928.jpg"
+        },
+        "fixture_image_sources": {
+          "small": "generated_placeholder",
+          "normal": "cache/card_images/normal/7d4bd7e1-9861-4f8a-9ad5-a41aeaee1928.jpg",
+          "large": "generated_placeholder",
+          "png": "generated_placeholder",
+          "art_crop": "generated_placeholder",
+          "border_crop": "generated_placeholder"
+        }
+      }
+    ],
+    "neriv, crackling vanguard": [
+      {
+        "id": "ac552ea3-f521-4c42-a846-21a73364e0ca",
+        "oracle_id": "c8f827d7-4740-43c8-b494-c9e0479e0bf7",
+        "name": "Neriv, Crackling Vanguard",
+        "mana_cost": "{2}{R}{W}{B}",
+        "type_line": "Legendary Creature \u2014 Spirit Dragon",
+        "colors": [
+          "B",
+          "R",
+          "W"
+        ],
+        "color_identity": [
+          "B",
+          "R",
+          "W"
+        ],
+        "set": "TDC",
+        "set_name": "Tarkir: Dragonstorm Commander",
+        "collector_number": "6",
+        "released_at": "2025-04-11",
+        "artist": "Lucas Graciano",
+        "rarity": "mythic",
+        "layout": "normal",
+        "games": [
+          "paper",
+          "mtgo",
+          "arena"
+        ],
+        "full_art": true,
+        "textless": false,
+        "promo": false,
+        "digital": false,
+        "variation": false,
+        "border_color": "borderless",
+        "frame": "2015",
+        "image_uris": {
+          "small": "images/small/neriv-crackling-vanguard-ac552ea3-f521-4c42-a846-21a73364e0ca.jpg",
+          "normal": "images/normal/neriv-crackling-vanguard-ac552ea3-f521-4c42-a846-21a73364e0ca.jpg",
+          "large": "images/large/neriv-crackling-vanguard-ac552ea3-f521-4c42-a846-21a73364e0ca.jpg",
+          "png": "images/png/neriv-crackling-vanguard-ac552ea3-f521-4c42-a846-21a73364e0ca.png",
+          "art_crop": "images/art_crop/neriv-crackling-vanguard-ac552ea3-f521-4c42-a846-21a73364e0ca.jpg",
+          "border_crop": "images/border_crop/neriv-crackling-vanguard-ac552ea3-f521-4c42-a846-21a73364e0ca.jpg"
+        },
+        "fixture_image_sources": {
+          "small": "generated_placeholder",
+          "normal": "cache/card_images/normal/ac552ea3-f521-4c42-a846-21a73364e0ca.jpg",
+          "large": "generated_placeholder",
+          "png": "generated_placeholder",
+          "art_crop": "generated_placeholder",
+          "border_crop": "generated_placeholder"
+        }
+      }
+    ],
+    "sol, advocate eternal": [
+      {
+        "id": "711ccbf2-1cd6-4881-b020-a71bedb8f664",
+        "oracle_id": "3191ef26-eeeb-419b-acbd-f4b496eea0db",
+        "name": "Sol, Advocate Eternal",
+        "mana_cost": "{G}{W}{U}{B}",
+        "type_line": "Legendary Creature \u2014 Dragon Angel",
+        "colors": [
+          "B",
+          "G",
+          "U",
+          "W"
+        ],
+        "color_identity": [
+          "B",
+          "G",
+          "U",
+          "W"
+        ],
+        "set": "PH18",
+        "set_name": "2018 Heroes of the Realm",
+        "collector_number": "3",
+        "released_at": "2019-08-01",
+        "artist": "Randy Vargas",
+        "rarity": "mythic",
+        "layout": "normal",
+        "games": [
+          "paper"
+        ],
+        "full_art": true,
+        "textless": false,
+        "promo": false,
+        "digital": false,
+        "variation": false,
+        "border_color": "black",
+        "frame": "2015",
+        "image_uris": {
+          "small": "images/small/sol-advocate-eternal-711ccbf2-1cd6-4881-b020-a71bedb8f664.jpg",
+          "normal": "images/normal/sol-advocate-eternal-711ccbf2-1cd6-4881-b020-a71bedb8f664.jpg",
+          "large": "images/large/sol-advocate-eternal-711ccbf2-1cd6-4881-b020-a71bedb8f664.jpg",
+          "png": "images/png/sol-advocate-eternal-711ccbf2-1cd6-4881-b020-a71bedb8f664.png",
+          "art_crop": "images/art_crop/sol-advocate-eternal-711ccbf2-1cd6-4881-b020-a71bedb8f664.jpg",
+          "border_crop": "images/border_crop/sol-advocate-eternal-711ccbf2-1cd6-4881-b020-a71bedb8f664.jpg"
+        },
+        "fixture_image_sources": {
+          "small": "generated_placeholder",
+          "normal": "cache/card_images/normal/711ccbf2-1cd6-4881-b020-a71bedb8f664.jpg",
+          "large": "generated_placeholder",
+          "png": "generated_placeholder",
+          "art_crop": "generated_placeholder",
+          "border_crop": "generated_placeholder"
+        }
+      }
+    ],
+    "the fourteenth doctor": [
+      {
+        "id": "8b8a78cf-ee6c-4852-9651-eeaa634daaa1",
+        "oracle_id": "0afcf1eb-ac2c-4bb0-8823-9fe45968c2d9",
+        "name": "The Fourteenth Doctor",
+        "mana_cost": "{R/G}{W}{U}",
+        "type_line": "Legendary Creature \u2014 Time Lord Doctor",
+        "colors": [
+          "G",
+          "R",
+          "U",
+          "W"
+        ],
+        "color_identity": [
+          "G",
+          "R",
+          "U",
+          "W"
+        ],
+        "set": "SLD",
+        "set_name": "Secret Lair Drop",
+        "collector_number": "1583",
+        "released_at": "2023-12-11",
+        "artist": "Justyna Dura",
+        "rarity": "rare",
+        "layout": "normal",
+        "games": [
+          "paper"
+        ],
+        "full_art": true,
+        "textless": false,
+        "promo": false,
+        "digital": false,
+        "variation": false,
+        "border_color": "borderless",
+        "frame": "2015",
+        "image_uris": {
+          "small": "images/small/the-fourteenth-doctor-8b8a78cf-ee6c-4852-9651-eeaa634daaa1.jpg",
+          "normal": "images/normal/the-fourteenth-doctor-8b8a78cf-ee6c-4852-9651-eeaa634daaa1.jpg",
+          "large": "images/large/the-fourteenth-doctor-8b8a78cf-ee6c-4852-9651-eeaa634daaa1.jpg",
+          "png": "images/png/the-fourteenth-doctor-8b8a78cf-ee6c-4852-9651-eeaa634daaa1.png",
+          "art_crop": "images/art_crop/the-fourteenth-doctor-8b8a78cf-ee6c-4852-9651-eeaa634daaa1.jpg",
+          "border_crop": "images/border_crop/the-fourteenth-doctor-8b8a78cf-ee6c-4852-9651-eeaa634daaa1.jpg"
+        },
+        "fixture_image_sources": {
+          "small": "generated_placeholder",
+          "normal": "cache/card_images/normal/8b8a78cf-ee6c-4852-9651-eeaa634daaa1.jpg",
+          "large": "generated_placeholder",
+          "png": "generated_placeholder",
+          "art_crop": "generated_placeholder",
+          "border_crop": "generated_placeholder"
+        }
+      }
+    ],
+    "toph, greatest earthbender": [
+      {
+        "id": "b15acc09-dd32-4e93-a788-7c0ae965a0c8",
+        "oracle_id": "3741206f-8ef5-4b8f-ae4c-df3ab0a17683",
+        "name": "Toph, Greatest Earthbender",
+        "mana_cost": "{2}{R}{G}",
+        "type_line": "Legendary Creature \u2014 Human Warrior Ally",
+        "colors": [
+          "G",
+          "R"
+        ],
+        "color_identity": [
+          "G",
+          "R"
+        ],
+        "set": "TLE",
+        "set_name": "Avatar: The Last Airbender Eternal",
+        "collector_number": "70",
+        "released_at": "2025-11-21",
+        "artist": "Brian Yuen",
+        "rarity": "rare",
+        "layout": "normal",
+        "games": [
+          "paper",
+          "arena",
+          "mtgo"
+        ],
+        "full_art": true,
+        "textless": false,
+        "promo": false,
+        "digital": false,
+        "variation": false,
+        "border_color": "borderless",
+        "frame": "2015",
+        "image_uris": {
+          "small": "images/small/toph-greatest-earthbender-b15acc09-dd32-4e93-a788-7c0ae965a0c8.jpg",
+          "normal": "images/normal/toph-greatest-earthbender-b15acc09-dd32-4e93-a788-7c0ae965a0c8.jpg",
+          "large": "images/large/toph-greatest-earthbender-b15acc09-dd32-4e93-a788-7c0ae965a0c8.jpg",
+          "png": "images/png/toph-greatest-earthbender-b15acc09-dd32-4e93-a788-7c0ae965a0c8.png",
+          "art_crop": "images/art_crop/toph-greatest-earthbender-b15acc09-dd32-4e93-a788-7c0ae965a0c8.jpg",
+          "border_crop": "images/border_crop/toph-greatest-earthbender-b15acc09-dd32-4e93-a788-7c0ae965a0c8.jpg"
+        },
+        "fixture_image_sources": {
+          "small": "generated_placeholder",
+          "normal": "cache/card_images/normal/b15acc09-dd32-4e93-a788-7c0ae965a0c8.jpg",
+          "large": "generated_placeholder",
+          "png": "generated_placeholder",
+          "art_crop": "generated_placeholder",
+          "border_crop": "generated_placeholder"
+        }
+      }
+    ],
+    "yidris, maelstrom wielder": [
+      {
+        "id": "c219dd22-433c-4f6a-a0c4-fae12239291c",
+        "oracle_id": "9efe8aff-9a7d-4397-b5fd-c1a0fad7c15f",
+        "name": "Yidris, Maelstrom Wielder",
+        "mana_cost": "{U}{B}{R}{G}",
+        "type_line": "Legendary Creature \u2014 Ogre Wizard",
+        "colors": [
+          "B",
+          "G",
+          "R",
+          "U"
+        ],
+        "color_identity": [
+          "B",
+          "G",
+          "R",
+          "U"
+        ],
+        "set": "C16",
+        "set_name": "Commander 2016",
+        "collector_number": "50",
+        "released_at": "2016-11-11",
+        "artist": "Karl Kopinski",
+        "rarity": "mythic",
+        "layout": "normal",
+        "games": [
+          "paper"
+        ],
+        "full_art": false,
+        "textless": false,
+        "promo": false,
+        "digital": false,
+        "variation": false,
+        "border_color": "black",
+        "frame": "2015",
+        "image_uris": {
+          "small": "images/small/yidris-maelstrom-wielder-c219dd22-433c-4f6a-a0c4-fae12239291c.jpg",
+          "normal": "images/normal/yidris-maelstrom-wielder-c219dd22-433c-4f6a-a0c4-fae12239291c.jpg",
+          "large": "images/large/yidris-maelstrom-wielder-c219dd22-433c-4f6a-a0c4-fae12239291c.jpg",
+          "png": "images/png/yidris-maelstrom-wielder-c219dd22-433c-4f6a-a0c4-fae12239291c.png",
+          "art_crop": "images/art_crop/yidris-maelstrom-wielder-c219dd22-433c-4f6a-a0c4-fae12239291c.jpg",
+          "border_crop": "images/border_crop/yidris-maelstrom-wielder-c219dd22-433c-4f6a-a0c4-fae12239291c.jpg"
+        },
+        "fixture_image_sources": {
+          "small": "generated_placeholder",
+          "normal": "cache/card_images/normal/c219dd22-433c-4f6a-a0c4-fae12239291c.jpg",
+          "large": "generated_placeholder",
+          "png": "generated_placeholder",
+          "art_crop": "generated_placeholder",
+          "border_crop": "generated_placeholder"
+        }
+      },
+      {
+        "id": "9d64a386-d426-4897-b14c-cd0706edd2a4",
+        "oracle_id": "9efe8aff-9a7d-4397-b5fd-c1a0fad7c15f",
+        "name": "Yidris, Maelstrom Wielder",
+        "mana_cost": "{U}{B}{R}{G}",
+        "type_line": "Legendary Creature \u2014 Ogre Wizard",
+        "colors": [
+          "B",
+          "G",
+          "R",
+          "U"
+        ],
+        "color_identity": [
+          "B",
+          "G",
+          "R",
+          "U"
+        ],
+        "set": "OC16",
+        "set_name": "Commander 2016 Oversized",
+        "collector_number": "50",
+        "released_at": "2016-11-11",
+        "artist": "Karl Kopinski",
+        "rarity": "mythic",
+        "layout": "normal",
+        "games": [
+          "paper"
+        ],
+        "full_art": false,
+        "textless": false,
+        "promo": false,
+        "digital": false,
+        "variation": false,
+        "border_color": "black",
+        "frame": "2015",
+        "image_uris": {
+          "small": "images/small/yidris-maelstrom-wielder-9d64a386-d426-4897-b14c-cd0706edd2a4.jpg",
+          "normal": "images/normal/yidris-maelstrom-wielder-9d64a386-d426-4897-b14c-cd0706edd2a4.jpg",
+          "large": "images/large/yidris-maelstrom-wielder-9d64a386-d426-4897-b14c-cd0706edd2a4.jpg",
+          "png": "images/png/yidris-maelstrom-wielder-9d64a386-d426-4897-b14c-cd0706edd2a4.png",
+          "art_crop": "images/art_crop/yidris-maelstrom-wielder-9d64a386-d426-4897-b14c-cd0706edd2a4.jpg",
+          "border_crop": "images/border_crop/yidris-maelstrom-wielder-9d64a386-d426-4897-b14c-cd0706edd2a4.jpg"
+        },
+        "fixture_image_sources": {
+          "small": "generated_placeholder",
+          "normal": "cache/card_images/normal/9d64a386-d426-4897-b14c-cd0706edd2a4.jpg",
+          "large": "generated_placeholder",
+          "png": "generated_placeholder",
+          "art_crop": "generated_placeholder",
+          "border_crop": "generated_placeholder"
+        }
+      },
+      {
+        "id": "51b8d72e-3322-4c74-8edc-a58d77232945",
+        "oracle_id": "9efe8aff-9a7d-4397-b5fd-c1a0fad7c15f",
+        "name": "Yidris, Maelstrom Wielder",
+        "mana_cost": "{U}{B}{R}{G}",
+        "type_line": "Legendary Creature \u2014 Ogre Wizard",
+        "colors": [
+          "B",
+          "G",
+          "R",
+          "U"
+        ],
+        "color_identity": [
+          "B",
+          "G",
+          "R",
+          "U"
+        ],
+        "set": "PZ2",
+        "set_name": "Treasure Chest",
+        "collector_number": "64",
+        "released_at": "2016-11-16",
+        "artist": "Karl Kopinski",
+        "rarity": "mythic",
+        "layout": "normal",
+        "games": [
+          "mtgo"
+        ],
+        "full_art": false,
+        "textless": false,
+        "promo": false,
+        "digital": true,
+        "variation": false,
+        "border_color": "black",
+        "frame": "2015",
+        "image_uris": {
+          "small": "images/small/yidris-maelstrom-wielder-51b8d72e-3322-4c74-8edc-a58d77232945.jpg",
+          "normal": "images/normal/yidris-maelstrom-wielder-51b8d72e-3322-4c74-8edc-a58d77232945.jpg",
+          "large": "images/large/yidris-maelstrom-wielder-51b8d72e-3322-4c74-8edc-a58d77232945.jpg",
+          "png": "images/png/yidris-maelstrom-wielder-51b8d72e-3322-4c74-8edc-a58d77232945.png",
+          "art_crop": "images/art_crop/yidris-maelstrom-wielder-51b8d72e-3322-4c74-8edc-a58d77232945.jpg",
+          "border_crop": "images/border_crop/yidris-maelstrom-wielder-51b8d72e-3322-4c74-8edc-a58d77232945.jpg"
+        },
+        "fixture_image_sources": {
+          "small": "generated_placeholder",
+          "normal": "cache/card_images/normal/51b8d72e-3322-4c74-8edc-a58d77232945.jpg",
+          "large": "generated_placeholder",
+          "png": "generated_placeholder",
+          "art_crop": "generated_placeholder",
+          "border_crop": "generated_placeholder"
+        }
+      },
+      {
+        "id": "bcd008c4-884a-4c98-8842-8f4b35fbdf81",
+        "oracle_id": "9efe8aff-9a7d-4397-b5fd-c1a0fad7c15f",
+        "name": "Yidris, Maelstrom Wielder",
+        "mana_cost": "{U}{B}{R}{G}",
+        "type_line": "Legendary Creature \u2014 Ogre Wizard",
+        "colors": [
+          "B",
+          "G",
+          "R",
+          "U"
+        ],
+        "color_identity": [
+          "B",
+          "G",
+          "R",
+          "U"
+        ],
+        "set": "SLD",
+        "set_name": "Secret Lair Drop",
+        "collector_number": "455",
+        "released_at": "2022-04-12",
+        "artist": "Krharts",
+        "rarity": "mythic",
+        "layout": "normal",
+        "games": [
+          "paper"
+        ],
+        "full_art": true,
+        "textless": false,
+        "promo": false,
+        "digital": false,
+        "variation": false,
+        "border_color": "black",
+        "frame": "2015",
+        "image_uris": {
+          "small": "images/small/yidris-maelstrom-wielder-bcd008c4-884a-4c98-8842-8f4b35fbdf81.jpg",
+          "normal": "images/normal/yidris-maelstrom-wielder-bcd008c4-884a-4c98-8842-8f4b35fbdf81.jpg",
+          "large": "images/large/yidris-maelstrom-wielder-bcd008c4-884a-4c98-8842-8f4b35fbdf81.jpg",
+          "png": "images/png/yidris-maelstrom-wielder-bcd008c4-884a-4c98-8842-8f4b35fbdf81.png",
+          "art_crop": "images/art_crop/yidris-maelstrom-wielder-bcd008c4-884a-4c98-8842-8f4b35fbdf81.jpg",
+          "border_crop": "images/border_crop/yidris-maelstrom-wielder-bcd008c4-884a-4c98-8842-8f4b35fbdf81.jpg"
+        },
+        "fixture_image_sources": {
+          "small": "generated_placeholder",
+          "normal": "cache/card_images/normal/bcd008c4-884a-4c98-8842-8f4b35fbdf81.jpg",
+          "large": "generated_placeholder",
+          "png": "generated_placeholder",
+          "art_crop": "generated_placeholder",
+          "border_crop": "generated_placeholder"
+        }
+      }
+    ],
+    "yore-tiller nephilim": [
+      {
+        "id": "0247d76c-dee4-4d1b-9c25-faa56171541e",
+        "oracle_id": "7e9d61d3-6ba7-45ac-a55c-a2f36595c5d2",
+        "name": "Yore-Tiller Nephilim",
+        "mana_cost": "{W}{U}{B}{R}",
+        "type_line": "Creature \u2014 Nephilim",
+        "colors": [
+          "B",
+          "R",
+          "U",
+          "W"
+        ],
+        "color_identity": [
+          "B",
+          "R",
+          "U",
+          "W"
+        ],
+        "set": "GPT",
+        "set_name": "Guildpact",
+        "collector_number": "140",
+        "released_at": "2006-02-03",
+        "artist": "Jeremy Jarvis",
+        "rarity": "rare",
+        "layout": "normal",
+        "games": [
+          "paper",
+          "mtgo"
+        ],
+        "full_art": false,
+        "textless": false,
+        "promo": false,
+        "digital": false,
+        "variation": false,
+        "border_color": "black",
+        "frame": "2003",
+        "image_uris": {
+          "small": "images/small/yore-tiller-nephilim-0247d76c-dee4-4d1b-9c25-faa56171541e.jpg",
+          "normal": "images/normal/yore-tiller-nephilim-0247d76c-dee4-4d1b-9c25-faa56171541e.jpg",
+          "large": "images/large/yore-tiller-nephilim-0247d76c-dee4-4d1b-9c25-faa56171541e.jpg",
+          "png": "images/png/yore-tiller-nephilim-0247d76c-dee4-4d1b-9c25-faa56171541e.png",
+          "art_crop": "images/art_crop/yore-tiller-nephilim-0247d76c-dee4-4d1b-9c25-faa56171541e.jpg",
+          "border_crop": "images/border_crop/yore-tiller-nephilim-0247d76c-dee4-4d1b-9c25-faa56171541e.jpg"
+        },
+        "fixture_image_sources": {
+          "small": "generated_placeholder",
+          "normal": "cache/card_images/normal/0247d76c-dee4-4d1b-9c25-faa56171541e.jpg",
+          "large": "generated_placeholder",
+          "png": "generated_placeholder",
+          "art_crop": "generated_placeholder",
+          "border_crop": "generated_placeholder"
+        }
+      },
+      {
+        "id": "1a52e7c4-c363-414b-a255-6abeb70fe69a",
+        "oracle_id": "7e9d61d3-6ba7-45ac-a55c-a2f36595c5d2",
+        "name": "Yore-Tiller Nephilim",
+        "mana_cost": "{W}{U}{B}{R}",
+        "type_line": "Creature \u2014 Nephilim",
+        "colors": [
+          "B",
+          "R",
+          "U",
+          "W"
+        ],
+        "color_identity": [
+          "B",
+          "R",
+          "U",
+          "W"
+        ],
+        "set": "PLST",
+        "set_name": "The List",
+        "collector_number": "GPT-140",
+        "released_at": "2021-02-05",
+        "artist": "Jeremy Jarvis",
+        "rarity": "rare",
+        "layout": "normal",
+        "games": [
+          "paper"
+        ],
+        "full_art": false,
+        "textless": false,
+        "promo": false,
+        "digital": false,
+        "variation": false,
+        "border_color": "black",
+        "frame": "2003",
+        "image_uris": {
+          "small": "images/small/yore-tiller-nephilim-1a52e7c4-c363-414b-a255-6abeb70fe69a.jpg",
+          "normal": "images/normal/yore-tiller-nephilim-1a52e7c4-c363-414b-a255-6abeb70fe69a.jpg",
+          "large": "images/large/yore-tiller-nephilim-1a52e7c4-c363-414b-a255-6abeb70fe69a.jpg",
+          "png": "images/png/yore-tiller-nephilim-1a52e7c4-c363-414b-a255-6abeb70fe69a.png",
+          "art_crop": "images/art_crop/yore-tiller-nephilim-1a52e7c4-c363-414b-a255-6abeb70fe69a.jpg",
+          "border_crop": "images/border_crop/yore-tiller-nephilim-1a52e7c4-c363-414b-a255-6abeb70fe69a.jpg"
+        },
+        "fixture_image_sources": {
+          "small": "generated_placeholder",
+          "normal": "cache/card_images/normal/1a52e7c4-c363-414b-a255-6abeb70fe69a.jpg",
+          "large": "generated_placeholder",
+          "png": "generated_placeholder",
+          "art_crop": "generated_placeholder",
+          "border_crop": "generated_placeholder"
+        }
+      }
+    ],
+    "yuma, proud protector": [
+      {
+        "id": "18df72be-07d2-4412-b36d-a45119763db3",
+        "oracle_id": "b8a0b967-3b5b-46f5-830b-5c8f1037784a",
+        "name": "Yuma, Proud Protector",
+        "mana_cost": "{5}{R}{G}{W}",
+        "type_line": "Legendary Creature \u2014 Human Ranger",
+        "colors": [
+          "G",
+          "R",
+          "W"
+        ],
+        "color_identity": [
+          "G",
+          "R",
+          "W"
+        ],
+        "set": "OTC",
+        "set_name": "Outlaws of Thunder Junction Commander",
+        "collector_number": "4",
+        "released_at": "2024-04-19",
+        "artist": "Matt Stewart",
+        "rarity": "mythic",
+        "layout": "normal",
+        "games": [
+          "paper",
+          "arena",
+          "mtgo"
+        ],
+        "full_art": true,
+        "textless": false,
+        "promo": false,
+        "digital": false,
+        "variation": false,
+        "border_color": "borderless",
+        "frame": "2015",
+        "image_uris": {
+          "small": "images/small/yuma-proud-protector-18df72be-07d2-4412-b36d-a45119763db3.jpg",
+          "normal": "images/normal/yuma-proud-protector-18df72be-07d2-4412-b36d-a45119763db3.jpg",
+          "large": "images/large/yuma-proud-protector-18df72be-07d2-4412-b36d-a45119763db3.jpg",
+          "png": "images/png/yuma-proud-protector-18df72be-07d2-4412-b36d-a45119763db3.png",
+          "art_crop": "images/art_crop/yuma-proud-protector-18df72be-07d2-4412-b36d-a45119763db3.jpg",
+          "border_crop": "images/border_crop/yuma-proud-protector-18df72be-07d2-4412-b36d-a45119763db3.jpg"
+        },
+        "fixture_image_sources": {
+          "small": "generated_placeholder",
+          "normal": "cache/card_images/normal/18df72be-07d2-4412-b36d-a45119763db3.jpg",
+          "large": "generated_placeholder",
+          "png": "generated_placeholder",
+          "art_crop": "generated_placeholder",
+          "border_crop": "generated_placeholder"
+        }
+      }
+    ]
+  }
+}
