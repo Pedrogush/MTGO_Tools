@@ -118,6 +118,12 @@ ignore_errors = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# Skip live network tests by default. Run them explicitly with:
+#   pytest -m network
+markers = [
+    "network: tests that hit live external services (excluded by default)",
+]
+addopts = "-m 'not network'"
 
 [tool.bandit]
 exclude_dirs = [

@@ -7,6 +7,7 @@ on:
   pull_request:
     branches:
       - main
+  workflow_dispatch:
 
 jobs:
   tests:
@@ -28,7 +29,30 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements-dev.txt
       - name: Run pytest
+        # Default pytest config excludes `network`-marked tests via addopts.
+        # Live network tests can be run on demand via the `network-tests`
+        # job below (triggered with workflow_dispatch).
         run: pytest
+
+  network-tests:
+    name: Live Network Tests
+    # Live tests that hit real external services (e.g. MTGGoldfish). These
+    # are flaky by nature, so we only run them on manual dispatch instead of
+    # blocking the default CI path.
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+      - name: Run network-marked tests
+        run: pytest -m network
 
   lint-and-format:
     name: Linting & Formatting
