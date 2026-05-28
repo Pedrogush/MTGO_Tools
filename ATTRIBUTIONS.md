@@ -21,7 +21,7 @@ This project incorporates ideas, techniques, and code patterns from various open
 - Log file format understanding
 
 **Files influenced:**
-- `utils/gamelog_parser.py` - Core parsing logic adapted from `modo.py`
+- `services/gamelog_service/parser.py` - Core parsing logic adapted from `modo.py`
 
 **Key modifications:**
 - Simplified for opponent extraction focus (removed deck analysis, play-by-play tracking)
@@ -51,7 +51,7 @@ The MTGO log file format is complex and undocumented. Chris Erickson's MTGO-Trac
 
 **Files influenced:**
 - `dotnet/MTGOBridge/Program.cs` - MTGOSDK integration
-- `utils/mtgo_bridge_client.py` - Bridge client for SDK communication
+- `services/mtgo_bridge_service/client.py` - Bridge client for SDK communication
 - `scripts/mtgosdk_repl.py` - REPL for exploring SDK API
 
 **Credit:**
@@ -120,8 +120,8 @@ The Tracker application provided excellent examples of how to structure an MTGOS
 We scrape MTGGoldfish in compliance with their `robots.txt` file. Our scraping is rate-limited and respects their terms of service. We do not republish or redistribute their data commercially.
 
 **Files influenced:**
-- `services/scrapers/mtggoldfish.py` - Web scraping implementation
-- `widgets/deck_selector.py` - Deck browser using scraped data
+- `repositories/scrapers/mtggoldfish.py` - Web scraping implementation
+- `widgets/panels/deck_research_panel/` - Deck browser using scraped data
 
 **Credit:**
 MTGGoldfish is an invaluable resource for the Magic: The Gathering community. Their metagame data and tournament coverage provide the foundation for competitive deck research. Please support them by visiting their site and considering their premium services.
