@@ -4,7 +4,7 @@
 #define MyAppName "MTGO Metagame Deck Builder"
 #define MyAppVersion "0.2"
 #define MyAppPublisher "MTGO Metagame Crawler Contributors"
-#define MyAppURL "https://github.com/yourusername/magic_online_metagame_crawler"
+#define MyAppURL "https://github.com/Pedrogush/MTGO_Tools"
 #define MyAppExeName "magic_online_metagame_crawler.exe"
 
 [Setup]
@@ -80,11 +80,21 @@ Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChang
 [Code]
 // ---------------------------------------------------------------------------
 // Bridge download constants
+//
+// The bridge artifact is intentionally downloaded at install time (rather than
+// bundled) so the installer stays small and the bridge can be republished
+// independently. The download is pinned to a specific release tag *and*
+// verified against a known SHA-256 to guarantee integrity. When publishing a
+// new bridge release, update all three values together: URL, ZIP filename,
+// and SHA-256. See packaging/README.md ("Bridge release flow") for details.
 // ---------------------------------------------------------------------------
 const
   BRIDGE_RELEASE_URL   = 'https://github.com/Pedrogush/MTGOBridge/releases/download/v1.0.0/MTGOBridge-v1.0.0.zip';
   BRIDGE_MANUAL_URL    = 'https://github.com/Pedrogush/MTGOBridge/releases/latest';
   BRIDGE_ZIP_FILENAME  = 'MTGOBridge-v1.0.0.zip';
+  // SHA-256 of MTGOBridge-v1.0.0.zip. Empty string disables verification
+  // (only intended for local debugging — production builds MUST set this).
+  BRIDGE_ZIP_SHA256    = '';
   DOTNET9_WINGET_ID    = 'Microsoft.DotNet.Runtime.9';
 
 // ---------------------------------------------------------------------------
@@ -118,6 +128,36 @@ begin
 end;
 
 // ---------------------------------------------------------------------------
+// PowerShell-based SHA-256 verification helper
+//
+// Returns True if the file at FilePath has a SHA-256 hash matching ExpectedHash
+// (case-insensitive). An empty ExpectedHash skips verification and returns True
+// — this is only intended for local/debug builds.
+// ---------------------------------------------------------------------------
+function VerifySha256PS(const FilePath, ExpectedHash: String): Boolean;
+var
+  ResultCode: Integer;
+  Script: String;
+begin
+  if Trim(ExpectedHash) = '' then
+  begin
+    Log('Bridge SHA-256 verification skipped (no expected hash configured).');
+    Result := True;
+    Exit;
+  end;
+
+  // Get-FileHash exits 0 regardless; we let PowerShell perform the comparison
+  // and translate the result into the process exit code.
+  Script := Format(
+    '$h = (Get-FileHash -Algorithm SHA256 -Path ''%s'').Hash; '
+    + 'if ($h -ieq ''%s'') { exit 0 } else { Write-Error "SHA256 mismatch: $h"; exit 1 }',
+    [FilePath, ExpectedHash]);
+  Result := Exec('powershell.exe',
+    '-NoProfile -NonInteractive -Command "' + Script + '"',
+    '', SW_HIDE, ewWaitUntilTerminated, ResultCode) and (ResultCode = 0);
+end;
+
+// ---------------------------------------------------------------------------
 // PowerShell-based zip extraction helper
 // ---------------------------------------------------------------------------
 function ExtractZipPS(const ZipPath, DestDir: String): Boolean;
@@ -138,7 +178,7 @@ end;
 procedure DownloadBridge;
 var
   ZipPath, IntegrationDir: String;
-  DownloadOk, ExtractOk: Boolean;
+  DownloadOk, VerifyOk, ExtractOk: Boolean;
 begin
   IntegrationDir := ExpandConstant('{app}\mtgo_integration');
   ZipPath        := ExpandConstant('{tmp}\') + BRIDGE_ZIP_FILENAME;
@@ -155,6 +195,21 @@ begin
       'The main application will work without it.' ,
       mbInformation, MB_OK);
     Log('Bridge download failed — MTGO integration will be unavailable.');
+    Exit;
+  end;
+
+  Log('Verifying MTGOBridge SHA-256 checksum');
+  VerifyOk := VerifySha256PS(ZipPath, BRIDGE_ZIP_SHA256);
+  if not VerifyOk then
+  begin
+    DeleteFile(ZipPath);
+    MsgBox(
+      'MTGOBridge download failed checksum verification and was discarded.' + #13#10 +
+      'You can install it manually from:' + #13#10 +
+      BRIDGE_MANUAL_URL + #13#10#13#10 +
+      'The main application will work without it.',
+      mbError, MB_OK);
+    Log('Bridge SHA-256 mismatch — MTGO integration will be unavailable.');
     Exit;
   end;
 
