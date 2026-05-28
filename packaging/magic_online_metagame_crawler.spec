@@ -33,6 +33,7 @@ for rel in [
     "vendor/mtgo_archetype_parser",
     # vendor/mtgosdk excluded — bridge is downloaded at install time
     "assets/mana",
+    "help",
 ]:
     src = project_root / rel
     if src.exists():

@@ -135,6 +135,20 @@ def _default_base_dir() -> Path:
     return _base_dir_from_cwd() or Path(__file__).resolve().parent.parent.parent
 
 
+def resource_path(*parts: str) -> Path:
+    """Resolve a read-only resource path that works from source and frozen builds.
+
+    In a PyInstaller bundle, data files live under ``sys._MEIPASS``; from source,
+    they live next to the repo root (three levels up from this file).
+    """
+    frozen_root = getattr(sys, "_MEIPASS", None)
+    if frozen_root:
+        root = Path(frozen_root)
+    else:
+        root = Path(__file__).resolve().parent.parent.parent
+    return root.joinpath(*parts)
+
+
 BASE_DATA_DIR = _default_base_dir()
 CONFIG_DIR = BASE_DATA_DIR / "config"
 CACHE_DIR = BASE_DATA_DIR / "cache"
