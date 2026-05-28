@@ -90,11 +90,16 @@ class CardTablePanelHandlersMixin(_Base):
                     scrollToTop=not preserve_scroll,
                 )
 
-                # Populate the new views with the same data so a switch is
-                # instant. The pile view is expensive (kicks off image loads)
-                # so only update it when it is or will be the active page.
-                self.table_view.set_cards(cards)
-                if self.view_mode == "pile":
+                # Populate the table/pile views only when one of them is the
+                # active page. Both are fully rebuilt by set_cards (the table
+                # issues ~5 SetCellValue per card plus a column auto-size, the
+                # pile kicks off image loads), so rebuilding the hidden view on
+                # every +/- edit just delays the visible view's refresh.
+                # set_view_mode() re-populates whichever view becomes active on
+                # the next switch, so a stale hidden view is harmless.
+                if self.view_mode == "table":
+                    self.table_view.set_cards(cards)
+                elif self.view_mode == "pile":
                     self.pile_view.set_cards(cards)
 
                 self._switch_content_page()
