@@ -1,10 +1,10 @@
 # Lines of Code by File (.py only)
 
-- Commit: `d7010c8` (d7010c8eafd706de2d1605fb90d9338259f76f64)
-- Commit date: 2026-05-28T08:24:23-03:00
-- Generated (UTC): 2026-05-28 11:24:34Z
-- Files counted: **469** (all git-tracked `*.py` files)
-- Total lines: **53,753**
+- Commit: `f667961` (f66796173395545800fb55ebe2e9299de8129c16)
+- Commit date: 2026-05-28T09:11:56-03:00
+- Generated (UTC): 2026-05-28 12:14:14Z
+- Files counted: **471** (all git-tracked `*.py` files)
+- Total lines: **54,187**
 
 Counts are raw `wc -l` (newline count). Files are grouped by top-level directory and sorted descending within each section. Regenerate with `python scripts/generate_loc_report.py`.
 
@@ -16,10 +16,10 @@ Counts are raw `wc -l` (newline count). Files are grouped by top-level directory
 | repositories | 51 | 4,090 |
 | widgets | 176 | 20,599 |
 | services | 72 | 7,576 |
-| tests | 51 | 11,188 |
+| tests | 52 | 11,257 |
 | automation | 19 | 3,244 |
 | utils | 71 | 3,035 |
-| other | 16 | 2,609 |
+| other | 17 | 2,974 |
 
 ## controllers (13 files, 1,412 LOC)
 
@@ -353,7 +353,7 @@ Counts are raw `wc -l` (newline count). Files are grouped by top-level directory
 | 24 | `services/bundle_snapshot_client/protocol.py` |
 | 20 | `services/deck_service/protocol.py` |
 
-## tests (51 files, 11,188 LOC)
+## tests (52 files, 11,257 LOC)
 
 | LOC | File |
 |----:|:-----|
@@ -400,6 +400,7 @@ Counts are raw `wc -l` (newline count). Files are grouped by top-level directory
 | 83 | `tests/test_helpers.py` |
 | 81 | `tests/test_runtime_flags.py` |
 | 69 | `tests/test_archetype_resolver.py` |
+| 69 | `tests/test_card_art_selection_fixture.py` |
 | 60 | `tests/test_mana_icon_factory.py` |
 | 56 | `tests/test_collection_loading.py` |
 | 43 | `tests/test_opponent_detection.py` |
@@ -509,12 +510,13 @@ Counts are raw `wc -l` (newline count). Files are grouped by top-level directory
 | 7 | `utils/constants/app.py` |
 | 3 | `utils/constants/images.py` |
 
-## other (16 files, 2,609 LOC)
+## other (17 files, 2,974 LOC)
 
 | LOC | File |
 |----:|:-----|
 | 615 | `scripts/mtgosdk_repl.py` |
 | 568 | `scripts/generate_dependency_diagrams.py` |
+| 365 | `scripts/generate_card_art_selection_fixture.py` |
 | 238 | `scripts/test_card_images.py` |
 | 168 | `scripts/benchmark_json_caches.py` |
 | 165 | `scripts/generate_loc_report.py` |
