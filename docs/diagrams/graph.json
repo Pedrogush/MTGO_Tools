@@ -216,6 +216,10 @@
         "utils.constants"
       ],
       [
+        "repositories.card_repository",
+        "utils.perf"
+      ],
+      [
         "repositories.deck_repository",
         "utils.atomic_io"
       ],
@@ -274,6 +278,10 @@
       [
         "repositories.scrapers",
         "utils.json_io"
+      ],
+      [
+        "repositories.scrapers",
+        "utils.perf"
       ],
       [
         "services.archetype_resolver",
@@ -566,9 +574,9 @@
     ]
   },
   "metadata": {
-    "commit": "f66796173395545800fb55ebe2e9299de8129c16",
-    "commit_date": "2026-05-28T09:11:56-03:00",
-    "generated_at": "2026-05-28T12:14:18Z",
+    "commit": "7eeca99786f250dc099c211413a351e56debf79b",
+    "commit_date": "2026-05-29T11:24:59-03:00",
+    "generated_at": "2026-05-29T14:26:19Z",
     "internal_packages": [
       "automation",
       "controllers",
