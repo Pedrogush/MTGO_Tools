@@ -90,6 +90,30 @@ SCRYFALL_MAX_DOWNLOAD_WORKERS = 10  # concurrent image download threads
 SCRYFALL_DOWNLOAD_CHUNK_SIZE = 8192  # byte chunk size when streaming downloaded images
 SCRYFALL_DOWNLOAD_PROGRESS_INTERVAL = 100  # invoke progress callback every N completed cards
 
+# Startup cache warm-up — lazy background pre-fetch of decklists and card images.
+# The warm-up threads idle for this long after startup before doing any work, so
+# they never compete with the initial archetype/deck/card-data loads for the
+# network or CPU during the first few seconds of the session.
+CACHE_WARMUP_START_DELAY_SECONDS = 5.0
+# Pause between fetches during the *fast* initial warm-up pass (the first deck
+# of every archetype plus the top decklists of every format). Effectively
+# back-to-back — network latency paces it — so the data a user is most likely
+# to open is local within the first minute.
+CACHE_WARMUP_FAST_THROTTLE_SECONDS = 0.0
+# Pause between fetches during the *slow* deep pass (every remaining decklist).
+# Deliberately large so the exhaustive backfill trickles in the background
+# without competing for the network. The stop event is waited on during the
+# pause so shutdown interrupts the warm-up immediately.
+CACHE_WARMUP_SLOW_THROTTLE_SECONDS = 20.0
+# Max seconds to wait for each warm-up thread to join on shutdown.
+CACHE_WARMUP_JOIN_TIMEOUT_SECONDS = 2.0
+# Number of "top" decklists per format the decklist warmer hydrates first (the
+# headline list of each of the top N archetypes) before deep-loading a format.
+CACHE_WARMUP_TOP_DECKS_PER_FORMAT = 6
+# Emit a progress log line every N hydrated decklists so the warm-up is visible
+# without logging every individual fetch.
+CACHE_WARMUP_PROGRESS_INTERVAL = 50
+
 # Card image download queue — retry and timing configuration
 IMAGE_DOWNLOAD_QUEUE_STOP_TIMEOUT_SECONDS = (
     2.0  # max seconds to wait for queue thread to join on stop

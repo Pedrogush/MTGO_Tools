@@ -52,6 +52,7 @@ from utils.diagnostics import EventLogger
 from utils.perf import timed
 
 if TYPE_CHECKING:
+    from controllers.app_controller.cache_warmer import CacheWarmer
     from widgets.frames.app_frame import AppFrame
 
 
@@ -153,6 +154,7 @@ class AppController(
         self._worker = BackgroundWorker()
         self.frame: AppFrame | None = None
         self._bulk_check_worker_active = False
+        self._cache_warmer: CacheWarmer | None = None
 
     # ----- Backward-compat repository accessors -----
     # Widgets, handlers, and a few tests still reach for ``controller.card_repo``,

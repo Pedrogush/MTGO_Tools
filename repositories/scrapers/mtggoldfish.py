@@ -304,6 +304,7 @@ def fetch_deck_text(deck_num: str, source_filter: str | None = None) -> str:
     cache_source = None if source_filter == "both" else source_filter
     cached_text = cache.get(deck_num, source=cache_source)
     if cached_text is not None:
+        logger.debug(f"Deck {deck_num} served from cache (no download needed)")
         return cached_text
 
     # Cache miss - only download from MTGGoldfish if source allows it

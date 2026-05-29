@@ -4,7 +4,31 @@ from __future__ import annotations
 
 from loguru import logger
 
-from utils.logging_config import configure_logging
+from utils.logging_config import _warmup_filter, configure_logging
+
+
+class _Level:
+    def __init__(self, no: int) -> None:
+        self.no = no
+
+
+def _record(*, warmup: bool, level_name: str) -> dict:
+    return {
+        "extra": {"warmup": True} if warmup else {},
+        "level": _Level(logger.level(level_name).no),
+    }
+
+
+def test_warmup_filter_drops_all_warmup_records():
+    # Every level from the warm-up context is dropped, including errors —
+    # the warmer summarises failures itself.
+    for level_name in ("DEBUG", "INFO", "WARNING", "ERROR"):
+        assert _warmup_filter(_record(warmup=True, level_name=level_name)) is False
+
+
+def test_warmup_filter_passes_non_warmup_records():
+    assert _warmup_filter(_record(warmup=False, level_name="INFO")) is True
+    assert _warmup_filter(_record(warmup=False, level_name="DEBUG")) is True
 
 
 def _captured_levels(logs_dir, monkeypatch, env_value):

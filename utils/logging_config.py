@@ -10,6 +10,20 @@ from pathlib import Path
 from loguru import logger
 
 
+def _warmup_filter(record) -> bool:
+    """Drop records emitted by the background cache warm-up.
+
+    The warm-up drives a high volume of per-archetype scrapes and per-deck
+    downloads, each of which logs from ``deck_operations`` and the scrapers
+    (including expected per-deck parse failures for decks MTGGoldfish can't
+    render). Those calls run inside ``logger.contextualize(warmup=True)``, so we
+    drop the resulting records from every sink — including their errors, which
+    are best-effort and already summarised by the warmer's own failed count —
+    and let the warmer emit its own concise, clearly-labelled progress lines.
+    """
+    return not record["extra"].get("warmup")
+
+
 def configure_logging(logs_dir: Path) -> Path | None:
     """
     Configure loguru to emit to stderr and a rolling file in the given logs directory.
@@ -27,7 +41,14 @@ def configure_logging(logs_dir: Path) -> Path | None:
         if stream is None:
             continue
         try:
-            logger.add(stream, level=level, backtrace=True, diagnose=True, enqueue=True)
+            logger.add(
+                stream,
+                level=level,
+                backtrace=True,
+                diagnose=True,
+                enqueue=True,
+                filter=_warmup_filter,
+            )
             break
         except TypeError:
             continue
@@ -44,6 +65,7 @@ def configure_logging(logs_dir: Path) -> Path | None:
             backtrace=True,
             diagnose=True,
             enqueue=True,
+            filter=_warmup_filter,
         )
     except Exception as exc:
         logger.warning(f"File logging disabled; unable to write to {logs_dir}: {exc}")
