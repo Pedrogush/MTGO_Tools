@@ -76,6 +76,9 @@ class WritesMixin(_Base):
                 ],
             )
             conn.commit()
+        # The snapshot changed; drop memoized reads and recycle the shared
+        # read connection so subsequent reads observe the new data.
+        self._invalidate_read_state()
         return True
 
     def bulk_replace(self, entries: list[dict[str, Any]]) -> int:
