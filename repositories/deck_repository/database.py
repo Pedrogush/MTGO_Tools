@@ -140,7 +140,9 @@ class DatabaseMixin(_Base):
 
         with self._connect() as conn:
             rows = conn.execute(
-                f"SELECT * FROM decks{where} ORDER BY {sort_column} DESC",
+                # sort_column is whitelisted (allowed_sort) and the WHERE
+                # clauses bind every user value via ? placeholders in `params`.
+                f"SELECT * FROM decks{where} ORDER BY {sort_column} DESC",  # nosec B608
                 params,
             ).fetchall()
 
@@ -212,7 +214,9 @@ class DatabaseMixin(_Base):
 
             params.append(deck_id)
             cursor = conn.execute(
-                f"UPDATE decks SET {', '.join(assignments)} WHERE id = ?",
+                # assignments are fixed "col = ?" fragments and every value
+                # (including deck_id) is bound via ? placeholders in `params`.
+                f"UPDATE decks SET {', '.join(assignments)} WHERE id = ?",  # nosec B608
                 params,
             )
             conn.commit()
