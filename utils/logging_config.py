@@ -14,15 +14,14 @@ def _warmup_filter(record) -> bool:
     """Drop records emitted by the background cache warm-up.
 
     The warm-up drives a high volume of per-archetype scrapes and per-deck
-    downloads, each of which logs at INFO from ``deck_operations`` and the
-    scrapers. Those calls run inside ``logger.contextualize(warmup=True)``, so
-    we filter the resulting records out of every sink and let the warmer emit
-    its own concise, clearly-labelled progress lines instead. WARNING and above
-    still pass through so genuine problems are never hidden.
+    downloads, each of which logs from ``deck_operations`` and the scrapers
+    (including expected per-deck parse failures for decks MTGGoldfish can't
+    render). Those calls run inside ``logger.contextualize(warmup=True)``, so we
+    drop the resulting records from every sink — including their errors, which
+    are best-effort and already summarised by the warmer's own failed count —
+    and let the warmer emit its own concise, clearly-labelled progress lines.
     """
-    if record["extra"].get("warmup"):
-        return record["level"].no >= logger.level("WARNING").no
-    return True
+    return not record["extra"].get("warmup")
 
 
 def configure_logging(logs_dir: Path) -> Path | None:

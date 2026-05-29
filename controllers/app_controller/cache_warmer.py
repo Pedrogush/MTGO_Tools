@@ -13,11 +13,20 @@ most likely to open next is already local by the time they click:
   format (so all formats get a quick sample), then every list of the selected
   format, then every list of the remaining formats.
 
-Both threads idle for :data:`CACHE_WARMUP_START_DELAY_SECONDS` before starting,
-throttle between fetches, and check a shared stop event frequently so shutdown
-interrupts them promptly. All the fetch/scrape calls they make are cache-first
-(the metagame and deck-text caches dedupe), so a warm start is mostly skips and
-the network cost is paid once.
+Both threads idle for :data:`CACHE_WARMUP_START_DELAY_SECONDS` before starting
+and check a shared stop event frequently so shutdown interrupts them promptly.
+
+Pacing is two-speed: the *fast* initial pass — the first deck of every
+archetype (image warmer) and the top decklists of every format (Phase 1 of the
+decklist warmer) — runs effectively back-to-back so the data a user is most
+likely to open is local within the first minute. The *slow* deep pass — every
+remaining decklist of the selected format and then the rest — throttles
+:data:`CACHE_WARMUP_SLOW_THROTTLE_SECONDS` between fetches so the exhaustive
+backfill only trickles in the background.
+
+All the fetch/scrape calls they make are cache-first (the metagame and
+deck-text caches dedupe), so a warm start is mostly skips and the network cost
+is paid once.
 """
 
 from __future__ import annotations
@@ -30,10 +39,11 @@ from loguru import logger
 
 from services.image_service.schemas import CardImageRequest
 from utils.constants.timing import (
+    CACHE_WARMUP_FAST_THROTTLE_SECONDS,
     CACHE_WARMUP_JOIN_TIMEOUT_SECONDS,
     CACHE_WARMUP_PROGRESS_INTERVAL,
+    CACHE_WARMUP_SLOW_THROTTLE_SECONDS,
     CACHE_WARMUP_START_DELAY_SECONDS,
-    CACHE_WARMUP_THROTTLE_SECONDS,
     CACHE_WARMUP_TOP_DECKS_PER_FORMAT,
 )
 
@@ -60,7 +70,8 @@ class CacheWarmer:
         extract_card_names: Callable[[str], list[str]],
         enqueue_image: Callable[[CardImageRequest], None],
         start_delay: float = CACHE_WARMUP_START_DELAY_SECONDS,
-        throttle: float = CACHE_WARMUP_THROTTLE_SECONDS,
+        fast_throttle: float = CACHE_WARMUP_FAST_THROTTLE_SECONDS,
+        slow_throttle: float = CACHE_WARMUP_SLOW_THROTTLE_SECONDS,
         top_decks_per_format: int = CACHE_WARMUP_TOP_DECKS_PER_FORMAT,
         progress_interval: int = CACHE_WARMUP_PROGRESS_INTERVAL,
     ) -> None:
@@ -72,7 +83,8 @@ class CacheWarmer:
         self._extract_card_names = extract_card_names
         self._enqueue_image = enqueue_image
         self._start_delay = start_delay
-        self._throttle = throttle
+        self._fast_throttle = fast_throttle
+        self._slow_throttle = slow_throttle
         self._top_decks_per_format = top_decks_per_format
         self._progress_interval = max(1, progress_interval)
 
@@ -206,7 +218,9 @@ class CacheWarmer:
                         return
                     self._queue_image(name)
                     count += 1
-                if self._wait(self._throttle):
+                # The image warmer is part of the fast initial pass (one deck
+                # per archetype), so it stays at the fast throttle throughout.
+                if self._wait(self._fast_throttle):
                     return
         logger.info(f"Cache warm-up: image pre-fetch complete ({count} cards queued)")
 
@@ -246,8 +260,8 @@ class CacheWarmer:
         self._dl_failed = 0
         warmed: set[str] = set()
 
-        # Phase 1: the headline list of the top few archetypes for *every*
-        # format, so all formats get a quick representative sample first.
+        # Phase 1 (fast): the headline list of the top few archetypes for
+        # *every* format, so all formats get a quick representative sample.
         logger.info("Cache warm-up: hydrating top decklists for every format")
         for fmt in formats:
             if self._stopped():
@@ -255,22 +269,22 @@ class CacheWarmer:
             for deck in self._iter_format_decks(
                 fmt, per_archetype=1, limit=self._top_decks_per_format
             ):
-                if self._warm_deck(deck, warmed):
+                if self._warm_deck(deck, warmed, self._fast_throttle):
                     return
 
-        # Phase 2: every list of the selected format.
-        logger.info(f"Cache warm-up: hydrating all {formats[0]} decklists")
+        # Phase 2 (slow): every list of the selected format.
+        logger.info(f"Cache warm-up: hydrating all {formats[0]} decklists (slow pass)")
         for deck in self._iter_format_decks(formats[0], per_archetype=None, limit=None):
-            if self._warm_deck(deck, warmed):
+            if self._warm_deck(deck, warmed, self._slow_throttle):
                 return
 
-        # Phase 3: every list of the remaining formats.
+        # Phase 3 (slow): every list of the remaining formats.
         for fmt in formats[1:]:
             if self._stopped():
                 return
-            logger.info(f"Cache warm-up: hydrating all {fmt} decklists")
+            logger.info(f"Cache warm-up: hydrating all {fmt} decklists (slow pass)")
             for deck in self._iter_format_decks(fmt, per_archetype=None, limit=None):
-                if self._warm_deck(deck, warmed):
+                if self._warm_deck(deck, warmed, self._slow_throttle):
                     return
 
         logger.info(
@@ -278,7 +292,7 @@ class CacheWarmer:
             f"({self._dl_ok} hydrated, {self._dl_failed} failed)"
         )
 
-    def _warm_deck(self, deck: dict[str, Any], warmed: set[str]) -> bool:
+    def _warm_deck(self, deck: dict[str, Any], warmed: set[str], throttle: float) -> bool:
         """Hydrate one deck's text into the cache. Returns True if it should stop."""
         if self._stopped():
             return True
@@ -297,4 +311,4 @@ class CacheWarmer:
                 )
         else:
             self._dl_failed += 1
-        return self._wait(self._throttle)
+        return self._wait(throttle)

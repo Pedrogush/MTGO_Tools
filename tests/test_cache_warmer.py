@@ -68,8 +68,10 @@ def _make_warmer(
         extract_card_names=extract_names,
         enqueue_image=enqueue,
         start_delay=0.0,
-        throttle=0.0,
+        fast_throttle=0.0,
+        slow_throttle=0.0,
         top_decks_per_format=6,
+        progress_interval=50,
     )
     return warmer, fetched, queued
 

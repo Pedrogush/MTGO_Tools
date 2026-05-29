@@ -19,14 +19,11 @@ def _record(*, warmup: bool, level_name: str) -> dict:
     }
 
 
-def test_warmup_filter_drops_info_from_warmup_context():
-    assert _warmup_filter(_record(warmup=True, level_name="INFO")) is False
-    assert _warmup_filter(_record(warmup=True, level_name="DEBUG")) is False
-
-
-def test_warmup_filter_keeps_warnings_from_warmup_context():
-    assert _warmup_filter(_record(warmup=True, level_name="WARNING")) is True
-    assert _warmup_filter(_record(warmup=True, level_name="ERROR")) is True
+def test_warmup_filter_drops_all_warmup_records():
+    # Every level from the warm-up context is dropped, including errors —
+    # the warmer summarises failures itself.
+    for level_name in ("DEBUG", "INFO", "WARNING", "ERROR"):
+        assert _warmup_filter(_record(warmup=True, level_name=level_name)) is False
 
 
 def test_warmup_filter_passes_non_warmup_records():
