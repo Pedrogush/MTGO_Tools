@@ -1,0 +1,53 @@
+name: Refresh Generated Reports
+
+# LOC_REPORT.md and docs/diagrams/* are derived from the whole source tree, so
+# regenerating them inside every PR caused constant merge conflicts and stale
+# freshness-check failures. Instead of gating PRs on them, this workflow
+# regenerates them once a day (and on demand) and commits the result straight
+# to the default branch. The PR-time freshness checks have been removed from
+# ci.yml.
+
+on:
+  schedule:
+    # 06:17 UTC daily. Off the hour to avoid GitHub's top-of-hour scheduling
+    # congestion (which can delay or drop cron runs).
+    - cron: "17 6 * * *"
+  workflow_dispatch: {}
+
+# Only one refresh at a time; a newer run supersedes an in-flight one.
+concurrency:
+  group: refresh-reports
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    name: Regenerate LOC report and dependency diagrams
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Regenerate reports
+        run: |
+          python scripts/generate_loc_report.py
+          python scripts/generate_dependency_diagrams.py
+
+      - name: Commit and push if changed
+        run: |
+          if [ -z "$(git status --porcelain LOC_REPORT.md docs/diagrams)" ]; then
+            echo "Reports already up to date; nothing to commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add LOC_REPORT.md docs/diagrams
+          # [skip ci] so the auto-commit does not trigger the PR/push CI matrix.
+          git commit -m "chore: refresh LOC report and dependency diagrams [skip ci]"
+          git push
