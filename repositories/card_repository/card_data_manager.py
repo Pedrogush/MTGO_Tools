@@ -21,6 +21,7 @@ from repositories.card_repository import remote, storage
 from repositories.card_repository.builder import build_index
 from repositories.card_repository.schemas import CardEntry
 from utils.constants import ATOMIC_DATA_HEAD_TTL_SECONDS, CARD_DATA_DIR
+from utils.perf import timed
 
 
 def load_card_manager(data_dir: Path | str = CARD_DATA_DIR, force: bool = False) -> CardDataManager:
@@ -37,6 +38,9 @@ class CardDataManager:
         self._cards_by_name: dict[str, CardEntry] | None = None
 
     def ensure_latest(self, force: bool = False) -> None:
+        # One-time conversion of a pre-msgpack JSON index so existing installs
+        # avoid a needless re-download on first launch after the format change.
+        storage.migrate_legacy_index(self.index_path, storage.legacy_index_path(self.data_dir))
         local_meta = storage.load_meta(self.meta_path) or {}
         missing_index = not self.index_path.exists()
 
@@ -177,6 +181,7 @@ class CardDataManager:
         self._cards = index["cards"]
         self._cards_by_name = index["cards_by_name"]
 
+    @timed
     def _load_index(self) -> None:
         card_index = storage.load_index(self.index_path)
         self._cards = card_index.cards

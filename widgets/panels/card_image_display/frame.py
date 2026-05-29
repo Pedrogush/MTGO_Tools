@@ -49,6 +49,10 @@ class CardImageDisplay(CardImageDisplayHandlersMixin, CardImageDisplayProperties
         self.image_paths: list[Path] = []
         self.current_index: int = 0
 
+        # Generation counter so stale background decodes (from rapid card
+        # switches / face flips) are discarded when they reach the UI thread.
+        self._image_load_gen: int = 0
+
         # Animation state
         self.animation_timer: wx.Timer | None = None
         self.animation_alpha: float = 0.0

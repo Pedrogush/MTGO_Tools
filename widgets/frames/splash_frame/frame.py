@@ -15,7 +15,7 @@ from widgets.frames.splash_frame.properties import LoadingFramePropertiesMixin
 class LoadingFrame(LoadingFrameHandlersMixin, LoadingFramePropertiesMixin, wx.Frame):
     """Lightweight splash that shows a loading message while the main UI initializes."""
 
-    def __init__(self, min_duration: float = 0.8, max_duration: float = 1.8) -> None:
+    def __init__(self, min_duration: float = 0.25, max_duration: float = 1.8) -> None:
         super().__init__(
             None,
             title="Loading MTGO Deck Builder",
@@ -33,7 +33,7 @@ class LoadingFrame(LoadingFrameHandlersMixin, LoadingFramePropertiesMixin, wx.Fr
 
         self._timer = wx.Timer(self)
         self.Bind(wx.EVT_TIMER, self._on_tick, self._timer)
-        self._timer.Start(40)
+        self._timer.Start(20)
 
         self.Centre(wx.BOTH)
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from threading import Thread
 
 import wx
 from loguru import logger
@@ -28,6 +29,7 @@ class CardImageDisplayHandlersMixin:
     flip_icon_margin: int
     image_paths: list[Path]
     current_index: int
+    _image_load_gen: int
     animation_timer: wx.Timer | None
     animation_alpha: float
     animation_target_bitmap: wx.Bitmap | None
@@ -66,52 +68,88 @@ class CardImageDisplayHandlersMixin:
     def show_image(self, image_path: Path) -> bool:
         return self.show_images([image_path] if image_path else [])
 
-    @timed
     def _load_image_at_index(self, index: int, animate: bool = True) -> bool:
+        """Kick off an off-thread decode/scale/mask, then composite on the UI thread.
+
+        The expensive work (``wx.Image`` decode, high-quality ``Scale`` and the
+        PIL/numpy rounded-corner masking) runs in a background thread so rapid
+        card selection / face flips / printing navigation do not hitch the UI.
+        Only the lightweight DC compositing + ``SetBitmap`` runs on the main
+        thread, marshalled via :func:`wx.CallAfter`. Mirrors the off-thread
+        pattern in ``card_table_panel/pile_view.py``.
+
+        Returns ``True`` when a load was dispatched (the path exists and is in
+        range); the actual decode result is applied asynchronously.
+        """
         if not 0 <= index < len(self.image_paths):
             return False
 
         image_path = self.image_paths[index]
 
+        # Bump the generation so any in-flight decode for a previous image is
+        # discarded when it reaches the UI thread.
+        self._image_load_gen += 1
+        gen = self._image_load_gen
+
+        Thread(
+            target=self._decode_image_worker,
+            args=(gen, image_path, animate),
+            daemon=True,
+        ).start()
+        return True
+
+    @timed
+    def _decode_image_worker(self, gen: int, image_path: Path, animate: bool) -> None:
+        """Background worker: decode, scale and rounded-corner mask ``image_path``.
+
+        Produces a ready ``wx.Image`` and marshals the final composite back to
+        the UI thread. No wx UI objects are touched here — ``wx.Image`` is a
+        plain pixel container and the masking is pure PIL/numpy.
+        """
         try:
-            # Load the image
             img = wx.Image(str(image_path), wx.BITMAP_TYPE_ANY)
             if not img.IsOk():
                 logger.debug(f"Failed to load image: {image_path}")
-                return False
+                return
 
-            # Scale to fit while maintaining aspect ratio
+            # Scale to fit while maintaining aspect ratio.
             img_width = img.GetWidth()
             img_height = img.GetHeight()
-
-            scale_w = self.image_width / img_width
-            scale_h = self.image_height / img_height
-            scale = min(scale_w, scale_h)
-
+            scale = min(self.image_width / img_width, self.image_height / img_height)
             new_width = int(img_width * scale)
             new_height = int(img_height * scale)
-
             img = img.Scale(new_width, new_height, wx.IMAGE_QUALITY_HIGH)
 
-            # Create bitmap with rounded corners
-            bitmap = self._create_rounded_bitmap(img)
+            # Apply the rounded-corner alpha mask off-thread (PIL/numpy only).
+            masked_image = self._apply_rounded_corners_to_image(img, self.corner_radius)
+        except Exception as exc:
+            logger.exception(f"Error loading image {image_path}: {exc}")
+            return
 
-            # Display with or without animation
+        wx.CallAfter(self._apply_decoded_image, gen, masked_image, animate)
+
+    def _apply_decoded_image(self, gen: int, masked_image: wx.Image, animate: bool) -> None:
+        """UI-thread: composite the pre-masked image and display it.
+
+        Discards stale results via the generation counter so only the most
+        recent request is shown.
+        """
+        if gen != self._image_load_gen:
+            return
+        try:
+            # Composite background, border and flip icon around the masked image.
+            bitmap = self._create_rounded_bitmap(masked_image)
+
+            # Display with or without animation.
             if animate and self.bitmap_ctrl.GetBitmap().IsOk():
                 self._start_fade_animation(bitmap)
             else:
                 self.bitmap_ctrl.SetBitmap(bitmap)
                 self.Refresh()
-
-            return True
-
         except RuntimeError:
             # Widget was destroyed (e.g. during app shutdown) while a
             # CallAfter callback was still pending – silently bail out.
-            return False
-        except Exception as exc:
-            logger.exception(f"Error loading image {image_path}: {exc}")
-            return False
+            return
 
     def _start_fade_animation(self, target_bitmap: wx.Bitmap) -> None:
         # Cancel any existing animation
@@ -198,7 +236,14 @@ class CardImageDisplayHandlersMixin:
         self._load_image_at_index(self.current_index, animate=True)
         self._update_navigation()
 
-    def _create_rounded_bitmap(self, image: wx.Image) -> wx.Bitmap:
+    def _create_rounded_bitmap(self, masked_image: wx.Image) -> wx.Bitmap:
+        """Composite a pre-masked card image onto the dark, bordered canvas.
+
+        ``masked_image`` must already have its rounded-corner alpha applied
+        (done off-thread in :meth:`_decode_image_worker`); this method performs
+        only the UI-thread DC compositing of the background, border and flip
+        icon.
+        """
         # Create a bitmap canvas
         bitmap = wx.Bitmap(self.image_width, self.image_height)
         dc = wx.MemoryDC(bitmap)
@@ -214,15 +259,12 @@ class CardImageDisplayHandlersMixin:
         dc.DrawRoundedRectangle(0, 0, self.image_width, self.image_height, self.corner_radius)
 
         # Center the image
-        img_width = image.GetWidth()
-        img_height = image.GetHeight()
+        img_width = masked_image.GetWidth()
+        img_height = masked_image.GetHeight()
         x = (self.image_width - img_width) // 2
         y = (self.image_height - img_height) // 2
 
-        # Create a rounded corner mask and apply it to the image
-        masked_image = self._apply_rounded_corners_to_image(image, self.corner_radius)
-
-        # Draw the masked image
+        # Draw the (already masked) image
         dc.DrawBitmap(wx.Bitmap(masked_image), x, y, True)
 
         # Draw border using GraphicsContext for smooth anti-aliased edges
