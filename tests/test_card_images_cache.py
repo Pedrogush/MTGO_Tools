@@ -451,3 +451,139 @@ def test_get_image_path_no_accent_no_extra_query(tmp_path):
     # A plain ASCII name must still resolve correctly
     result = cache.get_image_path("Lightning Bolt", "normal")
     assert result == image_file
+
+
+def _write_bulk_data(cache_dir, monkeypatch):
+    """Seed a small bulk_data.json and point the schemas constant at it."""
+    import json
+
+    bulk_path = cache_dir / "bulk_data.json"
+    bulk_path.parent.mkdir(parents=True, exist_ok=True)
+    bulk_path.write_text(
+        json.dumps(
+            [
+                {
+                    "name": "Lightning Bolt",
+                    "id": "u-lea",
+                    "set": "lea",
+                    "collector_number": "161",
+                    "image_uris": {"normal": "http://img/bolt-lea.jpg"},
+                },
+                {
+                    "name": "Lightning Bolt",
+                    "id": "u-m11",
+                    "set": "m11",
+                    "collector_number": "149",
+                    "image_uris": {"normal": "http://img/bolt-m11.jpg"},
+                },
+                {
+                    "name": "Fire // Ice",
+                    "id": "u-fireice",
+                    "set": "apc",
+                    "card_faces": [{"name": "Fire"}, {"name": "Ice"}],
+                    "image_uris": {"normal": "http://img/fireice.jpg"},
+                },
+            ]
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(card_images_schemas, "BULK_DATA_CACHE", bulk_path, raising=False)
+    return bulk_path
+
+
+def test_resolve_card_locally_returns_record_without_set(tmp_path, monkeypatch):
+    """A name-only lookup resolves to a local printing and skips the API."""
+    cache_dir = tmp_path / "card_images"
+    _write_bulk_data(cache_dir, monkeypatch)
+    cache = card_images.CardImageCache(cache_dir=cache_dir, db_path=cache_dir / "images.db")
+    downloader = card_images.BulkImageDownloader(cache)
+
+    card = downloader._resolve_card_locally("Lightning Bolt")
+    assert card is not None
+    assert card.get("id") in {"u-lea", "u-m11"}
+    assert card.get("image_uris", {}).get("normal")
+
+
+def test_resolve_card_locally_matches_requested_set(tmp_path, monkeypatch):
+    """A set-qualified lookup returns the matching printing (case-insensitive)."""
+    cache_dir = tmp_path / "card_images"
+    _write_bulk_data(cache_dir, monkeypatch)
+    cache = card_images.CardImageCache(cache_dir=cache_dir, db_path=cache_dir / "images.db")
+    downloader = card_images.BulkImageDownloader(cache)
+
+    card = downloader._resolve_card_locally("lightning bolt", set_code="M11")
+    assert card is not None
+    assert card.get("id") == "u-m11"
+
+
+def test_resolve_card_locally_missing_set_defers_to_api(tmp_path, monkeypatch):
+    """A set we lack locally returns None so the caller hits the API."""
+    cache_dir = tmp_path / "card_images"
+    _write_bulk_data(cache_dir, monkeypatch)
+    cache = card_images.CardImageCache(cache_dir=cache_dir, db_path=cache_dir / "images.db")
+    downloader = card_images.BulkImageDownloader(cache)
+
+    assert downloader._resolve_card_locally("Lightning Bolt", set_code="ZZZ") is None
+    assert downloader._resolve_card_locally("Unknown Card") is None
+
+
+def test_resolve_card_locally_resolves_face_name(tmp_path, monkeypatch):
+    """A single face name of a split/MDFC card resolves to the full card."""
+    cache_dir = tmp_path / "card_images"
+    _write_bulk_data(cache_dir, monkeypatch)
+    cache = card_images.CardImageCache(cache_dir=cache_dir, db_path=cache_dir / "images.db")
+    downloader = card_images.BulkImageDownloader(cache)
+
+    card = downloader._resolve_card_locally("Fire")
+    assert card is not None
+    assert card.get("id") == "u-fireice"
+
+
+def test_download_by_name_uses_local_index_before_api(tmp_path, monkeypatch):
+    """A local hit must avoid the Scryfall /cards/named round-trip."""
+    cache_dir = tmp_path / "card_images"
+    _write_bulk_data(cache_dir, monkeypatch)
+    cache = card_images.CardImageCache(cache_dir=cache_dir, db_path=cache_dir / "images.db")
+    downloader = card_images.BulkImageDownloader(cache)
+
+    def _no_api(*_args, **_kwargs):
+        raise AssertionError("fetch_card_by_name should not be called on a local hit")
+
+    monkeypatch.setattr(downloader, "fetch_card_by_name", _no_api)
+    captured = {}
+
+    def _fake_download(card, size):
+        captured["id"] = card.get("id")
+        captured["size"] = size
+        return True, "ok"
+
+    monkeypatch.setattr(downloader, "_download_single_image", _fake_download)
+
+    success, message = downloader.download_card_image_by_name(
+        "Lightning Bolt", "normal", set_code="LEA"
+    )
+    assert success is True
+    assert message == "ok"
+    assert captured["id"] == "u-lea"
+    assert captured["size"] == "normal"
+
+
+def test_download_by_name_falls_back_to_api_on_local_miss(tmp_path, monkeypatch):
+    """A name absent from local bulk data must fall back to the API."""
+    cache_dir = tmp_path / "card_images"
+    _write_bulk_data(cache_dir, monkeypatch)
+    cache = card_images.CardImageCache(cache_dir=cache_dir, db_path=cache_dir / "images.db")
+    downloader = card_images.BulkImageDownloader(cache)
+
+    api_calls = {"n": 0}
+
+    def _api(name, set_code=None):
+        api_calls["n"] += 1
+        return {"id": "api-id", "name": name, "image_uris": {"normal": "http://api"}}
+
+    monkeypatch.setattr(downloader, "fetch_card_by_name", _api)
+    monkeypatch.setattr(downloader, "_download_single_image", lambda card, size: (True, "ok"))
+
+    success, _ = downloader.download_card_image_by_name("Totally Unknown Card", "normal")
+    assert success is True
+    assert api_calls["n"] == 1
