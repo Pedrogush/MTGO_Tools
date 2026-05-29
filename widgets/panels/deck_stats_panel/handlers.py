@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from utils.perf import perf_phase
 from widgets.panels.deck_stats_panel.properties import _EMPTY_HTML, _build_html
 
 if TYPE_CHECKING:
@@ -26,29 +27,31 @@ class DeckStatsPanelHandlersMixin(_Base):
             self._set_webview_page(_EMPTY_HTML)
             return
 
-        stats = self.deck_service.analyze_deck(deck_text)
-        land_count, mdfc_count = self._count_lands()
-        total_land_count = land_count + mdfc_count
+        with perf_phase("stats: analyze + metadata item helpers"):
+            stats = self.deck_service.analyze_deck(deck_text)
+            land_count, mdfc_count = self._count_lands()
+            total_land_count = land_count + mdfc_count
 
-        land_label = f"{land_count} land{'s' if land_count != 1 else ''}"
-        if mdfc_count:
-            land_label += f" + {mdfc_count} MDFC{'s' if mdfc_count != 1 else ''}"
-        summary = (
-            f"Mainboard: {stats['mainboard_count']} cards ({stats['unique_mainboard']} unique)"
-            f"  |  Sideboard: {stats['sideboard_count']} cards ({stats['unique_sideboard']} unique)"
-            f"  |  Lands: {land_label}"
-        )
+            land_label = f"{land_count} land{'s' if land_count != 1 else ''}"
+            if mdfc_count:
+                land_label += f" + {mdfc_count} MDFC{'s' if mdfc_count != 1 else ''}"
+            summary = (
+                f"Mainboard: {stats['mainboard_count']} cards ({stats['unique_mainboard']} unique)"
+                f"  |  Sideboard: {stats['sideboard_count']} cards ({stats['unique_sideboard']} unique)"
+                f"  |  Lands: {land_label}"
+            )
 
-        self.summary_label.SetLabel(summary)
+            self.summary_label.SetLabel(summary)
 
-        html = _build_html(
-            summary,
-            self._curve_items(),
-            self._color_items(),
-            self._type_items(),
-            self._hand_items(stats["mainboard_count"], total_land_count),
-        )
-        self._set_webview_page(html)
+            curve_items = self._curve_items()
+            color_items = self._color_items()
+            type_items = self._type_items()
+            hand_items = self._hand_items(stats["mainboard_count"], total_land_count)
+
+        with perf_phase("stats: build HTML"):
+            html = _build_html(summary, curve_items, color_items, type_items, hand_items)
+        with perf_phase("stats: WebView SetPage"):
+            self._set_webview_page(html)
 
     def set_card_manager(self, card_manager: CardDataManager) -> None:
         self.card_manager = card_manager

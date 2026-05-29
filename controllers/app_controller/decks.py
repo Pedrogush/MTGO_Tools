@@ -9,6 +9,8 @@ from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
+from utils.perf import perf_phase
+
 if TYPE_CHECKING:
     from controllers.app_controller.protocol import AppControllerProto
 
@@ -36,7 +38,11 @@ class DeckManagementMixin(_Base):
         source_filter = self.get_deck_data_source()
 
         def worker(number: str):
-            return self.workflow_service.download_deck_text(number, source_filter=source_filter)
+            # PERF: this runs on the worker thread (off the UI thread). It is
+            # the "download" leg of click-to-ready — a SQLite cache hit when the
+            # deck text is local, an HTTP scrape of MTGGoldfish on a cache miss.
+            with perf_phase("deck download (worker thread, cache or network)"):
+                return self.workflow_service.download_deck_text(number, source_filter=source_filter)
 
         self._worker.submit(worker, deck_number, on_success=on_success, on_error=on_error)
 
