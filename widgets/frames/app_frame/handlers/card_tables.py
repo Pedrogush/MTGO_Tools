@@ -120,6 +120,19 @@ class CardTablesHandler(_Base):
             return
 
         if not event.ControlDown():
+            # Plain +/-/Delete edit the quantity of the currently selected deck
+            # card in whatever view (grid/table/pile) is showing. Skipped while a
+            # text field has focus so they don't clobber normal typing.
+            if not self._typing_in_text_field():
+                if key_code in (ord("+"), wx.WXK_NUMPAD_ADD, ord("=")):
+                    if self._handle_increment_shortcut():
+                        return
+                elif key_code in (ord("-"), wx.WXK_NUMPAD_SUBTRACT):
+                    if self._handle_decrement_shortcut():
+                        return
+                elif key_code in (wx.WXK_DELETE, wx.WXK_NUMPAD_DELETE):
+                    if self._handle_remove_shortcut():
+                        return
             event.Skip()
             return
         handled = False
@@ -138,6 +151,16 @@ class CardTablesHandler(_Base):
         if handled:
             return
         event.Skip()
+
+    @staticmethod
+    def _typing_in_text_field() -> bool:
+        """True when keyboard focus is on an editable text control.
+
+        Used to suppress the bare +/-/Delete deck-edit shortcuts while the user
+        is typing in a search box, deck-name field, notes area, etc.
+        """
+        focused = wx.Window.FindFocus()
+        return isinstance(focused, (wx.TextCtrl, wx.SearchCtrl, wx.ComboBox))
 
     def _handle_increment_shortcut(self: AppFrame) -> bool:
         selection = self._get_selected_zone_card()
@@ -166,6 +189,15 @@ class CardTablesHandler(_Base):
             return False
         self._handle_zone_delta(zone, card["name"], -1)
         self._focus_card_in_zone(zone, card["name"])
+        return True
+
+    def _handle_remove_shortcut(self: AppFrame) -> bool:
+        """Remove the selected card from its zone entirely (the [Del] shortcut)."""
+        selection = self._get_selected_zone_card()
+        if selection is None:
+            return False
+        zone, card = selection
+        self._handle_zone_remove(zone, card["name"])
         return True
 
     def _get_selected_zone_card(self: AppFrame) -> tuple[str, dict[str, Any]] | None:

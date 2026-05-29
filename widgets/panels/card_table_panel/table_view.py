@@ -34,7 +34,11 @@ from widgets.panels.card_table_panel.sorting import (
     COL_NAME,
     COL_TEXT,
     COL_TYPE,
+    TABLE_ACTION_ADD,
+    TABLE_ACTION_REMOVE,
+    TABLE_ACTION_SUB,
     TABLE_COLUMNS,
+    action_slot_at,
     card_colors,
     card_mana_value,
     card_type_line,
@@ -76,6 +80,14 @@ _COLUMN_LABELS: dict[str, str] = {
     COL_TEXT: "Text",
     COL_COLOR: "Color",
 }
+
+# Trailing, non-data "actions" column rendered with the same +/-/x controls the
+# grid view shows on a selected card. It is not part of TABLE_COLUMNS so it
+# never participates in sorting or fit-to-width; it is appended after the data
+# columns and clicks on it are routed by x-position to add/remove/delete.
+_ACTIONS_COL = len(TABLE_COLUMNS)
+_ACTION_GLYPHS = ("+", "−", "×")
+_ACTIONS_COL_WIDTH = 66
 
 # Cache of (token, target-size) → wx.Bitmap shared across all renderer
 # instances. Bitmap creation + scaling is expensive; oracle text repeats
@@ -358,6 +370,44 @@ class _InlineSymbolStringRenderer(gridlib.GridCellRenderer):
         return _InlineSymbolStringRenderer(self._factory, self._icon_size)
 
 
+class _ActionCellRenderer(gridlib.GridCellRenderer):
+    """Draws the ``+ − ×`` row controls, each glyph centered in an equal slot."""
+
+    def Draw(
+        self,
+        grid: gridlib.Grid,
+        attr: gridlib.GridCellAttr,
+        dc: wx.DC,
+        rect: wx.Rect,
+        row: int,
+        col: int,
+        isSelected: bool,
+    ) -> None:
+        _paint_row_background(grid, dc, rect, col, isSelected)
+        dc.SetFont(grid.GetDefaultCellFont().Bold())
+        dc.SetTextForeground(grid.GetDefaultCellTextColour())
+        slot_w = rect.width / len(_ACTION_GLYPHS)
+        char_h = dc.GetCharHeight()
+        y = rect.y + max(0, (rect.height - char_h) // 2)
+        for idx, glyph in enumerate(_ACTION_GLYPHS):
+            tw = dc.GetTextExtent(glyph)[0]
+            x = rect.x + int(slot_w * idx + (slot_w - tw) / 2)
+            dc.DrawText(glyph, x, y)
+
+    def GetBestSize(
+        self,
+        grid: gridlib.Grid,
+        attr: gridlib.GridCellAttr,
+        dc: wx.DC,
+        row: int,
+        col: int,
+    ) -> wx.Size:
+        return wx.Size(_ACTIONS_COL_WIDTH, grid.GetDefaultRowSize())
+
+    def Clone(self) -> _ActionCellRenderer:
+        return _ActionCellRenderer()
+
+
 class DeckTableView(wx.Panel):
     """A wx.grid-backed sortable/reorderable table of deck cards."""
 
@@ -370,6 +420,8 @@ class DeckTableView(wx.Panel):
         on_hover: Callable[[dict[str, Any]], None] | None,
         icon_factory: ManaIconFactory,
         label_for_column: Callable[[str], str] | None = None,
+        on_delta: Callable[[str, int], None] | None = None,
+        on_remove: Callable[[str], None] | None = None,
     ) -> None:
         super().__init__(parent)
         self.zone = zone
@@ -378,6 +430,8 @@ class DeckTableView(wx.Panel):
         self._on_hover = on_hover
         self._icon_factory = icon_factory
         self._labels = label_for_column or _COLUMN_LABELS.get
+        self._on_delta = on_delta
+        self._on_remove = on_remove
 
         self._cards: list[dict[str, Any]] = []
         self._rows: list[dict[str, Any]] = []  # cards in current display order
@@ -395,7 +449,8 @@ class DeckTableView(wx.Panel):
         self.SetSizer(sizer)
 
         self.grid = gridlib.Grid(self)
-        self.grid.CreateGrid(0, len(TABLE_COLUMNS))
+        # One extra trailing column hosts the +/-/x row controls.
+        self.grid.CreateGrid(0, len(TABLE_COLUMNS) + 1)
         self.grid.EnableEditing(False)
         self.grid.EnableDragColMove(True)
         self.grid.EnableDragColSize(True)
@@ -439,6 +494,14 @@ class DeckTableView(wx.Panel):
             attr = gridlib.GridCellAttr()
             attr.SetRenderer(renderer)
             self.grid.SetColAttr(idx, attr)
+
+        # Actions column: fixed width, non-sortable, non-resizable.
+        self.grid.SetColLabelValue(_ACTIONS_COL, "")
+        actions_attr = gridlib.GridCellAttr()
+        actions_attr.SetRenderer(_ActionCellRenderer())
+        self.grid.SetColAttr(_ACTIONS_COL, actions_attr)
+        self.grid.SetColSize(_ACTIONS_COL, _ACTIONS_COL_WIDTH)
+        self.grid.DisableColResize(_ACTIONS_COL)
 
         sizer.Add(self.grid, 1, wx.EXPAND)
 
@@ -558,7 +621,9 @@ class DeckTableView(wx.Panel):
         for idx, w in self._natural_widths.items():
             if self.grid.GetColSize(idx) != w:
                 self.grid.SetColSize(idx, w)
-        available = self.grid.GetClientSize().GetWidth()
+        # Reserve room for the fixed actions column so the data columns shrink
+        # to fit beside it rather than pushing it off-screen.
+        available = self.grid.GetClientSize().GetWidth() - _ACTIONS_COL_WIDTH
         if available <= 0:
             return
         total = sum(self._natural_widths.values())
@@ -608,7 +673,7 @@ class DeckTableView(wx.Panel):
     # ----- event handlers -----
     def _on_header_click(self, event: gridlib.GridEvent) -> None:
         col = event.GetCol()
-        if col < 0:
+        if col < 0 or col == _ACTIONS_COL:
             event.Skip()
             return
         col_id = self._column_id_at(col)
@@ -625,6 +690,9 @@ class DeckTableView(wx.Panel):
             event.Skip()
             return
         card = self._rows[row]
+        if event.GetCol() == _ACTIONS_COL:
+            self._handle_action_click(row, card["name"], event.GetPosition())
+            return
         if self._selected_name and card["name"].lower() == self._selected_name.lower():
             self._selected_name = None
             self._apply_selection_highlight()
@@ -633,6 +701,23 @@ class DeckTableView(wx.Panel):
         self._selected_name = card["name"]
         self._apply_selection_highlight()
         self._on_select(card)
+
+    def _handle_action_click(self, row: int, name: str, pos: wx.Point) -> None:
+        # Convert the event position (device coords on the grid window) into an
+        # offset within the actions cell, then route to the matching callback.
+        # CellToRect returns logical (scroll-aware, col-move-aware) coords, so
+        # compare against the unscrolled click position.
+        col = _ACTIONS_COL
+        rect = self.grid.CellToRect(row, col)
+        x_logical, _ = self.grid.CalcUnscrolledPosition(pos)
+        x_in_cell = x_logical - rect.x
+        action = action_slot_at(x_in_cell, rect.width)
+        if action == TABLE_ACTION_ADD and self._on_delta:
+            self._on_delta(name, 1)
+        elif action == TABLE_ACTION_SUB and self._on_delta:
+            self._on_delta(name, -1)
+        elif action == TABLE_ACTION_REMOVE and self._on_remove:
+            self._on_remove(name)
 
     def _on_cell_select(self, event: gridlib.GridEvent) -> None:
         # Suppress the native single-cell highlight; we manage row selection.

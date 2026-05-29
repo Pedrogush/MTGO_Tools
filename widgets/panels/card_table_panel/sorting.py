@@ -32,6 +32,23 @@ PILE_SORT_MV = "mv"
 PILE_SORT_COLOR = "color"
 PILE_SORT_TYPE = "type"
 
+# Table-view row controls. The trailing actions cell is split into this many
+# equal-width slots, one glyph each (add / subtract / remove).
+TABLE_ACTION_COUNT = 3
+TABLE_ACTION_ADD, TABLE_ACTION_SUB, TABLE_ACTION_REMOVE = range(TABLE_ACTION_COUNT)
+
+
+def action_slot_at(x_in_cell: int, cell_width: int) -> int:
+    """Map an x offset inside the actions cell to an action slot index.
+
+    The cell is split into ``TABLE_ACTION_COUNT`` equal slots. Out-of-range x
+    is clamped so an edge click still resolves to the nearest slot.
+    """
+    if cell_width <= 0:
+        return TABLE_ACTION_ADD
+    slot = int(x_in_cell // (cell_width / TABLE_ACTION_COUNT))
+    return max(0, min(TABLE_ACTION_COUNT - 1, slot))
+
 
 def _meta(get_metadata: Callable[[str], Any], name: str) -> dict[str, Any]:
     """Return metadata for ``name`` as a dict-like object, never None."""

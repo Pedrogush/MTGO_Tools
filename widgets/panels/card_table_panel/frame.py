@@ -167,6 +167,8 @@ class CardTablePanel(CardTablePanelHandlersMixin, CardTablePanelPropertiesMixin,
             on_hover=self._handle_view_hover,
             icon_factory=icon_factory,
             label_for_column=self._column_label,
+            on_delta=lambda name, delta: self._on_delta(self.zone, name, delta),
+            on_remove=self._handle_view_remove,
         )
         self._content_book.AddPage(self.table_view, "table")
 
@@ -179,6 +181,7 @@ class CardTablePanel(CardTablePanelHandlersMixin, CardTablePanelPropertiesMixin,
             on_select=self._handle_view_select,
             on_hover=self._handle_view_hover,
             get_sort_mode=lambda: self.pile_sort,
+            on_remove=self._handle_view_remove,
         )
         self._content_book.AddPage(self.pile_view, "pile")
 
@@ -284,6 +287,11 @@ class CardTablePanel(CardTablePanelHandlersMixin, CardTablePanelPropertiesMixin,
         if self._on_hover is None:
             return
         self._on_hover(self.zone, card)
+
+    def _handle_view_remove(self, name: str) -> None:
+        """Remove ``name`` from this panel's zone (pile-view right-click)."""
+        if self._on_remove:
+            self._on_remove(self.zone, name)
 
     def _sync_grid_selection(self) -> None:
         if self.active_panel:
