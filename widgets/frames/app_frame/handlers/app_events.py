@@ -246,20 +246,22 @@ class AppEventHandlers(_Base):
             return
         slug_to_name = {a.get("href", ""): a.get("name", "") for a in self.archetypes}
         show_source = self.controller.get_deck_data_source() == "both"
-        for deck in filtered:
-            slug = deck.get("name", "")
-            self.deck_list.AppendDeck(
-                player=deck.get("player", "Unknown"),
-                archetype=slug_to_name.get(slug, slug),
-                event=AppEventHandlers._strip_extra_dates(deck.get("event", "")),
-                result=deck.get("result", ""),
-                date=AppEventHandlers._normalize_date(deck.get("date", "")),
-                emoji=(
+        rows = [
+            (
+                (
                     ("🐠" if deck.get("source") == "mtggoldfish" else "🧙🏾‍♂️")
                     if show_source
                     else ""
                 ),
+                deck.get("player", "Unknown"),
+                slug_to_name.get(deck.get("name", ""), deck.get("name", "")),
+                AppEventHandlers._strip_extra_dates(deck.get("event", "")),
+                deck.get("result", ""),
+                AppEventHandlers._normalize_date(deck.get("date", "")),
             )
+            for deck in filtered
+        ]
+        self.deck_list.set_decks(rows)
         self.deck_list.Enable()
 
     def on_deck_selected(self: AppFrame, _event: wx.CommandEvent | None = None) -> None:
