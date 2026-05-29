@@ -399,7 +399,7 @@ class TestGetArchetypeDecks:
 
         with patch(
             "repositories.scrapers.mtggoldfish.ARCHETYPE_DECKS_CACHE_FILE",
-            tempfile.mktemp(suffix=".json"),
+            temp_archetype_decks_file,
         ):
             get_archetype_decks("modern-some-fresh-archetype")
 
