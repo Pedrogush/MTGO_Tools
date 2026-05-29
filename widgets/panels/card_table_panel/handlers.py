@@ -67,6 +67,10 @@ class CardTablePanelHandlersMixin(_Base):
                 if self.active_panel:
                     self.active_panel.set_active(False)
                 self.active_panel = None
+                # Grow the recycled pool on demand. Cells are allocated lazily
+                # (see CardTablePanel._ensure_pool) so an empty deck creates no
+                # grid cells at startup; this is where they actually appear.
+                self._ensure_pool(len(cards))
                 for i, panel in enumerate(self._pool):
                     if i < len(cards):
                         card = cards[i]
