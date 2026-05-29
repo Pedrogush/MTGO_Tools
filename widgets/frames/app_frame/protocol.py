@@ -84,6 +84,9 @@ class AppFrameProto(Protocol):
     _pending_deck_restore: bool
     _is_first_deck_load: bool
     _all_loaded_decks: list[dict[str, Any]]
+    _last_archetype_reload_sig: tuple[str, tuple[str, ...]] | None
+    _last_deck_load_sig: tuple[str, str, str] | None
+    _last_deck_load_time: float
     _builder_search_pending: bool
     _search_seq: int
 

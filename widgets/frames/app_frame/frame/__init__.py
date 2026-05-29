@@ -108,6 +108,13 @@ class AppFrame(
         self._pending_deck_restore: bool = False
         self._is_first_deck_load: bool = True
         self._all_loaded_decks: list[dict[str, Any]] = []
+        # Dedup state for the "Any" deck reload triggered on archetype load.
+        # Archetype fetch uses stale-while-revalidate, which delivers results
+        # twice (cached then background-refreshed); see _on_archetypes_loaded
+        # and _load_decks for the two guards that collapse the redundant load.
+        self._last_archetype_reload_sig: tuple[str, tuple[str, ...]] | None = None
+        self._last_deck_load_sig: tuple[str, str, str] | None = None
+        self._last_deck_load_time: float = 0.0
 
         self._build_ui()
         self._apply_window_preferences()

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 import threading
+import time
 from datetime import date, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -418,6 +419,21 @@ class AppEventHandlers(_Base):
         # so the list reflects the newly loaded format on startup and on every
         # format change — otherwise it shows stale results from the previous
         # format.
+        #
+        # Archetype fetch uses stale-while-revalidate, so this callback fires
+        # twice per fetch: once with the cached/stale list and again with the
+        # background-refreshed list. The "Any" deck list depends only on the
+        # format, not on the archetype contents, so reload decks only when the
+        # (format, archetype names) signature actually changes — this collapses
+        # the redundant second reload when the refresh returns identical data.
+        signature = (self.current_format, tuple(a.get("name", "") for a in self.archetypes))
+        if signature == self._last_archetype_reload_sig:
+            logger.debug(
+                "Archetypes unchanged for {fmt}; skipping redundant deck reload",
+                fmt=self.current_format,
+            )
+            return
+        self._last_archetype_reload_sig = signature
         self._load_decks(scope="all")
 
     def _on_archetypes_error(self: AppFrame, error: Exception) -> None:
@@ -881,6 +897,19 @@ class AppEventHandlers(_Base):
         else:
             wx.MessageBox("Archetype missing.", "Deck Error", wx.OK | wx.ICON_ERROR)
             return
+
+        # Debounce rapid duplicate loads: the same target (scope + format +
+        # name) firing twice within 1s is always redundant — e.g. the
+        # stale-while-revalidate double archetype delivery, or a flurry of
+        # selection events. Distinct targets are never debounced, so genuine
+        # navigation (format switch, archetype click) stays responsive.
+        signature = (scope, self.current_format, name)
+        now = time.monotonic()
+        if signature == self._last_deck_load_sig and (now - self._last_deck_load_time) < 1.0:
+            logger.debug("Debouncing duplicate deck load: {sig}", sig=signature)
+            return
+        self._last_deck_load_sig = signature
+        self._last_deck_load_time = now
 
         self._all_loaded_decks = []
         if not self._is_first_deck_load:
