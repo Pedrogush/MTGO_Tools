@@ -27,12 +27,14 @@ class _WxStub(types.ModuleType):
     so the digit map under test behaves like the real wx.
     """
 
+    # Mirror the real wx values so the stub matches the constants the handler
+    # reads on the Windows host (wx.WXK_NUMPAD0 == 324, NUMPAD1..9 == 325..333).
     _PINNED = {
         "NOT_FOUND": -1,
-        "WXK_NUMPAD1": 324,
-        "WXK_NUMPAD2": 325,
-        "WXK_NUMPAD3": 326,
-        "WXK_NUMPAD4": 327,
+        "WXK_NUMPAD1": 325,
+        "WXK_NUMPAD2": 326,
+        "WXK_NUMPAD3": 327,
+        "WXK_NUMPAD4": 328,
     }
 
     def __init__(self, name: str) -> None:
@@ -96,7 +98,7 @@ def _load_handlers_module() -> types.ModuleType:
     return module
 
 
-_install_wx_stub()
+_WX = _install_wx_stub()
 DeckBuilderPanelHandlersMixin = _load_handlers_module().DeckBuilderPanelHandlersMixin
 
 
@@ -168,8 +170,11 @@ class _Panel(DeckBuilderPanelHandlersMixin):
         (ord("2"), 2),
         (ord("3"), 3),
         (ord("4"), 4),
-        (324, 1),  # WXK_NUMPAD1
-        (327, 4),  # WXK_NUMPAD4
+        # Reference the same wx constants the handler reads, so the codes stay
+        # correct under both real wx (Windows) and the stub (WSL) rather than
+        # hard-coding numbers that drift from wx's actual numpad values.
+        (_WX.WXK_NUMPAD1, 1),
+        (_WX.WXK_NUMPAD4, 4),
         (ord("0"), None),
         (ord("5"), None),
         (ord("a"), None),
