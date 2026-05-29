@@ -85,8 +85,35 @@ class BundleSnapshotClient(
             logger.debug("Bundle stamp is fresh — skipping download")
             return False, None
 
+        stamp = self._read_stamp()
+        stored_generated_at = str(stamp.get("generated_at", "")) if stamp else ""
+        stored_etag = stamp.get("etag") if stamp else None
+        stored_last_modified = stamp.get("last_modified") if stamp else None
+
+        logger.info("Revalidating remote client bundle…")
+        response = self._download_bundle(
+            etag=stored_etag if isinstance(stored_etag, str) else None,
+            last_modified=stored_last_modified if isinstance(stored_last_modified, str) else None,
+        )
+
+        now = time.time()
+
+        # 304 Not Modified — the multi-MB download + gunzip + tar-parse +
+        # SQLite merge are all skipped. Refresh applied_at so the cheap
+        # revalidation only recurs once per TTL.
+        if response.not_modified or response.content is None:
+            logger.debug("Bundle unchanged (304) — skipping download + merge")
+            self._write_stamp(
+                stored_generated_at,
+                now,
+                etag=stored_etag if isinstance(stored_etag, str) else None,
+                last_modified=(
+                    stored_last_modified if isinstance(stored_last_modified, str) else None
+                ),
+            )
+            return False, None
+
         logger.info("Downloading remote client bundle…")
-        bundle_bytes = self._download_bundle()
         (
             manifest,
             archetype_entries,
@@ -95,10 +122,22 @@ class BundleSnapshotClient(
             card_pool_entries,
             radar_entries,
             mtgo_decklist_entries,
-        ) = self._parse_bundle(bundle_bytes)
+        ) = self._parse_bundle(response.content)
 
         generated_at = manifest.get("generated_at", "")
-        now = time.time()
+
+        # Manifest short-circuit — the server did not honour the conditional
+        # request (no validators), but the downloaded bundle is identical to the
+        # one we already merged, so skip the expensive re-hydration.
+        if generated_at and generated_at == stored_generated_at:
+            logger.debug(f"Bundle generated_at unchanged ({generated_at!r}) — skipping merge")
+            self._write_stamp(
+                generated_at,
+                now,
+                etag=response.etag,
+                last_modified=response.last_modified,
+            )
+            return False, None
 
         # Phase 1: cheap, user-visible artifacts first. Surface them to the UI
         # (via on_archetypes_ready) before the expensive hydration below.
@@ -124,7 +163,12 @@ class BundleSnapshotClient(
         card_pools = self._hydrate_format_card_pools(card_pool_entries)
         radars = self._hydrate_radars(radar_entries)
         inserted = self._hydrate_deck_texts(deck_texts)
-        self._write_stamp(generated_at, now)
+        self._write_stamp(
+            generated_at,
+            now,
+            etag=response.etag,
+            last_modified=response.last_modified,
+        )
 
         logger.info(
             f"Bundle applied: {len(archetype_entries)} archetype lists, "

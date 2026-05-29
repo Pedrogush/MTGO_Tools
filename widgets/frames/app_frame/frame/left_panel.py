@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 import wx
 
 from utils.constants import DARK_PANEL, FORMAT_OPTIONS
+from utils.perf import timed
 from widgets.panels.deck_builder_panel import DeckBuilderPanel
 from widgets.panels.deck_research_panel import DeckResearchPanel
 
@@ -25,6 +26,7 @@ class LeftPanelBuilderMixin(_Base):
     source of truth for instance-state initialization.
     """
 
+    @timed
     def _build_left_panel(self, parent: wx.Window) -> wx.Panel:
         left_panel = wx.Panel(parent)
         left_panel.SetBackgroundColour(DARK_PANEL)

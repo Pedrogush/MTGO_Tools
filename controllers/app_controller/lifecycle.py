@@ -53,10 +53,24 @@ class LifecycleMixin(_Base):
             fmt_archetypes = archetypes_by_format.get(self.current_format.lower())
             if fmt_archetypes is None:
                 return
-            # Archetypes already in memory from bundle — skip the disk read.
+            # The bundle carries archetypes for the current format. The
+            # optimistic startup load may already have put an identical list on
+            # screen; firing on_archetypes_success when nothing changed would
+            # repopulate the combo and redundantly reload the full deck list
+            # (~1.9s no-op + visible UI churn), so skip the UI update in that
+            # case. Either way the bundle archetypes are now authoritative, so
+            # mark them handled to suppress the done-handler's disk re-fetch.
+            surfaced_from_bundle = True
+            if fmt_archetypes == self.archetypes:
+                logger.debug(
+                    f"Bundle archetypes unchanged for {self.current_format} — "
+                    "skipping redundant reload"
+                )
+                return
+            # Archetypes changed — adopt the in-memory copy from the bundle
+            # (skip the disk read) and refresh the UI.
             self.archetypes = fmt_archetypes
             self.filtered_archetypes = fmt_archetypes
-            surfaced_from_bundle = True
             if callbacks:
                 # on_archetypes_success already marshals onto the UI thread.
                 callbacks.on_archetypes_success(fmt_archetypes)
@@ -68,7 +82,9 @@ class LifecycleMixin(_Base):
 
         def _on_bundle_done(result: tuple[bool, dict[str, list[dict[str, Any]]] | None]) -> None:
             if surfaced_from_bundle:
-                # Fresh archetypes were already surfaced by _surface_archetypes.
+                # The bundle's archetypes for the current format were already
+                # handled during phase 1 by _surface_archetypes (surfaced if
+                # changed, or confirmed unchanged) — no disk re-fetch needed.
                 return
             self.fetch_archetypes(
                 on_success=callbacks.on_archetypes_success if callbacks else None,

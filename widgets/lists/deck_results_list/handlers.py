@@ -45,6 +45,22 @@ class DeckResultsListHandlersMixin:
         self.SetItemCount(len(self._items))
         self.Refresh()
 
+    def set_decks(self, rows: list[tuple[str, str, str, str, str, str]]) -> None:
+        """Bulk-populate structured deck rows with a single layout pass.
+
+        Each row is ``(emoji, player, archetype, event, result, date)``. Appending
+        every row before a single :meth:`SetItemCount`/:meth:`Refresh` avoids the
+        per-row scrollbar/layout recomputation that defeats VListBox virtualization.
+        """
+        self.Freeze()
+        try:
+            for emoji, player, archetype, event, result, date in rows:
+                self._items.append((True, (emoji, player, archetype, event, result, date)))
+            self.SetItemCount(len(self._items))
+            self.Refresh()
+        finally:
+            self.Thaw()
+
     def Clear(self) -> None:
         self._items = []
         self.SetItemCount(0)

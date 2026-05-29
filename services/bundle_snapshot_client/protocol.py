@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
+
+if TYPE_CHECKING:
+    from services.bundle_snapshot_client.http import BundleResponse
 
 
 class BundleSnapshotClientProto(Protocol):
@@ -19,6 +22,15 @@ class BundleSnapshotClientProto(Protocol):
     max_age: int
     request_timeout: int
 
-    def _http_get_bytes(self, url: str) -> bytes | None: ...
+    def _http_get_bytes(
+        self, url: str, etag: str | None = ..., last_modified: str | None = ...
+    ) -> BundleResponse | None: ...
+    def _read_stamp(self) -> dict[str, object]: ...
     def _is_stamp_fresh(self) -> bool: ...
-    def _write_stamp(self, generated_at: str, applied_at: float) -> None: ...
+    def _write_stamp(
+        self,
+        generated_at: str,
+        applied_at: float,
+        etag: str | None = ...,
+        last_modified: str | None = ...,
+    ) -> None: ...

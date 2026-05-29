@@ -19,6 +19,7 @@ from services.bundle_snapshot_client import (
     BundleSnapshotError,
     reset_bundle_snapshot_client,
 )
+from services.bundle_snapshot_client.http import BundleResponse
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -217,7 +218,7 @@ def test_stale_stamp_triggers_download(tmp_client: BundleSnapshotClient) -> None
         encoding="utf-8",
     )
     bundle = _make_bundle()
-    with patch.object(tmp_client, "_http_get_bytes", return_value=bundle):
+    with patch.object(tmp_client, "_http_get_bytes", return_value=BundleResponse(content=bundle)):
         result = tmp_client.apply()
     updated, _ = result
     assert updated is True
@@ -225,10 +226,105 @@ def test_stale_stamp_triggers_download(tmp_client: BundleSnapshotClient) -> None
 
 def test_missing_stamp_triggers_download(tmp_client: BundleSnapshotClient) -> None:
     bundle = _make_bundle()
-    with patch.object(tmp_client, "_http_get_bytes", return_value=bundle):
+    with patch.object(tmp_client, "_http_get_bytes", return_value=BundleResponse(content=bundle)):
         result = tmp_client.apply()
     updated, _ = result
     assert updated is True
+
+
+# ---------------------------------------------------------------------------
+# Conditional request (304) + manifest short-circuit
+# ---------------------------------------------------------------------------
+
+
+def test_stale_stamp_sends_conditional_headers(tmp_client: BundleSnapshotClient) -> None:
+    """A stale stamp with stored validators issues a conditional request."""
+    tmp_client.stamp_file.parent.mkdir(parents=True, exist_ok=True)
+    tmp_client.stamp_file.write_text(
+        json.dumps(
+            {
+                "applied_at": time.time() - 9999,
+                "generated_at": "2026-03-26T12:00:00Z",
+                "etag": '"abc123"',
+                "last_modified": "Thu, 26 Mar 2026 12:00:00 GMT",
+            }
+        ),
+        encoding="utf-8",
+    )
+    with patch.object(
+        tmp_client,
+        "_http_get_bytes",
+        return_value=BundleResponse(content=None, not_modified=True),
+    ) as mock_get:
+        tmp_client.apply()
+
+    _, kwargs = mock_get.call_args
+    assert kwargs["etag"] == '"abc123"'
+    assert kwargs["last_modified"] == "Thu, 26 Mar 2026 12:00:00 GMT"
+
+
+def test_not_modified_skips_merge_and_refreshes_stamp(tmp_client: BundleSnapshotClient) -> None:
+    """A 304 response skips the merge but refreshes applied_at so the TTL resets."""
+    tmp_client.stamp_file.parent.mkdir(parents=True, exist_ok=True)
+    old_applied = time.time() - 9999
+    tmp_client.stamp_file.write_text(
+        json.dumps(
+            {
+                "applied_at": old_applied,
+                "generated_at": "2026-03-26T12:00:00Z",
+                "etag": '"abc123"',
+            }
+        ),
+        encoding="utf-8",
+    )
+    with (
+        patch.object(
+            tmp_client,
+            "_http_get_bytes",
+            return_value=BundleResponse(content=None, not_modified=True),
+        ),
+        patch.object(tmp_client, "_parse_bundle") as mock_parse,
+    ):
+        updated, archetypes_by_format = tmp_client.apply()
+
+    mock_parse.assert_not_called()
+    assert updated is False
+    assert archetypes_by_format is None
+    stamp = json.loads(tmp_client.stamp_file.read_text())
+    assert stamp["generated_at"] == "2026-03-26T12:00:00Z"
+    assert stamp["etag"] == '"abc123"'
+    assert stamp["applied_at"] > old_applied  # refreshed -> TTL reset
+
+
+def test_unchanged_manifest_short_circuits_merge(tmp_client: BundleSnapshotClient) -> None:
+    """When the server ignores validators but generated_at is unchanged, skip the merge."""
+    tmp_client.stamp_file.parent.mkdir(parents=True, exist_ok=True)
+    tmp_client.stamp_file.write_text(
+        json.dumps({"applied_at": time.time() - 9999, "generated_at": "2026-03-26T12:00:00Z"}),
+        encoding="utf-8",
+    )
+    bundle = _make_bundle()  # default manifest generated_at == stored value
+    with patch.object(tmp_client, "_http_get_bytes", return_value=BundleResponse(content=bundle)):
+        updated, archetypes_by_format = tmp_client.apply()
+
+    assert updated is False
+    assert archetypes_by_format is None
+
+
+def test_apply_persists_validators_in_stamp(tmp_client: BundleSnapshotClient) -> None:
+    """ETag / Last-Modified from a full download are persisted for the next request."""
+    bundle = _make_bundle()
+    response = BundleResponse(
+        content=bundle,
+        etag='"v2"',
+        last_modified="Fri, 27 Mar 2026 12:00:00 GMT",
+    )
+    with patch.object(tmp_client, "_http_get_bytes", return_value=response):
+        tmp_client.apply()
+
+    stamp = json.loads(tmp_client.stamp_file.read_text())
+    assert stamp["etag"] == '"v2"'
+    assert stamp["last_modified"] == "Fri, 27 Mar 2026 12:00:00 GMT"
 
 
 # ---------------------------------------------------------------------------
@@ -238,7 +334,7 @@ def test_missing_stamp_triggers_download(tmp_client: BundleSnapshotClient) -> No
 
 def test_apply_writes_archetype_list_cache(tmp_client: BundleSnapshotClient) -> None:
     bundle = _make_bundle()
-    with patch.object(tmp_client, "_http_get_bytes", return_value=bundle):
+    with patch.object(tmp_client, "_http_get_bytes", return_value=BundleResponse(content=bundle)):
         tmp_client.apply()
 
     data = json.loads(tmp_client.archetype_list_cache_file.read_text())
@@ -250,7 +346,7 @@ def test_apply_writes_archetype_list_cache(tmp_client: BundleSnapshotClient) -> 
 
 def test_apply_writes_archetype_decks_cache(tmp_client: BundleSnapshotClient) -> None:
     bundle = _make_bundle()
-    with patch.object(tmp_client, "_http_get_bytes", return_value=bundle):
+    with patch.object(tmp_client, "_http_get_bytes", return_value=BundleResponse(content=bundle)):
         tmp_client.apply()
 
     data = json.loads(tmp_client.archetype_decks_cache_file.read_text())
@@ -262,7 +358,7 @@ def test_apply_writes_archetype_decks_cache(tmp_client: BundleSnapshotClient) ->
 
 def test_apply_writes_stamp_file(tmp_client: BundleSnapshotClient) -> None:
     bundle = _make_bundle()
-    with patch.object(tmp_client, "_http_get_bytes", return_value=bundle):
+    with patch.object(tmp_client, "_http_get_bytes", return_value=BundleResponse(content=bundle)):
         tmp_client.apply()
 
     stamp = json.loads(tmp_client.stamp_file.read_text())
@@ -272,7 +368,7 @@ def test_apply_writes_stamp_file(tmp_client: BundleSnapshotClient) -> None:
 
 def test_apply_writes_format_card_pool_db(tmp_client: BundleSnapshotClient) -> None:
     bundle = _make_bundle()
-    with patch.object(tmp_client, "_http_get_bytes", return_value=bundle):
+    with patch.object(tmp_client, "_http_get_bytes", return_value=BundleResponse(content=bundle)):
         tmp_client.apply()
 
     repo = FormatCardPoolRepository(tmp_client.format_card_pool_db_file)
@@ -285,7 +381,7 @@ def test_apply_writes_format_card_pool_db(tmp_client: BundleSnapshotClient) -> N
 
 def test_apply_writes_radar_db(tmp_client: BundleSnapshotClient) -> None:
     bundle = _make_bundle()
-    with patch.object(tmp_client, "_http_get_bytes", return_value=bundle):
+    with patch.object(tmp_client, "_http_get_bytes", return_value=BundleResponse(content=bundle)):
         tmp_client.apply()
 
     repo = RadarRepository(tmp_client.radar_db_file)
@@ -302,7 +398,7 @@ def test_apply_merges_with_existing_archetype_list_cache(tmp_client: BundleSnaps
     tmp_client.archetype_list_cache_file.write_text(json.dumps(existing), encoding="utf-8")
 
     bundle = _make_bundle()
-    with patch.object(tmp_client, "_http_get_bytes", return_value=bundle):
+    with patch.object(tmp_client, "_http_get_bytes", return_value=BundleResponse(content=bundle)):
         tmp_client.apply()
 
     data = json.loads(tmp_client.archetype_list_cache_file.read_text())
@@ -326,7 +422,7 @@ def test_apply_multiple_formats(tmp_client: BundleSnapshotClient) -> None:
         },
     ]
     bundle = _make_bundle(archetypes=archetypes, decks=[])
-    with patch.object(tmp_client, "_http_get_bytes", return_value=bundle):
+    with patch.object(tmp_client, "_http_get_bytes", return_value=BundleResponse(content=bundle)):
         tmp_client.apply()
 
     data = json.loads(tmp_client.archetype_list_cache_file.read_text())
@@ -368,7 +464,7 @@ def test_malformed_archetype_entry_skipped(tmp_client: BundleSnapshotClient) -> 
         {"schema_version": "1", "kind": "archetype_list"},  # missing format
     ]
     bundle = _make_bundle(archetypes=archetypes, decks=[])
-    with patch.object(tmp_client, "_http_get_bytes", return_value=bundle):
+    with patch.object(tmp_client, "_http_get_bytes", return_value=BundleResponse(content=bundle)):
         tmp_client.apply()  # should not raise
 
     data = json.loads(tmp_client.archetype_list_cache_file.read_text())
@@ -386,7 +482,7 @@ def test_deck_entry_missing_href_skipped(tmp_client: BundleSnapshotClient) -> No
         }
     ]
     bundle = _make_bundle(decks=decks)
-    with patch.object(tmp_client, "_http_get_bytes", return_value=bundle):
+    with patch.object(tmp_client, "_http_get_bytes", return_value=BundleResponse(content=bundle)):
         tmp_client.apply()  # should not raise
 
 
@@ -403,7 +499,7 @@ def test_apply_hydrates_deck_text_cache(tmp_client: BundleSnapshotClient, tmp_pa
 
     bundle = _make_bundle()
     with (
-        patch.object(tmp_client, "_http_get_bytes", return_value=bundle),
+        patch.object(tmp_client, "_http_get_bytes", return_value=BundleResponse(content=bundle)),
         patch("repositories.deck_text_cache.get_deck_cache", return_value=cache),
     ):
         tmp_client.apply()
@@ -424,7 +520,7 @@ def test_deck_text_hydration_skips_existing(
 
     bundle = _make_bundle()
     with (
-        patch.object(tmp_client, "_http_get_bytes", return_value=bundle),
+        patch.object(tmp_client, "_http_get_bytes", return_value=BundleResponse(content=bundle)),
         patch("repositories.deck_text_cache.get_deck_cache", return_value=cache),
     ):
         tmp_client._hydrate_deck_texts([("1234", "4 Lightning Bolt\n", "mtggoldfish")])
@@ -445,7 +541,7 @@ def test_deck_text_entry_missing_deck_id_skipped(tmp_client: BundleSnapshotClien
         }
     ]
     bundle = _make_bundle(deck_texts=deck_texts)
-    with patch.object(tmp_client, "_http_get_bytes", return_value=bundle):
+    with patch.object(tmp_client, "_http_get_bytes", return_value=BundleResponse(content=bundle)):
         tmp_client.apply()  # should not raise
 
 
@@ -456,7 +552,7 @@ def test_deck_text_entry_missing_deck_id_skipped(tmp_client: BundleSnapshotClien
 
 def test_apply_returns_archetypes_by_format(tmp_client: BundleSnapshotClient) -> None:
     bundle = _make_bundle()
-    with patch.object(tmp_client, "_http_get_bytes", return_value=bundle):
+    with patch.object(tmp_client, "_http_get_bytes", return_value=BundleResponse(content=bundle)):
         updated, archetypes_by_format = tmp_client.apply()
 
     assert updated is True
@@ -483,7 +579,7 @@ def test_apply_returns_archetypes_for_all_formats(tmp_client: BundleSnapshotClie
         },
     ]
     bundle = _make_bundle(archetypes=archetypes, decks=[])
-    with patch.object(tmp_client, "_http_get_bytes", return_value=bundle):
+    with patch.object(tmp_client, "_http_get_bytes", return_value=BundleResponse(content=bundle)):
         updated, archetypes_by_format = tmp_client.apply()
 
     assert updated is True
@@ -581,7 +677,7 @@ def test_apply_merges_mtgo_decklists_into_archetype_cache(
     cache = DeckTextCache(db_path=db_path)
     bundle = _make_bundle(mtgo_decklists=[_MTGO_DECKLIST_ENTRY])
 
-    with patch.object(tmp_client, "_http_get_bytes", return_value=bundle):
+    with patch.object(tmp_client, "_http_get_bytes", return_value=BundleResponse(content=bundle)):
         with patch("repositories.deck_text_cache.get_deck_cache", return_value=cache):
             tmp_client.apply()
 
@@ -606,7 +702,7 @@ def test_apply_mtgo_deck_text_stored_in_cache(
     cache = DeckTextCache(db_path=db_path)
     bundle = _make_bundle(mtgo_decklists=[_MTGO_DECKLIST_ENTRY])
 
-    with patch.object(tmp_client, "_http_get_bytes", return_value=bundle):
+    with patch.object(tmp_client, "_http_get_bytes", return_value=BundleResponse(content=bundle)):
         with patch("repositories.deck_text_cache.get_deck_cache", return_value=cache):
             tmp_client.apply()
 
@@ -625,7 +721,7 @@ def test_apply_mtgo_unmatched_archetype_skipped(
     cache = DeckTextCache(db_path=db_path)
     bundle = _make_bundle(mtgo_decklists=[_MTGO_DECKLIST_ENTRY])
 
-    with patch.object(tmp_client, "_http_get_bytes", return_value=bundle):
+    with patch.object(tmp_client, "_http_get_bytes", return_value=BundleResponse(content=bundle)):
         with patch("repositories.deck_text_cache.get_deck_cache", return_value=cache):
             tmp_client.apply()
 
@@ -644,7 +740,7 @@ def test_apply_mtgo_preserves_goldfish_decks(
     cache = DeckTextCache(db_path=db_path)
     bundle = _make_bundle(mtgo_decklists=[_MTGO_DECKLIST_ENTRY])
 
-    with patch.object(tmp_client, "_http_get_bytes", return_value=bundle):
+    with patch.object(tmp_client, "_http_get_bytes", return_value=BundleResponse(content=bundle)):
         with patch("repositories.deck_text_cache.get_deck_cache", return_value=cache):
             tmp_client.apply()
 
@@ -666,7 +762,7 @@ def test_apply_mtgo_deduplicates_on_re_hydration(
     cache = DeckTextCache(db_path=db_path)
     bundle = _make_bundle(mtgo_decklists=[_MTGO_DECKLIST_ENTRY])
 
-    with patch.object(tmp_client, "_http_get_bytes", return_value=bundle):
+    with patch.object(tmp_client, "_http_get_bytes", return_value=BundleResponse(content=bundle)):
         with patch("repositories.deck_text_cache.get_deck_cache", return_value=cache):
             tmp_client.apply()
             # Force a second apply by clearing the stamp
