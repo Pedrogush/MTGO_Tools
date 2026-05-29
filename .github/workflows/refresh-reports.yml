@@ -3,9 +3,14 @@ name: Refresh Generated Reports
 # LOC_REPORT.md and docs/diagrams/* are derived from the whole source tree, so
 # regenerating them inside every PR caused constant merge conflicts and stale
 # freshness-check failures. Instead of gating PRs on them, this workflow
-# regenerates them once a day (and on demand) and commits the result straight
-# to the default branch. The PR-time freshness checks have been removed from
-# ci.yml.
+# regenerates them once a day (and on demand) and, when either report actually
+# changed, opens a pull request to the default branch.
+#
+# It does NOT push to the default branch directly: `main` is protected by a
+# ruleset ("Changes must be made through a pull request"), so a direct push is
+# rejected (GH013). Each run supersedes the previous one — any still-open PR
+# this job opened is closed (and its branch deleted) before a fresh PR is
+# opened, so at most one automated report PR stands at a time.
 
 on:
   schedule:
@@ -21,6 +26,13 @@ concurrency:
 
 permissions:
   contents: write
+  pull-requests: write
+
+env:
+  # Branch this job opens its PRs from, and the label used to find its own
+  # prior PRs so they can be superseded.
+  PR_LABEL: automated-reports
+  GH_TOKEN: ${{ github.token }}
 
 jobs:
   refresh:
@@ -39,15 +51,43 @@ jobs:
           python scripts/generate_loc_report.py
           python scripts/generate_dependency_diagrams.py
 
-      - name: Commit and push if changed
+      - name: Open a PR if either report changed
         run: |
-          if [ -z "$(git status --porcelain LOC_REPORT.md docs/diagrams)" ]; then
-            echo "Reports already up to date; nothing to commit."
+          set -euo pipefail
+
+          # Only act when LOC_REPORT.md or docs/diagrams actually changed.
+          if [ -z "$(git status --porcelain -- LOC_REPORT.md docs/diagrams)" ]; then
+            echo "Reports already up to date; nothing to do."
             exit 0
           fi
+          echo "Detected report changes:"
+          git status --porcelain -- LOC_REPORT.md docs/diagrams
+
+          # Ensure the label this job uses to track its own PRs exists.
+          gh label create "$PR_LABEL" \
+            --color BFD4F2 \
+            --description "Automated daily LOC report / dependency graph refresh" \
+            --force
+
+          # Supersede any still-open PR from a previous run: close it and delete
+          # its branch so only the latest automated report PR ever stands.
+          for pr in $(gh pr list --state open --label "$PR_LABEL" --json number --jq '.[].number'); do
+            echo "Closing superseded automated report PR #$pr"
+            gh pr close "$pr" --delete-branch \
+              --comment "Superseded by a newer automated report refresh (run ${GITHUB_RUN_ID})."
+          done
+
+          branch="automated/refresh-reports-${GITHUB_RUN_ID}"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$branch"
           git add LOC_REPORT.md docs/diagrams
-          # [skip ci] so the auto-commit does not trigger the PR/push CI matrix.
-          git commit -m "chore: refresh LOC report and dependency diagrams [skip ci]"
-          git push
+          git commit -m "chore: refresh LOC report and dependency diagrams"
+          git push -u origin "$branch"
+
+          gh pr create \
+            --base "${GITHUB_REF_NAME}" \
+            --head "$branch" \
+            --label "$PR_LABEL" \
+            --title "chore: refresh LOC report and dependency diagrams" \
+            --body "Automated daily refresh of \`LOC_REPORT.md\` and \`docs/diagrams/*\` (opened by the \`Refresh Generated Reports\` workflow, run ${GITHUB_RUN_ID}). These files are generated from the whole source tree and are no longer gated in PR CI. Merge to keep the committed reports current; this PR supersedes any earlier automated report PR."
