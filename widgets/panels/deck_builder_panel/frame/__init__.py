@@ -47,8 +47,8 @@ class DeckBuilderPanel(
         on_search: Callable[[], None],
         on_clear: Callable[[], None],
         on_result_selected: Callable[[int | None], None],
-        on_add_to_main: Callable[[str], None] | None = None,
-        on_add_to_side: Callable[[str], None] | None = None,
+        on_add_to_main: Callable[..., None] | None = None,
+        on_add_to_side: Callable[..., None] | None = None,
         on_add_to_active_zone: Callable[[str], None] | None = None,
         locale: str | None = None,
     ) -> None:

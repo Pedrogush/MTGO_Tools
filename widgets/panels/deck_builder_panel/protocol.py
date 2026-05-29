@@ -26,8 +26,8 @@ class DeckBuilderPanelProto(Protocol):
     _on_search_callback: Callable[[], None]
     _on_clear_callback: Callable[[], None]
     _on_result_selected_callback: Callable[[int | None], None]
-    _on_add_to_main: Callable[[str], None] | None
-    _on_add_to_side: Callable[[str], None] | None
+    _on_add_to_main: Callable[..., None] | None
+    _on_add_to_side: Callable[..., None] | None
     _on_add_to_active_zone: Callable[[str], None] | None
 
     inputs: dict[str, wx.TextCtrl]

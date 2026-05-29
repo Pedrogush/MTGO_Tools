@@ -106,7 +106,10 @@ class ResultsPaneBuilderMixin(_Base):
         add_btns_row = wx.BoxSizer(wx.HORIZONTAL)
         add_main_btn = wx.Button(self, label=self._t("builder.add_to_main"))
         stylize_button(add_main_btn)
-        add_main_btn.SetToolTip("Add the selected card to the mainboard")
+        add_main_btn.SetToolTip(
+            "Add the selected card to the mainboard "
+            "(shortcut: press 1-4 in the results list to add that many copies)"
+        )
         add_main_btn.Enable(False)
         add_main_btn.Bind(wx.EVT_BUTTON, lambda _evt: self._on_add_to_zone("main"))
         add_btns_row.Add(add_main_btn, 1, wx.RIGHT, PADDING_SM)
@@ -114,7 +117,10 @@ class ResultsPaneBuilderMixin(_Base):
 
         add_side_btn = wx.Button(self, label=self._t("builder.add_to_side"))
         stylize_button(add_side_btn)
-        add_side_btn.SetToolTip("Add the selected card to the sideboard")
+        add_side_btn.SetToolTip(
+            "Add the selected card to the sideboard "
+            "(shortcut: press Shift+1-4 in the results list to add that many copies)"
+        )
         add_side_btn.Enable(False)
         add_side_btn.Bind(wx.EVT_BUTTON, lambda _evt: self._on_add_to_zone("side"))
         add_btns_row.Add(add_side_btn, 1)
