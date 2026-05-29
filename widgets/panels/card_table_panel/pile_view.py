@@ -91,6 +91,7 @@ class DeckPileView(wx.ScrolledWindow):
         on_select: Callable[[dict[str, Any] | None], None],
         on_hover: Callable[[dict[str, Any]], None] | None,
         get_sort_mode: Callable[[], str] | None = None,
+        on_remove: Callable[[str], None] | None = None,
     ) -> None:
         super().__init__(parent, style=wx.HSCROLL | wx.VSCROLL)
         self.zone = zone
@@ -99,6 +100,7 @@ class DeckPileView(wx.ScrolledWindow):
         self._on_select = on_select
         self._on_hover = on_hover
         self._get_sort_mode = get_sort_mode or (lambda: PILE_SORT_MV)
+        self._on_remove = on_remove
 
         self._cards: list[dict[str, Any]] = []
         # piles is a list of (label, [card_entries...]) — card_entries are
@@ -133,6 +135,7 @@ class DeckPileView(wx.ScrolledWindow):
         self.Bind(wx.EVT_PAINT, self._on_paint)
         self.Bind(wx.EVT_LEFT_DOWN, self._on_left_down)
         self.Bind(wx.EVT_LEFT_UP, self._on_left_up)
+        self.Bind(wx.EVT_RIGHT_DOWN, self._on_right_down)
         self.Bind(wx.EVT_MOTION, self._on_motion)
         self.Bind(wx.EVT_LEAVE_WINDOW, self._on_leave)
         self.Bind(wx.EVT_MOUSE_CAPTURE_LOST, self._on_capture_lost)
@@ -433,6 +436,24 @@ class DeckPileView(wx.ScrolledWindow):
         if not self.HasCapture():
             self.CaptureMouse()
         self.Refresh()
+
+    def _on_right_down(self, event: wx.MouseEvent) -> None:
+        """Right-click removes the card under the cursor from the deck zone.
+
+        Removal is delegated to the panel's ``on_remove`` callback, which drops
+        every copy of that card from the zone (mirroring the grid view's ``×``
+        button); the pile view is then rebuilt by the resulting ``set_cards``.
+        """
+        if self._on_remove is None:
+            event.Skip()
+            return
+        point = self._to_logical(event.GetPosition())
+        hit = self._hit_test(point)
+        if hit is None:
+            event.Skip()
+            return
+        _pile_idx, _member_idx, entry = hit
+        self._on_remove(entry["name"])
 
     def _on_motion(self, event: wx.MouseEvent) -> None:
         point = self._to_logical(event.GetPosition())
