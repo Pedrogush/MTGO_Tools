@@ -16,6 +16,7 @@ from utils.constants import (
     PADDING_SM,
     SUBDUED_TEXT,
 )
+from utils.perf import timed
 from widgets.panels.card_table_panel import CardTablePanel
 from widgets.panels.deck_notes_panel import DeckNotesPanel
 from widgets.panels.deck_stats_panel import DeckStatsPanel
@@ -54,6 +55,7 @@ class CenterPanelBuilderMixin(_Base):
         notebook.SetForegroundColour(LIGHT_TEXT)
         return notebook
 
+    @timed
     def _build_deck_workspace(self, parent: wx.Window) -> wx.StaticBoxSizer:
         detail_box = wx.StaticBox(parent, label=self._t("app.label.deck_workspace"))
         detail_box.SetForegroundColour(LIGHT_TEXT)
