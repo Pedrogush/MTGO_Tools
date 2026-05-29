@@ -94,6 +94,35 @@ class BulkCard(msgspec.Struct, gc=False):
             raise KeyError(key) from None
 
 
+class BulkCardImage(msgspec.Struct, gc=False):
+    """Minimal Scryfall bulk-data card record carrying image URLs.
+
+    Used to build an in-memory name -> image-URL map so that
+    :meth:`BulkImageDownloader.download_card_image_by_name` can resolve image
+    URLs from the locally-cached bulk data instead of issuing a Scryfall
+    ``/cards/named`` round-trip on every uncached card.  Only the fields
+    consumed by ``_download_single_image`` are decoded; msgspec skips the rest.
+    """
+
+    name: str | None = None
+    id: str | None = None
+    set: str | None = None
+    collector_number: str | None = None
+    scryfall_uri: str | None = None
+    artist: str | None = None
+    image_uris: dict[str, str] | None = None
+    card_faces: list[BulkCardFace] | None = None
+
+    def get(self, key: str, default: Any = None) -> Any:  # noqa: ANN401
+        return getattr(self, key, default)
+
+    def __getitem__(self, key: str) -> Any:  # noqa: ANN401
+        try:
+            return getattr(self, key)
+        except AttributeError:
+            raise KeyError(key) from None
+
+
 class PrintingEntry(msgspec.Struct, gc=False):
     """A single card printing record stored in the printings index."""
 
@@ -128,6 +157,9 @@ class PrintingIndexPayload(msgspec.Struct):
 
 # Pre-instantiated decoders – reusing avoids re-building on every call.
 _bulk_cards_decoder: msgspec.json.Decoder[list[BulkCard]] = msgspec.json.Decoder(list[BulkCard])
+_bulk_card_images_decoder: msgspec.json.Decoder[list[BulkCardImage]] = msgspec.json.Decoder(
+    list[BulkCardImage]
+)
 _printing_index_decoder: msgspec.json.Decoder[PrintingIndexPayload] = msgspec.json.Decoder(
     PrintingIndexPayload
 )
@@ -159,6 +191,7 @@ __all__ = [
     "BULK_DATA_URL",
     "BulkCard",
     "BulkCardFace",
+    "BulkCardImage",
     "CardImageRequest",
     "IMAGE_CACHE_DIR",
     "IMAGE_DB_PATH",
@@ -170,6 +203,7 @@ __all__ = [
     "SCRYFALL_CARD_NAMED_URL",
     "SCRYFALL_CARD_SEARCH_URL",
     "UTC",
+    "_bulk_card_images_decoder",
     "_bulk_cards_decoder",
     "_printing_index_decoder",
 ]
