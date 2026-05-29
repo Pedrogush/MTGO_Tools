@@ -62,8 +62,10 @@ SQLITE_CONNECTION_TIMEOUT_SECONDS = 30.0
 SQLITE_BUSY_TIMEOUT_MS = 30000
 
 # Card data download timing
-ATOMIC_DATA_HEAD_TIMEOUT_SECONDS = 60
+ATOMIC_DATA_HEAD_TIMEOUT_SECONDS = 5
 ATOMIC_DATA_DOWNLOAD_TIMEOUT_SECONDS = 300
+# Skip the remote HEAD on warm starts unless the cache metadata is older than this.
+ATOMIC_DATA_HEAD_TTL_SECONDS = ONE_DAY_SECONDS
 
 # Deck Builder Panel — search debounce
 BUILDER_SEARCH_DEBOUNCE_MS = 300  # milliseconds to wait after last filter change before searching

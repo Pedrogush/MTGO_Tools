@@ -15,6 +15,10 @@ from widgets.panels.card_table_panel.sorting import (
     PILE_SORT_COLOR,
     PILE_SORT_MV,
     PILE_SORT_TYPE,
+    TABLE_ACTION_ADD,
+    TABLE_ACTION_REMOVE,
+    TABLE_ACTION_SUB,
+    action_slot_at,
     color_sort_key,
     group_into_piles,
     is_land,
@@ -212,3 +216,21 @@ def test_pile_key_for_handles_missing_metadata():
     # A card whose name doesn't exist in metadata should still bucket safely.
     key = pile_key_for({"name": "Unknown", "qty": 1}, {}, PILE_SORT_MV)
     assert key == (0, "0")  # no metadata → mv 0, label "0"
+
+
+def test_action_slot_at_maps_thirds_to_add_sub_remove():
+    width = 60  # three 20px slots
+    # First third -> add, middle -> subtract, last -> remove.
+    assert action_slot_at(0, width) == TABLE_ACTION_ADD
+    assert action_slot_at(19, width) == TABLE_ACTION_ADD
+    assert action_slot_at(20, width) == TABLE_ACTION_SUB
+    assert action_slot_at(39, width) == TABLE_ACTION_SUB
+    assert action_slot_at(40, width) == TABLE_ACTION_REMOVE
+    assert action_slot_at(59, width) == TABLE_ACTION_REMOVE
+
+
+def test_action_slot_at_clamps_out_of_range_and_zero_width():
+    # Past the right edge clamps to the last slot; a degenerate width is safe.
+    assert action_slot_at(1000, 60) == TABLE_ACTION_REMOVE
+    assert action_slot_at(-5, 60) == TABLE_ACTION_ADD
+    assert action_slot_at(10, 0) == TABLE_ACTION_ADD
