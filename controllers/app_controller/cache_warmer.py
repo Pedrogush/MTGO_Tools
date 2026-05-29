@@ -31,6 +31,7 @@ from loguru import logger
 from services.image_service.schemas import CardImageRequest
 from utils.constants.timing import (
     CACHE_WARMUP_JOIN_TIMEOUT_SECONDS,
+    CACHE_WARMUP_PROGRESS_INTERVAL,
     CACHE_WARMUP_START_DELAY_SECONDS,
     CACHE_WARMUP_THROTTLE_SECONDS,
     CACHE_WARMUP_TOP_DECKS_PER_FORMAT,
@@ -61,6 +62,7 @@ class CacheWarmer:
         start_delay: float = CACHE_WARMUP_START_DELAY_SECONDS,
         throttle: float = CACHE_WARMUP_THROTTLE_SECONDS,
         top_decks_per_format: int = CACHE_WARMUP_TOP_DECKS_PER_FORMAT,
+        progress_interval: int = CACHE_WARMUP_PROGRESS_INTERVAL,
     ) -> None:
         self._get_current_format = get_current_format
         self._formats = formats
@@ -72,6 +74,11 @@ class CacheWarmer:
         self._start_delay = start_delay
         self._throttle = throttle
         self._top_decks_per_format = top_decks_per_format
+        self._progress_interval = max(1, progress_interval)
+
+        # Decklist-warmer running tallies (only touched by its single thread).
+        self._dl_ok = 0
+        self._dl_failed = 0
 
         self._stop_event = threading.Event()
         self._threads: list[threading.Thread] = []
@@ -131,21 +138,24 @@ class CacheWarmer:
 
     def _safe_archetypes(self, fmt: str) -> list[dict[str, Any]]:
         try:
-            return self._get_archetypes(fmt) or []
+            with logger.contextualize(warmup=True):
+                return self._get_archetypes(fmt) or []
         except Exception as exc:
             logger.debug(f"Warm-up: failed to load archetypes for {fmt}: {exc}")
             return []
 
     def _safe_decks(self, archetype: dict[str, Any]) -> list[dict[str, Any]]:
         try:
-            return self._get_decks_for_archetype(archetype) or []
+            with logger.contextualize(warmup=True):
+                return self._get_decks_for_archetype(archetype) or []
         except Exception as exc:
             logger.debug(f"Warm-up: failed to load decks for {archetype.get('name')}: {exc}")
             return []
 
     def _safe_deck_text(self, deck: dict[str, Any]) -> str:
         try:
-            return self._download_deck_text(deck) or ""
+            with logger.contextualize(warmup=True):
+                return self._download_deck_text(deck) or ""
         except Exception as exc:
             logger.debug(f"Warm-up: failed to fetch deck {deck.get('number')}: {exc}")
             return ""
@@ -174,11 +184,12 @@ class CacheWarmer:
     def _warm_images(self) -> None:
         if self._wait(self._start_delay):
             return
-        logger.debug("Cache warm-up: starting image pre-fetch")
+        logger.info("Cache warm-up: pre-fetching card images (selected format first)")
         count = 0
         for fmt in self._ordered_formats():
             if self._stopped():
                 return
+            logger.info(f"Cache warm-up: warming images for {fmt}")
             for archetype in self._safe_archetypes(fmt):
                 if self._stopped():
                     return
@@ -228,14 +239,16 @@ class CacheWarmer:
     def _warm_decklists(self) -> None:
         if self._wait(self._start_delay):
             return
-        logger.debug("Cache warm-up: starting decklist pre-fetch")
         formats = self._ordered_formats()
         if not formats:
             return
+        self._dl_ok = 0
+        self._dl_failed = 0
         warmed: set[str] = set()
 
         # Phase 1: the headline list of the top few archetypes for *every*
         # format, so all formats get a quick representative sample first.
+        logger.info("Cache warm-up: hydrating top decklists for every format")
         for fmt in formats:
             if self._stopped():
                 return
@@ -246,17 +259,24 @@ class CacheWarmer:
                     return
 
         # Phase 2: every list of the selected format.
+        logger.info(f"Cache warm-up: hydrating all {formats[0]} decklists")
         for deck in self._iter_format_decks(formats[0], per_archetype=None, limit=None):
             if self._warm_deck(deck, warmed):
                 return
 
         # Phase 3: every list of the remaining formats.
         for fmt in formats[1:]:
+            if self._stopped():
+                return
+            logger.info(f"Cache warm-up: hydrating all {fmt} decklists")
             for deck in self._iter_format_decks(fmt, per_archetype=None, limit=None):
                 if self._warm_deck(deck, warmed):
                     return
 
-        logger.info(f"Cache warm-up: decklist pre-fetch complete ({len(warmed)} lists)")
+        logger.info(
+            f"Cache warm-up: decklist pre-fetch complete "
+            f"({self._dl_ok} hydrated, {self._dl_failed} failed)"
+        )
 
     def _warm_deck(self, deck: dict[str, Any], warmed: set[str]) -> bool:
         """Hydrate one deck's text into the cache. Returns True if it should stop."""
@@ -265,7 +285,16 @@ class CacheWarmer:
         number = str(deck.get("number") or "")
         if number and number in warmed:
             return False
-        self._safe_deck_text(deck)
+        text = self._safe_deck_text(deck)
         if number:
             warmed.add(number)
+        if text:
+            self._dl_ok += 1
+            if self._dl_ok % self._progress_interval == 0:
+                logger.info(
+                    f"Cache warm-up: {self._dl_ok} decklists hydrated "
+                    f"({self._dl_failed} failed)"
+                )
+        else:
+            self._dl_failed += 1
         return self._wait(self._throttle)

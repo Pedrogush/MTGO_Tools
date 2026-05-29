@@ -107,6 +107,20 @@ def test_warm_decklists_phases_and_dedup():
     assert fetched == ["1", "3", "4", "2", "5"]
     # No deck fetched twice.
     assert len(fetched) == len(set(fetched))
+    # All five decks returned text, so all count as hydrated.
+    assert warmer._dl_ok == 5
+    assert warmer._dl_failed == 0
+
+
+def test_warm_decklists_counts_empty_text_as_failed():
+    deck_text = {"1": "4 Card One\n", "3": "4 Card Three\n", "4": "4 Card Four\n", "5": ""}
+    warmer, _, _ = _make_warmer(deck_text=deck_text)
+
+    warmer._warm_decklists()
+
+    # Deck 2 and 5 have no text; the rest hydrate.
+    assert warmer._dl_ok == 3
+    assert warmer._dl_failed == 2
 
 
 def test_stop_before_start_does_no_work():

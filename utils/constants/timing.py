@@ -95,6 +95,9 @@ CACHE_WARMUP_JOIN_TIMEOUT_SECONDS = 2.0
 # Number of "top" decklists per format the decklist warmer hydrates first (the
 # headline list of each of the top N archetypes) before deep-loading a format.
 CACHE_WARMUP_TOP_DECKS_PER_FORMAT = 6
+# Emit a progress log line every N hydrated decklists so the warm-up is visible
+# without logging every individual fetch.
+CACHE_WARMUP_PROGRESS_INTERVAL = 25
 
 # Card image download queue — retry and timing configuration
 IMAGE_DOWNLOAD_QUEUE_STOP_TIMEOUT_SECONDS = (
