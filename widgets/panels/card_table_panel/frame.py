@@ -53,7 +53,13 @@ VIEW_MODES = ("grid", "table", "pile")
 class CardTablePanel(CardTablePanelHandlersMixin, CardTablePanelPropertiesMixin, wx.Panel):
     GRID_COLUMNS = 4
     GRID_GAP = 8
+    # Maximum number of recycled grid cells. The pool is grown lazily on demand
+    # (see ``_ensure_pool``) rather than pre-allocated, so an empty deck creates
+    # no native CardBoxPanel controls at startup.
     POOL_SIZE = 60
+    # Cells created eagerly in __init__. Anything beyond this is allocated the
+    # first time ``render``/``_update_panels`` needs it.
+    INITIAL_POOL_SIZE = 0
 
     def __init__(
         self,
@@ -137,23 +143,7 @@ class CardTablePanel(CardTablePanelHandlersMixin, CardTablePanelPropertiesMixin,
         self.scroller = scrolled.ScrolledPanel(self._content_book, style=wx.VSCROLL)
         self.scroller.SetBackgroundColour(DARK_PANEL)
         self.grid_sizer = wx.WrapSizer(wx.HORIZONTAL)
-        for _ in range(self.POOL_SIZE):
-            cell = CardBoxPanel(
-                self.scroller,
-                zone,
-                {"name": "", "qty": 0},
-                icon_factory,
-                get_metadata,
-                owned_status,
-                on_delta,
-                on_remove,
-                self._handle_card_click,
-                get_card_image,
-                on_hover,
-            )
-            self.grid_sizer.Add(cell, 0, wx.RIGHT | wx.BOTTOM, self.GRID_GAP)
-            self.grid_sizer.Show(cell, False)
-            self._pool.append(cell)
+        self._ensure_pool(self.INITIAL_POOL_SIZE)
         self.scroller.SetSizer(self.grid_sizer)
         self.scroller.SetupScrolling(scroll_x=False, scroll_y=True, rate_x=5, rate_y=5)
         self._content_book.AddPage(self.scroller, "grid")
@@ -193,6 +183,33 @@ class CardTablePanel(CardTablePanelHandlersMixin, CardTablePanelPropertiesMixin,
 
         self._refresh_view_mode_buttons()
         self._update_pile_sort_button_visibility()
+
+    def _ensure_pool(self, size: int) -> None:
+        """Lazily grow the recycled grid-cell pool to at least ``size`` cells.
+
+        Cells are expensive native controls (a panel plus a qty label, a button
+        sub-panel and three buttons each), so they are only created on demand
+        rather than all ``POOL_SIZE`` up front. ``size`` is clamped to
+        ``POOL_SIZE`` to preserve the existing cap (zones with more distinct
+        entries than ``POOL_SIZE`` are truncated, as before)."""
+        target = min(size, self.POOL_SIZE)
+        while len(self._pool) < target:
+            cell = CardBoxPanel(
+                self.scroller,
+                self.zone,
+                {"name": "", "qty": 0},
+                self.icon_factory,
+                self._get_metadata,
+                self._owned_status,
+                self._on_delta,
+                self._on_remove,
+                self._handle_card_click,
+                self._get_card_image,
+                self._on_hover,
+            )
+            self.grid_sizer.Add(cell, 0, wx.RIGHT | wx.BOTTOM, self.GRID_GAP)
+            self.grid_sizer.Show(cell, False)
+            self._pool.append(cell)
 
     # ----- public API -----
     def set_view_mode(self, mode: str, *, persist: bool = True) -> None:
