@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 import wx
 
 from utils.constants import DARK_PANEL, LIGHT_TEXT, PADDING_SM
+from utils.perf import timed
 from widgets.buttons.toolbar_buttons import ToolbarButtons
 from widgets.panels.card_inspector_panel import CardInspectorPanel
 from widgets.panels.card_panel import CardPanel
@@ -29,6 +30,7 @@ class RightPanelBuilderMixin(_Base):
     source of truth for instance-state initialization.
     """
 
+    @timed
     def _build_toolbar(self, parent: wx.Window) -> ToolbarButtons:
         return ToolbarButtons(
             parent,
@@ -57,6 +59,7 @@ class RightPanelBuilderMixin(_Base):
             },
         )
 
+    @timed
     def _build_card_inspector(self, parent: wx.Window) -> wx.StaticBoxSizer:
         inspector_box = wx.StaticBox(parent, label=self._t("app.label.card_inspector"))
         inspector_box.SetForegroundColour(LIGHT_TEXT)
@@ -93,6 +96,7 @@ class RightPanelBuilderMixin(_Base):
 
         return inspector_sizer
 
+    @timed
     def _build_card_panel(self, parent: wx.Window) -> wx.StaticBoxSizer:
         card_box = wx.StaticBox(parent, label=self._t("app.label.card_panel"))
         card_box.SetForegroundColour(LIGHT_TEXT)

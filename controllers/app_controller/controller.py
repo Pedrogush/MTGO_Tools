@@ -49,6 +49,7 @@ from utils.constants import (
     ensure_base_dirs,
 )
 from utils.diagnostics import EventLogger
+from utils.perf import timed
 
 if TYPE_CHECKING:
     from widgets.frames.app_frame import AppFrame
@@ -64,6 +65,7 @@ class AppController(
     LifecycleMixin,
 ):
 
+    @timed
     def __init__(
         self,
         *,

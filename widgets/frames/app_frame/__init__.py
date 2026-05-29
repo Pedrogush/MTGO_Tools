@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+from utils.perf import timed
 from widgets.frames.app_frame.frame import AppFrame
 
 
+@timed
 def make_app_frame():
     """Construct the singleton AppController, attach the frame, and return it.
 

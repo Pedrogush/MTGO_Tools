@@ -21,6 +21,7 @@ from utils.constants import (
     PADDING_MD,
 )
 from utils.i18n import SUPPORTED_LOCALES, translate
+from utils.perf import timed
 from widgets.frames.app_frame.frame.center_panel import CenterPanelBuilderMixin
 from widgets.frames.app_frame.frame.left_panel import LeftPanelBuilderMixin
 from widgets.frames.app_frame.frame.right_panel import RightPanelBuilderMixin
@@ -123,6 +124,7 @@ class AppFrame(
         self.Bind(wx.EVT_MOVE, self.on_window_change)
         self.Bind(wx.EVT_CHAR_HOOK, self._on_hotkey)
 
+    @timed
     def _build_ui(self) -> None:
         self.SetBackgroundColour(DARK_BG)
         self._setup_status_bar()
@@ -144,6 +146,7 @@ class AppFrame(
         self.status_bar.SetForegroundColour(LIGHT_TEXT)
         self._set_status("app.status.ready")
 
+    @timed
     def _build_right_container(self, parent: wx.Window) -> wx.Panel:
         """Compose the right side of the window: toolbar over (center | inspector)."""
         right_panel = wx.Panel(parent)
