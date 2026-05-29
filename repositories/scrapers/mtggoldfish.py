@@ -22,8 +22,10 @@ from utils.constants import (
     METAGAME_CACHE_TTL_SECONDS,
     MTGGOLDFISH_REQUEST_TIMEOUT_SECONDS,
     MTGGOLDFISH_STALE_CACHE_SECONDS,
+    MTGGOLDFISH_STATS_CONNECT_TIMEOUT_SECONDS,
     MTGGOLDFISH_STATS_LOOKBACK_DAYS,
     MTGGOLDFISH_STATS_MAX_WORKERS,
+    MTGGOLDFISH_STATS_READ_TIMEOUT_SECONDS,
     ONE_DAY_SECONDS,
 )
 from utils.json_io import fast_load
@@ -155,7 +157,12 @@ def get_archetype_decks(archetype: str):
         page = requests.get(
             f"https://www.mtggoldfish.com/archetype/{archetype}/decks",
             impersonate="chrome",
-            timeout=MTGGOLDFISH_REQUEST_TIMEOUT_SECONDS,
+            # Best-effort bulk stats fetch: tight (connect, read) split so a
+            # dead/firewalled host fails fast instead of stalling the wave.
+            timeout=(
+                MTGGOLDFISH_STATS_CONNECT_TIMEOUT_SECONDS,
+                MTGGOLDFISH_STATS_READ_TIMEOUT_SECONDS,
+            ),
         )
         page.raise_for_status()
     except Exception as exc:
