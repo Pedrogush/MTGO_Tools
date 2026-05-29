@@ -9,6 +9,8 @@ from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
+from utils.perf import timed
+
 if TYPE_CHECKING:
     from services.bundle_snapshot_client.protocol import BundleSnapshotClientProto
 
@@ -20,6 +22,7 @@ else:
 class BundleParserMixin(_Base):
     """Parse the downloaded tar.gz bundle into grouped artifact entries."""
 
+    @timed
     def _parse_bundle(self, bundle_bytes: bytes) -> tuple[
         dict[str, Any],
         list[dict[str, Any]],

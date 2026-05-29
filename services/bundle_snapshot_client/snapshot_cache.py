@@ -8,6 +8,7 @@ from loguru import logger
 
 from repositories.format_card_pool_repository import FormatCardPoolRepository
 from repositories.radar_repository import RadarRepository
+from utils.perf import timed
 
 if TYPE_CHECKING:
     from services.bundle_snapshot_client.protocol import BundleSnapshotClientProto
@@ -20,6 +21,7 @@ else:
 class SnapshotCacheMixin(_Base):
     """Hydrate SQLite-backed format card pool and precomputed radar stores."""
 
+    @timed
     def _hydrate_format_card_pools(self, card_pool_entries: list[dict[str, Any]]) -> int:
         if not card_pool_entries:
             return 0
@@ -32,6 +34,7 @@ class SnapshotCacheMixin(_Base):
             logger.warning(f"Failed to hydrate format card pools: {exc}")
             return 0
 
+    @timed
     def _hydrate_radars(self, radar_entries: list[dict[str, Any]]) -> int:
         if not radar_entries:
             return 0
