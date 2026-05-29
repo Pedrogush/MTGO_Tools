@@ -304,6 +304,11 @@ class AppFrameHandlersMixin(_Base):
         self._apply_deck_filters()
 
     def fetch_archetypes(self, force: bool = False) -> None:
+        if force:
+            # An explicit reload must always refresh the deck list, even if the
+            # refreshed archetype list is byte-for-byte identical. Clearing the
+            # dedup signature lets _on_archetypes_loaded reload decks again.
+            self._last_archetype_reload_sig = None
         self.research_panel.set_loading_state()
         self.controller.deck_repo.clear_decks_list()
         self.deck_list.Clear()

@@ -72,6 +72,69 @@ def test_format_change_reloads_decks_with_any_selected(
 
 
 @pytest.mark.usefixtures("wx_app")
+def test_duplicate_archetype_delivery_skips_redundant_deck_reload(
+    deck_selector_factory,
+):
+    """Stale-while-revalidate delivers archetypes twice (cached, then a
+    background-refreshed copy). The second, identical delivery must NOT trigger
+    a second "Any" deck reload — that was the duplicate "Loading decks for Any"
+    seen on startup.
+    """
+    frame = deck_selector_factory()
+    try:
+        load_decks_calls: list[dict[str, object]] = []
+        original_load_decks = frame._load_decks
+
+        def recording_load_decks(**kwargs):
+            load_decks_calls.append(kwargs)
+            return original_load_decks(**kwargs)
+
+        frame._load_decks = recording_load_decks  # type: ignore[assignment]
+
+        archetypes = [
+            {"name": "Mono Red Aggro", "href": "mono-red-aggro"},
+            {"name": "Azorius Control", "href": "azorius-control"},
+        ]
+        frame._on_archetypes_loaded(archetypes)  # cached delivery
+        frame._on_archetypes_loaded(list(archetypes))  # background refresh (identical)
+        pump_ui_events(wx.GetApp())
+
+        assert load_decks_calls == [{"scope": "all"}]
+    finally:
+        frame.Destroy()
+
+
+@pytest.mark.usefixtures("wx_app")
+def test_load_decks_debounces_rapid_identical_target(
+    deck_selector_factory,
+):
+    """A second _load_decks for the same target within 1s is debounced, while a
+    different target fires immediately.
+    """
+    frame = deck_selector_factory()
+    try:
+        real_load_decks = type(frame)._load_decks
+        controller_calls: list[dict[str, object]] = []
+        original_ctrl_load = frame.controller.load_decks
+
+        def recording_ctrl_load(**kwargs):
+            controller_calls.append(kwargs)
+            return original_ctrl_load(**kwargs)
+
+        frame.controller.load_decks = recording_ctrl_load  # type: ignore[assignment]
+
+        real_load_decks(frame, scope="all")
+        real_load_decks(frame, scope="all")  # identical target, <1s → debounced
+        assert len(controller_calls) == 1
+
+        # A distinct target is never debounced.
+        real_load_decks(frame, scope="archetype", archetype={"name": "X", "href": "x"})
+        assert len(controller_calls) == 2
+    finally:
+        frame.Destroy()
+
+
+@pytest.mark.usefixtures("wx_app")
 def test_present_deck_text_updates_ui_without_download_io(
     deck_selector_factory,
 ):
