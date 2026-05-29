@@ -7,16 +7,14 @@ that are initialized on ``DeckRepository`` itself.
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any, Protocol
-
-import pymongo
 
 
 class DeckRepositoryProto(Protocol):
     """Cross-mixin ``self`` surface for ``DeckRepository``."""
 
-    _client: pymongo.MongoClient | None
-    _db: Any
+    _db_path: Path | None
     _decks: list[dict[str, Any]]
     _current_deck: dict[str, Any] | None
     _current_deck_text: str

@@ -70,7 +70,6 @@ compatible with MIT redistribution:
 | wxPython | wxWindows Library License (LGPL-derived, permits closed-source linking) |
 | beautifulsoup4 | MIT |
 | curl-cffi | MIT |
-| pymongo | Apache-2.0 |
 | pygetwindow | BSD-3-Clause |
 | defusedxml | PSF |
 | pyautogui | BSD-3-Clause |

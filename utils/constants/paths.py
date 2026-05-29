@@ -179,6 +179,7 @@ DECK_TEXT_CACHE_FILE = CACHE_DIR / "deck_text_cache.json"  # Individual deck con
 ARCHETYPE_DECKS_CACHE_FILE = CACHE_DIR / "archetype_decks_cache.json"  # Deck lists per archetype
 FORMAT_CARD_POOL_DB_FILE = CACHE_DIR / "format_card_pool.db"
 RADAR_CACHE_DB_FILE = CACHE_DIR / "radar_cache.db"
+SAVED_DECKS_DB_FILE = CACHE_DIR / "saved_decks.db"
 DECK_CACHE_FILE = DECK_TEXT_CACHE_FILE
 CURR_DECK_FILE = DECKS_DIR / "curr_deck.txt"
 
