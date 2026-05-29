@@ -214,34 +214,17 @@ jobs:
           path: dist/installer/*.exe
 
 
-  loc-report:
-    name: LOC Report Freshness
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-      - name: Verify LOC_REPORT.md is up to date
-        run: python scripts/generate_loc_report.py --check
-
-  dep-graph:
-    name: Dependency Graph Freshness
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-      - name: Verify docs/diagrams/graph.json is up to date
-        run: python scripts/generate_dependency_diagrams.py --check
+  # NOTE: LOC report (LOC_REPORT.md) and dependency graph (docs/diagrams/*)
+  # are generated from the whole tree, so every PR would otherwise both
+  # conflict on them and fail a freshness gate. Their freshness checks have
+  # been removed from PR CI; they are now regenerated and committed once a day
+  # by .github/workflows/refresh-reports.yml (and on-demand via that workflow's
+  # manual dispatch). See that workflow and CONTRIBUTING/README for details.
 
   validation-summary:
     name: Validation Summary
     runs-on: ubuntu-latest
-    needs: [lint-and-format, type-check, security-scan, compile-check, dotnet-build, loc-report, dep-graph]
+    needs: [lint-and-format, type-check, security-scan, compile-check, dotnet-build]
     if: always()
     steps:
       - name: Check job results
@@ -253,14 +236,10 @@ jobs:
           echo "Security Scanning: ${{ needs.security-scan.result }}"
           echo "Compilation Check: ${{ needs.compile-check.result }}"
           echo ".NET Build: ${{ needs.dotnet-build.result }}"
-          echo "LOC Report: ${{ needs.loc-report.result }}"
-          echo "Dependency Graph: ${{ needs.dep-graph.result }}"
 
           if [ "${{ needs.lint-and-format.result }}" != "success" ] || \
              [ "${{ needs.compile-check.result }}" != "success" ] || \
-             [ "${{ needs.dotnet-build.result }}" != "success" ] || \
-             [ "${{ needs.loc-report.result }}" != "success" ] || \
-             [ "${{ needs.dep-graph.result }}" != "success" ]; then
+             [ "${{ needs.dotnet-build.result }}" != "success" ]; then
             echo "❌ Critical validation checks failed"
             exit 1
           fi
