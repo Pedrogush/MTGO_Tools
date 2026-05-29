@@ -54,8 +54,12 @@ BRIDGE_PROCESS_TERMINATE_TIMEOUT_SECONDS = 2
 REMOTE_SNAPSHOT_MAX_AGE_SECONDS = 2 * ONE_HOUR_SECONDS  # re-download if manifest is older than this
 REMOTE_SNAPSHOT_REQUEST_TIMEOUT_SECONDS = 30
 
-# Bundle snapshot — re-download bundle if stamp is older than this
-REMOTE_SNAPSHOT_BUNDLE_MAX_AGE_SECONDS = ONE_HOUR_SECONDS
+# Bundle snapshot — revalidate bundle if stamp is older than this.
+# Set to the real upstream regeneration cadence: a stale stamp triggers a
+# *conditional* request (If-None-Match / If-Modified-Since), so an unchanged
+# bundle returns 304 and skips the multi-MB download + merge entirely. The TTL
+# only bounds how often that cheap revalidation HEAD/GET round-trip happens.
+REMOTE_SNAPSHOT_BUNDLE_MAX_AGE_SECONDS = 6 * ONE_HOUR_SECONDS
 
 # SQLite cache settings
 SQLITE_CONNECTION_TIMEOUT_SECONDS = 30.0
