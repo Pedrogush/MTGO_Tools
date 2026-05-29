@@ -20,12 +20,12 @@ def _sample_index() -> dict:
         legalities={"modern": "Legal"},
         mana_cost="{U}",
     )
-    return {"cards": [entry], "cards_by_name": {"opt": entry}}
+    return {"cards": [entry], "cards_by_name": {"opt": 0}}
 
 
 def test_resolve_paths_uses_msgpack_extension(tmp_path: Path) -> None:
     _, index_path, meta_path = storage.resolve_paths(tmp_path)
-    assert index_path.name == "atomic_cards_index_v2.msgpack"
+    assert index_path.name == "atomic_cards_index_v3.msgpack"
     assert meta_path.name == "atomic_cards_meta.json"
 
 
@@ -35,7 +35,8 @@ def test_write_then_load_index_round_trip(tmp_path: Path) -> None:
 
     loaded = storage.load_index(index_path)
     assert loaded.cards[0].name == "Opt"
-    assert loaded.cards_by_name["opt"].mana_cost == "{U}"
+    # ``cards_by_name`` maps an alias to the index of its record in ``cards``.
+    assert loaded.cards[loaded.cards_by_name["opt"]].mana_cost == "{U}"
 
 
 def test_load_index_missing_raises(tmp_path: Path) -> None:

@@ -31,6 +31,16 @@ def load_card_manager(data_dir: Path | str = CARD_DATA_DIR, force: bool = False)
     return manager
 
 
+def _resolve_name_index(cards: list, name_index: dict[str, int]) -> dict:
+    """Rebuild an alias -> card mapping from the persisted alias -> index map.
+
+    The index stores ``cards_by_name`` as offsets into ``cards`` to avoid
+    duplicating every card object on disk; this turns those offsets back into
+    references to the shared card records.
+    """
+    return {alias: cards[position] for alias, position in name_index.items()}
+
+
 class CardDataManager:
     def __init__(self, data_dir: Path | str = CARD_DATA_DIR):
         self.data_dir, self.index_path, self.meta_path = storage.resolve_paths(data_dir)
@@ -179,13 +189,13 @@ class CardDataManager:
         meta_to_store["head_checked_at"] = time.time()
         storage.write_meta(self.meta_path, meta_to_store)
         self._cards = index["cards"]
-        self._cards_by_name = index["cards_by_name"]
+        self._cards_by_name = _resolve_name_index(index["cards"], index["cards_by_name"])
 
     @timed
     def _load_index(self) -> None:
         card_index = storage.load_index(self.index_path)
         self._cards = card_index.cards
-        self._cards_by_name = card_index.cards_by_name
+        self._cards_by_name = _resolve_name_index(card_index.cards, card_index.cards_by_name)
 
 
 __all__ = ["CardDataManager", "load_card_manager"]

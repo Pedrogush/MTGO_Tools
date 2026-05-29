@@ -56,7 +56,14 @@ class CardEntry(msgspec.Struct, gc=False):
 
 
 class CardIndex(msgspec.Struct):
-    """Root structure of the saved atomic-cards index file."""
+    """Root structure of the saved atomic-cards index file.
+
+    ``cards_by_name`` maps an alias (lowercased) to the *index* of the matching
+    record in ``cards`` rather than to a duplicated ``CardEntry``. Persisting
+    indices avoids serializing every card twice, which roughly halves the index
+    file size and decode time; consumers rebuild a name -> ``CardEntry`` mapping
+    by indexing into ``cards``.
+    """
 
     cards: list[CardEntry]
-    cards_by_name: dict[str, CardEntry]
+    cards_by_name: dict[str, int]

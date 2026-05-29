@@ -35,12 +35,15 @@ _card_index_encoder: msgspec.msgpack.Encoder = msgspec.msgpack.Encoder()
 def resolve_paths(data_dir: Path | str = CARD_DATA_DIR) -> tuple[Path, Path, Path]:
     """Return ``(data_dir, index_path, meta_path)`` after ensuring ``data_dir`` exists.
 
-    The ``_v2`` filename invalidates pre-double-faced-aware caches; the
-    ``.msgpack`` extension distinguishes the binary index from the legacy JSON.
+    The index is persisted as ``msgspec.msgpack`` (binary) for fast, compact
+    decode. The ``_v3`` filename invalidates older caches: ``_v2`` added
+    double-faced-aware records, ``_v3`` stores ``cards_by_name`` as a
+    name -> index map instead of duplicated card objects. The ``.msgpack``
+    extension distinguishes the binary index from the legacy JSON.
     """
     base = Path(data_dir)
     base.mkdir(parents=True, exist_ok=True)
-    return base, base / "atomic_cards_index_v2.msgpack", base / "atomic_cards_meta.json"
+    return base, base / "atomic_cards_index_v3.msgpack", base / "atomic_cards_meta.json"
 
 
 def legacy_index_path(data_dir: Path | str = CARD_DATA_DIR) -> Path:

@@ -1,10 +1,10 @@
 # Lines of Code by File (.py only)
 
-- Commit: `7eeca99` (7eeca99786f250dc099c211413a351e56debf79b)
-- Commit date: 2026-05-29T11:24:59-03:00
-- Generated (UTC): 2026-05-29 14:26:14Z
+- Commit: `b520de3` (b520de3df7968dbdd15cf54daaa53b708ddefac4)
+- Commit date: 2026-05-29T11:31:19-03:00
+- Generated (UTC): 2026-05-29 14:44:28Z
 - Files counted: **472** (all git-tracked `*.py` files)
-- Total lines: **54,649**
+- Total lines: **54,892**
 
 Counts are raw `wc -l` (newline count). Files are grouped by top-level directory and sorted descending within each section. Regenerate with `python scripts/generate_loc_report.py`.
 
@@ -13,10 +13,10 @@ Counts are raw `wc -l` (newline count). Files are grouped by top-level directory
 | Section | Files | LOC |
 |:--------|------:|----:|
 | controllers | 13 | 1,412 |
-| repositories | 51 | 4,180 |
-| widgets | 176 | 20,654 |
+| repositories | 51 | 4,203 |
+| widgets | 176 | 20,817 |
 | services | 72 | 7,604 |
-| tests | 53 | 11,529 |
+| tests | 53 | 11,586 |
 | automation | 19 | 3,244 |
 | utils | 71 | 3,052 |
 | other | 17 | 2,974 |
@@ -39,32 +39,32 @@ Counts are raw `wc -l` (newline count). Files are grouped by top-level directory
 | 43 | `controllers/app_controller/__init__.py` |
 | 13 | `controllers/__init__.py` |
 
-## repositories (51 files, 4,180 LOC)
+## repositories (51 files, 4,203 LOC)
 
 | LOC | File |
 |----:|:-----|
 | 383 | `repositories/deck_text_cache.py` |
 | 348 | `repositories/scrapers/mtggoldfish.py` |
 | 228 | `repositories/radar_repository/reads.py` |
-| 191 | `repositories/card_repository/card_data_manager.py` |
-| 148 | `repositories/card_repository/builder.py` |
+| 201 | `repositories/card_repository/card_data_manager.py` |
+| 151 | `repositories/card_repository/builder.py` |
 | 141 | `repositories/deck_repository/database.py` |
 | 141 | `repositories/metagame_repository/cache.py` |
 | 137 | `repositories/format_card_pool_repository/reads.py` |
 | 136 | `repositories/remote_snapshot_client/service.py` |
 | 126 | `repositories/metagame_repository/deck_operations.py` |
 | 125 | `repositories/radar_repository/writes.py` |
-| 111 | `repositories/card_repository/storage.py` |
+| 114 | `repositories/card_repository/storage.py` |
 | 109 | `repositories/metagame_repository/archetype_resolution.py` |
 | 108 | `repositories/card_repository/collection.py` |
 | 93 | `repositories/deck_repository/ui_state.py` |
 | 88 | `repositories/format_card_pool_repository/writes.py` |
 | 86 | `repositories/deck_repository/metadata_store.py` |
 | 76 | `repositories/deck_repository/filesystem.py` |
+| 69 | `repositories/card_repository/schemas.py` |
 | 68 | `repositories/remote_snapshot_client/manifest.py` |
 | 66 | `repositories/radar_repository/schema.py` |
 | 63 | `repositories/scrapers/mtggoldfish_visual.py` |
-| 62 | `repositories/card_repository/schemas.py` |
 | 61 | `repositories/remote_snapshot_client/artifact.py` |
 | 60 | `repositories/card_repository/protocol.py` |
 | 59 | `repositories/card_repository/remote.py` |
@@ -95,37 +95,37 @@ Counts are raw `wc -l` (newline count). Files are grouped by top-level directory
 | 15 | `repositories/radar_repository/protocol.py` |
 | 14 | `repositories/scrapers/__init__.py` |
 
-## widgets (176 files, 20,654 LOC)
+## widgets (176 files, 20,817 LOC)
 
 | LOC | File |
 |----:|:-----|
 | 900 | `widgets/frames/app_frame/handlers/app_events.py` |
+| 742 | `widgets/panels/card_table_panel/table_view.py` |
 | 673 | `widgets/panels/deck_stats_panel/properties.py` |
-| 657 | `widgets/panels/card_table_panel/table_view.py` |
 | 651 | `widgets/frames/identify_opponent/handlers.py` |
-| 620 | `widgets/panels/card_table_panel/pile_view.py` |
+| 641 | `widgets/panels/card_table_panel/pile_view.py` |
 | 585 | `widgets/frames/app_frame/handlers/sideboard_guide.py` |
 | 410 | `widgets/mana_icon_factory/svg_renderer.py` |
 | 408 | `widgets/panels/card_inspector_panel/handlers.py` |
 | 396 | `widgets/mana_icon_factory/bitmap_renderer.py` |
+| 389 | `widgets/panels/card_table_panel/frame.py` |
 | 385 | `widgets/panels/card_image_display/handlers.py` |
-| 381 | `widgets/panels/card_table_panel/frame.py` |
 | 367 | `widgets/frames/app_frame/handlers/app_frame.py` |
 | 358 | `widgets/panels/card_panel/html_renderer.py` |
 | 349 | `widgets/frames/metagame_analysis/handlers.py` |
+| 345 | `widgets/frames/app_frame/handlers/card_tables.py` |
 | 331 | `widgets/panels/mana_rich_text_ctrl/handlers.py` |
 | 329 | `widgets/frames/match_history/handlers.py` |
-| 313 | `widgets/frames/app_frame/handlers/card_tables.py` |
 | 313 | `widgets/panels/card_box_panel/handlers.py` |
 | 307 | `widgets/frames/radar/handlers.py` |
 | 273 | `widgets/frames/timer_alert/handlers.py` |
 | 269 | `widgets/panels/card_panel/handlers.py` |
 | 245 | `widgets/lists/deck_results_list/handlers.py` |
 | 239 | `widgets/mana_icon_factory/factory.py` |
+| 239 | `widgets/panels/card_table_panel/sorting.py` |
 | 232 | `widgets/frames/match_history/frame.py` |
 | 231 | `widgets/panels/deck_builder_panel/handlers.py` |
 | 227 | `widgets/panels/card_inspector_panel/frame.py` |
-| 222 | `widgets/panels/card_table_panel/sorting.py` |
 | 220 | `widgets/frames/metagame_analysis/frame.py` |
 | 213 | `widgets/frames/identify_opponent/frame/calculator_panel.py` |
 | 205 | `widgets/panels/deck_builder_panel/frame/advanced_filters.py` |
@@ -353,7 +353,7 @@ Counts are raw `wc -l` (newline count). Files are grouped by top-level directory
 | 24 | `services/bundle_snapshot_client/protocol.py` |
 | 20 | `services/deck_service/protocol.py` |
 
-## tests (53 files, 11,529 LOC)
+## tests (53 files, 11,586 LOC)
 
 | LOC | File |
 |----:|:-----|
@@ -368,17 +368,17 @@ Counts are raw `wc -l` (newline count). Files are grouped by top-level directory
 | 408 | `tests/test_collection_service.py` |
 | 391 | `tests/test_gamelog_parser.py` |
 | 385 | `tests/ui/conftest.py` |
+| 280 | `tests/test_card_data_refresh.py` |
 | 270 | `tests/test_remote_snapshot_client.py` |
 | 269 | `tests/test_card_repository.py` |
 | 268 | `tests/test_card_panel_html_renderer.py` |
 | 268 | `tests/test_identify_opponent_radar.py` |
 | 263 | `tests/ui/test_deck_selector.py` |
-| 249 | `tests/test_card_data_refresh.py` |
 | 242 | `tests/test_card_image_display_logic.py` |
+| 236 | `tests/test_card_table_panel_sorting.py` |
 | 233 | `tests/test_search_filters.py` |
 | 228 | `tests/test_image_service.py` |
 | 221 | `tests/test_deck_workflow_service.py` |
-| 214 | `tests/test_card_table_panel_sorting.py` |
 | 212 | `tests/test_diagnostics.py` |
 | 209 | `tests/test_math_utils.py` |
 | 183 | `tests/test_radar_card_stats.py` |
@@ -391,11 +391,11 @@ Counts are raw `wc -l` (newline count). Files are grouped by top-level directory
 | 118 | `tests/test_background_worker.py` |
 | 114 | `tests/test_store_service.py` |
 | 109 | `tests/test_timer_alert_async.py` |
-| 101 | `tests/test_card_data_aliases.py` |
+| 104 | `tests/test_card_data_aliases.py` |
 | 97 | `tests/test_rules_browser_html_render.py` |
 | 91 | `tests/test_perf.py` |
 | 89 | `tests/test_card_box_panel_logic.py` |
-| 87 | `tests/test_card_index_storage.py` |
+| 88 | `tests/test_card_index_storage.py` |
 | 87 | `tests/test_i18n.py` |
 | 83 | `tests/test_deck_service.py` |
 | 83 | `tests/test_helpers.py` |
