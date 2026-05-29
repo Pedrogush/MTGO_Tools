@@ -46,7 +46,20 @@ class LifecycleMixin(_Base):
             if updated and archetypes_by_format:
                 fmt_archetypes = archetypes_by_format.get(self.current_format.lower())
                 if fmt_archetypes is not None:
-                    # Archetypes already in memory from bundle — skip the disk read.
+                    # If the bundle's archetypes match what the optimistic
+                    # startup load already put on screen, the combo and deck
+                    # list are already correct — firing on_archetypes_success
+                    # here would repopulate the combo and redundantly reload the
+                    # full deck list (a ~1.9s no-op with visible UI churn).
+                    # Skip it; the on-screen state is unchanged.
+                    if fmt_archetypes == self.archetypes:
+                        logger.debug(
+                            "Bundle archetypes unchanged for "
+                            f"{self.current_format} — skipping redundant reload"
+                        )
+                        return
+                    # Archetypes changed — use the in-memory copy from the bundle
+                    # (skip the disk read) and refresh the UI.
                     self.archetypes = fmt_archetypes
                     self.filtered_archetypes = fmt_archetypes
                     if callbacks:
