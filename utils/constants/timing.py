@@ -43,6 +43,11 @@ MTGGOLDFISH_STALE_CACHE_SECONDS = ONE_DAY_SECONDS * MTGGOLDFISH_STALE_CACHE_DAYS
 # MTGGoldfish archetype stats — lookback window for daily result counts
 MTGGOLDFISH_STATS_LOOKBACK_DAYS = 7
 
+# MTGGoldfish archetype stats — max concurrent per-archetype deck fetches.
+# Bounds the ThreadPoolExecutor that parallelizes the otherwise-serial N+1
+# per-archetype HTTP GETs when building the metagame stats cache.
+MTGGOLDFISH_STATS_MAX_WORKERS = 16
+
 BRIDGE_PROCESS_TERMINATE_TIMEOUT_SECONDS = 2
 
 # Remote snapshot client — freshness and request timeouts
