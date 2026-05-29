@@ -61,13 +61,45 @@ class DeckBuilderPanelHandlersMixin(_Base):
         self._add_result_by_index(idx)
 
     def _on_result_key_down(self, event: wx.KeyEvent) -> None:
-        if event.GetKeyCode() == ord("+") and not event.ControlDown():
+        if event.ControlDown() or event.AltDown():
+            event.Skip()
+            return
+
+        key_code = event.GetKeyCode()
+
+        # "+" adds one copy to the active zone (legacy shortcut).
+        if key_code == ord("+"):
             if self.results_ctrl:
                 selected = self.results_ctrl.GetFirstSelected()
                 if selected != wx.NOT_FOUND:
                     self._add_result_by_index(selected)
                     return
+            event.Skip()
+            return
+
+        # 1-4 add 1-4 copies to the mainboard; Shift+1-4 add to the sideboard.
+        count = self._digit_to_count(key_code)
+        if count is not None:
+            zone = "side" if event.ShiftDown() else "main"
+            self._on_add_to_zone(zone, count)
+            return
+
         event.Skip()
+
+    @staticmethod
+    def _digit_to_count(key_code: int) -> int | None:
+        """Map a 1-4 key code (top row or numpad) to a copy count, else ``None``."""
+        digit_keys = {
+            ord("1"): 1,
+            ord("2"): 2,
+            ord("3"): 3,
+            ord("4"): 4,
+            wx.WXK_NUMPAD1: 1,
+            wx.WXK_NUMPAD2: 2,
+            wx.WXK_NUMPAD3: 3,
+            wx.WXK_NUMPAD4: 4,
+        }
+        return digit_keys.get(key_code)
 
     def _add_result_by_index(self, idx: int) -> None:
         card = self.get_result_at_index(idx)
@@ -76,7 +108,7 @@ class DeckBuilderPanelHandlersMixin(_Base):
             if name:
                 self._on_add_to_active_zone(name)
 
-    def _on_add_to_zone(self, zone: str) -> None:
+    def _on_add_to_zone(self, zone: str, count: int = 1) -> None:
         card = self.get_selected_result()
         if not card:
             return
@@ -84,9 +116,9 @@ class DeckBuilderPanelHandlersMixin(_Base):
         if not name:
             return
         if zone == "main" and self._on_add_to_main:
-            self._on_add_to_main(name)
+            self._on_add_to_main(name, count)
         elif zone == "side" and self._on_add_to_side:
-            self._on_add_to_side(name)
+            self._on_add_to_side(name, count)
 
     def _update_add_buttons(self) -> None:
         has_selection = self.get_selected_result() is not None

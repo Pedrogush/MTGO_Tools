@@ -92,8 +92,8 @@ class LeftPanelBuilderMixin(_Base):
             on_search=self._on_builder_search,
             on_clear=self._on_builder_clear,
             on_result_selected=self._on_builder_result_selected,
-            on_add_to_main=lambda name: self._handle_zone_delta("main", name, 1),
-            on_add_to_side=lambda name: self._handle_zone_delta("side", name, 1),
+            on_add_to_main=lambda name, count=1: self._handle_zone_delta("main", name, count),
+            on_add_to_side=lambda name, count=1: self._handle_zone_delta("side", name, count),
             on_add_to_active_zone=self._add_search_card_to_active_zone,
             locale=self.locale,
         )
