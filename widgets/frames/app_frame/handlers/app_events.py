@@ -168,7 +168,10 @@ class AppEventHandlers(_Base):
         self.current_format = self.research_panel.get_selected_format()
         self.card_panel.update_format(self.current_format)
         self.card_panel.update_archetype(None)
-        self.fetch_archetypes(force=True)
+        # Use stale-while-revalidate (same as startup): serve cached/stale
+        # archetypes for the new format immediately and refresh in the
+        # background. force=True is reserved for the explicit reload action.
+        self.fetch_archetypes()
 
     def on_archetype_filter(self: AppFrame) -> None:
         query = self.research_panel.get_search_query()
