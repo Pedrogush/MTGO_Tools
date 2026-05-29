@@ -88,15 +88,24 @@ class CardTablePanelHandlersMixin(_Base):
                     self.card_widgets = self._pool[: len(cards)]
                 with perf_phase(f"[{zone}] grid layout + scroll setup"):
                     self.grid_sizer.Layout()
-                    self.scroller.Layout()
                     self.scroller.FitInside()
-                    self.scroller.SetupScrolling(
-                        scroll_x=False,
-                        scroll_y=True,
-                        rate_x=5,
-                        rate_y=5,
-                        scrollToTop=not preserve_scroll,
-                    )
+                    # SetupScrolling recomputes scrollbars/rate over every child
+                    # and is the costly part of this block. Only re-run it when
+                    # the visible cell count actually changes; otherwise just
+                    # reset the scroll position (cheap), which covers +/- edits
+                    # and re-selecting a same-size deck.
+                    visible_count = len(cards)
+                    if visible_count != self._scroll_count:
+                        self._scroll_count = visible_count
+                        self.scroller.SetupScrolling(
+                            scroll_x=False,
+                            scroll_y=True,
+                            rate_x=5,
+                            rate_y=5,
+                            scrollToTop=not preserve_scroll,
+                        )
+                    elif not preserve_scroll:
+                        self.scroller.Scroll(0, 0)
 
                 # Populate the table/pile views only when one of them is the
                 # active page. Both are fully rebuilt by set_cards (the table

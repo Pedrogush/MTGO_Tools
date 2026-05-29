@@ -162,3 +162,43 @@ segment) or gating it behind `MTGO_LOG_LEVEL=DEBUG` once the work lands.
 
 A + B alone should bring warm clicks to ~120 ms and eliminate the cold spike; C
 closes the last gap to < 100 ms.
+
+---
+
+## 4. Results (after implementing A–D)
+
+All four steps landed on this branch. Re-measured with the same
+instrumented flow (Vintage, WSL→Windows):
+
+| | Before | After |
+|---|---|---|
+| **1st click (cold)** render block | 951 ms | **130 ms** |
+| 1st click click-to-ready | 981 ms | 167 ms |
+| warm click render block | 260–390 ms | **95–105 ms** |
+| warm click click-to-ready | 290–530 ms | 125–137 ms |
+
+Segment-level (warm, main 41–43 cards):
+
+| Segment | Before | After |
+|---|---|---|
+| main pool assign | 12–229 ms | **3–11 ms** (pre-warmed; cold spike gone) |
+| main grid layout + scroll | ~53 ms | **~2 ms** (dropped redundant `Layout`; gated `SetupScrolling`) |
+| main dispatch image loads | ~140 ms | **~0.5 ms** (shared pool replaces per-card threads) |
+| side zone | 55–450 ms on the click | **deferred** — off the click-to-visible path |
+
+What each step bought:
+
+- **A (shared decode pool):** main-zone image dispatch ~140 ms → ~0.5 ms,
+  every click. Images still stream in asynchronously.
+- **B (idle pool pre-warm):** the ~577 ms first-click widget-construction spike
+  is gone — the first real click now matches warm clicks (pool assign ~3 ms).
+- **C (defer side zone + gate `SetupScrolling`):** removed the side zone's full
+  cost from the click-to-visible interval and cut the main grid-layout phase
+  from ~53 ms to ~2 ms.
+- **D (verify):** both zones populate correctly (main 60 / side 15 cards), grid
+  layout and scrolling intact (screenshot + `get-zone-cards`).
+
+Net: **~7× faster cold, ~3× faster warm**; warm steady-state click-to-rendered
+mainboard is at/under the 100 ms target, with the sideboard following one frame
+later. The `perf_phase` instrumentation is kept in place (INFO, one cheap log
+line per segment) for future regression checks.

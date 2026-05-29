@@ -25,6 +25,7 @@ class CardTablePanelProto(Protocol):
     _pool: list[CardBoxPanel]
     active_panel: CardBoxPanel | None
     selected_name: str | None
+    _scroll_count: int
     count_label: wx.StaticText
     scroller: scrolled.ScrolledPanel
     grid_sizer: wx.WrapSizer

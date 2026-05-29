@@ -521,11 +521,10 @@ class AppEventHandlers(_Base):
             self.zone_cards["out"] = self._load_outboard_for_current()
         with perf_phase("main_table.set_cards"):
             self.main_table.set_cards(self.zone_cards["main"])
-        with perf_phase("side_table.set_cards"):
-            self.side_table.set_cards(self.zone_cards["side"])
-        if self.out_table:
-            with perf_phase("out_table.set_cards"):
-                self.out_table.set_cards(self.zone_cards["out"])
+        # Defer the secondary zones to the next event-loop turn so the mainboard
+        # — the zone the user is looking at — paints first. They fill in a frame
+        # later, which removes their cost from the click-to-visible interval.
+        wx.CallAfter(self._render_secondary_zones)
         with perf_phase("update_stats"):
             self._update_stats(deck_text)
         self.copy_button.Enable(True)
@@ -558,6 +557,19 @@ class AppEventHandlers(_Base):
                 render_ms,
                 source,
             )
+
+    def _render_secondary_zones(self: AppFrame) -> None:
+        """Render the sideboard/outboard zones, deferred off the click path.
+
+        Reads the current ``zone_cards`` at fire time, so if a newer deck loaded
+        between scheduling and firing it simply paints the latest data (the new
+        load scheduled its own deferral); a redundant repaint is harmless.
+        """
+        with perf_phase("side_table.set_cards (deferred)"):
+            self.side_table.set_cards(self.zone_cards["side"])
+        if self.out_table:
+            with perf_phase("out_table.set_cards (deferred)"):
+                self.out_table.set_cards(self.zone_cards["out"])
 
     def _on_collection_fetched(self: AppFrame, filepath: Path, cards: list) -> None:
         if cards:
