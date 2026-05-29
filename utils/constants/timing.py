@@ -28,6 +28,15 @@ COLLECTION_BRIDGE_TIMEOUT_SECONDS = 60.0
 
 # External HTTP request timeouts
 MTGGOLDFISH_REQUEST_TIMEOUT_SECONDS = 30
+# Per-archetype GET in the bulk metagame stats scrape. This runs N times in a
+# bounded ThreadPoolExecutor (MTGGOLDFISH_STATS_MAX_WORKERS) and is a best-effort
+# daily aggregate, so it uses a tighter (connect, read) split via curl_cffi: a
+# short connect timeout fails fast on a dead/firewalled host instead of letting
+# one hung archetype ride the full 30s and stall its whole wave (and the
+# Metagame Analysis spinner). The single user-initiated deck download keeps the
+# longer MTGGOLDFISH_REQUEST_TIMEOUT_SECONDS.
+MTGGOLDFISH_STATS_CONNECT_TIMEOUT_SECONDS = 5
+MTGGOLDFISH_STATS_READ_TIMEOUT_SECONDS = 10
 OPPONENT_TRACKER_REQUEST_TIMEOUT_SECONDS = 30
 
 # Opponent tracker timers

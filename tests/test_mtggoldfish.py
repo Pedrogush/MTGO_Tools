@@ -385,6 +385,32 @@ class TestGetArchetypeDecks:
         assert len(result) == 2  # Returns cached data as fallback
         assert result[0]["number"] == "123456"
 
+    @patch("repositories.scrapers.mtggoldfish.requests.get")
+    def test_get_archetype_decks_uses_split_connect_read_timeout(
+        self, mock_get, temp_archetype_decks_file
+    ):
+        """The bulk stats per-archetype GET must use the tighter (connect, read)
+        timeout split so one hung host fails fast instead of riding the full 30s
+        single-request timeout."""
+        mock_response = Mock()
+        mock_response.text = SAMPLE_ARCHETYPE_DECKS_HTML
+        mock_response.raise_for_status = Mock()
+        mock_get.return_value = mock_response
+
+        with patch(
+            "repositories.scrapers.mtggoldfish.ARCHETYPE_DECKS_CACHE_FILE",
+            temp_archetype_decks_file,
+        ):
+            get_archetype_decks("modern-some-fresh-archetype")
+
+        timeout = mock_get.call_args.kwargs["timeout"]
+        assert timeout == (
+            mtggoldfish.MTGGOLDFISH_STATS_CONNECT_TIMEOUT_SECONDS,
+            mtggoldfish.MTGGOLDFISH_STATS_READ_TIMEOUT_SECONDS,
+        )
+        connect_timeout = timeout[0]
+        assert connect_timeout < mtggoldfish.MTGGOLDFISH_REQUEST_TIMEOUT_SECONDS
+
 
 class TestGetArchetypeStats:
     """Test get_archetype_stats parallelization and result aggregation."""
