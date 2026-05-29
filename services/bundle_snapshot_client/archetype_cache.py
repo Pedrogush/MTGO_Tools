@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any
 from loguru import logger
 
 from utils.atomic_io import atomic_write_json, locked_path
+from utils.perf import timed
 
 if TYPE_CHECKING:
     from services.bundle_snapshot_client.protocol import BundleSnapshotClientProto
@@ -20,6 +21,7 @@ else:
 class ArchetypeCacheMixin(_Base):
     """Hydrate archetype-list, archetype-deck, MTGO decklist, and deck-text caches."""
 
+    @timed
     def _hydrate_archetype_lists(self, archetype_entries: list[dict[str, Any]], now: float) -> None:
         if not archetype_entries:
             return
@@ -47,6 +49,7 @@ class ArchetypeCacheMixin(_Base):
             except OSError as exc:
                 logger.warning(f"Failed to write archetype list cache: {exc}")
 
+    @timed
     def _hydrate_archetype_decks(self, deck_entries: list[dict[str, Any]], now: float) -> None:
         if not deck_entries:
             return
@@ -75,6 +78,7 @@ class ArchetypeCacheMixin(_Base):
             except OSError as exc:
                 logger.warning(f"Failed to write archetype decks cache: {exc}")
 
+    @timed
     def _hydrate_deck_texts(self, deck_texts: list[tuple[str, str, str]]) -> int:
         """Insert deck texts into the SQLite deck text cache.
 
@@ -92,6 +96,7 @@ class ArchetypeCacheMixin(_Base):
             logger.warning(f"Failed to hydrate deck texts: {exc}")
             return 0
 
+    @timed
     def _hydrate_mtgo_decklists(
         self,
         mtgo_decklist_entries: list[dict[str, Any]],

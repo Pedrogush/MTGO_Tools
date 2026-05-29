@@ -172,6 +172,10 @@
         "utils.i18n"
       ],
       [
+        "controllers.app_controller",
+        "utils.perf"
+      ],
+      [
         "controllers.session_manager",
         "utils.atomic_io"
       ],
@@ -306,6 +310,10 @@
       [
         "services.bundle_snapshot_client",
         "utils.constants"
+      ],
+      [
+        "services.bundle_snapshot_client",
+        "utils.perf"
       ],
       [
         "services.card_service",
@@ -509,6 +517,10 @@
       ],
       [
         "widgets.frames",
+        "utils.perf"
+      ],
+      [
+        "widgets.frames",
         "utils.runtime_flags"
       ],
       [
@@ -574,9 +586,9 @@
     ]
   },
   "metadata": {
-    "commit": "b520de3df7968dbdd15cf54daaa53b708ddefac4",
-    "commit_date": "2026-05-29T11:31:19-03:00",
-    "generated_at": "2026-05-29T14:44:30Z",
+    "commit": "1cad2dc7a7b46242b6cfae1d97f5f291f86bf464",
+    "commit_date": "2026-05-29T13:12:23-03:00",
+    "generated_at": "2026-05-29T17:02:39Z",
     "internal_packages": [
       "automation",
       "controllers",

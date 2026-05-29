@@ -36,35 +36,56 @@ class LifecycleMixin(_Base):
             force=force_archetypes,
         )
 
-        def _apply_bundle() -> bool:
+        # Tracks whether the early on_archetypes_ready hook already surfaced
+        # fresh archetypes for the current format, so the final done-handler
+        # does not redundantly re-fetch from disk (dedup the UI update).
+        surfaced_from_bundle = False
+
+        def _surface_archetypes(
+            archetypes_by_format: dict[str, list[dict[str, Any]]] | None,
+        ) -> None:
+            # Fires on the bundle worker thread as soon as the cheap archetype
+            # artifacts are hydrated — before radars/card-pools/deck-texts — so
+            # the user sees fresh data without waiting on the rest of the bundle.
+            nonlocal surfaced_from_bundle
+            if not archetypes_by_format:
+                return
+            fmt_archetypes = archetypes_by_format.get(self.current_format.lower())
+            if fmt_archetypes is None:
+                return
+            # The bundle carries archetypes for the current format. The
+            # optimistic startup load may already have put an identical list on
+            # screen; firing on_archetypes_success when nothing changed would
+            # repopulate the combo and redundantly reload the full deck list
+            # (~1.9s no-op + visible UI churn), so skip the UI update in that
+            # case. Either way the bundle archetypes are now authoritative, so
+            # mark them handled to suppress the done-handler's disk re-fetch.
+            surfaced_from_bundle = True
+            if fmt_archetypes == self.archetypes:
+                logger.debug(
+                    f"Bundle archetypes unchanged for {self.current_format} — "
+                    "skipping redundant reload"
+                )
+                return
+            # Archetypes changed — adopt the in-memory copy from the bundle
+            # (skip the disk read) and refresh the UI.
+            self.archetypes = fmt_archetypes
+            self.filtered_archetypes = fmt_archetypes
+            if callbacks:
+                # on_archetypes_success already marshals onto the UI thread.
+                callbacks.on_archetypes_success(fmt_archetypes)
+
+        def _apply_bundle() -> tuple[bool, dict[str, list[dict[str, Any]]] | None]:
             from services.bundle_snapshot_client import get_bundle_snapshot_client
 
-            return get_bundle_snapshot_client().apply()
+            return get_bundle_snapshot_client().apply(on_archetypes_ready=_surface_archetypes)
 
         def _on_bundle_done(result: tuple[bool, dict[str, list[dict[str, Any]]] | None]) -> None:
-            updated, archetypes_by_format = result
-            if updated and archetypes_by_format:
-                fmt_archetypes = archetypes_by_format.get(self.current_format.lower())
-                if fmt_archetypes is not None:
-                    # If the bundle's archetypes match what the optimistic
-                    # startup load already put on screen, the combo and deck
-                    # list are already correct — firing on_archetypes_success
-                    # here would repopulate the combo and redundantly reload the
-                    # full deck list (a ~1.9s no-op with visible UI churn).
-                    # Skip it; the on-screen state is unchanged.
-                    if fmt_archetypes == self.archetypes:
-                        logger.debug(
-                            "Bundle archetypes unchanged for "
-                            f"{self.current_format} — skipping redundant reload"
-                        )
-                        return
-                    # Archetypes changed — use the in-memory copy from the bundle
-                    # (skip the disk read) and refresh the UI.
-                    self.archetypes = fmt_archetypes
-                    self.filtered_archetypes = fmt_archetypes
-                    if callbacks:
-                        callbacks.on_archetypes_success(fmt_archetypes)
-                    return
+            if surfaced_from_bundle:
+                # The bundle's archetypes for the current format were already
+                # handled during phase 1 by _surface_archetypes (surfaced if
+                # changed, or confirmed unchanged) — no disk re-fetch needed.
+                return
             self.fetch_archetypes(
                 on_success=callbacks.on_archetypes_success if callbacks else None,
                 on_error=callbacks.on_archetypes_error if callbacks else None,
