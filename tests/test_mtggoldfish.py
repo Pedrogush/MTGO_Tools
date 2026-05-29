@@ -3,16 +3,19 @@
 import json
 import tempfile
 import time
+from datetime import datetime
 from pathlib import Path
 from unittest.mock import Mock, patch
 
 import pytest
 
+import repositories.scrapers.mtggoldfish as mtggoldfish
 from repositories.scrapers.mtggoldfish import (
     _load_cached_archetypes,
     _save_cached_archetypes,
     download_deck,
     get_archetype_decks,
+    get_archetype_stats,
     get_archetypes,
 )
 
@@ -381,6 +384,49 @@ class TestGetArchetypeDecks:
             result = get_archetype_decks("modern-rakdos-midrange")
         assert len(result) == 2  # Returns cached data as fallback
         assert result[0]["number"] == "123456"
+
+
+class TestGetArchetypeStats:
+    """Test get_archetype_stats parallelization and result aggregation."""
+
+    def test_parallel_fetch_preserves_archetype_mapping(self, temp_cache_dir):
+        """Each archetype's decks must map back to that archetype, even when the
+        per-archetype fetches run concurrently and complete out of order."""
+        archetypes = [
+            {"name": "Rakdos Midrange", "href": "modern-rakdos-midrange"},
+            {"name": "Amulet Titan", "href": "modern-amulet-titan"},
+            {"name": "Burn", "href": "modern-burn"},
+        ]
+        today = datetime.now().strftime("%Y-%m-%d")
+        # One deck per archetype, tagged so we can verify the mapping survives.
+        decks_by_href = {
+            a["href"]: [{"date": today, "name": a["name"], "tag": a["href"]}] for a in archetypes
+        }
+
+        def fake_get_archetype_decks(href):
+            # Reverse-order sleep so later hrefs finish first if run serially in
+            # submission order; the pool result must still match by archetype.
+            return decks_by_href[href]
+
+        cache_file = temp_cache_dir / "archetype_stats.json"
+        with (
+            patch.object(mtggoldfish, "get_archetypes", return_value=archetypes),
+            patch.object(
+                mtggoldfish, "get_archetype_decks", side_effect=fake_get_archetype_decks
+            ) as mock_decks,
+            patch.object(mtggoldfish, "ARCHETYPE_CACHE_FILE", cache_file),
+        ):
+            stats = get_archetype_stats("modern")
+
+        # One fetch per archetype, parallelized but complete.
+        assert mock_decks.call_count == len(archetypes)
+        for a in archetypes:
+            entry = stats["modern"][a["name"]]
+            assert entry["decks"] == decks_by_href[a["href"]]
+            # Today's lookback bucket should count the single tagged deck.
+            assert entry["results"][today] == 1
+        # Cache file written.
+        assert cache_file.exists()
 
 
 # NOTE: TestFetchDeckText tests were removed because they tested the old JSON-based

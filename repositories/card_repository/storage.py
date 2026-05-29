@@ -1,7 +1,13 @@
 """On-disk format for the atomic-cards index and its metadata sidecar.
 
 Owns path resolution, the module-level msgspec decoder (reused across loads),
-atomic JSON writes, and the meta-JSON read helper.
+atomic index writes, and the meta-JSON read helper.
+
+The index is persisted as ``msgspec.msgpack`` (binary): it decodes
+substantially faster and is smaller on disk than the equivalent JSON, which
+matters because the index is ~34k card records read on every startup. A
+one-time migration converts a pre-existing JSON index to msgpack in place
+(see :func:`migrate_legacy_index`).
 """
 
 from __future__ import annotations
@@ -12,29 +18,63 @@ from typing import Any
 
 import msgspec
 import msgspec.json
+import msgspec.msgpack
 from loguru import logger
 
 from repositories.card_repository.schemas import CardIndex
-from utils.atomic_io import atomic_write_json
+from utils.atomic_io import atomic_write_bytes, atomic_write_json
 from utils.constants import CARD_DATA_DIR
+from utils.perf import timed
 
-# Reusing the decoder avoids re-building it on every call, which matters for
+# Reusing the codecs avoids re-building them on every call, which matters for
 # repeat loads (e.g. force-refresh).
-_card_index_decoder: msgspec.json.Decoder[CardIndex] = msgspec.json.Decoder(CardIndex)
+_card_index_decoder: msgspec.msgpack.Decoder[CardIndex] = msgspec.msgpack.Decoder(CardIndex)
+_card_index_encoder: msgspec.msgpack.Encoder = msgspec.msgpack.Encoder()
 
 
 def resolve_paths(data_dir: Path | str = CARD_DATA_DIR) -> tuple[Path, Path, Path]:
     """Return ``(data_dir, index_path, meta_path)`` after ensuring ``data_dir`` exists.
 
-    The ``_v3`` filename invalidates older caches: ``_v2`` added
+    The index is persisted as ``msgspec.msgpack`` (binary) for fast, compact
+    decode. The ``_v3`` filename invalidates older caches: ``_v2`` added
     double-faced-aware records, ``_v3`` stores ``cards_by_name`` as a
-    name -> index map instead of duplicated card objects.
+    name -> index map instead of duplicated card objects. The ``.msgpack``
+    extension distinguishes the binary index from the legacy JSON.
     """
     base = Path(data_dir)
     base.mkdir(parents=True, exist_ok=True)
-    return base, base / "atomic_cards_index_v3.json", base / "atomic_cards_meta.json"
+    return base, base / "atomic_cards_index_v3.msgpack", base / "atomic_cards_meta.json"
 
 
+def legacy_index_path(data_dir: Path | str = CARD_DATA_DIR) -> Path:
+    """Return the path of the pre-msgpack JSON index (used for migration)."""
+    return Path(data_dir) / "atomic_cards_index_v2.json"
+
+
+def migrate_legacy_index(index_path: Path, legacy_path: Path) -> bool:
+    """Convert a legacy JSON index to msgpack in place, if applicable.
+
+    Returns ``True`` when a migration was performed. The legacy JSON file is
+    removed afterwards so the conversion runs at most once. A corrupt legacy
+    file is left untouched so the normal download/rebuild path can replace it.
+    """
+    if index_path.exists() or not legacy_path.exists():
+        return False
+    try:
+        index = msgspec.json.decode(legacy_path.read_bytes(), type=CardIndex)
+    except (msgspec.DecodeError, OSError) as exc:
+        logger.warning(f"Could not migrate legacy card index {legacy_path}: {exc}")
+        return False
+    atomic_write_bytes(index_path, _card_index_encoder.encode(index))
+    logger.info("Migrated card index from JSON to msgpack")
+    try:
+        legacy_path.unlink()
+    except OSError:
+        pass
+    return True
+
+
+@timed
 def load_index(index_path: Path) -> CardIndex:
     if not index_path.exists():
         raise RuntimeError("Card data index missing or invalid")
@@ -46,7 +86,7 @@ def load_index(index_path: Path) -> CardIndex:
 
 
 def write_index(index_path: Path, index: dict[str, Any]) -> None:
-    atomic_write_json(index_path, index, ensure_ascii=False)
+    atomic_write_bytes(index_path, _card_index_encoder.encode(index))
 
 
 def load_meta(meta_path: Path) -> dict[str, Any] | None:
@@ -64,8 +104,10 @@ def write_meta(meta_path: Path, meta: dict[str, Any]) -> None:
 
 
 __all__ = [
+    "legacy_index_path",
     "load_index",
     "load_meta",
+    "migrate_legacy_index",
     "resolve_paths",
     "write_index",
     "write_meta",

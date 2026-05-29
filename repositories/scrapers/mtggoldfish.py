@@ -1,5 +1,6 @@
 import json
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 
 import bs4
@@ -22,9 +23,11 @@ from utils.constants import (
     MTGGOLDFISH_REQUEST_TIMEOUT_SECONDS,
     MTGGOLDFISH_STALE_CACHE_SECONDS,
     MTGGOLDFISH_STATS_LOOKBACK_DAYS,
+    MTGGOLDFISH_STATS_MAX_WORKERS,
     ONE_DAY_SECONDS,
 )
 from utils.json_io import fast_load
+from utils.perf import timed
 
 
 def _load_cached_archetypes(mtg_format: str, max_age: int = METAGAME_CACHE_TTL_SECONDS):
@@ -188,6 +191,7 @@ def get_archetype_decks(archetype: str):
     return decks
 
 
+@timed
 def get_archetype_stats(mtg_format: str):
     cache_path = ARCHETYPE_CACHE_FILE
     stats = {}
@@ -204,18 +208,28 @@ def get_archetype_stats(mtg_format: str):
             return stats
     archetypes = get_archetypes(mtg_format)
     stats = {mtg_format: {"timestamp": time.time()}}
+    # Each per-archetype fetch is an independent HTTP round trip (cache miss =>
+    # one GET, 30s timeout). Run them in a bounded thread pool so N serial round
+    # trips collapse into ceil(N / MTGGOLDFISH_STATS_MAX_WORKERS) waves. Cache
+    # reads/writes inside get_archetype_decks are guarded by a per-path lock, so
+    # concurrent access is safe.
+    max_workers = min(MTGGOLDFISH_STATS_MAX_WORKERS, len(archetypes)) or 1
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        decks_by_name = dict(
+            zip(
+                (archetype["name"] for archetype in archetypes),
+                executor.map(lambda archetype: get_archetype_decks(archetype["href"]), archetypes),
+            )
+        )
     for archetype in archetypes:
-        stats[mtg_format][archetype["name"]] = {"decks": get_archetype_decks(archetype["href"])}
+        decks = decks_by_name[archetype["name"]]
+        stats[mtg_format][archetype["name"]] = {"decks": decks}
         # for day in the past week display the number of decks
         stats[mtg_format][archetype["name"]]["results"] = {}
         for day in range(MTGGOLDFISH_STATS_LOOKBACK_DAYS):
             date = (datetime.now() - timedelta(days=day)).strftime("%Y-%m-%d")
             stats[mtg_format][archetype["name"]]["results"][date] = len(
-                [
-                    deck
-                    for deck in stats[mtg_format][archetype["name"]]["decks"]
-                    if date.lower() in deck["date"].lower()
-                ]
+                [deck for deck in decks if date.lower() in deck["date"].lower()]
             )
     ARCHETYPE_CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
     with ARCHETYPE_CACHE_FILE.open("w", encoding="utf-8") as f:
