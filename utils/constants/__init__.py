@@ -82,6 +82,7 @@ from utils.constants.paths import (
     REMOTE_SNAPSHOT_BUNDLE_STAMP_FILE,
     REMOTE_SNAPSHOT_CACHE_DIR,
     REMOTE_SNAPSHOT_MANIFEST_FILE,
+    SAVED_DECKS_DB_FILE,
     ensure_base_dirs,
 )
 from utils.constants.radar import (
@@ -333,6 +334,7 @@ __all__ = [
     "LOGS_DIR",
     "MTGO_ARTICLES_CACHE_FILE",
     "RADAR_CACHE_DB_FILE",
+    "SAVED_DECKS_DB_FILE",
     "ARCHETYPE_CACHE_FILE",
     "ARCHETYPE_LIST_CACHE_FILE",
     "ARCHETYPE_DECKS_CACHE_FILE",

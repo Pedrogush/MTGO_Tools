@@ -19,7 +19,7 @@ A desktop application for Magic: The Gathering Online (MTGO) players providing m
 
 ## Installation
 
-**Prerequisites**: Windows 10+, Python 3.11+, MongoDB (optional, for deck persistence), .NET 9.0 SDK (for MTGO Bridge).
+**Prerequisites**: Windows 10+, Python 3.11+, .NET 9.0 SDK (for MTGO Bridge).
 
 ```bash
 git clone https://github.com/Pedrogush/MTGO_Tools.git

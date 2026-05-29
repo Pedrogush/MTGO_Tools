@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
-
-import pymongo
 
 from repositories.deck_repository.database import DatabaseMixin
 from repositories.deck_repository.filesystem import FilesystemMixin
@@ -20,9 +19,8 @@ class DeckRepository(
 ):
     """Repository for deck data access operations and deck state management."""
 
-    def __init__(self, mongo_client: pymongo.MongoClient | None = None):
-        self._client = mongo_client
-        self._db = None
+    def __init__(self, db_path: Path | None = None):
+        self._db_path = db_path
 
         self._decks: list[dict[str, Any]] = []
         self._current_deck: dict[str, Any] | None = None

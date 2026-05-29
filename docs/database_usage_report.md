@@ -4,6 +4,15 @@ Report for issue #473. Inventories every place SQL (SQLite) and MongoDB are
 used in the codebase so we can decide whether to consolidate on a single
 persistence layer and how to make MongoDB fail fast when it is absent.
 
+> **Resolution (2026-05-29):** Per the repo owner's decision in #473, MongoDB
+> has been removed and the project now uses SQLite exclusively. The
+> `DatabaseMixin` saved-deck CRUD (`save_to_db`, `get_decks`, `load_from_db`,
+> `update_in_db`, `delete_from_db`) was migrated to a SQLite database at
+> `cache/saved_decks.db` with the same public method signatures (deck ids are
+> now integer rowids instead of Mongo `ObjectId`s). The `pymongo` dependency
+> and the MongoDB prerequisite/attributions were dropped. The inventory below
+> documents the pre-removal state.
+
 ## Summary
 
 - **SQLite** is the dominant local-persistence layer. It is used for four

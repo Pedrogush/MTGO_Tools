@@ -28,6 +28,70 @@ def deck_repo():
     return DeckRepository()
 
 
+@pytest.fixture
+def db_repo(tmp_path):
+    """DeckRepository whose SQLite saved-deck DB lives in a temp directory."""
+    return DeckRepository(db_path=tmp_path / "saved_decks.db")
+
+
+def test_save_to_db_returns_integer_id_and_loads_back(db_repo):
+    deck_id = db_repo.save_to_db(
+        deck_name="Dimir Control",
+        deck_content=SAMPLE_DECK,
+        format_type="Legacy",
+        archetype="Control",
+        player="Tester",
+        source="manual",
+        metadata={"foo": "bar"},
+    )
+
+    assert isinstance(deck_id, int)
+
+    loaded = db_repo.load_from_db(deck_id)
+    assert loaded is not None
+    assert loaded["name"] == "Dimir Control"
+    assert loaded["content"] == SAMPLE_DECK
+    assert loaded["format"] == "Legacy"
+    assert loaded["metadata"] == {"foo": "bar"}
+
+
+def test_get_decks_filters_by_format_and_archetype(db_repo):
+    db_repo.save_to_db("A", SAMPLE_DECK, format_type="Legacy", archetype="Control")
+    db_repo.save_to_db("B", SAMPLE_DECK, format_type="Modern", archetype="Aggro")
+
+    legacy = db_repo.get_decks(format_type="Legacy")
+    assert [d["name"] for d in legacy] == ["A"]
+
+    aggro = db_repo.get_decks(archetype="Aggro")
+    assert [d["name"] for d in aggro] == ["B"]
+
+    assert len(db_repo.get_decks()) == 2
+
+
+def test_update_in_db_merges_metadata(db_repo):
+    deck_id = db_repo.save_to_db("A", SAMPLE_DECK, metadata={"keep": 1})
+
+    assert db_repo.update_in_db(deck_id, deck_name="A2", metadata={"added": 2}) is True
+
+    loaded = db_repo.load_from_db(deck_id)
+    assert loaded["name"] == "A2"
+    assert loaded["metadata"] == {"keep": 1, "added": 2}
+
+
+def test_delete_from_db(db_repo):
+    deck_id = db_repo.save_to_db("A", SAMPLE_DECK)
+
+    assert db_repo.delete_from_db(deck_id) is True
+    assert db_repo.load_from_db(deck_id) is None
+    assert db_repo.delete_from_db(deck_id) is False
+
+
+def test_save_to_db_does_not_require_external_server(db_repo):
+    """SQLite persistence must work with no running database server (issue #473)."""
+    deck_id = db_repo.save_to_db("Offline", SAMPLE_DECK)
+    assert isinstance(deck_id, int)
+
+
 def test_save_deck_with_blank_name_uses_fallback(deck_repo, temp_dir):
     """Verify that blank deck names use the fallback 'saved_deck'."""
     result_path = deck_repo.save_deck_to_file("", SAMPLE_DECK, directory=temp_dir)

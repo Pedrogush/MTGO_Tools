@@ -2,7 +2,7 @@
 
 Split by responsibility into internal modules:
 
-- ``database``: MongoDB CRUD (``save_to_db``, ``get_decks``, ``update_in_db`` …)
+- ``database``: SQLite CRUD (``save_to_db``, ``get_decks``, ``update_in_db`` …)
 - ``filesystem``: deck-text file I/O and legacy-path migration
 - ``metadata_store``: per-deck notes, outboard, and sideboard-guide JSON stores
 - ``ui_state``: in-memory deck/current-deck/averaging buffer kept for the UI layer

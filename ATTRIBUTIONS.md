@@ -100,7 +100,6 @@ The Tracker application provided excellent examples of how to structure an MTGOS
 
 - **BeautifulSoup4** - HTML parsing for MTGGoldfish scraping
 - **requests** - HTTP client for web scraping
-- **pymongo** - MongoDB driver
 - **pytesseract** - OCR for opponent name detection
 - **Pillow (PIL)** - Image processing for OCR
 - **pyautogui** - Screen capture (read-only)
@@ -165,7 +164,6 @@ While we did not use code from these projects, they demonstrated what features a
 - **Stack Overflow** - Various programming solutions
 - **Python documentation** - Language reference
 - **.NET documentation** - C# and framework references
-- **MongoDB documentation** - Database usage
 
 ---
 
