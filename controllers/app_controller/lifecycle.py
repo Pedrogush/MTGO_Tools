@@ -145,6 +145,34 @@ class LifecycleMixin(_Base):
             on_error=_on_comp_rules_error,
         )
 
+        # Step 7: Lazily warm the decklist and card-image caches in the
+        # background so the data the user is most likely to open next is
+        # already local. Starts a few seconds late so it never competes with
+        # the initial loads above.
+        self._start_cache_warmup()
+
+    def _start_cache_warmup(self) -> None:
+        from controllers.app_controller.cache_warmer import CacheWarmer
+        from utils.constants.formats import FORMAT_OPTIONS
+
+        def _extract_card_names(deck_text: str) -> list[str]:
+            analysis = self.deck_service.analyze_deck(deck_text)
+            cards = analysis.get("mainboard_cards", []) + analysis.get("sideboard_cards", [])
+            return [name for name, _count in cards]
+
+        self._cache_warmer = CacheWarmer(
+            get_current_format=lambda: self.current_format,
+            formats=list(FORMAT_OPTIONS),
+            get_archetypes=self.metagame_service.get_archetypes_for_format,
+            get_decks_for_archetype=self.metagame_repo.get_decks_for_archetype,
+            download_deck_text=self.metagame_repo.download_deck_content,
+            extract_card_names=_extract_card_names,
+            enqueue_image=lambda request: self.image_service.queue_card_image_download(
+                request, prioritize=False
+            ),
+        )
+        self._cache_warmer.start()
+
     def attach_frame(self, frame: AppFrame) -> AppFrame:
         import wx
 
@@ -165,5 +193,8 @@ class LifecycleMixin(_Base):
 
     def shutdown(self, timeout: float = MTGO_BRIDGE_SHUTDOWN_TIMEOUT_SECONDS) -> None:
         logger.info("Shutting down AppController background workers...")
+        cache_warmer = getattr(self, "_cache_warmer", None)
+        if cache_warmer is not None:
+            cache_warmer.stop()
         self.image_service.shutdown()
         self._worker.shutdown(timeout=timeout)
