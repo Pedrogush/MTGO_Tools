@@ -23,6 +23,8 @@ from __future__ import annotations
 # after the module became a package.
 import time  # noqa: F401
 
+from loguru import logger
+
 from services.image_service.disk_cache import CardImageCache
 from services.image_service.download_queue import CardImageDownloadQueue
 from services.image_service.downloader import (
@@ -60,8 +62,21 @@ def get_image_service() -> ImageService:
 
 
 def reset_image_service() -> None:
-    """Reset the global image service (use in tests for isolation)."""
+    """Reset the global image service (use in tests for isolation).
+
+    Shut the live instance down before dropping it so its background
+    download-queue daemon thread and ThreadPoolExecutor are joined/cancelled
+    rather than leaked. A leaked daemon thread that is still running (e.g.
+    mid-download) at interpreter shutdown can throw and then deadlock on the
+    stderr buffer lock during finalization — the ``_enter_buffered_busy``
+    fatal error that crashed CI even when every test passed.
+    """
     global _default_service
+    if _default_service is not None:
+        try:
+            _default_service.shutdown()
+        except Exception as exc:  # pragma: no cover - defensive teardown
+            logger.warning(f"Image service shutdown during reset failed: {exc}")
     _default_service = None
 
 
