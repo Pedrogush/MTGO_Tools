@@ -145,8 +145,14 @@ class DeckGridView(wx.ScrolledWindow):
     # ----- public API consumed by CardTablePanel -----
     def set_cards(self, cards: list[dict[str, Any]], preserve_scroll: bool = False) -> None:
         self._cards = list(cards)
-        self._hover_name = None
-        self._pressed = None
+        # An in-place edit (preserve_scroll) — e.g. a +/−/× click — leaves the
+        # cursor over the same card, so keep its hovered +/−/× controls drawn.
+        # Clearing hover here is what made the buttons vanish after every click
+        # and blocked rapid clicking. A fresh load / deck switch (not
+        # preserve_scroll) moves focus elsewhere, so drop stale hover/press.
+        if not preserve_scroll:
+            self._hover_name = None
+            self._pressed = None
         self._recompute_layout()
         self._prefetch_images()
         if not preserve_scroll:
