@@ -6,12 +6,11 @@ from collections.abc import Callable
 from typing import Any
 
 import wx
-import wx.lib.scrolledpanel as scrolled
 
 from utils.constants import DARK_ACCENT, DARK_ALT, DARK_PANEL, LIGHT_TEXT, SUBDUED_TEXT
 from utils.i18n import translate as _i18n_translate
 from widgets.mana_icon_factory import ManaIconFactory
-from widgets.panels.card_box_panel import CardBoxPanel
+from widgets.panels.card_table_panel.grid_view import DeckGridView
 from widgets.panels.card_table_panel.handlers import CardTablePanelHandlersMixin
 from widgets.panels.card_table_panel.pile_view import DeckPileView
 from widgets.panels.card_table_panel.properties import CardTablePanelPropertiesMixin
@@ -53,20 +52,6 @@ VIEW_MODES = ("grid", "table", "pile")
 class CardTablePanel(CardTablePanelHandlersMixin, CardTablePanelPropertiesMixin, wx.Panel):
     GRID_COLUMNS = 4
     GRID_GAP = 8
-    # Maximum number of recycled grid cells. The pool is grown lazily on demand
-    # (see ``_ensure_pool``) rather than pre-allocated, so an empty deck creates
-    # no native CardBoxPanel controls at startup.
-    POOL_SIZE = 60
-    # Cells created eagerly in __init__. Anything beyond this is allocated the
-    # first time ``render``/``_update_panels`` needs it.
-    INITIAL_POOL_SIZE = 0
-    # Pre-warm: after construction the pool is grown during idle so the first
-    # real deck render hits a warm pool (~12ms assign) instead of paying the
-    # one-time per-zone widget-construction cost (~300ms) on the click. Cells
-    # are built a few per tick so the warming itself is imperceptible.
-    WARM_POOL_DELAY_MS = 400
-    WARM_POOL_INTERVAL_MS = 25
-    WARM_POOL_BATCH = 4
 
     def __init__(
         self,
@@ -103,9 +88,6 @@ class CardTablePanel(CardTablePanelHandlersMixin, CardTablePanelPropertiesMixin,
         self._on_pile_sort_change = on_pile_sort_change
 
         self.cards: list[dict[str, Any]] = []
-        self.card_widgets: list[CardBoxPanel] = []
-        self._pool: list[CardBoxPanel] = []
-        self.active_panel: CardBoxPanel | None = None
         self.selected_name: str | None = None
         self.view_mode: str = initial_view_mode if initial_view_mode in VIEW_MODES else "grid"
         self.pile_sort: str = (
@@ -146,14 +128,22 @@ class CardTablePanel(CardTablePanelHandlersMixin, CardTablePanelPropertiesMixin,
         self._empty_state = self._build_empty_state(self._content_book, zone)
         self._content_book.AddPage(self._empty_state, "empty")
 
-        # Page 1: grid view (existing implementation).
-        self.scroller = scrolled.ScrolledPanel(self._content_book, style=wx.VSCROLL)
-        self.scroller.SetBackgroundColour(DARK_PANEL)
-        self.grid_sizer = wx.WrapSizer(wx.HORIZONTAL)
-        self._ensure_pool(self.INITIAL_POOL_SIZE)
-        self.scroller.SetSizer(self.grid_sizer)
-        self.scroller.SetupScrolling(scroll_x=False, scroll_y=True, rate_x=5, rate_y=5)
-        self._content_book.AddPage(self.scroller, "grid")
+        # Page 1: grid view — a single custom-drawn canvas (no per-card native
+        # widgets). See ``DeckGridView`` for why this replaced the old pool of
+        # ``CardBoxPanel`` cells.
+        self.grid_view = DeckGridView(
+            self._content_book,
+            zone,
+            get_metadata,
+            get_card_image,
+            owned_status,
+            icon_factory,
+            on_select=self._handle_view_select,
+            on_hover=self._handle_view_hover,
+            on_delta=lambda name, delta: self._on_delta(self.zone, name, delta),
+            on_remove=self._handle_view_remove,
+        )
+        self._content_book.AddPage(self.grid_view, "grid")
 
         # Page 2: table view.
         self.table_view = DeckTableView(
@@ -191,58 +181,6 @@ class CardTablePanel(CardTablePanelHandlersMixin, CardTablePanelPropertiesMixin,
         self._refresh_view_mode_buttons()
         self._update_pile_sort_button_visibility()
 
-        # Cached count of currently-shown cells, so _update_panels can skip the
-        # expensive ScrolledPanel re-setup when the count is unchanged.
-        self._scroll_count = 0
-        # Warm the recycled cell pool during idle. The mainboard needs the full
-        # pool; side/out decks are small, so warm them to half to bound the
-        # number of idle native controls.
-        self._warm_pool_target = self.POOL_SIZE if zone == "main" else self.POOL_SIZE // 2
-        wx.CallLater(self.WARM_POOL_DELAY_MS, self._warm_pool_tick)
-
-    def _warm_pool_tick(self) -> None:
-        """Grow the cell pool a few cells per idle tick (see ``WARM_POOL_*``)."""
-        try:
-            target = min(self._warm_pool_target, self.POOL_SIZE)
-            if len(self._pool) >= target:
-                return
-            grow_to = min(len(self._pool) + self.WARM_POOL_BATCH, target)
-            self.Freeze()
-            try:
-                self._ensure_pool(grow_to)
-            finally:
-                self.Thaw()
-        except RuntimeError:
-            return  # panel destroyed mid-warm; stop rescheduling
-        wx.CallLater(self.WARM_POOL_INTERVAL_MS, self._warm_pool_tick)
-
-    def _ensure_pool(self, size: int) -> None:
-        """Lazily grow the recycled grid-cell pool to at least ``size`` cells.
-
-        Cells are expensive native controls (a panel plus a qty label, a button
-        sub-panel and three buttons each), so they are only created on demand
-        rather than all ``POOL_SIZE`` up front. ``size`` is clamped to
-        ``POOL_SIZE`` to preserve the existing cap (zones with more distinct
-        entries than ``POOL_SIZE`` are truncated, as before)."""
-        target = min(size, self.POOL_SIZE)
-        while len(self._pool) < target:
-            cell = CardBoxPanel(
-                self.scroller,
-                self.zone,
-                {"name": "", "qty": 0},
-                self.icon_factory,
-                self._get_metadata,
-                self._owned_status,
-                self._on_delta,
-                self._on_remove,
-                self._handle_card_click,
-                self._get_card_image,
-                self._on_hover,
-            )
-            self.grid_sizer.Add(cell, 0, wx.RIGHT | wx.BOTTOM, self.GRID_GAP)
-            self.grid_sizer.Show(cell, False)
-            self._pool.append(cell)
-
     # ----- public API -----
     def set_view_mode(self, mode: str, *, persist: bool = True) -> None:
         if mode not in VIEW_MODES:
@@ -256,7 +194,10 @@ class CardTablePanel(CardTablePanelHandlersMixin, CardTablePanelPropertiesMixin,
         self._update_pile_sort_button_visibility()
         # Re-populate the now-active view if we have cards.
         if self.cards:
-            if mode == "table":
+            if mode == "grid":
+                self.grid_view.set_cards(self.cards)
+                self.grid_view.set_selected(self.selected_name)
+            elif mode == "table":
                 self.table_view.set_cards(self.cards)
                 self.table_view.set_selected(self.selected_name)
             elif mode == "pile":
@@ -320,16 +261,15 @@ class CardTablePanel(CardTablePanelHandlersMixin, CardTablePanelPropertiesMixin,
         if self._content_book.GetSelection() != target:
             self._content_book.ChangeSelection(target)
 
-    # ----- selection plumbing for the new views -----
+    # ----- selection plumbing shared by all three views -----
     def _handle_view_select(self, card: dict[str, Any] | None) -> None:
         if card is None:
             self.selected_name = None
-            self._sync_grid_selection()
+            self._sync_selection()
             self._notify_selection(None)
             return
         self.selected_name = card["name"]
-        # Mirror to grid view so the inspector stays consistent if user switches.
-        self._sync_grid_selection()
+        self._sync_selection()
         self._notify_selection(card)
 
     def _handle_view_hover(self, card: dict[str, Any]) -> None:
@@ -338,21 +278,9 @@ class CardTablePanel(CardTablePanelHandlersMixin, CardTablePanelPropertiesMixin,
         self._on_hover(self.zone, card)
 
     def _handle_view_remove(self, name: str) -> None:
-        """Remove ``name`` from this panel's zone (pile-view right-click)."""
+        """Remove ``name`` from this panel's zone (grid/pile-view action)."""
         if self._on_remove:
             self._on_remove(self.zone, name)
-
-    def _sync_grid_selection(self) -> None:
-        if self.active_panel:
-            self.active_panel.set_active(False)
-        self.active_panel = None
-        if not self.selected_name:
-            return
-        for widget in self.card_widgets:
-            if widget.card["name"].lower() == self.selected_name.lower():
-                self.active_panel = widget
-                widget.set_active(True)
-                return
 
     @staticmethod
     def _build_loading_state(parent: wx.Window) -> wx.Panel:

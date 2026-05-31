@@ -34,6 +34,9 @@ class CardTablePanelPropertiesMixin(_Base):
         return (DECK_CARD_WIDTH + cls.GRID_GAP) * cls.GRID_COLUMNS + scrollbar_width
 
     def get_selected_card(self) -> dict[str, Any] | None:
-        if self.active_panel:
-            return self.active_panel.card
+        if not self.selected_name:
+            return None
+        for card in self.cards:
+            if card["name"].lower() == self.selected_name.lower():
+                return card
         return None

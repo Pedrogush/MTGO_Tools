@@ -5,7 +5,6 @@ from __future__ import annotations
 from importlib import import_module
 
 _EXPORTS = {
-    "CardBoxPanel": "widgets.panels.card_box_panel",
     "CardImageDisplay": "widgets.panels.card_image_display",
     "CardInspectorPanel": "widgets.panels.card_inspector_panel",
     "CardTablePanel": "widgets.panels.card_table_panel",

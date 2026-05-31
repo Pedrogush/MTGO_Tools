@@ -1,4 +1,4 @@
-"""Tests for wx-independent methods of CardBoxPanel."""
+"""Tests for the wx-independent card-render helpers."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-from widgets.panels.card_box_panel import CardBoxPanel
+from widgets.panels.card_table_panel.card_render import build_image_name_candidates
 
 
 class _CardEntryStub:
@@ -84,6 +84,6 @@ class _CardEntryStub:
     ],
 )
 def test_build_image_name_candidates(card: dict[str, Any], meta: Any, expected: list[str]) -> None:
-    """_build_image_name_candidates must return the correct candidate list for each input."""
-    result = CardBoxPanel._build_image_name_candidates(None, card, meta)
+    """build_image_name_candidates must return the correct candidate list for each input."""
+    result = build_image_name_candidates(card, meta)
     assert result == expected
