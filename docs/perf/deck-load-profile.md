@@ -202,3 +202,27 @@ Net: **~7× faster cold, ~3× faster warm**; warm steady-state click-to-rendered
 mainboard is at/under the 100 ms target, with the sideboard following one frame
 later. The `perf_phase` instrumentation is kept in place (INFO, one cheap log
 line per segment) for future regression checks.
+
+---
+
+## 5. Follow-up — grid view → single custom-drawn canvas (issue #532)
+
+After A–D the remaining cost on a warm click was the grid view's per-window
+overhead: each card was a native `CardBoxPanel` (a `wx.Panel` with a qty
+`StaticText`, a button sub-panel and three `wx.Button`s — ~5 handles × ~40
+cards ≈ ~200 OS window handles), and `Thaw` dispatched ~40 separate paint
+events (~30–48 ms just for that).
+
+Issue #532 replaced the grid-of-native-cells with a single custom-drawn
+`DeckGridView` (`card_table_panel/grid_view.py`), the same canvas model the
+pile/table views already use: one `wx.ScrolledWindow` with no child widgets,
+`set_cards` does pure layout math + a `Refresh`, and one buffered `_on_paint`
+blits every card bitmap and draws the qty / placeholder / selection / inline
+`+ − ×` hit-zones in a single pass. Card images decode on the shared bounded
+pool. The `CardBoxPanel` pool and its idle pre-warm (`WARM_POOL_*`,
+`_warm_pool_tick`, `_ensure_pool`) are gone — there are no widgets to build.
+
+Measured (Modern Eldrazi Tron, 60 main / 15 side, WSL→Windows): the
+`[main] grid_view.set_cards` segment is **~1.6–2.4 ms** (was ~95–125 ms for the
+old `set_cards`, with ~30–48 ms of that the 40-way thaw+repaint). No idle
+pre-warm controls and no first-click widget-construction spike.

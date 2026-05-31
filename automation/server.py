@@ -864,11 +864,11 @@ class AutomationServer:
                 "error": f"No table for zone: {zone}",
             }
 
-        scroller = getattr(table, "scroller", None)
-        if scroller is None:
-            return {"zone": zone, "scroll_x": 0, "scroll_y": 0, "error": "No scroller on table"}
+        grid_view = getattr(table, "grid_view", None)
+        if grid_view is None:
+            return {"zone": zone, "scroll_x": 0, "scroll_y": 0, "error": "No grid view on table"}
 
-        x, y = scroller.GetViewStart()
+        x, y = grid_view.GetViewStart()
         return {"zone": zone, "scroll_x": x, "scroll_y": y}
 
     def _handle_get_builder_result_count(self) -> dict[str, Any]:
@@ -933,7 +933,7 @@ class AutomationServer:
         return {"closed": True}
 
     def _handle_get_card_images_loaded(self, zone: str = "main") -> dict[str, Any]:
-        """Count how many card panels in a zone have successfully loaded images."""
+        """Count how many cards in a zone's grid view have loaded their images."""
         table = None
         if zone == "main":
             table = getattr(self.frame, "main_table", None)
@@ -945,13 +945,10 @@ class AutomationServer:
         if table is None:
             return {"zone": zone, "loaded": 0, "total": 0, "error": f"No table for zone: {zone}"}
 
-        card_widgets = getattr(table, "card_widgets", [])
-        total = len(card_widgets)
-        loaded = 0
-        for panel in card_widgets:
-            bmp = getattr(panel, "_card_bitmap", None)
-            if bmp is not None and hasattr(bmp, "IsOk") and bmp.IsOk():
-                loaded += 1
+        grid_view = getattr(table, "grid_view", None)
+        if grid_view is None or not hasattr(grid_view, "count_loaded_images"):
+            return {"zone": zone, "loaded": 0, "total": 0}
+        loaded, total = grid_view.count_loaded_images()
         return {"zone": zone, "loaded": loaded, "total": total}
 
     # ------------------------------------------------------------------ Mana symbol rendering (issue #410) ------------------------------------------------------------------
