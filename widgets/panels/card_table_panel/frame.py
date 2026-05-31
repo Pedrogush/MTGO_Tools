@@ -60,6 +60,13 @@ class CardTablePanel(CardTablePanelHandlersMixin, CardTablePanelPropertiesMixin,
     # Cells created eagerly in __init__. Anything beyond this is allocated the
     # first time ``render``/``_update_panels`` needs it.
     INITIAL_POOL_SIZE = 0
+    # Pre-warm: after construction the pool is grown during idle so the first
+    # real deck render hits a warm pool (~12ms assign) instead of paying the
+    # one-time per-zone widget-construction cost (~300ms) on the click. Cells
+    # are built a few per tick so the warming itself is imperceptible.
+    WARM_POOL_DELAY_MS = 400
+    WARM_POOL_INTERVAL_MS = 25
+    WARM_POOL_BATCH = 4
 
     def __init__(
         self,
@@ -183,6 +190,31 @@ class CardTablePanel(CardTablePanelHandlersMixin, CardTablePanelPropertiesMixin,
 
         self._refresh_view_mode_buttons()
         self._update_pile_sort_button_visibility()
+
+        # Cached count of currently-shown cells, so _update_panels can skip the
+        # expensive ScrolledPanel re-setup when the count is unchanged.
+        self._scroll_count = 0
+        # Warm the recycled cell pool during idle. The mainboard needs the full
+        # pool; side/out decks are small, so warm them to half to bound the
+        # number of idle native controls.
+        self._warm_pool_target = self.POOL_SIZE if zone == "main" else self.POOL_SIZE // 2
+        wx.CallLater(self.WARM_POOL_DELAY_MS, self._warm_pool_tick)
+
+    def _warm_pool_tick(self) -> None:
+        """Grow the cell pool a few cells per idle tick (see ``WARM_POOL_*``)."""
+        try:
+            target = min(self._warm_pool_target, self.POOL_SIZE)
+            if len(self._pool) >= target:
+                return
+            grow_to = min(len(self._pool) + self.WARM_POOL_BATCH, target)
+            self.Freeze()
+            try:
+                self._ensure_pool(grow_to)
+            finally:
+                self.Thaw()
+        except RuntimeError:
+            return  # panel destroyed mid-warm; stop rescheduling
+        wx.CallLater(self.WARM_POOL_INTERVAL_MS, self._warm_pool_tick)
 
     def _ensure_pool(self, size: int) -> None:
         """Lazily grow the recycled grid-cell pool to at least ``size`` cells.

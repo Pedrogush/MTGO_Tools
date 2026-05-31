@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from utils.perf import timed
+from utils.perf import perf_phase, timed
 from widgets.panels.card_box_panel import CardBoxPanel
 
 if TYPE_CHECKING:
@@ -35,64 +35,77 @@ class CardTablePanelHandlersMixin(_Base):
 
     @timed
     def _update_panels(self, cards: list[dict[str, Any]], preserve_scroll: bool = False) -> None:
+        zone = self.zone
         self.Freeze()
         needs_image_load: list[CardBoxPanel] = []
         try:
             self.scroller.Freeze()
             try:
                 # Always refresh the count label irrespective of active view.
-                total = lands = mdfcs = 0
-                for card in cards:
-                    qty = card["qty"]
-                    total += qty
-                    meta = self._get_metadata(card["name"]) or {}
-                    type_line = (meta.get("type_line") or "").lower()
-                    back_type_line = (meta.get("back_type_line") or "").lower()
-                    if "land" in type_line:
-                        lands += qty
-                    elif "land" in back_type_line:
-                        mdfcs += qty
-                label = f"{total} card{'s' if total != 1 else ''}"
-                parts = []
-                if lands:
-                    parts.append(f"{lands} land{'s' if lands != 1 else ''}")
-                if mdfcs:
-                    parts.append(f"{mdfcs} MDFC{'s' if mdfcs != 1 else ''}")
-                if parts:
-                    label += " | " + " + ".join(parts)
-                self.count_label.SetLabel(label)
+                with perf_phase(f"[{zone}] count/metadata loop ({len(cards)} cards)"):
+                    total = lands = mdfcs = 0
+                    for card in cards:
+                        qty = card["qty"]
+                        total += qty
+                        meta = self._get_metadata(card["name"]) or {}
+                        type_line = (meta.get("type_line") or "").lower()
+                        back_type_line = (meta.get("back_type_line") or "").lower()
+                        if "land" in type_line:
+                            lands += qty
+                        elif "land" in back_type_line:
+                            mdfcs += qty
+                    label = f"{total} card{'s' if total != 1 else ''}"
+                    parts = []
+                    if lands:
+                        parts.append(f"{lands} land{'s' if lands != 1 else ''}")
+                    if mdfcs:
+                        parts.append(f"{mdfcs} MDFC{'s' if mdfcs != 1 else ''}")
+                    if parts:
+                        label += " | " + " + ".join(parts)
+                    self.count_label.SetLabel(label)
 
                 # Refresh the grid-view widget pool (still needed even when not
                 # the active page, so the next switch is instant).
                 if self.active_panel:
                     self.active_panel.set_active(False)
                 self.active_panel = None
-                # Grow the recycled pool on demand. Cells are allocated lazily
-                # (see CardTablePanel._ensure_pool) so an empty deck creates no
-                # grid cells at startup; this is where they actually appear.
-                self._ensure_pool(len(cards))
-                for i, panel in enumerate(self._pool):
-                    if i < len(cards):
-                        card = cards[i]
-                        if panel.card is card:
-                            panel.update_qty()
+                with perf_phase(f"[{zone}] pool assign ({len(cards)} cells)"):
+                    # Grow the recycled pool on demand. Cells are allocated lazily
+                    # (see CardTablePanel._ensure_pool) so an empty deck creates no
+                    # grid cells at startup; this is where they actually appear.
+                    self._ensure_pool(len(cards))
+                    for i, panel in enumerate(self._pool):
+                        if i < len(cards):
+                            card = cards[i]
+                            if panel.card is card:
+                                panel.update_qty()
+                            else:
+                                panel.assign_card(card, self.zone)
+                                needs_image_load.append(panel)
+                            self.grid_sizer.Show(panel, True)
                         else:
-                            panel.assign_card(card, self.zone)
-                            needs_image_load.append(panel)
-                        self.grid_sizer.Show(panel, True)
-                    else:
-                        self.grid_sizer.Show(panel, False)
-                self.card_widgets = self._pool[: len(cards)]
-                self.grid_sizer.Layout()
-                self.scroller.Layout()
-                self.scroller.FitInside()
-                self.scroller.SetupScrolling(
-                    scroll_x=False,
-                    scroll_y=True,
-                    rate_x=5,
-                    rate_y=5,
-                    scrollToTop=not preserve_scroll,
-                )
+                            self.grid_sizer.Show(panel, False)
+                    self.card_widgets = self._pool[: len(cards)]
+                with perf_phase(f"[{zone}] grid layout + scroll setup"):
+                    self.grid_sizer.Layout()
+                    self.scroller.FitInside()
+                    # SetupScrolling recomputes scrollbars/rate over every child
+                    # and is the costly part of this block. Only re-run it when
+                    # the visible cell count actually changes; otherwise just
+                    # reset the scroll position (cheap), which covers +/- edits
+                    # and re-selecting a same-size deck.
+                    visible_count = len(cards)
+                    if visible_count != self._scroll_count:
+                        self._scroll_count = visible_count
+                        self.scroller.SetupScrolling(
+                            scroll_x=False,
+                            scroll_y=True,
+                            rate_x=5,
+                            rate_y=5,
+                            scrollToTop=not preserve_scroll,
+                        )
+                    elif not preserve_scroll:
+                        self.scroller.Scroll(0, 0)
 
                 # Populate the table/pile views only when one of them is the
                 # active page. Both are fully rebuilt by set_cards (the table
@@ -102,9 +115,11 @@ class CardTablePanelHandlersMixin(_Base):
                 # set_view_mode() re-populates whichever view becomes active on
                 # the next switch, so a stale hidden view is harmless.
                 if self.view_mode == "table":
-                    self.table_view.set_cards(cards)
+                    with perf_phase(f"[{zone}] table_view.set_cards"):
+                        self.table_view.set_cards(cards)
                 elif self.view_mode == "pile":
-                    self.pile_view.set_cards(cards)
+                    with perf_phase(f"[{zone}] pile_view.set_cards"):
+                        self.pile_view.set_cards(cards)
 
                 self._switch_content_page()
                 self._restore_selection()
@@ -113,8 +128,9 @@ class CardTablePanelHandlersMixin(_Base):
         finally:
             self.Thaw()
 
-        for panel in needs_image_load:
-            panel.load_image_async()
+        with perf_phase(f"[{zone}] dispatch {len(needs_image_load)} async image loads"):
+            for panel in needs_image_load:
+                panel.load_image_async()
 
     def _handle_card_click(self, zone: str, card: dict[str, Any], panel: CardBoxPanel) -> None:
         if self.active_panel is panel:

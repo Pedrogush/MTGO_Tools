@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from threading import Thread
+import atexit
+from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any
 
 import wx
@@ -34,6 +35,18 @@ if TYPE_CHECKING:
     _Base = CardBoxPanelProto
 else:
     _Base = object
+
+
+# Shared, bounded pool for decoding deck-cell card images off the UI thread.
+# Each CardBoxPanel.load_image_async() used to spawn its own daemon thread, so
+# rendering a 40-card deck created ~40 threads on the UI thread (~140ms just to
+# start them) which then thrashed the GIL on simultaneous PIL decodes. Routing
+# every load through one shared pool makes dispatch a near-free submit() and
+# caps the number of concurrent decodes. Threads idle out so the pool costs
+# nothing between deck loads.
+_IMAGE_DECODE_POOL = ThreadPoolExecutor(max_workers=6, thread_name_prefix="card-img-decode")
+# Don't let the executor's atexit join block app shutdown on in-flight decodes.
+atexit.register(_IMAGE_DECODE_POOL.shutdown, wait=False, cancel_futures=True)
 
 
 class CardBoxPanelHandlersMixin(_Base):
@@ -73,19 +86,25 @@ class CardBoxPanelHandlersMixin(_Base):
         self.Refresh()
 
     def load_image_async(self) -> None:
-        """Start asynchronous image loading in a background thread.
+        """Start asynchronous image loading on the shared decode pool.
 
-        Safe to call simultaneously on many panels — all I/O happens in parallel
-        daemon threads and results are posted back to the main thread via
-        wx.CallAfter, so the UI is never blocked.
+        Safe to call simultaneously on many panels — the work is submitted to a
+        bounded module-level pool (``_IMAGE_DECODE_POOL``), so dispatch is a
+        near-free ``submit()`` and at most a handful of decodes run at once.
+        Results are posted back to the main thread via ``wx.CallAfter``, so the
+        UI is never blocked.
         """
         self._image_generation += 1
         gen = self._image_generation
         self._image_attempted = True
         candidates = list(self._image_name_candidates)
-        Thread(target=self._image_load_worker, args=(gen, candidates), daemon=True).start()
+        _IMAGE_DECODE_POOL.submit(self._image_load_worker, gen, candidates)
 
     def _image_load_worker(self, gen: int, candidates: list[str]) -> None:
+        # The pool can queue tasks under load; skip work for a load already
+        # superseded by a newer assign_card/load before this task started.
+        if gen != self._image_generation:
+            return
         image_path = None
         for name in candidates:
             path = self._get_card_image(name, "normal")

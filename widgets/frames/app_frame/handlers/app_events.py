@@ -12,6 +12,7 @@ from loguru import logger
 
 from utils.constants import LOGS_DIR
 from utils.deck import sanitize_filename
+from utils.perf import perf_phase
 from widgets.dialogs.feedback_dialog import show_feedback_dialog
 from widgets.frames.app_frame.handlers.ui_helpers import open_child_window, widget_exists
 from widgets.frames.identify_opponent import MTGOpponentDeckSpy
@@ -273,6 +274,9 @@ class AppEventHandlers(_Base):
         if idx == wx.NOT_FOUND:
             return
         deck = self.controller.deck_repo.get_decks_list()[idx]
+        # PERF: mark the instant of the click so _on_deck_content_ready can
+        # report the full click-to-rendered-deck wall time (download + render).
+        self._deck_click_t0 = time.perf_counter()
         self.controller.deck_repo.set_current_deck(deck)
         self.deck_notes_panel.load_notes_for_current()
         self.copy_button.Disable()
@@ -501,29 +505,71 @@ class AppEventHandlers(_Base):
             self.controller.deck_repo.get_current_deck(),
             self.controller.deck_repo.get_current_deck_key(),
         )
+        render_t0 = time.perf_counter()
         self.controller.deck_repo.set_current_deck_text(deck_text)
-        stats = self.controller.deck_service.analyze_deck(deck_text)
-        self.zone_cards["main"] = sorted(
-            [{"name": name, "qty": qty} for name, qty in stats["mainboard_cards"]],
-            key=lambda card: card["name"].lower(),
-        )
-        self.zone_cards["side"] = sorted(
-            [{"name": name, "qty": qty} for name, qty in stats["sideboard_cards"]],
-            key=lambda card: card["name"].lower(),
-        )
-        self.zone_cards["out"] = self._load_outboard_for_current()
-        self.main_table.set_cards(self.zone_cards["main"])
-        self.side_table.set_cards(self.zone_cards["side"])
-        if self.out_table:
-            self.out_table.set_cards(self.zone_cards["out"])
-        self._update_stats(deck_text)
+        with perf_phase("analyze_deck + zone sort"):
+            stats = self.controller.deck_service.analyze_deck(deck_text)
+            self.zone_cards["main"] = sorted(
+                [{"name": name, "qty": qty} for name, qty in stats["mainboard_cards"]],
+                key=lambda card: card["name"].lower(),
+            )
+            self.zone_cards["side"] = sorted(
+                [{"name": name, "qty": qty} for name, qty in stats["sideboard_cards"]],
+                key=lambda card: card["name"].lower(),
+            )
+        with perf_phase("load outboard"):
+            self.zone_cards["out"] = self._load_outboard_for_current()
+        with perf_phase("main_table.set_cards"):
+            self.main_table.set_cards(self.zone_cards["main"])
+        # Defer the secondary zones to the next event-loop turn so the mainboard
+        # — the zone the user is looking at — paints first. They fill in a frame
+        # later, which removes their cost from the click-to-visible interval.
+        wx.CallAfter(self._render_secondary_zones)
+        with perf_phase("update_stats"):
+            self._update_stats(deck_text)
         self.copy_button.Enable(True)
         self.save_button.Enable(True)
         logger.info("Triggering deck notes reload for source={}", source)
-        self.deck_notes_panel.load_notes_for_current()
-        self._load_guide_for_current()
+        with perf_phase("load_notes_for_current"):
+            self.deck_notes_panel.load_notes_for_current()
+        with perf_phase("load_guide_for_current"):
+            self._load_guide_for_current()
         self._set_status("app.status.deck_ready", source=source)
         self._schedule_settings_save()
+
+        # PERF: headline numbers. "render" is the synchronous UI-thread block
+        # that stalls the app (the ~600ms gap in the logs); "click-to-ready"
+        # adds the async download leg when this load came from a deck click.
+        render_ms = (time.perf_counter() - render_t0) * 1000.0
+        click_t0 = getattr(self, "_deck_click_t0", None)
+        if source == "mtggoldfish" and click_t0 is not None:
+            total_ms = (time.perf_counter() - click_t0) * 1000.0
+            self._deck_click_t0 = None
+            logger.info(
+                "PERF | {:>7.1f} ms | === deck render block (sync, UI thread) ===", render_ms
+            )
+            logger.info(
+                "PERF | {:>7.1f} ms | === click-to-ready TOTAL (download + render) ===", total_ms
+            )
+        else:
+            logger.info(
+                "PERF | {:>7.1f} ms | === deck render block (sync, UI thread), source={} ===",
+                render_ms,
+                source,
+            )
+
+    def _render_secondary_zones(self: AppFrame) -> None:
+        """Render the sideboard/outboard zones, deferred off the click path.
+
+        Reads the current ``zone_cards`` at fire time, so if a newer deck loaded
+        between scheduling and firing it simply paints the latest data (the new
+        load scheduled its own deferral); a redundant repaint is harmless.
+        """
+        with perf_phase("side_table.set_cards (deferred)"):
+            self.side_table.set_cards(self.zone_cards["side"])
+        if self.out_table:
+            with perf_phase("out_table.set_cards (deferred)"):
+                self.out_table.set_cards(self.zone_cards["out"])
 
     def _on_collection_fetched(self: AppFrame, filepath: Path, cards: list) -> None:
         if cards:
