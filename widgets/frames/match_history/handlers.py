@@ -9,6 +9,12 @@ import wx
 import wx.dataview as dv
 from loguru import logger
 
+from widgets.frames.match_history.properties import (
+    compute_history_metrics,
+    compute_opponent_stats,
+    resolve_match_perspective,
+)
+
 
 class MatchHistoryHandlersMixin:
     """Callbacks and worker-thread bridges for :class:`MatchHistoryFrame`."""
@@ -91,52 +97,18 @@ class MatchHistoryHandlersMixin:
             if not isinstance(match, dict):
                 continue
 
-            players = match.get("players", [])
-            winner = match.get("winner")
-            match_score_str = match.get("match_score", "?-?")
             timestamp = match.get("timestamp")
             date_str = timestamp.strftime("%Y-%m-%d %H:%M") if timestamp else "Unknown"
 
-            player1_name = players[0] if len(players) > 0 else "Unknown"
-            player2_name = players[1] if len(players) > 1 else "Unknown"
-            player1_archetype = match.get("player1_archetype", "Unknown")
-            player2_archetype = match.get("player2_archetype", "Unknown")
-
-            try:
-                score_parts = match_score_str.split("-")
-                player1_score = int(score_parts[0])
-                player2_score = int(score_parts[1])
-            except (ValueError, IndexError):
-                player1_score = 0
-                player2_score = 0
-
-            if self.current_username:
-                if player1_name.lower() == self.current_username.lower():
-                    our_name = player1_name
-                    opp_name = player2_name
-                    our_archetype = player1_archetype
-                    opp_archetype = player2_archetype
-                    our_mulligans = match.get("player1_mulligans", [])
-                    our_score = player1_score
-                    opp_score = player2_score
-                else:
-                    our_name = player2_name
-                    opp_name = player1_name
-                    our_archetype = player2_archetype
-                    opp_archetype = player1_archetype
-                    our_mulligans = match.get("player2_mulligans", [])
-                    our_score = player2_score
-                    opp_score = player1_score
-            else:
-                our_name = player1_name
-                opp_name = player2_name
-                our_archetype = player1_archetype
-                opp_archetype = player2_archetype
-                our_mulligans = match.get("player1_mulligans", [])
-                our_score = player1_score
-                opp_score = player2_score
-
-            we_won = winner == our_name
+            perspective = resolve_match_perspective(match, self.current_username)
+            our_name = perspective["our_name"]
+            opp_name = perspective["opp_name"]
+            our_archetype = perspective["our_archetype"]
+            opp_archetype = perspective["opp_archetype"]
+            our_mulligans = perspective["our_mulligans"]
+            our_score = perspective["our_score"]
+            opp_score = perspective["opp_score"]
+            we_won = perspective["we_won"]
 
             total_mulls = sum(our_mulligans) if our_mulligans else 0
             mull_detail = ", ".join(str(m) for m in our_mulligans) if our_mulligans else "0"
@@ -230,19 +202,18 @@ class MatchHistoryHandlersMixin:
             self._clear_opp_stats()
             return
 
-        metrics = self._iter_matches(matches)
-        total = len(metrics)
-        wins = sum(1 for m in metrics if m["match_win"])
-        total_mulls = sum(m["total_mulligans"] for m in metrics)
-        games_played = sum(m["games_total"] for m in metrics)
-        win_pct = (wins / total * 100) if total else 0.0
-        mull_rate = (total_mulls / games_played * 100) if games_played else 0.0
+        stats = compute_opponent_stats(self._iter_matches(matches))
+        if not stats:
+            self._clear_opp_stats()
+            return
 
         self.opp_match_rate_label.SetLabel(
-            f"Vs. {opp_name} Match Win Rate: {win_pct:.1f}% ({wins}/{total})"
+            f"Vs. {opp_name} Match Win Rate: {stats['win_pct']:.1f}%"
+            f" ({stats['wins']}/{stats['total']})"
         )
         self.opp_mull_rate_label.SetLabel(
-            f"Vs. {opp_name} Mull Rate: {mull_rate:.1f}%" f" ({total_mulls}/{games_played} games)"
+            f"Vs. {opp_name} Mull Rate: {stats['mull_rate']:.1f}%"
+            f" ({stats['total_mulligans']}/{stats['games_played']} games)"
         )
 
     def _clear_opp_stats(self) -> None:
@@ -264,35 +235,6 @@ class MatchHistoryHandlersMixin:
             self.avg_mulligans_label.SetLabel(f"{self._t('match.metrics.avg_mulligans')}: \u2014")
             return
 
-        total_matches = len(matches)
-        match_wins = sum(1 for match in matches if match["match_win"])
-        games_won = sum(match["games_won"] for match in matches)
-        games_played = sum(match["games_total"] for match in matches)
-
-        total_mulligans = sum(match["total_mulligans"] for match in matches)
-        games_with_data = sum(match["games_total"] for match in matches if match["games_total"] > 0)
-        mulligan_rate = (total_mulligans / games_with_data * 100) if games_with_data else 0.0
-        avg_mulligans_per_match = total_mulligans / total_matches if total_matches else 0.0
-
-        match_rate = (match_wins / total_matches) * 100 if total_matches else 0.0
-        game_rate = (games_won / games_played) * 100 if games_played else 0.0
-
-        self.match_rate_label.SetLabel(
-            f"{self._t('match.metrics.abs_match_rate')}: {match_rate:.1f}%"
-            f" ({match_wins}/{total_matches})"
-        )
-        self.game_rate_label.SetLabel(
-            f"{self._t('match.metrics.abs_game_rate')}: {game_rate:.1f}%"
-            f" ({games_won}/{games_played or 1})"
-        )
-        self.mulligan_rate_label.SetLabel(
-            f"{self._t('match.metrics.mulligan_rate')}: {mulligan_rate:.1f}%"
-            f" ({total_mulligans}/{games_with_data} games)"
-        )
-        self.avg_mulligans_label.SetLabel(
-            f"{self._t('match.metrics.avg_mulligans')}: {avg_mulligans_per_match:.2f}"
-        )
-
         start = self._parse_date_input(self.start_date_ctrl.GetValue())
         end = self._parse_date_input(self.end_date_ctrl.GetValue())
         if start or end:
@@ -300,21 +242,35 @@ class MatchHistoryHandlersMixin:
         else:
             filtered = matches
 
-        if filtered:
-            filtered_match_wins = sum(1 for match in filtered if match["match_win"])
-            filtered_games_won = sum(match["games_won"] for match in filtered)
-            filtered_games_total = sum(match["games_total"] for match in filtered)
-            filtered_match_rate = (filtered_match_wins / len(filtered)) * 100
-            filtered_game_rate = (
-                (filtered_games_won / filtered_games_total) * 100 if filtered_games_total else 0.0
-            )
+        metrics = compute_history_metrics(matches, filtered)
+
+        self.match_rate_label.SetLabel(
+            f"{self._t('match.metrics.abs_match_rate')}: {metrics['match_rate']:.1f}%"
+            f" ({metrics['match_wins']}/{metrics['total_matches']})"
+        )
+        self.game_rate_label.SetLabel(
+            f"{self._t('match.metrics.abs_game_rate')}: {metrics['game_rate']:.1f}%"
+            f" ({metrics['games_won']}/{metrics['games_played'] or 1})"
+        )
+        self.mulligan_rate_label.SetLabel(
+            f"{self._t('match.metrics.mulligan_rate')}: {metrics['mulligan_rate']:.1f}%"
+            f" ({metrics['total_mulligans']}/{metrics['games_with_data']} games)"
+        )
+        self.avg_mulligans_label.SetLabel(
+            f"{self._t('match.metrics.avg_mulligans')}: {metrics['avg_mulligans_per_match']:.2f}"
+        )
+
+        filtered_metrics = metrics["filtered"]
+        if filtered_metrics:
             self.filtered_match_rate_label.SetLabel(
-                f"{self._t('match.metrics.filtered_match_rate')}: {filtered_match_rate:.1f}%"
-                f" ({filtered_match_wins}/{len(filtered)})"
+                f"{self._t('match.metrics.filtered_match_rate')}:"
+                f" {filtered_metrics['match_rate']:.1f}%"
+                f" ({filtered_metrics['match_wins']}/{filtered_metrics['match_total']})"
             )
             self.filtered_game_rate_label.SetLabel(
-                f"{self._t('match.metrics.filtered_game_rate')}: {filtered_game_rate:.1f}%"
-                f" ({filtered_games_won}/{filtered_games_total})"
+                f"{self._t('match.metrics.filtered_game_rate')}:"
+                f" {filtered_metrics['game_rate']:.1f}%"
+                f" ({filtered_metrics['games_won']}/{filtered_metrics['games_total']})"
             )
         else:
             self.filtered_match_rate_label.SetLabel(
