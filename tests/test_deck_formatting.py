@@ -40,6 +40,29 @@ def test_strip_extra_dates_collapses_whitespace():
     assert deck_formatting.strip_extra_dates("Modern 2024-01-02 Challenge") == "Modern Challenge"
 
 
+def test_strip_extra_dates_multiple_dates_with_pipe_separators():
+    assert (
+        deck_formatting.strip_extra_dates("Modern Challenge | 2024-01-02 | 2024-02-03")
+        == "Modern Challenge"
+    )
+
+
+def test_strip_extra_dates_en_dash_separators():
+    assert deck_formatting.strip_extra_dates("Modern–2024-01-02–Challenge") == "Modern Challenge"
+
+
+def test_strip_extra_dates_em_dash_separators():
+    assert deck_formatting.strip_extra_dates("Modern—2024-01-02—Challenge") == "Modern Challenge"
+
+
+def test_strip_extra_dates_slash_separators():
+    assert deck_formatting.strip_extra_dates("Modern/2024-01-02/Challenge") == "Modern Challenge"
+
+
+def test_strip_extra_dates_hyphen_separators():
+    assert deck_formatting.strip_extra_dates("Modern-2024-01-02-Challenge") == "Modern Challenge"
+
+
 # ---------------------------------------------------------------------------
 # format_deck_name
 # ---------------------------------------------------------------------------
@@ -57,6 +80,20 @@ def test_format_deck_name_unknown_when_empty():
     assert deck_formatting.format_deck_name({}) == "Unknown"
 
 
+def test_format_deck_name_no_event_strips_trailing_separator():
+    deck = {"player": "Bob", "result": "5-0", "date": "2024-01-02"}
+    assert deck_formatting.format_deck_name(deck) == "Bob, 5-0, 2024-01-02"
+
+
+def test_format_deck_name_event_only_keeps_unknown_identity():
+    # line_one always falls back to "Unknown", so the leading separator is not
+    # stripped — only the trailing one is when the event is empty.
+    assert (
+        deck_formatting.format_deck_name({"event": "Modern Challenge"})
+        == "Unknown | Modern Challenge"
+    )
+
+
 # ---------------------------------------------------------------------------
 # format_deck_list_entry
 # ---------------------------------------------------------------------------
@@ -65,10 +102,22 @@ def test_format_deck_list_entry_two_lines():
     assert deck_formatting.format_deck_list_entry(deck) == "Bob, 5-0, 2024-01-02\nModern Challenge"
 
 
-def test_format_deck_list_entry_with_source_prefix():
+def test_format_deck_list_entry_with_mtggoldfish_source_prefix():
     deck = {"player": "Bob", "event": "Modern Challenge", "source": "mtggoldfish"}
     entry = deck_formatting.format_deck_list_entry(deck, show_source=True)
-    assert entry.startswith("🐠 Bob")
+    assert entry == "🐠 Bob\nModern Challenge"
+
+
+def test_format_deck_list_entry_with_non_mtggoldfish_source_prefix():
+    deck = {"player": "Bob", "event": "Modern Challenge", "source": "aetherhub"}
+    entry = deck_formatting.format_deck_list_entry(deck, show_source=True)
+    assert entry == "🧙🏾‍♂️ Bob\nModern Challenge"
+
+
+def test_format_deck_list_entry_missing_source_uses_wizard_emoji():
+    deck = {"player": "Bob", "event": "Modern Challenge"}
+    entry = deck_formatting.format_deck_list_entry(deck, show_source=True)
+    assert entry == "🧙🏾‍♂️ Bob\nModern Challenge"
 
 
 # ---------------------------------------------------------------------------
