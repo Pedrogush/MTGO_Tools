@@ -304,9 +304,19 @@ def test_unchanged_manifest_short_circuits_merge(tmp_client: BundleSnapshotClien
         encoding="utf-8",
     )
     bundle = _make_bundle()  # default manifest generated_at == stored value
-    with patch.object(tmp_client, "_http_get_bytes", return_value=BundleResponse(content=bundle)):
+    with (
+        patch.object(tmp_client, "_http_get_bytes", return_value=BundleResponse(content=bundle)),
+        patch.object(tmp_client, "_hydrate_archetype_lists") as mock_arch,
+        patch.object(tmp_client, "_hydrate_format_card_pools") as mock_pools,
+        patch.object(tmp_client, "_hydrate_radars") as mock_radars,
+    ):
         updated, archetypes_by_format = tmp_client.apply()
 
+    # The merge must be genuinely skipped, not merely producing empty output.
+    mock_arch.assert_not_called()
+    mock_pools.assert_not_called()
+    mock_radars.assert_not_called()
+    assert not tmp_client.archetype_list_cache_file.exists()
     assert updated is False
     assert archetypes_by_format is None
 
@@ -599,6 +609,77 @@ def test_apply_returns_none_archetypes_when_stamp_fresh(tmp_client: BundleSnapsh
     updated, archetypes_by_format = tmp_client.apply()
     assert updated is False
     assert archetypes_by_format is None
+
+
+# ---------------------------------------------------------------------------
+# on_archetypes_ready callback
+# ---------------------------------------------------------------------------
+
+
+def test_on_archetypes_ready_invoked_with_payload_before_phase2(
+    tmp_client: BundleSnapshotClient,
+) -> None:
+    """The callback fires once with archetypes_by_format BEFORE Phase 2 hydration."""
+    calls: list[dict[str, Any] | None] = []
+    order: list[str] = []
+
+    def _callback(archetypes_by_format: dict[str, list[dict[str, Any]]] | None) -> None:
+        calls.append(archetypes_by_format)
+        order.append("callback")
+
+    bundle = _make_bundle()
+    real_pools = tmp_client._hydrate_format_card_pools
+    real_radars = tmp_client._hydrate_radars
+
+    def _spy_pools(*args: Any, **kwargs: Any) -> Any:
+        order.append("pools")
+        return real_pools(*args, **kwargs)
+
+    def _spy_radars(*args: Any, **kwargs: Any) -> Any:
+        order.append("radars")
+        return real_radars(*args, **kwargs)
+
+    with (
+        patch.object(tmp_client, "_http_get_bytes", return_value=BundleResponse(content=bundle)),
+        patch.object(tmp_client, "_hydrate_format_card_pools", side_effect=_spy_pools),
+        patch.object(tmp_client, "_hydrate_radars", side_effect=_spy_radars),
+    ):
+        updated, archetypes_by_format = tmp_client.apply(on_archetypes_ready=_callback)
+
+    assert updated is True
+    assert len(calls) == 1
+    assert calls[0] == archetypes_by_format
+    assert calls[0] is not None
+    assert _FORMAT in calls[0]
+    assert calls[0][_FORMAT][0]["href"] == _SLUG
+    # The callback must run before the expensive Phase 2 hydration.
+    assert order[0] == "callback"
+    assert "pools" in order and "radars" in order
+    assert order.index("callback") < order.index("pools")
+    assert order.index("callback") < order.index("radars")
+
+
+def test_on_archetypes_ready_exception_does_not_abort_hydration(
+    tmp_client: BundleSnapshotClient,
+) -> None:
+    """A raising callback is swallowed; Phase 2 caches are still written."""
+
+    def _boom(_archetypes_by_format: dict[str, list[dict[str, Any]]] | None) -> None:
+        raise RuntimeError("callback failed")
+
+    bundle = _make_bundle()
+    with patch.object(tmp_client, "_http_get_bytes", return_value=BundleResponse(content=bundle)):
+        updated, archetypes_by_format = tmp_client.apply(on_archetypes_ready=_boom)
+
+    # apply() still succeeds despite the callback exception.
+    assert updated is True
+    assert archetypes_by_format is not None
+
+    # Phase 2 (expensive) caches were still hydrated.
+    repo = FormatCardPoolRepository(tmp_client.format_card_pool_db_file)
+    assert repo.get_summary(_FORMAT) is not None
+    radar_repo = RadarRepository(tmp_client.radar_db_file)
+    assert radar_repo.get_radar(_FORMAT, _SLUG) is not None
 
 
 # ---------------------------------------------------------------------------
