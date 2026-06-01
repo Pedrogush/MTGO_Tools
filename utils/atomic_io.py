@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import tempfile
 import threading
+import time
 from collections.abc import Iterable, Iterator
 from contextlib import contextmanager
 from pathlib import Path
@@ -14,6 +15,24 @@ import msgspec.json
 
 _lock_registry: dict[Path, threading.RLock] = {}
 _lock_registry_lock = threading.Lock()
+
+# Windows briefly holds a handle on the destination (antivirus, Search
+# indexer, or a concurrent reader) which makes os.replace fail with
+# PermissionError / WinError 5. The lock is transient, so retry with a
+# short backoff before giving up.
+_REPLACE_RETRIES = 5
+_REPLACE_BACKOFF = 0.05
+
+
+def _replace_with_retry(src: Path, dst: Path) -> None:
+    for attempt in range(_REPLACE_RETRIES):
+        try:
+            os.replace(src, dst)
+            return
+        except PermissionError:
+            if attempt == _REPLACE_RETRIES - 1:
+                raise
+            time.sleep(_REPLACE_BACKOFF * (attempt + 1))
 
 
 def _get_path_lock(path: Path) -> threading.RLock:
@@ -59,7 +78,7 @@ def atomic_write_bytes(path: Path, data: bytes) -> None:
                 fh.write(data)
                 fh.flush()
                 os.fsync(fh.fileno())
-            os.replace(tmp_file, path)
+            _replace_with_retry(tmp_file, path)
             _fsync_dir(path.parent)
         finally:
             if tmp_file.exists():
@@ -80,7 +99,7 @@ def atomic_write_stream(path: Path, chunks: Iterable[bytes]) -> None:
                     fh.write(chunk)
                 fh.flush()
                 os.fsync(fh.fileno())
-            os.replace(tmp_file, path)
+            _replace_with_retry(tmp_file, path)
             _fsync_dir(path.parent)
         finally:
             if tmp_file.exists():
