@@ -26,9 +26,12 @@ from widgets.frames.app_frame.frame.center_panel import CenterPanelBuilderMixin
 from widgets.frames.app_frame.frame.left_panel import LeftPanelBuilderMixin
 from widgets.frames.app_frame.frame.right_panel import RightPanelBuilderMixin
 from widgets.frames.app_frame.handlers import (
-    AppEventHandlers,
     AppFrameHandlersMixin,
     CardTablesHandler,
+    ChildWindowHandlers,
+    DataLoadingHandlers,
+    DeckContentHandlers,
+    DeckResearchHandlers,
     SideboardGuideHandlers,
 )
 from widgets.frames.app_frame.properties import AppFramePropertiesMixin
@@ -51,7 +54,10 @@ if TYPE_CHECKING:
 class AppFrame(
     AppFrameHandlersMixin,
     AppFramePropertiesMixin,
-    AppEventHandlers,
+    DeckResearchHandlers,
+    DeckContentHandlers,
+    ChildWindowHandlers,
+    DataLoadingHandlers,
     SideboardGuideHandlers,
     CardTablesHandler,
     LeftPanelBuilderMixin,

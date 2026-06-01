@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+import threading
+from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
@@ -22,6 +23,75 @@ class AppFramePropertiesMixin(_Base):
     Kept as a mixin (no ``__init__``) so :class:`AppFrame` remains the single
     source of truth for instance-state initialization.
     """
+
+    # ------------------------------------------------------------------ Controller state delegation properties ---------------------------------
+    @property
+    def current_format(self) -> str:
+        return self.controller.current_format
+
+    @current_format.setter
+    def current_format(self, value: str) -> None:
+        self.controller.current_format = value
+
+    @property
+    def archetypes(self) -> list[dict[str, Any]]:
+        return self.controller.archetypes
+
+    @archetypes.setter
+    def archetypes(self, value: list[dict[str, Any]]) -> None:
+        self.controller.archetypes = value
+
+    @property
+    def filtered_archetypes(self) -> list[dict[str, Any]]:
+        return self.controller.filtered_archetypes
+
+    @filtered_archetypes.setter
+    def filtered_archetypes(self, value: list[dict[str, Any]]) -> None:
+        self.controller.filtered_archetypes = value
+
+    @property
+    def zone_cards(self) -> dict[str, list[dict[str, Any]]]:
+        return self.controller.zone_cards
+
+    @zone_cards.setter
+    def zone_cards(self, value: dict[str, list[dict[str, Any]]]) -> None:
+        self.controller.zone_cards = value
+
+    @property
+    def left_mode(self) -> str:
+        return self.controller.left_mode
+
+    @left_mode.setter
+    def left_mode(self, value: str) -> None:
+        self.controller.left_mode = value
+
+    @property
+    def loading_archetypes(self) -> bool:
+        return self.controller.loading_archetypes
+
+    @loading_archetypes.setter
+    def loading_archetypes(self, value: bool) -> None:
+        self.controller.loading_archetypes = value
+
+    @property
+    def loading_decks(self) -> bool:
+        return self.controller.loading_decks
+
+    @loading_decks.setter
+    def loading_decks(self, value: bool) -> None:
+        self.controller.loading_decks = value
+
+    @property
+    def loading_daily_average(self) -> bool:
+        return self.controller.loading_daily_average
+
+    @loading_daily_average.setter
+    def loading_daily_average(self, value: bool) -> None:
+        self.controller.loading_daily_average = value
+
+    @property
+    def _loading_lock(self) -> threading.Lock:
+        return self.controller._loading_lock
 
     def _t(self, key: str, **kwargs: object) -> str:
         return translate(self.locale, key, **kwargs)
