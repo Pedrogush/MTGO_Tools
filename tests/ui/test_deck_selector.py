@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 import pytest
 import wx
 
@@ -42,6 +44,14 @@ def test_format_change_reloads_decks_with_any_selected(
     Regression test: previously, the auto-load of "Any" decks was gated by a
     `_initial_any_load_triggered` flag that only fired once per session, so a
     format change populated the archetype list but left the deck list empty.
+
+    Note: the factory replaces ``frame._load_decks`` with a debounce-free stub,
+    so this test only exercises the ``_on_archetypes_loaded`` signature-skip
+    logic (which decides whether to reload at all). The real ``_load_decks``
+    debounce — including that a distinct (format, scope) target is never
+    swallowed across a format change — is covered separately by
+    ``test_format_change_reloads_decks_through_real_load_decks`` and
+    ``test_load_decks_debounces_rapid_identical_target``.
     """
     frame = deck_selector_factory()
     try:
@@ -322,5 +332,270 @@ def test_file_deck_load_uses_file_deck_key_for_notes(
         )
         assert frame.deck_repo.get_current_deck_key() == "my-deck"
         assert frame.deck_notes_panel.get_notes()[0]["body"] == "File note"
+    finally:
+        frame.Destroy()
+
+
+@pytest.mark.usefixtures("wx_app")
+def test_format_change_reloads_decks_through_real_load_decks(
+    deck_selector_factory,
+):
+    """A format change must reach the real ``_load_decks`` -> ``controller.load_decks``.
+
+    Complements ``test_format_change_reloads_decks_with_any_selected`` (which
+    stubs ``_load_decks``): here we restore the real method and assert the
+    downstream ``controller.load_decks`` fires for each distinct format, proving
+    the debounce does not swallow the post-format-change "all" load.
+    """
+    frame = deck_selector_factory()
+    try:
+        # Restore the real (debounced) _load_decks; the factory stubs it out.
+        frame._load_decks = lambda **kwargs: type(frame)._load_decks(frame, **kwargs)
+
+        controller_calls: list[dict[str, object]] = []
+        original_ctrl_load = frame.controller.load_decks
+
+        def recording_ctrl_load(**kwargs):
+            controller_calls.append(kwargs)
+            return original_ctrl_load(**kwargs)
+
+        frame.controller.load_decks = recording_ctrl_load  # type: ignore[assignment]
+
+        frame.fetch_archetypes()
+        pump_ui_events(wx.GetApp())
+        assert frame.research_panel.archetype_list.GetSelection() == 0  # "Any"
+        assert [c["scope"] for c in controller_calls] == ["all"]
+
+        frame.research_panel.format_choice.SetStringSelection("Legacy")
+        frame.on_format_changed()
+        pump_ui_events(wx.GetApp())
+
+        assert frame.current_format == "Legacy"
+        # The distinct (scope='all', format='Legacy') target is not debounced
+        # against the prior Modern load, so a second controller load fires.
+        assert [c["scope"] for c in controller_calls] == ["all", "all"]
+    finally:
+        frame.Destroy()
+
+
+@pytest.mark.usefixtures("wx_app")
+def test_on_archetypes_error_resets_loading_flag(
+    deck_selector_factory,
+):
+    """A failed archetype fetch must clear ``loading_archetypes`` and notify."""
+    frame = deck_selector_factory()
+    try:
+        with frame._loading_lock:
+            frame.loading_archetypes = True
+        with patch("wx.MessageBox") as message_box:
+            frame._on_archetypes_error(RuntimeError("boom"))
+        assert frame.loading_archetypes is False
+        assert message_box.called
+    finally:
+        frame.Destroy()
+
+
+@pytest.mark.usefixtures("wx_app")
+def test_on_decks_error_resets_loading_flag_and_shows_failed_load(
+    deck_selector_factory,
+):
+    """A failed deck fetch must clear ``loading_decks`` and surface the error."""
+    frame = deck_selector_factory()
+    try:
+        with frame._loading_lock:
+            frame.loading_decks = True
+        with patch("wx.MessageBox") as message_box:
+            frame._on_decks_error(RuntimeError("kaboom"))
+        assert frame.loading_decks is False
+        assert frame.deck_list.GetCount() == 1
+        assert frame.deck_list.GetString(0) == frame._t("deck_results.failed_load")
+        assert message_box.called
+    finally:
+        frame.Destroy()
+
+
+@pytest.mark.usefixtures("wx_app")
+def test_on_deck_download_error_disables_actions(
+    deck_selector_factory,
+):
+    """A failed deck download must disable copy/save and notify the user."""
+    frame = deck_selector_factory()
+    try:
+        frame.copy_button.Enable(True)
+        frame.save_button.Enable(True)
+        with patch("wx.MessageBox") as message_box:
+            frame._on_deck_download_error(RuntimeError("nope"))
+        assert not frame.copy_button.IsEnabled()
+        assert not frame.save_button.IsEnabled()
+        assert message_box.called
+    finally:
+        frame.Destroy()
+
+
+@pytest.mark.usefixtures("wx_app")
+def test_load_decks_archetype_scope_without_archetype_is_guarded(
+    deck_selector_factory,
+):
+    """``_load_decks(scope='archetype', archetype=None)`` must not load decks."""
+    frame = deck_selector_factory()
+    try:
+        controller_calls: list[dict[str, object]] = []
+        frame.controller.load_decks = lambda **kwargs: controller_calls.append(  # type: ignore[assignment]
+            kwargs
+        )
+        with patch("wx.MessageBox") as message_box:
+            type(frame)._load_decks(frame, scope="archetype", archetype=None)
+        assert controller_calls == []
+        assert message_box.called
+    finally:
+        frame.Destroy()
+
+
+@pytest.mark.usefixtures("wx_app")
+def test_on_archetype_selected_skips_while_loading(
+    deck_selector_factory,
+):
+    """The re-entrancy guard must block archetype selection during an in-flight load."""
+    frame = deck_selector_factory()
+    try:
+        load_calls: list[dict[str, object]] = []
+        frame._load_decks = lambda **kwargs: load_calls.append(kwargs)  # type: ignore[assignment]
+        with frame._loading_lock:
+            frame.loading_archetypes = True
+        frame.on_archetype_selected()
+        assert load_calls == []
+    finally:
+        frame.Destroy()
+
+
+@pytest.mark.usefixtures("wx_app")
+def test_on_deck_selected_skips_while_loading(
+    deck_selector_factory,
+):
+    """The re-entrancy guard must block deck selection during an in-flight load."""
+    frame = deck_selector_factory()
+    try:
+        download_calls: list[object] = []
+        frame._download_deck_text = lambda deck: download_calls.append(deck)  # type: ignore[assignment]
+        with frame._loading_lock:
+            frame.loading_decks = True
+        frame.on_deck_selected(None)
+        assert download_calls == []
+    finally:
+        frame.Destroy()
+
+
+@pytest.mark.usefixtures("wx_app")
+def test_on_deck_content_ready_clears_current_deck_for_manual_source(
+    deck_selector_factory,
+):
+    """Manual/automation/average pastes must reset the current deck to None.
+
+    This is what scopes deck notes to the source's fallback ("manual") key
+    rather than a previously selected research deck.
+    """
+    frame = deck_selector_factory()
+    try:
+        frame.deck_repo.set_current_deck({"href": "azorius-control", "name": "Azorius Control"})
+        frame._on_deck_content_ready("4 Mountain\n4 Island\n", source="manual")
+        pump_ui_events(wx.GetApp())
+        assert frame.controller.deck_repo.get_current_deck() is None
+    finally:
+        frame.Destroy()
+
+
+@pytest.mark.usefixtures("wx_app")
+def test_on_copy_clicked_empty_deck_warns_without_clipboard_write(
+    deck_selector_factory,
+):
+    """Copying with nothing loaded must warn and never touch the clipboard."""
+    frame = deck_selector_factory()
+    try:
+        frame.zone_cards = {"main": [], "side": [], "out": []}
+        with patch("wx.MessageBox") as message_box, patch("wx.TheClipboard") as clipboard:
+            frame.on_copy_clicked(None)
+        assert message_box.called
+        assert not clipboard.Open.called
+    finally:
+        frame.Destroy()
+
+
+@pytest.mark.usefixtures("wx_app")
+def test_on_save_clicked_empty_deck_warns_without_save(
+    deck_selector_factory,
+):
+    """Saving with nothing loaded must warn and never call save_deck."""
+    frame = deck_selector_factory()
+    try:
+        frame.zone_cards = {"main": [], "side": [], "out": []}
+        save_calls: list[object] = []
+        frame.controller.save_deck = lambda **kwargs: save_calls.append(kwargs)  # type: ignore[assignment]
+        with patch("wx.MessageBox") as message_box:
+            frame.on_save_clicked(None)
+        assert message_box.called
+        assert save_calls == []
+    finally:
+        frame.Destroy()
+
+
+@pytest.mark.usefixtures("wx_app")
+def test_on_save_clicked_round_trip(
+    deck_selector_factory,
+):
+    """A non-empty deck must be written via controller.save_deck under the entered name."""
+    frame = deck_selector_factory()
+    try:
+        frame.zone_cards = {
+            "main": [{"name": "Mountain", "qty": 4}],
+            "side": [],
+            "out": [],
+        }
+        save_calls: list[dict[str, object]] = []
+
+        def fake_save_deck(**kwargs):
+            save_calls.append(kwargs)
+            return ("C:/decks/saved_deck.txt", None)
+
+        frame.controller.save_deck = fake_save_deck  # type: ignore[assignment]
+
+        with patch("wx.TextEntryDialog") as dialog_cls, patch("wx.MessageBox"):
+            dialog = dialog_cls.return_value
+            dialog.ShowModal.return_value = wx.ID_OK
+            dialog.GetValue.return_value = "My Saved Deck"
+            frame.on_save_clicked(None)
+
+        assert len(save_calls) == 1
+        assert save_calls[0]["deck_name"] == "My Saved Deck"
+        assert save_calls[0]["deck_content"].strip()
+    finally:
+        frame.Destroy()
+
+
+@pytest.mark.usefixtures("wx_app")
+def test_on_load_deck_clicked_file_read_error_is_handled(
+    deck_selector_factory,
+):
+    """An unreadable selected file must surface an error and not render content."""
+    frame = deck_selector_factory()
+    try:
+        ready_calls: list[object] = []
+        frame._on_deck_content_ready = lambda text, source="manual": ready_calls.append(  # type: ignore[assignment]
+            (text, source)
+        )
+
+        with (
+            patch("wx.FileDialog") as dialog_cls,
+            patch("pathlib.Path.read_text", side_effect=OSError("denied")),
+            patch("wx.MessageBox") as message_box,
+        ):
+            dialog = dialog_cls.return_value.__enter__.return_value
+            dialog.ShowModal.return_value = wx.ID_OK
+            dialog.GetPath.return_value = "C:/decks/Unreadable Deck.txt"
+            frame.on_load_deck_clicked()
+
+        assert ready_calls == []
+        assert message_box.called
+        # The current deck key is derived from the chosen file before the read.
+        assert frame.deck_repo.get_current_deck_key() == "unreadable deck"
     finally:
         frame.Destroy()
