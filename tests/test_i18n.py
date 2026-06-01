@@ -1,3 +1,5 @@
+import pytest
+
 from utils.i18n import DEFAULT_LOCALE, MESSAGES, SUPPORTED_LOCALES, normalize_locale, translate
 
 
@@ -13,8 +15,40 @@ def test_translate_returns_locale_string_and_falls_back_to_default() -> None:
     assert translate("es-ES", "app.status.ready") == "Ready"
 
 
+def test_translate_falls_back_to_default_locale_for_missing_key(monkeypatch) -> None:
+    # A supported, non-default locale that is missing a specific key should fall
+    # back to the default locale's string for that key (the right-hand side of the
+    # per-key fallback in translate). Drop a key from the pt-BR table to exercise it.
+    pt_br = dict(MESSAGES["pt-BR"])
+    pt_br.pop("app.status.ready")
+    monkeypatch.setitem(MESSAGES, "pt-BR", pt_br)
+    assert translate("pt-BR", "app.status.ready") == MESSAGES[DEFAULT_LOCALE]["app.status.ready"]
+
+
+def test_translate_preserves_empty_string_for_supported_locale(monkeypatch) -> None:
+    # An empty-string translation in a supported locale must be returned as-is and
+    # must not silently fall through to the default locale's value.
+    pt_br = dict(MESSAGES["pt-BR"])
+    pt_br["app.status.ready"] = ""
+    monkeypatch.setitem(MESSAGES, "pt-BR", pt_br)
+    assert translate("pt-BR", "app.status.ready") == ""
+
+
 def test_translate_returns_key_when_missing() -> None:
     assert translate("pt-BR", "missing.translation.key") == "missing.translation.key"
+
+
+def test_translate_raises_when_required_placeholder_kwarg_missing() -> None:
+    # app.status.selected_language expects a `language` placeholder.
+    with pytest.raises(KeyError):
+        translate("en-US", "app.status.selected_language", wrong_kwarg="x")
+
+
+def test_translate_ignores_extra_kwargs_for_template_without_placeholders() -> None:
+    # app.status.ready has no placeholders; extra kwargs should be ignored.
+    assert (
+        translate("en-US", "app.status.ready", unused="x") == MESSAGES["en-US"]["app.status.ready"]
+    )
 
 
 def test_translate_formats_params_when_present() -> None:
