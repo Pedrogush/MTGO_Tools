@@ -77,6 +77,25 @@ def hypergeometric_probability(
         raise ValueError(f"Error calculating probability: {e}") from e
 
 
+def hypergeometric_exactly(
+    n_total: int,
+    n_success: int,
+    n_draw: int,
+    k: int,
+) -> float:
+    """Lenient P(X = k) under the hypergeometric distribution.
+
+    Unlike :func:`hypergeometric_probability`, this variant never raises on
+    out-of-range inputs; impossible draws simply return ``0.0``. This makes it
+    convenient for sweeping over a full range of ``k`` values (e.g. plotting a
+    distribution) where some combinations are not achievable.
+    """
+    n_fail = n_total - n_success
+    if k < 0 or k > n_success or n_draw - k < 0 or n_draw - k > n_fail:
+        return 0.0
+    return math.comb(n_success, k) * math.comb(n_fail, n_draw - k) / math.comb(n_total, n_draw)
+
+
 def hypergeometric_at_least(
     population: int,
     successes_in_pop: int,

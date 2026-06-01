@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from utils.perf import perf_phase
-from widgets.panels.deck_stats_panel.properties import _EMPTY_HTML, _build_html
+from widgets.panels.deck_stats_panel.stats_chart_html import _EMPTY_HTML, _build_html
 
 if TYPE_CHECKING:
     from repositories.card_repository import CardDataManager

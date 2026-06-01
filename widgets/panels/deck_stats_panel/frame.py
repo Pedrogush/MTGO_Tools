@@ -14,10 +14,8 @@ from loguru import logger
 
 from utils.constants import DARK_PANEL
 from widgets.panels.deck_stats_panel.handlers import DeckStatsPanelHandlersMixin
-from widgets.panels.deck_stats_panel.properties import (
-    _EMPTY_HTML,
-    DeckStatsPanelPropertiesMixin,
-)
+from widgets.panels.deck_stats_panel.properties import DeckStatsPanelPropertiesMixin
+from widgets.panels.deck_stats_panel.stats_chart_html import _EMPTY_HTML
 
 if TYPE_CHECKING:
     from repositories.card_repository import CardDataManager

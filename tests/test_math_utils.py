@@ -2,7 +2,11 @@
 
 import pytest
 
-from utils.math_utils import hypergeometric_at_least, hypergeometric_probability
+from utils.math_utils import (
+    hypergeometric_at_least,
+    hypergeometric_exactly,
+    hypergeometric_probability,
+)
 
 
 class TestHypergeometricProbability:
@@ -207,3 +211,32 @@ class TestProbabilityBounds:
         pop, k_pop, n = 60, 4, 7
         total = sum(hypergeometric_probability(pop, k_pop, n, k) for k in range(min(k_pop, n) + 1))
         assert abs(total - 1.0) < 1e-10
+
+
+class TestHypergeometricExactly:
+    """Tests for the lenient hypergeometric_exactly helper."""
+
+    def test_matches_strict_for_valid_inputs(self) -> None:
+        """For in-range inputs it agrees with hypergeometric_probability."""
+        for k in range(0, 5):
+            assert hypergeometric_exactly(60, 24, 7, k) == pytest.approx(
+                hypergeometric_probability(60, 24, 7, k)
+            )
+
+    def test_out_of_range_returns_zero_instead_of_raising(self) -> None:
+        """Impossible draws return 0.0 rather than raising (panel relies on this)."""
+        # k exceeds successes in population
+        assert hypergeometric_exactly(60, 4, 7, 5) == 0.0
+        # negative k
+        assert hypergeometric_exactly(60, 4, 7, -1) == 0.0
+        # not enough failures to fill the rest of the draw
+        assert hypergeometric_exactly(60, 58, 7, 0) == 0.0
+
+    def test_sums_to_one_over_full_hand_range(self) -> None:
+        """Sweeping k over the whole hand size sums to 1.0 even with 0 buckets."""
+        deck_size, land_count, hand_size = 60, 24, 7
+        total = sum(
+            hypergeometric_exactly(deck_size, land_count, hand_size, k)
+            for k in range(hand_size + 1)
+        )
+        assert total == pytest.approx(1.0)
