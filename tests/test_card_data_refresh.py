@@ -9,7 +9,7 @@ from typing import Any
 import msgspec.msgpack
 import pytest
 
-from repositories.card_repository import CardDataManager
+from repositories.card_repository import CardDataManager, load_card_manager
 from repositories.card_repository import remote as card_data_remote
 
 
@@ -268,13 +268,144 @@ def test_ensure_latest_uses_cache_when_offline(tmp_path: Path, monkeypatch):
     def offline_head(*_: Any, **__: Any) -> _StubResponse:
         raise RuntimeError("network unreachable")
 
-    def offline_get(*_: Any, **__: Any) -> _StubResponse:
-        raise RuntimeError("network unreachable")
-
+    # HEAD fails, so fetch_dataset_headers returns None and the GET branch is
+    # never reached; the download-fails fallback is covered separately by
+    # test_ensure_latest_falls_back_to_cache_when_download_fails.
     monkeypatch.setattr(card_data_remote.requests, "head", offline_head, raising=False)
-    monkeypatch.setattr(card_data_remote.requests, "get", offline_get, raising=False)
 
     second_manager = CardDataManager(tmp_path)
     second_manager.ensure_latest()
 
     assert second_manager.get_card("Opt") is not None
+
+
+def test_ensure_latest_falls_back_to_cache_when_download_fails(tmp_path: Path, monkeypatch):
+    """A forced refresh whose GET fails keeps serving the existing cache.
+
+    This exercises the download-failed-with-existing-cache branch
+    (card_data_manager.py: ``logger.warning(..., using cache)``): unlike the
+    offline test, the HEAD succeeds so ``needs_refresh`` is True and the GET
+    branch is actually reached and raises.
+    """
+    cards = {"Opt": [_card("Opt", "{U}", "", "U")]}
+    headers = {"etag": "v1", "content-length": "123"}
+    content = _build_bulk_zip(cards)
+    _patch_requests(monkeypatch, headers, content)
+
+    first_manager = CardDataManager(tmp_path)
+    first_manager.ensure_latest()
+    _stale_head_stamp(tmp_path)
+
+    def failing_get(*_: Any, **__: Any) -> _StubResponse:
+        raise RuntimeError("download interrupted")
+
+    monkeypatch.setattr(card_data_remote.requests, "get", failing_get, raising=False)
+
+    second_manager = CardDataManager(tmp_path)
+    # force=True so we skip the size comparison and go straight to the GET,
+    # guaranteeing the failure path is the download branch and not a no-op.
+    second_manager.ensure_latest(force=True)
+
+    assert second_manager.get_card("Opt") is not None
+
+
+def test_ensure_latest_raises_when_download_fails_and_no_cache(tmp_path: Path, monkeypatch):
+    """Cold start with no cache and a failing GET surfaces a clear RuntimeError."""
+
+    def failing_get(*_: Any, **__: Any) -> _StubResponse:
+        raise RuntimeError("network unreachable")
+
+    def fake_head(*_: Any, **__: Any) -> _StubResponse:
+        return _StubResponse(headers={"etag": "v1", "content-length": "123"})
+
+    monkeypatch.setattr(card_data_remote.requests, "head", fake_head, raising=False)
+    monkeypatch.setattr(card_data_remote.requests, "get", failing_get, raising=False)
+
+    manager = CardDataManager(tmp_path)
+    with pytest.raises(RuntimeError, match="no cache is available"):
+        manager.ensure_latest()
+
+
+def test_ensure_latest_force_redownloads_warm_cache(tmp_path: Path, monkeypatch):
+    """``force=True`` bypasses the warm-cache fast path and re-downloads."""
+    cards = {"Opt": [_card("Opt", "{U}", "", "U")]}
+    headers = {"etag": "v1", "content-length": "123"}
+    content = _build_bulk_zip(cards)
+    _patch_requests(monkeypatch, headers, content)
+
+    first_manager = CardDataManager(tmp_path)
+    first_manager.ensure_latest()
+
+    new_cards = {"Lightning Bolt": [_card("Lightning Bolt", "{R}", "3 damage", "R")]}
+    new_headers = {"etag": "v2", "content-length": "456"}
+    new_content = _build_bulk_zip(new_cards)
+
+    download_called = False
+
+    def fake_get(*_: Any, **__: Any) -> _StubResponse:
+        nonlocal download_called
+        download_called = True
+        return _StubResponse(headers=new_headers, content=new_content)
+
+    def fake_head(*_: Any, **__: Any) -> _StubResponse:
+        return _StubResponse(headers=new_headers)
+
+    monkeypatch.setattr(card_data_remote.requests, "head", fake_head, raising=False)
+    monkeypatch.setattr(card_data_remote.requests, "get", fake_get, raising=False)
+
+    # The cache is fresh, so without force this would skip the network entirely.
+    second_manager = CardDataManager(tmp_path)
+    second_manager.ensure_latest(force=True)
+
+    assert download_called is True
+    assert second_manager.get_card("Lightning Bolt") is not None
+
+
+def test_load_card_manager_force_downloads(tmp_path: Path, monkeypatch):
+    """The module-level helper builds a manager and honours ``force``."""
+    cards = {"Opt": [_card("Opt", "{U}", "", "U")]}
+    headers = {"etag": "v1", "content-length": "123"}
+    _patch_requests(monkeypatch, headers, _build_bulk_zip(cards))
+
+    manager = load_card_manager(tmp_path, force=True)
+
+    assert isinstance(manager, CardDataManager)
+    assert manager.is_loaded is True
+    assert manager.get_card("Opt") is not None
+
+
+def test_loaded_manager_query_api(tmp_path: Path, monkeypatch):
+    """A loaded manager answers search_cards/available_formats consistently."""
+    cards = {
+        "Opt": [_card("Opt", "{U}", "Scry 1, draw a card.", "U")],
+        "Lightning Bolt": [_card("Lightning Bolt", "{R}", "Deal 3 damage.", "R")],
+    }
+    headers = {"etag": "v1", "content-length": "123"}
+    _patch_requests(monkeypatch, headers, _build_bulk_zip(cards))
+
+    manager = CardDataManager(tmp_path)
+    manager.ensure_latest()
+
+    by_name = manager.search_cards(query="opt")
+    assert [c.name for c in by_name] == ["Opt"]
+
+    by_color = manager.search_cards(color_identity=["R"])
+    assert [c.name for c in by_color] == ["Lightning Bolt"]
+
+    limited = manager.search_cards(limit=1)
+    assert len(limited) == 1
+
+    # All seeded cards are modern-legal (see ``_card``).
+    assert manager.available_formats() == ["modern"]
+
+
+def test_query_api_requires_loaded_data(tmp_path: Path):
+    """The query API refuses to run before ensure_latest has loaded data."""
+    manager = CardDataManager(tmp_path)
+    assert manager.is_loaded is False
+    with pytest.raises(RuntimeError, match="not loaded"):
+        manager.get_card("Opt")
+    with pytest.raises(RuntimeError, match="not loaded"):
+        manager.search_cards(query="opt")
+    with pytest.raises(RuntimeError, match="not loaded"):
+        manager.available_formats()
