@@ -1,6 +1,6 @@
 """Tests for archetype resolver utility."""
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -16,6 +16,9 @@ class TestNormalizeArchetypeName:
 
     def test_collapse_spaces(self):
         assert normalize_archetype_name("UR   Murktide") == "ur murktide"
+
+    def test_collapse_tabs_and_newlines(self):
+        assert normalize_archetype_name("UR\tMurktide\nTempo") == "ur murktide tempo"
 
     def test_empty_string(self):
         assert normalize_archetype_name("") == ""
@@ -51,6 +54,26 @@ class TestFindArchetypeByName:
         assert result is not None
         assert result["name"] == "UR Murktide"
 
+    def test_partial_match_stored_name_in_input(self, mock_repo):
+        # Reverse direction: stored name is a substring of the longer input,
+        # exercising the `normalized_name in normalized_input` branch.
+        result = find_archetype_by_name("UR Murktide Tempo", "Modern", mock_repo)
+        assert result is not None
+        assert result["name"] == "UR Murktide"
+
+    def test_exact_match_takes_precedence_over_partial(self):
+        # "Murktide" is a partial match for "UR Murktide" but an exact match
+        # for the standalone "Murktide" entry; the exact match must win even
+        # though the partial candidate appears first in the list.
+        repo = MagicMock()
+        repo.get_archetypes_for_format.return_value = [
+            {"name": "UR Murktide", "href": "/archetype/ur-murktide"},
+            {"name": "Murktide", "href": "/archetype/murktide"},
+        ]
+        result = find_archetype_by_name("Murktide", "Modern", repo)
+        assert result is not None
+        assert result["name"] == "Murktide"
+
     def test_network_failure(self, mock_repo):
         mock_repo.get_archetypes_for_format.side_effect = Exception("Network error")
         result = find_archetype_by_name("UR Murktide", "Modern", mock_repo)
@@ -62,8 +85,18 @@ class TestFindArchetypeByName:
         assert result is None
 
     def test_uses_default_repo_when_none(self):
-        """Verify the function works when no repo is passed (hits real code path)."""
-        # We can't test the actual network call, but we verify it doesn't crash
-        # when metagame_repo is None (it will use the default singleton)
-        # This test just verifies the code path exists
-        pass
+        """When no repo is passed, the default singleton repository is used."""
+        singleton = MagicMock()
+        singleton.get_archetypes_for_format.return_value = [
+            {"name": "UR Murktide", "href": "/archetype/ur-murktide"},
+        ]
+        with patch(
+            "services.archetype_resolver.get_metagame_repository",
+            return_value=singleton,
+        ) as mock_get_repo:
+            result = find_archetype_by_name("UR Murktide", "Modern")
+
+        mock_get_repo.assert_called_once_with()
+        singleton.get_archetypes_for_format.assert_called_once_with("Modern")
+        assert result is not None
+        assert result["name"] == "UR Murktide"
