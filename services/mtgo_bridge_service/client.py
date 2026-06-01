@@ -7,446 +7,68 @@ This module runs the compiled ``MTGOBridge.exe`` and exposes:
 * ``BridgeWatcher`` for streaming challenge timer / opponent snapshots using
   the bridge ``watch`` mode in a background process.
 
-Designed to be self-contained so it can replace the previous pythonnet-based
-runtime without requiring MTGOSDK assemblies in-process.
+The implementation is split across three function-based submodules:
+
+* :mod:`.discovery` — bridge discovery / process resolution
+* :mod:`.commands` — one-shot command transport
+* :mod:`.watch` — streaming / challenge-watch transport
+
+This module is kept as a thin re-export facade so existing import paths
+(``services.mtgo_bridge_service.client.*``) continue to resolve.
 """
 
 from __future__ import annotations
 
-import json
-import multiprocessing as mp
-import os
-import subprocess  # nosec B404 - required to invoke MTGO bridge executable
-from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
-from pathlib import Path
-from queue import Empty, Full
-from typing import Any
-
-from loguru import logger
-
-from utils.constants import BRIDGE_PROCESS_TERMINATE_TIMEOUT_SECONDS
-
-# Manual download URL shown to users when the bridge is missing.
-BRIDGE_MANUAL_DOWNLOAD_URL = "https://github.com/Pedrogush/MTGOBridge/releases/latest"
-
-
-def _installed_app_dir() -> Path | None:
-    """Return the directory containing the running executable, if determinable."""
-    import sys
-
-    exe = getattr(sys, "frozen", False) and sys.executable
-    if exe:
-        return Path(exe).parent
-    return None
-
-
-def _default_bridge_candidates() -> list[Path]:
-    """Return probe paths for MTGOBridge.exe in priority order.
-
-    Order:
-    1. Install-time path: ``{app_dir}/mtgo_integration/MTGOBridge.exe``
-    2. Local dev build paths (Release then Debug)
-    """
-    candidates: list[Path] = []
-
-    app_dir = _installed_app_dir()
-    if app_dir is not None:
-        candidates.append(app_dir / "mtgo_integration" / "MTGOBridge.exe")
-
-    candidates += [
-        Path("dotnet/MTGOBridge/bin/Release/net9.0-windows7.0/win-x64/publish/MTGOBridge.exe"),
-        Path("dotnet/MTGOBridge/bin/Release/net9.0-windows7.0/MTGOBridge.exe"),
-        Path("dotnet/MTGOBridge/bin/Debug/net9.0-windows7.0/win-x64/publish/MTGOBridge.exe"),
-        Path("dotnet/MTGOBridge/bin/Debug/net9.0-windows7.0/MTGOBridge.exe"),
-    ]
-    return candidates
-
-
-class BridgeCommandError(RuntimeError):
-    """Raised when a bridge command fails or the executable cannot be run."""
-
-
-def _resolve_bridge_path(explicit: str | os.PathLike[str] | None = None) -> Path | None:
-    if explicit:
-        candidate = Path(explicit)
-        if candidate.exists():
-            return candidate
-        return None
-
-    env_path = os.getenv("MTGO_BRIDGE_PATH")
-    if env_path:
-        candidate = Path(env_path)
-        if candidate.exists():
-            return candidate
-
-    for candidate in _default_bridge_candidates():
-        if candidate.exists():
-            return candidate
-    return None
-
-
-def _require_bridge_path(explicit: str | os.PathLike[str] | None = None) -> Path:
-    resolved = _resolve_bridge_path(explicit)
-    if resolved is None:
-        raise FileNotFoundError(
-            "MTGO bridge executable not found. "
-            "Set MTGO_BRIDGE_PATH, build the project, or download the bridge from: "
-            f"{BRIDGE_MANUAL_DOWNLOAD_URL}"
-        )
-    return resolved
-
-
-def _sanitize_json_payload(raw: str) -> Any:
-    payload = raw.strip()
-    if not payload:
-        raise BridgeCommandError("Bridge produced no output.")
-    # Handle UTF-8 BOM if present.
-    payload = payload.lstrip("\ufeff")
-    try:
-        return json.loads(payload)
-    except json.JSONDecodeError as exc:
-        raise BridgeCommandError(f"Invalid JSON payload from bridge: {exc}") from exc
-
-
-def _command_worker(
-    bridge_path: str,
-    args: Sequence[str],
-    queue: mp.Queue,
-    timeout: float | None = None,
-) -> None:
-    try:
-        try:
-            completed = subprocess.run(
-                [bridge_path, *args],
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                check=False,
-                timeout=timeout,
-            )  # nosec B603 - arguments are constructed internally
-        except subprocess.TimeoutExpired as exc:
-            # subprocess.run already terminates the child on TimeoutExpired,
-            # but surface an actionable error to the parent.
-            raise BridgeCommandError(
-                f"Bridge command {list(args)!r} timed out after {timeout} seconds."
-            ) from exc
-        if completed.returncode != 0:
-            raise BridgeCommandError(
-                f"Bridge exited with code {completed.returncode}: {completed.stderr.strip()}"
-            )
-        queue.put(("ok", _sanitize_json_payload(completed.stdout)))
-    except Exception as exc:  # noqa: BLE001 - surface error to parent
-        queue.put(("error", repr(exc)))
-
-
-class BridgeCommandFuture:
-    """Handle for a bridge command running in a separate process."""
-
-    def __init__(self, process: mp.Process, queue: mp.Queue):
-        self._process = process
-        self._queue = queue
-
-    def result(self, timeout: float | None = None) -> Any:
-        try:
-            status, payload = self._queue.get(timeout=timeout)
-        except Empty as exc:
-            # Wrapper thread timed out waiting on the bridge worker. Make sure
-            # the child process is torn down so it can't outlive the request.
-            self.cancel()
-            raise BridgeCommandError(
-                f"Bridge command did not produce a result within {timeout} seconds."
-            ) from exc
-        self._queue.close()
-        self._process.join(timeout)
-        if status == "ok":
-            return payload
-        raise BridgeCommandError(payload)
-
-    def cancel(self) -> None:
-        if self._process.is_alive():
-            self._process.terminate()
-            self._process.join(BRIDGE_PROCESS_TERMINATE_TIMEOUT_SECONDS)
-            if self._process.is_alive():
-                # On Windows ``terminate`` may not kill grandchildren; ``kill``
-                # sends SIGKILL/TerminateProcess to guarantee teardown.
-                self._process.kill()
-                self._process.join(BRIDGE_PROCESS_TERMINATE_TIMEOUT_SECONDS)
-        self._queue.close()
-
-
-def submit_bridge_command(
-    mode: str,
-    *,
-    bridge_path: str | os.PathLike[str] | None = None,
-    extra_args: Sequence[str] | None = None,
-    context: mp.context.BaseContext | None = None,
-    timeout: float | None = None,
-) -> BridgeCommandFuture:
-    """Run ``MTGOBridge.exe <mode>`` in a worker process and return a future.
-
-    ``timeout`` is passed through to ``subprocess.run`` inside the worker so
-    the bridge subprocess itself is bounded, not just the wrapper wait.
-    """
-    executable = _require_bridge_path(bridge_path)
-    ctx = context or mp.get_context("spawn")
-    queue: mp.Queue = ctx.Queue()
-    args: list[str] = [mode]
-    if extra_args:
-        args.extend(extra_args)
-    process = ctx.Process(target=_command_worker, args=(str(executable), args, queue, timeout))
-    process.start()
-    return BridgeCommandFuture(process, queue)
-
-
-def run_bridge_command(
-    mode: str,
-    *,
-    bridge_path: str | os.PathLike[str] | None = None,
-    extra_args: Sequence[str] | None = None,
-    timeout: float | None = None,
-) -> Any:
-    future = submit_bridge_command(
-        mode, bridge_path=bridge_path, extra_args=extra_args, timeout=timeout
-    )
-    try:
-        return future.result(timeout=timeout)
-    finally:
-        future.cancel()
-
-
-def fetch_collection_snapshot_async(
-    *,
-    bridge_path: str | os.PathLike[str] | None = None,
-    context: mp.context.BaseContext | None = None,
-) -> BridgeCommandFuture:
-    return submit_bridge_command("collection", bridge_path=bridge_path, context=context)
-
-
-def fetch_match_history_async(
-    *,
-    bridge_path: str | os.PathLike[str] | None = None,
-    context: mp.context.BaseContext | None = None,
-) -> BridgeCommandFuture:
-    return submit_bridge_command("history", bridge_path=bridge_path, context=context)
-
-
-def fetch_collection_snapshot(
-    *,
-    bridge_path: str | os.PathLike[str] | None = None,
-    timeout: float | None = None,
-) -> Mapping[str, Any]:
-    return run_bridge_command("collection", bridge_path=bridge_path, timeout=timeout)
-
-
-def fetch_match_history(
-    *,
-    bridge_path: str | os.PathLike[str] | None = None,
-    timeout: float | None = None,
-) -> Mapping[str, Any]:
-    return run_bridge_command("history", bridge_path=bridge_path, timeout=timeout)
-
-
-def fetch_trade_snapshot(
-    *,
-    bridge_path: str | os.PathLike[str] | None = None,
-    timeout: float | None = None,
-) -> Mapping[str, Any]:
-    """Return the trade status payload emitted by the bridge."""
-    return run_bridge_command(
-        "trade",
-        bridge_path=bridge_path,
-        extra_args=("status",),
-        timeout=timeout,
-    )
-
-
-def accept_trade(
-    *,
-    bridge_path: str | os.PathLike[str] | None = None,
-    timeout: float | None = None,
-) -> Mapping[str, Any]:
-    """Request that the bridge accept the currently active trade."""
-    return run_bridge_command(
-        "trade",
-        bridge_path=bridge_path,
-        extra_args=("accept",),
-        timeout=timeout,
-    )
-
-
-def _watch_worker(
-    bridge_path: str,
-    output_queue: mp.Queue,
-    stop_event: mp.Event,
-) -> None:
-    cmd = [bridge_path, "watch"]
-    logger.debug("Starting bridge watch subprocess: {}", cmd)
-    process = subprocess.Popen(
-        cmd,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        encoding="utf-8",
-        bufsize=1,
-    )  # nosec B603 - command is internal bridge watcher
-
-    buffer = ""
-    depth = 0
-    in_string = False
-    escape = False
-
-    try:
-        while True:
-            if stop_event.is_set():
-                break
-
-            line = process.stdout.readline()
-            if not line:
-                if process.poll() is not None:
-                    break
-                continue
-
-            chunk = line.strip()
-            if not chunk:
-                continue
-
-            if not buffer:
-                buffer = chunk.lstrip("\ufeff")
-            else:
-                buffer += chunk
-
-            for ch in chunk:
-                if escape:
-                    escape = False
-                    continue
-                if ch == "\\":
-                    escape = True
-                    continue
-                if ch == '"':
-                    in_string = not in_string
-                elif not in_string:
-                    if ch in "{[":
-                        depth += 1
-                    elif ch in "}]":
-                        if depth > 0:
-                            depth -= 1
-
-            if depth == 0 and not in_string and buffer:
-                candidate = buffer.strip()
-                if candidate:
-                    try:
-                        payload = json.loads(candidate)
-                    except json.JSONDecodeError:
-                        logger.debug("Skipping malformed watch payload: {}", candidate)
-                    else:
-                        _queue_replace(output_queue, payload)
-                buffer = ""
-                depth = 0
-                in_string = False
-                escape = False
-    finally:
-        if buffer.strip():
-            try:
-                payload = json.loads(buffer.strip())
-            except json.JSONDecodeError:
-                logger.debug("Skipping trailing malformed watch payload: {}", buffer.strip())
-            else:
-                _queue_replace(output_queue, payload)
-        stop_event.set()
-        if process.poll() is None:
-            process.terminate()
-            try:
-                process.wait(timeout=BRIDGE_PROCESS_TERMINATE_TIMEOUT_SECONDS)
-            except subprocess.TimeoutExpired:
-                process.kill()
-        if process.stdout:
-            process.stdout.close()
-        if process.stderr:
-            stderr_tail = process.stderr.read().strip()
-            if stderr_tail:
-                logger.debug("Bridge watch stderr: {}", stderr_tail)
-            process.stderr.close()
-
-
-def _queue_replace(queue: mp.Queue, item: Any) -> None:
-    """Replace the current queue item with ``item`` (maxsize 1)."""
-    try:
-        queue.get_nowait()
-    except Empty:
-        pass
-    try:
-        queue.put_nowait(item)
-    except Full:
-        # If queue is full even after draining, drop the update.
-        logger.debug("Dropping watch update because queue is full.")
-
-
-@dataclass
-class BridgeWatcher:
-    """Background process that streams watch payloads."""
-
-    bridge_path: Path
-    interval_ms: int = 500
-    context: mp.context.BaseContext = mp.get_context("spawn")
-
-    def __post_init__(self) -> None:
-        self._queue: mp.Queue = self.context.Queue(maxsize=1)
-        self._stop_event: mp.Event = self.context.Event()
-        self._process: mp.Process | None = None
-
-    def start(self) -> None:
-        if self._process and self._process.is_alive():
-            return
-        self._stop_event.clear()
-        self._process = self.context.Process(
-            target=_watch_worker,
-            args=(str(self.bridge_path), self._queue, self._stop_event),
-        )
-        self._process.daemon = True
-        self._process.start()
-
-    def stop(self, timeout: float | None = 5) -> None:
-        self._stop_event.set()
-        if self._process and self._process.is_alive():
-            self._process.join(timeout)
-            if self._process.is_alive():
-                self._process.terminate()
-                self._process.join(timeout)
-        if self._queue:
-            self._queue.close()
-
-    def latest(self, *, block: bool = False, timeout: float | None = None) -> Any | None:
-        if block:
-            try:
-                return self._queue.get(timeout=timeout)
-            except Empty:
-                return None
-        try:
-            return self._queue.get_nowait()
-        except Empty:
-            return None
-
-    def __enter__(self) -> BridgeWatcher:
-        self.start()
-        return self
-
-    def __exit__(self, *exc: object) -> None:
-        self.stop()
-
-
-def start_watch(
-    *,
-    bridge_path: str | os.PathLike[str] | None = None,
-    interval_ms: int = 500,
-    context: mp.context.BaseContext | None = None,
-) -> BridgeWatcher:
-    """Convenience helper that instantiates and starts a watcher."""
-    ctx = context or mp.get_context("spawn")
-    watcher = BridgeWatcher(
-        bridge_path=_require_bridge_path(bridge_path),
-        interval_ms=interval_ms,
-        context=ctx,
-    )
-    watcher.start()
-    return watcher
+from .commands import (
+    BridgeCommandError,
+    BridgeCommandFuture,
+    _command_worker,
+    _sanitize_json_payload,
+    accept_trade,
+    fetch_collection_snapshot,
+    fetch_collection_snapshot_async,
+    fetch_match_history,
+    fetch_match_history_async,
+    fetch_trade_snapshot,
+    run_bridge_command,
+    submit_bridge_command,
+)
+from .discovery import (
+    BRIDGE_MANUAL_DOWNLOAD_URL,
+    _default_bridge_candidates,
+    _installed_app_dir,
+    _require_bridge_path,
+    _resolve_bridge_path,
+)
+from .watch import (
+    BridgeWatcher,
+    _queue_replace,
+    _watch_worker,
+    start_watch,
+)
+
+__all__ = [
+    "BRIDGE_MANUAL_DOWNLOAD_URL",
+    "BridgeCommandError",
+    "BridgeCommandFuture",
+    "BridgeWatcher",
+    "accept_trade",
+    "fetch_collection_snapshot",
+    "fetch_collection_snapshot_async",
+    "fetch_match_history",
+    "fetch_match_history_async",
+    "fetch_trade_snapshot",
+    "run_bridge_command",
+    "start_watch",
+    "submit_bridge_command",
+    # Internal helpers preserved for existing callers/tests that resolve
+    # them through this facade.
+    "_command_worker",
+    "_default_bridge_candidates",
+    "_installed_app_dir",
+    "_queue_replace",
+    "_require_bridge_path",
+    "_resolve_bridge_path",
+    "_sanitize_json_payload",
+    "_watch_worker",
+]
