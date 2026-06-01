@@ -104,15 +104,134 @@ def test_background_worker_multiple_threads():
 def test_background_worker_shutdown_timeout():
     worker = BackgroundWorker()
     started = threading.Event()
+    threads_seen = []
 
     def blocking_task():
+        threads_seen.append(threading.current_thread())
         started.set()
         while True:
             time.sleep(0.1)
 
     worker.submit(blocking_task)
-    started.wait(timeout=1.0)
+    assert started.wait(timeout=1.0)
 
+    # shutdown must return promptly after the timeout instead of blocking
+    # forever on the non-cooperative thread (which ignores is_stopped()).
+    start = time.monotonic()
     worker.shutdown(timeout=0.2)
+    elapsed = time.monotonic() - start
 
     assert worker.is_stopped()
+    # join timed out rather than hung; allow generous slack for slow CI.
+    assert elapsed < 2.0
+    # the task ignored the stop flag, so its thread is still alive.
+    assert threads_seen and threads_seen[0].is_alive()
+
+
+def test_background_worker_on_success_receives_result():
+    worker = BackgroundWorker()
+    received = []
+    done = threading.Event()
+
+    def task():
+        return 42
+
+    def on_success(result):
+        received.append(result)
+        done.set()
+
+    worker.submit(task, on_success=on_success)
+    assert done.wait(timeout=1.0)
+    worker.shutdown()
+
+    assert received == [42]
+
+
+def test_background_worker_on_error_receives_exception():
+    worker = BackgroundWorker()
+    errors = []
+    success_called = []
+    done = threading.Event()
+    boom = ValueError("boom")
+
+    def task():
+        raise boom
+
+    def on_success(result):
+        success_called.append(result)
+
+    def on_error(exc):
+        errors.append(exc)
+        done.set()
+
+    worker.submit(task, on_success=on_success, on_error=on_error)
+    assert done.wait(timeout=1.0)
+    worker.shutdown()
+
+    assert errors == [boom]
+    assert success_called == []
+
+
+def test_background_worker_on_success_not_called_on_error():
+    worker = BackgroundWorker()
+    success_called = []
+    done = threading.Event()
+
+    def task():
+        raise RuntimeError("fail")
+
+    def on_success(result):
+        success_called.append(result)
+
+    def on_error(_exc):
+        done.set()
+
+    worker.submit(task, on_success=on_success, on_error=on_error)
+    assert done.wait(timeout=1.0)
+    worker.shutdown()
+
+    assert success_called == []
+
+
+def test_background_worker_error_without_on_error_is_swallowed():
+    worker = BackgroundWorker()
+    after = []
+    done = threading.Event()
+
+    def failing_task():
+        raise RuntimeError("fail")
+
+    def ok_task():
+        after.append(1)
+        done.set()
+
+    # A failing task without on_error must not propagate or crash the worker;
+    # a subsequent task still runs normally.
+    worker.submit(failing_task)
+    worker.submit(ok_task)
+    assert done.wait(timeout=1.0)
+    worker.shutdown()
+
+    assert after == [1]
+
+
+def test_background_worker_call_after_runs_synchronously_without_wx():
+    # In the off-Windows test env wx is absent, so _call_after falls back to
+    # invoking the callback directly (synchronously, in the worker thread).
+    worker = BackgroundWorker()
+    callback_thread = []
+
+    def task():
+        return threading.current_thread()
+
+    def on_success(result):
+        callback_thread.append((result, threading.current_thread()))
+
+    worker.submit(task, on_success=on_success)
+    worker.shutdown(timeout=2.0)
+
+    # shutdown joins the worker thread; the synchronous fallback means the
+    # callback already ran (in that same worker thread) by the time we assert.
+    assert len(callback_thread) == 1
+    worker_result, cb_thread = callback_thread[0]
+    assert worker_result is cb_thread
