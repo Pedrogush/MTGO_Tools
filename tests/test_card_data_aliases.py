@@ -102,3 +102,182 @@ def test_build_index_back_face_when_back_listed_first():
     assert entry["type_line"] == "Legendary Creature — Human Wizard"
     assert entry["back_type_line"] == "Legendary Planeswalker — Jace"
     assert entry["back_name"] == "Jace, Telepath Unbound"
+
+
+def test_build_index_single_face_card():
+    """The common single-face path should index one card with no back fields."""
+    payload = {
+        "Lightning Bolt": [
+            {
+                "name": "Lightning Bolt",
+                "manaCost": "{R}",
+                "manaValue": 1,
+                "type": "Instant",
+                "text": "Lightning Bolt deals 3 damage to any target.",
+                "colors": ["R"],
+                "colorIdentity": ["R"],
+                "legalities": {"modern": "Legal"},
+            }
+        ]
+    }
+    index = build_index(payload)
+
+    assert len(index["cards"]) == 1
+    entry = index["cards"][0]
+    assert entry["name"] == "Lightning Bolt"
+    # Single-face cards never get back_* fields applied.
+    assert entry.get("back_name") is None
+    assert entry.get("back_type_line") is None
+    assert "back_name" not in entry
+    assert "back_type_line" not in entry
+    assert set(entry["aliases"]) == {"Lightning Bolt"}
+    assert index["cards_by_name"]["lightning bolt"] == 0
+
+
+def test_build_index_merges_and_filters_legalities():
+    """Only ``Legal`` formats survive, unioned across printings."""
+    payload = {
+        "Splinter Twin": [
+            {
+                "name": "Splinter Twin",
+                "manaCost": "{2}{R}",
+                "manaValue": 3,
+                "type": "Enchantment — Aura",
+                "legalities": {"modern": "Banned", "legacy": "Legal"},
+            },
+            {
+                "name": "Splinter Twin",
+                "manaCost": "{2}{R}",
+                "manaValue": 3,
+                "type": "Enchantment — Aura",
+                "legalities": {"commander": "Legal", "vintage": "Restricted"},
+            },
+        ]
+    }
+    index = build_index(payload)
+    entry = index["cards"][0]
+
+    # Banned/Restricted dropped; Legal formats from both printings unioned.
+    assert entry["legalities"] == {"legacy": "Legal", "commander": "Legal"}
+
+
+def test_build_index_sorts_cards_and_maps_distinct_indices():
+    """Cards are sorted by name_lower and each alias maps to its own index."""
+    payload = {
+        "Zealous Conscripts": [
+            {
+                "name": "Zealous Conscripts",
+                "manaCost": "{4}{R}",
+                "manaValue": 5,
+                "type": "Creature — Human Warrior",
+                "legalities": {"modern": "Legal"},
+            }
+        ],
+        "Aether Vial": [
+            {
+                "name": "Aether Vial",
+                "manaCost": "{1}",
+                "manaValue": 1,
+                "type": "Artifact",
+                "legalities": {"modern": "Legal"},
+            }
+        ],
+    }
+    index = build_index(payload)
+    cards = index["cards"]
+    lookup = index["cards_by_name"]
+
+    # Sorted alphabetically by name_lower regardless of input order.
+    assert [c["name"] for c in cards] == ["Aether Vial", "Zealous Conscripts"]
+    assert lookup["aether vial"] == 0
+    assert lookup["zealous conscripts"] == 1
+    # Distinct indices resolve back to distinct cards.
+    assert cards[lookup["aether vial"]]["name"] == "Aether Vial"
+    assert cards[lookup["zealous conscripts"]]["name"] == "Zealous Conscripts"
+
+
+def test_build_index_filters_token_printings():
+    """Token printings are excluded; the remaining real printing is kept."""
+    payload = {
+        "Soldier": [
+            {
+                "name": "Soldier",
+                "type": "Token Creature — Soldier",
+                "isToken": True,
+                "legalities": {},
+            },
+            {
+                "name": "Soldier",
+                "manaCost": "{1}{W}",
+                "manaValue": 2,
+                "type": "Creature — Soldier",
+                "legalities": {"modern": "Legal"},
+            },
+        ]
+    }
+    index = build_index(payload)
+    assert len(index["cards"]) == 1
+    entry = index["cards"][0]
+    assert entry["type_line"] == "Creature — Soldier"
+    assert set(entry["aliases"]) == {"Soldier"}
+
+
+def test_build_index_skips_all_token_groups():
+    """A group made up entirely of tokens produces no card."""
+    payload = {
+        "Treasure": [
+            {
+                "name": "Treasure",
+                "type": "Token Artifact — Treasure",
+                "layout": "token",
+                "legalities": {},
+            }
+        ]
+    }
+    index = build_index(payload)
+    assert index["cards"] == []
+    assert index["cards_by_name"] == {}
+
+
+def test_build_index_coerces_numeric_string_mana_value():
+    """A numeric-string ``manaValue`` is coerced to float."""
+    payload = {
+        "Tarmogoyf": [
+            {
+                "name": "Tarmogoyf",
+                "manaCost": "{1}{G}",
+                "manaValue": "2",
+                "type": "Creature — Lhurgoyf",
+                "legalities": {"modern": "Legal"},
+            }
+        ]
+    }
+    index = build_index(payload)
+    entry = index["cards"][0]
+    assert entry["mana_value"] == 2.0
+    assert isinstance(entry["mana_value"], float)
+
+
+def test_build_index_leaves_non_numeric_mana_value_unchanged():
+    """A non-numeric-string ``manaValue`` is left as-is (ValueError fallback)."""
+    payload = {
+        "Mystery Card": [
+            {
+                "name": "Mystery Card",
+                "manaCost": "{X}",
+                "manaValue": "unknown",
+                "type": "Sorcery",
+                "legalities": {"modern": "Legal"},
+            }
+        ]
+    }
+    index = build_index(payload)
+    entry = index["cards"][0]
+    assert entry["mana_value"] == "unknown"
+
+
+def test_build_index_dfc_mana_value():
+    """The existing DFC entry exposes the front-face int mana value."""
+    index = build_index(_sample_atomic_payload())
+    entry = index["cards"][0]
+    assert entry["mana_value"] == 2
