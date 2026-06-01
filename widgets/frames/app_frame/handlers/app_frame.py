@@ -14,7 +14,7 @@ from utils.runtime_flags import is_automation_enabled
 from widgets.dialogs.help_dialog import show_help
 from widgets.dialogs.image_download_dialog import show_image_download_dialog
 from widgets.dialogs.tutorial_dialog import show_tutorial
-from widgets.frames.app_frame.handlers.app_events import _simple_summary_html
+from widgets.frames.app_frame.handlers.deck_formatting import simple_summary_html
 from widgets.frames.mana_keyboard import open_mana_keyboard
 
 if TYPE_CHECKING:
@@ -326,7 +326,7 @@ class AppFrameHandlersMixin(_Base):
 
     def _clear_deck_display(self) -> None:
         self.controller.deck_repo.set_current_deck(None)
-        self.summary_text.SetPage(_simple_summary_html(self._t("app.status.select_archetype")))
+        self.summary_text.SetPage(simple_summary_html(self._t("app.status.select_archetype")))
         self.zone_cards = {"main": [], "side": [], "out": []}
         self.main_table.set_cards([])
         self.side_table.set_cards([])
