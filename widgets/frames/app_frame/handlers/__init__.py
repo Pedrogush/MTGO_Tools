@@ -6,7 +6,15 @@ from widgets.frames.app_frame.handlers.child_windows import ChildWindowHandlers
 from widgets.frames.app_frame.handlers.data_loading import DataLoadingHandlers
 from widgets.frames.app_frame.handlers.deck_content import DeckContentHandlers
 from widgets.frames.app_frame.handlers.research import DeckResearchHandlers
-from widgets.frames.app_frame.handlers.sideboard_guide import SideboardGuideHandlers
+from widgets.frames.app_frame.handlers.sideboard_guide_entries import (
+    SideboardGuideEntryHandlers,
+)
+from widgets.frames.app_frame.handlers.sideboard_guide_io import (
+    SideboardGuideImportExportHandlers,
+)
+from widgets.frames.app_frame.handlers.sideboard_guide_persistence import (
+    SideboardGuidePersistenceHandlers,
+)
 
 __all__ = [
     "AppFrameHandlersMixin",
@@ -15,5 +23,7 @@ __all__ = [
     "DataLoadingHandlers",
     "DeckContentHandlers",
     "DeckResearchHandlers",
-    "SideboardGuideHandlers",
+    "SideboardGuideEntryHandlers",
+    "SideboardGuideImportExportHandlers",
+    "SideboardGuidePersistenceHandlers",
 ]

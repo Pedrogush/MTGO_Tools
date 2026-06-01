@@ -1,4 +1,4 @@
-"""Sideboard guide and outboard handlers for the deck selector frame."""
+"""CSV import/export handlers for the sideboard guide."""
 
 from __future__ import annotations
 
@@ -8,15 +8,11 @@ from typing import TYPE_CHECKING, Any
 import wx
 from loguru import logger
 
-from utils.atomic_io import atomic_write_json
-from utils.constants import ACTIVE_GUIDE_FILE
-from utils.constants.app import DECK_HASH_DISPLAY_LENGTH
 from utils.constants.ui_layout import PADDING_BASE, PADDING_XL
 from utils.constants.ui_windows import (
     GUIDE_IMPORT_OPTIONS_DIALOG_HEIGHT,
     GUIDE_IMPORT_OPTIONS_DIALOG_WIDTH,
 )
-from widgets.dialogs.guide_entry_dialog import GuideEntryDialog
 
 if TYPE_CHECKING:
     from widgets.frames.app_frame import AppFrame
@@ -27,227 +23,8 @@ else:
     _Base = object
 
 
-class SideboardGuideHandlers(_Base):
-    """Mixin that centralizes guide/outboard interactions for the deck selector."""
-
-    def _persist_outboard_for_current(self: AppFrame) -> None:
-        key = self.controller.deck_repo.get_current_deck_key()
-        self.controller.outboard_store[key] = self.zone_cards.get("out", [])
-        self.controller.store_service.save_store(
-            self.controller.outboard_store_path, self.controller.outboard_store
-        )
-
-    def _load_outboard_for_current(self: AppFrame) -> list[dict[str, Any]]:
-        key = self.controller.deck_repo.get_current_deck_key()
-        data = self.controller.outboard_store.get(key, [])
-        cleaned: list[dict[str, Any]] = []
-        for entry in data:
-            name = entry.get("name")
-            qty_raw = entry.get("qty", 0)
-            try:
-                qty_float = float(qty_raw)
-                qty = int(qty_float) if qty_float.is_integer() else qty_float
-            except (TypeError, ValueError):
-                qty = 0
-            if name and qty > 0:
-                cleaned.append({"name": name, "qty": qty})
-        return cleaned
-
-    def _refresh_pin_indicator(self: AppFrame) -> None:
-        if not ACTIVE_GUIDE_FILE.exists():
-            self.sideboard_guide_panel.set_pinned(False)
-            return
-        try:
-            import json
-
-            with ACTIVE_GUIDE_FILE.open("r", encoding="utf-8") as fh:
-                data = json.load(fh)
-            current_hash = self.controller.deck_repo.get_current_decklist_hash()
-            self.sideboard_guide_panel.set_pinned(data.get("deck_hash") == current_hash)
-        except Exception:
-            self.sideboard_guide_panel.set_pinned(False)
-
-    def _load_guide_for_current(self: AppFrame) -> None:
-        # Use decklist hash so each unique 75 has its own guide
-        key = self.controller.deck_repo.get_current_decklist_hash()
-        payload = self.controller.guide_store.get(key) or {}
-        entries = payload.get("entries", [])
-
-        migrated_entries = []
-        for entry in entries:
-            if "cards_in" in entry or "cards_out" in entry:
-                play_out = self._parse_card_text(entry.get("cards_out", ""))
-                play_in = self._parse_card_text(entry.get("cards_in", ""))
-                migrated_entries.append(
-                    {
-                        "archetype": entry.get("archetype", ""),
-                        "play_out": play_out,
-                        "play_in": play_in,
-                        "draw_out": play_out.copy(),
-                        "draw_in": play_in.copy(),
-                        "notes": entry.get("notes", ""),
-                    }
-                )
-            else:
-                migrated = entry.copy()
-                for field in ["play_out", "play_in", "draw_out", "draw_in"]:
-                    if field in migrated and isinstance(migrated[field], str):
-                        migrated[field] = self._parse_card_text(migrated[field])
-                migrated_entries.append(migrated)
-
-        self.sideboard_guide_entries = migrated_entries
-        self.sideboard_exclusions = payload.get("exclusions", [])
-        self.sideboard_flex_slots = payload.get("flex_slots", [])
-        self.sideboard_guide_panel.set_entries(
-            self.sideboard_guide_entries, self.sideboard_exclusions
-        )
-        self._refresh_pin_indicator()
-
-    def _persist_guide_for_current(self: AppFrame) -> None:
-        key = self.controller.deck_repo.get_current_decklist_hash()
-        self.controller.guide_store[key] = {
-            "entries": self.sideboard_guide_entries,
-            "exclusions": self.sideboard_exclusions,
-            "flex_slots": self.sideboard_flex_slots,
-        }
-        self.controller.store_service.save_store(
-            self.controller.guide_store_path, self.controller.guide_store
-        )
-
-    def _refresh_guide_view(self: AppFrame) -> None:
-        self.sideboard_guide_panel.set_entries(
-            self.sideboard_guide_entries, self.sideboard_exclusions
-        )
-
-    def _on_add_guide_entry(self: AppFrame) -> None:
-        names = [item.get("name", "") for item in self.archetypes]
-        mainboard = self.zone_cards.get("main", [])
-        sideboard = self.zone_cards.get("side", [])
-
-        dlg = GuideEntryDialog(
-            self,
-            names,
-            mainboard_cards=mainboard,
-            sideboard_cards=sideboard,
-            flex_slots=self.sideboard_flex_slots,
-            locale=self.locale,
-        )
-
-        while True:
-            result = dlg.ShowModal()
-            if result == wx.ID_CANCEL:
-                break
-
-            data = dlg.get_data()
-            if data.get("archetype"):
-                archetype_name = data.get("archetype")
-                enable_double = data.get("enable_double_entries", False)
-
-                entry_data = {k: v for k, v in data.items() if k != "enable_double_entries"}
-
-                if not enable_double:
-                    existing_index = None
-                    for i, entry in enumerate(self.sideboard_guide_entries):
-                        if entry.get("archetype") == archetype_name:
-                            existing_index = i
-                            break
-
-                    if existing_index is not None:
-                        self.sideboard_guide_entries[existing_index] = entry_data
-                    else:
-                        self.sideboard_guide_entries.append(entry_data)
-                else:
-                    self.sideboard_guide_entries.append(entry_data)
-
-                self._persist_guide_for_current()
-                self._refresh_guide_view()
-
-            if result == wx.ID_OK:
-                break
-
-        dlg.Destroy()
-
-    def _on_edit_guide_entry(self: AppFrame) -> None:
-        index = self.sideboard_guide_panel.get_selected_index()
-        if index is None:
-            wx.MessageBox(
-                "Select an entry to edit.", "Sideboard Guide", wx.OK | wx.ICON_INFORMATION
-            )
-            return
-        data = self.sideboard_guide_entries[index]
-        names = [item.get("name", "") for item in self.archetypes]
-        dlg = GuideEntryDialog(
-            self,
-            names,
-            mainboard_cards=self.zone_cards.get("main", []),
-            sideboard_cards=self.zone_cards.get("side", []),
-            data=data,
-            flex_slots=self.sideboard_flex_slots,
-            locale=self.locale,
-        )
-        if dlg.ShowModal() == wx.ID_OK:
-            updated = dlg.get_data()
-            if updated.get("archetype"):
-                self.sideboard_guide_entries[index] = updated
-                self._persist_guide_for_current()
-                self._refresh_guide_view()
-        dlg.Destroy()
-
-    def _on_remove_guide_entry(self: AppFrame) -> None:
-        index = self.sideboard_guide_panel.get_selected_index()
-        if index is None:
-            wx.MessageBox(
-                "Select an entry to remove.", "Sideboard Guide", wx.OK | wx.ICON_INFORMATION
-            )
-            return
-        del self.sideboard_guide_entries[index]
-        self._persist_guide_for_current()
-        self._refresh_guide_view()
-
-    def _on_edit_exclusions(self: AppFrame) -> None:
-        archetype_names = [item.get("name", "") for item in self.archetypes]
-        dlg = wx.MultiChoiceDialog(
-            self,
-            "Select archetypes to exclude from the printed guide.",
-            "Sideboard Guide",
-            archetype_names,
-        )
-        selected_indices = [
-            archetype_names.index(name)
-            for name in self.sideboard_exclusions
-            if name in archetype_names
-        ]
-        dlg.SetSelections(selected_indices)
-        if dlg.ShowModal() == wx.ID_OK:
-            selections = dlg.GetSelections()
-            self.sideboard_exclusions = [archetype_names[idx] for idx in selections]
-            self._persist_guide_for_current()
-            self._refresh_guide_view()
-        dlg.Destroy()
-
-    def _on_edit_flex_slots(self: AppFrame) -> None:
-        mainboard_cards = self.zone_cards.get("main", [])
-        if not mainboard_cards:
-            wx.MessageBox("No mainboard cards loaded.", "Flex Slots", wx.OK | wx.ICON_INFORMATION)
-            return
-
-        card_names = [card["name"] for card in mainboard_cards]
-        dlg = wx.MultiChoiceDialog(
-            self,
-            "Select mainboard cards that can be taken out during sideboarding (flex slots).\n"
-            "These will be highlighted in the Out selectors when adding guide entries.",
-            "Flex Slots",
-            card_names,
-        )
-        selected_indices = [
-            card_names.index(name) for name in self.sideboard_flex_slots if name in card_names
-        ]
-        dlg.SetSelections(selected_indices)
-        if dlg.ShowModal() == wx.ID_OK:
-            selections = dlg.GetSelections()
-            self.sideboard_flex_slots = [card_names[idx] for idx in selections]
-            self._persist_guide_for_current()
-        dlg.Destroy()
+class SideboardGuideImportExportHandlers(_Base):
+    """CSV import/export, matchup parsing, and threaded I/O workers."""
 
     def _on_export_guide(self: AppFrame) -> None:
         if not self.sideboard_guide_entries:
@@ -541,25 +318,6 @@ class SideboardGuideHandlers(_Base):
             warnings.append(f"Cards not in deck: {', '.join(sorted(missing_cards))}")
 
         return imported_entries, warnings
-
-    def _on_pin_guide(self: AppFrame) -> None:
-        deck_hash = self.controller.deck_repo.get_current_decklist_hash()
-        current_deck = self.controller.deck_repo.get_current_deck()
-        deck_name = ""
-        if current_deck:
-            deck_name = current_deck.get("name") or current_deck.get("archetype") or ""
-
-        payload = {"deck_hash": deck_hash, "deck_name": deck_name}
-        try:
-            atomic_write_json(ACTIVE_GUIDE_FILE, payload, indent=2)
-            self.sideboard_guide_panel.set_pinned(True)
-            self._set_status(
-                "guide.status.pinned", name=deck_name or deck_hash[:DECK_HASH_DISPLAY_LENGTH]
-            )
-            logger.info(f"Pinned guide: hash={deck_hash}, name={deck_name!r}")
-        except OSError as exc:
-            logger.error(f"Failed to save active guide: {exc}")
-            self._set_status("guide.status.pin_error")
 
     def _parse_card_text(self: AppFrame, text: str) -> dict[str, int]:
         if not text or not isinstance(text, str):
