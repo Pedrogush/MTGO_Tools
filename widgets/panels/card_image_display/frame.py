@@ -19,11 +19,21 @@ from utils.constants import (
     CARD_IMAGE_FLIP_ICON_MARGIN,
     CARD_IMAGE_FLIP_ICON_SIZE,
 )
+from widgets.panels.card_image_display.animation import _AnimationMixin
+from widgets.panels.card_image_display.bitmap_renderer import _BitmapRendererMixin
 from widgets.panels.card_image_display.handlers import CardImageDisplayHandlersMixin
+from widgets.panels.card_image_display.image_loader import _ImageLoaderMixin
 from widgets.panels.card_image_display.properties import CardImageDisplayPropertiesMixin
 
 
-class CardImageDisplay(CardImageDisplayHandlersMixin, CardImageDisplayPropertiesMixin, wx.Panel):
+class CardImageDisplay(
+    CardImageDisplayHandlersMixin,
+    _ImageLoaderMixin,
+    _AnimationMixin,
+    _BitmapRendererMixin,
+    CardImageDisplayPropertiesMixin,
+    wx.Panel,
+):
     """A panel that displays MTG card images with navigation and animations."""
 
     def __init__(
