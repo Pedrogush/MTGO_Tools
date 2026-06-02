@@ -18,7 +18,11 @@ from typing import Any
 import pytest
 import wx
 
-from widgets.panels.card_table_panel.pile_view import _NAME_STRIP_HEIGHT, DeckPileView
+from widgets.panels.card_table_panel.pile_view import (
+    _NAME_STRIP_HEIGHT,
+    _WHEEL_SCROLL_STEP,
+    DeckPileView,
+)
 
 _META: dict[str, dict[str, Any]] = {
     "grizzly bears": {"mana_value": 2, "type_line": "Creature — Bear", "colors": ["G"]},
@@ -49,6 +53,31 @@ class _FakeMouseEvent:
 
     def ControlDown(self) -> bool:
         return self._ctrl
+
+
+class _FakeWheelEvent:
+    """Minimal stand-in for the wx.MouseEvent fields _on_wheel reads."""
+
+    def __init__(self, rotation: int, *, axis: int = 0, shift: bool = False) -> None:
+        self._rotation = rotation
+        self._axis = axis
+        self._shift = shift
+        self.skipped = False
+
+    def GetWheelRotation(self) -> int:
+        return self._rotation
+
+    def GetWheelDelta(self) -> int:
+        return 120
+
+    def GetWheelAxis(self) -> int:
+        return self._axis
+
+    def ShiftDown(self) -> bool:
+        return self._shift
+
+    def Skip(self) -> None:
+        self.skipped = True
 
 
 def _make_view(frame: wx.Frame, on_select):
@@ -148,5 +177,53 @@ def test_multi_copy_selection_survives_round_trip():
 
         assert view._selected_uids == chosen
         assert reported["name"] is None
+    finally:
+        frame.Destroy()
+
+
+def _wheel_view(frame: wx.Frame, start: tuple[int, int]):
+    """A pile view whose Scroll calls are captured and view origin is fixed."""
+    view = _make_view(frame, lambda _card: None)
+    view.set_cards([{"name": "Grizzly Bears", "qty": 4}])
+    calls: list[tuple[int, int]] = []
+    view.GetViewStart = lambda: start  # type: ignore[assignment]
+    view.Scroll = lambda x, y: calls.append((x, y))  # type: ignore[assignment]
+    return view, calls
+
+
+@pytest.mark.usefixtures("wx_app")
+def test_wheel_scrolls_vertical_by_fixed_step():
+    """One notch moves a useful distance, not the ~3px the 1px rate would give."""
+    frame = wx.Frame(None)
+    try:
+        view, calls = _wheel_view(frame, (0, 200))
+        view._on_wheel(_FakeWheelEvent(120))  # one notch up
+        assert calls == [(0, 200 - _WHEEL_SCROLL_STEP)]
+
+        calls.clear()
+        view._on_wheel(_FakeWheelEvent(-120))  # one notch down
+        assert calls == [(0, 200 + _WHEEL_SCROLL_STEP)]
+    finally:
+        frame.Destroy()
+
+
+@pytest.mark.usefixtures("wx_app")
+def test_wheel_clamps_at_top():
+    frame = wx.Frame(None)
+    try:
+        view, calls = _wheel_view(frame, (0, _WHEEL_SCROLL_STEP // 2))
+        view._on_wheel(_FakeWheelEvent(120))  # scroll up past the top
+        assert calls == [(0, 0)]
+    finally:
+        frame.Destroy()
+
+
+@pytest.mark.usefixtures("wx_app")
+def test_shift_wheel_scrolls_horizontal():
+    frame = wx.Frame(None)
+    try:
+        view, calls = _wheel_view(frame, (200, 50))
+        view._on_wheel(_FakeWheelEvent(120, shift=True))
+        assert calls == [(200 - _WHEEL_SCROLL_STEP, 50)]
     finally:
         frame.Destroy()

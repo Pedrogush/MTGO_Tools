@@ -57,6 +57,10 @@ _NAME_STRIP_HEIGHT = 32  # visible portion of stacked-above cards
 _PILE_GAP = 8  # gap between piles (matches grid view's GRID_GAP)
 _PILE_PAD = 6  # padding inside a pile column
 _PILE_TOP = _PILE_PAD  # top inset for the first card in a pile
+# Pixels scrolled per mouse-wheel notch. The scroll *rate* is 1px so the
+# scrollbar thumb positions cards with single-pixel precision; the wheel
+# handler applies this larger step so a notch still moves a useful distance.
+_WHEEL_SCROLL_STEP = 60
 
 
 class _ImageCache:
@@ -134,7 +138,10 @@ class DeckPileView(wx.ScrolledWindow):
         # wx skips its own erase-background draw and the custom _on_paint owns
         # the whole client area.
         self.SetBackgroundStyle(wx.BG_STYLE_PAINT)
-        self.SetScrollRate(20, 20)
+        # 1px scroll units give the scrollbar thumb single-pixel granularity so
+        # cards no longer snap in coarse jumps. The wheel scrolls a larger fixed
+        # step (see _on_wheel) since a notch would otherwise move only ~3px.
+        self.SetScrollRate(1, 1)
         self.SetDoubleBuffered(True)
 
         self.Bind(wx.EVT_PAINT, self._on_paint)
@@ -142,6 +149,7 @@ class DeckPileView(wx.ScrolledWindow):
         self.Bind(wx.EVT_LEFT_UP, self._on_left_up)
         self.Bind(wx.EVT_RIGHT_DOWN, self._on_right_down)
         self.Bind(wx.EVT_MOTION, self._on_motion)
+        self.Bind(wx.EVT_MOUSEWHEEL, self._on_wheel)
         self.Bind(wx.EVT_LEAVE_WINDOW, self._on_leave)
         self.Bind(wx.EVT_MOUSE_CAPTURE_LOST, self._on_capture_lost)
 
@@ -522,6 +530,31 @@ class DeckPileView(wx.ScrolledWindow):
 
         self._drag_press = None
         self._drag_uids = []
+
+    def _on_wheel(self, event: wx.MouseEvent) -> None:
+        """Scroll a fixed pixel step per wheel notch.
+
+        Scroll units are 1px (for a fine scrollbar), so wx's default wheel
+        handling would crawl ~3px per notch. We translate notches into a
+        larger step instead. A horizontal wheel — or Shift+wheel, the usual
+        convention — scrolls the horizontal axis.
+        """
+        rotation = event.GetWheelRotation()
+        if rotation == 0:
+            event.Skip()
+            return
+        delta = event.GetWheelDelta() or 120
+        notches = rotation / delta
+        # Positive rotation scrolls toward the start (up / left) on whichever
+        # axis the wheel drives, so the step is subtracted from the view origin.
+        offset = int(round(notches * _WHEEL_SCROLL_STEP))
+        # GetViewStart is in scroll units, which are 1px here.
+        view_x, view_y = self.GetViewStart()
+        horizontal = event.GetWheelAxis() == wx.MOUSE_WHEEL_HORIZONTAL or event.ShiftDown()
+        if horizontal:
+            self.Scroll(max(0, view_x - offset), view_y)
+        else:
+            self.Scroll(view_x, max(0, view_y - offset))
 
     def _on_leave(self, _event: wx.MouseEvent) -> None:
         if self._hover_uid is not None:
