@@ -110,6 +110,11 @@ class DeckPileView(wx.ScrolledWindow):
         self._selected_uids: set[int] = set()
         self._hover_uid: int | None = None
         self._manual_overrides: bool = False
+        # While the pile view is reporting its own selection to the panel, the
+        # panel echoes it back via set_selected(name). That round-trip is lossy
+        # (a name can't name a specific copy, and multi-selection collapses to
+        # None), so we suppress it to keep the per-copy selection we just made.
+        self._suppress_set_selected: bool = False
 
         # Rectangle selection state.
         self._rubber_start: wx.Point | None = None
@@ -156,7 +161,15 @@ class DeckPileView(wx.ScrolledWindow):
 
         We pick the first copy of ``name`` we find so the pile view shows the
         same card as the grid/table views.
+
+        Ignored while the pile view is broadcasting its own selection: the
+        panel echoes that selection straight back here, and re-resolving it
+        from a bare name would bounce a clicked copy to the first copy (and
+        wipe any multi-copy rubber-band selection). The copies we just chose
+        are authoritative, so keep them.
         """
+        if self._suppress_set_selected:
+            return
         self._selected_uids.clear()
         if name:
             for _label, members in self._piles:
@@ -549,14 +562,21 @@ class DeckPileView(wx.ScrolledWindow):
             self._notify_selection_changed()
 
     def _notify_selection_changed(self) -> None:
-        if len(self._selected_uids) == 1:
-            uid = next(iter(self._selected_uids))
-            entry = self._find_entry(uid)
-            if entry:
-                self._on_select({"name": entry["name"], "qty": 1})
-                return
-        # Multi or empty selection: clear the inspector selection so hover wins.
-        self._on_select(None)
+        # The panel syncs the reported selection back into every view,
+        # including this one. Guard that re-entrant set_selected so it can't
+        # clobber the per-copy selection we're about to report.
+        self._suppress_set_selected = True
+        try:
+            if len(self._selected_uids) == 1:
+                uid = next(iter(self._selected_uids))
+                entry = self._find_entry(uid)
+                if entry:
+                    self._on_select({"name": entry["name"], "qty": 1})
+                    return
+            # Multi or empty selection: clear the inspector selection so hover wins.
+            self._on_select(None)
+        finally:
+            self._suppress_set_selected = False
 
     def _find_entry(self, uid: int) -> dict[str, Any] | None:
         for _label, members in self._piles:
