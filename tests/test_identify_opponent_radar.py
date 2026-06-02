@@ -50,11 +50,19 @@ class _WxStub(types.ModuleType):
 
 
 def _install_wx_stub() -> types.ModuleType:
-    """Install a ``wx`` stub only when the real module is unavailable."""
-    try:
-        import wx as real_wx  # noqa: F401
+    """Make ``wx.CallAfter`` synchronous so marshalled UI calls can be observed.
 
-        return sys.modules["wx"]
+    When the real ``wx`` is importable (the headless Windows CI runner) there is
+    no ``wx.App``, so the real ``wx.CallAfter`` raises "No wx.App created yet".
+    We override ``CallAfter`` to run synchronously instead of returning the
+    module untouched. When ``wx`` is absent (WSL dev) we inject a permissive
+    stub whose ``CallAfter`` is already synchronous.
+    """
+    try:
+        import wx as real_wx
+
+        real_wx.CallAfter = lambda func, *args, **kwargs: func(*args, **kwargs)
+        return real_wx
     except Exception:
         pass
     stub = _WxStub("wx")
