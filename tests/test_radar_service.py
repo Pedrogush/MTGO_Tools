@@ -490,3 +490,295 @@ def test_calculate_radar_progress_callback_can_cancel(
 
     # Cancelling on the first completed deck must not keep analyzing the rest.
     assert len(calls) == 1
+
+
+def test_calculate_radar_no_decks_found(
+    radar_service, mock_metagame_repo, mock_deck_service, sample_archetype
+):
+    """An archetype with no decks returns an empty, zero-count radar."""
+    mock_metagame_repo.get_decks_for_archetype.return_value = []
+
+    radar = radar_service.calculate_radar(sample_archetype, "Modern")
+
+    assert radar.archetype_name == "Azorius Control"
+    assert radar.format_name == "Modern"
+    assert radar.total_decks_analyzed == 0
+    assert radar.decks_failed == 0
+    assert radar.mainboard_cards == []
+    assert radar.sideboard_cards == []
+    # Without any decks we never attempt a download.
+    mock_metagame_repo.download_deck_content.assert_not_called()
+
+
+def test_calculate_radar_all_decks_fail(
+    radar_service, mock_metagame_repo, mock_deck_service, sample_archetype, sample_decks
+):
+    """When every deck fails to analyze, the radar reports zero analyzed/all failed."""
+    mock_metagame_repo.get_decks_for_archetype.return_value = sample_decks
+
+    # Every download raises, so successful_decks stays at 0.
+    mock_metagame_repo.download_deck_content.side_effect = Exception("Download failed")
+
+    radar = radar_service.calculate_radar(sample_archetype, "Modern")
+
+    assert radar.total_decks_analyzed == 0
+    assert radar.decks_failed == len(sample_decks)
+    assert radar.mainboard_cards == []
+    assert radar.sideboard_cards == []
+    # analyze_deck is never reached because the download itself failed.
+    mock_deck_service.analyze_deck.assert_not_called()
+
+
+def test_calculate_radar_rejects_precomputed_snapshot_larger_than_max_decks(
+    tmp_path, mock_metagame_repo, mock_deck_service
+):
+    """A cached snapshot with more decks than max_decks falls back to live scraping."""
+    repo = RadarRepository(tmp_path / "radar_cache.db")
+    repo.replace_radar(
+        {
+            "format": "modern",
+            "generated_at": "2026-03-26T12:00:00Z",
+            "source": "published-deck-texts",
+            "archetype": {"name": "Azorius Control", "href": "modern-azorius-control"},
+            "total_decks_analyzed": 50,
+            "decks_failed": 0,
+            "mainboard_cards": [
+                {
+                    "card_name": "Counterspell",
+                    "appearances": 50,
+                    "total_copies": 200,
+                    "max_copies": 4,
+                    "avg_copies": 4.0,
+                    "inclusion_rate": 100.0,
+                    "expected_copies": 4.0,
+                    "copy_distribution": {4: 50},
+                }
+            ],
+            "sideboard_cards": [],
+        }
+    )
+    mock_metagame_repo.get_decks_for_archetype.return_value = [
+        {"name": "Deck 1", "url": "https://example.com/deck1"}
+    ]
+    mock_metagame_repo.download_deck_content.return_value = "4 Lightning Bolt"
+    mock_deck_service.analyze_deck.return_value = {
+        "mainboard_cards": [("Lightning Bolt", 4)],
+        "sideboard_cards": [],
+    }
+
+    service = RadarService(
+        metagame_repository=mock_metagame_repo,
+        deck_service=mock_deck_service,
+        radar_repository=repo,
+    )
+
+    # The snapshot has 50 decks but the caller asked for at most 10, so the
+    # snapshot must be rejected and the live path used instead.
+    radar = service.calculate_radar(
+        {"name": "Azorius Control", "href": "modern-azorius-control"},
+        "Modern",
+        max_decks=10,
+    )
+
+    assert radar.total_decks_analyzed == 1
+    assert radar.mainboard_cards[0].card_name == "Lightning Bolt"
+    mock_metagame_repo.get_decks_for_archetype.assert_called_once()
+
+
+def _store_usage_snapshot(repo):
+    """Seed a format with two archetype radars sharing a card for usage rollups."""
+    repo.replace_radar(
+        {
+            "format": "modern",
+            "generated_at": "2026-03-26T12:00:00Z",
+            "source": "published-deck-texts",
+            "archetype": {"name": "Azorius Control", "href": "modern-azorius-control"},
+            "total_decks_analyzed": 10,
+            "decks_failed": 0,
+            "mainboard_cards": [
+                {
+                    "card_name": "Counterspell",
+                    "appearances": 8,
+                    "total_copies": 24,
+                    "max_copies": 4,
+                    "avg_copies": 3.0,
+                    "inclusion_rate": 80.0,
+                    "expected_copies": 2.4,
+                    "copy_distribution": {4: 4, 2: 4, 0: 2},
+                }
+            ],
+            "sideboard_cards": [
+                {
+                    "card_name": "Negate",
+                    "appearances": 5,
+                    "total_copies": 5,
+                    "max_copies": 1,
+                    "avg_copies": 1.0,
+                    "inclusion_rate": 50.0,
+                    "expected_copies": 0.5,
+                    "copy_distribution": {1: 5, 0: 5},
+                }
+            ],
+        }
+    )
+    repo.replace_radar(
+        {
+            "format": "modern",
+            "generated_at": "2026-03-26T12:00:00Z",
+            "source": "published-deck-texts",
+            "archetype": {"name": "Dimir Control", "href": "modern-dimir-control"},
+            "total_decks_analyzed": 5,
+            "decks_failed": 0,
+            "mainboard_cards": [
+                {
+                    "card_name": "Counterspell",
+                    "appearances": 5,
+                    "total_copies": 16,
+                    "max_copies": 4,
+                    "avg_copies": 3.2,
+                    "inclusion_rate": 100.0,
+                    "expected_copies": 3.2,
+                    "copy_distribution": {4: 3, 2: 2},
+                }
+            ],
+            "sideboard_cards": [],
+        }
+    )
+
+
+def test_get_card_usage_stats_rolls_up_across_archetypes(tmp_path, mock_metagame_repo):
+    """Usage stats sum copies/appearances across every archetype radar in a format."""
+    repo = RadarRepository(tmp_path / "radar_cache.db")
+    _store_usage_snapshot(repo)
+    service = RadarService(metagame_repository=mock_metagame_repo, radar_repository=repo)
+
+    stats = service.get_card_usage_stats("Modern", ["Counterspell", "Negate"])
+
+    counter = stats["Counterspell"]
+    # 10 + 5 decks analyzed across the two archetype radars.
+    assert counter.total_decks == 15
+    # Mainboard copies/appearances roll up across both archetypes.
+    assert counter.mainboard_copies == 40
+    assert counter.mainboard_decks_present == 13
+    assert counter.mainboard_archetypes == 2
+    assert counter.sideboard_archetypes == 0
+    # Karsten avg = copies / decks present; arithmetic = copies / total decks.
+    assert counter.mainboard_avg_karsten == pytest.approx(40 / 13)
+    assert counter.mainboard_avg_arithmetic == pytest.approx(40 / 15)
+
+    negate = stats["Negate"]
+    assert negate.sideboard_copies == 5
+    assert negate.sideboard_decks_present == 5
+    assert negate.sideboard_avg_karsten == pytest.approx(1.0)
+    assert negate.sideboard_avg_arithmetic == pytest.approx(5 / 15)
+
+
+def test_get_card_usage_stats_missing_card_is_zeroed(tmp_path, mock_metagame_repo):
+    """A card absent from every radar yields a zero-filled entry with None averages."""
+    repo = RadarRepository(tmp_path / "radar_cache.db")
+    _store_usage_snapshot(repo)
+    service = RadarService(metagame_repository=mock_metagame_repo, radar_repository=repo)
+
+    stats = service.get_card_usage_stats("Modern", ["Black Lotus"])
+
+    lotus = stats["Black Lotus"]
+    assert lotus.mainboard_copies == 0
+    assert lotus.sideboard_copies == 0
+    assert lotus.mainboard_decks_present == 0
+    assert lotus.sideboard_decks_present == 0
+    # No decks present -> Karsten averages are None even though total_decks > 0.
+    assert lotus.mainboard_avg_karsten is None
+    assert lotus.sideboard_avg_karsten is None
+    # Arithmetic averages over the format's total decks are still defined (0.0).
+    assert lotus.mainboard_avg_arithmetic == 0.0
+
+
+def test_get_card_usage_stats_blank_names_return_empty(tmp_path, mock_metagame_repo):
+    """All-blank card-name input short-circuits to an empty mapping."""
+    repo = RadarRepository(tmp_path / "radar_cache.db")
+    service = RadarService(metagame_repository=mock_metagame_repo, radar_repository=repo)
+
+    assert service.get_card_usage_stats("Modern", ["", "   "]) == {}
+
+
+def test_get_card_usage_stats_zero_total_decks_averages_none(tmp_path, mock_metagame_repo):
+    """When the format has no analyzed decks, arithmetic averages are None."""
+    repo = RadarRepository(tmp_path / "radar_cache.db")
+    # A radar with zero analyzed decks but a stored card row.
+    repo.replace_radar(
+        {
+            "format": "modern",
+            "generated_at": "2026-03-26T12:00:00Z",
+            "source": "published-deck-texts",
+            "archetype": {"name": "Empty", "href": "modern-empty"},
+            "total_decks_analyzed": 0,
+            "decks_failed": 0,
+            "mainboard_cards": [
+                {
+                    "card_name": "Counterspell",
+                    "appearances": 0,
+                    "total_copies": 0,
+                    "max_copies": 0,
+                    "avg_copies": 0.0,
+                    "inclusion_rate": 0.0,
+                    "expected_copies": 0.0,
+                    "copy_distribution": {},
+                }
+            ],
+            "sideboard_cards": [],
+        }
+    )
+    service = RadarService(metagame_repository=mock_metagame_repo, radar_repository=repo)
+
+    stats = service.get_card_usage_stats("Modern", ["Counterspell"])
+    counter = stats["Counterspell"]
+    assert counter.total_decks == 0
+    assert counter.mainboard_avg_arithmetic is None
+    assert counter.sideboard_avg_arithmetic is None
+
+
+def test_get_effective_legalities_filters_blanks_and_lists_formats(tmp_path, mock_metagame_repo):
+    """Effective legality maps each card to the formats whose radars include it."""
+    repo = RadarRepository(tmp_path / "radar_cache.db")
+    _store_usage_snapshot(repo)
+    # Same card appearing in a second format establishes multi-format membership.
+    repo.replace_radar(
+        {
+            "format": "legacy",
+            "generated_at": "2026-03-26T12:00:00Z",
+            "source": "published-deck-texts",
+            "archetype": {"name": "Legacy Control", "href": "legacy-control"},
+            "total_decks_analyzed": 3,
+            "decks_failed": 0,
+            "mainboard_cards": [
+                {
+                    "card_name": "Counterspell",
+                    "appearances": 3,
+                    "total_copies": 12,
+                    "max_copies": 4,
+                    "avg_copies": 4.0,
+                    "inclusion_rate": 100.0,
+                    "expected_copies": 4.0,
+                    "copy_distribution": {4: 3},
+                }
+            ],
+            "sideboard_cards": [],
+        }
+    )
+    service = RadarService(metagame_repository=mock_metagame_repo, radar_repository=repo)
+
+    legalities = service.get_effective_legalities(["Counterspell", "Negate", "  "])
+
+    # Blank names are filtered out entirely.
+    assert "  " not in legalities
+    # Counterspell appears in both formats; Negate only in modern (sideboard).
+    assert legalities["Counterspell"] == ["legacy", "modern"]
+    assert legalities["Negate"] == ["modern"]
+
+
+def test_get_effective_legalities_blank_names_return_empty(tmp_path, mock_metagame_repo):
+    """All-blank input short-circuits to an empty mapping."""
+    repo = RadarRepository(tmp_path / "radar_cache.db")
+    service = RadarService(metagame_repository=mock_metagame_repo, radar_repository=repo)
+
+    assert service.get_effective_legalities(["", "   "]) == {}
