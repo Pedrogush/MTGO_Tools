@@ -250,6 +250,9 @@ def test_resolved_env_base_dir_expands_user(tmp_path, monkeypatch):
     home = tmp_path / "home"
     (home / "shared").mkdir(parents=True)
     monkeypatch.setenv("HOME", str(home))
+    # On Windows ``os.path.expanduser`` resolves ``~`` via USERPROFILE
+    # (and HOMEDRIVE/HOMEPATH), not HOME, so set it too for cross-platform parity.
+    monkeypatch.setenv("USERPROFILE", str(home))
     monkeypatch.setenv(paths.BASE_DATA_DIR_ENV_VAR, "~/shared")
 
     assert paths._resolved_env_base_dir() == (home / "shared").resolve()
