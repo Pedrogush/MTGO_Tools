@@ -126,8 +126,6 @@ def test_build_index_single_face_card():
     entry = index["cards"][0]
     assert entry["name"] == "Lightning Bolt"
     # Single-face cards never get back_* fields applied.
-    assert entry.get("back_name") is None
-    assert entry.get("back_type_line") is None
     assert "back_name" not in entry
     assert "back_type_line" not in entry
     assert set(entry["aliases"]) == {"Lightning Bolt"}
@@ -281,3 +279,74 @@ def test_build_index_dfc_mana_value():
     index = build_index(_sample_atomic_payload())
     entry = index["cards"][0]
     assert entry["mana_value"] == 2
+
+
+def test_build_index_skips_non_list_and_empty_variations():
+    """Group values that are not non-empty lists are ignored."""
+    payload = {
+        "Bogus String": "not a list",
+        "Empty Group": [],
+        "Lightning Bolt": [
+            {
+                "name": "Lightning Bolt",
+                "manaCost": "{R}",
+                "manaValue": 1,
+                "type": "Instant",
+                "legalities": {"modern": "Legal"},
+            }
+        ],
+    }
+    index = build_index(payload)
+    assert [c["name"] for c in index["cards"]] == ["Lightning Bolt"]
+
+
+def test_build_index_skips_printing_without_name():
+    """A printing with neither ``name`` nor ``faceName`` yields no card."""
+    payload = {
+        "Nameless": [
+            {
+                "manaCost": "{1}",
+                "type": "Artifact",
+                "legalities": {"modern": "Legal"},
+            }
+        ]
+    }
+    index = build_index(payload)
+    assert index["cards"] == []
+    assert index["cards_by_name"] == {}
+
+
+def test_build_index_dfc_without_facenames_derives_back_name_from_canonical():
+    """When a DFC printing has no faceName, the back name comes from the canonical.
+
+    With no ``faceName`` to match, ``_select_front_back`` falls back to using the
+    first printing as the front face, and ``_apply_back_face`` derives the back
+    name from the half of ``name`` after ``//``.
+    """
+    canonical = "Front Half // Back Half"
+    payload = {
+        canonical: [
+            {
+                "name": canonical,
+                "manaCost": "{1}{U}",
+                "type": "Creature — Front",
+                "text": "Front text.",
+                "legalities": {"modern": "Legal"},
+            },
+            {
+                "name": canonical,
+                "manaCost": "",
+                "type": "Land",
+                "text": "Back text.",
+                "legalities": {"modern": "Legal"},
+            },
+        ]
+    }
+    index = build_index(payload)
+    entry = index["cards"][0]
+
+    assert entry["type_line"] == "Creature — Front"
+    # Back name is derived from the canonical's second half when faceName is absent.
+    assert entry["back_name"] == "Back Half"
+    # Both halves of the canonical are exposed as aliases.
+    assert set(entry["aliases"]) == {canonical, "Front Half", "Back Half"}

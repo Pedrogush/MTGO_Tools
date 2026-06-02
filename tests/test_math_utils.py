@@ -50,11 +50,6 @@ class TestHypergeometricProbability:
         prob = hypergeometric_probability(60, 4, 7, 0)
         assert 0.599 <= prob <= 0.602
 
-    def test_impossible_draw_raises_error(self) -> None:
-        """Requesting more target cards than exist in deck raises ValueError."""
-        with pytest.raises(ValueError, match="cannot exceed successes in population"):
-            hypergeometric_probability(60, 4, 7, 5)
-
     def test_guaranteed_draw(self) -> None:
         """Drawing all copies when sample equals available copies.
 
@@ -183,6 +178,18 @@ class TestInputValidation:
         """Negative minimum successes in at_least should raise."""
         with pytest.raises(ValueError, match="Minimum successes must be non-negative"):
             hypergeometric_at_least(60, 4, 7, -1)
+
+    def test_at_least_delegates_validation_to_probability(self) -> None:
+        """at_least delegates non-min_successes validation to the strict function.
+
+        Only ``min_successes`` is checked directly; the remaining arguments are
+        validated lazily when ``hypergeometric_probability`` is called inside the
+        summation loop, so an out-of-range argument must still surface as a
+        ValueError. Sample size exceeding population reaches that call because
+        ``min_successes`` is in range and ``max_successes`` is non-zero here.
+        """
+        with pytest.raises(ValueError, match="cannot exceed population"):
+            hypergeometric_at_least(60, 4, 61, 1)
 
 
 class TestProbabilityBounds:

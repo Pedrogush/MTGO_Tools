@@ -80,6 +80,26 @@ def test_ensure_latest_downloads_when_cache_missing(tmp_path: Path, monkeypatch)
     assert manager.get_card("Opt") is not None
 
 
+def test_ensure_latest_strips_quotes_from_etag(tmp_path: Path, monkeypatch):
+    """Quoted ETags (the HTTP-standard form) are normalized before storage.
+
+    HTTP servers wrap ETag values in double quotes (e.g. ``ETag: "abc"``).
+    The cache stores the bare token so later HEAD comparisons match.
+    """
+    cards = {"Opt": [_card("Opt", "{U}", "", "U")]}
+    headers = {
+        "etag": '"v1"',
+        "last-modified": "Mon, 01 Jan 2024 00:00:00 GMT",
+        "content-length": "123",
+    }
+    _patch_requests(monkeypatch, headers, _build_bulk_zip(cards))
+
+    CardDataManager(tmp_path).ensure_latest()
+
+    meta = json.loads((tmp_path / "atomic_cards_meta.json").read_text(encoding="utf-8"))
+    assert meta["etag"] == "v1"
+
+
 def test_ensure_latest_skips_download_when_meta_matches(tmp_path: Path, monkeypatch):
     cards = {"Opt": [_card("Opt", "{U}", "", "U")]}
     headers = {
@@ -268,14 +288,24 @@ def test_ensure_latest_uses_cache_when_offline(tmp_path: Path, monkeypatch):
     def offline_head(*_: Any, **__: Any) -> _StubResponse:
         raise RuntimeError("network unreachable")
 
+    download_called = False
+
+    def fake_get(*_: Any, **__: Any) -> _StubResponse:
+        nonlocal download_called
+        download_called = True
+        return _StubResponse(headers=headers, content=content)
+
     # HEAD fails, so fetch_dataset_headers returns None and the GET branch is
     # never reached; the download-fails fallback is covered separately by
     # test_ensure_latest_falls_back_to_cache_when_download_fails.
     monkeypatch.setattr(card_data_remote.requests, "head", offline_head, raising=False)
+    monkeypatch.setattr(card_data_remote.requests, "get", fake_get, raising=False)
 
     second_manager = CardDataManager(tmp_path)
     second_manager.ensure_latest()
 
+    # The card is served strictly from the on-disk cache: no GET was issued.
+    assert download_called is False
     assert second_manager.get_card("Opt") is not None
 
 

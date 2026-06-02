@@ -11,6 +11,8 @@ Two layers of coverage:
   upstream page-structure changes.
 """
 
+from unittest.mock import Mock, patch
+
 import pytest
 
 from repositories.scrapers.mtggoldfish_visual import (
@@ -78,6 +80,43 @@ def test_parse_visual_page_raises_when_no_card_piles():
 def test_parse_visual_page_raises_when_containers_missing():
     with pytest.raises(ValueError):
         parse_visual_page("<html><body><p>no piles here</p></body></html>")
+
+
+@patch("repositories.scrapers.mtggoldfish_visual.requests.get")
+def test_fetch_deck_text_from_visual_page_offline(mock_get):
+    """Offline cover of the fetch path: mock the HTTP call, parse fixed HTML."""
+    html = _visual_html(
+        main_alts=["Mox Opal", "Mox Opal", "Ornithopter"],
+        side_alts=["Galvanic Blast", "Galvanic Blast"],
+    )
+    mock_response = Mock()
+    mock_response.text = html
+    mock_response.raise_for_status = Mock()
+    mock_get.return_value = mock_response
+
+    text = fetch_deck_text_from_visual_page("12345")
+
+    # The fetcher hits the unprotected visual endpoint for the given deck id.
+    mock_get.assert_called_once()
+    assert mock_get.call_args.args[0] == "https://www.mtggoldfish.com/deck/visual/12345"
+    # raise_for_status must be honoured before parsing.
+    mock_response.raise_for_status.assert_called_once()
+    # The page text is parsed into the same plain-text decklist contract.
+    main_block, sep, side_block = text.partition("\n\n")
+    assert sep == "\n\n"
+    assert main_block == "2 Mox Opal\n1 Ornithopter"
+    assert side_block == "2 Galvanic Blast"
+
+
+@patch("repositories.scrapers.mtggoldfish_visual.requests.get")
+def test_fetch_deck_text_from_visual_page_propagates_http_error(mock_get):
+    """A non-2xx response surfaces via raise_for_status, not silent parsing."""
+    mock_response = Mock()
+    mock_response.raise_for_status = Mock(side_effect=RuntimeError("404"))
+    mock_get.return_value = mock_response
+
+    with pytest.raises(RuntimeError):
+        fetch_deck_text_from_visual_page("12345")
 
 
 @pytest.mark.network

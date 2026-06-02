@@ -30,6 +30,33 @@ def test_deck_to_dictionary_handles_empty_lines(deck_service):
     assert deck_dict["Sideboard Lightning Bolt"] == 2.0
 
 
+def test_deck_to_dictionary_skips_count_only_lines(deck_service):
+    """A line with a count but no card name yields no entry."""
+    # "4" has no name after the count; "5 " strips to "5" (same boundary).
+    deck_text = "4\n5 \n2 Island\n"
+
+    deck_dict = deck_service.deck_to_dictionary(deck_text)
+
+    assert deck_dict == {"Island": 2.0}
+
+
+def test_analyze_deck_skips_count_only_lines(deck_service):
+    """analyze_deck drops count-only lines instead of creating empty-name entries."""
+    deck_text = "4\n2 Island\n\nSideboard\n3\n1 Abrade\n"
+
+    stats = deck_service.analyze_deck(deck_text)
+
+    mainboard_dict = dict(stats["mainboard_cards"])
+    sideboard_dict = dict(stats["sideboard_cards"])
+    assert mainboard_dict == {"Island": 2}
+    assert sideboard_dict == {"Abrade": 1}
+    # No empty-name entry leaked into either zone.
+    assert "" not in mainboard_dict
+    assert "" not in sideboard_dict
+    assert stats["unique_mainboard"] == 1
+    assert stats["unique_sideboard"] == 1
+
+
 def test_analyze_deck_preserves_fractional_quantities(deck_service):
     """Test that analyze_deck preserves fractional quantities from average decks."""
     deck_text = (

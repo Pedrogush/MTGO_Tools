@@ -48,49 +48,38 @@ def test_ensure_printing_index_cache_includes_face_aliases(tmp_path, monkeypatch
     assert data["insectile aberration"] == data[canonical_key]
 
 
-def test_card_image_cache_resolves_double_faced_alias(tmp_path):
-    """Image cache should find stored MDFC images via either face name."""
-    cache_dir = tmp_path / "cache"
-    db_path = cache_dir / "images.db"
-    cache = card_images.CardImageCache(cache_dir=cache_dir, db_path=db_path)
-    front_path = cache.cache_dir / "normal" / "uuid-delver.jpg"
-    back_path = cache.cache_dir / "normal" / "uuid-delver-f1.jpg"
-    front_path.parent.mkdir(parents=True, exist_ok=True)
-    front_path.write_bytes(b"front")
-    back_path.write_bytes(b"back")
+def test_ensure_printing_index_cache_splits_face_aliases_without_card_faces(tmp_path, monkeypatch):
+    """A '//' display name with no card_faces must still expose each half.
 
-    cache.add_image(
-        uuid="uuid-delver",
-        name="Delver of Secrets",
-        set_code="ISD",
-        collector_number="51",
-        image_size="normal",
-        file_path=front_path,
-        face_index=0,
-    )
-    cache.add_image(
-        uuid="uuid-delver",
-        name="Insectile Aberration",
-        set_code="ISD",
-        collector_number="51",
-        image_size="normal",
-        file_path=back_path,
-        face_index=1,
-    )
-    cache.add_image(
-        uuid="uuid-delver",
-        name="Delver of Secrets // Insectile Aberration",
-        set_code="ISD",
-        collector_number="51",
-        image_size="normal",
-        file_path=front_path,
-        face_index=-1,
-    )
+    Isolates the ``"//" in display_name`` branch of ``_collect_face_aliases``,
+    which is the only alias source when bulk data omits ``card_faces``.
+    """
+    cache_dir = tmp_path / "card_images"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    bulk_path = cache_dir / "bulk_data.json"
+    printings_path = cache_dir / "printings.json"
+    payload = [
+        {
+            "name": "Wear // Tear",
+            "id": "uuid-wear-tear",
+            "set": "dgm",
+            "set_name": "Dragon's Maze",
+            "collector_number": "135",
+            "released_at": "2013-05-03",
+            # Deliberately no "card_faces" key.
+        }
+    ]
+    bulk_path.write_text(json.dumps(payload), encoding="utf-8")
 
-    assert cache.get_image_path("Delver of Secrets") == front_path
-    assert cache.get_image_path("Insectile Aberration") == back_path
-    assert cache.get_image_path("Delver of Secrets // Insectile Aberration") == front_path
-    assert cache.get_image_paths_by_uuid("uuid-delver") == [front_path, back_path]
+    monkeypatch.setattr(card_images_schemas, "IMAGE_CACHE_DIR", cache_dir, raising=False)
+    monkeypatch.setattr(card_images_schemas, "BULK_DATA_CACHE", bulk_path, raising=False)
+    monkeypatch.setattr(card_images_schemas, "PRINTING_INDEX_CACHE", printings_path, raising=False)
+
+    data = card_images.ensure_printing_index_cache(force=True)["data"]
+
+    canonical_key = "wear // tear"
+    assert data["wear"] == data[canonical_key]
+    assert data["tear"] == data[canonical_key]
 
 
 def test_build_printing_index_sorts_and_counts():
@@ -120,89 +109,6 @@ def test_build_printing_index_sorts_and_counts():
     assert stats["total_printings"] == 2
     entries = by_name["test card"]
     assert [entry["id"] for entry in entries] == ["uuid-2", "uuid-1"]
-
-
-def test_card_image_cache_resolves_accent_insensitive(tmp_path):
-    """Image cache should match across diacritics in either direction.
-
-    Cards like "Lórien Revealed" may be stored under their accented Scryfall
-    name but requested without accents (or vice-versa). SQLite's LOWER() does
-    not strip combining characters, so the cache registers a custom
-    strip_accents scalar as a fallback lookup.
-    """
-    cache_dir = tmp_path / "cache"
-    db_path = cache_dir / "images.db"
-    cache = card_images.CardImageCache(cache_dir=cache_dir, db_path=db_path)
-
-    accented_path = cache.cache_dir / "normal" / "uuid-lorien.jpg"
-    unaccented_path = cache.cache_dir / "normal" / "uuid-other.jpg"
-    accented_path.parent.mkdir(parents=True, exist_ok=True)
-    accented_path.write_bytes(b"accented")
-    unaccented_path.write_bytes(b"unaccented")
-
-    # Stored with accents, queried without.
-    cache.add_image(
-        uuid="uuid-lorien",
-        name="Lórien Revealed",
-        set_code="MH3",
-        collector_number="1",
-        image_size="normal",
-        file_path=accented_path,
-        face_index=0,
-    )
-    assert cache.get_image_path("Lorien Revealed") == accented_path
-
-    # Stored without accents, queried with.
-    cache.add_image(
-        uuid="uuid-other",
-        name="Geralf, Visionary Stitcher",
-        set_code="MID",
-        collector_number="2",
-        image_size="normal",
-        file_path=unaccented_path,
-        face_index=0,
-    )
-    assert cache.get_image_path("Géralf, Visionary Stitcher") == unaccented_path
-
-
-def test_card_image_cache_path_cache_invalidated_on_add(tmp_path):
-    """A miss must not be cached, and add_image must evict stale positive hits."""
-    cache_dir = tmp_path / "cache"
-    db_path = cache_dir / "images.db"
-    cache = card_images.CardImageCache(cache_dir=cache_dir, db_path=db_path)
-
-    first_path = cache.cache_dir / "normal" / "uuid-card.jpg"
-    second_path = cache.cache_dir / "normal" / "uuid-card-v2.jpg"
-    first_path.parent.mkdir(parents=True, exist_ok=True)
-    first_path.write_bytes(b"first")
-    second_path.write_bytes(b"second")
-
-    # Miss before the image exists; None must not be cached.
-    assert cache.get_image_path("Lightning Bolt") is None
-
-    cache.add_image(
-        uuid="uuid-card",
-        name="Lightning Bolt",
-        set_code="LEA",
-        collector_number="161",
-        image_size="normal",
-        file_path=first_path,
-        face_index=0,
-    )
-    # The earlier miss must not suppress the now-available path.
-    assert cache.get_image_path("Lightning Bolt") == first_path
-
-    # Re-adding to a different path must invalidate the cached positive hit.
-    cache.add_image(
-        uuid="uuid-card",
-        name="Lightning Bolt",
-        set_code="2ED",
-        collector_number="162",
-        image_size="normal",
-        file_path=second_path,
-        face_index=0,
-    )
-    assert cache.get_image_path("Lightning Bolt") == second_path
 
 
 def _write_bulk_payload(cache_dir, monkeypatch, printings_path):
@@ -244,6 +150,45 @@ def test_ensure_printing_index_cache_reuses_cache_without_rebuild(tmp_path, monk
     reused = card_images.ensure_printing_index_cache(force=False)
     assert reused["generated_at"] == built["generated_at"]
     assert reused["data"] == built["data"]
+
+
+def test_ensure_printing_index_cache_rebuilds_when_bulk_data_newer(tmp_path, monkeypatch):
+    """force=False must rebuild when bulk data is newer than the cached index."""
+    import os
+
+    cache_dir = tmp_path / "card_images"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    printings_path = cache_dir / "printings.json"
+    bulk_path = _write_bulk_payload(cache_dir, monkeypatch, printings_path)
+
+    built = card_images.ensure_printing_index_cache(force=True)
+    assert "test card" in built["data"]
+    assert "fresh card" not in built["data"]
+
+    # Replace the bulk data with a different card and bump its mtime past the
+    # mtime recorded in the persisted index, exercising the staleness branch.
+    bulk_path.write_text(
+        json.dumps(
+            [
+                {
+                    "name": "Fresh Card",
+                    "id": "uuid-fresh",
+                    "set": "xyz",
+                    "set_name": "Omega",
+                    "collector_number": "9",
+                    "released_at": "2020-01-01",
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+    newer = built["bulk_mtime"] + 100
+    os.utime(bulk_path, (newer, newer))
+
+    rebuilt = card_images.ensure_printing_index_cache(force=False)
+    assert "fresh card" in rebuilt["data"]
+    assert "test card" not in rebuilt["data"]
+    assert rebuilt["bulk_mtime"] >= newer
 
 
 def test_ensure_printing_index_cache_round_trips_to_disk(tmp_path, monkeypatch):

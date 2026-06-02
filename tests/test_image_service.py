@@ -4,7 +4,28 @@ import pytest
 
 import services.image_service as image_service
 from services.image_service import CardImageDownloadQueue, CardImageRequest, ImageService
-from utils.constants.timing import IMAGE_DOWNLOAD_SLOW_THRESHOLD_SECONDS
+from utils.constants.timing import (
+    IMAGE_DOWNLOAD_INITIAL_BACKOFF_SECONDS,
+    IMAGE_DOWNLOAD_MAX_RETRIES,
+    IMAGE_DOWNLOAD_SLOW_THRESHOLD_SECONDS,
+)
+
+
+@pytest.fixture(autouse=True)
+def synchronous_call_after(monkeypatch):
+    """Run ``wx.CallAfter`` synchronously when wx is importable.
+
+    ``import wx`` succeeds on the Windows CI runner but there is no ``wx.App``
+    in the test process, so a real ``wx.CallAfter(...)`` raises
+    ``AssertionError: No wx.App created yet``. Off-Windows (WSL dev) wx is
+    absent and ``ImageCacheMixin._call_after`` already falls back to a direct
+    call. Stubbing here keeps the dispatch tests passing in both places.
+    """
+    try:
+        import wx
+    except ImportError:
+        return  # off-Windows: production fallback already runs synchronously
+    monkeypatch.setattr(wx, "CallAfter", lambda func, *a, **k: func(*a, **k))
 
 
 @pytest.fixture(autouse=True)
@@ -402,3 +423,141 @@ def test_selected_request_skips_not_found():
             assert request not in queue._queue
     finally:
         queue._discard_not_found_key(not_found_key)
+
+
+def test_download_request_cached_returns_true_without_downloading():
+    """An already-cached request short-circuits before hitting the downloader."""
+    cache = _FakeCache(cached_keys={("Mirrorpool", "aeoe", "normal")})
+    downloader = _FakeDownloader([])
+    queue = _build_queue(downloader, cache=cache)
+    try:
+        queue.stop()
+        assert queue._download_request(_request()) is True
+    finally:
+        queue.stop()
+    # The cache hit means the downloader was never consulted.
+    assert downloader.calls == 0
+
+
+def test_download_request_success_clears_prior_not_found(monkeypatch):
+    """A fresh, fast success removes a stale not-found marker so re-enqueue works."""
+    # Constant monotonic => zero elapsed, so the slow-success guard is skipped
+    # and the success branch (which discards the not-found key) is reached.
+    monkeypatch.setattr(image_service.time, "monotonic", lambda: 0.0)
+    # Empty cache: the cached short-circuit is NOT taken, exercising the real
+    # download + success path rather than the early return.
+    downloader = _FakeDownloader([(True, "ok")])
+    queue = _build_queue(downloader)
+    request = _request()
+    not_found_key = queue._not_found_key(request)
+    try:
+        queue._add_not_found_key(not_found_key)
+        assert queue._download_request(request) is True
+        assert queue._is_not_found_key_blocked(not_found_key) is False
+    finally:
+        queue._discard_not_found_key(not_found_key)
+        queue.stop()
+    assert downloader.calls == 1
+
+
+def test_download_request_retries_exhausted_returns_false(monkeypatch):
+    """Backoff doubles each attempt and a final failure gives up cleanly."""
+    monkeypatch.setattr(image_service.time, "monotonic", lambda: 0.0)
+    # All attempts are transient failures (initial + IMAGE_DOWNLOAD_MAX_RETRIES).
+    responses = [(False, "429 Too Many Requests")] * (IMAGE_DOWNLOAD_MAX_RETRIES + 1)
+    downloader = _FakeDownloader(responses)
+    queue = _build_queue(downloader)
+    sleeps = []
+    monkeypatch.setattr(queue._stop_event, "wait", lambda seconds: sleeps.append(seconds) or False)
+    try:
+        assert queue._download_request(_request()) is False
+    finally:
+        queue.stop()
+
+    assert downloader.calls == IMAGE_DOWNLOAD_MAX_RETRIES + 1
+    # Backoff doubles between retries: 0.5, 1.0, 2.0, ... for MAX_RETRIES waits.
+    expected = [
+        IMAGE_DOWNLOAD_INITIAL_BACKOFF_SECONDS * (2**i) for i in range(IMAGE_DOWNLOAD_MAX_RETRIES)
+    ]
+    assert sleeps == expected
+
+
+def test_notify_downloaded_fires_only_when_cached():
+    """_notify_downloaded invokes the callback iff the image landed in cache."""
+    cache = _FakeCache(cached_keys={("Mirrorpool", "aeoe", "normal")})
+    downloaded = []
+    queue = CardImageDownloadQueue(cache, on_downloaded=downloaded.append)
+    try:
+        queue.stop()
+        cached_request = _request()
+        queue._notify_downloaded(cached_request)
+        assert downloaded == [cached_request]
+
+        downloaded.clear()
+        # A request the cache does not report should not notify.
+        uncached_request = _request(set_code="zzz")
+        queue._notify_downloaded(uncached_request)
+        assert downloaded == []
+    finally:
+        queue.stop()
+
+
+def test_request_queue_key_uses_uuid_when_present():
+    """queue_key keys off the uuid (ignoring set/collector) when one is set."""
+    with_uuid = _request(uuid="ABC-123", set_code="aaa", collector_number="7")
+    other_set = _request(uuid="ABC-123", set_code="bbb", collector_number="9")
+    # Same uuid + size collapse to the same key regardless of set/collector.
+    assert with_uuid.queue_key() == ("uuid", "abc-123", "normal", "")
+    assert with_uuid.queue_key() == other_set.queue_key()
+    # A differing size yields a distinct key.
+    assert _request(uuid="ABC-123", size="large").queue_key() != with_uuid.queue_key()
+
+
+def test_image_service_download_callback_dispatched(image_service_instance):
+    """A queued success dispatches the registered download callback via _call_after."""
+    service = image_service_instance
+    received = []
+    service.set_image_download_callback(received.append)
+
+    request = _request()
+    # Drive the success path directly: _handle_image_downloaded routes through
+    # _call_after (wx.CallAfter when wx is importable, direct call otherwise).
+    service._handle_image_downloaded(request)
+
+    assert received == [request]
+
+
+def test_image_service_download_callback_noop_without_callback(image_service_instance):
+    """With no callback registered, dispatch is a silent no-op."""
+    service = image_service_instance
+    # No set_image_download_callback call; must not raise.
+    service._handle_image_downloaded(_request())
+
+
+def test_image_service_failed_callback_dispatched(image_service_instance):
+    """A failure dispatches the registered failed callback with the message."""
+    service = image_service_instance
+    received = []
+    service.set_image_download_failed_callback(lambda req, msg: received.append((req, msg)))
+
+    request = _request()
+    service._handle_image_download_failed(request, "404 not found")
+
+    assert received == [(request, "404 not found")]
+
+
+def test_image_service_failed_callback_noop_without_callback(image_service_instance):
+    """With no failed-callback registered, dispatch is a silent no-op."""
+    service = image_service_instance
+    service._handle_image_download_failed(_request(), "boom")
+
+
+def test_image_service_callbacks_can_be_cleared(image_service_instance):
+    """Passing None clears a previously-registered callback."""
+    service = image_service_instance
+    received = []
+    service.set_image_download_callback(received.append)
+    service.set_image_download_callback(None)
+
+    service._handle_image_downloaded(_request())
+    assert received == []

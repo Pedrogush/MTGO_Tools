@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import json
 import os
+from datetime import datetime
 from pathlib import Path
-from unittest.mock import MagicMock
 
 import pytest
 
+from repositories.card_repository.schemas import CardEntry
 from services.gamelog_service import (
+    detect_archetype,
     detect_format_from_cards,
     extract_cards_played,
     extract_players,
@@ -17,10 +19,12 @@ from services.gamelog_service import (
     find_gamelog_files,
     infer_username_from_matches,
     normalize_player_name,
+    parse_all_gamelogs,
     parse_game_results,
     parse_gamelog_file,
     parse_match_score,
     parse_mulligan_data,
+    parse_timestamp,
 )
 
 # ---------------------------------------------------------------------------
@@ -283,25 +287,194 @@ class TestParseGamelogFileSynthetic:
 
 
 # ---------------------------------------------------------------------------
+# Unit tests for parse_timestamp
+# ---------------------------------------------------------------------------
+
+
+class TestParseTimestamp:
+    def test_parses_valid_mtgo_timestamp_string(self):
+        # Format: "Wed Dec 04 14:23:10 PST 2024" -> seconds are dropped (":00").
+        assert parse_timestamp("Wed Dec 04 14:23:10 PST 2024") == datetime(2024, 12, 4, 14, 23, 0)
+
+    def test_parses_each_month_abbreviation(self):
+        assert parse_timestamp("Mon Jan 01 00:00:00 PST 2023") == datetime(2023, 1, 1, 0, 0, 0)
+        assert parse_timestamp("Tue Jul 09 09:05:00 PST 2025") == datetime(2025, 7, 9, 9, 5, 0)
+
+    def test_binary_first_line_falls_back_to_file_mtime(self, tmp_path):
+        # A first line that looks like binary data (non-ASCII / '$') must use the
+        # file's modification time instead of attempting to parse the string.
+        f = tmp_path / "Match_GameLog_1.dat"
+        f.write_bytes(b"\x00\x01binary$payload")
+        os.utime(f, (1_700_000_000, 1_700_000_000))
+        binary_first_line = "\x80\x81garbage$data"
+        result = parse_timestamp(binary_first_line, str(f))
+        assert result == datetime.fromtimestamp(1_700_000_000)
+
+    def test_binary_without_file_path_falls_back_to_now(self):
+        before = datetime.now()
+        result = parse_timestamp("\x80binary$data")
+        after = datetime.now()
+        assert before <= result <= after
+
+    def test_malformed_string_falls_back_to_file_mtime(self, tmp_path):
+        # A non-binary but unparseable string drops into the exception handler,
+        # which falls back to the file mtime.
+        f = tmp_path / "Match_GameLog_2.dat"
+        f.write_text("content", encoding="latin1")
+        os.utime(f, (1_650_000_000, 1_650_000_000))
+        result = parse_timestamp("not a real timestamp", str(f))
+        assert result == datetime.fromtimestamp(1_650_000_000)
+
+    def test_malformed_string_without_file_falls_back_to_now(self):
+        before = datetime.now()
+        result = parse_timestamp("garbage")
+        after = datetime.now()
+        assert before <= result <= after
+
+
+# ---------------------------------------------------------------------------
+# Unit tests for detect_archetype
+# ---------------------------------------------------------------------------
+
+
+class TestDetectArchetype:
+    def test_returns_unknown_for_empty_list(self):
+        assert detect_archetype([]) == "Unknown"
+
+    def test_returns_unknown_below_five_cards(self):
+        # A signature card is present, but the deck has < 5 cards, so the
+        # early-return guard wins before any signature matching.
+        assert detect_archetype(["Murktide Regent", "Plains", "Island"]) == "Unknown"
+
+    def test_detects_known_signature(self):
+        cards = ["Murktide Regent", "Dragon's Rage Channeler", "Island", "Mountain", "Consider"]
+        assert detect_archetype(cards) == "Murktide"
+
+    def test_tie_break_on_equal_match_count(self):
+        # Two archetypes each match exactly one signature card. The sort key is
+        # ``(match_count, -signature_len)`` with ``reverse=True``: among equal
+        # match counts the *smaller* signature wins (because ``-len`` is larger
+        # for a shorter signature and reverse=True takes the largest key first).
+        #   Burn signature len 3, Living End signature len 2 -> Living End wins.
+        cards = ["Lightning Bolt", "Living End", "Forest", "Island", "Swamp"]
+        assert detect_archetype(cards) == "Living End"
+
+    def test_higher_match_count_beats_signature_size(self):
+        # Match count dominates the sort: an archetype with two signature hits
+        # outranks one with a single hit regardless of signature size.
+        cards = ["Colossus Hammer", "Puresteel Paladin", "Lightning Bolt", "Plains", "Island"]
+        # Hammer Time matches 2 of 3; Burn matches 1 of 3 -> Hammer Time wins.
+        assert detect_archetype(cards) == "Hammer Time"
+
+    def test_land_count_fallback_aggro(self):
+        # No signature match, fewer than 10 lands -> Aggro.
+        cards = [f"Random Creature {i}" for i in range(20)]
+        assert detect_archetype(cards) == "Aggro"
+
+    def test_land_count_fallback_control(self):
+        # No signature match, more than 25 lands -> Control.
+        cards = ["Island"] * 30
+        assert detect_archetype(cards) == "Control"
+
+    def test_land_count_fallback_midrange(self):
+        # No signature match, 10..25 lands inclusive -> Midrange.
+        cards = ["Forest"] * 15 + [f"Random Creature {i}" for i in range(5)]
+        assert detect_archetype(cards) == "Midrange"
+
+
+# ---------------------------------------------------------------------------
+# Unit tests for parse_all_gamelogs (orchestrator over a directory tree)
+# ---------------------------------------------------------------------------
+
+
+class TestParseAllGamelogs:
+    def _write_match(self, directory: Path, match_id: str) -> None:
+        directory.mkdir(parents=True, exist_ok=True)
+        (directory / f"Match_GameLog_{match_id}.dat").write_text(
+            _synthetic_match(), encoding="latin1"
+        )
+
+    def test_parses_every_file_in_a_directory(self, tmp_path):
+        self._write_match(tmp_path, "1")
+        self._write_match(tmp_path, "2")
+        results = parse_all_gamelogs(str(tmp_path))
+        assert sorted(r["match_id"] for r in results) == ["1", "2"]
+
+    def test_deduplicates_same_filename_across_directories(self, tmp_path):
+        d1 = tmp_path / "a"
+        d2 = tmp_path / "b"
+        self._write_match(d1, "1")
+        self._write_match(d2, "1")  # same filename in a second directory
+        results = parse_all_gamelogs([str(d1), str(d2)])
+        assert [r["match_id"] for r in results] == ["1"]
+
+    def test_limit_caps_number_of_files_processed(self, tmp_path):
+        for i in range(5):
+            self._write_match(tmp_path, str(i))
+        results = parse_all_gamelogs(str(tmp_path), limit=2)
+        assert len(results) == 2
+
+    def test_progress_callback_reports_each_file(self, tmp_path):
+        self._write_match(tmp_path, "1")
+        self._write_match(tmp_path, "2")
+        calls: list[tuple[int, int]] = []
+        parse_all_gamelogs(str(tmp_path), progress_callback=lambda i, n: calls.append((i, n)))
+        assert calls == [(1, 2), (2, 2)]
+
+    def test_empty_directory_returns_empty_list(self, tmp_path):
+        assert parse_all_gamelogs(str(tmp_path)) == []
+
+    def test_raises_when_no_directories_located(self, tmp_path, monkeypatch):
+        # directory=None triggers auto-discovery; force it to find nothing.
+        monkeypatch.setattr("services.gamelog_service.service.find_all_gamelog_dirs", lambda: [])
+        with pytest.raises(RuntimeError):
+            parse_all_gamelogs()
+
+
+# ---------------------------------------------------------------------------
 # Unit tests for detect_format_from_cards
 # ---------------------------------------------------------------------------
 
 
-def _make_manager(card_legalities: dict[str, dict[str, str]]) -> MagicMock:
-    """Build a mock CardDataManager where each card name maps to given legalities."""
-    manager = MagicMock()
-    manager.is_loaded = True
+def _card_entry(name: str, legalities: dict[str, str]) -> CardEntry:
+    """Build a real ``CardEntry`` with the given legalities (other fields empty)."""
+    return CardEntry(
+        name=name,
+        name_lower=name.lower(),
+        aliases=[],
+        colors=[],
+        color_identity=[],
+        legalities=legalities,
+    )
 
-    def get_card(name: str):
-        legalities = card_legalities.get(name.lower())
-        if legalities is None:
-            return None
-        entry = MagicMock()
-        entry.legalities = legalities
-        return entry
 
-    manager.get_card.side_effect = get_card
-    return manager
+class _FakeCardManager:
+    """Minimal real implementation of ``CardDataManagerProto``'s read surface.
+
+    Instead of a MagicMock, this is a small real object that returns genuine
+    ``CardEntry`` instances, so the test exercises ``detect_format_from_cards``
+    against the same domain type production uses (legality dict on a real struct,
+    real ``.get_card`` lookup semantics) rather than asserting against a stub.
+    """
+
+    def __init__(self, card_legalities: dict[str, dict[str, str]], *, is_loaded: bool = True):
+        self._cards = {
+            name.lower(): _card_entry(name, legalities)
+            for name, legalities in card_legalities.items()
+        }
+        self._is_loaded = is_loaded
+
+    @property
+    def is_loaded(self) -> bool:
+        return self._is_loaded
+
+    def get_card(self, name: str) -> CardEntry | None:
+        return self._cards.get(name.lower())
+
+
+def _make_manager(card_legalities: dict[str, dict[str, str]]) -> _FakeCardManager:
+    """Build a real card manager where each card name maps to given legalities."""
+    return _FakeCardManager(card_legalities)
 
 
 class TestDetectFormatFromCards:
@@ -339,13 +512,11 @@ class TestDetectFormatFromCards:
         )
 
     def test_returns_unknown_when_manager_not_loaded(self):
-        manager = MagicMock()
-        manager.is_loaded = False
+        manager = _FakeCardManager({}, is_loaded=False)
         assert detect_format_from_cards(["Force of Will"] * 10, manager) == "Unknown"
 
     def test_returns_last_parsed_format_when_manager_not_loaded(self):
-        manager = MagicMock()
-        manager.is_loaded = False
+        manager = _FakeCardManager({}, is_loaded=False)
         assert (
             detect_format_from_cards(["Force of Will"] * 10, manager, last_parsed_format="Legacy")
             == "Legacy"
