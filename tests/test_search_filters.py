@@ -1,5 +1,7 @@
 """Tests for search filter utility functions."""
 
+import pytest
+
 from services.search_service.mana_filters import (
     matches_color_filter,
     matches_mana_cost,
@@ -231,3 +233,42 @@ def test_matches_color_filter_colorless_not_these():
 def test_matches_color_filter_unknown_mode():
     """Test color filter with unknown mode defaults to True."""
     assert matches_color_filter(["G"], ["U"], "UnknownMode") is True
+
+
+# ----- Word-form mode spellings (UI labels) -----
+#
+# matches_color_filter accepts both a symbol spelling and a human-readable
+# word spelling for every mode. The tests above only cover the symbol forms,
+# so these parametrized cases pin down the word-form aliases too. Dropping any
+# alias should fail at least one of these.
+
+
+@pytest.mark.parametrize("any_mode", ["Any", "-"])
+def test_matches_color_filter_any_mode_word_form(any_mode):
+    """'Any'/'-' mode never filters, regardless of spelling."""
+    assert matches_color_filter(["G"], ["R", "U"], any_mode) is True
+    assert matches_color_filter([], ["W"], any_mode) is True
+
+
+@pytest.mark.parametrize("at_least_mode", ["At least", "≥"])
+def test_matches_color_filter_at_least_word_form(at_least_mode):
+    """'At least'/'≥' mode behaves identically for both spellings."""
+    assert matches_color_filter(["G"], ["G"], at_least_mode) is True
+    assert matches_color_filter(["G", "U"], ["G"], at_least_mode) is True
+    assert matches_color_filter(["U"], ["G"], at_least_mode) is False
+
+
+@pytest.mark.parametrize("exactly_mode", ["Exactly", "="])
+def test_matches_color_filter_exactly_word_form(exactly_mode):
+    """'Exactly'/'=' mode behaves identically for both spellings."""
+    assert matches_color_filter(["G"], ["G"], exactly_mode) is True
+    assert matches_color_filter(["G", "U"], ["G"], exactly_mode) is False
+    assert matches_color_filter(["G", "U"], ["G", "U"], exactly_mode) is True
+
+
+@pytest.mark.parametrize("not_these_mode", ["Not these", "≠"])
+def test_matches_color_filter_not_these_word_form(not_these_mode):
+    """'Not these'/'≠' mode behaves identically for both spellings."""
+    assert matches_color_filter(["R"], ["G"], not_these_mode) is True
+    assert matches_color_filter(["G"], ["G"], not_these_mode) is False
+    assert matches_color_filter(["W", "B"], ["R", "G"], not_these_mode) is True
