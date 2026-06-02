@@ -11,10 +11,16 @@ import pytest
 
 from services.gamelog_service import (
     detect_format_from_cards,
+    extract_cards_played,
+    extract_players,
     find_all_gamelog_dirs,
     find_gamelog_files,
     infer_username_from_matches,
+    normalize_player_name,
+    parse_game_results,
     parse_gamelog_file,
+    parse_match_score,
+    parse_mulligan_data,
 )
 
 # ---------------------------------------------------------------------------
@@ -63,19 +69,15 @@ class TestInferUsername:
     def test_returns_none_on_empty(self):
         assert infer_username_from_matches([]) is None
 
-    def test_returns_none_when_no_majority(self):
-        # 50/50 split — neither player clears the 80% threshold
+    def test_tie_at_full_attendance_returns_most_common_insertion_order(self):
+        # Both players appear in every match (100% attendance), so both clear
+        # the 80% threshold. Counter.most_common breaks ties by first-seen
+        # insertion order, so the player encountered first ("alice") is returned.
         matches = [
             {"players": ["alice", "bob"]},
             {"players": ["bob", "alice"]},
         ]
-        # Both have count == 2 == 100% of 2 matches, but the *most common*
-        # could be either (Counter tie-break is insertion-order-dependent).
-        # At 100% either could be returned; the key is that with a genuine
-        # tie both clear the threshold, so one is returned — just verify the
-        # function doesn't raise.
-        result = infer_username_from_matches(matches)
-        assert result in ("alice", "bob", None)
+        assert infer_username_from_matches(matches) == "alice"
 
     def test_requires_80_percent_threshold(self):
         # alice in 3/5 = 60% — below threshold
@@ -94,6 +96,190 @@ class TestInferUsername:
         username = os.environ.get("MTGO_USERNAME", "testplayer")
         matches = [{"players": [username, f"opp{i}"]} for i in range(100)]
         assert infer_username_from_matches(matches) == username
+
+
+# ---------------------------------------------------------------------------
+# Unit tests for normalize_player_name (storage <-> display encoding)
+# ---------------------------------------------------------------------------
+
+
+class TestNormalizePlayerName:
+    def test_to_storage_substitutes_space_and_period(self):
+        assert normalize_player_name("a b.c", True) == "a+b*c"
+
+    def test_from_storage_inverts_substitution(self):
+        assert normalize_player_name("a+b*c", False) == "a b.c"
+
+    def test_round_trip_simple_name(self):
+        original = "Player One"
+        assert normalize_player_name(normalize_player_name(original, True), False) == original
+
+    def test_plain_name_is_unchanged(self):
+        assert normalize_player_name("alice", True) == "alice"
+        assert normalize_player_name("alice", False) == "alice"
+
+    def test_name_containing_literal_plus_does_not_round_trip(self):
+        # Documents a known limitation: a name that already contains '+' or '*'
+        # cannot round-trip, because the display->storage->display path is lossy.
+        # storage form of "a+b" is "a+b" (no spaces/periods to encode), and
+        # decoding it turns the literal '+' into a space.
+        assert normalize_player_name("a+b", True) == "a+b"
+        assert normalize_player_name("a+b", False) == "a b"
+
+
+# ---------------------------------------------------------------------------
+# Unit tests for the binary-log text parser (synthetic content, no MTGO needed)
+# ---------------------------------------------------------------------------
+
+
+def _card_ref(name: str) -> str:
+    """Render a card reference in the GameLog binary text format."""
+    return f"@[{name}@:0,0:@]"
+
+
+def _synthetic_match(*, include_match_line: bool = True) -> str:
+    """Build a minimal but realistic GameLog text body for two players.
+
+    Alice plays Lightning Bolt and wins both games; Bob mulligans once in game 2.
+    """
+    lines = [
+        "Wed Dec 04 14:23:10 PST 2024",
+        "@PAlice joined the game",
+        "@PBob joined the game",
+        "@PAlice chooses to play first",
+        f"@PAlice plays {_card_ref('Lightning Bolt')}",
+        f"@PBob casts {_card_ref('Counterspell')}",
+        "@PAlice wins the game",
+        "@PBob chooses to play first",
+        "@PBob mulligans to six cards",
+        f"@PAlice casts {_card_ref('Snapcaster Mage')}",
+        "@PAlice wins the game",
+    ]
+    if include_match_line:
+        lines.append("@PAlice wins the match 2-0")
+    return "\n".join(lines)
+
+
+class TestExtractPlayers:
+    def test_extracts_both_players(self):
+        players = extract_players(_synthetic_match())
+        assert sorted(players) == ["Alice", "Bob"]
+
+    def test_returns_empty_when_no_join_lines(self):
+        assert extract_players("Wed Dec 04 14:23:10 PST 2024\nrandom content") == []
+
+    def test_deduplicates_repeated_joins(self):
+        content = "@PAlice joined the game\n@PAlice joined the game\n@PBob joined the game"
+        assert sorted(extract_players(content)) == ["Alice", "Bob"]
+
+
+class TestExtractCardsPlayed:
+    def test_attributes_cards_to_correct_player(self):
+        content = _synthetic_match()
+        assert extract_cards_played(content, "Alice") == ["Lightning Bolt", "Snapcaster Mage"]
+        assert extract_cards_played(content, "Bob") == ["Counterspell"]
+
+    def test_ignores_non_own_verbs(self):
+        # A card referenced as the target of an attack must not be attributed.
+        content = f"@PAlice is being attacked by {_card_ref('Goblin Guide')}"
+        assert extract_cards_played(content, "Alice") == []
+
+    def test_extracts_discard_and_reveal_verbs(self):
+        content = (
+            f"@PAlice discards {_card_ref('Faithless Looting')}\n"
+            f"@PAlice reveals {_card_ref('Tarmogoyf')}"
+        )
+        assert extract_cards_played(content, "Alice") == ["Faithless Looting", "Tarmogoyf"]
+
+
+class TestParseMatchScore:
+    def test_parses_wins_the_match(self):
+        assert parse_match_score("@PAlice wins the match 2-1") == ("Alice", 2, 1)
+
+    def test_parses_leads_the_match(self):
+        assert parse_match_score("@PBob leads the match 1-0") == ("Bob", 1, 0)
+
+    def test_prefers_last_match_line(self):
+        # parse_match_score scans from the end, so the final result wins.
+        content = "@PAlice leads the match 1-0\n@PAlice wins the match 2-1"
+        assert parse_match_score(content) == ("Alice", 2, 1)
+
+    def test_returns_none_when_absent(self):
+        assert parse_match_score("@PAlice plays a land") is None
+
+
+class TestParseGameResults:
+    def test_records_one_result_per_game(self):
+        content = _synthetic_match()
+        results = parse_game_results(content)
+        assert [g["game_num"] for g in results] == [1, 2]
+        assert results[0] == {"game_num": 1, "winner": "Alice", "method": "win"}
+
+    def test_records_concession(self):
+        content = "@PAlice chooses to play first\n@PBob has conceded from the game"
+        results = parse_game_results(content)
+        assert results == [{"game_num": 1, "loser": "Bob", "method": "concession"}]
+
+    def test_only_first_result_per_game_is_kept(self):
+        # Two "wins the game" lines in the same game must collapse to one record.
+        content = "@PAlice chooses to play first\n" "@PAlice wins the game\n" "@PBob wins the game"
+        results = parse_game_results(content)
+        assert len(results) == 1
+        assert results[0]["winner"] == "Alice"
+
+
+class TestParseMulliganData:
+    def test_maps_word_count_to_cards_kept(self):
+        # "mulligans to six cards" in game 2 => 7 - 6 = 1 mulligan for game 2.
+        results = parse_mulligan_data(_synthetic_match())
+        assert results["Bob"] == [0, 1]
+
+    def test_no_mulligans_returns_empty_dict(self):
+        content = "@PAlice chooses to play first\n@PAlice wins the game"
+        assert parse_mulligan_data(content) == {}
+
+
+class TestParseGamelogFileSynthetic:
+    """Drive parse_gamelog_file with temp files of synthetic content.
+
+    These cover the orchestrator branches (match-score path, game-results
+    fallback, <2-players early return, malformed-file exception swallowing)
+    portably, without a live MTGO GameLog directory.
+    """
+
+    def _write(self, tmp_path, content: str, name: str = "Match_GameLog_123.dat") -> str:
+        p = tmp_path / name
+        p.write_text(content, encoding="latin1")
+        return str(p)
+
+    def test_parses_normal_match_via_match_score(self, tmp_path):
+        path = self._write(tmp_path, _synthetic_match())
+        result = parse_gamelog_file(path)
+        assert result is not None
+        assert sorted(result["players"]) == ["Alice", "Bob"]
+        assert result["winner"] == "Alice"
+        assert result["match_score"] == "2-0"
+        assert result["match_id"] == "123"
+        assert "Lightning Bolt" in (result["player1_deck"] + result["player2_deck"])
+
+    def test_falls_back_to_game_results_without_match_line(self, tmp_path):
+        # Omitting the "wins the match" line forces the game-results count path.
+        path = self._write(tmp_path, _synthetic_match(include_match_line=False))
+        result = parse_gamelog_file(path)
+        assert result is not None
+        # Alice won both games; player order is length-sorted (both len 5 -> stable).
+        assert result["winner"] in ("Alice", "Bob")
+        # Alice won 2 games, Bob 0, so Alice must be the winner regardless of order.
+        assert result["winner"] == "Alice"
+        assert result["match_score"] in ("2-0", "0-2")
+
+    def test_returns_none_for_single_player(self, tmp_path):
+        path = self._write(tmp_path, "Wed Dec 04 14:23:10 PST 2024\n@PAlice joined the game")
+        assert parse_gamelog_file(path) is None
+
+    def test_returns_none_for_missing_file(self, tmp_path):
+        # A path that doesn't exist must be swallowed and return None, not raise.
+        assert parse_gamelog_file(str(tmp_path / "does_not_exist.dat")) is None
 
 
 # ---------------------------------------------------------------------------
@@ -321,6 +507,7 @@ class TestGamelogParserVsScreenshots:
 
         mismatches = []
         checked = 0
+        in_window_candidates = 0
 
         for entry in truth:
             if entry["mtg_format"] not in ("Modern",):
@@ -328,6 +515,8 @@ class TestGamelogParserVsScreenshots:
             opp = entry["opponent_name"].lower()
             if opp not in by_opponent:
                 continue
+
+            in_window_candidates += 1
 
             # Parse screenshot timestamp (match start time)
             try:
@@ -376,6 +565,15 @@ class TestGamelogParserVsScreenshots:
             checked += 1
 
         assert checked > 0, "No Modern matches were cross-referenced within the time window"
+        # Guard against silent under-matching: if a parser/timestamp regression
+        # caused most candidates to fall outside the window (or fail to parse),
+        # `checked` would collapse to 1 while still passing `checked > 0`. Require
+        # the majority of opponent-matched Modern candidates to actually line up.
+        if in_window_candidates:
+            assert checked >= max(1, in_window_candidates // 2), (
+                f"only {checked}/{in_window_candidates} opponent-matched Modern truth "
+                "entries cross-referenced within the time window"
+            )
         assert mismatches == [], f"{len(mismatches)} result mismatches found:\n" + "\n".join(
             str(m) for m in mismatches
         )

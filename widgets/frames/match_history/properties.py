@@ -43,7 +43,11 @@ def resolve_match_perspective(
         player1_score = 0
         player2_score = 0
 
-    use_player2 = bool(current_username and player1_name.lower() != current_username.lower())
+    use_player2 = bool(
+        current_username
+        and player1_name.lower() != current_username.lower()
+        and player2_name.lower() == current_username.lower()
+    )
     if use_player2:
         our_name = player2_name
         opp_name = player1_name

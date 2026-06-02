@@ -78,6 +78,17 @@ class TestHypergeometricProbability:
         prob = hypergeometric_probability(60, 0, 7, 0)
         assert prob == 1.0
 
+    def test_not_enough_failures_returns_zero(self) -> None:
+        """Combinatorially impossible draw returns 0.0 from the strict function.
+
+        Directly exercises the 'not enough non-target cards' branch: every
+        validation guard passes (successes_in_sample=0 is in range), yet the
+        sample cannot be filled because only 2 non-target cards exist for a
+        7-card draw, so failures_in_sample (7) > failures_in_pop (2).
+        """
+        assert hypergeometric_probability(60, 58, 7, 0) == 0.0
+        assert hypergeometric_probability(10, 8, 5, 0) == 0.0
+
 
 class TestHypergeometricAtLeast:
     """Tests for hypergeometric_at_least function."""

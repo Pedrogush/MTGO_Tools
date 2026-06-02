@@ -146,9 +146,9 @@ class _ResultsCtrl:
 class _Panel(DeckBuilderPanelHandlersMixin):
     """Concrete subclass wiring just enough state for the hotkey paths."""
 
-    def __init__(self, selected: dict[str, Any] | None) -> None:
+    def __init__(self, selected: dict[str, Any] | None, first_selected: int = 0) -> None:
         self._selected = selected
-        self.results_ctrl = _ResultsCtrl()
+        self.results_ctrl = _ResultsCtrl(first_selected)
         self.main_calls: list[tuple[str, int]] = []
         self.side_calls: list[tuple[str, int]] = []
         self.active_zone_calls: list[str] = []
@@ -227,6 +227,45 @@ def test_ctrl_digit_is_skipped() -> None:
     panel._on_result_key_down(event)
     assert panel.main_calls == []
     assert event.skipped is True
+
+
+def test_alt_digit_is_skipped() -> None:
+    """Alt-modified digits are left for the global app hotkey handler."""
+    panel = _Panel({"name": "Island"})
+    event = _KeyEvent(ord("1"), alt=True)
+    panel._on_result_key_down(event)
+    assert panel.main_calls == []
+    assert event.skipped is True
+
+
+def test_plus_with_no_selection_is_skipped() -> None:
+    """'+' with nothing selected must not add a phantom card; it Skips instead."""
+    panel = _Panel({"name": "Island"}, first_selected=_WX.NOT_FOUND)
+    event = _KeyEvent(ord("+"))
+    panel._on_result_key_down(event)
+    assert panel.active_zone_calls == []
+    assert panel.main_calls == []
+    assert panel.side_calls == []
+    assert event.skipped is True
+
+
+@pytest.mark.parametrize("card", [{}, {"name": ""}])
+def test_digit_with_unnamed_card_does_nothing(card: dict[str, Any]) -> None:
+    """A selected card without a usable name must not be added to a zone."""
+    panel = _Panel(card)
+    event = _KeyEvent(ord("1"))
+    panel._on_result_key_down(event)
+    assert panel.main_calls == []
+    assert panel.side_calls == []
+
+
+@pytest.mark.parametrize("card", [{}, {"name": ""}])
+def test_plus_with_unnamed_card_does_nothing(card: dict[str, Any]) -> None:
+    """The '+' active-zone shortcut must not add a card lacking a name."""
+    panel = _Panel(card)
+    event = _KeyEvent(ord("+"))
+    panel._on_result_key_down(event)
+    assert panel.active_zone_calls == []
 
 
 def test_unmapped_key_is_skipped() -> None:

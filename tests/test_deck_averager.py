@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import time
+from unittest.mock import patch
+
 import pytest
 
 from services.deck_service.averager import DeckAverager
@@ -118,3 +121,72 @@ def test_render_average_deck_fractional(averager):
 def test_render_average_deck_empty(averager):
     assert averager.render_average_deck({}, 5) == ""
     assert averager.render_average_deck({"x": 1.0}, 0) == ""
+
+
+def test_render_average_deck_sideboard_section(averager):
+    # A "\n\n" separator marks the start of the sideboard; the parser keys
+    # sideboard cards as "Sideboard {name}".
+    buf = averager.add_deck_to_buffer({}, "4 Lightning Bolt\n\n2 Duress")
+    text = averager.render_average_deck(buf, 1)
+    lines = text.splitlines()
+
+    # A blank-line separator splits mainboard from sideboard.
+    assert "" in lines
+    sep = lines.index("")
+    main_part = lines[:sep]
+    side_part = lines[sep + 1 :]
+
+    # Mainboard card stays in the mainboard section.
+    assert "4 Lightning Bolt" in main_part
+    # Sideboard card lands after the separator with the "Sideboard " prefix stripped.
+    assert "2 Duress" in side_part
+    assert all("Sideboard" not in ln for ln in lines)
+
+
+def test_render_average_deck_sorts_sideboard_last(averager):
+    # Sideboard cards must sort after every mainboard card regardless of name.
+    buf = averager.add_deck_to_buffer({}, "4 Zealous Conscripts\n\n2 Abrade")
+    text = averager.render_average_deck(buf, 1)
+    lines = text.splitlines()
+
+    sep = lines.index("")
+    assert lines[:sep] == ["4 Zealous Conscripts"]
+    assert lines[sep + 1 :] == ["2 Abrade"]
+
+
+# ──────────────────────────── filter_today_decks ────────────────────────────
+
+
+def test_filter_today_decks_matches_and_excludes(averager):
+    decks = [
+        {"date": "2026-06-01", "name": "today"},
+        {"date": "2026-05-31", "name": "yesterday"},
+    ]
+    result = averager.filter_today_decks(decks, today="2026-06-01")
+    assert [deck["name"] for deck in result] == ["today"]
+
+
+def test_filter_today_decks_case_insensitive_substring(averager):
+    decks = [{"date": "Decks 2026-06-01 EVENT", "name": "match"}]
+    result = averager.filter_today_decks(decks, today="2026-06-01")
+    assert [deck["name"] for deck in result] == ["match"]
+
+
+def test_filter_today_decks_missing_date_excluded(averager):
+    decks = [
+        {"name": "no-date-key"},
+        {"date": None, "name": "none-date"},
+        {"date": "2026-06-01", "name": "match"},
+    ]
+    result = averager.filter_today_decks(decks, today="2026-06-01")
+    assert [deck["name"] for deck in result] == ["match"]
+
+
+def test_filter_today_decks_defaults_to_current_date(averager):
+    decks = [
+        {"date": "today-fixed-date", "name": "match"},
+        {"date": "some-other-date", "name": "no-match"},
+    ]
+    with patch.object(time, "strftime", return_value="today-fixed-date"):
+        result = averager.filter_today_decks(decks)
+    assert [deck["name"] for deck in result] == ["match"]

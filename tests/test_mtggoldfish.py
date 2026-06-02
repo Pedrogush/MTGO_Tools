@@ -2,8 +2,9 @@
 
 import json
 import tempfile
+import threading
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from unittest.mock import Mock, patch
 
@@ -33,6 +34,24 @@ SAMPLE_METAGAME_HTML = """
     <span class="deck-price-paper">
         <div>Should be filtered</div>
         <a href="/archetype/filtered">Filtered</a>
+    </span>
+</div>
+</body>
+</html>
+"""
+
+SAMPLE_METAGAME_HTML_WITH_DUPLICATE = """
+<html>
+<body>
+<div id="metagame-decks-container">
+    <span class="deck-price-paper">
+        <a href="/archetype/modern-rakdos-midrange#paper">Rakdos Midrange</a>
+    </span>
+    <span class="deck-price-paper">
+        <a href="/archetype/modern-rakdos-midrange-alt#paper">Rakdos Midrange</a>
+    </span>
+    <span class="deck-price-paper">
+        <a href="/archetype/modern-amulet-titan#paper">Amulet Titan</a>
     </span>
 </div>
 </body>
@@ -247,6 +266,26 @@ class TestGetArchetypes:
         assert temp_archetype_list_file.exists()
 
     @patch("repositories.scrapers.mtggoldfish.requests.get")
+    def test_get_archetypes_deduplicates_by_name(self, mock_get, temp_archetype_list_file):
+        """Duplicate archetype names (same display name, different hrefs) collapse to
+        a single entry, keeping the first occurrence's href."""
+        mock_response = Mock()
+        mock_response.text = SAMPLE_METAGAME_HTML_WITH_DUPLICATE
+        mock_response.raise_for_status = Mock()
+        mock_get.return_value = mock_response
+
+        with patch(
+            "repositories.scrapers.mtggoldfish.ARCHETYPE_LIST_CACHE_FILE", temp_archetype_list_file
+        ):
+            result = get_archetypes("modern", cache_ttl=0)  # Force cache miss
+
+        assert len(result) == 2
+        rakdos = [item for item in result if item["name"] == "Rakdos Midrange"]
+        assert len(rakdos) == 1
+        # First occurrence wins.
+        assert rakdos[0]["href"] == "modern-rakdos-midrange"
+
+    @patch("repositories.scrapers.mtggoldfish.requests.get")
     def test_get_archetypes_request_failure_with_stale_cache(
         self, mock_get, temp_archetype_list_file
     ):
@@ -355,35 +394,44 @@ class TestGetArchetypeDecks:
         assert result[1]["player"] == "PlayerTwo"
 
     @patch("repositories.scrapers.mtggoldfish.requests.get")
-    def test_get_archetype_decks_request_failure(self, mock_get, temp_archetype_decks_file):
-        """Test handling request failure returns cached data."""
+    def test_get_archetype_decks_request_failure(self, mock_get, temp_cache_dir):
+        """Test that a request exception is caught and yields an empty result.
+
+        Uses a fresh per-test cache file and a never-before-seen archetype so the
+        cache misses and the network path actually runs (the failure return at
+        mtggoldfish.py is what is being exercised here)."""
         mock_get.side_effect = Exception("Network error")
 
-        # Should return cached data from previous successful test
+        fresh_cache = temp_cache_dir / "archetype_decks.json"
         with patch(
             "repositories.scrapers.mtggoldfish.ARCHETYPE_DECKS_CACHE_FILE",
-            temp_archetype_decks_file,
+            fresh_cache,
         ):
-            result = get_archetype_decks("modern-rakdos-midrange")
-        assert len(result) == 2  # Returns cached data as fallback
-        assert result[0]["number"] == "123456"
+            result = get_archetype_decks("modern-request-failure-archetype")
+
+        mock_get.assert_called()  # network path was taken (no cache short-circuit)
+        assert result == []
 
     @patch("repositories.scrapers.mtggoldfish.requests.get")
-    def test_get_archetype_decks_missing_table(self, mock_get, temp_archetype_decks_file):
-        """Test handling missing deck table returns cached data."""
+    def test_get_archetype_decks_missing_table(self, mock_get, temp_cache_dir):
+        """Test that missing deck table yields an empty result.
+
+        Uses a fresh per-test cache file and a never-before-seen archetype so the
+        cache misses and the missing-table return path actually runs."""
         mock_response = Mock()
         mock_response.text = "<html><body>No table here</body></html>"
         mock_response.raise_for_status = Mock()
         mock_get.return_value = mock_response
 
-        # Should return cached data from previous successful test
+        fresh_cache = temp_cache_dir / "archetype_decks.json"
         with patch(
             "repositories.scrapers.mtggoldfish.ARCHETYPE_DECKS_CACHE_FILE",
-            temp_archetype_decks_file,
+            fresh_cache,
         ):
-            result = get_archetype_decks("modern-rakdos-midrange")
-        assert len(result) == 2  # Returns cached data as fallback
-        assert result[0]["number"] == "123456"
+            result = get_archetype_decks("modern-missing-table-archetype")
+
+        mock_get.assert_called()  # network path was taken (no cache short-circuit)
+        assert result == []
 
     @patch("repositories.scrapers.mtggoldfish.requests.get")
     def test_get_archetype_decks_uses_split_connect_read_timeout(
@@ -417,21 +465,39 @@ class TestGetArchetypeStats:
 
     def test_parallel_fetch_preserves_archetype_mapping(self, temp_cache_dir):
         """Each archetype's decks must map back to that archetype, even when the
-        per-archetype fetches run concurrently and complete out of order."""
+        per-archetype fetches run concurrently and complete out of order.
+
+        Submission order is deterministically permuted relative to completion order
+        by blocking each fake fetch until the *last*-submitted archetype has been
+        entered, forcing out-of-order completion so a serial/positional mapping bug
+        would be caught."""
         archetypes = [
             {"name": "Rakdos Midrange", "href": "modern-rakdos-midrange"},
             {"name": "Amulet Titan", "href": "modern-amulet-titan"},
             {"name": "Burn", "href": "modern-burn"},
         ]
         today = datetime.now().strftime("%Y-%m-%d")
-        # One deck per archetype, tagged so we can verify the mapping survives.
+        two_days_ago = (datetime.now() - timedelta(days=2)).strftime("%Y-%m-%d")
+        # Each archetype has two decks: one today, one two days ago. The "two days
+        # ago" deck exercises a non-today lookback bucket; mixed casing on the date
+        # exercises the case-insensitive substring match.
         decks_by_href = {
-            a["href"]: [{"date": today, "name": a["name"], "tag": a["href"]}] for a in archetypes
+            a["href"]: [
+                {"date": today, "name": a["name"], "tag": a["href"]},
+                {"date": two_days_ago.upper(), "name": a["name"], "tag": a["href"]},
+            ]
+            for a in archetypes
         }
 
+        # Barrier of size N so all workers enter before any returns, then completion
+        # order is reversed relative to submission order via a per-href delay event.
+        barrier = threading.Barrier(len(archetypes))
+        order = [a["href"] for a in archetypes]
+
         def fake_get_archetype_decks(href):
-            # Reverse-order sleep so later hrefs finish first if run serially in
-            # submission order; the pool result must still match by archetype.
+            barrier.wait(timeout=5)
+            # Later-submitted hrefs sleep less, so they finish first -> out of order.
+            time.sleep(0.02 * order.index(href))
             return decks_by_href[href]
 
         cache_file = temp_cache_dir / "archetype_stats.json"
@@ -449,15 +515,136 @@ class TestGetArchetypeStats:
         for a in archetypes:
             entry = stats["modern"][a["name"]]
             assert entry["decks"] == decks_by_href[a["href"]]
-            # Today's lookback bucket should count the single tagged deck.
+            # Today's lookback bucket counts the single "today" deck.
             assert entry["results"][today] == 1
+            # A prior-day bucket counts the case-insensitively matched deck.
+            assert entry["results"][two_days_ago] == 1
         # Cache file written.
         assert cache_file.exists()
 
+    def test_get_archetype_stats_returns_fresh_cache_without_network(self, temp_cache_dir):
+        """A recent cache entry (< ONE_DAY_SECONDS old) is returned directly without
+        re-scraping, so neither get_archetypes nor get_archetype_decks is called."""
+        cache_file = temp_cache_dir / "archetype_stats.json"
+        cached_stats = {
+            "modern": {
+                "timestamp": time.time(),  # fresh
+                "Rakdos Midrange": {"decks": [], "results": {}},
+            }
+        }
+        cache_file.write_text(json.dumps(cached_stats))
 
-# NOTE: TestFetchDeckText tests were removed because they tested the old JSON-based
-# deck cache which was replaced with SQLite. These tests need to be rewritten to work
-# with the new SQLite-based deck cache system.
+        with (
+            patch.object(mtggoldfish, "get_archetypes") as mock_archetypes,
+            patch.object(mtggoldfish, "get_archetype_decks") as mock_decks,
+            patch.object(mtggoldfish, "ARCHETYPE_CACHE_FILE", cache_file),
+        ):
+            result = get_archetype_stats("modern")
+
+        assert result == cached_stats
+        mock_archetypes.assert_not_called()
+        mock_decks.assert_not_called()
+
+    def test_get_archetype_stats_recovers_from_corrupt_cache(self, temp_cache_dir):
+        """An unreadable (invalid JSON) cache is discarded and stats are recomputed
+        from the network path rather than crashing."""
+        cache_file = temp_cache_dir / "archetype_stats.json"
+        cache_file.write_text("not valid json{{{")
+
+        archetypes = [{"name": "Rakdos Midrange", "href": "modern-rakdos-midrange"}]
+        today = datetime.now().strftime("%Y-%m-%d")
+        decks = [{"date": today, "name": "Rakdos Midrange"}]
+
+        with (
+            patch.object(mtggoldfish, "get_archetypes", return_value=archetypes) as mock_archetypes,
+            patch.object(mtggoldfish, "get_archetype_decks", return_value=decks) as mock_decks,
+            patch.object(mtggoldfish, "ARCHETYPE_CACHE_FILE", cache_file),
+        ):
+            result = get_archetype_stats("modern")
+
+        # Recovered: recomputed instead of raising on the corrupt cache.
+        mock_archetypes.assert_called_once()
+        mock_decks.assert_called_once()
+        assert result["modern"]["Rakdos Midrange"]["decks"] == decks
+        assert result["modern"]["Rakdos Midrange"]["results"][today] == 1
+
+
+class TestFetchDeckText:
+    """Test fetch_deck_text function (SQLite-backed deck cache)."""
+
+    @patch("repositories.scrapers.mtggoldfish._ensure_cache_migration")
+    @patch("repositories.deck_text_cache.get_deck_cache")
+    def test_fetch_deck_text_cache_hit_no_download(self, mock_get_cache, _mock_migrate):
+        """A cache hit returns the cached text without hitting the visual page."""
+        cache = Mock()
+        cache.get.return_value = "4 Lightning Bolt"
+        mock_get_cache.return_value = cache
+
+        with patch(
+            "repositories.scrapers.mtggoldfish_visual.fetch_deck_text_from_visual_page"
+        ) as mock_visual:
+            result = mtggoldfish.fetch_deck_text("123456")
+
+        assert result == "4 Lightning Bolt"
+        mock_visual.assert_not_called()
+        cache.set.assert_not_called()
+        # source_filter=None maps to cache_source=None (any source).
+        cache.get.assert_called_once_with("123456", source=None)
+
+    @patch("repositories.scrapers.mtggoldfish._ensure_cache_migration")
+    @patch("repositories.deck_text_cache.get_deck_cache")
+    def test_fetch_deck_text_mtgo_filter_cache_miss_raises(self, mock_get_cache, _mock_migrate):
+        """source_filter='mtgo' with a cache miss must not fall back to MTGGoldfish
+        and instead raises ValueError."""
+        cache = Mock()
+        cache.get.return_value = None
+        mock_get_cache.return_value = cache
+
+        with patch(
+            "repositories.scrapers.mtggoldfish_visual.fetch_deck_text_from_visual_page"
+        ) as mock_visual:
+            with pytest.raises(ValueError, match="not available from MTGO source"):
+                mtggoldfish.fetch_deck_text("123456", source_filter="mtgo")
+
+        mock_visual.assert_not_called()
+        cache.set.assert_not_called()
+        cache.get.assert_called_once_with("123456", source="mtgo")
+
+    @patch("repositories.scrapers.mtggoldfish._ensure_cache_migration")
+    @patch("repositories.deck_text_cache.get_deck_cache")
+    def test_fetch_deck_text_visual_failure_wrapped_as_value_error(
+        self, mock_get_cache, _mock_migrate
+    ):
+        """A visual-page fetch exception is wrapped in ValueError and nothing is cached."""
+        cache = Mock()
+        cache.get.return_value = None
+        mock_get_cache.return_value = cache
+
+        with patch(
+            "repositories.scrapers.mtggoldfish_visual.fetch_deck_text_from_visual_page",
+            side_effect=RuntimeError("boom"),
+        ):
+            with pytest.raises(ValueError, match="Could not parse deck data"):
+                mtggoldfish.fetch_deck_text("123456")
+
+        cache.set.assert_not_called()
+
+    @patch("repositories.scrapers.mtggoldfish._ensure_cache_migration")
+    @patch("repositories.deck_text_cache.get_deck_cache")
+    def test_fetch_deck_text_successful_download_caches_result(self, mock_get_cache, _mock_migrate):
+        """On a cache miss the deck is downloaded and persisted with source='mtggoldfish'."""
+        cache = Mock()
+        cache.get.return_value = None
+        mock_get_cache.return_value = cache
+
+        with patch(
+            "repositories.scrapers.mtggoldfish_visual.fetch_deck_text_from_visual_page",
+            return_value="4 Lightning Bolt",
+        ):
+            result = mtggoldfish.fetch_deck_text("123456")
+
+        assert result == "4 Lightning Bolt"
+        cache.set.assert_called_once_with("123456", "4 Lightning Bolt", source="mtggoldfish")
 
 
 class TestDownloadDeck:

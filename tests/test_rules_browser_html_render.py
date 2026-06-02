@@ -60,6 +60,37 @@ def test_render_outline_applies_cross_ref_linkifier() -> None:
     assert '<a href="#702">rule 702.17</a>' in out
 
 
+def test_render_outline_converts_intra_paragraph_newline_to_br() -> None:
+    # A single newline within a paragraph (no blank line) is a deliberate
+    # soft break for multi-line examples and must become a literal <br>.
+    body = "702.9a First line\nsecond line of same paragraph"
+    sections = [_Sec(7, "Additional Rules", [_Sub("702", "Keyword Abilities", body)])]
+    out = render_outline_to_html(sections)
+    assert "First line<br>second line of same paragraph" in out
+    # Both lines stay inside a single paragraph (one <p>...</p> for the body).
+    assert out.count("<p>") == 1
+    # The leading rule-id anchor still forms despite the soft break.
+    assert '<a name="702.9a">702.9a</a>' in out
+
+
+def test_render_outline_linkifier_and_leading_rule_anchor_coexist() -> None:
+    # The linkifier runs BEFORE the per-rule anchoring pass (see
+    # _anchor_first_rule_id). A linkifier that rewrites text in the same
+    # paragraph as the leading rule id must not prevent the per-rule
+    # <a name="..."> anchor on that leading token from forming.
+    body = "702.9 Flying. See rule 702.17 for reach."
+
+    def linkifier(escaped: str) -> str:
+        return escaped.replace("rule 702.17", '<a href="#702">rule 702.17</a>')
+
+    sections = [_Sec(7, "Additional Rules", [_Sub("702", "Keyword Abilities", body)])]
+    out = render_outline_to_html(sections, cross_ref_linkifier=linkifier)
+    # Linkified cross-ref present...
+    assert '<a href="#702">rule 702.17</a>' in out
+    # ...alongside the leading rule-id name anchor in the same paragraph.
+    assert '<a name="702.9">702.9</a>' in out
+
+
 def test_render_outline_renders_section_title_with_number() -> None:
     sections = [_Sec(1, "Game Concepts", [])]
     out = render_outline_to_html(sections)

@@ -41,3 +41,23 @@ def test_find_opponent_names_ignores_non_match_titles(monkeypatch: pytest.Monkey
         lambda: ["MTGO Lobby", "Deck building", ""],
     )
     assert find_opponent_names() == []
+
+
+@pytest.mark.parametrize(
+    "titles",
+    [
+        ["Champion vs."],
+        ["vs."],
+        ["Champion vs. "],
+        ["Champion vs. Rival", "Lobby vs."],
+    ],
+)
+def test_find_opponent_names_skips_blank_opponents(
+    monkeypatch: pytest.MonkeyPatch, titles: Iterable[str]
+) -> None:
+    """A trailing 'vs.' yields an empty name that must not be emitted as an opponent."""
+    monkeypatch.setattr(
+        "utils.find_opponent_names.pygetwindow.getAllTitles",
+        lambda: list(titles),
+    )
+    assert "" not in find_opponent_names()
