@@ -2,10 +2,26 @@ from __future__ import annotations
 
 import importlib
 import importlib.util
-import sys
-from unittest.mock import MagicMock, patch
+from pathlib import Path
 
 import pytest
+
+# ``session_logic`` is a wx-free leaf module inside the
+# ``widgets.frames.app_frame`` package, whose ``__init__`` imports ``wx``
+# (unavailable off-Windows). Load it directly from source so the import does not
+# pull in the package ``__init__`` — same approach as ``test_deck_formatting``.
+_SESSION_LOGIC_PATH = (
+    Path(__file__).resolve().parents[1]
+    / "widgets"
+    / "frames"
+    / "app_frame"
+    / "handlers"
+    / "session_logic.py"
+)
+_spec = importlib.util.spec_from_file_location("_session_logic_under_test", _SESSION_LOGIC_PATH)
+_session_logic = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_session_logic)
+should_show_tutorial = _session_logic.should_show_tutorial
 
 
 @pytest.fixture
@@ -35,47 +51,45 @@ def test_set_automation_enabled_coerces_truthy_values(runtime_flags):
     assert runtime_flags.is_automation_enabled() is False
 
 
-_WX_AVAILABLE = importlib.util.find_spec("wx") is not None
-_requires_wx = pytest.mark.skipif(
-    not _WX_AVAILABLE or sys.platform != "win32",
-    reason="AppFrame tutorial-skip checks require wxPython (Windows-only)",
-)
+# --------------------------------------------------------------------------- #
+# Tutorial-gate decision (Humble Object): the pure predicate behind the wx
+# ``wx.CallAfter(self._open_tutorial)`` scheduling in
+# ``AppFrameHandlersMixin._restore_session_state``. Tested here with the real
+# function and the real ``runtime_flags`` flag — no wx, no mocked AppFrame.
+# --------------------------------------------------------------------------- #
 
 
-def _call_restore_session_state(is_automation: bool, tutorial_shown: bool):
-    """Invoke AppFrame._restore_session_state unbound with mocked collaborators."""
-    from widgets.frames.app_frame import AppFrame
-    from widgets.frames.app_frame.handlers import app_frame as handlers_module
-
-    frame = MagicMock()
-    frame.controller.zone_cards = {"main": [], "side": [], "out": []}
-    frame.controller.session_manager.restore_session_state.return_value = {
-        "left_mode": "research",
-    }
-    frame.controller.session_manager.is_tutorial_shown.return_value = tutorial_shown
-    frame.controller.card_repo.is_card_data_ready.return_value = True
-
-    with (
-        patch.object(handlers_module, "is_automation_enabled", return_value=is_automation),
-        patch.object(handlers_module, "wx") as wx_mock,
-    ):
-        AppFrame._restore_session_state(frame)
-        return wx_mock, frame
+def test_show_tutorial_when_not_shown_and_not_automation():
+    assert should_show_tutorial(tutorial_shown=False, automation_enabled=False) is True
 
 
-@_requires_wx
-def test_restore_session_state_schedules_tutorial_when_not_shown_and_not_automation():
-    wx_mock, frame = _call_restore_session_state(is_automation=False, tutorial_shown=False)
-    wx_mock.CallAfter.assert_called_once_with(frame._open_tutorial)
+def test_skip_tutorial_under_automation():
+    assert should_show_tutorial(tutorial_shown=False, automation_enabled=True) is False
 
 
-@_requires_wx
-def test_restore_session_state_skips_tutorial_under_automation():
-    wx_mock, _frame = _call_restore_session_state(is_automation=True, tutorial_shown=False)
-    wx_mock.CallAfter.assert_not_called()
+def test_skip_tutorial_when_already_shown():
+    assert should_show_tutorial(tutorial_shown=True, automation_enabled=False) is False
 
 
-@_requires_wx
-def test_restore_session_state_skips_tutorial_when_already_shown():
-    wx_mock, _frame = _call_restore_session_state(is_automation=False, tutorial_shown=True)
-    wx_mock.CallAfter.assert_not_called()
+def test_skip_tutorial_when_shown_and_automation():
+    assert should_show_tutorial(tutorial_shown=True, automation_enabled=True) is False
+
+
+def test_tutorial_gate_reads_live_automation_flag(runtime_flags):
+    """The gate honours the real process-wide automation flag set at startup."""
+    runtime_flags.set_automation_enabled(True)
+    assert (
+        should_show_tutorial(
+            tutorial_shown=False,
+            automation_enabled=runtime_flags.is_automation_enabled(),
+        )
+        is False
+    )
+    runtime_flags.set_automation_enabled(False)
+    assert (
+        should_show_tutorial(
+            tutorial_shown=False,
+            automation_enabled=runtime_flags.is_automation_enabled(),
+        )
+        is True
+    )
