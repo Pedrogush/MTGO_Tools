@@ -1,6 +1,11 @@
 import pytest
 
-from widgets.mana_icon_factory import ManaIconFactory, normalize_mana_query, tokenize_mana_symbols
+from widgets.mana_icon_factory import (
+    ManaIconFactory,
+    normalize_mana_query,
+    tokenize_mana_symbols,
+    type_global_mana_symbol,
+)
 
 wx = pytest.importorskip("wx")
 
@@ -144,3 +149,115 @@ def test_render_empty_cost_shows_placeholder(render_factory: ManaIconFactory) ->
         assert any(label.GetLabel() == "—" for label in labels)
     finally:
         frame.Destroy()
+
+
+def test_type_global_mana_symbol_empty_input_is_noop(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Empty/whitespace tokens normalize to "" and must skip the simulator entirely."""
+
+    def _fail() -> None:  # pragma: no cover - must never be reached
+        raise AssertionError("UIActionSimulator should not be constructed for empty input")
+
+    monkeypatch.setattr(wx, "UIActionSimulator", _fail)
+    # No simulator is constructed, so nothing is typed and no exception is raised.
+    assert type_global_mana_symbol("") is None
+    assert type_global_mana_symbol("   ") is None
+
+
+def test_type_global_mana_symbol_types_normalized_chars(monkeypatch: pytest.MonkeyPatch) -> None:
+    typed: list[int] = []
+
+    class _RecordingSimulator:
+        def Char(self, code: int) -> None:
+            typed.append(code)
+
+    monkeypatch.setattr(wx, "UIActionSimulator", _RecordingSimulator)
+    type_global_mana_symbol("2w")
+    # The token is normalized to "{2}{W}" before being typed character by character.
+    assert "".join(chr(c) for c in typed) == "{2}{W}"
+
+
+# ============= SvgRendererMixin (transparent PNGs) =============
+
+
+@pytest.fixture
+def svg_factory(wx_app, tmp_path) -> ManaIconFactory:
+    factory = ManaIconFactory(icon_size=16)
+    # Pin the rasterizer cache to tmp_path so PNGs land in the test sandbox
+    # instead of a process-wide temp dir.
+    factory._rasterizer_cache_dir = tmp_path
+    return factory
+
+
+def test_transparent_png_path_renders_basic_symbol(svg_factory: ManaIconFactory) -> None:
+    path = svg_factory.transparent_png_path("{W}", height=20)
+    assert path is not None
+    assert path.exists()
+    assert path.suffix == ".png"
+    img = wx.Image(str(path), wx.BITMAP_TYPE_PNG)
+    assert (img.GetWidth(), img.GetHeight()) == (20, 20)
+    assert img.HasAlpha()
+
+
+def test_transparent_png_path_renders_hybrid_symbol(svg_factory: ManaIconFactory) -> None:
+    path = svg_factory.transparent_png_path("{U/B}", height=20)
+    assert path is not None and path.exists()
+    img = wx.Image(str(path), wx.BITMAP_TYPE_PNG)
+    assert (img.GetWidth(), img.GetHeight()) == (20, 20)
+
+
+def test_transparent_png_path_renders_standalone_energy(svg_factory: ManaIconFactory) -> None:
+    path = svg_factory.transparent_png_path("{E}", height=20)
+    assert path is not None and path.exists()
+    img = wx.Image(str(path), wx.BITMAP_TYPE_PNG)
+    assert (img.GetWidth(), img.GetHeight()) == (20, 20)
+
+
+def test_transparent_png_path_renders_phyrexian_symbol(svg_factory: ManaIconFactory) -> None:
+    path = svg_factory.transparent_png_path("{W/P}", height=20)
+    assert path is not None and path.exists()
+    img = wx.Image(str(path), wx.BITMAP_TYPE_PNG)
+    assert (img.GetWidth(), img.GetHeight()) == (20, 20)
+
+
+def test_transparent_png_path_non_positive_height_is_none(svg_factory: ManaIconFactory) -> None:
+    assert svg_factory.transparent_png_path("{W}", height=0) is None
+    assert svg_factory.transparent_png_path("{W}", height=-5) is None
+
+
+def test_transparent_png_path_empty_token_is_none(svg_factory: ManaIconFactory) -> None:
+    assert svg_factory.transparent_png_path("", height=20) is None
+    assert svg_factory.transparent_png_path("{}", height=20) is None
+
+
+def test_transparent_png_path_is_cached(svg_factory: ManaIconFactory) -> None:
+    first = svg_factory.transparent_png_path("{G}", height=20)
+    assert first is not None
+    # A second call at the same height returns the cached path object.
+    assert svg_factory.transparent_png_path("{G}", height=20) == first
+    # A different height produces a distinct cache entry / file.
+    other = svg_factory.transparent_png_path("{G}", height=24)
+    assert other is not None and other != first
+
+
+# ============= BitmapRendererMixin standalone / hybrid =============
+
+
+def test_bitmap_for_symbol_renders_standalone_energy(render_factory: ManaIconFactory) -> None:
+    """{E} takes the no-circle standalone branch."""
+    bmp = render_factory.bitmap_for_symbol("{E}")
+    assert bmp is not None and bmp.IsOk()
+    assert (bmp.GetWidth(), bmp.GetHeight()) == (16, 16)
+
+
+def test_bitmap_for_symbol_renders_hybrid(render_factory: ManaIconFactory) -> None:
+    """{W/U} takes the split-circle hybrid branch."""
+    bmp = render_factory.bitmap_for_symbol("{W/U}")
+    assert bmp is not None and bmp.IsOk()
+    assert (bmp.GetWidth(), bmp.GetHeight()) == (16, 16)
+
+
+def test_bitmap_for_cost_with_hybrid_and_standalone(render_factory: ManaIconFactory) -> None:
+    composed = render_factory.bitmap_for_cost("{W/U}{E}")
+    assert composed is not None and composed.IsOk()
+    assert composed.GetHeight() == 16
+    assert composed.GetWidth() > 16
