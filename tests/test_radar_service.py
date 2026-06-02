@@ -5,27 +5,48 @@ from unittest.mock import MagicMock
 import pytest
 
 from repositories.radar_repository import RadarRepository
+from services.deck_service import DeckService
 from services.radar_service import CardFrequency, RadarData, RadarService
 
 
 @pytest.fixture
 def mock_metagame_repo():
-    """Mock metagame repository."""
+    """Mock metagame repository.
+
+    Only the network-facing methods (``get_decks_for_archetype`` and
+    ``download_deck_content``) are exercised, so a plain mock standing in for
+    the scraping layer is the only test double the radar tests need.
+    """
     repo = MagicMock()
     return repo
 
 
 @pytest.fixture
-def mock_deck_service():
-    """Mock deck service."""
-    service = MagicMock()
-    return service
+def deck_service(mock_metagame_repo):
+    """Real DeckService whose only used method is the pure ``analyze_deck`` parser.
+
+    The repositories are mocked because ``analyze_deck`` never touches them; the
+    radar path feeds it the decklist strings returned by ``download_deck_content``.
+    Using the real parser means the tests verify actual parsing behaviour rather
+    than a reimplemented fake.
+    """
+    return DeckService(deck_repository=MagicMock(), metagame_repository=mock_metagame_repo)
 
 
 @pytest.fixture
-def radar_service(mock_metagame_repo, mock_deck_service):
-    """RadarService with mocked dependencies."""
-    return RadarService(metagame_repository=mock_metagame_repo, deck_service=mock_deck_service)
+def radar_repo(tmp_path):
+    """tmp_path-backed RadarRepository so tests never read the real global cache."""
+    return RadarRepository(tmp_path / "radar_cache.db")
+
+
+@pytest.fixture
+def radar_service(mock_metagame_repo, deck_service, radar_repo):
+    """RadarService wired with the real deck parser and an isolated radar cache."""
+    return RadarService(
+        metagame_repository=mock_metagame_repo,
+        deck_service=deck_service,
+        radar_repository=radar_repo,
+    )
 
 
 @pytest.fixture
@@ -88,52 +109,17 @@ def test_calculate_frequencies_basic():
     assert consider.copy_distribution == {4: 1, 0: 2}
 
 
-def test_calculate_radar_success(
-    radar_service, mock_metagame_repo, mock_deck_service, sample_archetype, sample_decks
-):
-    """Test successful radar calculation."""
-    # Setup mocks
+def test_calculate_radar_success(radar_service, mock_metagame_repo, sample_archetype, sample_decks):
+    """Test successful radar calculation using the real deck parser."""
     mock_metagame_repo.get_decks_for_archetype.return_value = sample_decks
 
-    # Mock deck downloads
+    # Real decklist strings; the real DeckService.analyze_deck parses them.
     deck_contents = [
         "4 Lightning Bolt\n3 Island\n\nSideboard\n2 Counterspell",
         "4 Lightning Bolt\n4 Island\n\nSideboard\n1 Counterspell",
         "4 Lightning Bolt\n2 Island\n\nSideboard\n3 Counterspell",
     ]
     mock_metagame_repo.download_deck_content.side_effect = deck_contents
-
-    # Mock deck analysis
-    def mock_analyze(content):
-        lines = content.split("\n")
-        mainboard = []
-        sideboard = []
-        is_side = False
-
-        for line in lines:
-            if not line.strip():
-                is_side = True
-                continue
-            if line.lower() == "sideboard":
-                continue
-
-            parts = line.split(" ", 1)
-            if len(parts) == 2:
-                count = int(parts[0])
-                name = parts[1]
-                if is_side:
-                    sideboard.append((name, count))
-                else:
-                    mainboard.append((name, count))
-
-        return {
-            "mainboard_cards": mainboard,
-            "sideboard_cards": sideboard,
-            "mainboard_count": sum(c for _, c in mainboard),
-            "sideboard_count": sum(c for _, c in sideboard),
-        }
-
-    mock_deck_service.analyze_deck.side_effect = mock_analyze
 
     # Calculate radar
     radar = radar_service.calculate_radar(sample_archetype, "Modern")
@@ -164,7 +150,7 @@ def test_calculate_radar_success(
     assert counter.card_name == "Counterspell"
 
 
-def test_calculate_radar_uses_precomputed_snapshot(tmp_path, mock_metagame_repo, mock_deck_service):
+def test_calculate_radar_uses_precomputed_snapshot(tmp_path, mock_metagame_repo, deck_service):
     """Test that locally cached precomputed radars short-circuit live calculation."""
     repo = RadarRepository(tmp_path / "radar_cache.db")
     repo.replace_radar(
@@ -192,7 +178,7 @@ def test_calculate_radar_uses_precomputed_snapshot(tmp_path, mock_metagame_repo,
     )
     service = RadarService(
         metagame_repository=mock_metagame_repo,
-        deck_service=mock_deck_service,
+        deck_service=deck_service,
         radar_repository=repo,
     )
 
@@ -208,7 +194,7 @@ def test_calculate_radar_uses_precomputed_snapshot(tmp_path, mock_metagame_repo,
 
 
 def test_calculate_radar_handles_failures(
-    radar_service, mock_metagame_repo, mock_deck_service, sample_archetype, sample_decks
+    radar_service, mock_metagame_repo, sample_archetype, sample_decks
 ):
     """Test radar calculation with some deck failures."""
     mock_metagame_repo.get_decks_for_archetype.return_value = sample_decks
@@ -221,11 +207,6 @@ def test_calculate_radar_handles_failures(
 
     mock_metagame_repo.download_deck_content.side_effect = download_side_effect
 
-    mock_deck_service.analyze_deck.return_value = {
-        "mainboard_cards": [("Lightning Bolt", 4)],
-        "sideboard_cards": [("Counterspell", 2)],
-    }
-
     # Calculate radar
     radar = radar_service.calculate_radar(sample_archetype, "Modern")
 
@@ -235,7 +216,7 @@ def test_calculate_radar_handles_failures(
 
 
 def test_calculate_radar_falls_back_to_live_when_precomputed_snapshot_is_empty(
-    tmp_path, mock_metagame_repo, mock_deck_service
+    tmp_path, mock_metagame_repo, deck_service
 ):
     """Empty precomputed snapshots should not block live radar scraping."""
     repo = RadarRepository(tmp_path / "radar_cache.db")
@@ -257,14 +238,10 @@ def test_calculate_radar_falls_back_to_live_when_precomputed_snapshot_is_empty(
     mock_metagame_repo.download_deck_content.return_value = (
         "4 Lightning Bolt\n\nSideboard\n2 Counterspell"
     )
-    mock_deck_service.analyze_deck.return_value = {
-        "mainboard_cards": [("Lightning Bolt", 4)],
-        "sideboard_cards": [("Counterspell", 2)],
-    }
 
     service = RadarService(
         metagame_repository=mock_metagame_repo,
-        deck_service=mock_deck_service,
+        deck_service=deck_service,
         radar_repository=repo,
     )
 
@@ -394,19 +371,13 @@ def test_get_radar_card_names():
     assert sideboard == {"Card C", "Card D"}
 
 
-def test_calculate_radar_with_max_decks(
-    radar_service, mock_metagame_repo, mock_deck_service, sample_archetype
-):
+def test_calculate_radar_with_max_decks(radar_service, mock_metagame_repo, sample_archetype):
     """Test radar calculation with max_decks limit."""
     # Create 10 decks
     many_decks = [{"name": f"Deck {i}", "url": f"https://example.com/deck{i}"} for i in range(10)]
     mock_metagame_repo.get_decks_for_archetype.return_value = many_decks
 
     mock_metagame_repo.download_deck_content.return_value = "4 Lightning Bolt"
-    mock_deck_service.analyze_deck.return_value = {
-        "mainboard_cards": [("Lightning Bolt", 4)],
-        "sideboard_cards": [],
-    }
 
     # Calculate with max_decks=5
     radar = radar_service.calculate_radar(sample_archetype, "Modern", max_decks=5)
@@ -417,7 +388,7 @@ def test_calculate_radar_with_max_decks(
 
 
 def test_calculate_radar_downloads_decks_concurrently(
-    radar_service, mock_metagame_repo, mock_deck_service, sample_archetype
+    radar_service, mock_metagame_repo, sample_archetype
 ):
     """Cache-missing deck downloads should run in parallel, not one at a time."""
     import threading
@@ -441,10 +412,6 @@ def test_calculate_radar_downloads_decks_concurrently(
         return "4 Lightning Bolt"
 
     mock_metagame_repo.download_deck_content.side_effect = slow_download
-    mock_deck_service.analyze_deck.return_value = {
-        "mainboard_cards": [("Lightning Bolt", 4)],
-        "sideboard_cards": [],
-    }
 
     progress_calls = []
 
@@ -465,17 +432,13 @@ def test_calculate_radar_downloads_decks_concurrently(
 
 
 def test_calculate_radar_progress_callback_can_cancel(
-    radar_service, mock_metagame_repo, mock_deck_service, sample_archetype
+    radar_service, mock_metagame_repo, sample_archetype
 ):
     """A progress callback raising should abort generation and propagate."""
     many_decks = [{"name": f"Deck {i}", "url": f"https://example.com/deck{i}"} for i in range(8)]
     mock_metagame_repo.get_decks_for_archetype.return_value = many_decks
 
     mock_metagame_repo.download_deck_content.return_value = "4 Lightning Bolt"
-    mock_deck_service.analyze_deck.return_value = {
-        "mainboard_cards": [("Lightning Bolt", 4)],
-        "sideboard_cards": [],
-    }
 
     calls = []
 
@@ -492,9 +455,7 @@ def test_calculate_radar_progress_callback_can_cancel(
     assert len(calls) == 1
 
 
-def test_calculate_radar_no_decks_found(
-    radar_service, mock_metagame_repo, mock_deck_service, sample_archetype
-):
+def test_calculate_radar_no_decks_found(radar_service, mock_metagame_repo, sample_archetype):
     """An archetype with no decks returns an empty, zero-count radar."""
     mock_metagame_repo.get_decks_for_archetype.return_value = []
 
@@ -511,12 +472,13 @@ def test_calculate_radar_no_decks_found(
 
 
 def test_calculate_radar_all_decks_fail(
-    radar_service, mock_metagame_repo, mock_deck_service, sample_archetype, sample_decks
+    radar_service, mock_metagame_repo, sample_archetype, sample_decks
 ):
-    """When every deck fails to analyze, the radar reports zero analyzed/all failed."""
+    """When every deck fails to download, the radar reports zero analyzed/all failed."""
     mock_metagame_repo.get_decks_for_archetype.return_value = sample_decks
 
-    # Every download raises, so successful_decks stays at 0.
+    # Every download raises, so successful_decks stays at 0 and the parser is
+    # never reached.
     mock_metagame_repo.download_deck_content.side_effect = Exception("Download failed")
 
     radar = radar_service.calculate_radar(sample_archetype, "Modern")
@@ -525,12 +487,10 @@ def test_calculate_radar_all_decks_fail(
     assert radar.decks_failed == len(sample_decks)
     assert radar.mainboard_cards == []
     assert radar.sideboard_cards == []
-    # analyze_deck is never reached because the download itself failed.
-    mock_deck_service.analyze_deck.assert_not_called()
 
 
 def test_calculate_radar_rejects_precomputed_snapshot_larger_than_max_decks(
-    tmp_path, mock_metagame_repo, mock_deck_service
+    tmp_path, mock_metagame_repo, deck_service
 ):
     """A cached snapshot with more decks than max_decks falls back to live scraping."""
     repo = RadarRepository(tmp_path / "radar_cache.db")
@@ -561,14 +521,10 @@ def test_calculate_radar_rejects_precomputed_snapshot_larger_than_max_decks(
         {"name": "Deck 1", "url": "https://example.com/deck1"}
     ]
     mock_metagame_repo.download_deck_content.return_value = "4 Lightning Bolt"
-    mock_deck_service.analyze_deck.return_value = {
-        "mainboard_cards": [("Lightning Bolt", 4)],
-        "sideboard_cards": [],
-    }
 
     service = RadarService(
         metagame_repository=mock_metagame_repo,
-        deck_service=mock_deck_service,
+        deck_service=deck_service,
         radar_repository=repo,
     )
 
