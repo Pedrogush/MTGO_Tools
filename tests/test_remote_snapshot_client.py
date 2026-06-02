@@ -1,4 +1,12 @@
-"""Tests for RemoteSnapshotClient."""
+"""Tests for RemoteSnapshotClient.
+
+These drive the public API through the *real* manifest -> artifact -> disk ->
+cache stack and stub only ``_http_get_json`` — the network boundary the client
+owns (guideline 2: mock only network/scraping, never the UUT's own internals).
+A small URL->payload routing table stands in for the remote server, so every
+test exercises real key lookups, ``.lower()`` casing, on-disk staging, and
+cache-vs-fetch decisions.
+"""
 
 from __future__ import annotations
 
@@ -7,13 +15,18 @@ import time
 
 import pytest
 
-from repositories.remote_snapshot_client import RemoteSnapshotClient, reset_remote_snapshot_client
+from repositories.remote_snapshot_client import (
+    RemoteSnapshotClient,
+    get_remote_snapshot_client,
+    reset_remote_snapshot_client,
+)
 
 # ---------------------------------------------------------------------------
 # Helpers / fixtures
 # ---------------------------------------------------------------------------
 
 _SCHEMA = "1"
+_BASE_URL = "https://example.invalid"
 
 
 def _manifest(formats: dict | None = None) -> dict:
@@ -53,11 +66,46 @@ def client(tmp_path):
     cache_dir = tmp_path / "snap"
     manifest_file = cache_dir / "manifest.json"
     return RemoteSnapshotClient(
-        base_url="https://example.invalid",
+        base_url=_BASE_URL,
         cache_dir=cache_dir,
         manifest_file=manifest_file,
         max_age=3600,
     )
+
+
+class _FakeServer:
+    """Stands in for the remote HTTP server.
+
+    Routes URLs (``{base}/{path}``) to canned JSON payloads and records how many
+    times each URL was fetched, so tests can assert real cache behaviour through
+    the live stack instead of stubbing the client's own internals.
+    """
+
+    def __init__(self, base_url: str):
+        self._base = base_url.rstrip("/")
+        self.payloads: dict[str, dict | None] = {}
+        self.calls: dict[str, int] = {}
+
+    def serve(self, path: str, payload: dict | None) -> None:
+        self.payloads[f"{self._base}/{path}"] = payload
+
+    def get(self, url: str) -> dict | None:
+        self.calls[url] = self.calls.get(url, 0) + 1
+        return self.payloads.get(url)
+
+    def call_count(self, path: str) -> int:
+        return self.calls.get(f"{self._base}/{path}", 0)
+
+
+@pytest.fixture
+def server(client, monkeypatch):
+    """A fake remote server wired into the real ``_http_get_json`` seam."""
+    fake = _FakeServer(client.base_url)
+    monkeypatch.setattr(client, "_http_get_json", fake.get)
+    return fake
+
+
+_MANIFEST_PATH = "data/latest/manifest.json"
 
 
 def _write_manifest_cache(client: RemoteSnapshotClient, manifest: dict) -> None:
@@ -125,138 +173,164 @@ def test_fetch_manifest_caches_on_success(client, monkeypatch):
     assert cached["manifest"]["formats"]["modern"]["archetypes_url"] == "x"
 
 
+def test_get_manifest_caches_across_calls(client, server):
+    """The real ``_get_manifest`` should fetch once, then serve from disk."""
+    server.serve(_MANIFEST_PATH, _manifest({"modern": {"archetypes_url": "x"}}))
+
+    first = client._get_manifest()
+    second = client._get_manifest()
+
+    assert first is not None
+    assert second is not None
+    assert "modern" in second["formats"]
+    assert server.call_count(_MANIFEST_PATH) == 1, "fresh cached manifest must not refetch"
+
+
 # ---------------------------------------------------------------------------
-# get_archetypes_for_format
+# get_archetypes_for_format — through the real manifest+artifact stack
 # ---------------------------------------------------------------------------
 
 
-def test_get_archetypes_returns_none_when_manifest_unavailable(client, monkeypatch):
-    monkeypatch.setattr(client, "_get_manifest", lambda: None)
+def test_get_archetypes_returns_none_when_manifest_unavailable(client, server):
+    server.serve(_MANIFEST_PATH, None)  # network returns nothing
 
     assert client.get_archetypes_for_format("modern") is None
 
 
-def test_get_archetypes_returns_none_for_unknown_format(client, monkeypatch):
-    monkeypatch.setattr(client, "_get_manifest", lambda: _manifest({}))
+def test_get_archetypes_returns_none_for_unknown_format(client, server):
+    server.serve(_MANIFEST_PATH, _manifest({}))
 
     assert client.get_archetypes_for_format("vintage") is None
 
 
-def test_get_archetypes_returns_list_from_artifact(client, monkeypatch):
+def test_get_archetypes_returns_list_through_full_stack(client, server):
     artifact_path = "data/latest/modern/archetypes.json"
-    manifest = _manifest({"modern": {"archetypes_url": artifact_path}})
-    monkeypatch.setattr(client, "_get_manifest", lambda: manifest)
+    server.serve(_MANIFEST_PATH, _manifest({"modern": {"archetypes_url": artifact_path}}))
 
     expected = [{"name": "UR Murktide", "href": "/archetype/modern-ur-murktide"}]
-    artifact = _archetypes_artifact(expected)
-    monkeypatch.setattr(client, "_get_artifact", lambda _path: artifact)
+    server.serve(artifact_path, _archetypes_artifact(expected))
 
     result = client.get_archetypes_for_format("modern")
 
     assert result == expected
+    # The artifact must have been staged to disk by the real download path.
+    assert client._local_artifact_path(artifact_path).exists()
 
 
-def test_get_archetypes_is_case_insensitive(client, monkeypatch):
+def test_get_archetypes_is_case_insensitive(client, server):
     artifact_path = "data/latest/modern/archetypes.json"
-    manifest = _manifest({"modern": {"archetypes_url": artifact_path}})
-    monkeypatch.setattr(client, "_get_manifest", lambda: manifest)
+    server.serve(_MANIFEST_PATH, _manifest({"modern": {"archetypes_url": artifact_path}}))
 
     archetypes = [{"name": "UR Murktide"}]
-    monkeypatch.setattr(client, "_get_artifact", lambda _p: _archetypes_artifact(archetypes))
+    server.serve(artifact_path, _archetypes_artifact(archetypes))
 
     assert client.get_archetypes_for_format("Modern") == archetypes
     assert client.get_archetypes_for_format("MODERN") == archetypes
 
 
-def test_get_archetypes_returns_none_when_artifact_unavailable(client, monkeypatch):
+def test_get_archetypes_returns_none_when_artifact_unavailable(client, server):
     artifact_path = "data/latest/modern/archetypes.json"
-    manifest = _manifest({"modern": {"archetypes_url": artifact_path}})
-    monkeypatch.setattr(client, "_get_manifest", lambda: manifest)
-    monkeypatch.setattr(client, "_get_artifact", lambda _p: None)
+    server.serve(_MANIFEST_PATH, _manifest({"modern": {"archetypes_url": artifact_path}}))
+    server.serve(artifact_path, None)  # artifact fetch fails
 
     assert client.get_archetypes_for_format("modern") is None
 
 
-def test_get_archetypes_returns_none_when_url_missing(client, monkeypatch):
+def test_get_archetypes_returns_none_when_url_missing(client, server):
     # Format entry exists but has no archetypes_url.
-    manifest = _manifest({"modern": {"metagame_stats_url": "x"}})
-    monkeypatch.setattr(client, "_get_manifest", lambda: manifest)
+    server.serve(_MANIFEST_PATH, _manifest({"modern": {"metagame_stats_url": "x"}}))
 
     assert client.get_archetypes_for_format("modern") is None
 
 
 @pytest.mark.parametrize("bad_archetypes", [{"UR Murktide": {}}, "not-a-list", 42])
-def test_get_archetypes_returns_none_on_unexpected_shape(client, monkeypatch, bad_archetypes):
+def test_get_archetypes_returns_none_on_unexpected_shape(client, server, bad_archetypes):
     artifact_path = "data/latest/modern/archetypes.json"
-    manifest = _manifest({"modern": {"archetypes_url": artifact_path}})
-    monkeypatch.setattr(client, "_get_manifest", lambda: manifest)
-    monkeypatch.setattr(client, "_get_artifact", lambda _p: _archetypes_artifact(bad_archetypes))
+    server.serve(_MANIFEST_PATH, _manifest({"modern": {"archetypes_url": artifact_path}}))
+    server.serve(artifact_path, _archetypes_artifact(bad_archetypes))
 
     assert client.get_archetypes_for_format("modern") is None
 
 
 # ---------------------------------------------------------------------------
-# get_metagame_stats_for_format
+# get_metagame_stats_for_format — through the real manifest+artifact stack
 # ---------------------------------------------------------------------------
 
 
-def test_get_stats_returns_none_when_no_stats_url(client, monkeypatch):
-    manifest = _manifest({"modern": {"archetypes_url": "x"}})  # no metagame_stats_url
-    monkeypatch.setattr(client, "_get_manifest", lambda: manifest)
+def test_get_stats_returns_none_when_no_stats_url(client, server):
+    server.serve(_MANIFEST_PATH, _manifest({"modern": {"archetypes_url": "x"}}))
 
     assert client.get_metagame_stats_for_format("modern") is None
 
 
-def test_get_stats_normalises_to_expected_shape(client, monkeypatch):
+def test_get_stats_normalises_to_expected_shape(client, server):
     artifact_path = "data/latest/modern/metagame_stats.json"
-    manifest = _manifest({"modern": {"metagame_stats_url": artifact_path}})
-    monkeypatch.setattr(client, "_get_manifest", lambda: manifest)
+    server.serve(_MANIFEST_PATH, _manifest({"modern": {"metagame_stats_url": artifact_path}}))
 
     raw_archetypes = {
         "UR Murktide": {"results": {"2025-03-24": 5, "2025-03-23": 3}},
         "Amulet Titan": {"results": {"2025-03-24": 2}},
     }
-    monkeypatch.setattr(client, "_get_artifact", lambda _p: _stats_artifact(raw_archetypes))
+    server.serve(artifact_path, _stats_artifact(raw_archetypes))
 
+    before = time.time()
     result = client.get_metagame_stats_for_format("modern")
+    after = time.time()
 
     assert result is not None
     assert "modern" in result
     fmt_data = result["modern"]
-    assert "timestamp" in fmt_data
+    timestamp = fmt_data["timestamp"]
+    assert isinstance(timestamp, float)
+    assert before <= timestamp <= after, "timestamp should be the current time"
     assert fmt_data["UR Murktide"]["results"]["2025-03-24"] == 5
     assert fmt_data["Amulet Titan"]["results"]["2025-03-24"] == 2
 
 
-def test_get_stats_returns_none_when_manifest_unavailable(client, monkeypatch):
-    monkeypatch.setattr(client, "_get_manifest", lambda: None)
+def test_get_stats_returns_none_when_manifest_unavailable(client, server):
+    server.serve(_MANIFEST_PATH, None)
 
     assert client.get_metagame_stats_for_format("modern") is None
 
 
-def test_get_stats_returns_none_for_unknown_format(client, monkeypatch):
-    monkeypatch.setattr(client, "_get_manifest", lambda: _manifest({}))
+def test_get_stats_returns_none_for_unknown_format(client, server):
+    server.serve(_MANIFEST_PATH, _manifest({}))
 
     assert client.get_metagame_stats_for_format("vintage") is None
 
 
-def test_get_stats_returns_none_when_artifact_unavailable(client, monkeypatch):
+def test_get_stats_returns_none_when_artifact_unavailable(client, server):
     artifact_path = "data/latest/modern/metagame_stats.json"
-    manifest = _manifest({"modern": {"metagame_stats_url": artifact_path}})
-    monkeypatch.setattr(client, "_get_manifest", lambda: manifest)
-    monkeypatch.setattr(client, "_get_artifact", lambda _p: None)
+    server.serve(_MANIFEST_PATH, _manifest({"modern": {"metagame_stats_url": artifact_path}}))
+    server.serve(artifact_path, None)
 
     assert client.get_metagame_stats_for_format("modern") is None
 
 
 @pytest.mark.parametrize("bad_archetypes", [[], "not-a-dict", 42])
-def test_get_stats_returns_none_on_unexpected_shape(client, monkeypatch, bad_archetypes):
+def test_get_stats_returns_none_on_unexpected_shape(client, server, bad_archetypes):
     artifact_path = "data/latest/modern/metagame_stats.json"
-    manifest = _manifest({"modern": {"metagame_stats_url": artifact_path}})
-    monkeypatch.setattr(client, "_get_manifest", lambda: manifest)
-    monkeypatch.setattr(client, "_get_artifact", lambda _p: _stats_artifact(bad_archetypes))
+    server.serve(_MANIFEST_PATH, _manifest({"modern": {"metagame_stats_url": artifact_path}}))
+    server.serve(artifact_path, _stats_artifact(bad_archetypes))
 
     assert client.get_metagame_stats_for_format("modern") is None
+
+
+# ---------------------------------------------------------------------------
+# is_available — exercises the real manifest stack
+# ---------------------------------------------------------------------------
+
+
+def test_is_available_true_when_manifest_fetches(client, server):
+    server.serve(_MANIFEST_PATH, _manifest({"modern": {"archetypes_url": "x"}}))
+
+    assert client.is_available() is True
+
+
+def test_is_available_false_when_manifest_missing(client, server):
+    server.serve(_MANIFEST_PATH, None)
+
+    assert client.is_available() is False
 
 
 # ---------------------------------------------------------------------------
@@ -264,26 +338,26 @@ def test_get_stats_returns_none_on_unexpected_shape(client, monkeypatch, bad_arc
 # ---------------------------------------------------------------------------
 
 
-def test_artifact_served_from_disk_cache_when_fresh(client, monkeypatch):
+def test_artifact_served_from_disk_cache_when_fresh(client, server):
     artifact_path = "data/latest/modern/archetypes.json"
     artifact = _archetypes_artifact([{"name": "Living End"}])
     _write_artifact(client, artifact_path, artifact)
 
-    calls = []
-    monkeypatch.setattr(client, "_download_artifact", lambda *_: calls.append(1) or None)
+    # Serve a *different* body so any network hit would be detectable.
+    server.serve(artifact_path, _archetypes_artifact([{"name": "UR Murktide"}]))
 
     result = client._get_artifact(artifact_path)
 
-    assert result is not None
-    assert calls == [], "should not re-download a fresh artifact"
+    assert result == artifact, "fresh on-disk artifact must be returned verbatim"
+    assert server.call_count(artifact_path) == 0, "should not re-download a fresh artifact"
 
 
-def test_artifact_redownloaded_when_stale(client, monkeypatch):
+def test_artifact_redownloaded_when_stale(client, server):
     import os
 
     artifact_path = "data/latest/modern/archetypes.json"
-    # On-disk (stale) payload differs from the freshly downloaded one, so the
-    # returned value can only have come from the download path.
+    # On-disk (stale) payload differs from the served one, so the returned value
+    # can only have come from the download path.
     stale_artifact = _archetypes_artifact([{"name": "Living End"}])
     fresh_artifact = _archetypes_artifact([{"name": "UR Murktide"}])
     local = client._local_artifact_path(artifact_path)
@@ -294,21 +368,15 @@ def test_artifact_redownloaded_when_stale(client, monkeypatch):
     old_time = time.time() - client.max_age - 1
     os.utime(local, (old_time, old_time))
 
-    calls = []
-
-    def fake_download(_path, _local):
-        calls.append(1)
-        return fresh_artifact
-
-    monkeypatch.setattr(client, "_download_artifact", fake_download)
+    server.serve(artifact_path, fresh_artifact)
 
     result = client._get_artifact(artifact_path)
 
-    assert calls == [1], "stale artifact should trigger exactly one re-download"
+    assert server.call_count(artifact_path) == 1, "stale artifact should trigger one re-download"
     assert result == fresh_artifact
 
 
-def test_artifact_redownloaded_when_cache_corrupt(client, monkeypatch):
+def test_artifact_redownloaded_when_cache_corrupt(client, server):
     # A fresh-but-corrupt cached artifact must fall through to a re-download.
     artifact_path = "data/latest/modern/archetypes.json"
     local = client._local_artifact_path(artifact_path)
@@ -316,17 +384,11 @@ def test_artifact_redownloaded_when_cache_corrupt(client, monkeypatch):
     local.write_text("{not valid json", encoding="utf-8")  # fresh mtime, invalid body
 
     fresh_artifact = _archetypes_artifact([{"name": "UR Murktide"}])
-    calls = []
-
-    def fake_download(_path, _local):
-        calls.append(1)
-        return fresh_artifact
-
-    monkeypatch.setattr(client, "_download_artifact", fake_download)
+    server.serve(artifact_path, fresh_artifact)
 
     result = client._get_artifact(artifact_path)
 
-    assert calls == [1], "corrupt cached artifact should trigger a re-download"
+    assert server.call_count(artifact_path) == 1, "corrupt cached artifact should re-download"
     assert result == fresh_artifact
 
 
@@ -352,6 +414,27 @@ def test_download_artifact_writes_to_disk(client, monkeypatch):
     assert result is not None
     assert local.exists()
     assert json.loads(local.read_text())["archetypes"][0]["name"] == "UR Murktide"
+
+
+# ---------------------------------------------------------------------------
+# Singleton accessor
+# ---------------------------------------------------------------------------
+
+
+def test_get_remote_snapshot_client_returns_singleton():
+    first = get_remote_snapshot_client()
+    second = get_remote_snapshot_client()
+
+    assert isinstance(first, RemoteSnapshotClient)
+    assert first is second, "accessor should return the shared instance"
+
+
+def test_reset_remote_snapshot_client_clears_singleton():
+    first = get_remote_snapshot_client()
+    reset_remote_snapshot_client()
+    second = get_remote_snapshot_client()
+
+    assert first is not second, "reset must force a fresh instance"
 
 
 # ---------------------------------------------------------------------------
