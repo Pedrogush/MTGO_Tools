@@ -16,9 +16,11 @@ import pytest
 from services.comp_rules_service import (
     CompRulesService,
     find_latest_rules_url,
+    get_comp_rules_service,
     linkify_cross_refs,
     parse_keywords,
     parse_outline,
+    reset_comp_rules_service,
 )
 
 # A minimal-but-faithful fixture: TOC at top (which must be skipped), then the
@@ -246,6 +248,7 @@ def test_get_keyword_lookup_memoizes_until_mtime_changes(tmp_path: Path) -> None
 
 def _make_service_with_stub_http(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
     landing_html: str | None,
     txt_bytes: bytes | None,
 ) -> CompRulesService:
@@ -255,9 +258,10 @@ def _make_service_with_stub_http(
         landing_url="https://example.invalid/rules",
     )
 
-    # Monkey-patch the module-level fetchers via the service instance — but the
-    # service calls ``_http_get_text`` and ``_http_get_bytes`` from module scope,
-    # so we patch via ``services.comp_rules_service``.
+    # The service calls ``_http_get_text`` and ``_http_get_bytes`` from module
+    # scope, so we patch them on ``services.comp_rules_service``. Using
+    # ``monkeypatch`` ensures the original module globals are restored after the
+    # test, so the stubs don't leak into other tests.
     import services.comp_rules_service as crs
 
     def _stub_text(url: str, *, timeout: int) -> str | None:  # noqa: ARG001
@@ -266,8 +270,8 @@ def _make_service_with_stub_http(
     def _stub_bytes(url: str, *, timeout: int) -> bytes | None:  # noqa: ARG001
         return txt_bytes
 
-    crs._http_get_text = _stub_text  # type: ignore[assignment]
-    crs._http_get_bytes = _stub_bytes  # type: ignore[assignment]
+    monkeypatch.setattr(crs, "_http_get_text", _stub_text)
+    monkeypatch.setattr(crs, "_http_get_bytes", _stub_bytes)
     return svc
 
 
@@ -279,16 +283,18 @@ def test_refresh_downloads_when_stamp_missing(
         '<a href="https://media.wizards.com/2026/downloads/'
         'MagicCompRules%2020260227.txt">link</a>'
     )
-    svc = _make_service_with_stub_http(tmp_path, landing, _FIXTURE_TXT.encode("utf-8"))
+    svc = _make_service_with_stub_http(tmp_path, monkeypatch, landing, _FIXTURE_TXT.encode("utf-8"))
     assert svc.refresh() is True
     assert (tmp_path / "comp_rules.txt").is_file()
     assert (tmp_path / "stamp.json").is_file()
 
 
-def test_refresh_skips_download_when_stamp_matches(tmp_path: Path) -> None:
+def test_refresh_skips_download_when_stamp_matches(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     url = "https://media.wizards.com/2026/downloads/MagicCompRules%2020260227.txt"
     landing = f'<a href="{url}">link</a>'
-    svc = _make_service_with_stub_http(tmp_path, landing, b"WHATEVER")
+    svc = _make_service_with_stub_http(tmp_path, monkeypatch, landing, b"WHATEVER")
     # Pre-populate cache and stamp so the freshness check trips.
     (tmp_path / "comp_rules.txt").write_bytes(b"existing")
     (tmp_path / "stamp.json").write_text(f'{{"source_url":"{url}"}}', encoding="utf-8")
@@ -297,25 +303,30 @@ def test_refresh_skips_download_when_stamp_matches(tmp_path: Path) -> None:
     assert (tmp_path / "comp_rules.txt").read_bytes() == b"existing"
 
 
-def test_refresh_returns_false_when_landing_unreachable(tmp_path: Path) -> None:
-    svc = _make_service_with_stub_http(tmp_path, landing_html=None, txt_bytes=None)
+def test_refresh_returns_false_when_landing_unreachable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    svc = _make_service_with_stub_http(tmp_path, monkeypatch, landing_html=None, txt_bytes=None)
     assert svc.refresh() is False
 
 
-def test_refresh_returns_false_when_no_url_on_landing(tmp_path: Path) -> None:
-    svc = _make_service_with_stub_http(tmp_path, "<p>no link</p>", b"unused")
+def test_refresh_returns_false_when_no_url_on_landing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    svc = _make_service_with_stub_http(tmp_path, monkeypatch, "<p>no link</p>", b"unused")
     assert svc.refresh() is False
 
 
 def test_refresh_returns_false_and_writes_nothing_when_download_fails(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Landing reachable + .txt URL found, but the byte fetch fails: refresh
     must report no download and leave the cache/stamp untouched."""
     url = "https://media.wizards.com/2026/downloads/MagicCompRules%2020260227.txt"
     landing = f'<a href="{url}">link</a>'
     # txt_bytes=None simulates a failed download; no pre-existing stamp/cache.
-    svc = _make_service_with_stub_http(tmp_path, landing, txt_bytes=None)
+    svc = _make_service_with_stub_http(tmp_path, monkeypatch, landing, txt_bytes=None)
     assert svc.refresh() is False
     # The download-failure branch must not create a partial/empty cache or stamp.
     assert not (tmp_path / "comp_rules.txt").exists()
@@ -324,12 +335,13 @@ def test_refresh_returns_false_and_writes_nothing_when_download_fails(
 
 def test_refresh_leaves_existing_cache_intact_when_download_fails(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A failed re-download must not clobber an already-cached copy."""
     new_url = "https://media.wizards.com/2026/downloads/MagicCompRules%2020260301.txt"
     old_url = "https://media.wizards.com/2026/downloads/MagicCompRules%2020260227.txt"
     landing = f'<a href="{new_url}">link</a>'
-    svc = _make_service_with_stub_http(tmp_path, landing, txt_bytes=None)
+    svc = _make_service_with_stub_http(tmp_path, monkeypatch, landing, txt_bytes=None)
     # Pre-existing cache + stamp pointing at the older URL — the freshness
     # check trips (new_url != old_url) so refresh reaches the download branch.
     (tmp_path / "comp_rules.txt").write_bytes(b"existing")
@@ -341,12 +353,14 @@ def test_refresh_leaves_existing_cache_intact_when_download_fails(
     )
 
 
-def test_refresh_redownloads_when_stamp_is_corrupt(tmp_path: Path) -> None:
+def test_refresh_redownloads_when_stamp_is_corrupt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """A garbage/unreadable stamp is treated as 'no stamp': refresh re-downloads
     without raising."""
     url = "https://media.wizards.com/2026/downloads/MagicCompRules%2020260227.txt"
     landing = f'<a href="{url}">link</a>'
-    svc = _make_service_with_stub_http(tmp_path, landing, _FIXTURE_TXT.encode("utf-8"))
+    svc = _make_service_with_stub_http(tmp_path, monkeypatch, landing, _FIXTURE_TXT.encode("utf-8"))
     # Pre-write a corrupt stamp (invalid JSON) alongside a stale cache.
     (tmp_path / "comp_rules.txt").write_bytes(b"stale")
     (tmp_path / "stamp.json").write_bytes(b"{not json")
@@ -503,3 +517,30 @@ def test_linkify_cross_refs_does_not_match_bare_numbers() -> None:
 def test_linkify_cross_refs_is_case_insensitive() -> None:
     assert '<a href="#702">' in linkify_cross_refs("See Rule 702.9.")
     assert '<a href="#702">' in linkify_cross_refs("RULES 702.9 apply.")
+
+
+# ===================== singleton accessors =====================
+
+
+def test_get_comp_rules_service_returns_same_instance() -> None:
+    """The module-level accessor caches a single instance."""
+    reset_comp_rules_service()
+    try:
+        first = get_comp_rules_service()
+        second = get_comp_rules_service()
+        assert isinstance(first, CompRulesService)
+        assert first is second
+    finally:
+        reset_comp_rules_service()
+
+
+def test_reset_comp_rules_service_clears_singleton() -> None:
+    """After a reset the accessor builds a fresh instance."""
+    reset_comp_rules_service()
+    try:
+        first = get_comp_rules_service()
+        reset_comp_rules_service()
+        second = get_comp_rules_service()
+        assert first is not second
+    finally:
+        reset_comp_rules_service()
