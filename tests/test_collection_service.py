@@ -3,8 +3,9 @@
 import json
 import os
 import time
+from datetime import datetime, timedelta
 from types import SimpleNamespace
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 import pytest
 
@@ -578,16 +579,29 @@ def test_load_cached_status_recent(collection_service, tmp_path):
 
 
 def test_load_cached_status_hours_ago(collection_service, tmp_path):
-    """A backdated cache file produces an 'Nh ago' label (cache.py:116)."""
+    """A backdated cache file produces an 'Nh ago' label (cache.py:116).
+
+    Age is computed as ``datetime.now() - file mtime`` with int-hour
+    truncation (cache.py:93-94). A live-clock version of this test flaked on
+    CI (2h vs 3h) at the hour boundary, so we pin ``now`` to a fixed point
+    anchored on the file's *actual* recorded mtime. That keeps age_hours
+    exact and deterministic regardless of runner wall-clock, filesystem mtime
+    granularity, or DST artifacts.
+    """
     collection_data = [{"name": "Island", "quantity": 10}]
     filepath = tmp_path / "collection_full_trade_20240101.json"
     filepath.write_text(json.dumps(collection_data), encoding="utf-8")
 
-    # Backdate mtime by ~3 hours.
-    three_hours_ago = time.time() - 3 * 60 * 60
-    os.utime(filepath, (three_hours_ago, three_hours_ago))
+    # Backdate, then read back the actual stored mtime and place a fixed "now"
+    # exactly 3h05m later so the truncated age is unambiguously 3.
+    backdated = time.time() - 3 * 60 * 60
+    os.utime(filepath, (backdated, backdated))
+    actual_mtime = filepath.stat().st_mtime
+    fixed_now = datetime.fromtimestamp(actual_mtime) + timedelta(hours=3, minutes=5)
 
-    status = collection_service.load_cached_status(tmp_path)
+    with patch("services.collection_service.cache.datetime") as mock_datetime:
+        mock_datetime.now.return_value = fixed_now
+        status = collection_service.load_cached_status(tmp_path)
 
     assert status.age_hours == 3
     assert "3h ago" in status.label
