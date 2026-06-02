@@ -33,7 +33,9 @@ def normalize_locale(locale: str | None) -> LocaleCode:
 def translate(locale: str | None, key: str, **kwargs: object) -> str:
     """Return a translated string with fallback to default locale and key text."""
     normalized = normalize_locale(locale)
-    template = MESSAGES.get(normalized, {}).get(key) or MESSAGES[DEFAULT_LOCALE].get(key)
+    template = MESSAGES.get(normalized, {}).get(key)
+    if template is None:
+        template = MESSAGES[DEFAULT_LOCALE].get(key)
     if template is None:
         return key
     if not kwargs:

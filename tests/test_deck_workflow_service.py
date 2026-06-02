@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 
+import pytest
+
 from services.deck_workflow_service import DeckWorkflowService
 
 
@@ -12,6 +14,7 @@ class FakeDeckRepo:
         self.current_deck: dict[str, str] = {}
         self.saved_payload: dict | None = None
         self.daily_average_rows: list[list[dict]] = []
+        self.daily_average_add_funcs: list = []
 
     def set_decks_list(self, decks: list[dict]) -> None:
         self.decks_list = decks
@@ -46,6 +49,7 @@ class FakeDeckRepo:
         self, rows, download_func, reader_func, add_to_buffer, progress_callback
     ):
         self.daily_average_rows.append(rows)
+        self.daily_average_add_funcs.append(add_to_buffer)
         for index, row in enumerate(rows, start=1):
             download_func(row["number"])
             progress_callback(index, len(rows))
@@ -70,6 +74,7 @@ class FakeDeckService:
     def __init__(self) -> None:
         self.zone_calls: list[dict] = []
         self.buffer_calls = 0
+        self.karsten_calls = 0
 
     def build_deck_text_from_zones(self, zones):
         self.zone_calls.append(json.loads(json.dumps(zones)))
@@ -79,7 +84,7 @@ class FakeDeckService:
         self.buffer_calls += 1
 
     def add_deck_to_karsten_buffer(self, *_args, **_kwargs):
-        self.buffer_calls += 1
+        self.karsten_calls += 1
 
 
 def build_service(
@@ -129,6 +134,18 @@ def test_load_decks_routes_all_and_archetype_scopes_through_one_use_case():
     ]
 
 
+def test_load_decks_archetype_scope_requires_archetype():
+    service = build_service()
+    with pytest.raises(ValueError, match="Archetype scope requires an archetype"):
+        service.load_decks(scope="archetype", archetype=None, source_filter="mtggoldfish")
+
+
+def test_load_decks_rejects_unsupported_scope():
+    service = build_service()
+    with pytest.raises(ValueError, match="Unsupported deck load scope: bogus"):
+        service.load_decks(scope="bogus", source_filter="mtggoldfish")
+
+
 def test_download_deck_text_uses_injected_dependencies():
     download_calls: list[tuple[str, str | None]] = []
     reader_calls = 0
@@ -169,8 +186,30 @@ def test_build_daily_average_buffer_wires_dependencies():
     assert buffer == {"Card": 0.5}
     assert downloads == ["a:both", "b:both"]
     assert progress_calls == [(1, 2), (2, 2)]
-    assert deck_service.buffer_calls == 1
+    # Default method is "karsten": the karsten add_func must be selected and
+    # forwarded to the repo, and the non-karsten counter must stay untouched.
+    assert deck_service.karsten_calls == 1
+    assert deck_service.buffer_calls == 0
+    assert repo.daily_average_add_funcs == [deck_service.add_deck_to_karsten_buffer]
     assert repo.daily_average_rows == [rows]
+
+
+def test_build_daily_average_buffer_uses_non_karsten_method():
+    repo = FakeDeckRepo()
+    deck_service = FakeDeckService()
+
+    def downloader(deck_number: str, source_filter: str | None = None):
+        pass
+
+    service = build_service(deck_repo=repo, deck_service=deck_service, deck_downloader=downloader)
+    rows = [{"number": "a"}]
+    buffer = service.build_daily_average_buffer(rows, source_filter="both", method="market")
+
+    assert buffer == {"Card": 0.5}
+    # method != "karsten" must select the plain add_func.
+    assert deck_service.buffer_calls == 1
+    assert deck_service.karsten_calls == 0
+    assert repo.daily_average_add_funcs == [deck_service.add_deck_to_buffer]
 
 
 def test_save_deck_persists_file_and_db(tmp_path):
@@ -195,6 +234,26 @@ def test_save_deck_persists_file_and_db(tmp_path):
     assert repo.saved_payload["player"] == "Test"
     assert repo.saved_payload["source"] == "mtggoldfish"
     assert repo.saved_payload["metadata"] == deck_info
+
+
+def test_save_deck_manual_source_when_deck_is_none(tmp_path):
+    repo = FakeDeckRepo()
+    service = build_service(deck_repo=repo)
+
+    file_path, deck_id = service.save_deck(
+        deck_name="My Manual Deck",
+        deck_content="4 Lightning Bolt",
+        format_name="Modern",
+        deck=None,
+        deck_save_dir=tmp_path,
+    )
+
+    assert file_path.exists()
+    assert deck_id == 123
+    assert repo.saved_payload["source"] == "manual"
+    assert repo.saved_payload["archetype"] is None
+    assert repo.saved_payload["player"] is None
+    assert repo.saved_payload["metadata"] == {}
 
 
 def test_build_deck_text_prefers_existing_values():

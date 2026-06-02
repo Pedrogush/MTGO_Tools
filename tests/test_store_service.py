@@ -54,18 +54,52 @@ def test_load_store_returns_empty_on_invalid_json(tmp_path: Path, store_service:
 
 
 def test_load_store_handles_oserror(monkeypatch, tmp_path: Path, store_service: StoreService):
-    """OS errors while reading a store fallback to an empty dict."""
+    """OS errors while reading a store fall back to an empty dict and log a warning."""
+    from loguru import logger
+
     path = tmp_path / "store.json"
     path.write_text("{}", encoding="utf-8")
 
-    def fake_read_text(self, *args, **kwargs):  # pylint: disable=unused-argument
+    # load_store reads via fast_load -> Path.read_bytes, so patch read_bytes
+    # (not read_text) to actually exercise the OSError branch.
+    called = {"read_bytes": False}
+
+    def fake_read_bytes(self, *args, **kwargs):  # pylint: disable=unused-argument
+        called["read_bytes"] = True
         raise OSError("boom")
 
-    monkeypatch.setattr(type(path), "read_text", fake_read_text)
+    monkeypatch.setattr(type(path), "read_bytes", fake_read_bytes)
 
-    result = store_service.load_store(path)
+    messages: list[str] = []
+    sink_id = logger.add(messages.append, level="WARNING")
+    try:
+        result = store_service.load_store(path)
+    finally:
+        logger.remove(sink_id)
 
     assert result == {}
+    # Prove the patched read path ran and that the OSError-specific branch logged.
+    assert called["read_bytes"]
+    assert any("Failed to read" in message for message in messages)
+
+
+def test_load_store_logs_invalid_json_branch(tmp_path: Path, store_service: StoreService):
+    """Invalid JSON triggers the JSON-decode logging branch, not the OSError one."""
+    from loguru import logger
+
+    path = tmp_path / "corrupt.json"
+    path.write_text("{bad json", encoding="utf-8")
+
+    messages: list[str] = []
+    sink_id = logger.add(messages.append, level="WARNING")
+    try:
+        result = store_service.load_store(path)
+    finally:
+        logger.remove(sink_id)
+
+    assert result == {}
+    assert any("Invalid JSON" in message for message in messages)
+    assert not any("Failed to read" in message for message in messages)
 
 
 def test_save_store_writes_json_payload(tmp_path: Path, store_service: StoreService):

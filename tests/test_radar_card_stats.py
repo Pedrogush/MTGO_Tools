@@ -181,3 +181,70 @@ def test_card_usage_stats_handles_unknown_card(populated_repo):
     assert stats.mainboard_archetypes == 0
     assert stats.mainboard_avg_karsten is None
     assert stats.mainboard_avg_arithmetic == 0.0
+
+
+def test_zero_appearance_rows_are_excluded(tmp_path):
+    """Rows stored with appearances=0 must not leak into aggregates or formats.
+
+    The ``appearances > 0`` filter in both get_card_aggregates and
+    get_formats_for_cards guards against zero-appearance card rows (which can
+    carry stale non-zero copy totals) being counted as real metagame presence.
+    """
+    repo = RadarRepository(tmp_path / "radar_cache.db")
+    repo.replace_radar(
+        _radar(
+            fmt="modern",
+            href="modern-ghost",
+            name="Ghost",
+            decks=10,
+            mb=[
+                # Real presence: counts toward aggregates and formats.
+                _card(
+                    "Lightning Bolt",
+                    appearances=10,
+                    total_copies=40,
+                    avg_copies=4.0,
+                    expected_copies=4.0,
+                ),
+                # Zero appearances but non-zero copies: must be excluded.
+                _card(
+                    "Ghostly Card",
+                    appearances=0,
+                    total_copies=12,
+                    avg_copies=0.0,
+                    expected_copies=0.0,
+                ),
+            ],
+        )
+    )
+
+    aggregates = repo.get_card_aggregates("modern", ["Lightning Bolt", "Ghostly Card"])
+    ghost = aggregates["Ghostly Card"]
+    assert ghost.mainboard_archetypes == 0
+    assert ghost.mainboard_copies == 0
+    assert ghost.mainboard_appearances == 0
+    # The genuinely-present card is still rolled up normally.
+    assert aggregates["Lightning Bolt"].mainboard_archetypes == 1
+    assert aggregates["Lightning Bolt"].mainboard_copies == 40
+
+    formats = repo.get_formats_for_cards(["Lightning Bolt", "Ghostly Card"])
+    assert formats["Ghostly Card"] == []
+    assert formats["Lightning Bolt"] == ["modern"]
+
+
+def test_get_effective_legalities_strips_and_filters(populated_repo):
+    """The public service wrapper trims names, drops blanks, and early-returns."""
+    service = RadarService(radar_repository=populated_repo)
+
+    legalities = service.get_effective_legalities([" Lightning Bolt ", "", "Counterspell"])
+    # Stripped keys, matching the repo's name-keyed result.
+    assert legalities["Lightning Bolt"] == ["modern"]
+    assert legalities["Counterspell"] == ["legacy", "modern"]
+    # Blank-only entries are filtered out entirely.
+    assert "" not in legalities
+    # Same format lists as the underlying repo query (no padding/dropping).
+    assert legalities == populated_repo.get_formats_for_cards(["Lightning Bolt", "Counterspell"])
+
+    # Empty / all-blank input short-circuits to an empty mapping.
+    assert service.get_effective_legalities([]) == {}
+    assert service.get_effective_legalities(["   ", ""]) == {}

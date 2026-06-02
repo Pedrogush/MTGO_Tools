@@ -100,6 +100,59 @@ Sideboard
     assert summary["unique_sideboard"] == 1
 
 
+def test_analyze_deck_skips_malformed_lines():
+    """Verify lines without a leading numeric count or with too few parts are ignored."""
+    deck_with_noise = """Deck
+4 Lightning Bolt
+// comment
+x Counterspell
+3 Island
+Wasteland
+"""
+    summary = DeckService().analyze_deck(deck_with_noise)
+    mainboard_dict = dict(summary["mainboard_cards"])
+    # Only the two valid, count-prefixed lines parse.
+    assert mainboard_dict == {"Lightning Bolt": 4, "Island": 3}
+    assert summary["unique_mainboard"] == 2
+    assert summary["mainboard_count"] == 7
+
+
+def test_deck_to_dictionary_skips_malformed_lines():
+    """Verify deck_to_dictionary ignores non-numeric counts and single-token lines."""
+    deck_with_noise = """Deck
+2 Ragavan, Nimble Pilferer
+// comment
+Wasteland
+1 Blood Moon
+"""
+    parsed = DeckService().deck_to_dictionary(deck_with_noise)
+    assert parsed == {"Ragavan, Nimble Pilferer": 2.0, "Blood Moon": 1.0}
+
+
+def test_analyze_deck_preserves_fractional_quantities():
+    """Averaged decks use fractional counts; whole numbers must stay int, fractions stay float."""
+    averaged_deck = """2.5 Lightning Bolt
+3 Island
+"""
+    summary = DeckService().analyze_deck(averaged_deck)
+    mainboard_dict = dict(summary["mainboard_cards"])
+
+    assert mainboard_dict["Lightning Bolt"] == 2.5
+    assert isinstance(mainboard_dict["Lightning Bolt"], float)
+    assert mainboard_dict["Island"] == 3
+    assert isinstance(mainboard_dict["Island"], int)
+
+
+def test_deck_to_dictionary_preserves_fractional_quantities():
+    """deck_to_dictionary keeps float counts intact for averaged decks."""
+    averaged_deck = """2.5 Lightning Bolt
+3 Island
+"""
+    parsed = DeckService().deck_to_dictionary(averaged_deck)
+    assert parsed["Lightning Bolt"] == 2.5
+    assert parsed["Island"] == 3.0
+
+
 def test_sanitize_filename_removes_null_bytes():
     """Verify null bytes are replaced with underscores (consecutive underscores collapsed)."""
     assert sanitize_filename("test\x00file") == "test_file"

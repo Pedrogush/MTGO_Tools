@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from utils.diagnostics import EventLogger, export_diagnostics_bundle
+from utils.diagnostics import EventLogger, _get_app_version, export_diagnostics_bundle
 
 # ---------------------------------------------------------------------------
 # EventLogger
@@ -111,7 +111,28 @@ class TestExportDiagnosticsBundle:
             assert "system_info.json" in zf.namelist()
             info = json.loads(zf.read("system_info.json"))
             assert "platform" in info
+            assert "platform_release" in info
             assert "python_version" in info
+            # app_version must always be present and non-empty for support triage
+            assert "app_version" in info
+            assert info["app_version"]
+
+    def test_event_log_rotated_files_included(self, tmp_path: Path) -> None:
+        """Rotated event files (events.jsonl.1) must also land in the bundle."""
+        logs_dir = tmp_path / "logs"
+        logs_dir.mkdir()
+        el = EventLogger(logs_dir, enabled=True)
+        # Force rotation: first write creates the file, second sees size >= 1
+        el._MAX_BYTES = 1
+        el.log("first_event")
+        el.log("second_event")
+        assert (logs_dir / "events.jsonl.1").exists()
+
+        out = export_diagnostics_bundle(tmp_path / "bundle.zip", logs_dir=logs_dir)
+        with zipfile.ZipFile(out) as zf:
+            names = zf.namelist()
+        assert "logs/events.jsonl" in names
+        assert "logs/events.jsonl.1" in names
 
     def test_log_files_included(self, tmp_path: Path) -> None:
         logs_dir = tmp_path / "logs"
@@ -210,3 +231,35 @@ class TestExportDiagnosticsBundle:
         # Should not raise
         export_diagnostics_bundle(tmp_path / "bundle.zip", logs_dir=logs_dir)
         monkeypatch.setattr(socket.socket, "connect", original_connect)
+
+
+# ---------------------------------------------------------------------------
+# _get_app_version fallback chain
+# ---------------------------------------------------------------------------
+
+
+class TestGetAppVersion:
+    def test_returns_non_empty_string(self) -> None:
+        assert isinstance(_get_app_version(), str)
+        assert _get_app_version()
+
+    def test_falls_through_to_unknown(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """If both metadata and constants lookups fail, fall back to 'unknown'."""
+        import importlib.metadata
+
+        def raise_metadata(*args, **kwargs):  # type: ignore[no-untyped-def]
+            raise importlib.metadata.PackageNotFoundError("mtgo_tools")
+
+        monkeypatch.setattr(importlib.metadata, "version", raise_metadata)
+        # Block the utils.constants fallback so we reach the final "unknown".
+        import builtins
+
+        original_import = builtins.__import__
+
+        def blocked_import(name, *args, **kwargs):  # type: ignore[no-untyped-def]
+            if name == "utils.constants":
+                raise ImportError("blocked for test")
+            return original_import(name, *args, **kwargs)
+
+        monkeypatch.setattr(builtins, "__import__", blocked_import)
+        assert _get_app_version() == "unknown"

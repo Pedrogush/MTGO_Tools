@@ -275,6 +275,169 @@ def test_search_with_builder_filters_uses_format_pool():
     assert [card["name"] for card in results] == ["Counterspell"]
 
 
+def _make_builder_manager(cards):
+    """Build a fake card manager whose search_cards returns the given cards."""
+
+    class FakeCardManager:
+        def search_cards(self, query="", format_filter=None):
+            return list(cards)
+
+    return FakeCardManager()
+
+
+def test_search_with_builder_filters_format_legality_excludes_illegal_card():
+    """Cards not legal in the selected format are filtered out."""
+    legal = create_mock_card(name="Legal Card", legalities={"modern": "Legal"})
+    illegal = create_mock_card(name="Illegal Card", legalities={"modern": "Banned"})
+    service = SearchService(card_repository=SimpleNamespace())
+
+    results = service.search_with_builder_filters(
+        {"formats": ["modern"]},
+        _make_builder_manager([legal, illegal]),
+    )
+
+    assert [card["name"] for card in results] == ["Legal Card"]
+
+
+def test_search_with_builder_filters_mana_value_branch():
+    """The mana-value comparator removes cards failing the comparison."""
+    cheap = create_mock_card(name="Cheap", mana_value=1)
+    expensive = create_mock_card(name="Expensive", mana_value=6)
+    service = SearchService(card_repository=SimpleNamespace())
+
+    results = service.search_with_builder_filters(
+        {"mv_value": "3", "mv_comparator": "≤"},
+        _make_builder_manager([cheap, expensive]),
+    )
+
+    assert [card["name"] for card in results] == ["Cheap"]
+
+
+def test_search_with_builder_filters_color_mode_branch():
+    """Color-mode filtering removes cards that do not match the selected colors."""
+    green = create_mock_card(name="Green Card", colors=["G"])
+    blue = create_mock_card(name="Blue Card", colors=["U"])
+    service = SearchService(card_repository=SimpleNamespace())
+
+    results = service.search_with_builder_filters(
+        {"selected_colors": ["G"], "color_mode": "At least"},
+        _make_builder_manager([green, blue]),
+    )
+
+    assert [card["name"] for card in results] == ["Green Card"]
+
+
+def test_search_with_builder_filters_radar_branch():
+    """When radar is enabled, only cards present in radar_cards are returned."""
+    tracked = create_mock_card(name="Tracked Card")
+    untracked = create_mock_card(name="Untracked Card")
+    service = SearchService(card_repository=SimpleNamespace())
+
+    results = service.search_with_builder_filters(
+        {"radar_enabled": True, "radar_cards": {"Tracked Card"}},
+        _make_builder_manager([tracked, untracked]),
+    )
+
+    assert [card["name"] for card in results] == ["Tracked Card"]
+
+
+def test_search_with_builder_filters_limit():
+    """The limit caps the number of returned results."""
+    cards = [create_mock_card(name=f"Card {i}") for i in range(5)]
+    service = SearchService(card_repository=SimpleNamespace())
+
+    results = service.search_with_builder_filters({}, _make_builder_manager(cards), limit=2)
+
+    assert len(results) == 2
+
+
+def test_search_with_builder_filters_invalid_mv_value_skips_mana_value_filter():
+    """A non-numeric mv_value is logged and ignored rather than raising."""
+    cheap = create_mock_card(name="Cheap", mana_value=1)
+    expensive = create_mock_card(name="Expensive", mana_value=6)
+    service = SearchService(card_repository=SimpleNamespace())
+
+    results = service.search_with_builder_filters(
+        {"mv_value": "abc", "mv_comparator": "="},
+        _make_builder_manager([cheap, expensive]),
+    )
+
+    # Mana-value filter is effectively disabled, so both cards survive.
+    assert [card["name"] for card in results] == ["Cheap", "Expensive"]
+
+
+# ============= filter_cards mana_cost path =============
+
+
+def test_filter_cards_mana_cost_query_excludes_missing_symbol():
+    """filter_cards with mana_cost_query excludes cards lacking the symbol."""
+    service = SearchService(card_repository=SimpleNamespace())
+
+    cards = [
+        create_mock_card(name="Green Card", mana_cost="{2}{G}"),
+        create_mock_card(name="Blue Card", mana_cost="{2}{U}"),
+    ]
+
+    filtered = service.filter_cards(cards, mana_cost_query="{G}", mana_cost_mode="at_least")
+
+    assert [card["name"] for card in filtered] == ["Green Card"]
+
+
+def test_filter_cards_mana_cost_query_excludes_card_with_no_cost():
+    """A card with an empty mana_cost is excluded by the mana_cost guard."""
+    service = SearchService(card_repository=SimpleNamespace())
+
+    cards = [
+        create_mock_card(name="Has Cost", mana_cost="{G}"),
+        create_mock_card(name="No Cost", mana_cost=""),
+    ]
+
+    filtered = service.filter_cards(cards, mana_cost_query="{G}", mana_cost_mode="at_least")
+
+    assert [card["name"] for card in filtered] == ["Has Cost"]
+
+
+# ============= basic_search guard paths =============
+
+
+def test_search_cards_by_name_returns_empty_on_repo_exception():
+    """search_cards_by_name swallows repo exceptions and returns []."""
+    mock_repo = SimpleNamespace()
+    mock_repo.is_card_data_loaded = Mock(return_value=True)
+    mock_repo.search_cards = Mock(side_effect=RuntimeError("boom"))
+    service = SearchService(card_repository=mock_repo)
+
+    assert service.search_cards_by_name("Lightning Bolt") == []
+
+
+def test_get_card_suggestions_returns_empty_on_exception():
+    """get_card_suggestions swallows exceptions and returns []."""
+    mock_repo = SimpleNamespace()
+    mock_repo.is_card_data_loaded = Mock(return_value=True)
+    mock_repo.search_cards = Mock(side_effect=RuntimeError("boom"))
+    service = SearchService(card_repository=mock_repo)
+
+    assert service.get_card_suggestions("Light") == []
+
+
+def test_get_card_suggestions_excludes_results_without_name():
+    """Result rows lacking a usable 'name' are dropped from suggestions."""
+    mock_repo = SimpleNamespace()
+    mock_repo.is_card_data_loaded = Mock(return_value=True)
+    mock_repo.search_cards = Mock(
+        return_value=[
+            {"name": "Lightning Bolt"},
+            {"name": ""},
+            {"set": "LEA"},
+        ]
+    )
+    service = SearchService(card_repository=mock_repo)
+
+    suggestions = service.get_card_suggestions("Light")
+
+    assert suggestions == ["Lightning Bolt"]
+
+
 # ============= Suggestion Tests =============
 
 

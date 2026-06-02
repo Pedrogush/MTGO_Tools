@@ -6,7 +6,11 @@ from typing import Any
 
 import pytest
 
-from widgets.panels.card_table_panel.card_render import build_image_name_candidates
+from widgets.mana_icon_factory import ManaIconFactory
+from widgets.panels.card_table_panel.card_render import (
+    build_image_name_candidates,
+    resolve_card_color,
+)
 
 
 class _CardEntryStub:
@@ -30,6 +34,9 @@ class _CardEntryStub:
     "card, meta, expected",
     [
         ({"name": "Island"}, {}, ["Island"]),
+        # meta=None must short-circuit the alias/promotion branches (lines 31, 36)
+        # and return only the base name.
+        ({"name": "Island"}, None, ["Island"]),
         ({"name": "A // B"}, {}, ["A // B"]),
         ({"name": "A"}, {"aliases": ["Alias1"]}, ["A", "Alias1"]),
         # When meta has no "name" key (plain dict), no DFC promotion happens even
@@ -73,6 +80,7 @@ class _CardEntryStub:
     ],
     ids=[
         "simple-card",
+        "none-meta",
         "dfc-combined-name",
         "non-dfc-alias",
         "dfc-alias-no-promotion-without-meta-name",
@@ -87,3 +95,57 @@ def test_build_image_name_candidates(card: dict[str, Any], meta: Any, expected: 
     """build_image_name_candidates must return the correct candidate list for each input."""
     result = build_image_name_candidates(card, meta)
     assert result == expected
+
+
+# ---------------------------------------------------------------------------
+# resolve_card_color
+# ---------------------------------------------------------------------------
+_FALLBACK = ManaIconFactory.FALLBACK_COLORS
+
+
+@pytest.mark.parametrize(
+    "meta, expected",
+    [
+        # No color info at all -> colorless fallback.
+        ({}, _FALLBACK["c"]),
+        ({"color_identity": []}, _FALLBACK["c"]),
+        ({"color_identity": [], "colors": []}, _FALLBACK["c"]),
+        # Single known color, already lowercase.
+        ({"color_identity": ["w"]}, _FALLBACK["w"]),
+        # Single known color, normalized from uppercase.
+        ({"color_identity": ["W"]}, _FALLBACK["w"]),
+        ({"color_identity": ["U"]}, _FALLBACK["u"]),
+        # Single unknown color -> colorless fallback via .get() default.
+        ({"color_identity": ["X"]}, _FALLBACK["c"]),
+        # color_identity takes precedence over colors when non-empty.
+        ({"color_identity": ["R"], "colors": ["G"]}, _FALLBACK["r"]),
+        # color_identity empty -> falls back to colors.
+        ({"color_identity": [], "colors": ["G"]}, _FALLBACK["g"]),
+        ({"colors": ["B"]}, _FALLBACK["b"]),
+        # Falsy entries (None, "") are filtered out before counting.
+        ({"color_identity": [None, "", "W"]}, _FALLBACK["w"]),
+        ({"color_identity": [None, ""]}, _FALLBACK["c"]),
+        # Two or more colors -> multicolor fallback.
+        ({"color_identity": ["W", "U"]}, _FALLBACK["multicolor"]),
+        ({"color_identity": ["w", "u", "b"]}, _FALLBACK["multicolor"]),
+    ],
+    ids=[
+        "empty-meta",
+        "empty-identity",
+        "empty-identity-and-colors",
+        "single-lowercase",
+        "single-uppercase-normalized",
+        "single-u",
+        "single-unknown-color-falls-back-to-c",
+        "identity-wins-over-colors",
+        "empty-identity-falls-back-to-colors",
+        "colors-only",
+        "falsy-entries-filtered-single",
+        "falsy-entries-filtered-empty",
+        "multicolor-two",
+        "multicolor-three",
+    ],
+)
+def test_resolve_card_color(meta: dict[str, Any], expected: tuple[int, int, int]) -> None:
+    """resolve_card_color must map metadata to the correct placeholder RGB color."""
+    assert resolve_card_color(meta) == expected

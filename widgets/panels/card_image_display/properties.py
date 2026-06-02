@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
-import numpy as np
 import wx
-from PIL import Image as PilImage
-from PIL import ImageDraw
 
+from utils.image_effects import apply_rounded_corner_alpha_bytes, blend_rgb_bytes
 from utils.perf import timed
 
 
@@ -33,15 +31,13 @@ class CardImageDisplayPropertiesMixin:
             img1 = img1.Resize(img2.GetSize(), (0, 0))
             w1, h1 = w2, h2
 
-        # Convert wx.Image RGB data to PIL, blend in C, convert back.
+        # Blend RGB data in C (via PIL) and convert back.
         # wx.Image.GetData() always returns raw RGB bytes (3 bytes/pixel, no alpha),
         # matching PIL.Image.frombytes("RGB"). Semantics: out = img1*(1-alpha) + img2*alpha.
-        pil1 = PilImage.frombytes("RGB", (w1, h1), bytes(img1.GetData()))
-        pil2 = PilImage.frombytes("RGB", (w2, h2), bytes(img2.GetData()))
-        blended = PilImage.blend(pil1, pil2, alpha)
+        blended = blend_rgb_bytes(bytes(img1.GetData()), bytes(img2.GetData()), w1, h1, alpha)
 
         result = wx.Image(w1, h1)
-        result.SetData(blended.tobytes())
+        result.SetData(blended)
         return wx.Bitmap(result)
 
     def _get_flip_icon_rect(self) -> wx.Rect:
@@ -57,17 +53,9 @@ class CardImageDisplayPropertiesMixin:
 
         w, h = img.GetWidth(), img.GetHeight()
 
-        # Build a binary rounded-rectangle mask via PIL (C-native rasterisation).
-        # Interior pixels are 255; outside-corner pixels are 0.
-        mask_pil = PilImage.new("L", (w, h), 0)
-        draw = ImageDraw.Draw(mask_pil)
-        draw.rounded_rectangle([0, 0, w - 1, h - 1], radius=radius, fill=255)
-        mask_bytes = np.frombuffer(mask_pil.tobytes(), dtype=np.uint8)
-
-        # Apply mask: np.minimum preserves partial alpha inside the rect and
-        # forces alpha=0 in the transparent corner regions.
-        # bytes(img.GetAlpha()) creates a copy, so frombuffer is not read-only.
-        existing_alpha = np.frombuffer(bytes(img.GetAlpha()), dtype=np.uint8)
-        new_alpha = np.minimum(existing_alpha, mask_bytes)
-        img.SetAlpha(new_alpha.tobytes())
+        # Apply a rounded-rectangle mask: partial alpha inside the rect is
+        # preserved, alpha is forced to 0 in the transparent corner regions.
+        # bytes(img.GetAlpha()) creates a copy, so the buffer is not read-only.
+        new_alpha = apply_rounded_corner_alpha_bytes(bytes(img.GetAlpha()), w, h, radius)
+        img.SetAlpha(new_alpha)
         return img

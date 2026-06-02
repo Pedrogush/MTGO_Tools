@@ -134,3 +134,51 @@ def test_set_decks_empty_still_single_pass() -> None:
     assert lst.refresh_calls == 1
     assert lst.freeze_calls == 1
     assert lst.thaw_calls == 1
+
+
+def test_set_decks_thaws_on_exception() -> None:
+    """A malformed row must not leave the control permanently frozen.
+
+    The populate loop unpacks each row into six fields; a wrong-arity row raises
+    ``ValueError`` mid-loop. The ``try/finally`` guarantees :meth:`Thaw` still
+    runs, so a regression moving Thaw out of the finally block would fail here.
+    """
+    lst = _FakeList()
+
+    try:
+        lst.set_decks([("only", "two")])  # type: ignore[list-item]
+        raise AssertionError("expected ValueError from malformed row unpack")
+    except ValueError:
+        pass
+
+    assert lst.freeze_calls == 1
+    assert lst.thaw_calls == 1
+
+
+def test_append_deck_single_row_field_order() -> None:
+    """AppendDeck stores fields in the same order set_decks does and bumps once."""
+    lst = _FakeList()
+
+    lst.AppendDeck(
+        "player0",
+        "event0",
+        "result0",
+        "date0",
+        emoji="*",
+        archetype="arch0",
+    )
+
+    assert lst._items[-1] == (True, ("*", "player0", "arch0", "event0", "result0", "date0"))
+    assert lst.set_item_count_calls == [1]
+    assert lst.refresh_calls == 1
+
+
+def test_append_deck_after_existing_items() -> None:
+    lst = _FakeList()
+    lst._items.append((False, ("", "preexisting", "")))
+
+    lst.AppendDeck("p", "e", "r", "d")
+
+    assert len(lst._items) == 2
+    assert lst._items[-1] == (True, ("", "p", "", "e", "r", "d"))
+    assert lst.set_item_count_calls == [2]
