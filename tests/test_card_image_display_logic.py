@@ -122,6 +122,27 @@ def test_blend_output_length_matches_input():
     assert len(blend_rgb_bytes(data1, data2, W, H, 0.5)) == W * H * 3
 
 
+@pytest.mark.parametrize("alpha", [0.0, 0.35, 1.0])
+def test_blend_non_square_matches_reference(alpha):
+    """Blend must be correct when width != height.
+
+    ``blend_rgb_bytes`` reconstructs PIL images from ``(w, h)``; swapping the
+    two would only ever be caught by a rectangular image, since square inputs
+    are dimension-symmetric.  This guards against a width/height transposition.
+    """
+    nw, nh = 6, 10  # deliberately non-square so w and h are not interchangeable
+    rng = random.Random(7)
+    data1 = bytes(rng.randint(0, 255) for _ in range(nw * nh * 3))
+    data2 = bytes(rng.randint(0, 255) for _ in range(nw * nh * 3))
+
+    expected = _blend_bitmaps_reference(data1, data2, alpha)
+    actual = blend_rgb_bytes(data1, data2, nw, nh, alpha)
+
+    assert len(actual) == nw * nh * 3
+    for i, (e, a) in enumerate(zip(expected, actual)):
+        assert abs(e - a) <= 1, f"Pixel mismatch at byte {i}: expected {e}, got {a} (alpha={alpha})"
+
+
 # ── rounded corner tests (exercise production corner helpers) ─────────────────
 
 RW, RH = 20, 20
