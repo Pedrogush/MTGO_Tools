@@ -70,6 +70,8 @@ def test_session_manager_persists_and_restores(tmp_path):
     assert restored["zone_cards"]["main"][0]["qty"] == 4
     assert restored["window_size"] == (1280, 720)
     assert restored["screen_pos"] == (10, 20)
+    assert restored["deck_text"] == "4 Lightning Bolt"
+    assert restored["deck_info"] == {"name": "Burn"}
     assert repo.get_current_deck_text() == "4 Lightning Bolt"
     assert repo.get_current_deck() == {"name": "Burn"}
 
@@ -308,3 +310,84 @@ def test_tutorial_shown_persists_to_disk(tmp_path):
     assert manager.is_tutorial_shown() is True
     data = json.loads(manager.settings_file.read_text(encoding="utf-8"))
     assert data["tutorial_shown"] is True
+
+
+def _unwritable_path(tmp_path, name: str) -> Path:
+    """Return a path whose parent is a regular file, so any write raises OSError."""
+    blocker = tmp_path / "blocker_file"
+    blocker.write_text("not-a-directory", encoding="utf-8")
+    return blocker / name
+
+
+def test_ensure_deck_save_dir_falls_back_when_configured_path_unwritable(tmp_path):
+    settings_file = tmp_path / "settings.json"
+    config_file = tmp_path / "config.json"
+    fallback_dir = tmp_path / "fallback_decks"
+    manager = DeckSelectorSessionManager(
+        StubDeckRepo(),
+        settings_file=settings_file,
+        config_file=config_file,
+        default_deck_dir=fallback_dir,
+    )
+    # A configured save path that cannot be created (parent is a regular file).
+    manager.config["deck_selector_save_path"] = str(_unwritable_path(tmp_path, "decks"))
+
+    deck_dir = manager.ensure_deck_save_dir()
+
+    assert deck_dir == fallback_dir
+    assert deck_dir.exists()
+    config_data = json.loads(config_file.read_text(encoding="utf-8"))
+    assert config_data["deck_selector_save_path"] == str(fallback_dir)
+
+
+def test_mark_tutorial_shown_survives_persist_failure(tmp_path):
+    settings_file = _unwritable_path(tmp_path, "settings.json")
+    manager = DeckSelectorSessionManager(
+        StubDeckRepo(),
+        settings_file=settings_file,
+        config_file=tmp_path / "config.json",
+        default_deck_dir=tmp_path / "decks",
+    )
+    # Persistence fails, but the in-memory flag is still flipped and no error escapes.
+    manager.mark_tutorial_shown()
+    assert manager.is_tutorial_shown() is True
+    assert not settings_file.exists()
+
+
+def test_save_keeps_old_settings_when_persist_fails(tmp_path):
+    settings_file = _unwritable_path(tmp_path, "settings.json")
+    repo = StubDeckRepo()
+    repo.set_current_deck_text("4 Lightning Bolt")
+    manager = DeckSelectorSessionManager(
+        repo,
+        settings_file=settings_file,
+        config_file=tmp_path / "config.json",
+        default_deck_dir=tmp_path / "decks",
+    )
+    previous_settings = dict(manager.settings)
+
+    manager.save(
+        current_format="Modern",
+        left_mode="builder",
+        deck_data_source="mtgo",
+        zone_cards={"main": [], "side": [], "out": []},
+    )
+
+    # On write failure save() returns early without mutating in-memory settings.
+    assert manager.settings == previous_settings
+    assert not settings_file.exists()
+
+
+def test_persist_config_swallows_oserror(tmp_path):
+    config_file = _unwritable_path(tmp_path, "config.json")
+    manager = DeckSelectorSessionManager(
+        StubDeckRepo(),
+        settings_file=tmp_path / "settings.json",
+        config_file=config_file,
+        default_deck_dir=tmp_path / "decks",
+    )
+    manager.config["deck_selector_save_path"] = str(tmp_path / "decks")
+
+    # Should not raise even though the config file cannot be written.
+    manager._persist_config()
+    assert not config_file.exists()

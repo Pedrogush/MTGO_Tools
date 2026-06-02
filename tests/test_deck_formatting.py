@@ -120,6 +120,32 @@ def test_format_deck_list_entry_missing_source_uses_wizard_emoji():
     assert entry == "🧙🏾‍♂️ Bob\nModern Challenge"
 
 
+def test_format_deck_list_entry_empty_falls_back_to_unknown():
+    assert deck_formatting.format_deck_list_entry({}) == "Unknown"
+
+
+def test_format_deck_list_entry_empty_with_source_prepends_emoji_to_unknown():
+    entry = deck_formatting.format_deck_list_entry({}, show_source=True)
+    assert entry == "🧙🏾‍♂️ Unknown"
+
+
+def test_format_deck_list_entry_event_only_keeps_unknown_identity():
+    entry = deck_formatting.format_deck_list_entry({"event": "Modern Challenge"})
+    assert entry == "Unknown\nModern Challenge"
+
+
+# ---------------------------------------------------------------------------
+# re-exports
+# ---------------------------------------------------------------------------
+def test_normalize_date_is_reexported():
+    assert deck_formatting.normalize_date("Modern Challenge 2024-01-02") == "2024-01-02"
+
+
+def test_classify_event_type_is_reexported():
+    assert deck_formatting.classify_event_type("Modern Challenge") == "Challenge"
+    assert deck_formatting.classify_event_type("Friday Night") is None
+
+
 # ---------------------------------------------------------------------------
 # simple_summary_html
 # ---------------------------------------------------------------------------
@@ -127,3 +153,9 @@ def test_simple_summary_html_escapes_and_breaks():
     html = deck_formatting.simple_summary_html("a<b>&\nc")
     assert "a&lt;b&gt;&amp;<br>c" in html
     assert html.startswith("<html>")
+
+
+def test_simple_summary_html_full_template():
+    assert deck_formatting.simple_summary_html("hi") == (
+        '<html><body bgcolor="#22272E" text="#ECECEC">' '<font size="2">hi</font>' "</body></html>"
+    )

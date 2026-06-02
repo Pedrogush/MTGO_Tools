@@ -97,14 +97,14 @@ def _anchor_first_rule_id(escaped_paragraph: str) -> str:
     """Wrap the leading rule-id token in an ``<a name="…">`` anchor.
 
     The cross-ref linkifier must run *before* this so we don't double-wrap
-    the same token. Looks only at the first 12 chars of the paragraph for
-    a rule-id prefix; that keeps us safe from also matching IDs deeper in
-    the body that are already pure text.
+    the same token: a linkified leading id starts with an ``<a href=…>``
+    lead-in, so the anchored regex — which only matches a bare rule-id at
+    the very start of the paragraph — simply fails to match and returns the
+    paragraph unchanged. Paragraphs that don't lead with a rule id (free
+    prose) also fall through unchanged.
     """
     match = _RULE_HEADER_LINE_RE.match(escaped_paragraph)
     if match is None:
         return escaped_paragraph
     rule_id = match.group(1)
-    # If this token was already linkified by the cross-ref pass we'd see an
-    # ``<a href=…>`` lead-in instead — guard by checking the raw start.
     return f'<a name="{rule_id}">{rule_id}</a>{escaped_paragraph[len(rule_id):]}'

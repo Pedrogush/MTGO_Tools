@@ -1,5 +1,8 @@
+import pytest
+
 from services.deck_service import DeckService
-from utils.deck import sanitize_filename
+from utils import constants, deck
+from utils.deck import read_curr_deck_file, sanitize_filename, sanitize_zone_cards
 
 SAMPLE_DECK = """4 Ragavan, Nimble Pilferer
 2 Blood Moon
@@ -230,3 +233,91 @@ def test_sanitize_filename_normal_cases():
     # Single dots are allowed for version numbers
     assert sanitize_filename("UW Control v2.0") == "UW Control v2.0"
     assert sanitize_filename("deck.backup") == "deck.backup"
+
+
+def test_sanitize_zone_cards_keeps_valid_entries():
+    """Valid entries pass through with name and quantity preserved."""
+    result = sanitize_zone_cards(
+        [
+            {"name": "Lightning Bolt", "qty": 4},
+            {"name": "Island", "qty": "3"},
+        ]
+    )
+    assert result == [
+        {"name": "Lightning Bolt", "qty": 4},
+        {"name": "Island", "qty": 3},
+    ]
+    assert isinstance(result[1]["qty"], int)
+
+
+def test_sanitize_zone_cards_preserves_fractional_quantities():
+    """Averaged decks use fractional counts; whole numbers coerce to int, fractions stay float."""
+    result = sanitize_zone_cards(
+        [
+            {"name": "Lightning Bolt", "qty": 2.5},
+            {"name": "Island", "qty": 3.0},
+        ]
+    )
+    assert result[0] == {"name": "Lightning Bolt", "qty": 2.5}
+    assert isinstance(result[0]["qty"], float)
+    assert result[1] == {"name": "Island", "qty": 3}
+    assert isinstance(result[1]["qty"], int)
+
+
+def test_sanitize_zone_cards_defaults_missing_qty_to_zero_and_skips():
+    """Entries with no qty default to 0 and are dropped as non-positive."""
+    assert sanitize_zone_cards([{"name": "No Quantity"}]) == []
+
+
+def test_sanitize_zone_cards_skips_invalid_entries():
+    """Non-dicts, missing/blank names, unparseable and non-positive qtys are all dropped."""
+    entries = [
+        "not a dict",
+        42,
+        {"qty": 4},  # no name key
+        {"name": "", "qty": 4},  # blank name
+        {"name": None, "qty": 4},  # falsy name
+        {"name": "Bad Qty", "qty": "abc"},  # unparseable
+        {"name": "None Qty", "qty": None},  # TypeError on float()
+        {"name": "Zero", "qty": 0},  # non-positive
+        {"name": "Negative", "qty": -2},  # clamped to 0, then skipped
+    ]
+    assert sanitize_zone_cards(entries) == []
+
+
+def test_read_curr_deck_file_reads_primary_path(tmp_path, monkeypatch):
+    """The primary CURR_DECK_FILE is read when present."""
+    primary = tmp_path / "curr_deck.txt"
+    primary.write_text("4 Ragavan, Nimble Pilferer\n", encoding="utf-8")
+    monkeypatch.setattr(constants, "CURR_DECK_FILE", primary)
+    monkeypatch.setattr(deck, "LEGACY_CURR_DECK_CACHE", tmp_path / "cache" / "curr_deck.txt")
+    monkeypatch.setattr(deck, "LEGACY_CURR_DECK_ROOT", tmp_path / "legacy_root.txt")
+
+    assert read_curr_deck_file() == "4 Ragavan, Nimble Pilferer\n"
+
+
+def test_read_curr_deck_file_migrates_legacy_file(tmp_path, monkeypatch):
+    """A legacy file is read, copied to the primary path, and the legacy copy removed."""
+    primary = tmp_path / "curr_deck.txt"
+    legacy = tmp_path / "cache" / "curr_deck.txt"
+    legacy.parent.mkdir(parents=True, exist_ok=True)
+    legacy.write_text("2 Blood Moon\n", encoding="utf-8")
+    monkeypatch.setattr(constants, "CURR_DECK_FILE", primary)
+    monkeypatch.setattr(deck, "LEGACY_CURR_DECK_CACHE", legacy)
+    monkeypatch.setattr(deck, "LEGACY_CURR_DECK_ROOT", tmp_path / "legacy_root.txt")
+
+    assert read_curr_deck_file() == "2 Blood Moon\n"
+    # Contents migrated to the primary location.
+    assert primary.read_text(encoding="utf-8") == "2 Blood Moon\n"
+    # Legacy file removed after successful migration.
+    assert not legacy.exists()
+
+
+def test_read_curr_deck_file_raises_when_missing(tmp_path, monkeypatch):
+    """FileNotFoundError is raised when no candidate file exists."""
+    monkeypatch.setattr(constants, "CURR_DECK_FILE", tmp_path / "curr_deck.txt")
+    monkeypatch.setattr(deck, "LEGACY_CURR_DECK_CACHE", tmp_path / "cache" / "curr_deck.txt")
+    monkeypatch.setattr(deck, "LEGACY_CURR_DECK_ROOT", tmp_path / "legacy_root.txt")
+
+    with pytest.raises(FileNotFoundError):
+        read_curr_deck_file()

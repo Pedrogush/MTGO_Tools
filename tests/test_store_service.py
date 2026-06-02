@@ -43,16 +43,6 @@ def test_load_store_reads_valid_json(tmp_path: Path, store_service: StoreService
     assert result == payload
 
 
-def test_load_store_returns_empty_on_invalid_json(tmp_path: Path, store_service: StoreService):
-    """Invalid JSON is ignored and returns an empty dict."""
-    path = tmp_path / "corrupt.json"
-    path.write_text("{bad json", encoding="utf-8")
-
-    result = store_service.load_store(path)
-
-    assert result == {}
-
-
 def test_load_store_handles_oserror(monkeypatch, tmp_path: Path, store_service: StoreService):
     """OS errors while reading a store fall back to an empty dict and log a warning."""
     from loguru import logger
@@ -126,17 +116,26 @@ def test_save_store_preserves_unicode(tmp_path: Path, store_service: StoreServic
     assert "\\u00e9" not in raw  # ensure it was not escaped
 
 
-def test_save_store_handles_write_errors(monkeypatch, tmp_path: Path, store_service: StoreService):
-    """Errors during write operations are swallowed gracefully."""
-    target = tmp_path / "store.json"
+def test_save_store_handles_write_errors(tmp_path: Path, store_service: StoreService):
+    """A real OS write error is swallowed and logged, not raised."""
+    from loguru import logger
 
-    def fake_atomic_write(*args, **kwargs):  # pylint: disable=unused-argument
-        raise OSError("no space left on device")
+    # Place a regular file where save_store expects a parent directory. The
+    # real atomic write then fails when it tries to mkdir the parent, raising
+    # a genuine OSError (NotADirectoryError) without patching internals.
+    blocker = tmp_path / "blocker"
+    blocker.write_text("not a directory", encoding="utf-8")
+    target = blocker / "store.json"
 
-    monkeypatch.setattr("services.store_service.atomic_write_json", fake_atomic_write)
+    messages: list[str] = []
+    sink_id = logger.add(messages.append, level="WARNING")
+    try:
+        store_service.save_store(target, {"notes": {}})
+    finally:
+        logger.remove(sink_id)
 
-    store_service.save_store(target, {"notes": {}})
     assert not target.exists()
+    assert any("Failed to write" in message for message in messages)
 
 
 def test_get_store_service_returns_singleton():

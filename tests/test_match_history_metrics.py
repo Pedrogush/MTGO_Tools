@@ -3,15 +3,19 @@
 These cover the pure functions extracted from
 ``widgets/frames/match_history/handlers.py`` into ``properties.py``:
 ``resolve_match_perspective``, ``compute_history_metrics`` and
-``compute_opponent_stats``. ``wx`` is not importable in the WSL dev
-environment and the package ``__init__`` pulls in the wx-dependent frame, so
-``properties.py`` is loaded directly by file path.
+``compute_opponent_stats``. They also cover the wx-free helper methods on
+``MatchHistoryPropertiesMixin`` (``_iter_matches``, ``_parse_date`` and
+``_within_range``), which read only ``current_username`` and their arguments,
+so they can be exercised on a bare mixin instance. ``wx`` is not importable in
+the WSL dev environment and the package ``__init__`` pulls in the wx-dependent
+frame, so ``properties.py`` is loaded directly by file path.
 """
 
 from __future__ import annotations
 
 import importlib.util
 import types
+from datetime import date, datetime
 from pathlib import Path
 
 
@@ -35,6 +39,21 @@ _props = _load_properties_module()
 resolve_match_perspective = _props.resolve_match_perspective
 compute_history_metrics = _props.compute_history_metrics
 compute_opponent_stats = _props.compute_opponent_stats
+MatchHistoryPropertiesMixin = _props.MatchHistoryPropertiesMixin
+
+
+def _make_mixin(current_username: str | None) -> object:
+    """Bind the wx-free mixin methods to a stub carrying ``current_username``.
+
+    The mixin has no ``__init__`` (state lives on the wx frame), and the
+    methods exercised here (``_iter_matches``, ``_parse_date``,
+    ``_within_range``) only read ``current_username``, so a bare subclass with
+    that attribute set is a faithful, wx-free harness.
+    """
+
+    obj = MatchHistoryPropertiesMixin.__new__(MatchHistoryPropertiesMixin)
+    obj.current_username = current_username
+    return obj
 
 
 # ----------------------------------------------------------------- resolve_match_perspective
@@ -199,3 +218,165 @@ def test_compute_opponent_stats_aggregates() -> None:
     assert out["games_played"] == 5
     assert out["win_pct"] == 50.0
     assert out["mull_rate"] == 20.0
+
+
+# -------------------------------------------------------------------------------- _iter_matches
+def test_iter_matches_username_is_player1() -> None:
+    mixin = _make_mixin("me")
+    raw = [
+        {
+            "timestamp": datetime(2026, 1, 2, 10, 30),
+            "match_score": "2-1",
+            "players": ["me", "them"],
+            "winner": "me",
+            "player1_mulligans": [1, 0],
+            "player2_mulligans": [0],
+        }
+    ]
+    out = mixin._iter_matches(raw)
+    assert len(out) == 1
+    row = out[0]
+    assert row["date"] == date(2026, 1, 2)
+    assert row["match_win"] is True
+    assert row["games_won"] == 2
+    assert row["games_total"] == 3
+    assert row["total_mulligans"] == 1
+
+
+def test_iter_matches_username_is_player2_case_insensitive() -> None:
+    mixin = _make_mixin("ME")
+    raw = [
+        {
+            "timestamp": datetime(2026, 3, 4, 8, 0),
+            # match_score is player1-vs-player2; player2 (us) won 2-0.
+            "match_score": "0-2",
+            "players": ["them", "me"],
+            "winner": "me",
+            "player1_mulligans": [0],
+            "player2_mulligans": [1, 1],
+        }
+    ]
+    row = mixin._iter_matches(raw)[0]
+    # Score is taken from our (player2) perspective: we won 2-0.
+    assert row["match_win"] is True
+    assert row["games_won"] == 2
+    assert row["games_total"] == 2
+    assert row["total_mulligans"] == 2
+
+
+def test_iter_matches_unknown_username_falls_back_to_player1() -> None:
+    mixin = _make_mixin("zzz")
+    raw = [
+        {
+            "timestamp": datetime(2026, 5, 6, 12, 0),
+            "match_score": "2-0",
+            "players": ["a", "b"],
+            "winner": "a",
+            "total_mulligans": 3,
+        }
+    ]
+    row = mixin._iter_matches(raw)[0]
+    # Neither player matches the username: player1 is treated as us, and the
+    # aggregate ``total_mulligans`` field is used rather than per-player lists.
+    assert row["match_win"] is True
+    assert row["games_won"] == 2
+    assert row["games_total"] == 2
+    assert row["total_mulligans"] == 3
+
+
+def test_iter_matches_no_username_uses_player1_and_total_mulligans() -> None:
+    mixin = _make_mixin(None)
+    raw = [
+        {
+            "timestamp": datetime(2026, 6, 1, 9, 0),
+            "match_score": "1-2",
+            "players": ["a", "b"],
+            "winner": "b",
+            "total_mulligans": 4,
+        }
+    ]
+    row = mixin._iter_matches(raw)[0]
+    assert row["match_win"] is False
+    assert row["games_won"] == 1
+    assert row["games_total"] == 3
+    assert row["total_mulligans"] == 4
+
+
+def test_iter_matches_skips_non_dict_entries() -> None:
+    mixin = _make_mixin(None)
+    out = mixin._iter_matches(["nope", 42, None])  # type: ignore[list-item]
+    assert out == []
+
+
+def test_iter_matches_bad_score_and_missing_fields_default_to_zero() -> None:
+    mixin = _make_mixin(None)
+    raw = [{"match_score": "??"}]
+    row = mixin._iter_matches(raw)[0]
+    assert row["date"] is None
+    assert row["match_win"] is False
+    assert row["games_won"] == 0
+    assert row["games_total"] == 0
+    assert row["total_mulligans"] == 0
+
+
+# ----------------------------------------------------------------------------------- _parse_date
+def test_parse_date_none_and_empty_return_none() -> None:
+    mixin = _make_mixin(None)
+    assert mixin._parse_date(None) is None
+    assert mixin._parse_date("") is None
+
+
+def test_parse_date_iso_with_zulu_suffix() -> None:
+    mixin = _make_mixin(None)
+    assert mixin._parse_date("2026-01-02T10:30:00Z") == date(2026, 1, 2)
+
+
+def test_parse_date_plain_date() -> None:
+    mixin = _make_mixin(None)
+    assert mixin._parse_date("2026-01-02") == date(2026, 1, 2)
+
+
+def test_parse_date_falls_back_to_prefix_parse() -> None:
+    mixin = _make_mixin(None)
+    # Not valid ISO (space + extra junk), but the first 10 chars are a date.
+    assert mixin._parse_date("2026-01-02 something weird") == date(2026, 1, 2)
+
+
+def test_parse_date_unparseable_returns_none() -> None:
+    mixin = _make_mixin(None)
+    assert mixin._parse_date("not-a-date") is None
+
+
+# ---------------------------------------------------------------------------------- _within_range
+def test_within_range_none_date_with_no_bounds_included() -> None:
+    mixin = _make_mixin(None)
+    assert mixin._within_range(None, None, None) is True
+
+
+def test_within_range_none_date_with_bounds_excluded() -> None:
+    mixin = _make_mixin(None)
+    assert mixin._within_range(None, date(2026, 1, 1), None) is False
+    assert mixin._within_range(None, None, date(2026, 1, 1)) is False
+
+
+def test_within_range_inside_bounds() -> None:
+    mixin = _make_mixin(None)
+    assert mixin._within_range(date(2026, 1, 15), date(2026, 1, 1), date(2026, 1, 31)) is True
+
+
+def test_within_range_before_start_excluded() -> None:
+    mixin = _make_mixin(None)
+    assert mixin._within_range(date(2025, 12, 31), date(2026, 1, 1), None) is False
+
+
+def test_within_range_after_end_excluded() -> None:
+    mixin = _make_mixin(None)
+    assert mixin._within_range(date(2026, 2, 1), None, date(2026, 1, 31)) is False
+
+
+def test_within_range_boundaries_inclusive() -> None:
+    mixin = _make_mixin(None)
+    start = date(2026, 1, 1)
+    end = date(2026, 1, 31)
+    assert mixin._within_range(start, start, end) is True
+    assert mixin._within_range(end, start, end) is True
