@@ -3,7 +3,26 @@ from __future__ import annotations
 import threading
 import time
 
+import pytest
+
 from utils.background_worker import BackgroundWorker
+
+
+@pytest.fixture(autouse=True)
+def _synchronous_call_after(monkeypatch):
+    """Run wx.CallAfter callbacks synchronously whenever wx is importable.
+
+    The suite runs on a headless Windows CI runner where ``import wx`` succeeds
+    but no ``wx.App`` exists, so the real ``wx.CallAfter`` raises
+    "No wx.App created yet" and BackgroundWorker's callbacks never fire.
+    Off-Windows wx is absent and ``BackgroundWorker._call_after`` already falls
+    back to a direct call, so the stub is simply skipped there.
+    """
+    try:
+        import wx
+    except ImportError:
+        return
+    monkeypatch.setattr(wx, "CallAfter", lambda func, *args, **kwargs: func(*args, **kwargs))
 
 
 def test_background_worker_submit():
@@ -216,8 +235,10 @@ def test_background_worker_error_without_on_error_is_swallowed():
 
 
 def test_background_worker_call_after_runs_synchronously_without_wx():
-    # In the off-Windows test env wx is absent, so _call_after falls back to
-    # invoking the callback directly (synchronously, in the worker thread).
+    # The callback is marshalled synchronously: off-Windows wx is absent and
+    # _call_after falls back to a direct call; on the headless CI runner the
+    # _synchronous_call_after fixture stubs wx.CallAfter to the same effect.
+    # Either way the callback runs in the worker thread before shutdown joins it.
     worker = BackgroundWorker()
     callback_thread = []
 
