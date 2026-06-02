@@ -1,0 +1,5 @@
+# Generated review/audit reports live here (architecture reviews, test reviews,
+# perf reports, license/database audits, etc.). They are build artifacts, not
+# version-controlled source — only this .gitignore is tracked so the folder exists.
+*
+!.gitignore
