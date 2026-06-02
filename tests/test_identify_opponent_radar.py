@@ -14,9 +14,16 @@ These exercise the real production code paths:
   partial matches, the no-match ``None`` path, and the repo-error path).
 
 ``wx`` is not importable in the WSL dev environment, so a permissive stub
-module is injected before the handler modules are imported by file path. The
-stub's ``CallAfter`` runs synchronously so the marshalled UI calls can be
-asserted directly.
+module is injected before the handler modules are imported by file path. So the
+marshalled UI calls can be asserted directly, the handler modules loaded under
+test get their module-global ``wx`` rebound to a proxy whose ``CallAfter`` runs
+synchronously. Crucially this rebind is scoped to *these* modules only -- the
+shared ``wx`` module in ``sys.modules`` is left untouched, because other test
+files (e.g. the wxPython UI tests) rely on the real, asynchronous
+``wx.CallAfter`` to defer work off the construction path. Globally forcing
+``CallAfter`` synchronous makes deferred callbacks such as the opponent
+tracker's tutorial dialog fire mid-construction and block the whole suite on a
+modal ``ShowModal()``.
 """
 
 from __future__ import annotations
@@ -49,40 +56,68 @@ class _WxStub(types.ModuleType):
         return func(*args, **kwargs)
 
 
-def _install_wx_stub() -> types.ModuleType:
-    """Make ``wx.CallAfter`` synchronous so marshalled UI calls can be observed.
+class _SyncCallAfterWx(types.ModuleType):
+    """Proxy around the resolved ``wx`` whose ``CallAfter`` runs synchronously.
 
-    When the real ``wx`` is importable (the headless Windows CI runner) there is
-    no ``wx.App``, so the real ``wx.CallAfter`` raises "No wx.App created yet".
-    We override ``CallAfter`` to run synchronously instead of returning the
-    module untouched. When ``wx`` is absent (WSL dev) we inject a permissive
-    stub whose ``CallAfter`` is already synchronous.
+    Bound as the *loaded-under-test* handler modules' ``wx`` global so the
+    worker's marshalled UI calls execute inline (and can be asserted) without
+    a ``wx.App``. Every other attribute delegates to the real/stub ``wx``. This
+    proxy is NEVER placed in ``sys.modules``: mutating the shared ``wx`` module
+    would make ``CallAfter`` synchronous for the whole test session and hang the
+    wxPython UI tests, whose harness depends on deferred callbacks.
+    """
+
+    def __init__(self, base: types.ModuleType) -> None:
+        super().__init__("wx")
+        self.__dict__["_base"] = base
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self.__dict__["_base"], name)
+
+    @staticmethod
+    def CallAfter(func: Any, *args: Any, **kwargs: Any) -> Any:  # noqa: N802
+        return func(*args, **kwargs)
+
+
+def _ensure_wx_importable() -> types.ModuleType:
+    """Return the ``wx`` module the handlers should import, leaving it untouched.
+
+    On the Windows CI runner the real ``wx`` is importable and is returned as-is
+    (no global mutation). On the WSL dev box ``wx`` is absent, so a permissive
+    stub is injected into ``sys.modules`` -- required because importing the
+    handler modules transitively imports ``wx`` (e.g. ``services.radar_service``
+    pulls in ``utils.constants.keyboard``).
     """
     try:
         import wx as real_wx
 
-        real_wx.CallAfter = lambda func, *args, **kwargs: func(*args, **kwargs)
         return real_wx
     except Exception:
-        pass
-    stub = _WxStub("wx")
-    sys.modules["wx"] = stub
-    return stub
+        stub = _WxStub("wx")
+        sys.modules["wx"] = stub
+        return stub
 
 
 def _load_module(name: str, *parts: str) -> types.ModuleType:
-    """Import a module directly by file path, bypassing package side effects."""
+    """Import a module by file path and give it a synchronous ``wx.CallAfter``.
+
+    The module's own ``import wx`` binds the shared ``wx`` object; we rebind the
+    module global to a per-module proxy so its marshalled UI calls run inline
+    without affecting any other module's ``wx``.
+    """
     path = Path(__file__).resolve().parent.parent.joinpath(*parts)
     spec = importlib.util.spec_from_file_location(name, path)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
+    if hasattr(module, "wx"):
+        module.wx = _SyncCallAfterWx(module.wx)
     return module
 
 
-# wx must be stubbed before importing anything that transitively imports it
+# wx must be importable before loading anything that transitively imports it
 # (services.radar_service pulls in utils.constants.keyboard, which imports wx).
-_install_wx_stub()
+_ensure_wx_importable()
 
 from services.radar_service import CardFrequency, RadarData  # noqa: E402
 
