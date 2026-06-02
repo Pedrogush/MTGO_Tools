@@ -5,6 +5,7 @@ instances to ensure test isolation and prevent state leakage between tests.
 """
 
 import sys
+import warnings
 from pathlib import Path
 
 # Add parent directory to sys.path to enable imports from repositories and services
@@ -14,16 +15,45 @@ if str(parent_dir) not in sys.path:
 
 
 # ruff: noqa: E402
+def _noop(*_args, **_kwargs):
+    return None
+
+
 def _optional_reset(module_path: str, attr_name: str):
-    """Dynamically import a reset function, falling back to a no-op."""
+    """Dynamically import a reset function, falling back to a no-op.
+
+    The fallback exists so the test suite still collects in environments where
+    an optional dependency (e.g. ``wx``) is unavailable and the target module
+    cannot be imported. To avoid masking real regressions, only the expected
+    import/attribute failures are tolerated, and any fallback that is *not*
+    caused by a genuinely missing optional dependency is surfaced as a warning
+    so that a renamed/removed/relocated reset function is loud rather than a
+    silently broken test-isolation no-op.
+    """
     try:
         module = __import__(module_path, fromlist=[attr_name])
+    except ImportError as exc:  # pragma: no cover - depends on installed deps
+        # A missing optional dependency (the module that failed to import is
+        # not the target module itself) is the expected, benign fallback case.
+        missing = getattr(exc, "name", None)
+        if missing is not None and missing != module_path:
+            return _noop
+        warnings.warn(
+            f"Could not import reset module {module_path!r}; test isolation for "
+            f"{attr_name!r} is disabled (using a no-op).",
+            stacklevel=2,
+        )
+        return _noop
+
+    try:
         return getattr(module, attr_name)
-    except Exception:  # pragma: no cover - used in CI without optional deps
-
-        def _noop(*_args, **_kwargs):
-            return None
-
+    except AttributeError:
+        warnings.warn(
+            f"{module_path!r} has no attribute {attr_name!r}; test isolation for "
+            f"this singleton is disabled (using a no-op). It may have been "
+            f"renamed or removed.",
+            stacklevel=2,
+        )
         return _noop
 
 
