@@ -75,6 +75,14 @@ def test_replace_mana_symbols_threads_symbol_size(tmp_path) -> None:
     assert 'width="24" height="24"' in out
 
 
+def test_replace_mana_symbols_empty_returns_empty() -> None:
+    # The empty/None guard short-circuits before the resolver is ever called.
+    def _boom(token: str):  # noqa: ARG001
+        raise AssertionError("resolver must not be called for empty input")
+
+    assert replace_mana_symbols("", _boom) == ""
+
+
 def test_render_flavor_text_escapes_and_converts_newlines() -> None:
     out = render_flavor_text("Fear cuts deeper <than swords>.\nNext line & more.")
     assert "&lt;than swords&gt;" in out
@@ -117,6 +125,10 @@ def test_build_card_html_meta_get_subscript_fallback() -> None:
     html = build_card_html(meta, None, _no_png)
     assert "Mox Ruby" in html
     assert "Artifact" in html
+    # Every subscript-read field is rendered, not just name/type_line: the
+    # oracle text and the mana-cost fallback both come through the same path.
+    assert "Add R." in html
+    assert "{0}" in html
 
 
 def test_build_card_html_meta_get_subscript_keyerror_uses_default() -> None:
@@ -198,6 +210,36 @@ def test_build_card_html_renders_card_and_printing_fields() -> None:
     assert "161" in html
     assert "Christopher Rush" in html
     assert "<i>The sparkmage shrieked." in html
+
+
+def test_build_card_html_edition_label_set_name_only() -> None:
+    """With a set name but no set code, the label is the bare name (no parens)."""
+    meta = {
+        "name": "Lightning Bolt",
+        "mana_cost": "{R}",
+        "type_line": "Instant",
+        "oracle_text": "",
+    }
+    printing = {"set_name": "Limited Edition Alpha", "set": ""}
+    html = build_card_html(meta, printing, _no_png)
+    assert "Limited Edition Alpha" in html
+    # No parenthesised code is appended when the set code is absent.
+    assert "Limited Edition Alpha (" not in html
+
+
+def test_build_card_html_edition_label_set_code_only() -> None:
+    """With a set code but no set name, the label is the upper-cased code alone."""
+    meta = {
+        "name": "Lightning Bolt",
+        "mana_cost": "{R}",
+        "type_line": "Instant",
+        "oracle_text": "",
+    }
+    printing = {"set_name": "", "set": "lea"}
+    html = build_card_html(meta, printing, _no_png)
+    assert ">LEA<" in html
+    # No parenthesised form when there is no set name to pair it with.
+    assert "(LEA)" not in html
 
 
 def test_build_card_html_creature_includes_pt() -> None:
