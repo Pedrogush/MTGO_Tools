@@ -231,3 +231,76 @@ def test_running_under_wsl_false_when_proc_version_unreadable(monkeypatch):
 
     monkeypatch.setattr("builtins.open", _raise_oserror)
     assert paths._running_under_wsl() is False
+
+
+def test_running_under_wsl_true_when_distro_env_set(monkeypatch):
+    monkeypatch.setattr(paths.sys, "platform", "linux")
+    monkeypatch.delenv("WSL_INTEROP", raising=False)
+    monkeypatch.setenv("WSL_DISTRO_NAME", "Ubuntu")
+    assert paths._running_under_wsl() is True
+
+
+def test_resolved_env_base_dir_returns_none_when_unset(monkeypatch):
+    monkeypatch.delenv(paths.BASE_DATA_DIR_ENV_VAR, raising=False)
+    assert paths._resolved_env_base_dir() is None
+
+
+def test_resolved_env_base_dir_expands_user(tmp_path, monkeypatch):
+    """A '~'-prefixed override is expanded against $HOME before resolution."""
+    home = tmp_path / "home"
+    (home / "shared").mkdir(parents=True)
+    monkeypatch.setenv("HOME", str(home))
+    # On Windows ``os.path.expanduser`` resolves ``~`` via USERPROFILE
+    # (and HOMEDRIVE/HOMEPATH), not HOME, so set it too for cross-platform parity.
+    monkeypatch.setenv("USERPROFILE", str(home))
+    monkeypatch.setenv(paths.BASE_DATA_DIR_ENV_VAR, "~/shared")
+
+    assert paths._resolved_env_base_dir() == (home / "shared").resolve()
+
+
+def test_safe_cwd_returns_none_on_oserror(monkeypatch):
+    """A missing/inaccessible cwd is swallowed and reported as None."""
+
+    def _raise_oserror():
+        raise OSError("cwd gone")
+
+    monkeypatch.setattr(paths.Path, "cwd", staticmethod(_raise_oserror))
+    assert paths._safe_cwd() is None
+
+
+def test_default_base_dir_uses_executable_dir_when_frozen(tmp_path, monkeypatch):
+    """A frozen (PyInstaller) build resolves the base dir next to the executable."""
+    exe = tmp_path / "dist" / "app.exe"
+    exe.parent.mkdir(parents=True)
+    exe.write_text("", encoding="utf-8")
+
+    monkeypatch.delenv(paths.BASE_DATA_DIR_ENV_VAR, raising=False)
+    monkeypatch.setattr(paths.sys, "frozen", True, raising=False)
+    monkeypatch.setattr(paths.sys, "executable", str(exe), raising=False)
+
+    assert paths._default_base_dir() == exe.resolve().parent
+
+
+def test_ensure_base_dirs_creates_all_directories(tmp_path, monkeypatch):
+    """ensure_base_dirs creates every configured directory, idempotently."""
+    expected_dirs = [
+        tmp_path / "base",
+        tmp_path / "base" / "config",
+        tmp_path / "base" / "cache",
+        tmp_path / "decks",
+        tmp_path / "base" / "logs",
+        tmp_path / "base" / "data",
+    ]
+    monkeypatch.setattr(paths, "BASE_DATA_DIR", expected_dirs[0])
+    monkeypatch.setattr(paths, "CONFIG_DIR", expected_dirs[1])
+    monkeypatch.setattr(paths, "CACHE_DIR", expected_dirs[2])
+    monkeypatch.setattr(paths, "DECKS_DIR", expected_dirs[3])
+    monkeypatch.setattr(paths, "LOGS_DIR", expected_dirs[4])
+    monkeypatch.setattr(paths, "CARD_DATA_DIR", expected_dirs[5])
+
+    paths.ensure_base_dirs()
+    # A second call must not raise (exist_ok=True).
+    paths.ensure_base_dirs()
+
+    for directory in expected_dirs:
+        assert directory.is_dir()
