@@ -152,6 +152,77 @@ def test_replace_format_pool_rejects_invalid_entries(repo):
     assert repo.get_card_total("modern", "Lightning Bolt") is None
 
 
+def test_list_formats_and_has_format_pool(repo):
+    # No snapshots yet: list is empty and lookups are false.
+    assert repo.list_formats() == []
+    assert repo.has_format_pool("modern") is False
+
+    repo.replace_format_pool(_entry("modern"))
+    repo.replace_format_pool(_entry("legacy"))
+
+    # list_formats is sorted ascending and contains exactly the stored formats.
+    assert repo.list_formats() == ["legacy", "modern"]
+
+    # has_format_pool is case-insensitive and whitespace-trimmed for present
+    # formats, and false for absent ones.
+    assert repo.has_format_pool("modern") is True
+    assert repo.has_format_pool("  MODERN  ") is True
+    assert repo.has_format_pool("pauper") is False
+
+
+def test_has_format_pool_blank_input(repo):
+    repo.replace_format_pool(_entry())
+    assert repo.has_format_pool("") is False
+    assert repo.has_format_pool("   ") is False
+
+
+def test_get_card_names_semantics(repo):
+    # get_card_names returns every tracked card (including never-played ones),
+    # not just those with copies > 0.
+    repo.replace_format_pool(_entry())
+    assert repo.get_card_names("modern") == {"Lightning Bolt", "Brainstorm"}
+    # Unknown format and blank input both return an empty set.
+    assert repo.get_card_names("legacy") == set()
+    assert repo.get_card_names("   ") == set()
+
+
+def test_get_top_cards_semantics(repo):
+    repo.replace_format_pool(
+        _entry(
+            cards=["Lightning Bolt", "Brainstorm", "Counterspell"],
+            copy_totals=[
+                {"card_name": "Lightning Bolt", "copies_played": 40},
+                {"card_name": "Counterspell", "copies_played": 12},
+                {"card_name": "Brainstorm", "copies_played": 0},
+            ],
+        )
+    )
+
+    top = repo.get_top_cards("modern")
+    # Ordered by copies_played desc; never-played cards (0) are excluded.
+    assert [(t.card_name, t.copies_played) for t in top] == [
+        ("Lightning Bolt", 40),
+        ("Counterspell", 12),
+    ]
+
+    # limit is honoured and floored to at least 1.
+    assert [t.card_name for t in repo.get_top_cards("modern", limit=1)] == ["Lightning Bolt"]
+    assert len(repo.get_top_cards("modern", limit=0)) == 1
+
+    # Unknown format and blank input return an empty list.
+    assert repo.get_top_cards("legacy") == []
+    assert repo.get_top_cards("   ") == []
+
+
+def test_read_path_blank_input_guards(repo):
+    repo.replace_format_pool(_entry())
+    # Blank/whitespace format short-circuits before touching the DB.
+    assert repo.get_card_total("   ", "Lightning Bolt") is None
+    assert repo.get_summary("   ") is None
+    # Blank card name on get_card_total also returns None.
+    assert repo.get_card_total("modern", "") is None
+
+
 def test_copies_played_coercion_falls_back_to_zero(repo):
     # Non-numeric, None, and missing copies_played must coerce to 0 rather than
     # corrupting the stored total or raising.
