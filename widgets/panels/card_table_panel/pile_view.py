@@ -454,7 +454,21 @@ class DeckPileView(wx.ScrolledWindow):
                     dc.SetPen(wx.Pen(wx.Colour(*DARK_ACCENT), 3))
                 else:
                     dc.SetPen(wx.Pen(wx.Colour(*SUBDUED_TEXT), 1, wx.PENSTYLE_DOT))
-                dc.DrawRoundedRectangle(rect, DECK_CARD_CORNER_RADIUS)
+                # Only the bottom card of a pile is fully visible; the rest show
+                # just their top name strip. Clip the outline to the visible
+                # part so a stacked card isn't ringed across its hidden body.
+                is_bottom = member_idx == total - 1
+                if is_bottom:
+                    dc.DrawRoundedRectangle(rect, DECK_CARD_CORNER_RADIUS)
+                else:
+                    # Pen extends ~1.5px outside the path; widen the clip on the
+                    # top/sides to keep it, but cut the bottom exactly where the
+                    # next card begins so the side lines stop cleanly there.
+                    dc.SetClippingRegion(
+                        rect.x - 2, rect.y - 2, rect.width + 4, _NAME_STRIP_HEIGHT + 2
+                    )
+                    dc.DrawRoundedRectangle(rect, DECK_CARD_CORNER_RADIUS)
+                    dc.DestroyClippingRegion()
 
     def _draw_pile(
         self,
