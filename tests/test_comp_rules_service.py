@@ -204,6 +204,14 @@ def test_get_keyword_lookup_returns_empty_when_no_cache(tmp_path: Path) -> None:
     assert svc.get_keyword_lookup() == {}
 
 
+def test_get_outline_returns_empty_when_no_cache(tmp_path: Path) -> None:
+    svc = CompRulesService(
+        cache_path=tmp_path / "comp_rules.txt",
+        stamp_path=tmp_path / "stamp.json",
+    )
+    assert svc.get_outline() == []
+
+
 def test_get_keyword_lookup_parses_cached_file(tmp_path: Path) -> None:
     cache = tmp_path / "comp_rules.txt"
     cache.write_text(_FIXTURE_TXT, encoding="utf-8")
@@ -299,6 +307,53 @@ def test_refresh_returns_false_when_no_url_on_landing(tmp_path: Path) -> None:
     assert svc.refresh() is False
 
 
+def test_refresh_returns_false_and_writes_nothing_when_download_fails(
+    tmp_path: Path,
+) -> None:
+    """Landing reachable + .txt URL found, but the byte fetch fails: refresh
+    must report no download and leave the cache/stamp untouched."""
+    url = "https://media.wizards.com/2026/downloads/MagicCompRules%2020260227.txt"
+    landing = f'<a href="{url}">link</a>'
+    # txt_bytes=None simulates a failed download; no pre-existing stamp/cache.
+    svc = _make_service_with_stub_http(tmp_path, landing, txt_bytes=None)
+    assert svc.refresh() is False
+    # The download-failure branch must not create a partial/empty cache or stamp.
+    assert not (tmp_path / "comp_rules.txt").exists()
+    assert not (tmp_path / "stamp.json").exists()
+
+
+def test_refresh_leaves_existing_cache_intact_when_download_fails(
+    tmp_path: Path,
+) -> None:
+    """A failed re-download must not clobber an already-cached copy."""
+    new_url = "https://media.wizards.com/2026/downloads/MagicCompRules%2020260301.txt"
+    old_url = "https://media.wizards.com/2026/downloads/MagicCompRules%2020260227.txt"
+    landing = f'<a href="{new_url}">link</a>'
+    svc = _make_service_with_stub_http(tmp_path, landing, txt_bytes=None)
+    # Pre-existing cache + stamp pointing at the older URL — the freshness
+    # check trips (new_url != old_url) so refresh reaches the download branch.
+    (tmp_path / "comp_rules.txt").write_bytes(b"existing")
+    (tmp_path / "stamp.json").write_text(f'{{"source_url":"{old_url}"}}', encoding="utf-8")
+    assert svc.refresh() is False
+    assert (tmp_path / "comp_rules.txt").read_bytes() == b"existing"
+    assert (tmp_path / "stamp.json").read_text(encoding="utf-8") == (
+        f'{{"source_url":"{old_url}"}}'
+    )
+
+
+def test_refresh_redownloads_when_stamp_is_corrupt(tmp_path: Path) -> None:
+    """A garbage/unreadable stamp is treated as 'no stamp': refresh re-downloads
+    without raising."""
+    url = "https://media.wizards.com/2026/downloads/MagicCompRules%2020260227.txt"
+    landing = f'<a href="{url}">link</a>'
+    svc = _make_service_with_stub_http(tmp_path, landing, _FIXTURE_TXT.encode("utf-8"))
+    # Pre-write a corrupt stamp (invalid JSON) alongside a stale cache.
+    (tmp_path / "comp_rules.txt").write_bytes(b"stale")
+    (tmp_path / "stamp.json").write_bytes(b"{not json")
+    assert svc.refresh() is True
+    assert (tmp_path / "comp_rules.txt").read_bytes() == _FIXTURE_TXT.encode("utf-8")
+
+
 # ============================== parse_outline ==============================
 
 
@@ -358,6 +413,43 @@ def test_parse_outline_skips_toc_section_headers() -> None:
     sec1 = by_num[1]
     sec1_rule_ids = {sub.rule_id for sub in sec1.subsections}
     assert "200" not in sec1_rule_ids
+
+
+def test_parse_outline_bounds_last_section_at_credits_when_glossary_absent() -> None:
+    """With no Glossary header, the final section's body must be bounded by the
+    Credits marker (the elif branch), not run to end-of-file."""
+    # Drop the standalone "Glossary" header lines (TOC entry + body header) so
+    # the Glossary-present branch can't fire; Credits remains as the fallback.
+    no_glossary = "\n".join(
+        line for line in _FIXTURE_TXT.splitlines() if line.strip() != "Glossary"
+    )
+    outline = parse_outline(no_glossary)
+    numbers = [s.number for s in outline]
+    # No synthetic Glossary section may be emitted.
+    assert 0 not in numbers
+    # The last real section (2. Parts of a Card) must stop before Credits — its
+    # body should contain its own 200.x rule but not the credits prose.
+    by_num = {s.number: s for s in outline}
+    sec2 = by_num[2]
+    sec2_rule_ids = {sub.rule_id for sub in sec2.subsections}
+    assert "200" in sec2_rule_ids
+    bodies = " ".join(sub.body for sub in sec2.subsections)
+    assert "Richard Garfield" not in bodies
+
+
+def test_parse_outline_bounds_last_section_at_eof_when_no_markers() -> None:
+    """With neither Glossary nor Credits, the final section's body runs to the
+    end of the file (the else branch)."""
+    stripped = "\n".join(
+        line for line in _FIXTURE_TXT.splitlines() if line.strip() not in ("Glossary", "Credits")
+    )
+    outline = parse_outline(stripped)
+    numbers = [s.number for s in outline]
+    assert 0 not in numbers  # no synthetic Glossary section
+    by_num = {s.number: s for s in outline}
+    sec2 = by_num[2]
+    sec2_rule_ids = {sub.rule_id for sub in sec2.subsections}
+    assert "200" in sec2_rule_ids
 
 
 def test_get_outline_memoizes_until_mtime_changes(tmp_path: Path) -> None:

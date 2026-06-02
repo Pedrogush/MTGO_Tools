@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import threading
 from typing import Any
 
 from controllers.app_controller.cache_warmer import CacheWarmer
@@ -144,4 +145,111 @@ def test_failing_dependencies_are_swallowed():
     warmer._warm_images()
     warmer._warm_decklists()
 
+    assert queued == []
+
+
+def test_warm_decklists_phase1_limit_truncates_top_decks_per_format():
+    # Many archetypes per format, each with a deck, so the Phase 1 total-count
+    # cap (top_decks_per_format) is the binding constraint and actually fires.
+    archetypes = {
+        "Legacy": [{"name": n, "href": f"legacy-{n}"} for n in ("a", "b", "c", "d")],
+        "Modern": [{"name": n, "href": f"modern-{n}"} for n in ("e", "f", "g")],
+    }
+    decks = {
+        "legacy-a": [{"number": "1"}],
+        "legacy-b": [{"number": "2"}],
+        "legacy-c": [{"number": "3"}],
+        "legacy-d": [{"number": "4"}],
+        "modern-e": [{"number": "5"}],
+        "modern-f": [{"number": "6"}],
+        "modern-g": [{"number": "7"}],
+    }
+    warmer, fetched, _ = _make_warmer(archetypes=archetypes, decks=decks)
+    warmer._top_decks_per_format = 2
+
+    # Phase 1 alone, capped at 2 decks per format: Legacy 1,2 then Modern 5,6.
+    phase1 = [
+        deck["number"]
+        for fmt in warmer._ordered_formats()
+        for deck in warmer._iter_format_decks(fmt, per_archetype=1, limit=2)
+    ]
+    assert phase1 == ["1", "2", "5", "6"]
+
+    # End to end: Phase 1 takes only the first 2 archetypes of each format;
+    # the remaining archetypes are then backfilled in Phases 2 and 3.
+    warmer._warm_decklists()
+    assert fetched == ["1", "2", "5", "6", "3", "4", "7"]
+    assert len(fetched) == len(set(fetched))
+
+
+def test_start_is_idempotent_and_stop_clears_threads():
+    warmer, _, _ = _make_warmer()
+
+    started = threading.Event()
+    release = threading.Event()
+
+    # Block each thread body so start() can be inspected before they finish.
+    def blocking_format() -> str:
+        started.set()
+        release.wait(1.0)
+        return "Legacy"
+
+    warmer._get_current_format = blocking_format
+
+    warmer.start()
+    threads = list(warmer._threads)
+    assert len(threads) == 2
+    assert {t.name for t in threads} == {"cache-warmer-images", "cache-warmer-decklists"}
+
+    # A second start() while threads exist is a no-op (no new threads spawned).
+    warmer.start()
+    assert warmer._threads == threads
+
+    assert started.wait(1.0)
+    release.set()
+
+    warmer.stop()
+    assert warmer._stop_event.is_set()
+    assert warmer._threads == []
+    for thread in threads:
+        assert not thread.is_alive()
+
+
+def test_mid_run_stop_halts_decklist_warming_immediately():
+    warmer, fetched, _ = _make_warmer()
+
+    original_download = warmer._download_deck_text
+
+    def download_then_stop(deck: dict[str, Any]) -> str:
+        text = original_download(deck)
+        # Request shutdown after the very first deck is fetched.
+        warmer.stop()
+        return text
+
+    warmer._download_deck_text = download_then_stop
+
+    warmer._warm_decklists()
+
+    # Only the pre-stop deck is fetched; cooperative cancellation halts the rest.
+    assert fetched == ["1"]
+
+
+def test_mid_run_stop_halts_image_warming_immediately():
+    warmer, fetched, queued = _make_warmer()
+
+    original_download = warmer._download_deck_text
+
+    def download_then_stop(deck: dict[str, Any]) -> str:
+        text = original_download(deck)
+        warmer.stop()
+        return text
+
+    warmer._download_deck_text = download_then_stop
+
+    warmer._warm_images()
+
+    # Only the first archetype's deck is fetched before the stop is observed.
+    assert fetched == ["1"]
+    # The per-card stop check fires before any card from that deck is queued, so
+    # no images are enqueued once shutdown is requested mid-run.
     assert queued == []

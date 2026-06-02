@@ -73,6 +73,7 @@ def test_resolve_perspective_player2_is_us() -> None:
     assert out["our_name"] == "me"
     assert out["opp_name"] == "them"
     assert out["our_archetype"] == "Burn"
+    assert out["opp_archetype"] == "Control"
     assert out["our_mulligans"] == [1, 1]
     assert out["our_score"] == 0
     assert out["opp_score"] == 2
@@ -93,6 +94,37 @@ def test_resolve_perspective_bad_score_falls_back_to_zero() -> None:
     out = resolve_match_perspective({"players": ["a", "b"], "match_score": "??"}, None)
     assert out["our_score"] == 0
     assert out["opp_score"] == 0
+
+
+def test_resolve_perspective_unknown_username_defaults_to_player1() -> None:
+    # A username present but matching neither player must fall back to player1
+    # being "us", as documented. (Regression: player2 was wrongly treated as us.)
+    match = {
+        "players": ["a", "b"],
+        "winner": "a",
+        "match_score": "2-1",
+        "player1_archetype": "Burn",
+        "player2_archetype": "Control",
+    }
+    out = resolve_match_perspective(match, "zzz")
+    assert out["our_name"] == "a"
+    assert out["opp_name"] == "b"
+    assert out["our_archetype"] == "Burn"
+    assert out["opp_archetype"] == "Control"
+    assert out["our_score"] == 2
+    assert out["opp_score"] == 1
+    assert out["we_won"] is True
+
+
+def test_resolve_perspective_missing_players_defaults_to_unknown() -> None:
+    out = resolve_match_perspective({"players": []}, None)
+    assert out["our_name"] == "Unknown"
+    assert out["opp_name"] == "Unknown"
+
+
+def test_resolve_perspective_missing_winner_we_won_false() -> None:
+    out = resolve_match_perspective({"players": ["a", "b"], "match_score": "2-0"}, None)
+    assert out["we_won"] is False
 
 
 # -------------------------------------------------------------------- compute_history_metrics
@@ -144,6 +176,9 @@ def test_compute_history_metrics_zero_games_no_div_by_zero() -> None:
     assert out["game_rate"] == 0.0
     assert out["mulligan_rate"] == 0.0
     assert out["games_with_data"] == 0
+    # Lock in the filtered-branch zero-division guard.
+    assert out["filtered"] is not None
+    assert out["filtered"]["game_rate"] == 0.0
 
 
 # --------------------------------------------------------------------- compute_opponent_stats

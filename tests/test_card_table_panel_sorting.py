@@ -19,6 +19,7 @@ from widgets.panels.card_table_panel.sorting import (
     TABLE_ACTION_REMOVE,
     TABLE_ACTION_SUB,
     action_slot_at,
+    card_mana_value,
     color_sort_key,
     group_into_piles,
     is_land,
@@ -93,6 +94,20 @@ def test_is_land_recognises_basic_land():
     assert is_land({"type_line": "Legendary Land"}) is True
     assert is_land({"type_line": "Creature — Elf"}) is False
     assert is_land({}) is False
+
+
+def test_card_mana_value_defaults_to_zero_when_missing_or_none():
+    # Missing key and explicit None both fall back to 0.0 (e.g. lands).
+    assert card_mana_value({}) == 0.0
+    assert card_mana_value({"mana_value": None}) == 0.0
+
+
+def test_card_mana_value_coerces_numeric_strings_and_swallows_bad_values():
+    # Numeric strings coerce cleanly; non-numeric values fall back to 0.0
+    # instead of raising (defensive against malformed metadata).
+    assert card_mana_value({"mana_value": "3"}) == 3.0
+    assert card_mana_value({"mana_value": "X"}) == 0.0
+    assert card_mana_value({"mana_value": object()}) == 0.0
 
 
 def test_color_sort_key_orders_wubrg_then_multi_then_colorless():
@@ -210,6 +225,18 @@ def test_pile_sort_by_type(deck_meta):
     labels = [label for (_order, label), _ in piles]
     assert "Land" in labels
     assert "Creature" in labels
+
+
+def test_pile_key_for_buckets_high_mana_value_into_seven_plus():
+    # Any nonland card with mana value >= 7 collapses into a single "7+" pile,
+    # with the bucket clamped to 7 so a MV-9 card lands beside a MV-7 card.
+    seven = pile_key_for({"name": "Seven", "qty": 1}, {"mana_value": 7}, PILE_SORT_MV)
+    nine = pile_key_for({"name": "Nine", "qty": 1}, {"mana_value": 9}, PILE_SORT_MV)
+    six = pile_key_for({"name": "Six", "qty": 1}, {"mana_value": 6}, PILE_SORT_MV)
+    assert seven == (7, "7+")
+    assert nine == (7, "7+")
+    assert seven == nine  # same pile bucket and label
+    assert six == (6, "6")  # the cutoff is exclusive below 7
 
 
 def test_pile_key_for_handles_missing_metadata():

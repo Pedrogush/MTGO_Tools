@@ -14,5 +14,7 @@ def find_opponent_names():
     opponents = []
     for name in window_names:
         if "vs." in name:
-            opponents.append(name.split("vs.")[-1].strip())
+            opponent = name.split("vs.")[-1].strip()
+            if opponent:
+                opponents.append(opponent)
     return opponents

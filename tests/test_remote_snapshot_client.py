@@ -89,6 +89,13 @@ def test_load_cached_manifest_returns_none_when_stale(client):
     assert client._load_cached_manifest() is None
 
 
+def test_load_cached_manifest_returns_none_when_corrupt(client):
+    client.cache_dir.mkdir(parents=True, exist_ok=True)
+    client.manifest_file.write_text("{not valid json", encoding="utf-8")
+
+    assert client._load_cached_manifest() is None
+
+
 def test_load_cached_manifest_returns_data_when_fresh(client):
     manifest = _manifest({"modern": {"archetypes_url": "data/latest/modern/archetypes.json"}})
     _write_manifest_cache(client, manifest)
@@ -170,6 +177,24 @@ def test_get_archetypes_returns_none_when_artifact_unavailable(client, monkeypat
     assert client.get_archetypes_for_format("modern") is None
 
 
+def test_get_archetypes_returns_none_when_url_missing(client, monkeypatch):
+    # Format entry exists but has no archetypes_url.
+    manifest = _manifest({"modern": {"metagame_stats_url": "x"}})
+    monkeypatch.setattr(client, "_get_manifest", lambda: manifest)
+
+    assert client.get_archetypes_for_format("modern") is None
+
+
+@pytest.mark.parametrize("bad_archetypes", [{"UR Murktide": {}}, "not-a-list", 42])
+def test_get_archetypes_returns_none_on_unexpected_shape(client, monkeypatch, bad_archetypes):
+    artifact_path = "data/latest/modern/archetypes.json"
+    manifest = _manifest({"modern": {"archetypes_url": artifact_path}})
+    monkeypatch.setattr(client, "_get_manifest", lambda: manifest)
+    monkeypatch.setattr(client, "_get_artifact", lambda _p: _archetypes_artifact(bad_archetypes))
+
+    assert client.get_archetypes_for_format("modern") is None
+
+
 # ---------------------------------------------------------------------------
 # get_metagame_stats_for_format
 # ---------------------------------------------------------------------------
@@ -203,6 +228,37 @@ def test_get_stats_normalises_to_expected_shape(client, monkeypatch):
     assert fmt_data["Amulet Titan"]["results"]["2025-03-24"] == 2
 
 
+def test_get_stats_returns_none_when_manifest_unavailable(client, monkeypatch):
+    monkeypatch.setattr(client, "_get_manifest", lambda: None)
+
+    assert client.get_metagame_stats_for_format("modern") is None
+
+
+def test_get_stats_returns_none_for_unknown_format(client, monkeypatch):
+    monkeypatch.setattr(client, "_get_manifest", lambda: _manifest({}))
+
+    assert client.get_metagame_stats_for_format("vintage") is None
+
+
+def test_get_stats_returns_none_when_artifact_unavailable(client, monkeypatch):
+    artifact_path = "data/latest/modern/metagame_stats.json"
+    manifest = _manifest({"modern": {"metagame_stats_url": artifact_path}})
+    monkeypatch.setattr(client, "_get_manifest", lambda: manifest)
+    monkeypatch.setattr(client, "_get_artifact", lambda _p: None)
+
+    assert client.get_metagame_stats_for_format("modern") is None
+
+
+@pytest.mark.parametrize("bad_archetypes", [[], "not-a-dict", 42])
+def test_get_stats_returns_none_on_unexpected_shape(client, monkeypatch, bad_archetypes):
+    artifact_path = "data/latest/modern/metagame_stats.json"
+    manifest = _manifest({"modern": {"metagame_stats_url": artifact_path}})
+    monkeypatch.setattr(client, "_get_manifest", lambda: manifest)
+    monkeypatch.setattr(client, "_get_artifact", lambda _p: _stats_artifact(bad_archetypes))
+
+    assert client.get_metagame_stats_for_format("modern") is None
+
+
 # ---------------------------------------------------------------------------
 # Artifact caching
 # ---------------------------------------------------------------------------
@@ -223,27 +279,55 @@ def test_artifact_served_from_disk_cache_when_fresh(client, monkeypatch):
 
 
 def test_artifact_redownloaded_when_stale(client, monkeypatch):
+    import os
+
     artifact_path = "data/latest/modern/archetypes.json"
-    artifact = _archetypes_artifact([{"name": "Living End"}])
+    # On-disk (stale) payload differs from the freshly downloaded one, so the
+    # returned value can only have come from the download path.
+    stale_artifact = _archetypes_artifact([{"name": "Living End"}])
+    fresh_artifact = _archetypes_artifact([{"name": "UR Murktide"}])
     local = client._local_artifact_path(artifact_path)
     local.parent.mkdir(parents=True, exist_ok=True)
-    local.write_text(json.dumps(artifact), encoding="utf-8")
+    local.write_text(json.dumps(stale_artifact), encoding="utf-8")
 
     # make it look stale
     old_time = time.time() - client.max_age - 1
-    import os
-
     os.utime(local, (old_time, old_time))
 
-    downloaded = [artifact]
+    calls = []
 
     def fake_download(_path, _local):
-        return downloaded[0]
+        calls.append(1)
+        return fresh_artifact
 
     monkeypatch.setattr(client, "_download_artifact", fake_download)
 
     result = client._get_artifact(artifact_path)
-    assert result == artifact
+
+    assert calls == [1], "stale artifact should trigger exactly one re-download"
+    assert result == fresh_artifact
+
+
+def test_artifact_redownloaded_when_cache_corrupt(client, monkeypatch):
+    # A fresh-but-corrupt cached artifact must fall through to a re-download.
+    artifact_path = "data/latest/modern/archetypes.json"
+    local = client._local_artifact_path(artifact_path)
+    local.parent.mkdir(parents=True, exist_ok=True)
+    local.write_text("{not valid json", encoding="utf-8")  # fresh mtime, invalid body
+
+    fresh_artifact = _archetypes_artifact([{"name": "UR Murktide"}])
+    calls = []
+
+    def fake_download(_path, _local):
+        calls.append(1)
+        return fresh_artifact
+
+    monkeypatch.setattr(client, "_download_artifact", fake_download)
+
+    result = client._get_artifact(artifact_path)
+
+    assert calls == [1], "corrupt cached artifact should trigger a re-download"
+    assert result == fresh_artifact
 
 
 def test_download_artifact_rejects_wrong_schema(client, monkeypatch):
@@ -268,3 +352,77 @@ def test_download_artifact_writes_to_disk(client, monkeypatch):
     assert result is not None
     assert local.exists()
     assert json.loads(local.read_text())["archetypes"][0]["name"] == "UR Murktide"
+
+
+# ---------------------------------------------------------------------------
+# HTTP transport (HttpMixin._http_get_json)
+# ---------------------------------------------------------------------------
+
+
+class _FakeResponse:
+    """Minimal context-manager standin for urllib's HTTPResponse."""
+
+    def __init__(self, body: bytes):
+        self._body = body
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def read(self):
+        return self._body
+
+
+@pytest.fixture
+def _force_urllib(monkeypatch):
+    """Make ``import curl_cffi.requests`` raise ImportError so the urllib
+    fallback path in ``_http_get_json`` is exercised deterministically,
+    regardless of whether curl_cffi happens to be installed."""
+    import builtins
+
+    real_import = builtins.__import__
+
+    def fake_import(name, *args, **kwargs):
+        if name == "curl_cffi.requests" or name.startswith("curl_cffi"):
+            raise ImportError("blocked for test")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", fake_import)
+
+
+def test_http_get_json_urllib_decodes_body(client, monkeypatch, _force_urllib):
+    payload = {"schema_version": "1", "formats": {}}
+
+    def fake_urlopen(url, timeout=None):
+        return _FakeResponse(json.dumps(payload).encode("utf-8"))
+
+    import urllib.request
+
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+
+    assert client._http_get_json("https://example.invalid/x.json") == payload
+
+
+def test_http_get_json_rejects_bad_scheme(client, monkeypatch, _force_urllib):
+    # A non-http(s) scheme must be rejected before urlopen is ever called.
+    def boom(*_a, **_k):
+        raise AssertionError("urlopen should not be reached for a bad scheme")
+
+    import urllib.request
+
+    monkeypatch.setattr(urllib.request, "urlopen", boom)
+
+    assert client._http_get_json("file:///etc/passwd") is None
+
+
+def test_http_get_json_returns_none_on_network_error(client, monkeypatch, _force_urllib):
+    def fake_urlopen(url, timeout=None):
+        raise OSError("connection refused")
+
+    import urllib.request
+
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+
+    assert client._http_get_json("https://example.invalid/x.json") is None

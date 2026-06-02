@@ -992,3 +992,227 @@ def test_get_all_cached_decks_format_filter_is_case_insensitive(
     )
     assert [d["number"] for d in metagame_repo.get_all_cached_decks(mtg_format="modern")] == ["m1"]
     assert [d["number"] for d in metagame_repo.get_all_cached_decks(mtg_format="MODERN")] == ["m1"]
+
+
+# ============= get_all_cached_decks source filter and dedup =============
+
+
+def test_get_all_cached_decks_source_filter_restricts_to_source(
+    metagame_repo, archetype_deck_cache_file
+):
+    """source_filter='mtgo' must drop entries from other sources across all slugs."""
+    _write_cache(
+        archetype_deck_cache_file,
+        {
+            "modern-tron": {
+                "items": [
+                    {"name": "Tron MTGO", "number": "m1", "source": "mtgo"},
+                    {"name": "Tron GF", "number": "g1", "source": "mtggoldfish"},
+                ]
+            },
+            "legacy-burn": {"items": [{"name": "Burn MTGO", "number": "m2", "source": "mtgo"}]},
+        },
+    )
+
+    result = metagame_repo.get_all_cached_decks(source_filter="mtgo")
+
+    assert sorted(d["number"] for d in result) == ["m1", "m2"]
+    assert all(d["source"] == "mtgo" for d in result)
+
+
+def test_get_all_cached_decks_source_filter_both_returns_all_sources(
+    metagame_repo, archetype_deck_cache_file
+):
+    """The 'both' sentinel must return every source, unlike a concrete filter."""
+    _write_cache(
+        archetype_deck_cache_file,
+        {
+            "modern-tron": {
+                "items": [
+                    {"name": "Tron MTGO", "number": "m1", "source": "mtgo"},
+                    {"name": "Tron GF", "number": "g1", "source": "mtggoldfish"},
+                ]
+            },
+        },
+    )
+
+    result = metagame_repo.get_all_cached_decks(source_filter="both")
+
+    assert sorted(d["number"] for d in result) == ["g1", "m1"]
+
+
+def test_get_all_cached_decks_dedupes_by_number_across_slugs(
+    metagame_repo, archetype_deck_cache_file
+):
+    """A deck appearing under two slugs with the same 'number' must appear once."""
+    _write_cache(
+        archetype_deck_cache_file,
+        {
+            "modern-tron": {"items": [{"name": "Shared", "number": "dup", "date": "2026-04-01"}]},
+            "modern-amulet": {
+                "items": [{"name": "Shared Again", "number": "dup", "date": "2026-04-01"}]
+            },
+        },
+    )
+
+    result = metagame_repo.get_all_cached_decks()
+
+    assert [d["number"] for d in result] == ["dup"]
+
+
+def test_get_all_cached_decks_keeps_entries_without_number_or_href(
+    metagame_repo, archetype_deck_cache_file
+):
+    """Entries lacking both 'number' and 'href' are kept (never dropped as duplicates)."""
+    _write_cache(
+        archetype_deck_cache_file,
+        {
+            "modern-tron": {
+                "items": [
+                    {"name": "Keyless A", "date": "2026-04-01"},
+                    {"name": "Keyless B", "date": "2026-04-02"},
+                ]
+            },
+        },
+    )
+
+    result = metagame_repo.get_all_cached_decks()
+
+    names = {d["name"] for d in result}
+    assert names == {"Keyless A", "Keyless B"}
+
+
+def test_get_all_cached_decks_dedupes_by_href_when_number_absent(
+    metagame_repo, archetype_deck_cache_file
+):
+    """When 'number' is absent, dedup falls back to the 'href' key."""
+    _write_cache(
+        archetype_deck_cache_file,
+        {
+            "modern-tron": {"items": [{"name": "By Href", "href": "/d/1", "date": "2026-04-01"}]},
+            "modern-amulet": {
+                "items": [{"name": "By Href Dup", "href": "/d/1", "date": "2026-04-01"}]
+            },
+        },
+    )
+
+    result = metagame_repo.get_all_cached_decks()
+
+    assert [d["href"] for d in result] == ["/d/1"]
+
+
+# ============= download_deck_content =============
+
+
+def test_download_deck_content_requires_number(metagame_repo):
+    """A deck without a 'number' field must raise ValueError."""
+    with pytest.raises(ValueError):
+        metagame_repo.download_deck_content({"name": "No Number"})
+
+
+def test_download_deck_content_forwards_number_and_source_filter(metagame_repo, monkeypatch):
+    """download_deck_content must return fetch_deck_text's output and forward args."""
+    calls = []
+
+    def fake_fetch(deck_number, source_filter=None):
+        calls.append((deck_number, source_filter))
+        return "deck text"
+
+    monkeypatch.setattr("repositories.metagame_repository.fetch_deck_text", fake_fetch)
+
+    result = metagame_repo.download_deck_content(
+        {"name": "UR Murktide", "number": "42"}, source_filter="mtgo"
+    )
+
+    assert result == "deck text"
+    assert calls == [("42", "mtgo")]
+
+
+def test_download_deck_content_propagates_fetch_errors(metagame_repo, monkeypatch):
+    """Exceptions from fetch_deck_text must propagate to the caller."""
+
+    def boom(_number, source_filter=None):
+        raise RuntimeError("network down")
+
+    monkeypatch.setattr("repositories.metagame_repository.fetch_deck_text", boom)
+
+    with pytest.raises(RuntimeError, match="network down"):
+        metagame_repo.download_deck_content({"name": "UR Murktide", "number": "42"})
+
+
+# ============= Background refresh remote-snapshot branch =============
+
+
+def test_background_refresh_prefers_remote_snapshot(tmp_path, monkeypatch):
+    """When a remote client returns fresh data, the callback gets it and no live scrape runs."""
+    import threading
+
+    remote_archetypes = [{"name": "UR Murktide"}, {"name": "Amulet Titan"}]
+    remote = _FakeRemoteClient(archetypes=remote_archetypes)
+    repo = MetagameRepository(
+        cache_ttl=1,
+        archetype_list_cache_file=tmp_path / "archetypes.json",
+        archetype_decks_cache_file=tmp_path / "decks.json",
+        remote_snapshot_client=remote,
+    )
+    _write_cache(
+        tmp_path / "archetypes.json",
+        {"modern": {"timestamp": time.time() - 3600, "items": [{"name": "Stale"}]}},
+    )
+
+    live_calls = []
+    monkeypatch.setattr(
+        "repositories.metagame_repository.get_archetypes",
+        lambda _fmt: live_calls.append(1) or [],
+    )
+
+    received: list[list] = []
+    done = threading.Event()
+
+    def on_refresh(items):
+        received.append(items)
+        done.set()
+
+    repo.get_archetypes_for_format("modern", on_background_refresh=on_refresh)
+
+    assert done.wait(timeout=5), "background refresh did not complete in time"
+    assert received == [remote_archetypes]
+    assert live_calls == [], "live scrape must not run when the remote snapshot succeeds"
+
+
+def test_background_refresh_falls_through_to_live_when_remote_raises(tmp_path, monkeypatch):
+    """A remote-client exception inside the thread falls through to the live scrape."""
+    import threading
+
+    class _BoomClient:
+        def get_archetypes_for_format(self, _fmt):
+            raise RuntimeError("network error")
+
+    repo = MetagameRepository(
+        cache_ttl=1,
+        archetype_list_cache_file=tmp_path / "archetypes.json",
+        archetype_decks_cache_file=tmp_path / "decks.json",
+        remote_snapshot_client=_BoomClient(),
+    )
+    _write_cache(
+        tmp_path / "archetypes.json",
+        {"modern": {"timestamp": time.time() - 3600, "items": [{"name": "Stale"}]}},
+    )
+
+    live_archetypes = [{"name": "Living End"}]
+    monkeypatch.setattr(
+        "repositories.metagame_repository.get_archetypes",
+        lambda _fmt: live_archetypes,
+    )
+
+    received: list[list] = []
+    done = threading.Event()
+
+    def on_refresh(items):
+        received.append(items)
+        done.set()
+
+    repo.get_archetypes_for_format("modern", on_background_refresh=on_refresh)
+
+    assert done.wait(timeout=5), "background refresh did not complete in time"
+    assert received == [live_archetypes]

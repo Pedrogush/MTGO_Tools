@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from widgets.panels.card_panel.html_renderer import (
     build_card_html,
     linkify_keywords,
+    render_flavor_text,
     render_oracle_body,
     replace_mana_symbols,
 )
@@ -37,6 +38,129 @@ def test_replace_mana_symbols_falls_back_to_braced_text() -> None:
 def test_replace_mana_symbols_html_escapes_surrounding_text() -> None:
     out = replace_mana_symbols("a < b > c", _no_png)
     assert out == "a &lt; b &gt; c"
+
+
+def test_replace_mana_symbols_renders_img_when_png_resolves(tmp_path) -> None:
+    png = tmp_path / "r.png"
+    png.write_bytes(b"")
+
+    def _resolver(token: str):
+        assert token == "R"
+        return png
+
+    out = replace_mana_symbols("Pay {R} now", _resolver)
+    expected_uri = png.resolve().as_uri()
+    assert f'<img src="{expected_uri}"' in out
+    assert 'width="18" height="18"' in out
+    assert 'align="absbottom"' in out
+    assert 'alt="{R}"' in out
+    # Surrounding text is still emitted around the image.
+    assert out.startswith("Pay ")
+    assert out.endswith(" now")
+
+
+def test_replace_mana_symbols_escapes_surrounding_text_around_img(tmp_path) -> None:
+    png = tmp_path / "r.png"
+    png.write_bytes(b"")
+    out = replace_mana_symbols("a < {R} > b", lambda _t: png)
+    assert "a &lt; " in out
+    assert " &gt; b" in out
+    assert "<img " in out
+
+
+def test_replace_mana_symbols_threads_symbol_size(tmp_path) -> None:
+    png = tmp_path / "r.png"
+    png.write_bytes(b"")
+    out = replace_mana_symbols("{R}", lambda _t: png, symbol_size=24)
+    assert 'width="24" height="24"' in out
+
+
+def test_render_flavor_text_escapes_and_converts_newlines() -> None:
+    out = render_flavor_text("Fear cuts deeper <than swords>.\nNext line & more.")
+    assert "&lt;than swords&gt;" in out
+    assert "<br>" in out
+    assert "&amp; more" in out
+    assert "<script>" not in out
+
+
+def test_render_flavor_text_empty_returns_empty() -> None:
+    assert render_flavor_text("") == ""
+
+
+def test_build_card_html_escapes_flavor_text_with_markup() -> None:
+    meta = {"name": "X", "mana_cost": "", "type_line": "Instant", "oracle_text": ""}
+    printing = {"flavor_text": "Line one <b>\nLine & two"}
+    html = build_card_html(meta, printing, _no_png)
+    assert "<br>" in html
+    assert "&lt;b&gt;" in html
+    assert "&amp; two" in html
+
+
+def test_build_card_html_meta_get_subscript_fallback() -> None:
+    """A meta exposing only ``__getitem__`` (no ``.get``) is read via subscript."""
+
+    class SubscriptMeta:
+        def __init__(self, data: dict) -> None:
+            self._data = data
+
+        def __getitem__(self, key):
+            return self._data[key]
+
+    meta = SubscriptMeta(
+        {
+            "name": "Mox Ruby",
+            "mana_cost": "{0}",
+            "type_line": "Artifact",
+            "oracle_text": "Add R.",
+        }
+    )
+    html = build_card_html(meta, None, _no_png)
+    assert "Mox Ruby" in html
+    assert "Artifact" in html
+
+
+def test_build_card_html_meta_get_subscript_keyerror_uses_default() -> None:
+    """A subscript that raises ``KeyError`` for a missing field renders empty."""
+
+    class RaisingMeta:
+        def __getitem__(self, key):
+            if key == "name":
+                return "Black Lotus"
+            raise KeyError(key)
+
+    html = build_card_html(RaisingMeta(), None, _no_png)
+    # The present field renders; the missing ones fall back to empty placeholders
+    # rather than raising.
+    assert "Black Lotus" in html
+
+
+def test_format_pt_empty_strings_render_no_pt() -> None:
+    meta = {
+        "name": "Token",
+        "mana_cost": "",
+        "type_line": "Token",
+        "oracle_text": "",
+        "power": "",
+        "toughness": "",
+    }
+    html = build_card_html(meta, None, _no_png)
+    # The trailing P/T cell exists but is empty — no "/" separator inside it.
+    assert ">/<" not in html
+
+
+def test_format_pt_prefers_power_toughness_over_loyalty() -> None:
+    meta = {
+        "name": "Weird Card",
+        "mana_cost": "",
+        "type_line": "Creature",
+        "oracle_text": "",
+        "power": "5",
+        "toughness": "5",
+        "loyalty": "7",
+    }
+    html = build_card_html(meta, None, _no_png)
+    assert ">5/5<" in html
+    assert ">7<" not in html
 
 
 def test_render_oracle_body_splits_paragraphs_and_italicizes_reminder() -> None:

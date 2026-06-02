@@ -2,7 +2,7 @@
 
 import json
 from types import SimpleNamespace
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 import pytest
 
@@ -22,13 +22,6 @@ def mock_card_manager():
             {"name": "Lightning Strike"},
         ]
     )
-    manager.get_printings = Mock(
-        return_value=[
-            {"set": "LEA", "name": "Lightning Bolt"},
-            {"set": "M11", "name": "Lightning Bolt"},
-        ]
-    )
-    manager.ensure_latest = Mock(return_value=True)
     return manager
 
 
@@ -77,14 +70,32 @@ def test_search_cards_success(card_repository, mock_card_manager):
 
     assert len(results) == 2
     assert results[0]["name"] == "Lightning Bolt"
-    mock_card_manager.search_cards.assert_called_once()
+    # No filters supplied -> colors/types pass through as None.
+    mock_card_manager.search_cards.assert_called_once_with(
+        query="Lightning", color_identity=None, type_filter=None
+    )
 
 
 def test_search_cards_with_filters(card_repository, mock_card_manager):
-    """Test searching with filters."""
+    """Test searching with filters maps args correctly.
+
+    Guards the public->manager translation: colors->color_identity and
+    types->type_filter must not be swapped or dropped.
+    """
     card_repository.search_cards(query="Bolt", colors=["R"], types=["Instant"])
 
-    mock_card_manager.search_cards.assert_called_once()
+    mock_card_manager.search_cards.assert_called_once_with(
+        query="Bolt", color_identity=["R"], type_filter=["Instant"]
+    )
+
+
+def test_search_cards_query_none_passed_as_empty_string(card_repository, mock_card_manager):
+    """Test that a None query is forwarded to the manager as ''."""
+    card_repository.search_cards(query=None)
+
+    mock_card_manager.search_cards.assert_called_once_with(
+        query="", color_identity=None, type_filter=None
+    )
 
 
 def test_search_cards_runtime_error(card_repository, mock_card_manager):
@@ -152,6 +163,82 @@ def test_load_collection_from_file_nested_structure(card_repository, tmp_path):
 
     assert len(cards) == 1
     assert cards[0]["name"] == "Lightning Bolt"
+
+
+def test_load_collection_from_file_items_key(card_repository, tmp_path):
+    """Test loading collection from a dict using the 'items' key."""
+    collection_data = {"items": [{"name": "Lightning Bolt", "quantity": 4}]}
+    filepath = tmp_path / "collection.json"
+    filepath.write_text(json.dumps(collection_data), encoding="utf-8")
+
+    cards = card_repository.load_collection_from_file(filepath)
+
+    assert len(cards) == 1
+    assert cards[0]["name"] == "Lightning Bolt"
+
+
+def test_load_collection_from_file_nested_collection_dict(card_repository, tmp_path):
+    """Test loading collection nested under a 'collection' dict (recursion)."""
+    collection_data = {"collection": {"cards": [{"name": "Island", "quantity": 20}]}}
+    filepath = tmp_path / "collection.json"
+    filepath.write_text(json.dumps(collection_data), encoding="utf-8")
+
+    cards = card_repository.load_collection_from_file(filepath)
+
+    assert len(cards) == 1
+    assert cards[0]["name"] == "Island"
+    assert cards[0]["quantity"] == 20
+
+
+def test_load_collection_from_file_nested_collection_list(card_repository, tmp_path):
+    """Test loading collection nested under a 'collection' list (recursion)."""
+    collection_data = {"collection": [{"name": "Forest", "quantity": 10}]}
+    filepath = tmp_path / "collection.json"
+    filepath.write_text(json.dumps(collection_data), encoding="utf-8")
+
+    cards = card_repository.load_collection_from_file(filepath)
+
+    assert len(cards) == 1
+    assert cards[0]["name"] == "Forest"
+
+
+def test_load_collection_from_file_skips_non_dict_and_empty_name(card_repository, tmp_path):
+    """Test that non-dict entries and blank-name entries are filtered out."""
+    collection_data = [
+        "junk",
+        None,
+        {"name": "", "quantity": 1},
+        {"name": "   ", "quantity": 1},
+        {"name": "Real", "quantity": 2},
+    ]
+    filepath = tmp_path / "collection.json"
+    filepath.write_text(json.dumps(collection_data), encoding="utf-8")
+
+    cards = card_repository.load_collection_from_file(filepath)
+
+    assert len(cards) == 1
+    assert cards[0]["name"] == "Real"
+    assert cards[0]["quantity"] == 2
+
+
+def test_load_collection_from_file_empty_list(card_repository, tmp_path):
+    """Test loading an empty list returns [] via the no-entries path."""
+    filepath = tmp_path / "collection.json"
+    filepath.write_text(json.dumps([]), encoding="utf-8")
+
+    cards = card_repository.load_collection_from_file(filepath)
+
+    assert cards == []
+
+
+def test_load_collection_from_file_empty_cards_dict(card_repository, tmp_path):
+    """Test loading a dict with an empty 'cards' list returns []."""
+    filepath = tmp_path / "collection.json"
+    filepath.write_text(json.dumps({"cards": []}), encoding="utf-8")
+
+    cards = card_repository.load_collection_from_file(filepath)
+
+    assert cards == []
 
 
 def test_load_collection_from_file_nonexistent(card_repository, tmp_path):
@@ -267,3 +354,62 @@ def test_set_card_manager_none(card_repository):
     card_repository.set_card_manager(None)
 
     assert card_repository.get_card_manager() is None
+
+
+def test_card_data_manager_property_lazy_instantiation():
+    """Test the lazy card_data_manager property creates a manager on demand."""
+    repo = CardRepository()
+    sentinel = SimpleNamespace()
+
+    with patch(
+        "repositories.card_repository.repository.CardDataManager", return_value=sentinel
+    ) as mock_cls:
+        manager = repo.card_data_manager
+        # Second access should reuse the cached instance, not build a new one.
+        again = repo.card_data_manager
+
+    assert manager is sentinel
+    assert again is sentinel
+    mock_cls.assert_called_once_with()
+
+
+# ============= ensure_card_data_loaded Tests =============
+
+
+def test_ensure_card_data_loaded_uses_cached_manager(card_repository, mock_card_manager):
+    """Test cached fast-path returns existing manager without reloading."""
+    with patch("repositories.card_repository.state.load_card_manager") as mock_load:
+        result = card_repository.ensure_card_data_loaded()
+
+    assert result is mock_card_manager
+    mock_load.assert_not_called()
+
+
+def test_ensure_card_data_loaded_loads_when_no_manager():
+    """Test load path runs when no manager is present yet."""
+    repo = CardRepository()
+    loaded = SimpleNamespace(is_loaded=True)
+
+    with patch(
+        "repositories.card_repository.state.load_card_manager", return_value=loaded
+    ) as mock_load:
+        result = repo.ensure_card_data_loaded()
+
+    assert result is loaded
+    mock_load.assert_called_once_with()
+    assert repo.get_card_manager() is loaded
+    assert repo.is_card_data_ready() is True
+
+
+def test_ensure_card_data_loaded_force_reloads(card_repository, mock_card_manager):
+    """Test force=True reloads even when a loaded manager is present."""
+    reloaded = SimpleNamespace(is_loaded=True)
+
+    with patch(
+        "repositories.card_repository.state.load_card_manager", return_value=reloaded
+    ) as mock_load:
+        result = card_repository.ensure_card_data_loaded(force=True)
+
+    assert result is reloaded
+    mock_load.assert_called_once_with()
+    assert card_repository.get_card_manager() is reloaded

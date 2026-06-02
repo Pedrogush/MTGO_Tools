@@ -36,3 +36,38 @@ def test_find_card_frequency_matches_full_dfc_name_when_data_uses_canonical() ->
     found = _find_card_frequency(cards, "Fire // Ice")
     assert found is not None
     assert found.total_copies == 2
+
+
+def test_find_card_frequency_is_case_insensitive_for_simple_card() -> None:
+    cards = [_Freq(card_name="lightning bolt", total_copies=4)]
+    found = _find_card_frequency(cards, "Lightning Bolt")
+    assert found is not None
+    assert found.total_copies == 4
+
+
+def test_find_card_frequency_is_case_insensitive_for_dfc_front_face() -> None:
+    cards = [_Freq(card_name="AJANI, NACATL PARIAH", total_copies=3)]
+    found = _find_card_frequency(cards, "Ajani, Nacatl Pariah // Ajani, Nacatl Avenger")
+    assert found is not None
+    assert found.total_copies == 3
+
+
+def test_find_card_frequency_returns_none_when_no_match() -> None:
+    cards = [_Freq(card_name="Lightning Bolt")]
+    assert _find_card_frequency(cards, "Counterspell") is None
+
+
+def test_find_card_frequency_returns_none_for_empty_list() -> None:
+    assert _find_card_frequency([], "Lightning Bolt") is None
+
+
+def test_stats_lookup_names_strips_surrounding_whitespace() -> None:
+    assert _stats_lookup_names("  Lightning Bolt  ") == ["Lightning Bolt"]
+
+
+def test_stats_lookup_names_returns_empty_for_empty_string() -> None:
+    assert _stats_lookup_names("") == []
+
+
+def test_stats_lookup_names_returns_empty_for_whitespace_only() -> None:
+    assert _stats_lookup_names("   ") == []
