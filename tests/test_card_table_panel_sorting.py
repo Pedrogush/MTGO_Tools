@@ -19,6 +19,7 @@ from widgets.panels.card_table_panel.sorting import (
     TABLE_ACTION_REMOVE,
     TABLE_ACTION_SUB,
     action_slot_at,
+    card_colors,
     card_mana_value,
     color_sort_key,
     group_into_piles,
@@ -123,6 +124,17 @@ def test_color_sort_key_orders_wubrg_then_multi_then_colorless():
     assert sorted(keys) == keys
 
 
+def test_card_colors_normalises_string_and_filters_non_str():
+    # A bare string color is wrapped into a single-element list (defensive
+    # against metadata that stores colors as "R" rather than ["R"]).
+    assert card_colors({"colors": "R"}) == ["R"]
+    # Missing/empty colors yield an empty list.
+    assert card_colors({}) == []
+    assert card_colors({"colors": None}) == []
+    # Non-string items in the list are dropped rather than raising downstream.
+    assert card_colors({"colors": ["U", 5, None, "R"]}) == ["U", "R"]
+
+
 # ---------------------------------------------------------------------------
 # Table sort
 # ---------------------------------------------------------------------------
@@ -173,6 +185,21 @@ def test_table_sort_key_text_sorts_alphabetically_by_oracle(deck_meta):
     bolt = table_sort_key(COL_TEXT, meta["Lightning Bolt"], "Lightning Bolt")
     counter = table_sort_key(COL_TEXT, meta["Counterspell"], "Counterspell")
     assert counter < bolt  # "Counter target spell." < "Lightning Bolt deals..."
+
+
+def test_table_sort_key_unknown_column_falls_back_to_name(deck_meta):
+    # An unrecognised column name falls back to a case-folded name sort rather
+    # than raising, so a stray/legacy column id still produces a usable order.
+    _cards, meta = deck_meta
+    key = table_sort_key("not-a-real-column", meta["Lightning Bolt"], "Lightning Bolt")
+    assert key == ("lightning bolt",)
+
+
+def test_sort_table_rows_unknown_column_orders_by_name(deck_meta):
+    cards, meta = deck_meta
+    rows = sort_table_rows(cards, _meta_factory(meta), "not-a-real-column")
+    names = [c["name"] for c in rows]
+    assert names == sorted(names, key=str.lower)
 
 
 # ---------------------------------------------------------------------------
@@ -243,6 +270,26 @@ def test_pile_key_for_handles_missing_metadata():
     # A card whose name doesn't exist in metadata should still bucket safely.
     key = pile_key_for({"name": "Unknown", "qty": 1}, {}, PILE_SORT_MV)
     assert key == (0, "0")  # no metadata → mv 0, label "0"
+
+
+def test_group_into_piles_handles_lookup_returning_none():
+    # When get_metadata returns None (card absent from the metadata store), the
+    # internal lookup must coerce it to an empty dict so the card still buckets
+    # as MV 0 rather than raising on the missing-attribute path.
+    cards = [{"name": "Ghost Card", "qty": 2}]
+    piles = group_into_piles(cards, lambda _name: None, PILE_SORT_MV)
+    labels = [label for (_order, label), _ in piles]
+    assert labels == ["0"]
+    counts = {label: len(members) for (_order, label), members in piles}
+    assert counts["0"] == 2
+
+
+def test_sort_table_rows_handles_lookup_returning_none():
+    # The table sort path must also tolerate a None metadata lookup.
+    cards = [{"name": "Ghost Card", "qty": 1}, {"name": "Apparition", "qty": 1}]
+    rows = sort_table_rows(cards, lambda _name: None, COL_MANA)
+    names = [c["name"] for c in rows]
+    assert names == ["Apparition", "Ghost Card"]  # tie on MV 0 → name order
 
 
 def test_action_slot_at_maps_thirds_to_add_sub_remove():
