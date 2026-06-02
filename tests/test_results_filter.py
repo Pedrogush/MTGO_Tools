@@ -3,6 +3,7 @@
 from widgets.panels.deck_research_panel.results_filter import (
     _classify_event_type,
     _normalize_date,
+    _placement_value_for_field,
     filter_decks,
     parse_placement,
     parse_wins,
@@ -127,6 +128,16 @@ def test_parse_placement_unparseable_returns_none():
     assert parse_placement("") is None
 
 
+def test_parse_placement_boundary_inputs():
+    # Zero and large ordinals parse to their integer value.
+    assert parse_placement("0th") == 0
+    assert parse_placement("128th") == 128
+    # Any hyphenated string is treated as a record, never a placement.
+    assert parse_placement("Top-8") is None
+    # A bare integer with no ordinal suffix still parses.
+    assert parse_placement("5") == 5
+
+
 # ---------------------------------------------------------------------------
 # parse_wins
 # ---------------------------------------------------------------------------
@@ -143,6 +154,31 @@ def test_parse_wins_non_record_returns_none():
     assert parse_wins("Top 8") is None
     assert parse_wins("Winner") is None
     assert parse_wins("") is None
+
+
+def test_parse_wins_boundary_inputs():
+    # Spaces around the hyphen are tolerated.
+    assert parse_wins("5 - 0") == 5
+    # Double-digit records parse the full leading number.
+    assert parse_wins("12-3") == 12
+    # A record embedded in surrounding text is still extracted.
+    assert parse_wins("Record: 4-1") == 4
+
+
+# ---------------------------------------------------------------------------
+# _placement_value_for_field
+# ---------------------------------------------------------------------------
+
+
+def test_placement_value_for_field_dispatches_by_field():
+    assert _placement_value_for_field("1st", "Placement") == 1
+    assert _placement_value_for_field("5-0", "Wins") == 5
+
+
+def test_placement_value_for_field_unknown_field_returns_none():
+    # The fall-through guards against an unexpected field name reaching the
+    # helper; it must yield None rather than raising or mis-parsing.
+    assert _placement_value_for_field("1st", "Losses") is None
 
 
 # ---------------------------------------------------------------------------
@@ -193,10 +229,11 @@ def test_event_type_all_returns_everything():
     assert result == DECKS
 
 
-def test_event_type_no_matches():
-    result = filter_decks(DECKS, event_type="Showcase")
-    # Verify none of them is a plain "League" deck
-    assert not any(_classify_event_type(d["event"]) == "League" for d in result)
+def test_event_type_filter_unknown_label_excludes_everything():
+    # A label that no deck classifies to must yield an empty result, not a
+    # pass-through. (Only the literal "All" disables the event-type filter.)
+    result = filter_decks(DECKS, event_type="Nonexistent")
+    assert result == []
 
 
 # ---------------------------------------------------------------------------

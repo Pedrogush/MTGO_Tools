@@ -2,118 +2,190 @@
 
 import json
 from types import SimpleNamespace
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 import pytest
 
-from repositories.card_repository import CardRepository
+from repositories.card_repository import CardRepository, storage
+from repositories.card_repository.builder import build_index
+from repositories.card_repository.card_data_manager import CardDataManager
+
+# A tiny but realistic AtomicCards ``data`` payload. Built through the real
+# ``build_index`` -> on-disk index -> ``CardDataManager`` pipeline so tests
+# assert against real ``CardEntry`` values instead of mocked interactions.
+_ATOMIC_PAYLOAD = {
+    "Lightning Bolt": [
+        {
+            "name": "Lightning Bolt",
+            "manaCost": "{R}",
+            "manaValue": 1,
+            "type": "Instant",
+            "text": "Lightning Bolt deals 3 damage to any target.",
+            "colors": ["R"],
+            "colorIdentity": ["R"],
+            "legalities": {"modern": "Legal"},
+        }
+    ],
+    "Lightning Strike": [
+        {
+            "name": "Lightning Strike",
+            "manaCost": "{1}{R}",
+            "manaValue": 2,
+            "type": "Instant",
+            "text": "Lightning Strike deals 3 damage to any target.",
+            "colors": ["R"],
+            "colorIdentity": ["R"],
+            "legalities": {"standard": "Legal"},
+        }
+    ],
+    "Island": [
+        {
+            "name": "Island",
+            "type": "Basic Land — Island",
+            "text": "({T}: Add {U}.)",
+            "colors": [],
+            "colorIdentity": ["U"],
+            "legalities": {"modern": "Legal"},
+        }
+    ],
+}
 
 
 @pytest.fixture
-def mock_card_manager():
-    """Mock CardDataManager for testing."""
-    manager = SimpleNamespace()
-    manager._cards = {"Lightning Bolt": {"name": "Lightning Bolt", "cmc": 1}}
-    manager.is_loaded = True
-    manager.get_card = Mock(return_value={"name": "Lightning Bolt", "mana_cost": "{R}", "cmc": 1})
-    manager.search_cards = Mock(
-        return_value=[
-            {"name": "Lightning Bolt"},
-            {"name": "Lightning Strike"},
-        ]
-    )
+def card_manager(tmp_path):
+    """A real, loaded ``CardDataManager`` backed by a small on-disk index.
+
+    Exercises the genuine ``build_index`` -> ``write_index`` -> ``_load_index``
+    pipeline so callers see real ``CardEntry`` records, not test doubles.
+    """
+    manager = CardDataManager(tmp_path)
+    storage.write_index(manager.index_path, build_index(_ATOMIC_PAYLOAD))
+    manager._load_index()
     return manager
 
 
 @pytest.fixture
-def card_repository(mock_card_manager):
-    """CardRepository with mock manager."""
-    return CardRepository(card_data_manager=mock_card_manager)
+def card_repository(card_manager):
+    """CardRepository backed by the real card manager."""
+    return CardRepository(card_data_manager=card_manager)
 
 
 # ============= Card Metadata Tests =============
 
 
-def test_get_card_metadata_success(card_repository, mock_card_manager):
-    """Test getting card metadata successfully."""
+def test_get_card_metadata_success(card_repository):
+    """Test getting card metadata returns the real card record."""
     metadata = card_repository.get_card_metadata("Lightning Bolt")
 
     assert metadata is not None
     assert metadata["name"] == "Lightning Bolt"
-    mock_card_manager.get_card.assert_called_once_with("Lightning Bolt")
+    assert metadata["mana_cost"] == "{R}"
+    assert metadata["mana_value"] == 1
 
 
-def test_get_card_metadata_runtime_error(card_repository, mock_card_manager):
-    """Test getting metadata when card data not loaded."""
-    mock_card_manager.get_card = Mock(side_effect=RuntimeError("Card data not loaded"))
+def test_get_card_metadata_case_insensitive(card_repository):
+    """Lookup is case-insensitive (manager indexes by lowercased name)."""
+    metadata = card_repository.get_card_metadata("lightning bolt")
 
-    metadata = card_repository.get_card_metadata("Lightning Bolt")
+    assert metadata is not None
+    assert metadata["name"] == "Lightning Bolt"
 
-    assert metadata is None
+
+def test_get_card_metadata_missing_card(card_repository):
+    """An unknown card name yields ``None`` (manager returns no record)."""
+    assert card_repository.get_card_metadata("Black Lotus") is None
 
 
-def test_get_card_metadata_exception(card_repository, mock_card_manager):
-    """Test getting metadata with generic exception."""
-    mock_card_manager.get_card = Mock(side_effect=Exception("Some error"))
+def test_get_card_metadata_runtime_error_when_not_loaded():
+    """Test getting metadata when card data is not loaded returns None.
 
-    metadata = card_repository.get_card_metadata("Lightning Bolt")
+    The unloaded manager raises ``RuntimeError`` from ``get_card``; the
+    repository swallows it and returns ``None``.
+    """
+    repo = CardRepository(card_data_manager=CardDataManager())
 
-    assert metadata is None
+    assert repo.get_card_metadata("Lightning Bolt") is None
+
+
+def test_get_card_metadata_generic_exception_returns_none(card_repository):
+    """A non-RuntimeError from lookup is also swallowed and returns None.
+
+    A ``None`` name makes the loaded manager raise ``AttributeError`` (from
+    ``name.lower()``), exercising the generic ``except Exception`` branch.
+    """
+    assert card_repository.get_card_metadata(None) is None
 
 
 # ============= Card Search Tests =============
 
 
-def test_search_cards_success(card_repository, mock_card_manager):
-    """Test searching cards successfully."""
+def test_search_cards_success(card_repository):
+    """Test searching cards matches against name/type/text substrings."""
     results = card_repository.search_cards(query="Lightning")
 
-    assert len(results) == 2
-    assert results[0]["name"] == "Lightning Bolt"
-    # No filters supplied -> colors/types pass through as None.
-    mock_card_manager.search_cards.assert_called_once_with(
-        query="Lightning", color_identity=None, type_filter=None
-    )
+    names = sorted(card["name"] for card in results)
+    assert names == ["Lightning Bolt", "Lightning Strike"]
 
 
-def test_search_cards_with_filters(card_repository, mock_card_manager):
-    """Test searching with filters maps args correctly.
+def test_search_cards_color_filter(card_repository):
+    """``colors`` maps to ``color_identity`` and filters real records.
 
-    Guards the public->manager translation: colors->color_identity and
-    types->type_filter must not be swapped or dropped.
+    A blue color filter must drop the red instants and keep only the land,
+    proving colors hit ``color_identity`` (not the type line) and are not
+    dropped on the way to the manager.
     """
-    card_repository.search_cards(query="Bolt", colors=["R"], types=["Instant"])
+    results = card_repository.search_cards(colors=["U"])
 
-    mock_card_manager.search_cards.assert_called_once_with(
-        query="Bolt", color_identity=["R"], type_filter=["Instant"]
-    )
+    assert [card["name"] for card in results] == ["Island"]
 
 
-def test_search_cards_query_none_passed_as_empty_string(card_repository, mock_card_manager):
-    """Test that a None query is forwarded to the manager as ''."""
-    card_repository.search_cards(query=None)
+def test_search_cards_colors_not_swapped(card_repository):
+    """A red color filter keeps both red instants and drops the blue land."""
+    results = card_repository.search_cards(colors=["R"])
 
-    mock_card_manager.search_cards.assert_called_once_with(
-        query="", color_identity=None, type_filter=None
-    )
+    assert sorted(card["name"] for card in results) == ["Lightning Bolt", "Lightning Strike"]
 
 
-def test_search_cards_runtime_error(card_repository, mock_card_manager):
-    """Test searching when card data not loaded."""
-    mock_card_manager.search_cards = Mock(side_effect=RuntimeError("Card data not loaded"))
+def test_search_cards_query_none_returns_all(card_repository):
+    """A None query is forwarded as '' so every card matches."""
+    results = card_repository.search_cards(query=None)
 
-    results = card_repository.search_cards(query="Lightning")
+    assert sorted(card["name"] for card in results) == [
+        "Island",
+        "Lightning Bolt",
+        "Lightning Strike",
+    ]
 
-    assert results == []
+
+def test_search_cards_mana_value_param_is_currently_ignored(card_repository):
+    """Pin current behavior: ``mana_value`` is accepted but never applied.
+
+    ``search_cards`` declares a ``mana_value`` parameter that it does not
+    forward to the manager (which has no mana-value filter), so passing it has
+    no effect. This test documents that latent dead parameter; if mana-value
+    filtering is ever wired up, update this expectation.
+    """
+    unfiltered = card_repository.search_cards(query="Lightning")
+    filtered = card_repository.search_cards(query="Lightning", mana_value=1)
+
+    assert [c["name"] for c in filtered] == [c["name"] for c in unfiltered]
+    assert sorted(c["name"] for c in filtered) == ["Lightning Bolt", "Lightning Strike"]
 
 
-def test_search_cards_exception(card_repository, mock_card_manager):
-    """Test searching with generic exception."""
-    mock_card_manager.search_cards = Mock(side_effect=Exception("Some error"))
+def test_search_cards_runtime_error_when_not_loaded():
+    """Searching an unloaded manager returns [] (RuntimeError swallowed)."""
+    repo = CardRepository(card_data_manager=CardDataManager())
 
-    results = card_repository.search_cards(query="Lightning")
+    assert repo.search_cards(query="Lightning") == []
 
-    assert results == []
+
+def test_search_cards_generic_exception_returns_empty(card_repository):
+    """A non-RuntimeError during search is swallowed and returns [].
+
+    A non-iterable ``colors`` makes the loaded manager raise ``TypeError``,
+    exercising the generic ``except Exception`` branch.
+    """
+    assert card_repository.search_cards(query="Lightning", colors=5) == []
 
 
 # ============= Card Data Loading Tests =============
@@ -126,10 +198,7 @@ def test_is_card_data_loaded_true(card_repository):
 
 def test_is_card_data_loaded_false():
     """Test checking when card data is not loaded."""
-    manager = SimpleNamespace()
-    manager._cards = None
-    manager.is_loaded = False
-    repo = CardRepository(card_data_manager=manager)
+    repo = CardRepository(card_data_manager=CardDataManager())
 
     assert repo.is_card_data_loaded() is False
 
@@ -333,10 +402,10 @@ def test_set_card_data_ready(card_repository):
     assert card_repository.is_card_data_ready() is False
 
 
-def test_get_card_manager(card_repository, mock_card_manager):
+def test_get_card_manager(card_repository, card_manager):
     """Test getting card manager."""
     manager = card_repository.get_card_manager()
-    assert manager == mock_card_manager
+    assert manager is card_manager
 
 
 def test_set_card_manager(card_repository):
@@ -376,12 +445,12 @@ def test_card_data_manager_property_lazy_instantiation():
 # ============= ensure_card_data_loaded Tests =============
 
 
-def test_ensure_card_data_loaded_uses_cached_manager(card_repository, mock_card_manager):
+def test_ensure_card_data_loaded_uses_cached_manager(card_repository, card_manager):
     """Test cached fast-path returns existing manager without reloading."""
     with patch("repositories.card_repository.state.load_card_manager") as mock_load:
         result = card_repository.ensure_card_data_loaded()
 
-    assert result is mock_card_manager
+    assert result is card_manager
     mock_load.assert_not_called()
 
 
@@ -401,7 +470,7 @@ def test_ensure_card_data_loaded_loads_when_no_manager():
     assert repo.is_card_data_ready() is True
 
 
-def test_ensure_card_data_loaded_force_reloads(card_repository, mock_card_manager):
+def test_ensure_card_data_loaded_force_reloads(card_repository):
     """Test force=True reloads even when a loaded manager is present."""
     reloaded = SimpleNamespace(is_loaded=True)
 

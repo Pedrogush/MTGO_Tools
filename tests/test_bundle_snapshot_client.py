@@ -277,17 +277,19 @@ def test_not_modified_skips_merge_and_refreshes_stamp(tmp_client: BundleSnapshot
         ),
         encoding="utf-8",
     )
-    with (
-        patch.object(
-            tmp_client,
-            "_http_get_bytes",
-            return_value=BundleResponse(content=None, not_modified=True),
-        ),
-        patch.object(tmp_client, "_parse_bundle") as mock_parse,
+    with patch.object(
+        tmp_client,
+        "_http_get_bytes",
+        return_value=BundleResponse(content=None, not_modified=True),
     ):
         updated, archetypes_by_format = tmp_client.apply()
 
-    mock_parse.assert_not_called()
+    # The 304 short-circuit skips the parse + merge entirely: no cache artifacts
+    # are written (proven via real on-disk state, not a spy on the parser).
+    assert not tmp_client.archetype_list_cache_file.exists()
+    assert not tmp_client.archetype_decks_cache_file.exists()
+    assert not tmp_client.format_card_pool_db_file.exists()
+    assert not tmp_client.radar_db_file.exists()
     assert updated is False
     assert archetypes_by_format is None
     stamp = json.loads(tmp_client.stamp_file.read_text())
@@ -304,19 +306,15 @@ def test_unchanged_manifest_short_circuits_merge(tmp_client: BundleSnapshotClien
         encoding="utf-8",
     )
     bundle = _make_bundle()  # default manifest generated_at == stored value
-    with (
-        patch.object(tmp_client, "_http_get_bytes", return_value=BundleResponse(content=bundle)),
-        patch.object(tmp_client, "_hydrate_archetype_lists") as mock_arch,
-        patch.object(tmp_client, "_hydrate_format_card_pools") as mock_pools,
-        patch.object(tmp_client, "_hydrate_radars") as mock_radars,
-    ):
+    with patch.object(tmp_client, "_http_get_bytes", return_value=BundleResponse(content=bundle)):
         updated, archetypes_by_format = tmp_client.apply()
 
-    # The merge must be genuinely skipped, not merely producing empty output.
-    mock_arch.assert_not_called()
-    mock_pools.assert_not_called()
-    mock_radars.assert_not_called()
+    # The merge must be genuinely skipped, not merely producing empty output:
+    # none of the cache artifacts that hydration would create exist on disk.
     assert not tmp_client.archetype_list_cache_file.exists()
+    assert not tmp_client.archetype_decks_cache_file.exists()
+    assert not tmp_client.format_card_pool_db_file.exists()
+    assert not tmp_client.radar_db_file.exists()
     assert updated is False
     assert archetypes_by_format is None
 

@@ -146,15 +146,29 @@ class _ResultsCtrl:
 class _Panel(DeckBuilderPanelHandlersMixin):
     """Concrete subclass wiring just enough state for the hotkey paths."""
 
-    def __init__(self, selected: dict[str, Any] | None, first_selected: int = 0) -> None:
+    def __init__(
+        self,
+        selected: dict[str, Any] | None,
+        first_selected: int = 0,
+        *,
+        wire_callbacks: bool = True,
+    ) -> None:
         self._selected = selected
         self.results_ctrl = _ResultsCtrl(first_selected)
         self.main_calls: list[tuple[str, int]] = []
         self.side_calls: list[tuple[str, int]] = []
         self.active_zone_calls: list[str] = []
-        self._on_add_to_main = lambda name, count=1: self.main_calls.append((name, count))
-        self._on_add_to_side = lambda name, count=1: self.side_calls.append((name, count))
-        self._on_add_to_active_zone = self.active_zone_calls.append
+        # When ``wire_callbacks`` is False the add callbacks are left ``None``
+        # (the panel's pre-wired state) so the handler's missing-callback guards
+        # are exercised rather than always taking the happy path.
+        if wire_callbacks:
+            self._on_add_to_main = lambda name, count=1: self.main_calls.append((name, count))
+            self._on_add_to_side = lambda name, count=1: self.side_calls.append((name, count))
+            self._on_add_to_active_zone = self.active_zone_calls.append
+        else:
+            self._on_add_to_main = None
+            self._on_add_to_side = None
+            self._on_add_to_active_zone = None
 
     def get_selected_result(self) -> dict[str, Any] | None:
         return self._selected
@@ -239,8 +253,13 @@ def test_alt_digit_is_skipped() -> None:
 
 
 def test_plus_with_no_selection_is_skipped() -> None:
-    """'+' with nothing selected must not add a phantom card; it Skips instead."""
-    panel = _Panel({"name": "Island"}, first_selected=_WX.NOT_FOUND)
+    """'+' with nothing selected must not add a phantom card; it Skips instead.
+
+    The '+' path decides via ``results_ctrl.GetFirstSelected()``, so the panel
+    is constructed with no selected result (``None``) to avoid implying a card
+    is selected when the list reports ``NOT_FOUND``.
+    """
+    panel = _Panel(None, first_selected=_WX.NOT_FOUND)
     event = _KeyEvent(ord("+"))
     panel._on_result_key_down(event)
     assert panel.active_zone_calls == []
@@ -273,3 +292,30 @@ def test_unmapped_key_is_skipped() -> None:
     event = _KeyEvent(ord("z"))
     panel._on_result_key_down(event)
     assert event.skipped is True
+
+
+@pytest.mark.parametrize("count_key", [ord("1"), ord("2")])
+def test_digit_without_main_callback_does_nothing(count_key: int) -> None:
+    """Without an add-to-main callback wired, a digit must add nothing."""
+    panel = _Panel({"name": "Island"}, wire_callbacks=False)
+    event = _KeyEvent(count_key)
+    panel._on_result_key_down(event)
+    assert panel.main_calls == []
+    assert panel.side_calls == []
+
+
+def test_shift_digit_without_side_callback_does_nothing() -> None:
+    """Without an add-to-side callback wired, Shift+digit must add nothing."""
+    panel = _Panel({"name": "Island"}, wire_callbacks=False)
+    event = _KeyEvent(ord("2"), shift=True)
+    panel._on_result_key_down(event)
+    assert panel.side_calls == []
+    assert panel.main_calls == []
+
+
+def test_plus_without_active_zone_callback_does_nothing() -> None:
+    """Without an active-zone callback wired, '+' must add nothing."""
+    panel = _Panel({"name": "Island"}, wire_callbacks=False)
+    event = _KeyEvent(ord("+"))
+    panel._on_result_key_down(event)
+    assert panel.active_zone_calls == []

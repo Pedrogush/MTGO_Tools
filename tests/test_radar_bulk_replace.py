@@ -31,15 +31,19 @@ def _radar(
 
 
 def _card(name: str, *, copies: int) -> dict:
+    # Every numeric field gets a distinct value so a column-order swap, a
+    # float/int truncation, or a distribution mismatch cannot pass silently.
+    # ``copies`` drives ``appearances`` (the field the round-trip tests assert
+    # on); all other fields are offset to stay unique even when copies == 4.
     return {
         "card_name": name,
         "appearances": copies,
-        "total_copies": copies * 2,
-        "max_copies": 4,
-        "avg_copies": 2.0,
+        "total_copies": copies * 2 + 1,
+        "max_copies": 3,
+        "avg_copies": 2.5,
         "inclusion_rate": 0.5,
-        "expected_copies": 1.0,
-        "copy_distribution": {"4": copies},
+        "expected_copies": 1.25,
+        "copy_distribution": {"4": copies, "3": 7},
     }
 
 
@@ -69,12 +73,12 @@ def test_bulk_replace_persists_all_entries(repo):
     # cannot slip through (_card sets distinct values for every field).
     bolt = burn.mainboard_cards[0]
     assert bolt.appearances == 10
-    assert bolt.total_copies == 20
-    assert bolt.max_copies == 4
-    assert bolt.avg_copies == 2.0
+    assert bolt.total_copies == 21
+    assert bolt.max_copies == 3
+    assert bolt.avg_copies == 2.5
     assert bolt.inclusion_rate == 0.5
-    assert bolt.expected_copies == 1.0
-    assert bolt.copy_distribution == {4: 10}
+    assert bolt.expected_copies == 1.25
+    assert bolt.copy_distribution == {4: 10, 3: 7}
     assert repo.get_total_decks("modern") == 30
     assert repo.get_total_decks("legacy") == 5
 
@@ -167,6 +171,32 @@ def test_bulk_replace_duplicate_keys_in_one_batch_abort_transaction(repo):
     # The whole batch rolled back: neither variant of the duplicate key persisted.
     assert repo.get_radar("modern", "modern-burn") is None
     assert repo.get_total_decks("modern") == 0
+
+
+def test_bulk_replace_skips_entry_that_raises_during_normalization(repo):
+    """An entry that blows up inside ``_build_rows`` is logged and skipped.
+
+    ``total_decks_analyzed`` is fed a non-numeric string, so the ``int(...)``
+    coercion raises. This is past the ``None`` validity gates, so it can only be
+    handled by the ``try/except`` in ``bulk_replace`` -- which must drop the bad
+    entry and still persist the surrounding valid ones in the same batch.
+    """
+    entries = [
+        _radar(fmt="modern", href="modern-burn", name="Burn", decks=10),
+        {
+            "format": "modern",
+            "archetype": {"name": "Broken", "href": "modern-broken"},
+            "total_decks_analyzed": "not-a-number",
+        },
+        _radar(fmt="legacy", href="legacy-control", name="Control", decks=5),
+    ]
+
+    replaced = repo.bulk_replace(entries)
+
+    assert replaced == 2
+    assert repo.get_radar("modern", "modern-burn") is not None
+    assert repo.get_radar("modern", "modern-broken") is None
+    assert repo.get_radar("legacy", "legacy-control") is not None
 
 
 def test_bulk_replace_empty_returns_zero(repo):

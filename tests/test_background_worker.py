@@ -28,12 +28,14 @@ def _synchronous_call_after(monkeypatch):
 def test_background_worker_submit():
     worker = BackgroundWorker()
     result = []
+    done = threading.Event()
 
     def task():
         result.append(1)
+        done.set()
 
     worker.submit(task)
-    time.sleep(0.1)
+    assert done.wait(timeout=1.0)
 
     assert result == [1]
     worker.shutdown()
@@ -73,14 +75,16 @@ def test_background_worker_stops_loop():
 
 def test_background_worker_context_manager():
     result = []
+    done = threading.Event()
 
     with BackgroundWorker() as worker:
 
         def task():
             result.append(1)
+            done.set()
 
         worker.submit(task)
-        time.sleep(0.1)
+        assert done.wait(timeout=1.0)
 
     assert result == [1]
     assert worker.is_stopped()
@@ -89,14 +93,16 @@ def test_background_worker_context_manager():
 def test_background_worker_shutdown_waits_for_threads():
     worker = BackgroundWorker()
     completed = []
+    started = threading.Event()
 
     def slow_task():
+        started.set()
         while not worker.is_stopped():
-            time.sleep(0.1)
+            time.sleep(0.01)
         completed.append(1)
 
     worker.submit(slow_task)
-    time.sleep(0.1)
+    assert started.wait(timeout=1.0)
 
     worker.shutdown(timeout=2.0)
 
@@ -106,15 +112,19 @@ def test_background_worker_shutdown_waits_for_threads():
 def test_background_worker_multiple_threads():
     worker = BackgroundWorker()
     results = []
+    lock = threading.Lock()
+    all_done = threading.Barrier(4, timeout=1.0)
 
     def task(value):
-        results.append(value)
+        with lock:
+            results.append(value)
+        all_done.wait()
 
     worker.submit(task, 1)
     worker.submit(task, 2)
     worker.submit(task, 3)
 
-    time.sleep(0.2)
+    all_done.wait()
     worker.shutdown()
 
     assert sorted(results) == [1, 2, 3]
@@ -191,25 +201,22 @@ def test_background_worker_on_error_receives_exception():
     assert success_called == []
 
 
-def test_background_worker_on_success_not_called_on_error():
+def test_background_worker_forwards_args_and_kwargs():
     worker = BackgroundWorker()
-    success_called = []
+    received = []
     done = threading.Event()
 
-    def task():
-        raise RuntimeError("fail")
+    def task(a, b, *, c):
+        received.append((a, b, c))
 
-    def on_success(result):
-        success_called.append(result)
-
-    def on_error(_exc):
+    def on_success(_result):
         done.set()
 
-    worker.submit(task, on_success=on_success, on_error=on_error)
+    worker.submit(task, 1, 2, c=3, on_success=on_success)
     assert done.wait(timeout=1.0)
     worker.shutdown()
 
-    assert success_called == []
+    assert received == [(1, 2, 3)]
 
 
 def test_background_worker_error_without_on_error_is_swallowed():
@@ -234,7 +241,7 @@ def test_background_worker_error_without_on_error_is_swallowed():
     assert after == [1]
 
 
-def test_background_worker_call_after_runs_synchronously_without_wx():
+def test_background_worker_call_after_runs_synchronously():
     # The callback is marshalled synchronously: off-Windows wx is absent and
     # _call_after falls back to a direct call; on the headless CI runner the
     # _synchronous_call_after fixture stubs wx.CallAfter to the same effect.

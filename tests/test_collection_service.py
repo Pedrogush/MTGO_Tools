@@ -1,79 +1,128 @@
-"""Tests for CollectionService business logic."""
+"""Tests for CollectionService business logic.
+
+These tests wire a *real* ``CardRepository`` against the service so the real
+collection-file parser (``load_collection_from_file`` — msgspec decode,
+multi-shape ``_extract_cards``, OSError/DecodeError handling) and the real
+metadata aggregation path are exercised. Only the one seam we don't own — the
+``CardDataManager`` in-memory MTGJSON index, which would otherwise load bulk
+card data off disk/network — is faked. See ``tests/README.md`` §1–§2.
+"""
 
 import json
 import os
 import time
 from datetime import datetime, timedelta
-from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 import pytest
 
+from repositories.card_repository import CardRepository
 from services.collection_service import CollectionService
 from services.collection_service.cache import CollectionStatus
 from services.collection_service.parsing import build_inventory
 
 
+class _FakeCardDataManager:
+    """Stand-in for the MTGJSON-backed card index (the seam we don't own).
+
+    Holds a small in-memory ``{name: metadata}`` map keyed case-insensitively so
+    ``CardRepository.get_card_metadata`` runs for real against deterministic data
+    instead of a network/disk load. Tests mutate ``cards`` directly.
+    """
+
+    def __init__(self, cards: dict[str, dict] | None = None):
+        self.cards = cards or {}
+        self.is_loaded = True
+
+    def get_card(self, name: str) -> dict | None:
+        return self.cards.get(name)
+
+
 @pytest.fixture
-def mock_card_repo(tmp_path):
-    """Mock CardRepository for testing."""
-    repo = SimpleNamespace()
-    repo.get_collection_cache_path = Mock(return_value=tmp_path / "collection.json")
-    repo.load_collection_from_file = Mock(
-        return_value=[
-            {"name": "Lightning Bolt", "quantity": 4},
-            {"name": "Island", "quantity": 20},
-            {"name": "Mountain", "quantity": 10},
-        ]
-    )
-    repo.get_card_metadata = Mock(
-        side_effect=lambda name: {
+def card_data():
+    """Default fake card metadata used by the statistics tests."""
+    return _FakeCardDataManager(
+        {
             "Lightning Bolt": {"rarity": "common"},
             "Island": {"rarity": "basic"},
             "Mountain": {"rarity": "basic"},
-        }.get(name)
+        }
     )
+
+
+@pytest.fixture
+def card_repo(tmp_path, card_data):
+    """Real CardRepository pointed at ``tmp_path`` with a faked data manager.
+
+    Overriding ``get_collection_cache_path`` is path relocation of real file
+    I/O (README §3), not a mock of internal logic: the real
+    ``load_collection_from_file`` parser still runs against whatever is written
+    to the returned path.
+    """
+    repo = CardRepository(card_data_manager=card_data)
+    repo.get_collection_cache_path = lambda: tmp_path / "collection.json"  # type: ignore[method-assign]
     return repo
 
 
 @pytest.fixture
-def collection_service(mock_card_repo):
-    """CollectionService with mock repository."""
-    return CollectionService(card_repository=mock_card_repo)
-
-
-@pytest.fixture
-def temp_collection_file(tmp_path):
-    """Create a temporary collection file for testing."""
-    collection_data = [
-        {"name": "Lightning Bolt", "quantity": 4},
-        {"name": "Island", "quantity": 20},
-        {"name": "Counterspell", "quantity": 3},
-    ]
-    filepath = tmp_path / "collection.json"
-    filepath.write_text(json.dumps(collection_data), encoding="utf-8")
-    return filepath
+def collection_service(card_repo):
+    """CollectionService backed by a real CardRepository."""
+    return CollectionService(card_repository=card_repo)
 
 
 # ============= Collection Loading Tests =============
 
 
-def test_load_collection_from_file(collection_service, mock_card_repo, temp_collection_file):
-    """Test loading collection from file."""
-    mock_card_repo.load_collection_from_file = Mock(
-        return_value=[
-            {"name": "Lightning Bolt", "quantity": 4},
-            {"name": "Island", "quantity": 20},
-        ]
+def test_load_collection_from_file(collection_service, tmp_path):
+    """Loading a real collection file runs the msgspec parser end to end."""
+    filepath = tmp_path / "collection.json"
+    filepath.write_text(
+        json.dumps(
+            [
+                {"name": "Lightning Bolt", "quantity": 4},
+                {"name": "Island", "quantity": 20},
+            ]
+        ),
+        encoding="utf-8",
     )
 
-    success = collection_service.load_collection(temp_collection_file)
+    success = collection_service.load_collection(filepath)
 
     assert success is True
     assert collection_service.is_loaded() is True
     assert collection_service.get_collection_size() == 2
     assert collection_service.get_owned_count("Lightning Bolt") == 4
     assert collection_service.get_owned_count("Island") == 20
+
+
+def test_load_collection_from_nested_cards_payload(collection_service, tmp_path):
+    """The real parser unwraps the ``{"cards": [...]}`` MTGO shape.
+
+    Drives ``_extract_cards`` against a non-list wrapper — a branch the old
+    fully-mocked repo could never reach.
+    """
+    filepath = tmp_path / "collection.json"
+    filepath.write_text(
+        json.dumps({"cards": [{"name": "Counterspell", "quantity": "3"}]}),
+        encoding="utf-8",
+    )
+
+    success = collection_service.load_collection(filepath)
+
+    assert success is True
+    # Numeric-string quantity is coerced to int by the real parser.
+    assert collection_service.get_owned_count("Counterspell") == 3
+
+
+def test_load_collection_malformed_json_yields_empty(collection_service, tmp_path):
+    """A corrupt collection file is swallowed by the parser as an empty load."""
+    filepath = tmp_path / "collection.json"
+    filepath.write_text("{not valid json", encoding="utf-8")
+
+    success = collection_service.load_collection(filepath)
+
+    assert success is True
+    assert collection_service.get_collection_size() == 0
 
 
 def test_load_collection_nonexistent_file(collection_service, tmp_path):
@@ -86,27 +135,29 @@ def test_load_collection_nonexistent_file(collection_service, tmp_path):
     assert collection_service.get_collection_size() == 0
 
 
-def test_load_collection_force_reload(collection_service, mock_card_repo, temp_collection_file):
-    """Test force reloading collection."""
-    mock_card_repo.load_collection_from_file = Mock(
-        return_value=[{"name": "Island", "quantity": 5}]
-    )
+def test_load_collection_force_reload(collection_service, tmp_path):
+    """Test force reloading collection re-reads the file on disk."""
+    filepath = tmp_path / "collection.json"
+
+    def write(quantity: int) -> None:
+        filepath.write_text(
+            json.dumps([{"name": "Island", "quantity": quantity}]), encoding="utf-8"
+        )
 
     # First load
-    collection_service.load_collection(temp_collection_file)
+    write(5)
+    collection_service.load_collection(filepath)
     assert collection_service.get_owned_count("Island") == 5
 
-    # Update mock to return different data
-    mock_card_repo.load_collection_from_file = Mock(
-        return_value=[{"name": "Island", "quantity": 10}]
-    )
+    # Change the file on disk.
+    write(10)
 
-    # Load without force - should not reload
-    collection_service.load_collection(temp_collection_file)
+    # Load without force - should not re-read the file.
+    collection_service.load_collection(filepath)
     assert collection_service.get_owned_count("Island") == 5
 
-    # Load with force - should reload
-    collection_service.load_collection(temp_collection_file, force=True)
+    # Load with force - should re-read and pick up the new quantity.
+    collection_service.load_collection(filepath, force=True)
     assert collection_service.get_owned_count("Island") == 10
 
 
@@ -239,18 +290,20 @@ def test_get_owned_count_mixed_case_lookup(collection_service):
     assert collection_service.get_owned_count("lightning bolt") == 4
 
 
-def test_load_collection_normalizes_mixed_case_keys(
-    collection_service, mock_card_repo, temp_collection_file
-):
+def test_load_collection_normalizes_mixed_case_keys(collection_service, tmp_path):
     """load_collection must normalize keys so later lookups are case-insensitive (#469)."""
-    mock_card_repo.load_collection_from_file = Mock(
-        return_value=[
-            {"name": "Lightning Bolt", "quantity": 4},
-            {"name": "Force of Will", "quantity": 1},
-        ]
+    filepath = tmp_path / "collection.json"
+    filepath.write_text(
+        json.dumps(
+            [
+                {"name": "Lightning Bolt", "quantity": 4},
+                {"name": "Force of Will", "quantity": 1},
+            ]
+        ),
+        encoding="utf-8",
     )
 
-    success = collection_service.load_collection(temp_collection_file)
+    success = collection_service.load_collection(filepath)
 
     assert success is True
     # Any casing should resolve to the loaded counts.
@@ -364,8 +417,8 @@ def test_get_missing_cards_list(collection_service):
 # ============= Collection Statistics Tests =============
 
 
-def test_get_collection_statistics(collection_service, mock_card_repo):
-    """Test getting collection statistics."""
+def test_get_collection_statistics(collection_service):
+    """Stats flow through the real repo against the default fake card index."""
     collection_service.set_inventory({"Lightning Bolt": 4, "Island": 20, "Mountain": 10})
 
     stats = collection_service.get_collection_statistics()
@@ -378,11 +431,9 @@ def test_get_collection_statistics(collection_service, mock_card_repo):
     assert stats["rarity_distribution"] == {"common": 4, "basic": 30}
 
 
-def test_get_collection_statistics_missing_metadata_skipped(collection_service, mock_card_repo):
+def test_get_collection_statistics_missing_metadata_skipped(collection_service, card_data):
     """Cards whose metadata is None are skipped from the rarity aggregation (stats.py if metadata)."""
-    mock_card_repo.get_card_metadata = Mock(
-        side_effect=lambda name: {"Lightning Bolt": {"rarity": "common"}}.get(name)
-    )
+    card_data.cards = {"Lightning Bolt": {"rarity": "common"}}
     collection_service.set_inventory({"Lightning Bolt": 4, "Unknown Card": 7})
 
     stats = collection_service.get_collection_statistics()
@@ -391,9 +442,9 @@ def test_get_collection_statistics_missing_metadata_skipped(collection_service, 
     assert stats["rarity_distribution"] == {"common": 4}
 
 
-def test_get_collection_statistics_default_unknown_rarity(collection_service, mock_card_repo):
+def test_get_collection_statistics_default_unknown_rarity(collection_service, card_data):
     """Metadata lacking a 'rarity' key defaults to 'unknown' (stats.py:33)."""
-    mock_card_repo.get_card_metadata = Mock(return_value={"name": "Some Card"})
+    card_data.cards = {"Some Card": {"name": "Some Card"}}
     collection_service.set_inventory({"Some Card": 3})
 
     stats = collection_service.get_collection_statistics()

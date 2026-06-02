@@ -570,15 +570,36 @@ class TestGetArchetypeStats:
 
 
 class TestFetchDeckText:
-    """Test fetch_deck_text function (SQLite-backed deck cache)."""
+    """Test fetch_deck_text against a real SQLite-backed deck cache.
 
-    @patch("repositories.scrapers.mtggoldfish._ensure_cache_migration")
-    @patch("repositories.deck_text_cache.get_deck_cache")
-    def test_fetch_deck_text_cache_hit_no_download(self, mock_get_cache, _mock_migrate):
-        """A cache hit returns the cached text without hitting the visual page."""
-        cache = Mock()
-        cache.get.return_value = "4 Lightning Bolt"
-        mock_get_cache.return_value = cache
+    Only the network seam (the visual-page fetch) is mocked. The cache is a real
+    ``DeckTextCache`` over a ``tmp_path`` SQLite DB, so we assert on persisted
+    values rather than on mock interactions.
+    """
+
+    @pytest.fixture
+    def real_cache(self, tmp_path):
+        """A real DeckTextCache over a throwaway SQLite DB.
+
+        Patches both the function-local ``get_deck_cache`` import target and points
+        the legacy JSON migration source at a nonexistent path so migration is an
+        inert no-op for these tests.
+        """
+        from repositories.deck_text_cache import DeckTextCache
+
+        cache = DeckTextCache(tmp_path / "deck_cache.db")
+        with (
+            patch("repositories.deck_text_cache.get_deck_cache", return_value=cache),
+            patch(
+                "repositories.scrapers.mtggoldfish.DECK_TEXT_CACHE_FILE",
+                tmp_path / "missing_legacy_cache.json",
+            ),
+        ):
+            yield cache
+
+    def test_fetch_deck_text_cache_hit_no_download(self, real_cache):
+        """A pre-seeded cache entry is returned without hitting the visual page."""
+        real_cache.set("123456", "4 Lightning Bolt", source="mtggoldfish")
 
         with patch(
             "repositories.scrapers.mtggoldfish_visual.fetch_deck_text_from_visual_page"
@@ -587,19 +608,10 @@ class TestFetchDeckText:
 
         assert result == "4 Lightning Bolt"
         mock_visual.assert_not_called()
-        cache.set.assert_not_called()
-        # source_filter=None maps to cache_source=None (any source).
-        cache.get.assert_called_once_with("123456", source=None)
 
-    @patch("repositories.scrapers.mtggoldfish._ensure_cache_migration")
-    @patch("repositories.deck_text_cache.get_deck_cache")
-    def test_fetch_deck_text_mtgo_filter_cache_miss_raises(self, mock_get_cache, _mock_migrate):
+    def test_fetch_deck_text_mtgo_filter_cache_miss_raises(self, real_cache):
         """source_filter='mtgo' with a cache miss must not fall back to MTGGoldfish
         and instead raises ValueError."""
-        cache = Mock()
-        cache.get.return_value = None
-        mock_get_cache.return_value = cache
-
         with patch(
             "repositories.scrapers.mtggoldfish_visual.fetch_deck_text_from_visual_page"
         ) as mock_visual:
@@ -607,19 +619,28 @@ class TestFetchDeckText:
                 mtggoldfish.fetch_deck_text("123456", source_filter="mtgo")
 
         mock_visual.assert_not_called()
-        cache.set.assert_not_called()
-        cache.get.assert_called_once_with("123456", source="mtgo")
+        # Nothing was persisted for the missing deck.
+        assert real_cache.get("123456") is None
 
-    @patch("repositories.scrapers.mtggoldfish._ensure_cache_migration")
-    @patch("repositories.deck_text_cache.get_deck_cache")
-    def test_fetch_deck_text_visual_failure_wrapped_as_value_error(
-        self, mock_get_cache, _mock_migrate
-    ):
-        """A visual-page fetch exception is wrapped in ValueError and nothing is cached."""
-        cache = Mock()
-        cache.get.return_value = None
-        mock_get_cache.return_value = cache
+    def test_fetch_deck_text_mtgo_filter_serves_only_mtgo_source(self, real_cache):
+        """source_filter='mtgo' returns an mtgo-sourced entry but ignores an
+        mtggoldfish-sourced one (the source filter is honored against the real DB)."""
+        real_cache.set("mtgo-deck", "4 Island", source="mtgo")
+        real_cache.set("goldfish-deck", "4 Mountain", source="mtggoldfish")
 
+        with patch(
+            "repositories.scrapers.mtggoldfish_visual.fetch_deck_text_from_visual_page"
+        ) as mock_visual:
+            assert mtggoldfish.fetch_deck_text("mtgo-deck", source_filter="mtgo") == "4 Island"
+            # The mtggoldfish-sourced deck is not visible under the mtgo filter.
+            with pytest.raises(ValueError, match="not available from MTGO source"):
+                mtggoldfish.fetch_deck_text("goldfish-deck", source_filter="mtgo")
+
+        mock_visual.assert_not_called()
+
+    def test_fetch_deck_text_visual_failure_wrapped_and_not_cached(self, real_cache):
+        """A visual-page fetch exception is wrapped in ValueError and the cache is
+        not poisoned with a partial/empty entry."""
         with patch(
             "repositories.scrapers.mtggoldfish_visual.fetch_deck_text_from_visual_page",
             side_effect=RuntimeError("boom"),
@@ -627,24 +648,99 @@ class TestFetchDeckText:
             with pytest.raises(ValueError, match="Could not parse deck data"):
                 mtggoldfish.fetch_deck_text("123456")
 
-        cache.set.assert_not_called()
+        assert real_cache.get("123456") is None
 
-    @patch("repositories.scrapers.mtggoldfish._ensure_cache_migration")
-    @patch("repositories.deck_text_cache.get_deck_cache")
-    def test_fetch_deck_text_successful_download_caches_result(self, mock_get_cache, _mock_migrate):
-        """On a cache miss the deck is downloaded and persisted with source='mtggoldfish'."""
-        cache = Mock()
-        cache.get.return_value = None
-        mock_get_cache.return_value = cache
-
+    def test_fetch_deck_text_successful_download_persists_result(self, real_cache):
+        """On a cache miss the deck is downloaded and persisted with source
+        'mtggoldfish', and a subsequent fetch is served from the DB."""
         with patch(
             "repositories.scrapers.mtggoldfish_visual.fetch_deck_text_from_visual_page",
             return_value="4 Lightning Bolt",
-        ):
+        ) as mock_visual:
             result = mtggoldfish.fetch_deck_text("123456")
 
         assert result == "4 Lightning Bolt"
-        cache.set.assert_called_once_with("123456", "4 Lightning Bolt", source="mtggoldfish")
+        # Persisted to the real DB under the expected source.
+        assert real_cache.get("123456", source="mtggoldfish") == "4 Lightning Bolt"
+
+        # A second fetch is served from cache without re-downloading.
+        with patch(
+            "repositories.scrapers.mtggoldfish_visual.fetch_deck_text_from_visual_page"
+        ) as mock_visual_again:
+            assert mtggoldfish.fetch_deck_text("123456") == "4 Lightning Bolt"
+        mock_visual_again.assert_not_called()
+        mock_visual.assert_called_once_with("123456")
+
+
+class TestCacheMigration:
+    """Test _ensure_cache_migration end-to-end against a real SQLite cache."""
+
+    def setup_method(self):
+        # The migration guard is a module-level flag; reset it so each test runs.
+        mtggoldfish._migration_attempted = False
+
+    def teardown_method(self):
+        mtggoldfish._migration_attempted = False
+
+    def test_migration_imports_json_decks_and_backs_up_file(self, tmp_path):
+        """A legacy JSON deck cache is imported into the real SQLite cache and the
+        JSON file is renamed to a .json.backup sidecar."""
+        from repositories.deck_text_cache import DeckTextCache
+
+        json_path = tmp_path / "deck_text_cache.json"
+        json_path.write_text(
+            json.dumps({"111": "4 Lightning Bolt", "222": "4 Counterspell"}),
+            encoding="utf-8",
+        )
+
+        cache = DeckTextCache(tmp_path / "deck_cache.db")
+        with (
+            patch("repositories.deck_text_cache.get_deck_cache", return_value=cache),
+            patch("repositories.scrapers.mtggoldfish.DECK_TEXT_CACHE_FILE", json_path),
+        ):
+            mtggoldfish._ensure_cache_migration()
+
+        # Decks landed in the real SQLite cache.
+        assert cache.get("111") == "4 Lightning Bolt"
+        assert cache.get("222") == "4 Counterspell"
+        # Original JSON was backed up and removed.
+        assert not json_path.exists()
+        assert json_path.with_suffix(".json.backup").exists()
+
+    def test_migration_is_noop_when_no_json_cache(self, tmp_path):
+        """With no legacy JSON file the migration leaves the SQLite cache empty and
+        creates no backup."""
+        from repositories.deck_text_cache import DeckTextCache
+
+        json_path = tmp_path / "deck_text_cache.json"  # does not exist
+        cache = DeckTextCache(tmp_path / "deck_cache.db")
+        with (
+            patch("repositories.deck_text_cache.get_deck_cache", return_value=cache),
+            patch("repositories.scrapers.mtggoldfish.DECK_TEXT_CACHE_FILE", json_path),
+        ):
+            mtggoldfish._ensure_cache_migration()
+
+        assert cache.get_stats()["total_decks"] == 0
+        assert not json_path.with_suffix(".json.backup").exists()
+
+    def test_migration_runs_only_once(self, tmp_path):
+        """The module-level guard prevents a second migration pass; a JSON file
+        written after the first call is not imported."""
+        from repositories.deck_text_cache import DeckTextCache
+
+        json_path = tmp_path / "deck_text_cache.json"  # absent on first call
+        cache = DeckTextCache(tmp_path / "deck_cache.db")
+        with (
+            patch("repositories.deck_text_cache.get_deck_cache", return_value=cache),
+            patch("repositories.scrapers.mtggoldfish.DECK_TEXT_CACHE_FILE", json_path),
+        ):
+            mtggoldfish._ensure_cache_migration()  # marks attempted, no-op
+
+            json_path.write_text(json.dumps({"999": "4 Brainstorm"}), encoding="utf-8")
+            mtggoldfish._ensure_cache_migration()  # guarded -> skipped
+
+        assert cache.get("999") is None
+        assert json_path.exists()  # untouched, not backed up
 
 
 class TestDownloadDeck:

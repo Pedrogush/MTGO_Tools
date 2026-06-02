@@ -43,21 +43,30 @@ def test_find_opponent_names_ignores_non_match_titles(monkeypatch: pytest.Monkey
     assert find_opponent_names() == []
 
 
+def test_find_opponent_names_empty_title_list(monkeypatch: pytest.MonkeyPatch) -> None:
+    """No open windows yields no opponents."""
+    monkeypatch.setattr(
+        "utils.find_opponent_names.pygetwindow.getAllTitles",
+        lambda: [],
+    )
+    assert find_opponent_names() == []
+
+
 @pytest.mark.parametrize(
-    "titles",
+    "titles, expected",
     [
-        ["Champion vs."],
-        ["vs."],
-        ["Champion vs. "],
-        ["Champion vs. Rival", "Lobby vs."],
+        (["Champion vs."], []),
+        (["vs."], []),
+        (["Champion vs. "], []),
+        (["Champion vs. Rival", "Lobby vs."], ["Rival"]),
     ],
 )
 def test_find_opponent_names_skips_blank_opponents(
-    monkeypatch: pytest.MonkeyPatch, titles: Iterable[str]
+    monkeypatch: pytest.MonkeyPatch, titles: Iterable[str], expected: list[str]
 ) -> None:
     """A trailing 'vs.' yields an empty name that must not be emitted as an opponent."""
     monkeypatch.setattr(
         "utils.find_opponent_names.pygetwindow.getAllTitles",
         lambda: list(titles),
     )
-    assert "" not in find_opponent_names()
+    assert find_opponent_names() == expected

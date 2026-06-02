@@ -916,6 +916,51 @@ def test_get_stats_falls_back_to_live_when_remote_returns_none(tmp_path, monkeyp
     assert called == ["modern"]
 
 
+def test_get_stats_falls_back_to_live_when_remote_raises(tmp_path, monkeypatch):
+    """A remote stats exception should be swallowed and the live navigator used."""
+
+    class _BoomClient:
+        def get_metagame_stats_for_format(self, _fmt):
+            raise RuntimeError("network error")
+
+    live_stats = {"modern": {"timestamp": 0.0, "UR Murktide": {"results": {}}}}
+    called = []
+
+    def fake_live_stats(fmt):
+        called.append(fmt)
+        return live_stats
+
+    monkeypatch.setattr("repositories.scrapers.mtggoldfish.get_archetype_stats", fake_live_stats)
+
+    repo = _make_repo(tmp_path, remote_client=_BoomClient())
+    result = repo.get_stats_for_format("modern")
+
+    assert result == live_stats
+    assert called == ["modern"]
+
+
+def test_get_stats_force_refresh_skips_remote(tmp_path, monkeypatch):
+    """force_refresh=True must bypass the remote snapshot and scrape live data."""
+    remote_stats = {"modern": {"timestamp": 1711234567.0, "UR Murktide": {"results": {}}}}
+    remote = _FakeRemoteClient(stats=remote_stats)
+
+    live_stats = {"modern": {"timestamp": 0.0, "Amulet Titan": {"results": {}}}}
+    called = []
+
+    def fake_live_stats(fmt):
+        called.append(fmt)
+        return live_stats
+
+    monkeypatch.setattr("repositories.scrapers.mtggoldfish.get_archetype_stats", fake_live_stats)
+
+    repo = _make_repo(tmp_path, remote_client=remote)
+    result = repo.get_stats_for_format("modern", force_refresh=True)
+
+    assert result == live_stats
+    assert called == ["modern"]
+    assert remote.stats_calls == [], "remote client must not be consulted on force_refresh"
+
+
 def test_remote_client_not_used_when_disabled(tmp_path, monkeypatch):
     """Without an injected client and REMOTE_SNAPSHOTS_ENABLED=False, no remote calls."""
     monkeypatch.setattr("repositories.metagame_repository.REMOTE_SNAPSHOTS_ENABLED", False)

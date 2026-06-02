@@ -77,14 +77,19 @@ def test_transitive_missing_optional_dependency_is_silent(monkeypatch):
     """
     module_path = "pkg.target_mod"
 
-    def fake_import(name, *args, **kwargs):
-        # Simulate the target module importing an absent optional dependency.
-        raise ImportError("No module named 'wx'", name="wx")
-
-    monkeypatch.setattr(test_helpers, "__import__", fake_import, raising=False)
-    # ``__import__`` is looked up as a builtin; patch builtins to be safe.
     import builtins
 
+    real_import = builtins.__import__
+
+    def fake_import(name, *args, **kwargs):
+        # Simulate *only* the target module importing an absent optional
+        # dependency; delegate everything else so pytest internals keep working.
+        if name == module_path:
+            raise ImportError("No module named 'wx'", name="wx")
+        return real_import(name, *args, **kwargs)
+
+    # ``__import__`` is looked up as a builtin, so patching builtins is what
+    # actually intercepts the call inside ``_optional_reset``.
     monkeypatch.setattr(builtins, "__import__", fake_import)
 
     with warnings.catch_warnings(record=True) as caught:
@@ -93,3 +98,31 @@ def test_transitive_missing_optional_dependency_is_silent(monkeypatch):
 
     assert fn() is None
     assert not caught, [str(c.message) for c in caught]
+
+
+def test_import_error_without_name_warns(monkeypatch):
+    """An ImportError with no ``.name`` (``exc.name is None``) must warn.
+
+    Without a populated ``name`` attribute we cannot distinguish a benign
+    missing optional dependency from a broken target module, so the safe
+    behaviour is to surface a warning rather than silently no-op.
+    """
+    module_path = "pkg.nameless_target"
+
+    import builtins
+
+    real_import = builtins.__import__
+
+    def fake_import(name, *args, **kwargs):
+        if name == module_path:
+            raise ImportError("import failed with no name attribute")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", fake_import)
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        fn = test_helpers._optional_reset(module_path, "reset_x")
+
+    assert fn() is None
+    assert any(module_path in str(c.message) for c in caught)

@@ -4,6 +4,9 @@ import json
 import sys
 from pathlib import Path
 
+import pytest
+from PIL import Image
+
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 FIXTURE_DIR = Path(__file__).parent / "fixtures" / "card_art_selection"
 COLOR_ORDER = "WUBRG"
@@ -146,3 +149,279 @@ def test_build_printing_record_coalesces_missing_fields() -> None:
     assert record["full_art"] is False
     assert record["promo"] is False
     assert record["digital"] is False
+
+
+def test_build_printing_record_preserves_populated_fields() -> None:
+    record = generator.build_printing_record(
+        {
+            "id": "abc",
+            "oracle_id": "oid",
+            "name": "Apothecary White",
+            "mana_cost": "{W}",
+            "type_line": "Creature",
+            "colors": ["W"],
+            "color_identity": ["W"],
+            "set": "neo",
+            "set_name": "Kamigawa",
+            "collector_number": "5",
+            "released_at": "2022-02-18",
+            "artist": "Artist",
+            "rarity": "rare",
+            "layout": "normal",
+            "games": ["paper", "mtgo"],
+            "full_art": True,
+            "textless": True,
+            "promo": True,
+            "digital": True,
+            "variation": True,
+            "border_color": "black",
+            "frame": "2015",
+            "image_uris": {"normal": "images/normal/x.jpg"},
+            "fixture_image_sources": {"normal": "cache/card_images/normal/x.jpg"},
+        }
+    )
+    assert record["oracle_id"] == "oid"
+    assert record["mana_cost"] == "{W}"
+    assert record["colors"] == ["W"]
+    assert record["color_identity"] == ["W"]
+    assert record["set"] == "NEO"
+    assert record["set_name"] == "Kamigawa"
+    assert record["collector_number"] == "5"
+    assert record["released_at"] == "2022-02-18"
+    assert record["games"] == ["paper", "mtgo"]
+    assert record["full_art"] is True
+    assert record["textless"] is True
+    assert record["promo"] is True
+    assert record["digital"] is True
+    assert record["variation"] is True
+    assert record["image_uris"] == {"normal": "images/normal/x.jpg"}
+    assert record["fixture_image_sources"] == {"normal": "cache/card_images/normal/x.jpg"}
+
+
+def _color_identity_for(name: str) -> list[str]:
+    for group_name, group in generator.TARGETS.items():
+        for identity, card_name in group.items():
+            if card_name != name:
+                continue
+            if group_name in {"colorless", "nonbasic_land"}:
+                return []
+            return [c for c in COLOR_ORDER if c in identity]
+    raise AssertionError(f"unknown target name: {name}")
+
+
+def _type_line_for(name: str) -> str:
+    for group_name, group in generator.TARGETS.items():
+        for card_name in group.values():
+            if card_name == name:
+                return "Land" if group_name == "nonbasic_land" else "Legendary Creature"
+    raise AssertionError(f"unknown target name: {name}")
+
+
+def _write_bulk_cache(source: Path) -> list[dict]:
+    """Build a minimal JSONL bulk cache covering every TARGETS card name."""
+    cards: list[dict] = []
+    counter = 0
+    for name in sorted(generator.wanted_names()):
+        # Two printings per name so printing-count math and sorting are exercised.
+        for index, released in enumerate(("2021-01-01", "2022-02-02")):
+            counter += 1
+            cards.append(
+                {
+                    "object": "card",
+                    "lang": "en",
+                    "id": f"id-{counter:04d}",
+                    "oracle_id": f"oracle-{name}",
+                    "name": name,
+                    "type_line": _type_line_for(name),
+                    "color_identity": _color_identity_for(name),
+                    "colors": _color_identity_for(name),
+                    "set": f"s{counter % 7}",
+                    "set_name": "Test Set",
+                    "collector_number": str(counter),
+                    "released_at": released,
+                    "full_art": index == 0,
+                    "image_uris": {
+                        "small": "https://example.test/small.jpg",
+                        "normal": "https://example.test/normal.jpg",
+                    },
+                }
+            )
+
+    # Add cards that must be filtered out by selected_printings().
+    cards.append(
+        {
+            "object": "card",
+            "lang": "ja",  # wrong language
+            "id": "skip-lang",
+            "name": "Apothecary White",
+            "color_identity": ["W"],
+            "image_uris": {"normal": "https://example.test/normal.jpg"},
+        }
+    )
+    cards.append(
+        {
+            "object": "card",
+            "lang": "en",
+            "id": "skip-noimage",  # no normal image
+            "name": "Apothecary White",
+            "color_identity": ["W"],
+            "image_uris": {},
+        }
+    )
+    cards.append(
+        {
+            "object": "card",
+            "lang": "en",
+            "id": "skip-notwanted",  # not a target name
+            "name": "Some Other Card",
+            "color_identity": [],
+            "image_uris": {"normal": "https://example.test/normal.jpg"},
+        }
+    )
+
+    source.parent.mkdir(parents=True, exist_ok=True)
+    with source.open("w", encoding="utf-8") as handle:
+        handle.write("[\n")
+        for i, card in enumerate(cards):
+            suffix = "," if i < len(cards) - 1 else ""
+            handle.write(json.dumps(card) + suffix + "\n")
+        handle.write("]\n")
+    return cards
+
+
+def test_write_fixture_end_to_end(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Relocate the project root onto the temp surface so the real relative-path
+    # rewriting (cached_image.relative_to(PROJECT_ROOT)) operates on tmp_path I/O.
+    monkeypatch.setattr(generator, "PROJECT_ROOT", tmp_path)
+    source = tmp_path / "cache" / "card_images" / "bulk_data.json"
+    image_cache = tmp_path / "cache" / "card_images"
+    output = tmp_path / "out"
+    _write_bulk_cache(source)
+
+    # Seed a real cached image for exactly one id+size so the copy branch runs
+    # for it while every other size/printing falls through to a placeholder.
+    cached_id = "id-0001"
+    cached_size, cached_ext = generator.IMAGE_SPECS["small"]
+    cached_dir = image_cache / "small"
+    cached_dir.mkdir(parents=True, exist_ok=True)
+    Image.new("RGB", cached_size, (1, 2, 3)).save(cached_dir / f"{cached_id}.{cached_ext}")
+
+    generator.write_fixture(source, image_cache, output)
+
+    manifest = json.loads((output / "manifest.json").read_text(encoding="utf-8"))
+    index = json.loads((output / "printings_index.json").read_text(encoding="utf-8"))
+    cards = json.loads((output / "scryfall_cards.json").read_text(encoding="utf-8"))
+    assert (output / "README.md").exists()
+
+    target_count = len(generator.wanted_names())
+    # Two printings per target name were written.
+    assert manifest["printing_count"] == target_count * 2
+    assert len(cards) == target_count * 2
+    assert manifest["card_names"] == sorted(generator.wanted_names())
+
+    sizes = generator.IMAGE_SPECS
+    assert manifest["image_file_count"] == manifest["printing_count"] * len(sizes)
+    # Exactly one cached image existed, so exactly one copy happened.
+    assert manifest["copied_cached_image_count"] == 1
+    assert manifest["generated_placeholder_image_count"] == manifest["image_file_count"] - 1
+    assert (
+        manifest["copied_cached_image_count"] + manifest["generated_placeholder_image_count"]
+        == manifest["image_file_count"]
+    )
+    # One full-art printing per name (the first of each pair).
+    assert manifest["full_art_printing_count"] == target_count
+
+    # The copied image's source points back into the cache; placeholders are tagged.
+    copied = [
+        source_name
+        for printings in index["data"].values()
+        for printing in printings
+        for source_name in printing["fixture_image_sources"].values()
+        if source_name != "generated_placeholder"
+    ]
+    assert copied == ["cache/card_images/small/id-0001.jpg"]
+
+    # Every rewritten image path is relative and the file exists on disk.
+    for printings in index["data"].values():
+        for printing in printings:
+            assert set(printing["fixture_image_sources"]) == set(printing["image_uris"])
+            for image_path in printing["image_uris"].values():
+                assert not image_path.startswith(("http://", "https://"))
+                assert (output / image_path).exists()
+
+    # Printings are sorted oldest-first by release date.
+    sample = index["data"]["apothecary white"]
+    assert [p["released_at"] for p in sample] == ["2021-01-01", "2022-02-02"]
+
+    # source_image_uris preserves the original Scryfall URLs on the full records.
+    for card in cards:
+        assert card["source_image_uris"]["normal"].startswith("https://")
+        for image_path in card["image_uris"].values():
+            assert not image_path.startswith(("http://", "https://"))
+
+
+def test_write_fixture_raises_when_source_missing(tmp_path: Path) -> None:
+    image_cache = tmp_path / "cache"
+    image_cache.mkdir()
+    with pytest.raises(FileNotFoundError, match="Source bulk cache not found"):
+        generator.write_fixture(tmp_path / "missing.json", image_cache, tmp_path / "out")
+
+
+def test_write_fixture_raises_when_image_cache_missing(tmp_path: Path) -> None:
+    source = tmp_path / "bulk_data.json"
+    source.write_text("[]\n", encoding="utf-8")
+    with pytest.raises(FileNotFoundError, match="Image cache not found"):
+        generator.write_fixture(source, tmp_path / "no_cache", tmp_path / "out")
+
+
+def test_selected_printings_raises_when_target_missing(tmp_path: Path) -> None:
+    source = tmp_path / "bulk_data.json"
+    # A valid card record, but not one of the required target names.
+    source.write_text(
+        json.dumps(
+            {
+                "object": "card",
+                "lang": "en",
+                "id": "x",
+                "name": "Not A Target",
+                "image_uris": {"normal": "https://example.test/n.jpg"},
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(RuntimeError, match="Missing target cards"):
+        generator.selected_printings(source)
+
+
+def test_draw_placeholder_writes_jpg_and_png(tmp_path: Path) -> None:
+    card = {
+        "id": "abcdef123456",
+        "name": "Some Very Long Card Name For Wrapping",
+        "set": "neo",
+        "collector_number": "12",
+        "released_at": "2022-02-18",
+        "color_identity": ["W", "U"],
+        "full_art": True,
+    }
+    jpg_path = tmp_path / "out" / "art.jpg"
+    png_path = tmp_path / "out" / "art.png"
+    generator.draw_placeholder(card, "normal", (200, 280), jpg_path)
+    generator.draw_placeholder(card, "png", (200, 280), png_path)
+
+    with Image.open(jpg_path) as jpg:
+        assert jpg.size == (200, 280)
+        assert jpg.format == "JPEG"
+    with Image.open(png_path) as png:
+        assert png.size == (200, 280)
+        assert png.format == "PNG"
+
+
+def test_iter_bulk_cards_skips_brackets_and_trailing_commas(tmp_path: Path) -> None:
+    source = tmp_path / "bulk_data.json"
+    source.write_text(
+        '[\n{"id": "1"},\n{"id": "2"}\n]\n',
+        encoding="utf-8",
+    )
+    records = list(generator.iter_bulk_cards(source))
+    assert [r["id"] for r in records] == ["1", "2"]
