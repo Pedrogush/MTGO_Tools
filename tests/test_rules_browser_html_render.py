@@ -126,3 +126,61 @@ def test_render_outline_empty_sections_still_produces_valid_html() -> None:
     out = render_outline_to_html([])
     assert out.startswith("<html>")
     assert out.endswith("</body></html>")
+
+
+def test_render_outline_applies_color_params_to_body_tag() -> None:
+    sections = [_Sec(7, "Additional Rules", [_Sub("700", "General", "")])]
+    out = render_outline_to_html(
+        sections,
+        bg_color="#000000",
+        text_color="#FFFFFF",
+        link_color="#FF0000",
+    )
+    assert 'bgcolor="#000000"' in out
+    assert 'text="#FFFFFF"' in out
+    assert 'link="#FF0000"' in out
+
+
+def test_render_outline_uses_text_color_for_headings() -> None:
+    sections = [_Sec(7, "Additional Rules", [_Sub("700", "General", "")])]
+    out = render_outline_to_html(sections, text_color="#ABCDEF")
+    # Section heading (h2) and subsection heading (h3) both wrap their text
+    # in a <font color="..."> using the configured text color.
+    assert out.count('<font color="#ABCDEF">') == 2
+
+
+def test_render_outline_default_colors_emit_dark_theme() -> None:
+    sections = [_Sec(7, "Additional Rules", [_Sub("700", "General", "")])]
+    out = render_outline_to_html(sections)
+    assert 'bgcolor="#22272E"' in out
+    assert 'text="#E6EDF3"' in out
+    assert 'link="#7AA2F7"' in out
+
+
+def test_render_outline_paragraph_without_leading_rule_id_is_unanchored() -> None:
+    # Free-prose paragraphs that do not begin with a rule-id token must pass
+    # through without a per-rule <a name="..."> anchor.
+    body = "This introductory note has no rule id at the start."
+    sections = [_Sec(7, "Additional Rules", [_Sub("702", "Keyword Abilities", body)])]
+    out = render_outline_to_html(sections)
+    assert "This introductory note has no rule id at the start." in out
+    # No per-rule name anchor inside a <p> body paragraph (only the h3 carries
+    # the subsection-id anchor name="702").
+    assert "<p><a name=" not in out
+
+
+def test_render_outline_linkified_leading_rule_id_is_not_double_anchored() -> None:
+    # When the cross-ref linkifier rewrites the leading rule-id token itself,
+    # the per-rule anchoring pass must NOT also wrap it: the paragraph now
+    # starts with an <a href=...> lead-in, so no extra <a name="702.9">
+    # anchor is added on top.
+    body = "702.9 Flying is an evasion ability."
+
+    def linkifier(escaped: str) -> str:
+        return escaped.replace("702.9", '<a href="#702.9">702.9</a>', 1)
+
+    sections = [_Sec(7, "Additional Rules", [_Sub("702", "Keyword Abilities", body)])]
+    out = render_outline_to_html(sections, cross_ref_linkifier=linkifier)
+    assert '<a href="#702.9">702.9</a>' in out
+    # The leading id was linkified, so the per-rule name anchor must be absent.
+    assert '<a name="702.9">' not in out
