@@ -21,6 +21,7 @@ from __future__ import annotations
 import wx
 
 from utils.constants import CARD_VIEW_WHEEL_LINE_PX, CARD_VIEW_WHEEL_LINES_PER_NOTCH
+from widgets.panels.card_table_panel import scroll_perf
 
 # wx reports 120 per physical notch; guard against a 0 from odd drivers.
 _DEFAULT_WHEEL_DELTA = 120
@@ -33,9 +34,29 @@ def scroll_by_wheel(window: wx.ScrolledWindow, event: wx.MouseEvent) -> None:
     A horizontal wheel — or Shift+wheel, the usual convention — scrolls the
     horizontal axis; otherwise the vertical axis moves.
     """
-    rotation = event.GetWheelRotation()
-    delta = event.GetWheelDelta() or _DEFAULT_WHEEL_DELTA
+    horizontal = event.GetWheelAxis() == wx.MOUSE_WHEEL_HORIZONTAL or event.ShiftDown()
+    _apply_wheel(
+        window,
+        rotation=event.GetWheelRotation(),
+        delta=event.GetWheelDelta() or _DEFAULT_WHEEL_DELTA,
+        lines=event.GetLinesPerAction(),
+        horizontal=horizontal,
+    )
 
+
+def _apply_wheel(
+    window: wx.ScrolledWindow,
+    *,
+    rotation: int,
+    delta: int,
+    lines: int,
+    horizontal: bool,
+) -> None:
+    """Apply one wheel event's worth of rotation to ``window``.
+
+    Shared by the live event handler and the automation injection helper so
+    both drive the identical accumulator → ``Scroll`` → repaint path.
+    """
     # Carry sub-notch rotation across events so nothing is lost or over-fired.
     accumulated = getattr(window, "_wheel_accum", 0) + rotation
     notches = int(accumulated / delta)
@@ -43,15 +64,40 @@ def scroll_by_wheel(window: wx.ScrolledWindow, event: wx.MouseEvent) -> None:
     if notches == 0:
         return
 
-    lines = event.GetLinesPerAction()
     if lines <= 0:
         lines = CARD_VIEW_WHEEL_LINES_PER_NOTCH
     # Positive rotation scrolls toward the start (up / left), so subtract.
     offset = notches * lines * CARD_VIEW_WHEEL_LINE_PX
 
     view_x, view_y = window.GetViewStart()
-    horizontal = event.GetWheelAxis() == wx.MOUSE_WHEEL_HORIZONTAL or event.ShiftDown()
     if horizontal:
         window.Scroll(max(0, view_x - offset), view_y)
     else:
         window.Scroll(view_x, max(0, view_y - offset))
+    # Record where the scroll origin actually landed (Scroll clamps to the
+    # virtual bounds), so the perf harness can match paints against it.
+    actual_x, actual_y = window.GetViewStart()
+    scroll_perf.record_input(window, actual_x, actual_y)
+
+
+def inject_wheel_notches(
+    window: wx.ScrolledWindow,
+    count: int = 1,
+    *,
+    up: bool = True,
+    lines: int | None = None,
+) -> None:
+    """Drive ``count`` whole wheel notches through the real scroll path.
+
+    Used by the automation harness to exercise the accumulator → ``Scroll`` →
+    repaint pipeline deterministically without synthesising a native
+    ``wx.MouseEvent`` (whose wheel fields are read-only in wxPython). ``up``
+    scrolls toward the start of the view; vertical axis only.
+    """
+    if lines is None:
+        lines = CARD_VIEW_WHEEL_LINES_PER_NOTCH
+    rotation = _DEFAULT_WHEEL_DELTA if up else -_DEFAULT_WHEEL_DELTA
+    for _ in range(count):
+        _apply_wheel(
+            window, rotation=rotation, delta=_DEFAULT_WHEEL_DELTA, lines=lines, horizontal=False
+        )

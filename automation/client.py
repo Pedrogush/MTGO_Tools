@@ -234,6 +234,33 @@ class AutomationClient:
         """
         return self._send_command("get_scroll_pos", zone=zone)
 
+    def wheel_scroll_start(
+        self,
+        zone: str = "main",
+        view: str = "grid",
+        count: int = 10,
+        direction: str = "down",
+        interval_ms: float = 4.0,
+    ) -> dict[str, Any]:
+        """Start a mouse-wheel scroll burst and record its perf trace.
+
+        Fires ``count`` wheel notches in ``direction`` ('up'/'down') through the
+        zone's ``view`` ('grid'/'pile'), spaced ``interval_ms`` apart. Returns
+        immediately; poll :meth:`get_scroll_perf` after the burst settles.
+        """
+        return self._send_command(
+            "wheel_scroll_start",
+            zone=zone,
+            view=view,
+            count=count,
+            direction=direction,
+            interval_ms=interval_ms,
+        )
+
+    def get_scroll_perf(self, zone: str = "main", view: str = "grid") -> dict[str, Any]:
+        """Read back the recorded wheel-scroll perf trace (input/paint events)."""
+        return self._send_command("get_scroll_perf", zone=zone, view=view)
+
     def get_builder_result_count(self) -> dict[str, Any]:
         """Get the number of search results in the deck builder panel."""
         return self._send_command("get_builder_result_count")
