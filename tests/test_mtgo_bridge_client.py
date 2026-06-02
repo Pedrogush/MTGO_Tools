@@ -128,15 +128,21 @@ def _write_executable_bridge(tmp_path: Path, body: str) -> Path:
     ``.bat`` shim; POSIX uses a ``chmod +x`` shell shim).
     """
     program = tmp_path / "bridge_program.py"
-    program.write_text(textwrap.dedent(body))
+    # Bodies may contain non-cp1252 characters (e.g. a BOM); persist as UTF-8 so
+    # the write succeeds on Windows and PYTHONUTF8 below decodes the source.
+    program.write_text(textwrap.dedent(body), encoding="utf-8")
 
     if os.name == "nt":
         launcher = tmp_path / "bridge.bat"
-        launcher.write_text(f'@echo off\r\n"{sys.executable}" "{program}" %*\r\n')
+        # PYTHONUTF8 forces the child's stdout to UTF-8 so it can emit a BOM
+        # without tripping the default cp1252 console codec on Windows.
+        launcher.write_text(
+            f'@echo off\r\nset PYTHONUTF8=1\r\n"{sys.executable}" "{program}" %*\r\n'
+        )
         return launcher
 
     launcher = tmp_path / "bridge.sh"
-    launcher.write_text(f'#!/bin/sh\nexec "{sys.executable}" "{program}" "$@"\n')
+    launcher.write_text(f'#!/bin/sh\nPYTHONUTF8=1 exec "{sys.executable}" "{program}" "$@"\n')
     launcher.chmod(launcher.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
     return launcher
 
