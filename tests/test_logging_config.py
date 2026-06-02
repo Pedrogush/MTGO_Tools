@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import sys
 from pathlib import Path
 
 from loguru import logger
@@ -79,20 +80,64 @@ def test_returns_log_file_path_under_logs_dir(tmp_path, monkeypatch):
     assert tmp_path.is_dir()
 
 
+def _is_stream_sink(handler) -> bool:
+    # loguru names stream sinks after the stream repr (e.g. ``<stderr>``);
+    # file sinks are named after their quoted path.
+    return handler._name.startswith("<")
+
+
 def test_file_logging_failure_returns_none_but_keeps_stream_sink(tmp_path, monkeypatch):
     # When the logs_dir cannot be created/written, file logging is disabled:
-    # configure_logging returns None but the stderr/stdout sink(s) survive so
-    # console logging still works.
+    # configure_logging returns None but the stream sink survives so console
+    # logging still works, and a warning explaining the failure is emitted.
     monkeypatch.delenv("MTGO_LOG_LEVEL", raising=False)
+    info_no = logger.level("INFO").no
 
     def _boom(*_args, **_kwargs):
         raise OSError("logs dir is not writable")
 
     monkeypatch.setattr(Path, "mkdir", _boom)
+
+    # Capture the warning emitted on file-logging failure. configure_logging
+    # calls logger.remove() up front, so a sink added beforehand would be torn
+    # down; recording logger.warning directly survives that reset.
+    warnings: list[str] = []
+    real_warning = logger.warning
+    monkeypatch.setattr(logger, "warning", lambda msg, *a, **k: warnings.append(msg))
+
     try:
         log_file = configure_logging(tmp_path)
         assert log_file is None
-        # The stream sink was registered before the file sink failed.
-        assert len(logger._core.handlers) >= 1
+
+        handlers = list(logger._core.handlers.values())
+        # Exactly one stream sink survives and no file sink was registered.
+        assert all(_is_stream_sink(h) for h in handlers)
+        assert len(handlers) == 1
+        # The surviving sink emits at the configured (default INFO) level.
+        assert handlers[0].levelno == info_no
+    finally:
+        monkeypatch.setattr(logger, "warning", real_warning)
+        logger.remove()
+
+    # The failure is surfaced as a warning naming the directory and the error.
+    assert len(warnings) == 1
+    assert str(tmp_path) in warnings[0]
+    assert "logs dir is not writable" in warnings[0]
+
+
+def test_uses_stdout_when_stderr_unavailable(tmp_path, monkeypatch):
+    # Frozen/windowed builds can have ``sys.stderr is None``; the stream-
+    # selection loop must fall through to stdout rather than ending up with no
+    # console sink at all.
+    monkeypatch.delenv("MTGO_LOG_LEVEL", raising=False)
+    monkeypatch.setattr(sys, "stderr", None)
+    try:
+        configure_logging(tmp_path)
+        stream_sinks = [h for h in logger._core.handlers.values() if _is_stream_sink(h)]
+        assert len(stream_sinks) == 1
+        # The surviving console sink writes to stdout, the fallback stream.
+        # (Asserting the stream identity rather than the sink name keeps this
+        # robust under pytest's stdout capturing, which renames the stream.)
+        assert stream_sinks[0]._sink._stream is sys.stdout
     finally:
         logger.remove()

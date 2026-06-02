@@ -6,6 +6,7 @@ from typing import Any
 
 import pytest
 
+from repositories.card_repository.schemas import CardEntry
 from widgets.mana_icon_factory import ManaIconFactory
 from widgets.panels.card_table_panel.card_render import (
     build_image_name_candidates,
@@ -13,18 +14,21 @@ from widgets.panels.card_table_panel.card_render import (
 )
 
 
-class _CardEntryStub:
-    """Minimal stand-in for repositories.card_repository.CardEntry (a msgspec.Struct).
+def _card_entry(name: str = "", aliases: list[str] | None = None, **kwargs: Any) -> CardEntry:
+    """Build a real CardEntry with sensible defaults for its required fields.
 
-    isinstance(stub, dict) is False, but stub.get(key) works — mirroring the
-    real CardEntry behaviour.
+    Exercises the production msgspec.Struct (isinstance(entry, dict) is False but
+    entry.get(key) works) instead of a hand-rolled fake.
     """
-
-    def __init__(self, name: str = "", **kwargs: Any) -> None:
-        self._data = {"name": name, **kwargs}
-
-    def get(self, key: str, default: Any = None) -> Any:
-        return self._data.get(key, default)
+    return CardEntry(
+        name=name,
+        name_lower=name.lower(),
+        aliases=aliases if aliases is not None else [],
+        colors=kwargs.pop("colors", []),
+        color_identity=kwargs.pop("color_identity", []),
+        legalities=kwargs.pop("legalities", {}),
+        **kwargs,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -46,6 +50,9 @@ class _CardEntryStub:
         # not entered (requires no "//" in base_name).
         ({"name": "A // B"}, {"aliases": ["A // B", "A", "B"]}, ["A // B", "A", "B"]),
         ({"name": "A"}, {"aliases": "bad"}, ["A"]),
+        # Falsy aliases (None, "") are skipped by the `if alias` filter; valid
+        # ones (including duplicates of base_name) are de-duplicated.
+        ({"name": "A"}, {"aliases": [None, "", "A", "Alias1"]}, ["A", "Alias1"]),
         ({"name": ""}, {}, []),
         # CardEntry-like object: isinstance(meta, dict) is False but .get() works.
         # When meta.name is a combined DFC name, it is promoted to position 0 so
@@ -53,7 +60,7 @@ class _CardEntryStub:
         # Regression guard for the msgspec fix + promotion logic.
         (
             {"name": "Witch Enchanter"},
-            _CardEntryStub(
+            _card_entry(
                 name="Witch Enchanter // Witch-Blessed Meadow",
                 aliases=[
                     "Witch Enchanter",
@@ -71,7 +78,7 @@ class _CardEntryStub:
         # (base_name already contains "//"); aliases stay in insertion order.
         (
             {"name": "Witch Enchanter // Witch-Blessed Meadow"},
-            _CardEntryStub(
+            _card_entry(
                 name="Witch Enchanter // Witch-Blessed Meadow",
                 aliases=["Witch Enchanter", "Witch-Blessed Meadow"],
             ),
@@ -86,6 +93,7 @@ class _CardEntryStub:
         "dfc-alias-no-promotion-without-meta-name",
         "dfc-combined-base-with-face-aliases",
         "non-list-aliases",
+        "falsy-aliases-filtered-and-deduped",
         "empty-name",
         "cardentry-face-name-promotes-combined-to-front",
         "cardentry-combined-base-no-promotion",

@@ -1,60 +1,11 @@
 from __future__ import annotations
 
-import json
-
 import pytest
 
+from repositories.deck_repository.repository import DeckRepository
+from services.deck_service.averager import DeckAverager
+from services.deck_service.text_builder import DeckTextBuilder
 from services.deck_workflow_service import DeckWorkflowService
-
-
-class FakeDeckRepo:
-    def __init__(self) -> None:
-        self.decks_list: list[dict] = []
-        self.current_deck_text = ""
-        self.current_deck: dict[str, str] = {}
-        self.saved_payload: dict | None = None
-        self.daily_average_rows: list[list[dict]] = []
-        self.daily_average_add_funcs: list = []
-
-    def set_decks_list(self, decks: list[dict]) -> None:
-        self.decks_list = decks
-
-    def get_current_deck_text(self) -> str:
-        return self.current_deck_text
-
-    def set_current_deck_text(self, text: str) -> None:
-        self.current_deck_text = text
-
-    def get_current_deck(self) -> dict:
-        return self.current_deck
-
-    def set_current_deck(self, deck: dict | None) -> None:
-        self.current_deck = deck or {}
-
-    def save_deck_to_file(self, deck_name: str, deck_content: str, directory) -> object:
-        from pathlib import Path
-
-        from utils.deck import sanitize_filename
-
-        safe_name = sanitize_filename(deck_name, fallback="saved_deck")
-        path = Path(directory) / f"{safe_name}.txt"
-        path.write_text(deck_content, encoding="utf-8")
-        return path
-
-    def save_to_db(self, **payload):
-        self.saved_payload = payload
-        return 123
-
-    def build_daily_average_deck(
-        self, rows, download_func, reader_func, add_to_buffer, progress_callback
-    ):
-        self.daily_average_rows.append(rows)
-        self.daily_average_add_funcs.append(add_to_buffer)
-        for index, row in enumerate(rows, start=1):
-            download_func(row["number"])
-            progress_callback(index, len(rows))
-        add_to_buffer({"name": "Card"}, 0.5)
-        return {"Card": 0.5}
 
 
 class FakeMetagameRepo:
@@ -70,21 +21,9 @@ class FakeMetagameRepo:
         return [{"name": "Any", "number": "2"}]
 
 
-class FakeDeckService:
-    def __init__(self) -> None:
-        self.zone_calls: list[dict] = []
-        self.buffer_calls = 0
-        self.karsten_calls = 0
-
-    def build_deck_text_from_zones(self, zones):
-        self.zone_calls.append(json.loads(json.dumps(zones)))
-        return "from zones"
-
-    def add_deck_to_buffer(self, *_args, **_kwargs):
-        self.buffer_calls += 1
-
-    def add_deck_to_karsten_buffer(self, *_args, **_kwargs):
-        self.karsten_calls += 1
+def make_repo(tmp_path) -> DeckRepository:
+    """Real repository backed by an isolated on-disk SQLite database."""
+    return DeckRepository(db_path=tmp_path / "decks.sqlite")
 
 
 def build_service(
@@ -95,8 +34,8 @@ def build_service(
     **kwargs,
 ):
     return DeckWorkflowService(
-        deck_repo=deck_repo or FakeDeckRepo(),
-        deck_service=deck_service or FakeDeckService(),
+        deck_repo=deck_repo if deck_repo is not None else DeckRepository(),
+        deck_service=deck_service if deck_service is not None else DeckAverager(),
         metagame_repo=metagame_repo or FakeMetagameRepo(),
         **kwargs,
     )
@@ -114,6 +53,19 @@ def test_fetch_archetypes_respects_force_flag():
 
     assert result == [{"name": "Test"}]
     assert calls == [("modern", False)]
+
+
+def test_fetch_archetypes_allows_stale_when_not_forced():
+    calls: list[tuple[str, bool]] = []
+
+    def provider(fmt: str, *, allow_stale: bool):
+        calls.append((fmt, allow_stale))
+        return []
+
+    service = build_service(archetype_provider=provider)
+    service.fetch_archetypes("Legacy", force=False)
+
+    assert calls == [("legacy", True)]
 
 
 def test_load_decks_routes_all_and_archetype_scopes_through_one_use_case():
@@ -166,16 +118,53 @@ def test_download_deck_text_uses_injected_dependencies():
     assert reader_calls == 1
 
 
-def test_build_daily_average_buffer_wires_dependencies():
-    repo = FakeDeckRepo()
-    deck_service = FakeDeckService()
-    downloads: list[str] = []
+def test_set_and_get_decks_list_round_trip(tmp_path):
+    repo = make_repo(tmp_path)
+    service = build_service(deck_repo=repo)
+    decks = [{"name": "Burn", "number": "9"}]
+
+    service.set_decks_list(decks)
+
+    assert service.get_decks_list() == decks
+
+
+# --------------------------------------------------------------------------- averaging
+
+
+def _decklist_reader(decklists: dict[str, str]):
+    """A real reader/downloader pair driven by a row->decklist mapping.
+
+    The real ``build_daily_average_deck`` calls ``download_func(number)`` and
+    then ``read_func()``; this pair mimics that by remembering the most recently
+    requested deck's text, exactly like the file-backed reader does in prod.
+    """
+    state = {"current": ""}
+
+    def downloader(deck_number: str, source_filter: str | None = None) -> None:
+        state["current"] = decklists[deck_number]
+
+    def reader() -> str:
+        return state["current"]
+
+    return downloader, reader
+
+
+def test_build_daily_average_buffer_accumulates_real_card_counts(tmp_path):
+    repo = make_repo(tmp_path)
+    deck_service = DeckAverager()
+    decklists = {
+        "a": "4 Brainstorm\n2 Island",
+        "b": "2 Brainstorm\n3 Island",
+    }
+    downloader, reader = _decklist_reader(decklists)
     progress_calls: list[tuple[int, int]] = []
 
-    def downloader(deck_number: str, source_filter: str | None = None):
-        downloads.append(f"{deck_number}:{source_filter}")
-
-    service = build_service(deck_repo=repo, deck_service=deck_service, deck_downloader=downloader)
+    service = build_service(
+        deck_repo=repo,
+        deck_service=deck_service,
+        deck_downloader=downloader,
+        deck_reader=reader,
+    )
     rows = [{"number": "a"}, {"number": "b"}]
     buffer = service.build_daily_average_buffer(
         rows,
@@ -183,37 +172,47 @@ def test_build_daily_average_buffer_wires_dependencies():
         on_progress=lambda index, total: progress_calls.append((index, total)),
     )
 
-    assert buffer == {"Card": 0.5}
-    assert downloads == ["a:both", "b:both"]
+    # Default method is "karsten": the buffer counts, per unique copy index, how
+    # many decks contained at least that many copies of the card.
+    assert buffer == {
+        "Brainstorm\x001": 2,  # both decks have >=1 Brainstorm
+        "Brainstorm\x002": 2,  # both decks have >=2 Brainstorm
+        "Brainstorm\x003": 1,  # only deck "a" has >=3
+        "Brainstorm\x004": 1,  # only deck "a" has >=4
+        "Island\x001": 2,
+        "Island\x002": 2,
+        "Island\x003": 1,  # only deck "b" has >=3 Island
+    }
     assert progress_calls == [(1, 2), (2, 2)]
-    # Default method is "karsten": the karsten add_func must be selected and
-    # forwarded to the repo, and the non-karsten counter must stay untouched.
-    assert deck_service.karsten_calls == 1
-    assert deck_service.buffer_calls == 0
-    assert repo.daily_average_add_funcs == [deck_service.add_deck_to_karsten_buffer]
-    assert repo.daily_average_rows == [rows]
 
 
-def test_build_daily_average_buffer_uses_non_karsten_method():
-    repo = FakeDeckRepo()
-    deck_service = FakeDeckService()
+def test_build_daily_average_buffer_market_method_sums_quantities(tmp_path):
+    repo = make_repo(tmp_path)
+    deck_service = DeckAverager()
+    decklists = {
+        "a": "4 Brainstorm\n2 Island",
+        "b": "2 Brainstorm\n3 Island",
+    }
+    downloader, reader = _decklist_reader(decklists)
 
-    def downloader(deck_number: str, source_filter: str | None = None):
-        pass
-
-    service = build_service(deck_repo=repo, deck_service=deck_service, deck_downloader=downloader)
-    rows = [{"number": "a"}]
+    service = build_service(
+        deck_repo=repo,
+        deck_service=deck_service,
+        deck_downloader=downloader,
+        deck_reader=reader,
+    )
+    rows = [{"number": "a"}, {"number": "b"}]
     buffer = service.build_daily_average_buffer(rows, source_filter="both", method="market")
 
-    assert buffer == {"Card": 0.5}
-    # method != "karsten" must select the plain add_func.
-    assert deck_service.buffer_calls == 1
-    assert deck_service.karsten_calls == 0
-    assert repo.daily_average_add_funcs == [deck_service.add_deck_to_buffer]
+    # Non-karsten method sums raw quantities across decks.
+    assert buffer == {"Brainstorm": 6.0, "Island": 5.0}
+
+
+# --------------------------------------------------------------------------- saving
 
 
 def test_save_deck_persists_file_and_db(tmp_path):
-    repo = FakeDeckRepo()
+    repo = make_repo(tmp_path)
     service = build_service(deck_repo=repo)
     deck_info = {"name": "Dimir Control", "player": "Test"}
 
@@ -227,17 +226,19 @@ def test_save_deck_persists_file_and_db(tmp_path):
 
     assert file_path.exists()
     assert file_path.read_text(encoding="utf-8") == "4 Brainstorm"
-    assert deck_id == 123
-    assert repo.saved_payload["deck_name"] == "Dimir Control!"
-    assert repo.saved_payload["format_type"] == "Legacy"
-    assert repo.saved_payload["archetype"] == "Dimir Control"
-    assert repo.saved_payload["player"] == "Test"
-    assert repo.saved_payload["source"] == "mtggoldfish"
-    assert repo.saved_payload["metadata"] == deck_info
+
+    stored = repo.load_from_db(deck_id)
+    assert stored["name"] == "Dimir Control!"
+    assert stored["content"] == "4 Brainstorm"
+    assert stored["format"] == "Legacy"
+    assert stored["archetype"] == "Dimir Control"
+    assert stored["player"] == "Test"
+    assert stored["source"] == "mtggoldfish"
+    assert stored["metadata"] == deck_info
 
 
 def test_save_deck_manual_source_when_deck_is_none(tmp_path):
-    repo = FakeDeckRepo()
+    repo = make_repo(tmp_path)
     service = build_service(deck_repo=repo)
 
     file_path, deck_id = service.save_deck(
@@ -249,32 +250,68 @@ def test_save_deck_manual_source_when_deck_is_none(tmp_path):
     )
 
     assert file_path.exists()
-    assert deck_id == 123
-    assert repo.saved_payload["source"] == "manual"
-    assert repo.saved_payload["archetype"] is None
-    assert repo.saved_payload["player"] is None
-    assert repo.saved_payload["metadata"] == {}
+
+    stored = repo.load_from_db(deck_id)
+    assert stored["source"] == "manual"
+    assert stored["archetype"] is None
+    assert stored["player"] is None
+    assert stored["metadata"] == {}
 
 
-def test_build_deck_text_prefers_existing_values():
-    repo = FakeDeckRepo()
-    repo.current_deck_text = "existing deck"
+def test_save_deck_returns_file_even_when_db_save_fails(tmp_path):
+    """File persistence succeeds; a DB failure is swallowed and ``deck_id`` is None."""
+    repo = make_repo(tmp_path)
+
+    def boom(**_kwargs):
+        raise RuntimeError("db down")
+
+    repo.save_to_db = boom  # type: ignore[method-assign]
+    service = build_service(deck_repo=repo)
+
+    file_path, deck_id = service.save_deck(
+        deck_name="Resilient Deck",
+        deck_content="1 Sol Ring",
+        format_name="Commander",
+        deck=None,
+        deck_save_dir=tmp_path,
+    )
+
+    assert file_path.exists()
+    assert file_path.read_text(encoding="utf-8") == "1 Sol Ring"
+    assert deck_id is None
+
+
+# --------------------------------------------------------------------------- deck text
+
+
+def test_build_deck_text_prefers_existing_values(tmp_path):
+    repo = make_repo(tmp_path)
+    repo.set_current_deck_text("existing deck")
     service = build_service(deck_repo=repo)
     assert service.build_deck_text({"main": []}) == "existing deck"
 
-    repo.current_deck_text = ""
+    repo.set_current_deck_text("")
     repo.set_current_deck({"deck_text": "cached deck"})
     assert service.build_deck_text({}) == "cached deck"
 
 
-def test_build_deck_text_uses_zone_cards_when_needed():
-    repo = FakeDeckRepo()
-    deck_service = FakeDeckService()
-    repo.current_deck_text = ""
+@pytest.mark.parametrize("fallback_key", ["deck_text", "content", "text"])
+def test_build_deck_text_falls_back_through_current_deck_keys(tmp_path, fallback_key):
+    repo = make_repo(tmp_path)
+    repo.set_current_deck_text("")
+    repo.set_current_deck({fallback_key: "fallback deck"})
+    service = build_service(deck_repo=repo)
+
+    # No zone cards, so the only source is the current-deck fallback keys.
+    assert service.build_deck_text({}) == "fallback deck"
+
+
+def test_build_deck_text_uses_zone_cards_when_needed(tmp_path):
+    repo = make_repo(tmp_path)
+    repo.set_current_deck_text("")
     repo.set_current_deck({})
-    service = build_service(deck_repo=repo, deck_service=deck_service)
+    service = build_service(deck_repo=repo, deck_service=DeckTextBuilder())
 
     text = service.build_deck_text({"main": [{"name": "Card", "qty": 4}]})
 
-    assert text == "from zones"
-    assert deck_service.zone_calls
+    assert text == "4 Card"

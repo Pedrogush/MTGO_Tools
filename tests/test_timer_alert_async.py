@@ -7,6 +7,7 @@ from unittest.mock import MagicMock
 import pytest
 
 import widgets.frames.timer_alert as timer_alert
+import widgets.frames.timer_alert.handlers as timer_alert_handlers
 
 TimerAlertFrame = timer_alert.TimerAlertFrame
 
@@ -23,6 +24,75 @@ def _make_frame() -> TimerAlertFrame:
     frame._repeat_timer = MagicMock()
     frame._set_status = MagicMock()
     frame.controller = MagicMock()
+    return frame
+
+
+class _FakeValue:
+    """Tiny stand-in for a wx control exposing GetValue (and SetValue)."""
+
+    def __init__(self, value: object) -> None:
+        self._value = value
+
+    def GetValue(self) -> object:
+        return self._value
+
+    def SetValue(self, value: object) -> None:
+        self._value = value
+
+
+class _FakeThresholdPanel:
+    """Records enable/disable calls so monitoring can be asserted by value."""
+
+    def __init__(self, seconds: int | None) -> None:
+        self._seconds = seconds
+        self.enabled = True
+        self.time_input = _FakeValue("" if seconds is None else str(seconds))
+
+    def get_seconds(self) -> int | None:
+        return self._seconds
+
+    def set_enabled(self, enabled: bool) -> None:
+        self.enabled = enabled
+
+
+def _make_monitor_frame(
+    *,
+    panels: list[_FakeThresholdPanel] | None = None,
+    poll_value: object = 1000,
+    repeat_seconds: int = 3,
+) -> TimerAlertFrame:
+    """Frame wired for the monitoring/alert surface with fake widgets.
+
+    Records ``_set_status`` calls as ``(key, kwargs)`` tuples and ``_play_alert``
+    invocations, so behavior is asserted by value rather than by mock interaction.
+    """
+    frame = _make_frame()
+    frame.status_calls: list[tuple[str, dict[str, object]]] = []
+    frame._set_status = lambda key, **kwargs: frame.status_calls.append((key, kwargs))
+    frame.alert_messages: list[str] = []
+    frame._trigger_alert = lambda message: frame.alert_messages.append(message)
+    frame.play_alert_count = 0
+
+    def _count_play_alert() -> None:
+        frame.play_alert_count += 1
+
+    frame._play_alert = _count_play_alert
+    frame._format_seconds = lambda value: f"fmt:{value}"
+    frame._update_challenge_display = MagicMock()
+
+    frame.threshold_panels = panels if panels is not None else [_FakeThresholdPanel(60)]
+    frame.poll_interval_ctrl = _FakeValue(poll_value)
+    frame.repeat_interval_ctrl = _FakeValue(repeat_seconds)
+    frame.start_alert_checkbox = _FakeValue(False)
+    frame.repeat_alarm_checkbox = _FakeValue(False)
+
+    frame._current_thresholds = []
+    frame._monitor_interval_ms = 0
+    frame._repeat_interval_ms = 0
+    frame.triggered_thresholds = set()
+    frame.start_alert_sent = False
+    frame.monitor_job_active = False
+    frame._last_snapshot = None
     return frame
 
 
@@ -301,3 +371,343 @@ def test_complete_watch_start_stops_watcher_when_closed(monkeypatch) -> None:
     assert len(threads) == 1
     threads[0].target(*threads[0].args)
     watcher.stop.assert_called_once_with()
+
+
+# --------------------------------------------------------------------- monitoring
+
+
+def test_start_monitoring_noops_when_already_active() -> None:
+    frame = _make_monitor_frame()
+    frame.monitor_job_active = True
+
+    TimerAlertFrame.start_monitoring(frame)
+
+    assert frame.status_calls == [("timer.status.already_monitoring", {})]
+    frame._monitor_timer.Start.assert_not_called()
+    assert frame.threshold_panels[0].enabled is True
+
+
+def test_start_monitoring_requires_thresholds() -> None:
+    frame = _make_monitor_frame(panels=[_FakeThresholdPanel(None)])
+
+    TimerAlertFrame.start_monitoring(frame)
+
+    assert frame.status_calls == [("timer.status.no_thresholds", {})]
+    assert frame.monitor_job_active is False
+    frame._monitor_timer.Start.assert_not_called()
+
+
+def test_start_monitoring_rejects_invalid_poll_interval() -> None:
+    frame = _make_monitor_frame(poll_value="not-a-number")
+
+    TimerAlertFrame.start_monitoring(frame)
+
+    assert frame.status_calls == [("timer.status.invalid_poll_interval", {})]
+    assert frame.monitor_job_active is False
+    frame._monitor_timer.Start.assert_not_called()
+
+
+def test_start_monitoring_clamps_poll_interval_floor() -> None:
+    frame = _make_monitor_frame(poll_value=10)
+
+    TimerAlertFrame.start_monitoring(frame)
+
+    # The 250ms floor wins over the requested 10ms.
+    assert frame._monitor_interval_ms == 250
+    frame._monitor_timer.Start.assert_called_once_with(250)
+
+
+def test_start_monitoring_activates_and_disables_panels() -> None:
+    panels = [_FakeThresholdPanel(30), _FakeThresholdPanel(120)]
+    frame = _make_monitor_frame(panels=panels, poll_value=1000, repeat_seconds=4)
+    frame.triggered_thresholds = {99}
+    frame.start_alert_sent = True
+
+    TimerAlertFrame.start_monitoring(frame)
+
+    assert frame.monitor_job_active is True
+    # Thresholds parsed and sorted descending by the real properties mixin.
+    assert frame._current_thresholds == [120, 30]
+    assert frame._monitor_interval_ms == 1000
+    assert frame._repeat_interval_ms == 4000
+    assert frame.triggered_thresholds == set()
+    assert frame.start_alert_sent is False
+    assert all(panel.enabled is False for panel in panels)
+    frame._monitor_timer.Start.assert_called_once_with(1000)
+    # "monitoring" status is set before the initial step; the step then runs
+    # with no snapshot and reports waiting-for-data.
+    assert ("timer.status.monitoring", {}) in frame.status_calls
+    assert ("timer.status.waiting_data", {}) in frame.status_calls
+
+
+def test_stop_monitoring_stops_running_timers_and_reenables_panels() -> None:
+    panels = [_FakeThresholdPanel(30), _FakeThresholdPanel(60)]
+    frame = _make_monitor_frame(panels=panels)
+    frame.monitor_job_active = True
+    for panel in panels:
+        panel.enabled = False
+    frame._monitor_timer.IsRunning.return_value = True
+    frame._repeat_timer.IsRunning.return_value = True
+
+    TimerAlertFrame.stop_monitoring(frame)
+
+    frame._monitor_timer.Stop.assert_called_once_with()
+    frame._repeat_timer.Stop.assert_called_once_with()
+    assert frame.monitor_job_active is False
+    assert all(panel.enabled is True for panel in panels)
+    assert frame.status_calls == [("timer.status.stopped", {})]
+
+
+def test_stop_monitoring_skips_stop_when_timers_idle() -> None:
+    frame = _make_monitor_frame()
+    frame.monitor_job_active = True
+    frame._monitor_timer.IsRunning.return_value = False
+    frame._repeat_timer.IsRunning.return_value = False
+
+    TimerAlertFrame.stop_monitoring(frame)
+
+    frame._monitor_timer.Stop.assert_not_called()
+    frame._repeat_timer.Stop.assert_not_called()
+    assert frame.monitor_job_active is False
+
+
+def test_test_alert_delegates_to_play_alert() -> None:
+    frame = _make_monitor_frame()
+
+    TimerAlertFrame.test_alert(frame)
+
+    assert frame.play_alert_count == 1
+
+
+# ------------------------------------------------------------------ monitor step
+
+
+def test_monitor_step_waits_for_data_when_no_snapshot() -> None:
+    frame = _make_monitor_frame()
+    frame._last_snapshot = None
+
+    TimerAlertFrame._monitor_timer_step(frame)
+
+    assert frame.status_calls == [("timer.status.waiting_data", {})]
+
+
+def test_monitor_step_surfaces_bridge_error() -> None:
+    frame = _make_monitor_frame()
+    frame._last_snapshot = {"error": "boom"}
+
+    TimerAlertFrame._monitor_timer_step(frame)
+
+    assert frame.status_calls == [("timer.status.bridge_error", {"error": "boom"})]
+
+
+def test_monitor_step_reports_no_timer_and_resets_state() -> None:
+    frame = _make_monitor_frame()
+    frame._last_snapshot = {"challengeTimers": []}
+    frame.triggered_thresholds = {30}
+    frame.start_alert_sent = True
+    frame._repeat_timer.IsRunning.return_value = True
+
+    TimerAlertFrame._monitor_timer_step(frame)
+
+    assert frame.status_calls == [("timer.status.no_timer", {})]
+    assert frame.triggered_thresholds == set()
+    assert frame.start_alert_sent is False
+    frame._repeat_timer.Stop.assert_called_once_with()
+    frame._update_challenge_display.assert_called_once_with(frame._last_snapshot)
+
+
+def test_monitor_step_rejects_non_numeric_remaining() -> None:
+    frame = _make_monitor_frame()
+    frame._last_snapshot = {"challengeTimers": [{"remainingSeconds": "soon"}]}
+
+    TimerAlertFrame._monitor_timer_step(frame)
+
+    assert frame.status_calls == [("timer.status.invalid_value", {})]
+
+
+def test_monitor_step_fires_threshold_alerts_once() -> None:
+    frame = _make_monitor_frame()
+    frame._current_thresholds = [120, 30]
+    frame._last_snapshot = {"challengeTimers": [{"remainingSeconds": 25}]}
+
+    TimerAlertFrame._monitor_timer_step(frame)
+
+    # Both thresholds are at/above 25 remaining seconds, so both fire once.
+    assert frame.alert_messages == ["Timer reached fmt:120", "Timer reached fmt:30"]
+    assert frame.triggered_thresholds == {120, 30}
+
+    # A second step at the same remaining time does not re-fire.
+    frame.alert_messages.clear()
+    TimerAlertFrame._monitor_timer_step(frame)
+    assert frame.alert_messages == []
+
+
+def test_monitor_step_skips_negative_thresholds() -> None:
+    frame = _make_monitor_frame()
+    frame._current_thresholds = [-1]
+    frame._last_snapshot = {"challengeTimers": [{"remainingSeconds": 5}]}
+
+    TimerAlertFrame._monitor_timer_step(frame)
+
+    assert frame.alert_messages == []
+    assert frame.triggered_thresholds == set()
+
+
+def test_monitor_step_sends_start_alert_and_starts_repeat_timer() -> None:
+    frame = _make_monitor_frame(repeat_seconds=2)
+    frame._repeat_interval_ms = 2000
+    frame._current_thresholds = []
+    frame.start_alert_checkbox.SetValue(True)
+    frame.repeat_alarm_checkbox.SetValue(True)
+    frame._last_snapshot = {"challengeTimers": [{"remainingSeconds": 600}]}
+
+    TimerAlertFrame._monitor_timer_step(frame)
+
+    assert frame.alert_messages == ["Countdown started"]
+    assert frame.start_alert_sent is True
+    frame._repeat_timer.Start.assert_called_once_with(2000)
+
+
+def test_monitor_step_start_alert_fires_only_once() -> None:
+    frame = _make_monitor_frame()
+    frame._current_thresholds = []
+    frame.start_alert_checkbox.SetValue(True)
+    frame._last_snapshot = {"challengeTimers": [{"remainingSeconds": 600}]}
+
+    TimerAlertFrame._monitor_timer_step(frame)
+    frame.alert_messages.clear()
+    TimerAlertFrame._monitor_timer_step(frame)
+
+    assert frame.alert_messages == []
+
+
+# ------------------------------------------------------------------ timer events
+
+
+def test_on_watch_timer_noops_without_watcher() -> None:
+    frame = _make_monitor_frame()
+    frame._watcher = None
+
+    TimerAlertFrame._on_watch_timer(frame, MagicMock())
+
+    assert frame._last_snapshot is None
+    frame._update_challenge_display.assert_not_called()
+
+
+def test_on_watch_timer_ignores_empty_payload() -> None:
+    frame = _make_monitor_frame()
+    frame._watcher = MagicMock()
+    frame._watcher.latest.return_value = None
+
+    TimerAlertFrame._on_watch_timer(frame, MagicMock())
+
+    assert frame._last_snapshot is None
+    frame._update_challenge_display.assert_not_called()
+
+
+def test_on_watch_timer_stores_and_displays_payload() -> None:
+    frame = _make_monitor_frame()
+    payload = {"challengeTimers": [{"remainingSeconds": 10}]}
+    frame._watcher = MagicMock()
+    frame._watcher.latest.return_value = payload
+
+    TimerAlertFrame._on_watch_timer(frame, MagicMock())
+
+    assert frame._last_snapshot is payload
+    frame._update_challenge_display.assert_called_once_with(payload)
+
+
+def test_on_monitor_timer_runs_step() -> None:
+    frame = _make_monitor_frame()
+    frame._last_snapshot = None
+
+    TimerAlertFrame._on_monitor_timer(frame, MagicMock())
+
+    assert frame.status_calls == [("timer.status.waiting_data", {})]
+
+
+def test_on_repeat_timer_plays_alert_when_active_and_enabled() -> None:
+    frame = _make_monitor_frame()
+    frame.monitor_job_active = True
+    frame.repeat_alarm_checkbox.SetValue(True)
+
+    TimerAlertFrame._on_repeat_timer(frame, MagicMock())
+
+    assert frame.play_alert_count == 1
+
+
+@pytest.mark.parametrize(
+    ("active", "repeat_enabled"),
+    [(False, True), (True, False), (False, False)],
+)
+def test_on_repeat_timer_silent_when_inactive_or_disabled(active, repeat_enabled) -> None:
+    frame = _make_monitor_frame()
+    frame.monitor_job_active = active
+    frame.repeat_alarm_checkbox.SetValue(repeat_enabled)
+
+    TimerAlertFrame._on_repeat_timer(frame, MagicMock())
+
+    assert frame.play_alert_count == 0
+
+
+# ------------------------------------------------------------------ alert playback
+
+
+def test_play_alert_uses_mapped_sound_alias(monkeypatch) -> None:
+    frame = _make_frame()
+    frame.sound_choice = MagicMock()
+    frame.sound_choice.GetStringSelection.return_value = "Alert"
+    fake_winsound = MagicMock()
+    fake_winsound.SND_ALIAS = 0x10000
+    fake_winsound.SND_ASYNC = 0x0001
+    monkeypatch.setattr(timer_alert_handlers, "_SOUND_AVAILABLE", True)
+    monkeypatch.setattr(timer_alert_handlers, "winsound", fake_winsound, raising=False)
+
+    TimerAlertFrame._play_alert(frame)
+
+    fake_winsound.PlaySound.assert_called_once_with(
+        "SystemExclamation",
+        fake_winsound.SND_ALIAS | fake_winsound.SND_ASYNC,
+    )
+
+
+def test_play_alert_falls_back_to_default_alias(monkeypatch) -> None:
+    frame = _make_frame()
+    frame.sound_choice = MagicMock()
+    frame.sound_choice.GetStringSelection.return_value = "Unknown Sound"
+    fake_winsound = MagicMock()
+    monkeypatch.setattr(timer_alert_handlers, "_SOUND_AVAILABLE", True)
+    monkeypatch.setattr(timer_alert_handlers, "winsound", fake_winsound, raising=False)
+
+    TimerAlertFrame._play_alert(frame)
+
+    sound_key = fake_winsound.PlaySound.call_args.args[0]
+    assert sound_key == "SystemDefault"
+
+
+def test_play_alert_noops_when_sound_unavailable(monkeypatch) -> None:
+    frame = _make_frame()
+    frame.sound_choice = MagicMock()
+    fake_winsound = MagicMock()
+    monkeypatch.setattr(timer_alert_handlers, "_SOUND_AVAILABLE", False)
+    monkeypatch.setattr(timer_alert_handlers, "winsound", fake_winsound, raising=False)
+
+    TimerAlertFrame._play_alert(frame)
+
+    fake_winsound.PlaySound.assert_not_called()
+    frame.sound_choice.GetStringSelection.assert_not_called()
+
+
+def test_play_alert_swallows_playback_errors(monkeypatch) -> None:
+    frame = _make_frame()
+    frame.sound_choice = MagicMock()
+    frame.sound_choice.GetStringSelection.return_value = "Beep"
+    fake_winsound = MagicMock()
+    fake_winsound.PlaySound.side_effect = RuntimeError("device busy")
+    monkeypatch.setattr(timer_alert_handlers, "_SOUND_AVAILABLE", True)
+    monkeypatch.setattr(timer_alert_handlers, "winsound", fake_winsound, raising=False)
+
+    # Must not propagate; playback failure is logged and ignored.
+    TimerAlertFrame._play_alert(frame)
+
+    fake_winsound.PlaySound.assert_called_once()

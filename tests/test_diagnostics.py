@@ -82,6 +82,18 @@ class TestEventLogger:
         el = EventLogger(tmp_path)
         assert el.path == tmp_path / "events.jsonl"
 
+    def test_write_failure_is_non_fatal(self, tmp_path: Path) -> None:
+        """An I/O error while writing must be swallowed, never raised."""
+        # A regular file sitting where the logs directory should be makes
+        # ``mkdir`` (and thus the whole write) fail with an OSError.
+        blocker = tmp_path / "logs"
+        blocker.write_text("not a directory")
+        el = EventLogger(blocker / "nested", enabled=True)
+
+        el.log("boom")  # must not raise
+
+        assert not el.path.exists()
+
 
 # ---------------------------------------------------------------------------
 # export_diagnostics_bundle
@@ -219,8 +231,6 @@ class TestExportDiagnosticsBundle:
         """Bundle export must never open a network socket."""
         import socket
 
-        original_connect = socket.socket.connect
-
         def forbid_connect(self, *args, **kwargs):  # type: ignore[override]
             raise AssertionError("export_diagnostics_bundle must not make network calls")
 
@@ -228,9 +238,8 @@ class TestExportDiagnosticsBundle:
         logs_dir = tmp_path / "logs"
         logs_dir.mkdir()
 
-        # Should not raise
+        # Should not raise. ``monkeypatch`` restores ``connect`` automatically.
         export_diagnostics_bundle(tmp_path / "bundle.zip", logs_dir=logs_dir)
-        monkeypatch.setattr(socket.socket, "connect", original_connect)
 
 
 # ---------------------------------------------------------------------------
@@ -242,6 +251,24 @@ class TestGetAppVersion:
     def test_returns_non_empty_string(self) -> None:
         assert isinstance(_get_app_version(), str)
         assert _get_app_version()
+
+    def test_falls_back_to_constants_app_version(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """When package metadata is unavailable, use utils.constants.APP_VERSION."""
+        import importlib.metadata
+        import sys
+        import types
+
+        def raise_metadata(*args, **kwargs):  # type: ignore[no-untyped-def]
+            raise importlib.metadata.PackageNotFoundError("mtgo_tools")
+
+        monkeypatch.setattr(importlib.metadata, "version", raise_metadata)
+        # Inject a lightweight stand-in so the import succeeds without pulling in
+        # the real utils.constants package (which imports wx).
+        fake = types.ModuleType("utils.constants")
+        fake.APP_VERSION = "9.9.9"  # type: ignore[attr-defined]
+        monkeypatch.setitem(sys.modules, "utils.constants", fake)
+
+        assert _get_app_version() == "9.9.9"
 
     def test_falls_through_to_unknown(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """If both metadata and constants lookups fail, fall back to 'unknown'."""

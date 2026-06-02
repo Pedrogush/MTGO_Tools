@@ -366,6 +366,62 @@ def test_search_with_builder_filters_invalid_mv_value_skips_mana_value_filter():
     assert [card["name"] for card in results] == ["Cheap", "Expensive"]
 
 
+def test_search_with_builder_filters_name_branch():
+    """The name filter keeps only cards whose name contains the query substring."""
+    bolt = create_mock_card(name="Lightning Bolt")
+    counter = create_mock_card(name="Counterspell")
+    service = SearchService(card_repository=SimpleNamespace())
+
+    results = service.search_with_builder_filters(
+        {"name": "lightning"},
+        _make_builder_manager([bolt, counter]),
+    )
+
+    assert [card["name"] for card in results] == ["Lightning Bolt"]
+
+
+def test_search_with_builder_filters_type_branch():
+    """The type filter keeps only cards whose type line contains the query."""
+    creature = create_mock_card(name="Goblin Guide", type_line="Creature — Goblin")
+    instant = create_mock_card(name="Counterspell", type_line="Instant")
+    service = SearchService(card_repository=SimpleNamespace())
+
+    results = service.search_with_builder_filters(
+        {"type": "creature"},
+        _make_builder_manager([creature, instant]),
+    )
+
+    assert [card["name"] for card in results] == ["Goblin Guide"]
+
+
+def test_search_with_builder_filters_mana_branch_contains():
+    """The mana filter (contains mode) keeps cards whose cost includes the symbols."""
+    green = create_mock_card(name="Green Card", mana_cost="{2}{G}")
+    blue = create_mock_card(name="Blue Card", mana_cost="{2}{U}")
+    service = SearchService(card_repository=SimpleNamespace())
+
+    results = service.search_with_builder_filters(
+        {"mana": "{G}"},
+        _make_builder_manager([green, blue]),
+    )
+
+    assert [card["name"] for card in results] == ["Green Card"]
+
+
+def test_search_with_builder_filters_mana_branch_exact():
+    """With mana_exact, only cards whose full cost matches the query survive."""
+    exact = create_mock_card(name="Exact Match", mana_cost="{G}")
+    extra = create_mock_card(name="Extra Mana", mana_cost="{2}{G}")
+    service = SearchService(card_repository=SimpleNamespace())
+
+    results = service.search_with_builder_filters(
+        {"mana": "{G}", "mana_exact": True},
+        _make_builder_manager([exact, extra]),
+    )
+
+    assert [card["name"] for card in results] == ["Exact Match"]
+
+
 # ============= filter_cards mana_cost path =============
 
 
@@ -395,6 +451,23 @@ def test_filter_cards_mana_cost_query_excludes_card_with_no_cost():
     filtered = service.filter_cards(cards, mana_cost_query="{G}", mana_cost_mode="at_least")
 
     assert [card["name"] for card in filtered] == ["Has Cost"]
+
+
+def test_filter_cards_mana_cost_query_exact_mode():
+    """In 'exact' mode, only cards whose full cost equals the query survive."""
+    service = SearchService(card_repository=SimpleNamespace())
+
+    cards = [
+        create_mock_card(name="Exact Match", mana_cost="{G}"),
+        create_mock_card(name="Has Extra", mana_cost="{2}{G}"),
+    ]
+
+    # 'at_least' keeps both (both contain a {G}); 'exact' keeps only the exact cost.
+    at_least = service.filter_cards(cards, mana_cost_query="{G}", mana_cost_mode="at_least")
+    assert [card["name"] for card in at_least] == ["Exact Match", "Has Extra"]
+
+    exact = service.filter_cards(cards, mana_cost_query="{G}", mana_cost_mode="exact")
+    assert [card["name"] for card in exact] == ["Exact Match"]
 
 
 # ============= basic_search guard paths =============
@@ -517,6 +590,23 @@ def test_find_cards_in_deck_no_matches():
     assert len(results) == 0
 
 
+def test_find_cards_in_deck_skips_blank_and_malformed_lines():
+    """Blank lines, single-token lines, and non-numeric counts are skipped."""
+    mock_repo = SimpleNamespace()
+    service = SearchService(card_repository=mock_repo)
+
+    deck_text = """
+Lightning
+xx Lightning Helix
+4 Lightning Bolt
+"""
+
+    results = service.find_cards_in_deck(deck_text, "Lightning")
+
+    # Only the well-formed "4 Lightning Bolt" line survives the guards.
+    assert results == [("Lightning Bolt", 4)]
+
+
 # ============= Grouping Tests =============
 
 
@@ -631,10 +721,7 @@ def test_filter_cards_text_mode_any():
 
 def test_search_with_builder_filters_text_mode_any():
     """search_with_builder_filters 'any' mode requires all words to appear."""
-    from repositories.card_repository import CardDataManager
-
-    mock_repo = SimpleNamespace()
-    service = SearchService(card_repository=mock_repo)
+    service = SearchService(card_repository=SimpleNamespace())
 
     clock = create_mock_card(
         name="Clock of Omens",
@@ -643,11 +730,10 @@ def test_search_with_builder_filters_text_mode_any():
     tap_only = create_mock_card(name="Tap Card", oracle_text="Tap target creature.")
     other_card = create_mock_card(name="Other Card", oracle_text="Destroy target creature.")
 
-    mock_manager = Mock(spec=CardDataManager)
-    mock_manager.search_cards.return_value = [clock, tap_only, other_card]
-
     filters = {"text": "tap untapped", "text_mode": "any"}
-    results = service.search_with_builder_filters(filters, mock_manager)
+    results = service.search_with_builder_filters(
+        filters, _make_builder_manager([clock, tap_only, other_card])
+    )
     names = [c["name"] for c in results]
     assert "Clock of Omens" in names
     assert "Tap Card" not in names
@@ -709,6 +795,18 @@ def test_matches_mana_value_filter():
     assert service._matches_mana_value_filter(card, 2, ">") is True
     assert service._matches_mana_value_filter(card, 5, "<") is True
     assert service._matches_mana_value_filter(card, 2, "=") is False
+
+
+def test_matches_mana_value_filter_none_value():
+    """A card without a usable mana value never matches the mana-value filter."""
+    mock_repo = SimpleNamespace()
+    service = SearchService(card_repository=mock_repo)
+
+    card = create_mock_card(mana_value=None)
+    card["cmc"] = None
+
+    assert service._matches_mana_value_filter(card, 0, "=") is False
+    assert service._matches_mana_value_filter(card, 3, "≤") is False
 
 
 def test_matches_text_filter():

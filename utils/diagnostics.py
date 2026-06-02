@@ -70,7 +70,7 @@ class EventLogger:
                 self._path.replace(self._path.with_suffix(".jsonl.1"))
             with self._path.open("a", encoding="utf-8") as fh:
                 fh.write(json.dumps(entry) + "\n")
-        except Exception as exc:  # pragma: no cover – I/O failure is non-fatal
+        except Exception as exc:  # I/O failure is non-fatal
             logger.debug("EventLogger write failed: {}", exc)
 
 

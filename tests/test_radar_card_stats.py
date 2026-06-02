@@ -169,9 +169,35 @@ def test_card_usage_stats_derived_averages(populated_repo):
     # Card never seen in sideboard → averages collapse to None for stable rendering
     assert bolt.sideboard_avg_karsten is None
 
+    # Absent from the sideboard, but decks exist → arithmetic average is a real 0.0,
+    # not None (the symmetric counterpart to the None Karsten short-circuit).
+    assert bolt.sideboard_avg_arithmetic == 0.0
+
     counter = usage["Counterspell"]
     assert counter.sideboard_avg_karsten == pytest.approx(8 / 4)
     assert counter.sideboard_avg_arithmetic == pytest.approx(8 / 30)
+    # Counterspell is sideboard-only in modern: mainboard Karsten short-circuits to
+    # None while the arithmetic average is the genuine 0.0 over the format's decks.
+    assert counter.mainboard_avg_karsten is None
+    assert counter.mainboard_avg_arithmetic == 0.0
+
+
+def test_card_usage_stats_unknown_format_collapses_arithmetic_to_none(populated_repo):
+    """With no decks in the format, total_decks <= 0 → arithmetic averages are None.
+
+    Exercises the ``total_decks <= 0`` short-circuit in both arithmetic-average
+    properties, distinct from the populated-format 0.0 result above.
+    """
+    service = RadarService(radar_repository=populated_repo)
+    usage = service.get_card_usage_stats("unknown", ["Lightning Bolt"])
+
+    bolt: CardUsageStats = usage["Lightning Bolt"]
+    assert bolt.total_decks == 0
+    assert bolt.mainboard_avg_arithmetic is None
+    assert bolt.sideboard_avg_arithmetic is None
+    # Karsten averages are independent of total_decks: still None when never present.
+    assert bolt.mainboard_avg_karsten is None
+    assert bolt.sideboard_avg_karsten is None
 
 
 def test_card_usage_stats_handles_unknown_card(populated_repo):
