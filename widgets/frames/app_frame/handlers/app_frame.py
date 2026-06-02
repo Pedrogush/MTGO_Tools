@@ -15,6 +15,7 @@ from widgets.dialogs.help_dialog import show_help
 from widgets.dialogs.image_download_dialog import show_image_download_dialog
 from widgets.dialogs.tutorial_dialog import show_tutorial
 from widgets.frames.app_frame.handlers.deck_formatting import simple_summary_html
+from widgets.frames.app_frame.handlers.session_logic import should_show_tutorial
 from widgets.frames.mana_keyboard import open_mana_keyboard
 
 if TYPE_CHECKING:
@@ -208,7 +209,10 @@ class AppFrameHandlersMixin(_Base):
 
     def _restore_session_state(self) -> None:
         state = self.controller.session_manager.restore_session_state(self.controller.zone_cards)
-        if not self.controller.session_manager.is_tutorial_shown() and not is_automation_enabled():
+        if should_show_tutorial(
+            tutorial_shown=self.controller.session_manager.is_tutorial_shown(),
+            automation_enabled=is_automation_enabled(),
+        ):
             wx.CallAfter(self._open_tutorial)
 
         # Restore left panel mode
