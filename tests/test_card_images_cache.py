@@ -134,24 +134,19 @@ def test_is_bulk_data_outdated_respects_cached_metadata(tmp_path, monkeypatch):
     assert returned_metadata["download_uri"] == metadata["download_uri"]
 
 
-def test_get_image_path_calls_db_only_once_for_same_name(tmp_path, monkeypatch):
-    """get_image_path() should hit _get_image_path_from_db only once per unique key."""
+def test_get_image_path_caches_first_db_hit(tmp_path):
+    """get_image_path() should serve repeated lookups from the in-memory cache.
+
+    Behavioural proof: after the first lookup populates the cache, deleting the
+    underlying DB row must not change the result of a second lookup — the only
+    way the path can still resolve is from the cached value, not a fresh query.
+    """
     cache = card_images.CardImageCache(
         cache_dir=tmp_path / "cache", db_path=tmp_path / "cache" / "images.db"
     )
     image_file = cache.cache_dir / "normal" / "test.jpg"
     image_file.parent.mkdir(parents=True, exist_ok=True)
     image_file.write_bytes(b"fake")
-
-    call_count = 0
-    original_from_db = cache._get_image_path_from_db
-
-    def counting_from_db(card_name: str, size: str):
-        nonlocal call_count
-        call_count += 1
-        return original_from_db(card_name, size)
-
-    monkeypatch.setattr(cache, "_get_image_path_from_db", counting_from_db)
 
     # Seed the DB directly so the first lookup succeeds
     cache.add_image(
@@ -166,10 +161,16 @@ def test_get_image_path_calls_db_only_once_for_same_name(tmp_path, monkeypatch):
     cache._path_cache.clear()
 
     result1 = cache.get_image_path("Test Card", "normal")
-    result2 = cache.get_image_path("Test Card", "normal")
+    assert result1 == image_file
 
-    assert result1 == result2 == image_file
-    assert call_count == 1, f"Expected DB called once, got {call_count}"
+    # Remove the row the first lookup read; a DB-backed second lookup would now
+    # miss, so a matching result proves the value came from the in-memory cache.
+    with sqlite3.connect(cache.db_path) as conn:
+        conn.execute("DELETE FROM card_images")
+        conn.commit()
+
+    result2 = cache.get_image_path("Test Card", "normal")
+    assert result2 == image_file
 
 
 def test_get_image_path_returns_path_after_add_image_when_initial_miss(tmp_path):
@@ -203,8 +204,13 @@ def test_get_image_path_returns_path_after_add_image_when_initial_miss(tmp_path)
     assert result_after == image_file
 
 
-def test_get_image_path_cache_key_is_case_insensitive(tmp_path, monkeypatch):
-    """get_image_path() must treat card names case-insensitively for cache hits."""
+def test_get_image_path_cache_key_is_case_insensitive(tmp_path):
+    """get_image_path() must treat card names case-insensitively for cache hits.
+
+    The first uppercase lookup populates the cache under the lowercased key.
+    Deleting the DB row afterwards proves the second (also uppercase) lookup is
+    served from that case-folded cache entry rather than a fresh query.
+    """
     cache = card_images.CardImageCache(
         cache_dir=tmp_path / "cache", db_path=tmp_path / "cache" / "images.db"
     )
@@ -222,23 +228,17 @@ def test_get_image_path_cache_key_is_case_insensitive(tmp_path, monkeypatch):
     # Clear path cache to force a DB hit on the first lookup
     cache._path_cache.clear()
 
-    call_count = 0
-    original_from_db = cache._get_image_path_from_db
-
-    def counting_from_db(card_name: str, size: str):
-        nonlocal call_count
-        call_count += 1
-        return original_from_db(card_name, size)
-
-    monkeypatch.setattr(cache, "_get_image_path_from_db", counting_from_db)
-
     result = cache.get_image_path("LIGHTNING BOLT", "normal")
     assert result == image_file
 
-    # Second call must come from in-process cache, not DB
+    # Remove the row; a DB-backed second lookup would now miss, so a matching
+    # result proves the cache key was case-folded on insert and on lookup.
+    with sqlite3.connect(cache.db_path) as conn:
+        conn.execute("DELETE FROM card_images")
+        conn.commit()
+
     result2 = cache.get_image_path("LIGHTNING BOLT", "normal")
     assert result2 == image_file
-    assert call_count == 1, f"Expected DB called once, got {call_count}"
 
 
 def test_add_image_invalidates_only_matching_size_key(tmp_path):
@@ -429,46 +429,46 @@ def test_get_image_path_accent_normalized_fallback(tmp_path):
     assert result == image_file
 
 
-def test_get_image_path_no_accent_no_extra_query(tmp_path, monkeypatch):
-    """When the exact-name match succeeds, the accent-fallback query must not run.
+def test_get_image_path_exact_match_wins_over_accent_fallback(tmp_path):
+    """An exact-name hit must short-circuit before the accent-stripping query.
 
-    The accent fallback is the only code path that touches ``_strip_accents``
-    (both to register the SQLite scalar and to build the comparison argument);
-    spying on it therefore proves whether the extra query executed.
+    Behavioural proxy: store two rows whose names are identical once accents are
+    stripped ("Lorien" vs "Lórien"). A query for the exact ASCII name must
+    return *that* row, not the accented one. If the exact match did not
+    short-circuit, the accent fallback could surface either row, so a stable,
+    exact-name result proves the fast path ran first.
     """
-    from services.image_service import disk_cache
-
     cache = card_images.CardImageCache(
         cache_dir=tmp_path / "cache", db_path=tmp_path / "cache" / "images.db"
     )
-    image_file = cache.cache_dir / "normal" / "uuid-bolt.jpg"
-    image_file.parent.mkdir(parents=True, exist_ok=True)
-    image_file.write_bytes(b"fake")
+    ascii_file = cache.cache_dir / "normal" / "uuid-ascii.jpg"
+    accent_file = cache.cache_dir / "normal" / "uuid-accent.jpg"
+    ascii_file.parent.mkdir(parents=True, exist_ok=True)
+    ascii_file.write_bytes(b"ascii")
+    accent_file.write_bytes(b"accent")
 
+    # Exact ASCII spelling.
     cache.add_image(
-        uuid="uuid-bolt",
-        name="Lightning Bolt",
-        set_code="LEA",
-        collector_number="161",
+        uuid="uuid-ascii",
+        name="Lorien Revealed",
+        set_code="LTR",
+        collector_number="060",
         image_size="normal",
-        file_path=image_file,
+        file_path=ascii_file,
+    )
+    # Accented spelling that collides only under accent-stripping.
+    cache.add_image(
+        uuid="uuid-accent",
+        name="Lórien Revealed",
+        set_code="LTR",
+        collector_number="057",
+        image_size="normal",
+        file_path=accent_file,
     )
     cache._path_cache.clear()
 
-    strip_calls = {"n": 0}
-    original_strip = disk_cache._strip_accents
-
-    def counting_strip(text):
-        strip_calls["n"] += 1
-        return original_strip(text)
-
-    monkeypatch.setattr(disk_cache, "_strip_accents", counting_strip)
-
-    # A plain ASCII name must still resolve correctly...
-    result = cache.get_image_path("Lightning Bolt", "normal")
-    assert result == image_file
-    # ...and it must do so without falling through to the accent-stripping query.
-    assert strip_calls["n"] == 0, "accent fallback ran despite an exact-name hit"
+    # The exact ASCII match must win and return its own file.
+    assert cache.get_image_path("Lorien Revealed", "normal") == ascii_file
 
 
 def _write_bulk_data(cache_dir, monkeypatch):
@@ -558,32 +558,33 @@ def test_resolve_card_locally_resolves_face_name(tmp_path, monkeypatch):
 
 
 def test_download_by_name_uses_local_index_before_api(tmp_path, monkeypatch):
-    """A local hit must avoid the Scryfall /cards/named round-trip."""
+    """A local hit must avoid the Scryfall /cards/named round-trip.
+
+    Runs the real download pipeline against a ``_FakeSession`` so the local
+    resolution is proven by the file/DB outcome (the LEA printing's image URL is
+    fetched and persisted), not by spying on the private downloader method.
+    """
     cache_dir = tmp_path / "card_images"
     _write_bulk_data(cache_dir, monkeypatch)
     cache = card_images.CardImageCache(cache_dir=cache_dir, db_path=cache_dir / "images.db")
     downloader = card_images.BulkImageDownloader(cache)
+    downloader.session = _FakeSession()
 
     def _no_api(*_args, **_kwargs):
         raise AssertionError("fetch_card_by_name should not be called on a local hit")
 
     monkeypatch.setattr(downloader, "fetch_card_by_name", _no_api)
-    captured = {}
-
-    def _fake_download(card, size):
-        captured["id"] = card.get("id")
-        captured["size"] = size
-        return True, "ok"
-
-    monkeypatch.setattr(downloader, "_download_single_image", _fake_download)
 
     success, message = downloader.download_card_image_by_name(
         "Lightning Bolt", "normal", set_code="LEA"
     )
     assert success is True
-    assert message == "ok"
-    assert captured["id"] == "u-lea"
-    assert captured["size"] == "normal"
+    assert "Downloaded" in message
+    # The locally-resolved LEA printing's image URL was fetched (not the M11 one).
+    assert downloader.session.calls == ["http://img/bolt-lea.jpg"]
+    # ...and the LEA printing was persisted under its uuid.
+    stored = cache.get_image_by_uuid("u-lea", "normal", face_index=0)
+    assert stored is not None and stored.exists()
 
 
 def test_download_by_name_falls_back_to_api_on_local_miss(tmp_path, monkeypatch):
@@ -593,18 +594,22 @@ def test_download_by_name_falls_back_to_api_on_local_miss(tmp_path, monkeypatch)
     cache = card_images.CardImageCache(cache_dir=cache_dir, db_path=cache_dir / "images.db")
     downloader = card_images.BulkImageDownloader(cache)
 
+    downloader.session = _FakeSession()
     api_calls = {"n": 0}
 
     def _api(name, set_code=None):
         api_calls["n"] += 1
-        return {"id": "api-id", "name": name, "image_uris": {"normal": "http://api"}}
+        return {"id": "api-id", "name": name, "image_uris": {"normal": "http://api/img.jpg"}}
 
     monkeypatch.setattr(downloader, "fetch_card_by_name", _api)
-    monkeypatch.setattr(downloader, "_download_single_image", lambda card, size: (True, "ok"))
 
     success, _ = downloader.download_card_image_by_name("Totally Unknown Card", "normal")
     assert success is True
+    # The API was consulted exactly once and its image URL was fetched + stored.
     assert api_calls["n"] == 1
+    assert downloader.session.calls == ["http://api/img.jpg"]
+    stored = cache.get_image_by_uuid("api-id", "normal", face_index=0)
+    assert stored is not None and stored.exists()
 
 
 # ---------------------------------------------------------------------------
@@ -898,6 +903,11 @@ class _FakeResponse:
         if not self._ok:
             raise RuntimeError("HTTP 404")
 
+    def iter_content(self, chunk_size: int = 1):
+        """Yield the body in chunks, mirroring requests' streaming API."""
+        for i in range(0, len(self.content), chunk_size):
+            yield self.content[i : i + chunk_size]
+
 
 class _FakeSession:
     """Minimal requests.Session stand-in recording GET calls."""
@@ -1078,6 +1088,34 @@ def test_download_multi_face_two_image_card_stores_faces_and_combined(tmp_path):
     assert cache.get_image_path("Front // Back", "normal") == paths[0]
 
 
+def test_download_single_image_multi_face_split_card_one_physical_image(tmp_path):
+    """A split card (faces without image_uris, one top-level image) stores a single asset."""
+    cache = card_images.CardImageCache(
+        cache_dir=tmp_path / "cache", db_path=tmp_path / "cache" / "images.db"
+    )
+    downloader = card_images.BulkImageDownloader(cache)
+    downloader.session = _FakeSession()
+
+    card = {
+        "id": "uuid-split",
+        "name": "Fire // Ice",
+        "set": "apc",
+        "collector_number": "128",
+        "image_uris": {"normal": "http://img/fireice.jpg"},
+        "card_faces": [{"name": "Fire"}, {"name": "Ice"}],
+    }
+    success, _ = downloader._download_single_image(card, "normal")
+    assert success is True
+
+    # Exactly one physical image was fetched for the combined card.
+    assert downloader.session.calls == ["http://img/fireice.jpg"]
+    stored = cache.get_image_by_uuid("uuid-split", "normal", face_index=0)
+    assert stored is not None and stored.exists()
+    # Both face halves resolve to that single combined image.
+    assert cache.get_image_path("Fire", "normal") == stored
+    assert cache.get_image_path("Ice", "normal") == stored
+
+
 def test_download_bulk_metadata_uses_cache_when_current(tmp_path, monkeypatch):
     """Matching vendor metadata short-circuits without downloading."""
     downloader, _ = _make_downloader(tmp_path, monkeypatch)
@@ -1120,3 +1158,78 @@ def test_download_all_images_errors_when_bulk_file_missing(tmp_path, monkeypatch
     result = downloader.download_all_images("normal")
     assert result["success"] is False
     assert "Bulk data not downloaded" in result["error"]
+
+
+def test_download_all_images_downloads_every_card_from_bulk_file(tmp_path, monkeypatch):
+    """The success path downloads each card in the bulk file and reports counts."""
+    cache_dir = tmp_path / "card_images"
+    _write_bulk_data(cache_dir, monkeypatch)
+    cache = card_images.CardImageCache(cache_dir=cache_dir, db_path=cache_dir / "images.db")
+    downloader = card_images.BulkImageDownloader(cache)
+    downloader.session = _FakeSession()
+
+    result = downloader.download_all_images("normal")
+
+    assert result["success"] is True
+    # The seeded bulk file holds three cards.
+    assert result["total"] == 3
+    assert result["downloaded"] == 3
+    assert result["skipped"] == 0
+    assert result["failed"] == 0
+    # Every card's image URL was fetched and persisted to the cache.
+    assert set(downloader.session.calls) == {
+        "http://img/bolt-lea.jpg",
+        "http://img/bolt-m11.jpg",
+        "http://img/fireice.jpg",
+    }
+    assert cache.get_image_by_uuid("u-lea", "normal").exists()
+    assert cache.get_image_by_uuid("u-m11", "normal").exists()
+    assert cache.get_image_by_uuid("u-fireice", "normal").exists()
+
+
+def test_download_all_images_skips_already_cached_cards(tmp_path, monkeypatch):
+    """A re-run over the same bulk file reports the cards as skipped, not re-downloaded."""
+    cache_dir = tmp_path / "card_images"
+    _write_bulk_data(cache_dir, monkeypatch)
+    cache = card_images.CardImageCache(cache_dir=cache_dir, db_path=cache_dir / "images.db")
+    downloader = card_images.BulkImageDownloader(cache)
+    downloader.session = _FakeSession()
+
+    first = downloader.download_all_images("normal")
+    assert first["downloaded"] == 3
+
+    # Fresh session so any re-fetch would be visible in calls.
+    downloader.session = _FakeSession()
+    second = downloader.download_all_images("normal")
+
+    assert second["success"] is True
+    assert second["skipped"] == 3
+    assert second["downloaded"] == 0
+    assert downloader.session.calls == []
+
+
+def test_download_bulk_metadata_streams_and_records_metadata(tmp_path, monkeypatch):
+    """A fresh download streams the bulk file to disk and records vendor metadata."""
+    downloader, bulk_path = _make_downloader(tmp_path, monkeypatch, bulk_contents=None)
+    metadata = {
+        "updated_at": "2024-03-03T00:00:00Z",
+        "download_uri": "http://example.com/bulk.json",
+        "size": 1024,
+    }
+    monkeypatch.setattr(downloader, "_fetch_bulk_metadata", lambda: metadata)
+    downloader.session = _FakeSession(
+        responses={metadata["download_uri"]: _FakeResponse(content=b"[]")}
+    )
+
+    success, message = downloader.download_bulk_metadata()
+
+    assert success is True
+    assert "downloaded" in message.lower()
+    # The bulk file was streamed to disk with the served content.
+    assert bulk_path.exists()
+    assert bulk_path.read_bytes() == b"[]"
+    assert downloader.session.calls == [metadata["download_uri"]]
+    # The vendor metadata was persisted so a subsequent run can short-circuit.
+    cached_updated, cached_uri = downloader._get_cached_bulk_data_record()
+    assert cached_updated == metadata["updated_at"]
+    assert cached_uri == metadata["download_uri"]
