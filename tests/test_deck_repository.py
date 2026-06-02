@@ -436,3 +436,127 @@ def test_list_deck_files_returns_sorted_txt(deck_repo, temp_dir):
 
     files = deck_repo.list_deck_files(directory=temp_dir)
     assert [p.name for p in files] == ["a.txt", "b.txt"]
+
+
+# ---------------------------------------------------------------------------
+# UIStateMixin: get_current_deck_key
+# ---------------------------------------------------------------------------
+
+
+def test_get_current_deck_key_defaults_to_manual_when_no_deck(deck_repo):
+    assert deck_repo.get_current_deck() is None
+    assert deck_repo.get_current_deck_key() == "manual"
+
+
+def test_get_current_deck_key_prefers_href(deck_repo):
+    deck_repo.set_current_deck({"href": "/decklist/42", "name": "Burn"})
+    assert deck_repo.get_current_deck_key() == "/decklist/42"
+
+
+def test_get_current_deck_key_falls_back_to_lowercased_name(deck_repo):
+    deck_repo.set_current_deck({"name": "Mono Red Burn"})
+    assert deck_repo.get_current_deck_key() == "mono red burn"
+
+
+def test_get_current_deck_key_manual_when_deck_has_no_href_or_name(deck_repo):
+    deck_repo.set_current_deck({"format": "Legacy"})
+    assert deck_repo.get_current_deck_key() == "manual"
+
+
+# ---------------------------------------------------------------------------
+# UIStateMixin: get_current_decklist_hash
+# ---------------------------------------------------------------------------
+
+
+def test_get_current_decklist_hash_empty_when_no_text(deck_repo):
+    assert deck_repo.get_current_deck_text() == ""
+    assert deck_repo.get_current_decklist_hash() == "empty"
+
+
+def test_get_current_decklist_hash_empty_for_whitespace_only_text(deck_repo):
+    deck_repo.set_current_deck_text("   \n\t\n   ")
+    assert deck_repo.get_current_decklist_hash() == "empty"
+
+
+def test_get_current_decklist_hash_is_stable_and_short(deck_repo):
+    deck_repo.set_current_deck_text(SAMPLE_DECK)
+    first = deck_repo.get_current_decklist_hash()
+    second = deck_repo.get_current_decklist_hash()
+
+    assert first == second
+    assert first != "empty"
+    assert len(first) == 16
+
+
+def test_get_current_decklist_hash_is_order_independent(deck_repo):
+    deck_repo.set_current_deck_text("4 Lightning Bolt\n4 Counterspell\n3 Duress")
+    ordered = deck_repo.get_current_decklist_hash()
+
+    deck_repo.set_current_deck_text("3 Duress\n  4 Counterspell  \n4 Lightning Bolt\n")
+    shuffled = deck_repo.get_current_decklist_hash()
+
+    # Lines are stripped and sorted before hashing, so reordering and
+    # surrounding whitespace must not change the hash.
+    assert ordered == shuffled
+
+
+def test_get_current_decklist_hash_differs_for_different_decks(deck_repo):
+    deck_repo.set_current_deck_text("4 Lightning Bolt\n")
+    a = deck_repo.get_current_decklist_hash()
+
+    deck_repo.set_current_deck_text("4 Brainstorm\n")
+    b = deck_repo.get_current_decklist_hash()
+
+    assert a != b
+
+
+# ---------------------------------------------------------------------------
+# UIStateMixin: build_daily_average_deck
+# ---------------------------------------------------------------------------
+
+
+def test_build_daily_average_deck_accumulates_and_reports_progress(deck_repo):
+    decks = [{"number": 1}, {"number": 2}, {"number": 3}]
+    downloaded: list[int] = []
+    progress: list[tuple[int, int]] = []
+
+    def download_func(number):
+        downloaded.append(number)
+
+    def read_func():
+        # Return the content for the most recently downloaded deck.
+        return f"content-{downloaded[-1]}"
+
+    def add_to_buffer_func(buffer, deck_content):
+        merged = dict(buffer)
+        merged[deck_content] = merged.get(deck_content, 0.0) + 1.0
+        return merged
+
+    def progress_callback(index, total):
+        progress.append((index, total))
+
+    result = deck_repo.build_daily_average_deck(
+        decks,
+        download_func,
+        read_func,
+        add_to_buffer_func,
+        progress_callback,
+    )
+
+    assert downloaded == [1, 2, 3]
+    assert result == {"content-1": 1.0, "content-2": 1.0, "content-3": 1.0}
+    assert progress == [(1, 3), (2, 3), (3, 3)]
+
+
+def test_build_daily_average_deck_empty_without_progress_callback(deck_repo):
+    calls: list[int] = []
+
+    result = deck_repo.build_daily_average_deck(
+        [],
+        download_func=lambda number: calls.append(number),
+        read_func=lambda: "",
+        add_to_buffer_func=lambda buffer, content: buffer,
+    )
+
+    assert result == {}
+    assert calls == []

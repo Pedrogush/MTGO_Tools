@@ -43,6 +43,9 @@ class UIStateMixin(_Base):
             return "empty"
 
         lines = [line.strip() for line in deck_text.strip().split("\n") if line.strip()]
+        if not lines:
+            # Whitespace-only text carries no cards, so it is effectively empty.
+            return "empty"
         lines.sort()
         normalized_text = "\n".join(lines)
 
