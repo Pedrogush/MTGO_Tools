@@ -138,14 +138,90 @@ def test_stop_before_start_does_no_work():
 
 
 def test_failing_dependencies_are_swallowed():
-    warmer, _, queued = _make_warmer()
+    warmer, fetched, queued = _make_warmer()
     warmer._get_archetypes = lambda fmt: (_ for _ in ()).throw(RuntimeError("boom"))
 
     # Should not raise.
     warmer._warm_images()
     warmer._warm_decklists()
 
+    # A failing archetype source yields no decks, so nothing is fetched, queued,
+    # or counted as hydrated/failed — the warmer degrades to a clean no-op.
     assert queued == []
+    assert fetched == []
+    assert warmer._dl_ok == 0
+    assert warmer._dl_failed == 0
+
+
+def test_failing_deck_source_swallowed_and_other_archetypes_continue():
+    # Archetype A's deck source raises; B and C still warm normally.
+    warmer, fetched, queued = _make_warmer()
+    original_get_decks = warmer._get_decks_for_archetype
+
+    def get_decks(archetype: dict[str, Any]) -> list[dict[str, Any]]:
+        if archetype.get("href") == "legacy-a":
+            raise RuntimeError("decks boom")
+        return original_get_decks(archetype)
+
+    warmer._get_decks_for_archetype = get_decks
+
+    warmer._warm_images()
+
+    # _safe_decks swallows A's failure (no deck 1); B (deck 3) and C (deck 4) warm.
+    assert fetched == ["3", "4"]
+    assert set(queued) == {"Card Three", "Card Four"}
+
+
+def test_failing_deck_text_counts_as_failed_and_warming_continues():
+    # The download for one deck raises; _safe_deck_text returns "" so it is
+    # counted as failed while the remaining decks still hydrate.
+    warmer, fetched, _ = _make_warmer()
+    original_download = warmer._download_deck_text
+
+    def download(deck: dict[str, Any]) -> str:
+        if str(deck.get("number")) == "2":
+            raise RuntimeError("text boom")
+        return original_download(deck)
+
+    warmer._download_deck_text = download
+
+    warmer._warm_decklists()
+
+    # Deck 2 raised (counted failed); the other four hydrated. All still fetched.
+    assert fetched == ["1", "3", "4", "2", "5"]
+    assert warmer._dl_ok == 4
+    assert warmer._dl_failed == 1
+
+
+def test_warm_decklists_no_formats_is_a_clean_no_op():
+    warmer, fetched, _ = _make_warmer(current_format="", formats=[])
+
+    warmer._warm_decklists()
+
+    # No formats to warm: early return before any work or tallies.
+    assert fetched == []
+    assert warmer._dl_ok == 0
+    assert warmer._dl_failed == 0
+
+
+def test_warm_images_dedupes_repeated_card_within_a_deck():
+    # A card listed twice in the same decklist is queued only once.
+    archetypes = {"Legacy": [{"name": "A", "href": "legacy-a"}]}
+    decks = {"legacy-a": [{"number": "1"}]}
+    deck_text = {"1": "4 Card One\n2 Card One\n1 Card Two\n"}
+    warmer, fetched, queued = _make_warmer(
+        current_format="Legacy",
+        formats=["Legacy"],
+        archetypes=archetypes,
+        decks=decks,
+        deck_text=deck_text,
+    )
+
+    warmer._warm_images()
+
+    assert fetched == ["1"]
+    # "Card One" appears on two lines but is enqueued exactly once.
+    assert queued == ["Card One", "Card Two"]
 
 
 def test_warm_decklists_phase1_limit_truncates_top_decks_per_format():
