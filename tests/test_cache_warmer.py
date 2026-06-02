@@ -180,6 +180,9 @@ def test_failing_deck_text_counts_as_failed_and_warming_continues():
 
     def download(deck: dict[str, Any]) -> str:
         if str(deck.get("number")) == "2":
+            # Record the attempt (as the real downloader would) before failing,
+            # so deck 2 still appears in ``fetched`` though it never hydrates.
+            fetched.append("2")
             raise RuntimeError("text boom")
         return original_download(deck)
 
