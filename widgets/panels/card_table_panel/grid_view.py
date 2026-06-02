@@ -38,6 +38,7 @@ import wx
 from PIL import Image as PilImage
 
 from utils.constants import (
+    CARD_VIEW_SCROLL_RATE,
     DARK_ACCENT,
     DARK_ALT,
     DARK_PANEL,
@@ -63,6 +64,7 @@ from widgets.panels.card_table_panel.card_render import (
     resolve_card_color,
 )
 from widgets.panels.card_table_panel.pile_view import _ImageCache
+from widgets.panels.card_table_panel.scrolling import scroll_by_wheel
 
 # Match the grid sizer's old geometry: DECK_CARD_WIDTH×HEIGHT cells with a
 # GRID_GAP (== CardTablePanel.GRID_GAP) right/bottom margin between them.
@@ -132,7 +134,10 @@ class DeckGridView(wx.ScrolledWindow):
         # AutoBufferedPaintDC requires BG_STYLE_PAINT so wx skips its own
         # erase-background draw and _on_paint owns the whole client area.
         self.SetBackgroundStyle(wx.BG_STYLE_PAINT)
-        self.SetScrollRate(20, 20)
+        # 1px scroll units (shared with the pile view) give the scrollbar thumb
+        # single-pixel granularity; the wheel handler then scrolls a larger
+        # per-notch step so the wheel still moves a useful distance.
+        self.SetScrollRate(CARD_VIEW_SCROLL_RATE, CARD_VIEW_SCROLL_RATE)
         self.SetDoubleBuffered(True)
 
         self.Bind(wx.EVT_PAINT, self._on_paint)
@@ -140,6 +145,7 @@ class DeckGridView(wx.ScrolledWindow):
         self.Bind(wx.EVT_LEFT_DOWN, self._on_left_down)
         self.Bind(wx.EVT_LEFT_UP, self._on_left_up)
         self.Bind(wx.EVT_MOTION, self._on_motion)
+        self.Bind(wx.EVT_MOUSEWHEEL, self._on_wheel)
         self.Bind(wx.EVT_LEAVE_WINDOW, self._on_leave)
 
     # ----- public API consumed by CardTablePanel -----
@@ -536,6 +542,10 @@ class DeckGridView(wx.ScrolledWindow):
         if hovered and self._on_hover and idx is not None:
             self._on_hover(self._cards[idx])
         self.Refresh()
+
+    def _on_wheel(self, event: wx.MouseEvent) -> None:
+        # Shared with the pile view so both scroll identically (see scrolling.py).
+        scroll_by_wheel(self, event)
 
     def _on_leave(self, _event: wx.MouseEvent) -> None:
         if self._hover_name is not None:

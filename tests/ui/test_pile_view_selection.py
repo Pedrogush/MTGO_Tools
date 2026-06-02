@@ -18,11 +18,11 @@ from typing import Any
 import pytest
 import wx
 
-from widgets.panels.card_table_panel.pile_view import (
-    _NAME_STRIP_HEIGHT,
-    _WHEEL_SCROLL_STEP,
-    DeckPileView,
-)
+from utils.constants import CARD_VIEW_WHEEL_LINE_PX
+from widgets.panels.card_table_panel.pile_view import _NAME_STRIP_HEIGHT, DeckPileView
+
+# A standard mouse reports 3 lines per notch; one notch scrolls this many px.
+_NOTCH_PX = 3 * CARD_VIEW_WHEEL_LINE_PX
 
 _META: dict[str, dict[str, Any]] = {
     "grizzly bears": {"mana_value": 2, "type_line": "Creature — Bear", "colors": ["G"]},
@@ -56,13 +56,15 @@ class _FakeMouseEvent:
 
 
 class _FakeWheelEvent:
-    """Minimal stand-in for the wx.MouseEvent fields _on_wheel reads."""
+    """Minimal stand-in for the wx.MouseEvent fields scroll_by_wheel reads."""
 
-    def __init__(self, rotation: int, *, axis: int = 0, shift: bool = False) -> None:
+    def __init__(
+        self, rotation: int, *, axis: int = 0, shift: bool = False, lines: int = 3
+    ) -> None:
         self._rotation = rotation
         self._axis = axis
         self._shift = shift
-        self.skipped = False
+        self._lines = lines
 
     def GetWheelRotation(self) -> int:
         return self._rotation
@@ -73,11 +75,11 @@ class _FakeWheelEvent:
     def GetWheelAxis(self) -> int:
         return self._axis
 
+    def GetLinesPerAction(self) -> int:
+        return self._lines
+
     def ShiftDown(self) -> bool:
         return self._shift
-
-    def Skip(self) -> None:
-        self.skipped = True
 
 
 def _make_view(frame: wx.Frame, on_select):
@@ -192,17 +194,47 @@ def _wheel_view(frame: wx.Frame, start: tuple[int, int]):
 
 
 @pytest.mark.usefixtures("wx_app")
-def test_wheel_scrolls_vertical_by_fixed_step():
-    """One notch moves a useful distance, not the ~3px the 1px rate would give."""
+def test_wheel_scrolls_vertical_by_lines_per_notch():
+    """One notch moves lines_per_action * line_px, not the few px the 1px rate gives."""
     frame = wx.Frame(None)
     try:
         view, calls = _wheel_view(frame, (0, 200))
         view._on_wheel(_FakeWheelEvent(120))  # one notch up
-        assert calls == [(0, 200 - _WHEEL_SCROLL_STEP)]
+        assert calls == [(0, 200 - _NOTCH_PX)]
 
         calls.clear()
         view._on_wheel(_FakeWheelEvent(-120))  # one notch down
-        assert calls == [(0, 200 + _WHEEL_SCROLL_STEP)]
+        assert calls == [(0, 200 + _NOTCH_PX)]
+    finally:
+        frame.Destroy()
+
+
+@pytest.mark.usefixtures("wx_app")
+def test_wheel_honors_os_lines_per_action():
+    """A larger OS lines-per-action scrolls proportionally further per notch."""
+    frame = wx.Frame(None)
+    try:
+        view, calls = _wheel_view(frame, (0, 500))
+        view._on_wheel(_FakeWheelEvent(120, lines=5))
+        assert calls == [(0, 500 - 5 * CARD_VIEW_WHEEL_LINE_PX)]
+    finally:
+        frame.Destroy()
+
+
+@pytest.mark.usefixtures("wx_app")
+def test_sub_notch_rotation_accumulates_until_a_full_notch():
+    """High-res wheels: partial rotations are carried, not fired one repaint each.
+
+    This is the responsiveness fix — without accumulation every micro-event
+    would Scroll + repaint and the queue would backlog.
+    """
+    frame = wx.Frame(None)
+    try:
+        view, calls = _wheel_view(frame, (0, 200))
+        view._on_wheel(_FakeWheelEvent(60))  # half a notch — no scroll yet
+        assert calls == []
+        view._on_wheel(_FakeWheelEvent(60))  # completes the notch — scrolls once
+        assert calls == [(0, 200 - _NOTCH_PX)]
     finally:
         frame.Destroy()
 
@@ -211,7 +243,7 @@ def test_wheel_scrolls_vertical_by_fixed_step():
 def test_wheel_clamps_at_top():
     frame = wx.Frame(None)
     try:
-        view, calls = _wheel_view(frame, (0, _WHEEL_SCROLL_STEP // 2))
+        view, calls = _wheel_view(frame, (0, _NOTCH_PX // 2))
         view._on_wheel(_FakeWheelEvent(120))  # scroll up past the top
         assert calls == [(0, 0)]
     finally:
@@ -224,6 +256,6 @@ def test_shift_wheel_scrolls_horizontal():
     try:
         view, calls = _wheel_view(frame, (200, 50))
         view._on_wheel(_FakeWheelEvent(120, shift=True))
-        assert calls == [(200 - _WHEEL_SCROLL_STEP, 50)]
+        assert calls == [(200 - _NOTCH_PX, 50)]
     finally:
         frame.Destroy()

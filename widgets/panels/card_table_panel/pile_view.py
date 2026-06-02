@@ -33,6 +33,7 @@ import wx
 from PIL import Image as PilImage
 
 from utils.constants import (
+    CARD_VIEW_SCROLL_RATE,
     DARK_ACCENT,
     DARK_ALT,
     DARK_BG,
@@ -44,6 +45,7 @@ from utils.constants import (
     SUBDUED_TEXT,
 )
 from utils.image_effects import apply_rounded_corner_alpha
+from widgets.panels.card_table_panel.scrolling import scroll_by_wheel
 from widgets.panels.card_table_panel.sorting import (
     PILE_SORT_MV,
     group_into_piles,
@@ -57,10 +59,6 @@ _NAME_STRIP_HEIGHT = 32  # visible portion of stacked-above cards
 _PILE_GAP = 8  # gap between piles (matches grid view's GRID_GAP)
 _PILE_PAD = 6  # padding inside a pile column
 _PILE_TOP = _PILE_PAD  # top inset for the first card in a pile
-# Pixels scrolled per mouse-wheel notch. The scroll *rate* is 1px so the
-# scrollbar thumb positions cards with single-pixel precision; the wheel
-# handler applies this larger step so a notch still moves a useful distance.
-_WHEEL_SCROLL_STEP = 60
 
 
 class _ImageCache:
@@ -139,9 +137,9 @@ class DeckPileView(wx.ScrolledWindow):
         # the whole client area.
         self.SetBackgroundStyle(wx.BG_STYLE_PAINT)
         # 1px scroll units give the scrollbar thumb single-pixel granularity so
-        # cards no longer snap in coarse jumps. The wheel scrolls a larger fixed
-        # step (see _on_wheel) since a notch would otherwise move only ~3px.
-        self.SetScrollRate(1, 1)
+        # cards no longer snap in coarse jumps. The wheel scrolls a larger step
+        # (see _on_wheel) since a notch would otherwise move only a few px.
+        self.SetScrollRate(CARD_VIEW_SCROLL_RATE, CARD_VIEW_SCROLL_RATE)
         self.SetDoubleBuffered(True)
 
         self.Bind(wx.EVT_PAINT, self._on_paint)
@@ -532,29 +530,8 @@ class DeckPileView(wx.ScrolledWindow):
         self._drag_uids = []
 
     def _on_wheel(self, event: wx.MouseEvent) -> None:
-        """Scroll a fixed pixel step per wheel notch.
-
-        Scroll units are 1px (for a fine scrollbar), so wx's default wheel
-        handling would crawl ~3px per notch. We translate notches into a
-        larger step instead. A horizontal wheel — or Shift+wheel, the usual
-        convention — scrolls the horizontal axis.
-        """
-        rotation = event.GetWheelRotation()
-        if rotation == 0:
-            event.Skip()
-            return
-        delta = event.GetWheelDelta() or 120
-        notches = rotation / delta
-        # Positive rotation scrolls toward the start (up / left) on whichever
-        # axis the wheel drives, so the step is subtracted from the view origin.
-        offset = int(round(notches * _WHEEL_SCROLL_STEP))
-        # GetViewStart is in scroll units, which are 1px here.
-        view_x, view_y = self.GetViewStart()
-        horizontal = event.GetWheelAxis() == wx.MOUSE_WHEEL_HORIZONTAL or event.ShiftDown()
-        if horizontal:
-            self.Scroll(max(0, view_x - offset), view_y)
-        else:
-            self.Scroll(view_x, max(0, view_y - offset))
+        # Shared with the grid view so both scroll identically (see scrolling.py).
+        scroll_by_wheel(self, event)
 
     def _on_leave(self, _event: wx.MouseEvent) -> None:
         if self._hover_uid is not None:
