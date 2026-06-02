@@ -113,3 +113,62 @@ def test_bulk_replace_invalidates(repo):
         ]
     )
     assert repo.get_card_total("modern", "Lightning Bolt") == 3
+
+
+def test_bulk_replace_returns_count_and_persists_all(repo):
+    # Multiple distinct formats: the return value is the number of entries
+    # successfully replaced, and each snapshot must be persisted.
+    replaced = repo.bulk_replace([_entry(), _entry("legacy")])
+    assert replaced == 2
+    assert repo.get_card_total("modern", "Lightning Bolt") == 40
+    assert repo.get_card_total("legacy", "Lightning Bolt") == 40
+
+
+def test_bulk_replace_skips_invalid_entries(repo):
+    # A bad entry (missing format / non-list cards) is rejected by
+    # replace_format_pool (returns False), so it is not counted and valid
+    # entries still persist.
+    replaced = repo.bulk_replace(
+        [
+            {},
+            _entry(),
+            {"format": "legacy", "cards": "notalist"},
+        ]
+    )
+    assert replaced == 1
+    assert repo.get_card_total("modern", "Lightning Bolt") == 40
+    assert repo.get_summary("legacy") is None
+
+
+def test_replace_format_pool_rejects_invalid_entries(repo):
+    # Missing format, blank/whitespace format, and non-list cards are all
+    # data-integrity guards on the write path and must return False without
+    # persisting anything.
+    assert repo.replace_format_pool({}) is False
+    assert repo.replace_format_pool({"format": "   "}) is False
+    assert repo.replace_format_pool({"format": "modern", "cards": "notalist"}) is False
+
+    assert repo.get_summary("modern") is None
+    assert repo.get_card_total("modern", "Lightning Bolt") is None
+
+
+def test_copies_played_coercion_falls_back_to_zero(repo):
+    # Non-numeric, None, and missing copies_played must coerce to 0 rather than
+    # corrupting the stored total or raising.
+    assert (
+        repo.replace_format_pool(
+            _entry(
+                cards=["Lightning Bolt", "Brainstorm", "Counterspell"],
+                copy_totals=[
+                    {"card_name": "Lightning Bolt", "copies_played": "oops"},
+                    {"card_name": "Brainstorm", "copies_played": None},
+                    {"card_name": "Counterspell"},
+                ],
+            )
+        )
+        is True
+    )
+
+    assert repo.get_card_total("modern", "Lightning Bolt") == 0
+    assert repo.get_card_total("modern", "Brainstorm") == 0
+    assert repo.get_card_total("modern", "Counterspell") == 0
