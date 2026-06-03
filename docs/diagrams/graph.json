@@ -561,6 +561,10 @@
       ],
       [
         "widgets.panels",
+        "utils.math_utils"
+      ],
+      [
+        "widgets.panels",
         "utils.perf"
       ],
       [
@@ -586,9 +590,9 @@
     ]
   },
   "metadata": {
-    "commit": "1cad2dc7a7b46242b6cfae1d97f5f291f86bf464",
-    "commit_date": "2026-05-29T13:12:23-03:00",
-    "generated_at": "2026-05-29T17:02:39Z",
+    "commit": "ef7aff0c9a987f5ef5115e87836132ae682a6dd9",
+    "commit_date": "2026-06-02T13:09:08-03:00",
+    "generated_at": "2026-06-03T08:02:28Z",
     "internal_packages": [
       "automation",
       "controllers",
