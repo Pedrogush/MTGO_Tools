@@ -286,6 +286,26 @@ def test_rubber_band_past_canvas_selects_every_card():
 
 
 @pytest.mark.usefixtures("wx_app")
+def test_begin_marquee_at_screen_starts_a_selection_from_outside():
+    """A marquee can be initiated from outside the widget (frame background)."""
+    frame = wx.Frame(None)
+    try:
+        view = _make_view(frame, lambda _card: None)
+        view.set_cards([{"name": "Grizzly Bears", "qty": 4}])
+        # Don't spawn the real overlay popup for a never-shown test window.
+        view._update_marquee_overlay = lambda: None  # type: ignore[assignment]
+
+        view.begin_marquee_at_screen(wx.Point(500, 500))
+
+        assert view._rubber_start is not None
+        assert view._rubber_end == view._rubber_start
+        assert view._marquee_start_screen is not None
+        view._rubber_timer.Stop()
+    finally:
+        frame.Destroy()
+
+
+@pytest.mark.usefixtures("wx_app")
 def test_autoscroll_steps_toward_edges_the_pointer_is_held_past():
     """Holding the marquee past a viewport edge scrolls one step that way."""
     frame = wx.Frame(None)

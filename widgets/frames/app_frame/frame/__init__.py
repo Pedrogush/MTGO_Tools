@@ -150,12 +150,29 @@ class AppFrame(
         self.root_panel.SetBackgroundColour(DARK_BG)
         root_sizer = wx.BoxSizer(wx.HORIZONTAL)
         self.root_panel.SetSizer(root_sizer)
+        # Pressing the bare application background (outside any control) starts a
+        # pile-view marquee, so the selection box can be drawn from anywhere.
+        self.root_panel.Bind(wx.EVT_LEFT_DOWN, self._on_background_marquee_down)
 
         left_panel = self._build_left_panel(self.root_panel)
         root_sizer.Add(left_panel, 0, wx.EXPAND | wx.ALL, PADDING_LG)
 
         right_container = self._build_right_container(self.root_panel)
         root_sizer.Add(right_container, 1, wx.EXPAND | wx.ALL, PADDING_LG)
+
+    def _on_background_marquee_down(self, event: wx.MouseEvent) -> None:
+        """Begin a pile-view marquee from a press on the application background.
+
+        Only fires on the bare panel area (controls consume their own clicks),
+        and only when the visible deck tab is showing the pile view — otherwise
+        the press is left to its default handling.
+        """
+        page = self.deck_tabs.GetCurrentPage()
+        pile_view = getattr(page, "pile_view", None)
+        if pile_view is not None and getattr(page, "view_mode", None) == "pile":
+            pile_view.begin_marquee_at_screen(wx.GetMousePosition())
+            return
+        event.Skip()
 
     def _setup_status_bar(self) -> None:
         self.status_bar = self.CreateStatusBar()
@@ -168,6 +185,7 @@ class AppFrame(
         """Compose the right side of the window: toolbar over (center | inspector)."""
         right_panel = wx.Panel(parent)
         right_panel.SetBackgroundColour(DARK_BG)
+        right_panel.Bind(wx.EVT_LEFT_DOWN, self._on_background_marquee_down)
         right_sizer = wx.BoxSizer(wx.VERTICAL)
         right_panel.SetSizer(right_sizer)
 

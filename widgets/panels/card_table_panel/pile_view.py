@@ -47,6 +47,7 @@ from utils.constants import (
 )
 from utils.image_effects import apply_rounded_corner_alpha
 from widgets.panels.card_table_panel import scroll_perf
+from widgets.panels.card_table_panel.marquee_overlay import MarqueeOverlay
 from widgets.panels.card_table_panel.scrolling import scroll_by_wheel
 from widgets.panels.card_table_panel.sorting import (
     PILE_SORT_MV,
@@ -133,9 +134,13 @@ class DeckPileView(wx.ScrolledWindow):
         # None), so we suppress it to keep the per-copy selection we just made.
         self._suppress_set_selected: bool = False
 
-        # Rectangle selection state.
+        # Rectangle selection state. Selection is computed in logical (scrolled)
+        # coordinates; the visible outline is drawn by an app-level overlay in
+        # screen coordinates so it spans the whole window without clipping.
         self._rubber_start: wx.Point | None = None
         self._rubber_end: wx.Point | None = None
+        self._marquee_start_screen: wx.Point | None = None
+        self._marquee_overlay: MarqueeOverlay | None = None
         # Polls the cursor while a rubber-band is active so the marquee survives
         # the pointer leaving the window (see _RUBBER_POLL_MS).
         self._rubber_timer = wx.Timer(self)
@@ -357,8 +362,8 @@ class DeckPileView(wx.ScrolledWindow):
                 self._draw_pile(dc, pile_idx, members, dirty)
             self._draw_overlays(dc, dirty)
 
-        if self._rubber_start and self._rubber_end:
-            self._draw_rubber_band(dc)
+        # The rubber-band outline is rendered by the app-level MarqueeOverlay
+        # (not here) so it spans the whole window instead of clipping to it.
 
         if self._drag_active and self._drag_pos:
             self._draw_drag_ghost(dc)
@@ -546,16 +551,6 @@ class DeckPileView(wx.ScrolledWindow):
             text = text[:-1]
         return (text + ellipsis) if text else ""
 
-    def _draw_rubber_band(self, dc: wx.DC) -> None:
-        if not (self._rubber_start and self._rubber_end):
-            return
-        rect = wx.Rect(self._rubber_start, self._rubber_end)
-        rect = rect.Normalize() if hasattr(rect, "Normalize") else rect
-        # Outline only — a filled box would obscure the cards it covers.
-        dc.SetBrush(wx.TRANSPARENT_BRUSH)
-        dc.SetPen(wx.Pen(wx.Colour(*DARK_ACCENT), 1, wx.PENSTYLE_SHORT_DASH))
-        dc.DrawRectangle(rect)
-
     def _draw_drag_ghost(self, dc: wx.DC) -> None:
         """Render the dragged cards as a real pile anchored near the cursor.
 
@@ -578,6 +573,46 @@ class DeckPileView(wx.ScrolledWindow):
             rect = wx.Rect(origin_x, y, _CARD_WIDTH, _CARD_HEIGHT)
             self._draw_card_art(dc, rect, entry)
 
+    # ----- rubber-band marquee -----
+    def begin_marquee_at_screen(self, screen_point: wx.Point) -> None:
+        """Start a marquee from anywhere in the app (e.g. the frame background).
+
+        The pointer may be well outside this widget; capturing the mouse here
+        routes the rest of the drag to us regardless, and the polling timer
+        tracks the cursor by its global position from there on.
+        """
+        client_point = self.ScreenToClient(screen_point)
+        self._begin_marquee(self._to_logical(client_point), client_point, additive=False)
+
+    def _begin_marquee(
+        self, logical_point: wx.Point, client_point: wx.Point, *, additive: bool
+    ) -> None:
+        if not additive:
+            self._selected_uids.clear()
+            self._notify_selection_changed()
+        self._rubber_start = logical_point
+        self._rubber_end = logical_point
+        self._marquee_start_screen = self.ClientToScreen(client_point)
+        if not self.HasCapture():
+            self.CaptureMouse()
+        # Poll the cursor so the box keeps growing past the window edge and
+        # auto-scrolls; motion events alone stop once the pointer leaves.
+        self._rubber_timer.Start(_RUBBER_POLL_MS)
+        self._update_marquee_overlay()
+        self.Refresh()
+
+    def _update_marquee_overlay(self) -> None:
+        if self._marquee_start_screen is None:
+            return
+        if self._marquee_overlay is None:
+            self._marquee_overlay = MarqueeOverlay(self.GetTopLevelParent())
+        self._marquee_overlay.update(self._marquee_start_screen, wx.GetMousePosition())
+
+    def _clear_marquee_overlay(self) -> None:
+        if self._marquee_overlay is not None:
+            self._marquee_overlay.cancel()
+        self._marquee_start_screen = None
+
     # ----- event handlers -----
     def _on_left_down(self, event: wx.MouseEvent) -> None:
         point = self._to_logical(event.GetPosition())
@@ -585,17 +620,7 @@ class DeckPileView(wx.ScrolledWindow):
 
         if hit is None:
             # Empty space: start a rubber-band selection (clear previous unless shift).
-            if not event.ShiftDown():
-                self._selected_uids.clear()
-                self._notify_selection_changed()
-            self._rubber_start = point
-            self._rubber_end = point
-            if not self.HasCapture():
-                self.CaptureMouse()
-            # Poll the cursor so the box keeps growing past the window edge and
-            # auto-scrolls; motion events alone stop once the pointer leaves.
-            self._rubber_timer.Start(_RUBBER_POLL_MS)
-            self.Refresh()
+            self._begin_marquee(point, event.GetPosition(), additive=event.ShiftDown())
             return
 
         _pile_idx, _member_idx, entry = hit
@@ -650,6 +675,7 @@ class DeckPileView(wx.ScrolledWindow):
         if self._rubber_start is not None:
             self._rubber_end = point
             self._select_within_rubber()
+            self._update_marquee_overlay()
             self.Refresh()
             return
 
@@ -684,6 +710,7 @@ class DeckPileView(wx.ScrolledWindow):
 
         if self._rubber_start is not None:
             self._rubber_timer.Stop()
+            self._clear_marquee_overlay()
             self._rubber_start = None
             self._rubber_end = None
             self.Refresh()
@@ -712,6 +739,7 @@ class DeckPileView(wx.ScrolledWindow):
 
     def _on_capture_lost(self, _event: wx.MouseCaptureLostEvent) -> None:
         self._rubber_timer.Stop()
+        self._clear_marquee_overlay()
         self._rubber_start = None
         self._rubber_end = None
         self._drag_active = False
@@ -735,6 +763,7 @@ class DeckPileView(wx.ScrolledWindow):
         # marquee selection is already committed, so just stand down.
         if not wx.GetMouseState().LeftIsDown():
             self._rubber_timer.Stop()
+            self._clear_marquee_overlay()
             if self.HasCapture():
                 self.ReleaseMouse()
             self._rubber_start = None
@@ -747,6 +776,7 @@ class DeckPileView(wx.ScrolledWindow):
         # the content the cursor now sits over.
         self._rubber_end = self._to_logical(client_pos)
         self._select_within_rubber()
+        self._update_marquee_overlay()
         self.Refresh()
 
     def _autoscroll_towards(self, client_pos: wx.Point) -> None:
