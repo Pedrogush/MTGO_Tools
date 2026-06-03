@@ -67,6 +67,14 @@ _PILE_TOP = _PILE_PAD  # top inset for the first card in a pile
 # canvas. Comfortably clears any real deck zone.
 _MAX_CANVAS_PX = 20000
 
+# While a rubber-band selection is active a timer polls the global cursor so the
+# box keeps tracking (and the view keeps auto-scrolling) even when the pointer
+# is dragged past the window edge — the OS only delivers motion events while the
+# cursor is over the window, which would otherwise freeze the box at the edge.
+_RUBBER_POLL_MS = 30
+# Per-tick auto-scroll step while the pointer is held beyond a viewport edge.
+_RUBBER_AUTOSCROLL_PX = 24
+
 
 class _ImageCache:
     """Tiny LRU-ish cache of scaled card-image bitmaps keyed by name."""
@@ -128,6 +136,9 @@ class DeckPileView(wx.ScrolledWindow):
         # Rectangle selection state.
         self._rubber_start: wx.Point | None = None
         self._rubber_end: wx.Point | None = None
+        # Polls the cursor while a rubber-band is active so the marquee survives
+        # the pointer leaving the window (see _RUBBER_POLL_MS).
+        self._rubber_timer = wx.Timer(self)
 
         # Drag state.
         self._drag_active = False
@@ -166,6 +177,7 @@ class DeckPileView(wx.ScrolledWindow):
         self.Bind(wx.EVT_MOUSEWHEEL, self._on_wheel)
         self.Bind(wx.EVT_LEAVE_WINDOW, self._on_leave)
         self.Bind(wx.EVT_MOUSE_CAPTURE_LOST, self._on_capture_lost)
+        self.Bind(wx.EVT_TIMER, self._on_rubber_timer, self._rubber_timer)
 
     # ----- public API consumed by CardTablePanel -----
     def set_cards(self, cards: list[dict[str, Any]]) -> None:
@@ -539,7 +551,8 @@ class DeckPileView(wx.ScrolledWindow):
             return
         rect = wx.Rect(self._rubber_start, self._rubber_end)
         rect = rect.Normalize() if hasattr(rect, "Normalize") else rect
-        dc.SetBrush(wx.Brush(wx.Colour(*DARK_ACCENT, 60)))
+        # Outline only — a filled box would obscure the cards it covers.
+        dc.SetBrush(wx.TRANSPARENT_BRUSH)
         dc.SetPen(wx.Pen(wx.Colour(*DARK_ACCENT), 1, wx.PENSTYLE_SHORT_DASH))
         dc.DrawRectangle(rect)
 
@@ -579,6 +592,9 @@ class DeckPileView(wx.ScrolledWindow):
             self._rubber_end = point
             if not self.HasCapture():
                 self.CaptureMouse()
+            # Poll the cursor so the box keeps growing past the window edge and
+            # auto-scrolls; motion events alone stop once the pointer leaves.
+            self._rubber_timer.Start(_RUBBER_POLL_MS)
             self.Refresh()
             return
 
@@ -667,6 +683,7 @@ class DeckPileView(wx.ScrolledWindow):
         point = self._to_logical(event.GetPosition())
 
         if self._rubber_start is not None:
+            self._rubber_timer.Stop()
             self._rubber_start = None
             self._rubber_end = None
             self.Refresh()
@@ -694,6 +711,7 @@ class DeckPileView(wx.ScrolledWindow):
             self.Refresh()
 
     def _on_capture_lost(self, _event: wx.MouseCaptureLostEvent) -> None:
+        self._rubber_timer.Stop()
         self._rubber_start = None
         self._rubber_end = None
         self._drag_active = False
@@ -701,6 +719,53 @@ class DeckPileView(wx.ScrolledWindow):
         self._drag_uids = []
         self._drag_pos = None
         self.Refresh()
+
+    def _on_rubber_timer(self, _event: wx.TimerEvent) -> None:
+        """Extend the active rubber-band toward the live cursor position.
+
+        Reading the global cursor (rather than relying on motion events, which
+        the OS stops sending once the pointer leaves the window) keeps the box
+        growing past the canvas edges and lets a held-at-the-edge drag scroll
+        the view so the whole canvas — not just the visible part — is reachable.
+        """
+        if self._rubber_start is None:
+            self._rubber_timer.Stop()
+            return
+        # If the button came up off-window we may have missed EVT_LEFT_UP; the
+        # marquee selection is already committed, so just stand down.
+        if not wx.GetMouseState().LeftIsDown():
+            self._rubber_timer.Stop()
+            if self.HasCapture():
+                self.ReleaseMouse()
+            self._rubber_start = None
+            self._rubber_end = None
+            self.Refresh()
+            return
+        client_pos = self.ScreenToClient(wx.GetMousePosition())
+        self._autoscroll_towards(client_pos)
+        # Recompute in logical space *after* any scroll so the endpoint tracks
+        # the content the cursor now sits over.
+        self._rubber_end = self._to_logical(client_pos)
+        self._select_within_rubber()
+        self.Refresh()
+
+    def _autoscroll_towards(self, client_pos: wx.Point) -> None:
+        """Scroll one step toward any viewport edge the pointer is held beyond."""
+        client_w, client_h = self.GetClientSize()
+        view_x, view_y = self.GetViewStart()
+        new_x, new_y = view_x, view_y
+        step = _RUBBER_AUTOSCROLL_PX
+        if client_pos.x < 0:
+            new_x = max(0, view_x - step)
+        elif client_pos.x > client_w:
+            new_x = view_x + step
+        if client_pos.y < 0:
+            new_y = max(0, view_y - step)
+        elif client_pos.y > client_h:
+            new_y = view_y + step
+        if (new_x, new_y) != (view_x, view_y):
+            # Scroll clamps to the virtual bounds, so overshoot is harmless.
+            self.Scroll(new_x, new_y)
 
     # ----- selection helpers -----
     def _select_within_rubber(self) -> None:

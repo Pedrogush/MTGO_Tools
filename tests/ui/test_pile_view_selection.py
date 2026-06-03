@@ -259,3 +259,61 @@ def test_shift_wheel_scrolls_horizontal():
         assert calls == [(200 - _NOTCH_PX, 50)]
     finally:
         frame.Destroy()
+
+
+@pytest.mark.usefixtures("wx_app")
+def test_rubber_band_past_canvas_selects_every_card():
+    """A box dragged beyond the canvas bounds still selects everything inside.
+
+    The marquee endpoint follows the cursor unclamped (so it can grow past the
+    canvas), so an end point well outside the virtual size must still resolve to
+    "all cards under the box", not drop the edge copies.
+    """
+    frame = wx.Frame(None)
+    try:
+        view = _make_view(frame, lambda _card: None)
+        view.set_cards([{"name": "Grizzly Bears", "qty": 4}])
+        ((_label, members),) = view._piles
+        all_uids = {entry["_uid"] for entry in members}
+
+        view._rubber_start = wx.Point(0, 0)
+        view._rubber_end = wx.Point(10_000, 10_000)  # far past the canvas
+        view._select_within_rubber()
+
+        assert view._selected_uids == all_uids
+    finally:
+        frame.Destroy()
+
+
+@pytest.mark.usefixtures("wx_app")
+def test_autoscroll_steps_toward_edges_the_pointer_is_held_past():
+    """Holding the marquee past a viewport edge scrolls one step that way."""
+    frame = wx.Frame(None)
+    try:
+        view = _make_view(frame, lambda _card: None)
+        view.set_cards([{"name": "Grizzly Bears", "qty": 4}])
+        calls: list[tuple[int, int]] = []
+        view.GetClientSize = lambda: (200, 200)  # type: ignore[assignment]
+        view.GetViewStart = lambda: (50, 50)  # type: ignore[assignment]
+        view.Scroll = lambda x, y: calls.append((x, y))  # type: ignore[assignment]
+
+        # Past the right/bottom edges: step forward on that axis.
+        view._autoscroll_towards(wx.Point(250, 100))
+        assert calls == [(50 + 24, 50)]
+
+        calls.clear()
+        view._autoscroll_towards(wx.Point(100, 250))
+        assert calls == [(50, 50 + 24)]
+
+        # Before the origin: step back, clamped at 0.
+        calls.clear()
+        view.GetViewStart = lambda: (10, 10)  # type: ignore[assignment]
+        view._autoscroll_towards(wx.Point(-5, -5))
+        assert calls == [(0, 0)]
+
+        # Pointer inside the viewport: no scroll.
+        calls.clear()
+        view._autoscroll_towards(wx.Point(100, 100))
+        assert calls == []
+    finally:
+        frame.Destroy()
