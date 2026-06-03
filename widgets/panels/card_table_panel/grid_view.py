@@ -32,12 +32,14 @@ from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from math import ceil
 from pathlib import Path
+from time import perf_counter
 from typing import Any
 
 import wx
 from PIL import Image as PilImage
 
 from utils.constants import (
+    CARD_VIEW_SCROLL_RATE,
     DARK_ACCENT,
     DARK_ALT,
     DARK_PANEL,
@@ -58,11 +60,13 @@ from utils.constants import (
 )
 from utils.image_effects import apply_rounded_corner_alpha
 from widgets.mana_icon_factory import ManaIconFactory
+from widgets.panels.card_table_panel import scroll_perf
 from widgets.panels.card_table_panel.card_render import (
     build_image_name_candidates,
     resolve_card_color,
 )
 from widgets.panels.card_table_panel.pile_view import _ImageCache
+from widgets.panels.card_table_panel.scrolling import scroll_by_wheel
 
 # Match the grid sizer's old geometry: DECK_CARD_WIDTH×HEIGHT cells with a
 # GRID_GAP (== CardTablePanel.GRID_GAP) right/bottom margin between them.
@@ -78,6 +82,11 @@ _ACTION_BUTTON_RADIUS = 4
 
 # Fallback column count before the window has a real client width to wrap to.
 _DEFAULT_COLUMNS = 4
+
+# Above this virtual width/height (px) we skip the cached full-content bitmap
+# and fall back to direct culled drawing, so a pathologically large deck can't
+# allocate a multi-hundred-MB canvas. Comfortably clears any real deck zone.
+_MAX_CANVAS_PX = 20000
 
 # Shared, bounded pool for decoding deck-cell card images off the UI thread.
 # One shared pool makes dispatch a near-free submit() and caps the number of
@@ -127,19 +136,32 @@ class DeckGridView(wx.ScrolledWindow):
         self._load_gen: dict[str, int] = {}
         # Placeholder bitmaps keyed by name; built lazily, reused across loads.
         self._template_cache: dict[str, wx.Bitmap] = {}
+        # Full-content bitmap of every card (art + quantity badge). Scrolling
+        # blits a sub-rect of this instead of re-drawing each card's alpha
+        # bitmap, so a wheel notch costs one viewport-sized copy. Rebuilt on
+        # layout/content change; patched per-card when an image arrives.
+        self._canvas: wx.Bitmap | None = None
 
         self.SetBackgroundColour(DARK_PANEL)
         # AutoBufferedPaintDC requires BG_STYLE_PAINT so wx skips its own
         # erase-background draw and _on_paint owns the whole client area.
         self.SetBackgroundStyle(wx.BG_STYLE_PAINT)
-        self.SetScrollRate(20, 20)
-        self.SetDoubleBuffered(True)
+        # 1px scroll units (shared with the pile view) give the scrollbar thumb
+        # single-pixel granularity; the wheel handler then scrolls a larger
+        # per-notch step so the wheel still moves a useful distance.
+        self.SetScrollRate(CARD_VIEW_SCROLL_RATE, CARD_VIEW_SCROLL_RATE)
+        # No SetDoubleBuffered(True): AutoBufferedPaintDC in _on_paint already
+        # gives flicker-free painting, and a window-level back-buffer would make
+        # MSW repaint the whole client on every scroll instead of blitting the
+        # old pixels and exposing only a thin strip (which is what keeps the
+        # culled paint cheap).
 
         self.Bind(wx.EVT_PAINT, self._on_paint)
         self.Bind(wx.EVT_SIZE, self._on_size)
         self.Bind(wx.EVT_LEFT_DOWN, self._on_left_down)
         self.Bind(wx.EVT_LEFT_UP, self._on_left_up)
         self.Bind(wx.EVT_MOTION, self._on_motion)
+        self.Bind(wx.EVT_MOUSEWHEEL, self._on_wheel)
         self.Bind(wx.EVT_LEAVE_WINDOW, self._on_leave)
 
     # ----- public API consumed by CardTablePanel -----
@@ -214,6 +236,9 @@ class DeckGridView(wx.ScrolledWindow):
         n = len(self._cards)
         rows = ceil(n / cols) if n else 0
         self.SetVirtualSize((cols * _CELL_WIDTH, rows * _CELL_HEIGHT))
+        # Layout (column count / card count) changed — the cached image no
+        # longer matches; rebuild it on the next paint.
+        self._invalidate_canvas()
 
     def _card_rect(self, index: int) -> wx.Rect:
         cols = max(1, self._cols)
@@ -319,7 +344,8 @@ class DeckGridView(wx.ScrolledWindow):
             wx_img.SetData(pil_img.tobytes())
             wx_img = apply_rounded_corner_alpha(wx_img, DECK_CARD_CORNER_RADIUS)
             self._image_cache.put(name, wx_img.ConvertToBitmap())
-        self.Refresh()
+        # A single card's art changed — patch just its cell in the cached image.
+        self._patch_card_on_canvas(name)
 
     # ----- placeholder template -----
     def _template_for(self, name: str) -> wx.Bitmap:
@@ -406,14 +432,138 @@ class DeckGridView(wx.ScrolledWindow):
 
     # ----- paint -----
     def _on_paint(self, _event: wx.PaintEvent) -> None:
+        t0 = perf_counter()
         dc = wx.AutoBufferedPaintDC(self)
         self.PrepareDC(dc)
         dc.SetBackground(wx.Brush(wx.Colour(*DARK_PANEL)))
         dc.Clear()
-        for idx, card in enumerate(self._cards):
-            self._draw_card(dc, self._card_rect(idx), card)
+        canvas = self._ensure_canvas()
+        if canvas is not None:
+            # Cohesive image: copy just the visible window out of the prebuilt
+            # full-content bitmap. Cost is one viewport blit, independent of how
+            # many cards the deck has or how far we've scrolled.
+            view_x, view_y = self.GetViewStart()
+            client_w, client_h = self.GetClientSize()
+            # Clamp the copy to the canvas so we never read past its edge when
+            # the content is shorter than the viewport; dc.Clear already filled
+            # the remainder with the panel background.
+            blit_w = min(client_w, canvas.GetWidth() - view_x)
+            blit_h = min(client_h, canvas.GetHeight() - view_y)
+            if blit_w > 0 and blit_h > 0:
+                src = wx.MemoryDC(canvas)
+                dc.Blit(view_x, view_y, blit_w, blit_h, src, view_x, view_y)
+                src.SelectObject(wx.NullBitmap)
+            self._draw_overlays(dc)
+        else:
+            # Oversized deck: draw directly, culled to the repaint region.
+            for idx in self._visible_card_indices():
+                self._draw_card(dc, self._card_rect(idx), self._cards[idx])
+        # Stamp the origin this paint just rendered (and how long it took) so the
+        # wheel-latency harness can tell when the view caught up to the scroll
+        # input (no-op unless the perf recorder is enabled).
+        scroll_perf.record_paint(self, *self.GetViewStart(), dur_ms=(perf_counter() - t0) * 1000.0)
 
-    def _draw_card(self, dc: wx.DC, rect: wx.Rect, card: dict[str, Any]) -> None:
+    def _visible_card_indices(self) -> range:
+        """Indices of the cards overlapping the current repaint region.
+
+        Used only by the oversized-deck fallback. Falls back to every card when
+        the update region is empty (e.g. a full ``Refresh``).
+        """
+        n = len(self._cards)
+        if n == 0:
+            return range(0)
+        cols = max(1, self._cols)
+        box = self.GetUpdateRegion().GetBox()
+        if box.IsEmpty():
+            top, bottom = 0, self.GetClientSize().GetHeight()
+        else:
+            top, bottom = box.GetTop(), box.GetBottom()
+        # Region is in device coords; shift by the scroll origin to get logical y.
+        view_y = self.GetViewStart()[1]
+        first_row = max(0, (top + view_y) // _CELL_HEIGHT)
+        last_row = (bottom + view_y) // _CELL_HEIGHT
+        return range(first_row * cols, min(n, (last_row + 1) * cols))
+
+    # ----- cohesive cached canvas -----
+    def _invalidate_canvas(self) -> None:
+        """Drop the cached full-content bitmap so the next paint rebuilds it."""
+        self._canvas = None
+
+    def _ensure_canvas(self) -> wx.Bitmap | None:
+        """Return the full-content bitmap, building it if stale.
+
+        Returns ``None`` when there is nothing to draw or the virtual size is
+        too large to cache, signalling the caller to draw directly.
+        """
+        vsize = self.GetVirtualSize()
+        vw, vh = vsize.GetWidth(), vsize.GetHeight()
+        if not self._cards or vw <= 0 or vh <= 0:
+            return None
+        if vw > _MAX_CANVAS_PX or vh > _MAX_CANVAS_PX:
+            return None
+        if self._canvas is not None and self._canvas.GetSize() == vsize:
+            return self._canvas
+        canvas = wx.Bitmap(vw, vh)
+        mem = wx.MemoryDC(canvas)
+        mem.SetBackground(wx.Brush(wx.Colour(*DARK_PANEL)))
+        mem.Clear()
+        for idx, card in enumerate(self._cards):
+            self._draw_card_static(mem, self._card_rect(idx), card)
+        mem.SelectObject(wx.NullBitmap)
+        self._canvas = canvas
+        return canvas
+
+    def _patch_card_on_canvas(self, name: str) -> None:
+        """Redraw just ``name``'s cell(s) into the canvas and invalidate them.
+
+        Called when a card's art finishes loading so a single image swap repaints
+        only that card rather than rebuilding or re-blitting the whole view.
+        """
+        if self._canvas is None:
+            self.Refresh()
+            return
+        mem = wx.MemoryDC(self._canvas)
+        mem.SetBackground(wx.Brush(wx.Colour(*DARK_PANEL)))
+        view_x, view_y = self.GetViewStart()
+        for idx, card in enumerate(self._cards):
+            if card["name"].lower() != name.lower():
+                continue
+            rect = self._card_rect(idx)
+            mem.SetBrush(wx.Brush(wx.Colour(*DARK_PANEL)))
+            mem.SetPen(wx.TRANSPARENT_PEN)
+            mem.DrawRectangle(rect)
+            self._draw_card_static(mem, rect, card)
+            self.RefreshRect(wx.Rect(rect.x - view_x, rect.y - view_y, rect.width, rect.height))
+        mem.SelectObject(wx.NullBitmap)
+
+    def _draw_overlays(self, dc: wx.DC) -> None:
+        """Draw selection border, accent badge and +/−/× over the blitted cards."""
+        sel = self._selected_name
+        hov = self._hover_name
+        if not sel and not hov:
+            return
+        for idx, card in enumerate(self._cards):
+            name = card["name"]
+            is_selected = sel is not None and name.lower() == sel.lower()
+            is_hover = hov is not None and name.lower() == hov.lower()
+            if not (is_selected or is_hover):
+                continue
+            rect = self._card_rect(idx)
+            if is_selected:
+                self._draw_qty(dc, rect, card, True)
+                dc.SetPen(wx.Pen(wx.Colour(*DARK_ACCENT), DECK_CARD_ACTIVE_BORDER_WIDTH))
+                dc.SetBrush(wx.TRANSPARENT_BRUSH)
+                dc.DrawRoundedRectangle(rect, DECK_CARD_CORNER_RADIUS)
+            if self._shows_actions(name):
+                self._draw_actions(dc, rect, name)
+
+    def _draw_card_static(self, dc: wx.DC, rect: wx.Rect, card: dict[str, Any]) -> None:
+        """Draw a card's scroll-invariant content (art + base quantity badge).
+
+        This is what gets baked into the cached canvas. Selection accent, active
+        border and the +/−/× controls are deliberately left out — they change
+        without the card itself changing, so they are painted live as overlays.
+        """
         name = card["name"]
         bitmap = self._image_cache.get(name)
         if bitmap is not None:
@@ -422,13 +572,20 @@ class DeckGridView(wx.ScrolledWindow):
             dc.DrawBitmap(bitmap, x, y, True)
         else:
             dc.DrawBitmap(self._template_for(name), rect.x, rect.y, True)
+        self._draw_qty(dc, rect, card, False)
 
+    def _draw_card(self, dc: wx.DC, rect: wx.Rect, card: dict[str, Any]) -> None:
+        """Draw a card in full (static content + live overlays).
+
+        Used by the oversized-deck fallback path that bypasses the canvas.
+        """
+        name = card["name"]
         is_selected = (
             self._selected_name is not None and name.lower() == self._selected_name.lower()
         )
-        self._draw_qty(dc, rect, card, is_selected)
-
+        self._draw_card_static(dc, rect, card)
         if is_selected:
+            self._draw_qty(dc, rect, card, True)
             dc.SetPen(wx.Pen(wx.Colour(*DARK_ACCENT), DECK_CARD_ACTIVE_BORDER_WIDTH))
             dc.SetBrush(wx.TRANSPARENT_BRUSH)
             dc.DrawRoundedRectangle(rect, DECK_CARD_CORNER_RADIUS)
@@ -536,6 +693,10 @@ class DeckGridView(wx.ScrolledWindow):
         if hovered and self._on_hover and idx is not None:
             self._on_hover(self._cards[idx])
         self.Refresh()
+
+    def _on_wheel(self, event: wx.MouseEvent) -> None:
+        # Shared with the pile view so both scroll identically (see scrolling.py).
+        scroll_by_wheel(self, event)
 
     def _on_leave(self, _event: wx.MouseEvent) -> None:
         if self._hover_name is not None:

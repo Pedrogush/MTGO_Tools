@@ -45,8 +45,23 @@ class BackgroundWorker:
             if on_success:
                 self._call_after(on_success, result)
 
-        thread = threading.Thread(target=wrapper, daemon=True)
+        def runner():
+            try:
+                wrapper()
+            finally:
+                # Drop this thread from the tracking list as soon as it finishes
+                # so the list never accumulates dead threads over a long session.
+                with self._lock:
+                    me = threading.current_thread()
+                    if me in self._threads:
+                        self._threads.remove(me)
+
+        thread = threading.Thread(target=runner, daemon=True)
         with self._lock:
+            # Prune any threads that have already finished, then track this one.
+            # Without this the list grows unbounded for callers that submit on a
+            # timer (e.g. the opponent-tracker poll), leaking Thread objects.
+            self._threads = [t for t in self._threads if t.is_alive()]
             self._threads.append(thread)
         thread.start()
         logger.debug(f"Started background thread: {func.__name__}")

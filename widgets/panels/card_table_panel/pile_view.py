@@ -27,12 +27,14 @@ from __future__ import annotations
 from collections.abc import Callable
 from pathlib import Path
 from threading import Thread
+from time import perf_counter
 from typing import Any
 
 import wx
 from PIL import Image as PilImage
 
 from utils.constants import (
+    CARD_VIEW_SCROLL_RATE,
     DARK_ACCENT,
     DARK_ALT,
     DARK_BG,
@@ -44,6 +46,9 @@ from utils.constants import (
     SUBDUED_TEXT,
 )
 from utils.image_effects import apply_rounded_corner_alpha
+from widgets.panels.card_table_panel import scroll_perf
+from widgets.panels.card_table_panel.marquee_overlay import MarqueeOverlay
+from widgets.panels.card_table_panel.scrolling import scroll_by_wheel
 from widgets.panels.card_table_panel.sorting import (
     PILE_SORT_MV,
     group_into_piles,
@@ -57,6 +62,19 @@ _NAME_STRIP_HEIGHT = 32  # visible portion of stacked-above cards
 _PILE_GAP = 8  # gap between piles (matches grid view's GRID_GAP)
 _PILE_PAD = 6  # padding inside a pile column
 _PILE_TOP = _PILE_PAD  # top inset for the first card in a pile
+
+# Above this virtual width/height (px) we skip the cached full-content bitmap
+# and draw directly (culled), so a pathological pile can't allocate a huge
+# canvas. Comfortably clears any real deck zone.
+_MAX_CANVAS_PX = 20000
+
+# While a rubber-band selection is active a timer polls the global cursor so the
+# box keeps tracking (and the view keeps auto-scrolling) even when the pointer
+# is dragged past the window edge — the OS only delivers motion events while the
+# cursor is over the window, which would otherwise freeze the box at the edge.
+_RUBBER_POLL_MS = 30
+# Per-tick auto-scroll step while the pointer is held beyond a viewport edge.
+_RUBBER_AUTOSCROLL_PX = 24
 
 
 class _ImageCache:
@@ -110,10 +128,22 @@ class DeckPileView(wx.ScrolledWindow):
         self._selected_uids: set[int] = set()
         self._hover_uid: int | None = None
         self._manual_overrides: bool = False
+        # While the pile view is reporting its own selection to the panel, the
+        # panel echoes it back via set_selected(name). That round-trip is lossy
+        # (a name can't name a specific copy, and multi-selection collapses to
+        # None), so we suppress it to keep the per-copy selection we just made.
+        self._suppress_set_selected: bool = False
 
-        # Rectangle selection state.
+        # Rectangle selection state. Selection is computed in logical (scrolled)
+        # coordinates; the visible outline is drawn by an app-level overlay in
+        # screen coordinates so it spans the whole window without clipping.
         self._rubber_start: wx.Point | None = None
         self._rubber_end: wx.Point | None = None
+        self._marquee_start_screen: wx.Point | None = None
+        self._marquee_overlay: MarqueeOverlay | None = None
+        # Polls the cursor while a rubber-band is active so the marquee survives
+        # the pointer leaving the window (see _RUBBER_POLL_MS).
+        self._rubber_timer = wx.Timer(self)
 
         # Drag state.
         self._drag_active = False
@@ -123,22 +153,36 @@ class DeckPileView(wx.ScrolledWindow):
 
         self._image_cache = _ImageCache()
         self._image_gen = 0
+        # Full-content bitmap of every pile (card art only). Scrolling blits a
+        # sub-rect of this instead of re-drawing every copy's alpha bitmap, so a
+        # wheel notch costs one viewport copy. Rebuilt on content change; the
+        # affected pile is patched in place when a card image arrives.
+        self._canvas: wx.Bitmap | None = None
 
         self.SetBackgroundColour(DARK_PANEL)
         # AutoBufferedPaintDC requires the window to use BG_STYLE_PAINT so
         # wx skips its own erase-background draw and the custom _on_paint owns
         # the whole client area.
         self.SetBackgroundStyle(wx.BG_STYLE_PAINT)
-        self.SetScrollRate(20, 20)
-        self.SetDoubleBuffered(True)
+        # 1px scroll units give the scrollbar thumb single-pixel granularity so
+        # cards no longer snap in coarse jumps. The wheel scrolls a larger step
+        # (see _on_wheel) since a notch would otherwise move only a few px.
+        self.SetScrollRate(CARD_VIEW_SCROLL_RATE, CARD_VIEW_SCROLL_RATE)
+        # No SetDoubleBuffered(True): AutoBufferedPaintDC in _on_paint already
+        # gives flicker-free painting, and a window-level back-buffer would make
+        # MSW repaint the whole client on every scroll instead of blitting the
+        # old pixels and exposing only a thin strip (which is what keeps the
+        # culled paint cheap).
 
         self.Bind(wx.EVT_PAINT, self._on_paint)
         self.Bind(wx.EVT_LEFT_DOWN, self._on_left_down)
         self.Bind(wx.EVT_LEFT_UP, self._on_left_up)
         self.Bind(wx.EVT_RIGHT_DOWN, self._on_right_down)
         self.Bind(wx.EVT_MOTION, self._on_motion)
+        self.Bind(wx.EVT_MOUSEWHEEL, self._on_wheel)
         self.Bind(wx.EVT_LEAVE_WINDOW, self._on_leave)
         self.Bind(wx.EVT_MOUSE_CAPTURE_LOST, self._on_capture_lost)
+        self.Bind(wx.EVT_TIMER, self._on_rubber_timer, self._rubber_timer)
 
     # ----- public API consumed by CardTablePanel -----
     def set_cards(self, cards: list[dict[str, Any]]) -> None:
@@ -156,7 +200,15 @@ class DeckPileView(wx.ScrolledWindow):
 
         We pick the first copy of ``name`` we find so the pile view shows the
         same card as the grid/table views.
+
+        Ignored while the pile view is broadcasting its own selection: the
+        panel echoes that selection straight back here, and re-resolving it
+        from a bare name would bounce a clicked copy to the first copy (and
+        wipe any multi-copy rubber-band selection). The copies we just chose
+        are authoritative, so keep them.
         """
+        if self._suppress_set_selected:
+            return
         self._selected_uids.clear()
         if name:
             for _label, members in self._piles:
@@ -194,6 +246,8 @@ class DeckPileView(wx.ScrolledWindow):
         return _CARD_HEIGHT + (member_count - 1) * _NAME_STRIP_HEIGHT
 
     def _update_virtual_size(self) -> None:
+        # Pile contents/positions changed — the cached image is stale.
+        self._invalidate_canvas()
         if not self._piles:
             self.SetVirtualSize((100, 100))
             return
@@ -273,33 +327,178 @@ class DeckPileView(wx.ScrolledWindow):
             wx_img.SetData(pil_img.tobytes())
             wx_img = apply_rounded_corner_alpha(wx_img, DECK_CARD_CORNER_RADIUS)
             self._image_cache.put(name, wx_img.ConvertToBitmap())
-        self.Refresh()
+        # A single card's art changed — patch just the piles holding it.
+        self._patch_card_on_canvas(name)
 
     # ----- paint -----
     def _on_paint(self, _event: wx.PaintEvent) -> None:
+        t0 = perf_counter()
         dc = wx.AutoBufferedPaintDC(self)
         self.PrepareDC(dc)
         dc.SetBackground(wx.Brush(wx.Colour(*DARK_PANEL)))
         dc.Clear()
 
-        for pile_idx, (_label, members) in enumerate(self._piles):
-            self._draw_pile(dc, pile_idx, members)
+        canvas = self._ensure_canvas()
+        if canvas is not None:
+            # Cohesive image: copy just the visible window out of the prebuilt
+            # full-content bitmap. One viewport blit per scroll, regardless of
+            # how many copies the deck holds.
+            view_x, view_y = self.GetViewStart()
+            client_w, client_h = self.GetClientSize()
+            # Clamp the copy to the canvas so we never read past its edge when
+            # the content is shorter than the viewport; dc.Clear already filled
+            # the remainder with the panel background.
+            blit_w = min(client_w, canvas.GetWidth() - view_x)
+            blit_h = min(client_h, canvas.GetHeight() - view_y)
+            if blit_w > 0 and blit_h > 0:
+                src = wx.MemoryDC(canvas)
+                dc.Blit(view_x, view_y, blit_w, blit_h, src, view_x, view_y)
+                src.SelectObject(wx.NullBitmap)
+            self._draw_overlays(dc)
+        else:
+            # Oversized pile: draw directly, culled to the repaint region.
+            dirty = self._dirty_logical_rect()
+            for pile_idx, (_label, members) in enumerate(self._piles):
+                self._draw_pile(dc, pile_idx, members, dirty)
+            self._draw_overlays(dc, dirty)
 
-        if self._rubber_start and self._rubber_end:
-            self._draw_rubber_band(dc)
+        # The rubber-band outline is rendered by the app-level MarqueeOverlay
+        # (not here) so it spans the whole window instead of clipping to it.
 
         if self._drag_active and self._drag_pos:
             self._draw_drag_ghost(dc)
+
+        # Stamp the origin this paint just rendered (and how long it took) so the
+        # wheel-latency harness can tell when the view caught up to the scroll
+        # input (no-op unless the perf recorder is enabled).
+        scroll_perf.record_paint(self, *self.GetViewStart(), dur_ms=(perf_counter() - t0) * 1000.0)
+
+    def _dirty_logical_rect(self) -> wx.Rect | None:
+        """The region wx asked us to repaint, in logical (scrolled) coords.
+
+        ``None`` means repaint everything (empty update region, e.g. a full
+        ``Refresh``), so nothing is dropped from a non-scroll repaint.
+        """
+        box = self.GetUpdateRegion().GetBox()
+        if box.IsEmpty():
+            return None
+        top_left = self.CalcUnscrolledPosition(box.GetTopLeft())
+        return wx.Rect(top_left.x, top_left.y, box.GetWidth(), box.GetHeight())
+
+    # ----- cohesive cached canvas -----
+    def _invalidate_canvas(self) -> None:
+        """Drop the cached full-content bitmap so the next paint rebuilds it."""
+        self._canvas = None
+
+    def _ensure_canvas(self) -> wx.Bitmap | None:
+        """Return the full-content bitmap, building it if stale.
+
+        Returns ``None`` when there is nothing to draw or the virtual size is
+        too large to cache, signalling the caller to draw directly.
+        """
+        vsize = self.GetVirtualSize()
+        vw, vh = vsize.GetWidth(), vsize.GetHeight()
+        if not self._piles or vw <= 0 or vh <= 0:
+            return None
+        if vw > _MAX_CANVAS_PX or vh > _MAX_CANVAS_PX:
+            return None
+        if self._canvas is not None and self._canvas.GetSize() == vsize:
+            return self._canvas
+        canvas = wx.Bitmap(vw, vh)
+        mem = wx.MemoryDC(canvas)
+        mem.SetBackground(wx.Brush(wx.Colour(*DARK_PANEL)))
+        mem.Clear()
+        for pile_idx, (_label, members) in enumerate(self._piles):
+            self._draw_pile(mem, pile_idx, members, None)
+        mem.SelectObject(wx.NullBitmap)
+        self._canvas = canvas
+        return canvas
+
+    def _patch_card_on_canvas(self, name: str) -> None:
+        """Redraw the piles holding ``name`` into the canvas and invalidate them.
+
+        Cards in a pile overlap, with later members drawn on top, so from the
+        first matching copy downward must be repainted to composite correctly.
+        """
+        if self._canvas is None:
+            self.Refresh()
+            return
+        lname = name.lower()
+        mem = wx.MemoryDC(self._canvas)
+        mem.SetPen(wx.TRANSPARENT_PEN)
+        view_x, view_y = self.GetViewStart()
+        for pile_idx, (_label, members) in enumerate(self._piles):
+            total = len(members)
+            first = next((i for i, e in enumerate(members) if e["name"].lower() == lname), None)
+            if first is None:
+                continue
+            top_rect = self._card_rect(pile_idx, first, total)
+            bottom_rect = self._card_rect(pile_idx, total - 1, total)
+            region = wx.Rect(
+                top_rect.x,
+                top_rect.y,
+                _CARD_WIDTH,
+                bottom_rect.GetBottom() - top_rect.y + 1,
+            )
+            mem.SetBrush(wx.Brush(wx.Colour(*DARK_PANEL)))
+            mem.DrawRectangle(region)
+            for member_idx in range(first, total):
+                self._draw_card(
+                    mem, self._card_rect(pile_idx, member_idx, total), members[member_idx]
+                )
+            self.RefreshRect(
+                wx.Rect(region.x - view_x, region.y - view_y, region.width, region.height)
+            )
+        mem.SelectObject(wx.NullBitmap)
+
+    def _draw_overlays(self, dc: wx.DC, dirty: wx.Rect | None = None) -> None:
+        """Draw selection/hover borders over the blitted cards (live, not cached)."""
+        if not self._selected_uids and self._hover_uid is None:
+            return
+        for pile_idx, (_label, members) in enumerate(self._piles):
+            total = len(members)
+            for member_idx, entry in enumerate(members):
+                uid = entry["_uid"]
+                is_selected = uid in self._selected_uids
+                is_hover = uid == self._hover_uid
+                if not (is_selected or is_hover):
+                    continue
+                rect = self._card_rect(pile_idx, member_idx, total)
+                if dirty is not None and not dirty.Intersects(rect):
+                    continue
+                dc.SetBrush(wx.TRANSPARENT_BRUSH)
+                if is_selected:
+                    dc.SetPen(wx.Pen(wx.Colour(*DARK_ACCENT), 3))
+                else:
+                    dc.SetPen(wx.Pen(wx.Colour(*SUBDUED_TEXT), 1, wx.PENSTYLE_DOT))
+                # Only the bottom card of a pile is fully visible; the rest show
+                # just their top name strip. Clip the outline to the visible
+                # part so a stacked card isn't ringed across its hidden body.
+                is_bottom = member_idx == total - 1
+                if is_bottom:
+                    dc.DrawRoundedRectangle(rect, DECK_CARD_CORNER_RADIUS)
+                else:
+                    # Pen extends ~1.5px outside the path; widen the clip on the
+                    # top/sides to keep it, but cut the bottom exactly where the
+                    # next card begins so the side lines stop cleanly there.
+                    dc.SetClippingRegion(
+                        rect.x - 2, rect.y - 2, rect.width + 4, _NAME_STRIP_HEIGHT + 2
+                    )
+                    dc.DrawRoundedRectangle(rect, DECK_CARD_CORNER_RADIUS)
+                    dc.DestroyClippingRegion()
 
     def _draw_pile(
         self,
         dc: wx.DC,
         pile_idx: int,
         members: list[dict[str, Any]],
+        dirty: wx.Rect | None = None,
     ) -> None:
         total = len(members)
         for member_idx, entry in enumerate(members):
             rect = self._card_rect(pile_idx, member_idx, total)
+            if dirty is not None and not dirty.Intersects(rect):
+                continue
             self._draw_card(dc, rect, entry)
 
     def _draw_card(
@@ -308,18 +507,10 @@ class DeckPileView(wx.ScrolledWindow):
         rect: wx.Rect,
         entry: dict[str, Any],
     ) -> None:
+        # Only the scroll-invariant art is drawn here (and baked into the cached
+        # canvas). Selection/hover borders are painted live by _draw_overlays so
+        # selecting a card never invalidates the cached image.
         self._draw_card_art(dc, rect, entry)
-
-        is_selected = entry["_uid"] in self._selected_uids
-        is_hover = entry["_uid"] == self._hover_uid
-        if is_selected:
-            dc.SetPen(wx.Pen(wx.Colour(*DARK_ACCENT), 3))
-            dc.SetBrush(wx.TRANSPARENT_BRUSH)
-            dc.DrawRoundedRectangle(rect, DECK_CARD_CORNER_RADIUS)
-        elif is_hover:
-            dc.SetPen(wx.Pen(wx.Colour(*SUBDUED_TEXT), 1, wx.PENSTYLE_DOT))
-            dc.SetBrush(wx.TRANSPARENT_BRUSH)
-            dc.DrawRoundedRectangle(rect, DECK_CARD_CORNER_RADIUS)
 
     def _draw_card_art(
         self,
@@ -360,15 +551,6 @@ class DeckPileView(wx.ScrolledWindow):
             text = text[:-1]
         return (text + ellipsis) if text else ""
 
-    def _draw_rubber_band(self, dc: wx.DC) -> None:
-        if not (self._rubber_start and self._rubber_end):
-            return
-        rect = wx.Rect(self._rubber_start, self._rubber_end)
-        rect = rect.Normalize() if hasattr(rect, "Normalize") else rect
-        dc.SetBrush(wx.Brush(wx.Colour(*DARK_ACCENT, 60)))
-        dc.SetPen(wx.Pen(wx.Colour(*DARK_ACCENT), 1, wx.PENSTYLE_SHORT_DASH))
-        dc.DrawRectangle(rect)
-
     def _draw_drag_ghost(self, dc: wx.DC) -> None:
         """Render the dragged cards as a real pile anchored near the cursor.
 
@@ -391,6 +573,46 @@ class DeckPileView(wx.ScrolledWindow):
             rect = wx.Rect(origin_x, y, _CARD_WIDTH, _CARD_HEIGHT)
             self._draw_card_art(dc, rect, entry)
 
+    # ----- rubber-band marquee -----
+    def begin_marquee_at_screen(self, screen_point: wx.Point) -> None:
+        """Start a marquee from anywhere in the app (e.g. the frame background).
+
+        The pointer may be well outside this widget; capturing the mouse here
+        routes the rest of the drag to us regardless, and the polling timer
+        tracks the cursor by its global position from there on.
+        """
+        client_point = self.ScreenToClient(screen_point)
+        self._begin_marquee(self._to_logical(client_point), client_point, additive=False)
+
+    def _begin_marquee(
+        self, logical_point: wx.Point, client_point: wx.Point, *, additive: bool
+    ) -> None:
+        if not additive:
+            self._selected_uids.clear()
+            self._notify_selection_changed()
+        self._rubber_start = logical_point
+        self._rubber_end = logical_point
+        self._marquee_start_screen = self.ClientToScreen(client_point)
+        if not self.HasCapture():
+            self.CaptureMouse()
+        # Poll the cursor so the box keeps growing past the window edge and
+        # auto-scrolls; motion events alone stop once the pointer leaves.
+        self._rubber_timer.Start(_RUBBER_POLL_MS)
+        self._update_marquee_overlay()
+        self.Refresh()
+
+    def _update_marquee_overlay(self) -> None:
+        if self._marquee_start_screen is None:
+            return
+        if self._marquee_overlay is None:
+            self._marquee_overlay = MarqueeOverlay(self.GetTopLevelParent())
+        self._marquee_overlay.update(self._marquee_start_screen, wx.GetMousePosition())
+
+    def _clear_marquee_overlay(self) -> None:
+        if self._marquee_overlay is not None:
+            self._marquee_overlay.cancel()
+        self._marquee_start_screen = None
+
     # ----- event handlers -----
     def _on_left_down(self, event: wx.MouseEvent) -> None:
         point = self._to_logical(event.GetPosition())
@@ -398,14 +620,7 @@ class DeckPileView(wx.ScrolledWindow):
 
         if hit is None:
             # Empty space: start a rubber-band selection (clear previous unless shift).
-            if not event.ShiftDown():
-                self._selected_uids.clear()
-                self._notify_selection_changed()
-            self._rubber_start = point
-            self._rubber_end = point
-            if not self.HasCapture():
-                self.CaptureMouse()
-            self.Refresh()
+            self._begin_marquee(point, event.GetPosition(), additive=event.ShiftDown())
             return
 
         _pile_idx, _member_idx, entry = hit
@@ -460,6 +675,7 @@ class DeckPileView(wx.ScrolledWindow):
         if self._rubber_start is not None:
             self._rubber_end = point
             self._select_within_rubber()
+            self._update_marquee_overlay()
             self.Refresh()
             return
 
@@ -493,6 +709,8 @@ class DeckPileView(wx.ScrolledWindow):
         point = self._to_logical(event.GetPosition())
 
         if self._rubber_start is not None:
+            self._rubber_timer.Stop()
+            self._clear_marquee_overlay()
             self._rubber_start = None
             self._rubber_end = None
             self.Refresh()
@@ -510,12 +728,18 @@ class DeckPileView(wx.ScrolledWindow):
         self._drag_press = None
         self._drag_uids = []
 
+    def _on_wheel(self, event: wx.MouseEvent) -> None:
+        # Shared with the grid view so both scroll identically (see scrolling.py).
+        scroll_by_wheel(self, event)
+
     def _on_leave(self, _event: wx.MouseEvent) -> None:
         if self._hover_uid is not None:
             self._hover_uid = None
             self.Refresh()
 
     def _on_capture_lost(self, _event: wx.MouseCaptureLostEvent) -> None:
+        self._rubber_timer.Stop()
+        self._clear_marquee_overlay()
         self._rubber_start = None
         self._rubber_end = None
         self._drag_active = False
@@ -523,6 +747,55 @@ class DeckPileView(wx.ScrolledWindow):
         self._drag_uids = []
         self._drag_pos = None
         self.Refresh()
+
+    def _on_rubber_timer(self, _event: wx.TimerEvent) -> None:
+        """Extend the active rubber-band toward the live cursor position.
+
+        Reading the global cursor (rather than relying on motion events, which
+        the OS stops sending once the pointer leaves the window) keeps the box
+        growing past the canvas edges and lets a held-at-the-edge drag scroll
+        the view so the whole canvas — not just the visible part — is reachable.
+        """
+        if self._rubber_start is None:
+            self._rubber_timer.Stop()
+            return
+        # If the button came up off-window we may have missed EVT_LEFT_UP; the
+        # marquee selection is already committed, so just stand down.
+        if not wx.GetMouseState().LeftIsDown():
+            self._rubber_timer.Stop()
+            self._clear_marquee_overlay()
+            if self.HasCapture():
+                self.ReleaseMouse()
+            self._rubber_start = None
+            self._rubber_end = None
+            self.Refresh()
+            return
+        client_pos = self.ScreenToClient(wx.GetMousePosition())
+        self._autoscroll_towards(client_pos)
+        # Recompute in logical space *after* any scroll so the endpoint tracks
+        # the content the cursor now sits over.
+        self._rubber_end = self._to_logical(client_pos)
+        self._select_within_rubber()
+        self._update_marquee_overlay()
+        self.Refresh()
+
+    def _autoscroll_towards(self, client_pos: wx.Point) -> None:
+        """Scroll one step toward any viewport edge the pointer is held beyond."""
+        client_w, client_h = self.GetClientSize()
+        view_x, view_y = self.GetViewStart()
+        new_x, new_y = view_x, view_y
+        step = _RUBBER_AUTOSCROLL_PX
+        if client_pos.x < 0:
+            new_x = max(0, view_x - step)
+        elif client_pos.x > client_w:
+            new_x = view_x + step
+        if client_pos.y < 0:
+            new_y = max(0, view_y - step)
+        elif client_pos.y > client_h:
+            new_y = view_y + step
+        if (new_x, new_y) != (view_x, view_y):
+            # Scroll clamps to the virtual bounds, so overshoot is harmless.
+            self.Scroll(new_x, new_y)
 
     # ----- selection helpers -----
     def _select_within_rubber(self) -> None:
@@ -549,14 +822,21 @@ class DeckPileView(wx.ScrolledWindow):
             self._notify_selection_changed()
 
     def _notify_selection_changed(self) -> None:
-        if len(self._selected_uids) == 1:
-            uid = next(iter(self._selected_uids))
-            entry = self._find_entry(uid)
-            if entry:
-                self._on_select({"name": entry["name"], "qty": 1})
-                return
-        # Multi or empty selection: clear the inspector selection so hover wins.
-        self._on_select(None)
+        # The panel syncs the reported selection back into every view,
+        # including this one. Guard that re-entrant set_selected so it can't
+        # clobber the per-copy selection we're about to report.
+        self._suppress_set_selected = True
+        try:
+            if len(self._selected_uids) == 1:
+                uid = next(iter(self._selected_uids))
+                entry = self._find_entry(uid)
+                if entry:
+                    self._on_select({"name": entry["name"], "qty": 1})
+                    return
+            # Multi or empty selection: clear the inspector selection so hover wins.
+            self._on_select(None)
+        finally:
+            self._suppress_set_selected = False
 
     def _find_entry(self, uid: int) -> dict[str, Any] | None:
         for _label, members in self._piles:

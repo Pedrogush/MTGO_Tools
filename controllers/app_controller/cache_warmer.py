@@ -19,10 +19,12 @@ and check a shared stop event frequently so shutdown interrupts them promptly.
 Pacing is two-speed: the *fast* initial pass — the first deck of every
 archetype (image warmer) and the top decklists of every format (Phase 1 of the
 decklist warmer) — runs effectively back-to-back so the data a user is most
-likely to open is local within the first minute. The *slow* deep pass — every
-remaining decklist of the selected format and then the rest — throttles
-:data:`CACHE_WARMUP_SLOW_THROTTLE_SECONDS` between fetches so the exhaustive
-backfill only trickles in the background.
+likely to open is local within the first minute. The *slow* deep pass — the
+remaining decklists of the selected format and then the rest — throttles
+:data:`CACHE_WARMUP_SLOW_THROTTLE_SECONDS` between fetches so the backfill only
+trickles in the background, and is capped at
+:data:`CACHE_WARMUP_DEEP_PASS_MAX_DECKS` decklists total so the warmer finishes
+and the process goes idle instead of scraping every list for tens of hours.
 
 All the fetch/scrape calls they make are cache-first (the metagame and
 deck-text caches dedupe), so a warm start is mostly skips and the network cost
@@ -39,6 +41,7 @@ from loguru import logger
 
 from services.image_service.schemas import CardImageRequest
 from utils.constants.timing import (
+    CACHE_WARMUP_DEEP_PASS_MAX_DECKS,
     CACHE_WARMUP_FAST_THROTTLE_SECONDS,
     CACHE_WARMUP_JOIN_TIMEOUT_SECONDS,
     CACHE_WARMUP_PROGRESS_INTERVAL,
@@ -269,36 +272,64 @@ class CacheWarmer:
             for deck in self._iter_format_decks(
                 fmt, per_archetype=1, limit=self._top_decks_per_format
             ):
-                if self._warm_deck(deck, warmed, self._fast_throttle):
+                stop, _ = self._warm_deck(deck, warmed, self._fast_throttle)
+                if stop:
                     return
 
-        # Phase 2 (slow): every list of the selected format.
-        logger.info(f"Cache warm-up: hydrating all {formats[0]} decklists (slow pass)")
+        # Phases 2 & 3 (slow): the remaining decklists, capped at a fixed budget
+        # so the deep pass actually completes and the warmer can go idle rather
+        # than scraping every list of every format for tens of hours.
+        deep_budget = CACHE_WARMUP_DEEP_PASS_MAX_DECKS
+
+        # Phase 2 (slow): the selected format first.
+        logger.info(
+            f"Cache warm-up: hydrating up to {deep_budget} more decklists, "
+            f"{formats[0]} first (slow pass)"
+        )
         for deck in self._iter_format_decks(formats[0], per_archetype=None, limit=None):
-            if self._warm_deck(deck, warmed, self._slow_throttle):
+            if deep_budget <= 0:
+                break
+            stop, attempted = self._warm_deck(deck, warmed, self._slow_throttle)
+            if stop:
                 return
+            if attempted:
+                deep_budget -= 1
 
-        # Phase 3 (slow): every list of the remaining formats.
+        # Phase 3 (slow): the remaining formats, sharing the same budget.
         for fmt in formats[1:]:
-            if self._stopped():
-                return
-            logger.info(f"Cache warm-up: hydrating all {fmt} decklists (slow pass)")
+            if self._stopped() or deep_budget <= 0:
+                break
+            logger.info(f"Cache warm-up: hydrating {fmt} decklists (slow pass)")
             for deck in self._iter_format_decks(fmt, per_archetype=None, limit=None):
-                if self._warm_deck(deck, warmed, self._slow_throttle):
+                if deep_budget <= 0:
+                    break
+                stop, attempted = self._warm_deck(deck, warmed, self._slow_throttle)
+                if stop:
                     return
+                if attempted:
+                    deep_budget -= 1
 
         logger.info(
             f"Cache warm-up: decklist pre-fetch complete "
             f"({self._dl_ok} hydrated, {self._dl_failed} failed)"
         )
 
-    def _warm_deck(self, deck: dict[str, Any], warmed: set[str], throttle: float) -> bool:
-        """Hydrate one deck's text into the cache. Returns True if it should stop."""
+    def _warm_deck(
+        self, deck: dict[str, Any], warmed: set[str], throttle: float
+    ) -> tuple[bool, bool]:
+        """Hydrate one deck's text into the cache.
+
+        Returns ``(should_stop, attempted)``: ``should_stop`` is True when a stop
+        was requested (so the caller should abort); ``attempted`` is True when
+        the deck was actually fetched, and False when it was skipped because an
+        earlier phase already hydrated it (so it should not consume the deep-pass
+        budget).
+        """
         if self._stopped():
-            return True
+            return True, False
         number = str(deck.get("number") or "")
         if number and number in warmed:
-            return False
+            return False, False
         text = self._safe_deck_text(deck)
         if number:
             warmed.add(number)
@@ -311,4 +342,4 @@ class CacheWarmer:
                 )
         else:
             self._dl_failed += 1
-        return self._wait(throttle)
+        return self._wait(throttle), True

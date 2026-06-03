@@ -20,6 +20,15 @@ PADDING_BASE = 8
 DECK_CARD_BASE_FONT_SIZE = 11  # font size for the quantity badge label
 DECK_CARD_NAME_FONT_SIZE = 10  # font size for the card name in the placeholder template
 
+# Deck workspace card views (grid + pile) — scrolling. Shared so both views
+# behave identically. A 1px scroll rate gives the scrollbar thumb single-pixel
+# granularity; the mouse-wheel handler (utils in card_table_panel/scrolling.py)
+# then scrolls CARD_VIEW_WHEEL_LINES_PER_NOTCH "lines" of CARD_VIEW_WHEEL_LINE_PX
+# each per notch, matching what wx's built-in handler did at the old 20px rate.
+CARD_VIEW_SCROLL_RATE = 1  # pixels per scroll unit (fine scrollbar granularity)
+CARD_VIEW_WHEEL_LINE_PX = 20  # pixels scrolled per wheel "line"
+CARD_VIEW_WHEEL_LINES_PER_NOTCH = 3  # fallback when the OS lines-per-action is unknown
+
 # Deck Stats Panel — font sizes (px)
 STATS_FONT_SIZE_BODY = 12
 STATS_FONT_SIZE_LABEL = 11
