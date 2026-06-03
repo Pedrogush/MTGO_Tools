@@ -13,6 +13,7 @@ from utils.logging_config import configure_logging
 from utils.runtime_flags import set_automation_enabled
 from widgets.frames.app_frame import make_app_frame
 from widgets.frames.splash_frame import LoadingFrame
+from widgets.panels.card_table_panel.marquee import is_marquee_surface
 
 # Global flag for automation mode
 _automation_enabled = False
@@ -21,6 +22,24 @@ _automation_port = 19847
 
 class MetagameWxApp(wx.App):
     """Bootstrap the redesigned deck builder."""
+
+    def FilterEvent(self, event: wx.Event) -> int:  # noqa: N802 - wx override
+        """Route a left-press on a marked background surface into the marquee.
+
+        Runs before the event is dispatched to any window, so a press on a
+        non-interactive zone (which doesn't bind its own handler) can still
+        start the active deck view's rubber-band selection. Returns -1 so normal
+        processing always continues — the filter only *adds* the marquee start,
+        it never consumes the press.
+        """
+        if event.GetEventType() == wx.wxEVT_LEFT_DOWN and is_marquee_surface(
+            event.GetEventObject()
+        ):
+            top = self.GetTopWindow()
+            begin = getattr(top, "begin_active_marquee", None)
+            if callable(begin):
+                begin(wx.GetMousePosition())
+        return -1
 
     def OnInit(self) -> bool:  # noqa: N802 - wx override
         logger.info("Starting MTGO Metagame Deck Builder (wx)")

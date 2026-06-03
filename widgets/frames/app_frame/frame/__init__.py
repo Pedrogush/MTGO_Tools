@@ -45,6 +45,7 @@ from widgets.frames.timer_alert import TimerAlertFrame
 from widgets.frames.top_cards import TopCardsFrame
 from widgets.mana_icon_factory import ManaIconFactory
 from widgets.panels.card_table_panel import CardTablePanel
+from widgets.panels.card_table_panel.marquee import mark_marquee_surfaces_recursively
 from widgets.panels.deck_builder_panel import DeckBuilderPanel
 from widgets.panels.deck_research_panel import DeckResearchPanel
 
@@ -150,9 +151,6 @@ class AppFrame(
         self.root_panel.SetBackgroundColour(DARK_BG)
         root_sizer = wx.BoxSizer(wx.HORIZONTAL)
         self.root_panel.SetSizer(root_sizer)
-        # Pressing the bare application background (outside any control) starts a
-        # pile-view marquee, so the selection box can be drawn from anywhere.
-        self.root_panel.Bind(wx.EVT_LEFT_DOWN, self._on_background_marquee_down)
 
         left_panel = self._build_left_panel(self.root_panel)
         root_sizer.Add(left_panel, 0, wx.EXPAND | wx.ALL, PADDING_LG)
@@ -160,19 +158,23 @@ class AppFrame(
         right_container = self._build_right_container(self.root_panel)
         root_sizer.Add(right_container, 1, wx.EXPAND | wx.ALL, PADDING_LG)
 
-    def _on_background_marquee_down(self, event: wx.MouseEvent) -> None:
-        """Begin a pile-view marquee from a press on the application background.
+        # Opt every bare background/static surface into starting a marquee, so a
+        # press on any non-interactive zone draws the selection box. Controls and
+        # the card-view canvases are excluded (the canvases start their own
+        # marquee); the app's FilterEvent routes a marked press to the active
+        # view. See widgets/panels/card_table_panel/marquee.py.
+        mark_marquee_surfaces_recursively(self.root_panel)
 
-        Only fires on the bare panel area (controls consume their own clicks),
-        and only when the visible deck tab is showing the pile view — otherwise
-        the press is left to its default handling.
+    def begin_active_marquee(self, screen_point: wx.Point) -> None:
+        """Start a marquee on the visible deck view from a screen-space press.
+
+        Called by the app-level event filter when a press lands on a marked
+        surface. No-op unless the current deck tab hosts a card view with cards.
         """
         page = self.deck_tabs.GetCurrentPage()
-        pile_view = getattr(page, "pile_view", None)
-        if pile_view is not None and getattr(page, "view_mode", None) == "pile":
-            pile_view.begin_marquee_at_screen(wx.GetMousePosition())
-            return
-        event.Skip()
+        begin = getattr(page, "begin_marquee_at_screen", None)
+        if callable(begin):
+            begin(screen_point)
 
     def _setup_status_bar(self) -> None:
         self.status_bar = self.CreateStatusBar()
@@ -185,7 +187,6 @@ class AppFrame(
         """Compose the right side of the window: toolbar over (center | inspector)."""
         right_panel = wx.Panel(parent)
         right_panel.SetBackgroundColour(DARK_BG)
-        right_panel.Bind(wx.EVT_LEFT_DOWN, self._on_background_marquee_down)
         right_sizer = wx.BoxSizer(wx.VERTICAL)
         right_panel.SetSizer(right_sizer)
 

@@ -65,6 +65,7 @@ from widgets.panels.card_table_panel.card_render import (
     build_image_name_candidates,
     resolve_card_color,
 )
+from widgets.panels.card_table_panel.marquee import RUBBER_AUTOSCROLL_PX, MarqueeController
 from widgets.panels.card_table_panel.pile_view import _ImageCache
 from widgets.panels.card_table_panel.scrolling import scroll_by_wheel
 
@@ -125,10 +126,25 @@ class DeckGridView(wx.ScrolledWindow):
         self._on_remove = on_remove
 
         self._cards: list[dict[str, Any]] = []
-        self._selected_name: str | None = None
+        # Multi-selection by card name (a single click selects exactly one).
+        # Marquee can select several; the highlight covers every name in the set.
+        self._selected_names: set[str] = set()
         self._hover_name: str | None = None
         self._pressed: tuple[str, int] | None = None
         self._cols: int = _DEFAULT_COLUMNS
+        # See pile view: the panel echoes our reported selection back via
+        # set_selected(); suppress that round-trip while we report a multi-select
+        # marquee so the echoed None can't wipe the set we just built.
+        self._suppress_set_selected: bool = False
+        self._marquee = MarqueeController(
+            self,
+            to_logical=self._to_logical,
+            on_begin=self._marquee_begin,
+            on_select=self._marquee_select,
+            on_finish=self._marquee_finish,
+            autoscroll=self._autoscroll_towards,
+        )
+        self._marquee_base: set[str] | None = None
 
         self._image_cache = _ImageCache()
         # Per-name load generation so a stale in-flight decode (e.g. of an old
@@ -163,6 +179,7 @@ class DeckGridView(wx.ScrolledWindow):
         self.Bind(wx.EVT_MOTION, self._on_motion)
         self.Bind(wx.EVT_MOUSEWHEEL, self._on_wheel)
         self.Bind(wx.EVT_LEAVE_WINDOW, self._on_leave)
+        self.Bind(wx.EVT_MOUSE_CAPTURE_LOST, self._on_capture_lost)
 
     # ----- public API consumed by CardTablePanel -----
     def set_cards(self, cards: list[dict[str, Any]], preserve_scroll: bool = False) -> None:
@@ -182,17 +199,24 @@ class DeckGridView(wx.ScrolledWindow):
         self.Refresh()
 
     def set_selected(self, name: str | None) -> None:
-        self._selected_name = name
+        # Ignored while we broadcast our own (possibly multi-) selection: the
+        # panel echoes it straight back and a bare name can't represent a set.
+        if self._suppress_set_selected:
+            return
+        self._selected_names = {name} if name else set()
         self.Refresh()
 
     def get_selected_name(self) -> str | None:
-        return self._selected_name
+        if len(self._selected_names) != 1:
+            return None
+        return next(iter(self._selected_names))
 
     def get_selected_card(self) -> dict[str, Any] | None:
-        if not self._selected_name:
+        name = self.get_selected_name()
+        if not name:
             return None
         for card in self._cards:
-            if card["name"].lower() == self._selected_name.lower():
+            if card["name"].lower() == name.lower():
                 return card
         return None
 
@@ -202,7 +226,7 @@ class DeckGridView(wx.ScrolledWindow):
             return False
         for idx, card in enumerate(self._cards):
             if card["name"].lower() == name.lower():
-                self._selected_name = card["name"]
+                self._selected_names = {card["name"]}
                 self._ensure_visible(self._card_rect(idx))
                 self.Refresh()
                 return True
@@ -285,9 +309,11 @@ class DeckGridView(wx.ScrolledWindow):
 
     def _shows_actions(self, name: str) -> bool:
         lower = name.lower()
-        return (self._hover_name is not None and lower == self._hover_name.lower()) or (
-            self._selected_name is not None and lower == self._selected_name.lower()
-        )
+        if self._hover_name is not None and lower == self._hover_name.lower():
+            return True
+        # Only show the inline +/−/× on a lone selection; a marquee multi-select
+        # shouldn't plaster controls across every chosen card.
+        return len(self._selected_names) == 1 and name in self._selected_names
 
     # ----- image loading -----
     def _prefetch_images(self) -> None:
@@ -538,13 +564,13 @@ class DeckGridView(wx.ScrolledWindow):
 
     def _draw_overlays(self, dc: wx.DC) -> None:
         """Draw selection border, accent badge and +/−/× over the blitted cards."""
-        sel = self._selected_name
+        sel = self._selected_names
         hov = self._hover_name
         if not sel and not hov:
             return
         for idx, card in enumerate(self._cards):
             name = card["name"]
-            is_selected = sel is not None and name.lower() == sel.lower()
+            is_selected = name in sel
             is_hover = hov is not None and name.lower() == hov.lower()
             if not (is_selected or is_hover):
                 continue
@@ -580,9 +606,7 @@ class DeckGridView(wx.ScrolledWindow):
         Used by the oversized-deck fallback path that bypasses the canvas.
         """
         name = card["name"]
-        is_selected = (
-            self._selected_name is not None and name.lower() == self._selected_name.lower()
-        )
+        is_selected = name in self._selected_names
         self._draw_card_static(dc, rect, card)
         if is_selected:
             self._draw_qty(dc, rect, card, True)
@@ -652,6 +676,8 @@ class DeckGridView(wx.ScrolledWindow):
         point = self._to_logical(event.GetPosition())
         idx = self._hit_test(point)
         if idx is None:
+            # Empty space: start a rubber-band selection (clear unless Shift).
+            self._marquee.begin(event.GetPosition(), additive=event.ShiftDown())
             return
         card = self._cards[idx]
         name = card["name"]
@@ -665,10 +691,25 @@ class DeckGridView(wx.ScrolledWindow):
                     self._fire_action(name, slot)
                     return
 
-        if self._selected_name and name.lower() == self._selected_name.lower():
-            self._on_select(None)
+        if self._selected_names == {name}:
+            self._selected_names = set()
+            self._notify_selection(None)
         else:
+            self._selected_names = {name}
+            self._notify_selection(card)
+        self.Refresh()
+
+    def begin_marquee_at_screen(self, screen_point: wx.Point) -> None:
+        """Start a marquee from anywhere in the app (e.g. the frame background)."""
+        self._marquee.begin_at_screen(screen_point)
+
+    def _notify_selection(self, card: dict[str, Any] | None) -> None:
+        """Report selection to the panel, guarding the set_selected echo."""
+        self._suppress_set_selected = True
+        try:
             self._on_select(card)
+        finally:
+            self._suppress_set_selected = False
 
     def _fire_action(self, name: str, slot: int) -> None:
         if slot == 0 and self._on_delta:
@@ -679,11 +720,21 @@ class DeckGridView(wx.ScrolledWindow):
             self._on_remove(name)
 
     def _on_left_up(self, _event: wx.MouseEvent) -> None:
+        if self._marquee.active:
+            self._marquee.finish()
+            return
         if self._pressed is not None:
             self._pressed = None
             self.Refresh()
 
+    def _on_capture_lost(self, _event: wx.MouseCaptureLostEvent) -> None:
+        self._marquee.cancel()
+        self.Refresh()
+
     def _on_motion(self, event: wx.MouseEvent) -> None:
+        if self._marquee.active:
+            self._marquee.update(event.GetPosition())
+            return
         point = self._to_logical(event.GetPosition())
         idx = self._hit_test(point)
         hovered = self._cards[idx]["name"] if idx is not None else None
@@ -702,3 +753,52 @@ class DeckGridView(wx.ScrolledWindow):
         if self._hover_name is not None:
             self._hover_name = None
             self.Refresh()
+
+    # ----- rubber-band marquee -----
+    def _marquee_begin(self, additive: bool) -> None:
+        if not additive and self._selected_names:
+            self._selected_names = set()
+            self._notify_selection(None)
+        # Snapshot the (post-clear) selection so additive hits union into it.
+        self._marquee_base = set(self._selected_names)
+        # Hover controls would otherwise linger over the card the press started on.
+        self._hover_name = None
+        self.Refresh()
+
+    def _marquee_select(self, rect: wx.Rect) -> None:
+        chosen: set[str] = set(self._marquee_base or ())
+        for idx, card in enumerate(self._cards):
+            if rect.Intersects(self._card_rect(idx)):
+                chosen.add(card["name"])
+        if chosen != self._selected_names:
+            self._selected_names = chosen
+            # One card chosen reports that card; several (or none) report None so
+            # the inspector falls back to hover, mirroring the pile view.
+            if len(chosen) == 1:
+                self._notify_selection(self._card_for(next(iter(chosen))))
+            else:
+                self._notify_selection(None)
+            self.Refresh()
+
+    def _marquee_finish(self) -> None:
+        self._marquee_base = None
+        self.Refresh()
+
+    def _card_for(self, name: str) -> dict[str, Any] | None:
+        for card in self._cards:
+            if card["name"] == name:
+                return card
+        return None
+
+    def _autoscroll_towards(self, client_pos: wx.Point) -> None:
+        """Scroll one step toward any viewport edge the pointer is held beyond."""
+        client_h = self.GetClientSize().GetHeight()
+        view_x, view_y = self.GetViewStart()
+        new_y = view_y
+        if client_pos.y < 0:
+            new_y = max(0, view_y - RUBBER_AUTOSCROLL_PX)
+        elif client_pos.y > client_h:
+            new_y = view_y + RUBBER_AUTOSCROLL_PX
+        if new_y != view_y:
+            # Scroll clamps to the virtual bounds, so overshoot is harmless.
+            self.Scroll(view_x, new_y)
