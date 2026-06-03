@@ -110,6 +110,11 @@ CACHE_WARMUP_JOIN_TIMEOUT_SECONDS = 2.0
 # Number of "top" decklists per format the decklist warmer hydrates first (the
 # headline list of each of the top N archetypes) before deep-loading a format.
 CACHE_WARMUP_TOP_DECKS_PER_FORMAT = 6
+# Hard ceiling on how many decklists the *slow deep pass* (Phases 2 + 3) hydrates
+# in a session. Without it the deep pass walks every list of every format at the
+# 20s slow throttle — tens of hours of background scraping that never completes,
+# so the process never goes idle. Capping it lets the warmer finish and quiesce.
+CACHE_WARMUP_DEEP_PASS_MAX_DECKS = 150
 # Emit a progress log line every N hydrated decklists so the warm-up is visible
 # without logging every individual fetch.
 CACHE_WARMUP_PROGRESS_INTERVAL = 50

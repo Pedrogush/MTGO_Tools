@@ -115,6 +115,59 @@ def test_warm_decklists_phases_and_dedup():
     assert warmer._dl_failed == 0
 
 
+def test_warm_decklists_deep_pass_is_capped():
+    from utils.constants.timing import CACHE_WARMUP_DEEP_PASS_MAX_DECKS
+
+    # One format, one archetype, far more lists than the deep-pass budget.
+    total = CACHE_WARMUP_DEEP_PASS_MAX_DECKS + 50
+    numbers = [str(n) for n in range(total)]
+    warmer, fetched, _ = _make_warmer(
+        current_format="Legacy",
+        formats=["Legacy"],
+        archetypes={"Legacy": [{"name": "A", "href": "legacy-a"}]},
+        decks={"legacy-a": [{"number": n} for n in numbers]},
+        deck_text={n: f"4 Card {n}\n" for n in numbers},
+    )
+
+    warmer._warm_decklists()
+
+    # Phase 1 hydrates the archetype's top deck; the deep pass then hydrates at
+    # most CACHE_WARMUP_DEEP_PASS_MAX_DECKS more — so the warmer stops well short
+    # of every available list and the process can go idle.
+    assert len(fetched) == 1 + CACHE_WARMUP_DEEP_PASS_MAX_DECKS
+    assert len(fetched) == len(set(fetched))  # nothing fetched twice
+    assert warmer._dl_ok == 1 + CACHE_WARMUP_DEEP_PASS_MAX_DECKS
+
+
+def test_warm_decklists_deep_pass_budget_is_shared_across_formats():
+    from utils.constants.timing import CACHE_WARMUP_DEEP_PASS_MAX_DECKS
+
+    # Selected format alone holds more than the whole budget, so Phase 3 (the
+    # other format) must get nothing left to fetch.
+    legacy = [str(n) for n in range(CACHE_WARMUP_DEEP_PASS_MAX_DECKS + 20)]
+    warmer, fetched, _ = _make_warmer(
+        current_format="Legacy",
+        formats=["Legacy", "Modern"],
+        archetypes={
+            "Legacy": [{"name": "A", "href": "legacy-a"}],
+            "Modern": [{"name": "C", "href": "modern-c"}],
+        },
+        decks={
+            "legacy-a": [{"number": n} for n in legacy],
+            "modern-c": [{"number": "m1"}, {"number": "m2"}],
+        },
+        deck_text={**{n: f"4 Card {n}\n" for n in legacy}, "m1": "4 M1\n", "m2": "4 M2\n"},
+    )
+
+    warmer._warm_decklists()
+
+    # Phase 1 takes Legacy's top deck and Modern's top deck (1 each); the shared
+    # deep-pass budget is exhausted entirely within Legacy, so Modern's second
+    # list ("m2") is never reached.
+    assert "m2" not in fetched
+    assert warmer._dl_ok == 2 + CACHE_WARMUP_DEEP_PASS_MAX_DECKS
+
+
 def test_warm_decklists_counts_empty_text_as_failed():
     deck_text = {"1": "4 Card One\n", "3": "4 Card Three\n", "4": "4 Card Four\n", "5": ""}
     warmer, _, _ = _make_warmer(deck_text=deck_text)
