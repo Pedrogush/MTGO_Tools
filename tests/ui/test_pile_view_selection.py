@@ -276,9 +276,8 @@ def test_rubber_band_past_canvas_selects_every_card():
         ((_label, members),) = view._piles
         all_uids = {entry["_uid"] for entry in members}
 
-        view._rubber_start = wx.Point(0, 0)
-        view._rubber_end = wx.Point(10_000, 10_000)  # far past the canvas
-        view._select_within_rubber()
+        # A rectangle far past the canvas, applied through the marquee callback.
+        view._marquee_select(wx.Rect(0, 0, 10_000, 10_000))
 
         assert view._selected_uids == all_uids
     finally:
@@ -293,14 +292,13 @@ def test_begin_marquee_at_screen_starts_a_selection_from_outside():
         view = _make_view(frame, lambda _card: None)
         view.set_cards([{"name": "Grizzly Bears", "qty": 4}])
         # Don't spawn the real overlay popup for a never-shown test window.
-        view._update_marquee_overlay = lambda: None  # type: ignore[assignment]
+        view._marquee._update_overlay = lambda: None  # type: ignore[assignment]
 
         view.begin_marquee_at_screen(wx.Point(500, 500))
 
-        assert view._rubber_start is not None
-        assert view._rubber_end == view._rubber_start
-        assert view._marquee_start_screen is not None
-        view._rubber_timer.Stop()
+        assert view._marquee.active
+        view._marquee.cancel()
+        assert not view._marquee.active
     finally:
         frame.Destroy()
 

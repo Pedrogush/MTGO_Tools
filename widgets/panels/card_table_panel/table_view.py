@@ -28,6 +28,7 @@ import wx.grid as gridlib
 
 from utils.constants import DARK_ALT, DARK_BG, DARK_PANEL, LIGHT_TEXT, SUBDUED_TEXT
 from widgets.mana_icon_factory import ManaIconFactory
+from widgets.panels.card_table_panel.marquee import MarqueeController
 from widgets.panels.card_table_panel.sorting import (
     COL_COLOR,
     COL_MANA,
@@ -113,9 +114,15 @@ class DeckTableView(wx.Panel):
         self._rows: list[dict[str, Any]] = []  # cards in current display order
         self._sort_column: str = COL_NAME
         self._sort_descending: bool = False
-        self._selected_name: str | None = None
+        # Multi-selection by card name; a single click selects exactly one row,
+        # a marquee can select several. Native row selection renders the set.
+        self._selected_names: set[str] = set()
         self._hover_row: int = -1
         self._needs_autosize: bool = True
+        # Suppress the panel's set_selected() echo while we report our own
+        # (possibly multi-) selection, so an echoed None can't wipe the set.
+        self._suppress_set_selected: bool = False
+        self._marquee_base: set[str] | None = None
         # Natural widths populated by _autosize_columns; _fit_to_width starts
         # from these so resizing the panel wider re-expands the columns.
         self._natural_widths: dict[int, int] = {}
@@ -181,11 +188,25 @@ class DeckTableView(wx.Panel):
 
         sizer.Add(self.grid, 1, wx.EXPAND)
 
+        # Rubber-band selection lives on the grid's inner window (the surface the
+        # rows are drawn on and the one that carries the scroll offset).
+        grid_window = self.grid.GetGridWindow()
+        self._marquee = MarqueeController(
+            grid_window,
+            to_logical=self._to_logical,
+            on_begin=self._marquee_begin,
+            on_select=self._marquee_select,
+            on_finish=self._marquee_finish,
+        )
+
         self.grid.Bind(gridlib.EVT_GRID_LABEL_LEFT_CLICK, self._on_header_click)
         self.grid.Bind(gridlib.EVT_GRID_CELL_LEFT_CLICK, self._on_cell_click)
         self.grid.Bind(gridlib.EVT_GRID_SELECT_CELL, self._on_cell_select)
-        self.grid.GetGridWindow().Bind(wx.EVT_MOTION, self._on_grid_motion)
-        self.grid.GetGridWindow().Bind(wx.EVT_LEAVE_WINDOW, self._on_grid_leave)
+        grid_window.Bind(wx.EVT_LEFT_DOWN, self._on_grid_left_down)
+        grid_window.Bind(wx.EVT_LEFT_UP, self._on_grid_left_up)
+        grid_window.Bind(wx.EVT_MOTION, self._on_grid_motion)
+        grid_window.Bind(wx.EVT_LEAVE_WINDOW, self._on_grid_leave)
+        grid_window.Bind(wx.EVT_MOUSE_CAPTURE_LOST, self._on_grid_capture_lost)
         self.Bind(wx.EVT_SIZE, self._on_panel_resize)
 
     # ----- public API consumed by CardTablePanel -----
@@ -196,11 +217,17 @@ class DeckTableView(wx.Panel):
         self._refresh()
 
     def set_selected(self, name: str | None) -> None:
-        self._selected_name = name
+        # Ignored while we broadcast our own selection (the panel echoes it back
+        # and a bare name can't represent a multi-select set).
+        if self._suppress_set_selected:
+            return
+        self._selected_names = {name} if name else set()
         self._apply_selection_highlight()
 
     def get_selected_name(self) -> str | None:
-        return self._selected_name
+        if len(self._selected_names) != 1:
+            return None
+        return next(iter(self._selected_names))
 
     # ----- internal helpers -----
     def _label(self, col_id: str) -> str:
@@ -338,13 +365,16 @@ class DeckTableView(wx.Panel):
 
     def _apply_selection_highlight(self) -> None:
         self.grid.ClearSelection()
-        if not self._selected_name:
+        if not self._selected_names:
             return
+        wanted = {n.lower() for n in self._selected_names}
+        first = True
         for idx, card in enumerate(self._rows):
-            if card["name"].lower() == self._selected_name.lower():
-                self.grid.SelectRow(idx)
-                self.grid.MakeCellVisible(idx, 0)
-                return
+            if card["name"].lower() in wanted:
+                self.grid.SelectRow(idx, addToSelected=not first)
+                if first:
+                    self.grid.MakeCellVisible(idx, 0)
+                    first = False
 
     # ----- event handlers -----
     def _on_header_click(self, event: gridlib.GridEvent) -> None:
@@ -369,14 +399,14 @@ class DeckTableView(wx.Panel):
         if event.GetCol() == _ACTIONS_COL:
             self._handle_action_click(row, card["name"], event.GetPosition())
             return
-        if self._selected_name and card["name"].lower() == self._selected_name.lower():
-            self._selected_name = None
+        if self._selected_names == {card["name"]}:
+            self._selected_names = set()
             self._apply_selection_highlight()
-            self._on_select(None)
+            self._notify_selection(None)
             return
-        self._selected_name = card["name"]
+        self._selected_names = {card["name"]}
         self._apply_selection_highlight()
-        self._on_select(card)
+        self._notify_selection(card)
 
     def _handle_action_click(self, row: int, name: str, pos: wx.Point) -> None:
         # Convert the event position (device coords on the grid window) into an
@@ -400,7 +430,10 @@ class DeckTableView(wx.Panel):
         event.Veto()
 
     def _on_grid_motion(self, event: wx.MouseEvent) -> None:
-        if self._selected_name or self._on_hover is None:
+        if self._marquee.active:
+            self._marquee.update(event.GetPosition())
+            return
+        if self._selected_names or self._on_hover is None:
             event.Skip()
             return
         x, y = self.grid.CalcUnscrolledPosition(event.GetPosition())
@@ -416,3 +449,73 @@ class DeckTableView(wx.Panel):
     def _on_grid_leave(self, event: wx.MouseEvent) -> None:
         self._hover_row = -1
         event.Skip()
+
+    # ----- rubber-band marquee -----
+    def begin_marquee_at_screen(self, screen_point: wx.Point, *, additive: bool = False) -> None:
+        """Start a marquee from anywhere in the app (e.g. the frame background)."""
+        self._marquee.begin_at_screen(screen_point, additive=additive)
+
+    def _on_grid_left_down(self, event: wx.MouseEvent) -> None:
+        # A press on a real row is left to the grid (cell-click selection); a
+        # press on the empty area below the rows starts a marquee instead.
+        _x, y = self.grid.CalcUnscrolledPosition(event.GetPosition())
+        row = self.grid.YToRow(y)
+        if row == wx.NOT_FOUND or not (0 <= row < len(self._rows)):
+            self._marquee.begin(event.GetPosition(), additive=event.ShiftDown())
+            return
+        event.Skip()
+
+    def _on_grid_left_up(self, event: wx.MouseEvent) -> None:
+        if self._marquee.active:
+            self._marquee.finish()
+            return
+        event.Skip()
+
+    def _on_grid_capture_lost(self, _event: wx.MouseCaptureLostEvent) -> None:
+        self._marquee.cancel()
+
+    def _to_logical(self, client_point: wx.Point) -> wx.Point:
+        x, y = self.grid.CalcUnscrolledPosition(client_point)
+        return wx.Point(x, y)
+
+    def _marquee_begin(self, additive: bool) -> None:
+        if not additive and self._selected_names:
+            self._selected_names = set()
+            self._apply_selection_highlight()
+            self._notify_selection(None)
+        self._marquee_base = set(self._selected_names)
+
+    def _marquee_select(self, rect: wx.Rect) -> None:
+        chosen: set[str] = set(self._marquee_base or ())
+        for idx, card in enumerate(self._rows):
+            row_rect = self.grid.CellToRect(idx, 0)
+            # Full-row selection: a row is in the box when their vertical spans
+            # overlap (the horizontal position within the row is irrelevant).
+            if rect.GetTop() <= row_rect.GetBottom() and rect.GetBottom() >= row_rect.GetTop():
+                chosen.add(card["name"])
+        if chosen != self._selected_names:
+            self._selected_names = chosen
+            self._apply_selection_highlight()
+            # One row chosen reports that card; several (or none) report None so
+            # the inspector falls back to hover, mirroring the other views.
+            if len(chosen) == 1:
+                self._notify_selection(self._card_for(next(iter(chosen))))
+            else:
+                self._notify_selection(None)
+
+    def _marquee_finish(self) -> None:
+        self._marquee_base = None
+
+    def _card_for(self, name: str) -> dict[str, Any] | None:
+        for card in self._rows:
+            if card["name"] == name:
+                return card
+        return None
+
+    def _notify_selection(self, card: dict[str, Any] | None) -> None:
+        """Report selection to the panel, guarding the set_selected echo."""
+        self._suppress_set_selected = True
+        try:
+            self._on_select(card)
+        finally:
+            self._suppress_set_selected = False

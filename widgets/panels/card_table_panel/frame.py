@@ -182,6 +182,29 @@ class CardTablePanel(CardTablePanelHandlersMixin, CardTablePanelPropertiesMixin,
         self._update_pile_sort_button_visibility()
 
     # ----- public API -----
+    @property
+    def active_view(self) -> wx.Window | None:
+        """The card view currently on top (grid/table/pile), or None if empty."""
+        if not self.cards:
+            return None
+        return {
+            "grid": self.grid_view,
+            "table": self.table_view,
+            "pile": self.pile_view,
+        }.get(self.view_mode)
+
+    def begin_marquee_at_screen(self, screen_point: wx.Point, *, additive: bool = False) -> None:
+        """Start a rubber-band selection on the active view from a screen point.
+
+        Lets the app route a press on any non-interactive surface into the
+        visible view's marquee, so the selection box can be drawn from anywhere.
+        ``additive`` (Shift held) keeps the existing selection and unions in the
+        new hits instead of replacing it.
+        """
+        view = self.active_view
+        if view is not None:
+            view.begin_marquee_at_screen(screen_point, additive=additive)
+
     def set_view_mode(self, mode: str, *, persist: bool = True) -> None:
         if mode not in VIEW_MODES:
             return

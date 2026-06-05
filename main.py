@@ -13,6 +13,7 @@ from utils.logging_config import configure_logging
 from utils.runtime_flags import set_automation_enabled
 from widgets.frames.app_frame import make_app_frame
 from widgets.frames.splash_frame import LoadingFrame
+from widgets.panels.card_table_panel.marquee import is_background_window
 
 # Global flag for automation mode
 _automation_enabled = False
@@ -21,6 +22,31 @@ _automation_port = 19847
 
 class MetagameWxApp(wx.App):
     """Bootstrap the redesigned deck builder."""
+
+    def FilterEvent(self, event: wx.Event) -> int:  # noqa: N802 - wx override
+        """Start a marquee when a left-press lands on a background surface.
+
+        Runs before any window sees the event, so a press on a non-interactive
+        zone — which binds no handler of its own — can still begin the active
+        deck view's rubber-band selection, letting the box be drawn from
+        anywhere in the window. The press is classified at down time: a plain
+        background surface (see :func:`is_background_window`) starts a marquee;
+        anything else — a real control, or a card/row inside a card view — is
+        left untouched so its own click or drag-to-reorder gesture wins. The
+        card views begin their own marquee from an empty-space press, so those
+        are intentionally not background here.
+
+        Always returns -1 (continue normal processing): the filter only *adds*
+        the marquee start on top of the press, it never consumes it.
+        """
+        if event.GetEventType() == wx.wxEVT_LEFT_DOWN and is_background_window(
+            event.GetEventObject()
+        ):
+            top = self.GetTopWindow()
+            begin = getattr(top, "begin_active_marquee", None)
+            if callable(begin):
+                begin(wx.GetMousePosition(), additive=event.ShiftDown())
+        return -1
 
     def OnInit(self) -> bool:  # noqa: N802 - wx override
         logger.info("Starting MTGO Metagame Deck Builder (wx)")
