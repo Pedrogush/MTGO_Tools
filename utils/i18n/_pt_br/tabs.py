@@ -1,10 +1,12 @@
 """Deck tab UI strings. (Portuguese (Brazil))"""
 
 MESSAGES: dict[str, str] = {
+    "tabs.deck_tables": "Tabelas do Deck",
     "tabs.mainboard": "Principal",
     "tabs.sideboard": "Sideboard",
     "tabs.sideboard_guide": "Guia de Sideboard",
     "tabs.deck_notes": "Notas de Deck",
+    "tabs.tooltip.deck_tables": "Principal e sideboard lado a lado — arraste cartas para movê-las entre as zonas",
     "tabs.tooltip.mainboard": "Seu deck principal (geralmente 60 cartas)",
     "tabs.tooltip.sideboard": "Seu sideboard (até 15 cartas)",
     "tabs.tooltip.sideboard_guide": "Plano de sideboard e notas por matchup",

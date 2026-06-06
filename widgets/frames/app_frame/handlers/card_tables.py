@@ -230,17 +230,35 @@ class CardTablesHandler(_Base):
                 table.clear_selection()
 
     def _get_active_zone_for_add(self: AppFrame) -> str:
-        if not self.deck_tabs:
-            return "main"
-        selection = self.deck_tabs.GetSelection()
-        for zone, table in (
-            ("main", self.main_table),
-            ("side", self.side_table),
-            ("out", self.out_table),
-        ):
-            if table and self.deck_tabs.GetPageIndex(table) == selection:
-                return zone if zone in {"main", "side"} else "main"
-        return "main"
+        # Mainboard and sideboard are visible at once (#781), so there is no
+        # active tab to disambiguate; use the zone the user last interacted with.
+        zone = getattr(self, "_active_deck_zone", "main")
+        return zone if zone in {"main", "side"} else "main"
+
+    def _handle_zone_transfer(
+        self: AppFrame, source_zone: str, names: list[str], screen_point: wx.Point
+    ) -> bool:
+        """Move dragged cards to the other zone when dropped over its pane.
+
+        Called by a card view when a drag is released; returns True when the drop
+        landed on the sibling zone (so the view skips its within-zone reorder).
+        One copy is moved per entry in ``names`` (the pile view repeats a name to
+        move several copies). Routes through the normal zone-delta path so both
+        zones' quantities — and the deck text / stats — update correctly (#781).
+        """
+        if source_zone not in {"main", "side"} or not names:
+            return False
+        dest_zone = "side" if source_zone == "main" else "main"
+        dest_table = self._get_table_for_zone(dest_zone)
+        if not dest_table or not dest_table.GetScreenRect().Contains(screen_point):
+            return False
+        for name in names:
+            # Only move a copy that's actually present in the source zone.
+            if any(c["name"].lower() == name.lower() for c in self.zone_cards.get(source_zone, [])):
+                self._handle_zone_delta(source_zone, name, -1)
+                self._handle_zone_delta(dest_zone, name, 1)
+        self._active_deck_zone = dest_zone
+        return True
 
     def _add_search_card_to_active_zone(self: AppFrame, name: str) -> None:
         zone = self._get_active_zone_for_add()
@@ -281,6 +299,8 @@ class CardTablesHandler(_Base):
                 self.card_inspector_panel.reset()
                 self.card_panel.clear()
             return
+        if zone in {"main", "side"}:
+            self._active_deck_zone = zone
         if self.builder_panel:
             self.builder_panel.clear_result_selection()
         self._collapse_other_zone_tables(zone)

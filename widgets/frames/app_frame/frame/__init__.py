@@ -102,6 +102,11 @@ class AppFrame(
         self.builder_panel: DeckBuilderPanel | None = None
         self.out_table: CardTablePanel | None = None
         self.root_panel: wx.Panel | None = None
+        # With both zones visible at once (#781) there is no "selected tab" to
+        # tell which zone a searched card should be added to; track the last zone
+        # the user interacted with instead (defaults to mainboard).
+        self._active_deck_zone: str = "main"
+        self._deck_sash_initialized: bool = False
 
         self._save_timer: wx.Timer | None = None
         self._filter_debounce_timer: wx.Timer | None = None
@@ -166,6 +171,13 @@ class AppFrame(
         selection box can be drawn from any non-interactive zone. A no-op unless
         that tab is a card panel with cards loaded.
         """
+        # In the deck-tables split both zones share a page, so target whichever
+        # zone the press landed over rather than the page (the splitter itself
+        # has no marquee).
+        for table in (getattr(self, "main_table", None), getattr(self, "side_table", None)):
+            if table and table.IsShownOnScreen() and table.GetScreenRect().Contains(screen_point):
+                table.begin_marquee_at_screen(screen_point, additive=additive)
+                return
         page = self.deck_tabs.GetCurrentPage()
         begin = getattr(page, "begin_marquee_at_screen", None)
         if callable(begin):

@@ -144,6 +144,23 @@ class DeckSelectorSessionManager:
         sorts[zone] = sort_mode
         self.settings["deck_pile_sort_modes"] = sorts
 
+    def get_deck_sash_position(self, default: int = 0) -> int:
+        """Height of the mainboard pane in the deck-tables vertical split.
+
+        ``0`` (the default) means "no saved position" — the split view falls
+        back to its gravity-based default at construction.
+        """
+        value = self.settings.get("deck_sash_position", default)
+        try:
+            value = int(value)
+        except (TypeError, ValueError):
+            return default
+        return value if value > 0 else default
+
+    def update_deck_sash_position(self, position: int) -> None:
+        if isinstance(position, int) and position > 0:
+            self.settings["deck_sash_position"] = position
+
     _VALID_EVENT_TYPE_FILTERS = {"All", "Challenge", "League", "Showcase", "Last Chance"}
 
     def get_deck_event_type_filter(self, default: str = "All") -> str:
