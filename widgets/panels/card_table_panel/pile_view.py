@@ -102,6 +102,7 @@ class DeckPileView(wx.ScrolledWindow):
         on_hover: Callable[[dict[str, Any]], None] | None,
         get_sort_mode: Callable[[], str] | None = None,
         on_remove: Callable[[str], None] | None = None,
+        on_zone_transfer: Callable[[list[str], wx.Point], bool] | None = None,
     ) -> None:
         super().__init__(parent, style=wx.HSCROLL | wx.VSCROLL)
         self.zone = zone
@@ -111,6 +112,7 @@ class DeckPileView(wx.ScrolledWindow):
         self._on_hover = on_hover
         self._get_sort_mode = get_sort_mode or (lambda: PILE_SORT_MV)
         self._on_remove = on_remove
+        self._on_zone_transfer = on_zone_transfer
 
         self._cards: list[dict[str, Any]] = []
         # piles is a list of (label, [card_entries...]) — card_entries are
@@ -680,7 +682,21 @@ class DeckPileView(wx.ScrolledWindow):
         point = self._to_logical(event.GetPosition())
 
         if self._drag_active:
-            self._drop_at(point)
+            # A drop over the other zone's pane moves those copies there;
+            # otherwise it's a within-view rearrangement.
+            transferred = False
+            if self._on_zone_transfer is not None:
+                names = [
+                    entry["name"]
+                    for uid in self._drag_uids
+                    if (entry := self._find_entry(uid)) is not None
+                ]
+                if names:
+                    transferred = self._on_zone_transfer(
+                        names, self.ClientToScreen(event.GetPosition())
+                    )
+            if not transferred:
+                self._drop_at(point)
             self._drag_active = False
             self._drag_press = None
             self._drag_uids = []

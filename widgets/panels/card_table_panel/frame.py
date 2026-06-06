@@ -71,6 +71,7 @@ class CardTablePanel(CardTablePanelHandlersMixin, CardTablePanelPropertiesMixin,
         initial_pile_sort: str = PILE_SORT_MV,
         on_view_mode_change: Callable[[str, str], None] | None = None,
         on_pile_sort_change: Callable[[str, str], None] | None = None,
+        on_zone_transfer: Callable[[str, list[str], wx.Point], bool] | None = None,
     ) -> None:
         super().__init__(parent)
         self.zone = zone
@@ -86,6 +87,7 @@ class CardTablePanel(CardTablePanelHandlersMixin, CardTablePanelPropertiesMixin,
         self._locale = locale
         self._on_view_mode_change = on_view_mode_change
         self._on_pile_sort_change = on_pile_sort_change
+        self._on_zone_transfer = on_zone_transfer
 
         self.cards: list[dict[str, Any]] = []
         self.selected_name: str | None = None
@@ -142,6 +144,7 @@ class CardTablePanel(CardTablePanelHandlersMixin, CardTablePanelPropertiesMixin,
             on_hover=self._handle_view_hover,
             on_delta=lambda name, delta: self._on_delta(self.zone, name, delta),
             on_remove=self._handle_view_remove,
+            on_zone_transfer=self._handle_view_zone_transfer,
         )
         self._content_book.AddPage(self.grid_view, "grid")
 
@@ -156,6 +159,7 @@ class CardTablePanel(CardTablePanelHandlersMixin, CardTablePanelPropertiesMixin,
             label_for_column=self._column_label,
             on_delta=lambda name, delta: self._on_delta(self.zone, name, delta),
             on_remove=self._handle_view_remove,
+            on_zone_transfer=self._handle_view_zone_transfer,
         )
         self._content_book.AddPage(self.table_view, "table")
 
@@ -169,6 +173,7 @@ class CardTablePanel(CardTablePanelHandlersMixin, CardTablePanelPropertiesMixin,
             on_hover=self._handle_view_hover,
             get_sort_mode=lambda: self.pile_sort,
             on_remove=self._handle_view_remove,
+            on_zone_transfer=self._handle_view_zone_transfer,
         )
         self._content_book.AddPage(self.pile_view, "pile")
 
@@ -304,6 +309,16 @@ class CardTablePanel(CardTablePanelHandlersMixin, CardTablePanelPropertiesMixin,
         """Remove ``name`` from this panel's zone (grid/pile-view action)."""
         if self._on_remove:
             self._on_remove(self.zone, name)
+
+    def _handle_view_zone_transfer(self, names: list[str], screen_point: wx.Point) -> bool:
+        """Offer a cross-zone drop to the frame; returns True if it was consumed.
+
+        A view calls this when a drag is released; the frame moves the cards to
+        the other zone if the drop landed over that zone's pane (#781).
+        """
+        if self._on_zone_transfer:
+            return self._on_zone_transfer(self.zone, names, screen_point)
+        return False
 
     @staticmethod
     def _build_loading_state(parent: wx.Window) -> wx.Panel:

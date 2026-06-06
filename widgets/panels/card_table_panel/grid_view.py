@@ -113,6 +113,7 @@ class DeckGridView(wx.ScrolledWindow):
         on_hover: Callable[[dict[str, Any]], None] | None,
         on_delta: Callable[[str, int], None] | None = None,
         on_remove: Callable[[str], None] | None = None,
+        on_zone_transfer: Callable[[list[str], wx.Point], bool] | None = None,
     ) -> None:
         super().__init__(parent, style=wx.VSCROLL)
         self.zone = zone
@@ -124,6 +125,7 @@ class DeckGridView(wx.ScrolledWindow):
         self._on_hover = on_hover
         self._on_delta = on_delta
         self._on_remove = on_remove
+        self._on_zone_transfer = on_zone_transfer
 
         self._cards: list[dict[str, Any]] = []
         # Multi-selection by card name (a single click selects exactly one).
@@ -768,7 +770,15 @@ class DeckGridView(wx.ScrolledWindow):
         if self.HasCapture():
             self.ReleaseMouse()
         if self._drag_active:
-            self._perform_drop(self._to_logical(event.GetPosition()))
+            # A drop over the other zone's pane moves the cards there; otherwise
+            # it's a within-zone reorder.
+            transferred = False
+            if self._on_zone_transfer is not None:
+                transferred = self._on_zone_transfer(
+                    self._drag_names, self.ClientToScreen(event.GetPosition())
+                )
+            if not transferred:
+                self._perform_drop(self._to_logical(event.GetPosition()))
             self._reset_drag()
             self.Refresh()
             return

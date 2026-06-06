@@ -99,6 +99,7 @@ class DeckTableView(wx.Panel):
         label_for_column: Callable[[str], str] | None = None,
         on_delta: Callable[[str, int], None] | None = None,
         on_remove: Callable[[str], None] | None = None,
+        on_zone_transfer: Callable[[list[str], wx.Point], bool] | None = None,
     ) -> None:
         super().__init__(parent)
         self.zone = zone
@@ -109,6 +110,7 @@ class DeckTableView(wx.Panel):
         self._labels = label_for_column or _COLUMN_LABELS.get
         self._on_delta = on_delta
         self._on_remove = on_remove
+        self._on_zone_transfer = on_zone_transfer
 
         self._cards: list[dict[str, Any]] = []
         self._rows: list[dict[str, Any]] = []  # cards in current display order
@@ -518,8 +520,16 @@ class DeckTableView(wx.Panel):
         if self._grid_window.HasCapture():
             self._grid_window.ReleaseMouse()
         if self._drag_active:
-            x, y = self.grid.CalcUnscrolledPosition(event.GetPosition())
-            self._perform_drop(self._drop_row_at(y))
+            # A drop over the other zone's pane moves the cards there; otherwise
+            # it's a within-zone reorder.
+            transferred = False
+            if self._on_zone_transfer is not None:
+                transferred = self._on_zone_transfer(
+                    self._drag_names, self._grid_window.ClientToScreen(event.GetPosition())
+                )
+            if not transferred:
+                x, y = self.grid.CalcUnscrolledPosition(event.GetPosition())
+                self._perform_drop(self._drop_row_at(y))
             self._reset_drag()
             return
         self._drag_press = None
