@@ -27,7 +27,7 @@ from utils.constants import CACHE_DIR
 IMAGE_CACHE_DIR = CACHE_DIR / "card_images"
 IMAGE_DB_PATH = IMAGE_CACHE_DIR / "images.db"
 BULK_DATA_CACHE = IMAGE_CACHE_DIR / "bulk_data.json"
-PRINTING_INDEX_VERSION = 3
+PRINTING_INDEX_VERSION = 4
 PRINTING_INDEX_CACHE = IMAGE_CACHE_DIR / f"printings_v{PRINTING_INDEX_VERSION}.json"
 
 # Image size options (in order of preference for storage)
@@ -82,6 +82,7 @@ class BulkCard(msgspec.Struct, gc=False):
     released_at: str | None = None
     flavor_text: str | None = None
     artist: str | None = None
+    full_art: bool | None = None
     card_faces: list[BulkCardFace] | None = None
 
     def get(self, key: str, default: Any = None) -> Any:  # noqa: ANN401
@@ -133,6 +134,7 @@ class PrintingEntry(msgspec.Struct, gc=False):
     released_at: str
     flavor_text: str = ""
     artist: str = ""
+    full_art: bool = False
 
     def get(self, key: str, default: Any = None) -> Any:  # noqa: ANN401
         return getattr(self, key, default)

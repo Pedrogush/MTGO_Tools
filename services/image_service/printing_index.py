@@ -77,6 +77,7 @@ def build_printing_index(
             "released_at": card.get("released_at") or "",
             "flavor_text": card.get("flavor_text") or "",
             "artist": card.get("artist") or "",
+            "full_art": bool(card.get("full_art")),
         }
         by_name.setdefault(key, []).append(entry)
         for alias in _collect_face_aliases(card, name):
