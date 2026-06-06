@@ -98,6 +98,10 @@ class SideboardGuidePanelHandlersMixin(_Base):
         if self.on_edit_flex_slots:
             self.on_edit_flex_slots()
 
+    def _on_record_clicked(self, _event: wx.Event) -> None:
+        if self.on_record_guide:
+            self.on_record_guide()
+
     def set_pinned(self, pinned: bool) -> None:
         if pinned:
             self.pin_btn.SetLabel(self._t("guide.btn.pinned"))

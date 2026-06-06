@@ -42,6 +42,7 @@ class SideboardGuidePanel(
         on_import_csv: Callable[[], None],
         on_pin_guide: Callable[[], None] | None = None,
         on_edit_flex_slots: Callable[[], None] | None = None,
+        on_record_guide: Callable[[], None] | None = None,
         locale: str | None = None,
     ):
         super().__init__(parent)
@@ -56,6 +57,7 @@ class SideboardGuidePanel(
         self.on_import_csv = on_import_csv
         self.on_pin_guide = on_pin_guide
         self.on_edit_flex_slots = on_edit_flex_slots
+        self.on_record_guide = on_record_guide
 
         self.entries: list[dict[str, str]] = []
         self.exclusions: list[str] = []
@@ -98,6 +100,15 @@ class SideboardGuidePanel(
         stylize_button(self.empty_cta_btn)
         self.empty_cta_btn.Bind(wx.EVT_BUTTON, self._on_add_clicked)
         empty_sizer.Add(self.empty_cta_btn, 0, wx.ALIGN_CENTER | wx.ALL, PADDING_MD)
+        # Recording is most useful when starting from an empty guide, so surface
+        # it in the empty state too (the button row is hidden there).
+        self.empty_record_btn = wx.Button(self.empty_state_panel, label=self._t("guide.btn.record"))
+        stylize_button(self.empty_record_btn)
+        self.empty_record_btn.SetToolTip(self._t("guide.tooltip.record"))
+        self.empty_record_btn.Bind(wx.EVT_BUTTON, self._on_record_clicked)
+        empty_sizer.Add(self.empty_record_btn, 0, wx.ALIGN_CENTER | wx.ALL, PADDING_MD)
+        if self.on_record_guide is None:
+            self.empty_record_btn.Disable()
         empty_sizer.AddStretchSpacer(1)
         self.empty_state_panel.Hide()
         sizer.Add(self.empty_state_panel, 1, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_MD)
@@ -113,6 +124,14 @@ class SideboardGuidePanel(
         stylize_button(self.add_btn)
         self.add_btn.Bind(wx.EVT_BUTTON, self._on_add_clicked)
         buttons.Add(self.add_btn, 0, wx.RIGHT, PADDING_MD)
+
+        self.record_btn = wx.Button(self.button_row, label=self._t("guide.btn.record"))
+        stylize_button(self.record_btn)
+        self.record_btn.SetToolTip(self._t("guide.tooltip.record"))
+        self.record_btn.Bind(wx.EVT_BUTTON, self._on_record_clicked)
+        if self.on_record_guide is None:
+            self.record_btn.Disable()
+        buttons.Add(self.record_btn, 0, wx.RIGHT, PADDING_MD)
 
         self.edit_btn = wx.Button(self.button_row, label=self._t("guide.btn.edit"))
         stylize_button(self.edit_btn)

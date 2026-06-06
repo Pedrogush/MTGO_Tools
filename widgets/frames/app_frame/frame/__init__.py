@@ -35,6 +35,7 @@ from widgets.frames.app_frame.handlers import (
     SideboardGuideEntryHandlers,
     SideboardGuideImportExportHandlers,
     SideboardGuidePersistenceHandlers,
+    SideboardGuideRecordHandlers,
 )
 from widgets.frames.app_frame.properties import AppFramePropertiesMixin
 from widgets.frames.identify_opponent import MTGOpponentDeckSpy
@@ -63,6 +64,7 @@ class AppFrame(
     SideboardGuidePersistenceHandlers,
     SideboardGuideEntryHandlers,
     SideboardGuideImportExportHandlers,
+    SideboardGuideRecordHandlers,
     CardTablesHandler,
     LeftPanelBuilderMixin,
     CenterPanelBuilderMixin,
@@ -107,6 +109,10 @@ class AppFrame(
         # the user interacted with instead (defaults to mainboard).
         self._active_deck_zone: str = "main"
         self._deck_sash_initialized: bool = False
+        # Sideboard-guide record mode (#782): state dict + floating control bar,
+        # both None unless a record walk is in progress.
+        self._guide_record: dict[str, Any] | None = None
+        self._guide_record_bar: wx.MiniFrame | None = None
 
         self._save_timer: wx.Timer | None = None
         self._filter_debounce_timer: wx.Timer | None = None
