@@ -191,8 +191,12 @@ class AppFrame(
         content_split = wx.BoxSizer(wx.HORIZONTAL)
         right_sizer.Add(content_split, 1, wx.EXPAND | wx.BOTTOM, PADDING_LG)
 
+        # The deck workspace takes all leftover horizontal space (proportion 1)
+        # so a wider window grows the workspace — and the grid view fits more
+        # cards per row — rather than leaving empty background (issue #785). The
+        # inspector column stays at its natural width (proportion 0).
         deck_workspace = self._build_deck_workspace(right_panel)
-        content_split.Add(deck_workspace, 0, wx.EXPAND | wx.RIGHT, PADDING_LG)
+        content_split.Add(deck_workspace, 1, wx.EXPAND | wx.RIGHT, PADDING_LG)
 
         inspector_column = wx.BoxSizer(wx.VERTICAL)
         content_split.Add(inspector_column, 0, wx.EXPAND)
