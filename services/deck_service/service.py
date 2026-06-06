@@ -12,6 +12,7 @@ from repositories.deck_repository import DeckRepository, get_deck_repository
 from repositories.metagame_repository import MetagameRepository, get_metagame_repository
 from services.deck_service.averager import DeckAveragerMixin
 from services.deck_service.parser import DeckParserMixin
+from services.deck_service.printing_service import DeckPrintingMixin
 from services.deck_service.text_builder import DeckTextBuilderMixin
 from utils.constants import DEFAULT_MAX_DECKS
 
@@ -28,6 +29,7 @@ class DeckService(
     DeckParserMixin,
     DeckAveragerMixin,
     DeckTextBuilderMixin,
+    DeckPrintingMixin,
 ):
     """Service for deck-related business logic."""
 
