@@ -67,12 +67,15 @@ class CenterPanelBuilderMixin(_Base):
 
         # Mainboard and Sideboard as top-level tabs
         self._build_deck_tables_tab()
+        # The workspace keeps a *minimum* width that fits GRID_COLUMNS cards
+        # across, but is no longer locked to it (issue #785): all leftover
+        # horizontal space is given to the workspace (see `_build_right_container`
+        # where it is added with a stretch proportion), and each card view fits
+        # as many cards per row as the allotted width allows — the grid view
+        # recomputes its column count on resize.
         deck_tabs_width = CardTablePanel.grid_width()
         self.deck_tabs.SetMinSize((deck_tabs_width, -1))
-        self.deck_tabs.SetMaxSize((deck_tabs_width, -1))
-        detail_box_width = deck_tabs_width + (PADDING_MD * 2)
-        detail_box.SetMinSize((detail_box_width, -1))
-        detail_box.SetMaxSize((detail_box_width, -1))
+        detail_box.SetMinSize((deck_tabs_width + (PADDING_MD * 2), -1))
 
         # Collection status label below the tabs
         self.collection_status_label = wx.StaticText(
