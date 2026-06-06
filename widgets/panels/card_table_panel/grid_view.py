@@ -146,6 +146,21 @@ class DeckGridView(wx.ScrolledWindow):
         )
         self._marquee_base: set[str] | None = None
 
+        # Drag-to-reorder state. The grid lays out one cell per distinct card
+        # (quantity shown as a badge), so a reorder rearranges card *names*, not
+        # individual copies — the natural model for this layout (see issue #780).
+        # A reorder is a visual rearrangement only: it never changes zone
+        # quantities, so it stays inside the view and is not reported upward.
+        self._drag_press: wx.Point | None = None
+        self._drag_active = False
+        self._drag_names: list[str] = []
+        self._drag_pos: wx.Point | None = None
+        # Insertion index the current drag would drop into (None when no drag).
+        self._drop_index: int | None = None
+        # Set once the user manually reorders; like the pile view, the arranged
+        # order survives until the next set_cards (a deck edit / reload re-sorts).
+        self._manual_overrides = False
+
         self._image_cache = _ImageCache()
         # Per-name load generation so a stale in-flight decode (e.g. of an old
         # image after refresh_image re-downloads) can't overwrite a newer one.
@@ -192,6 +207,11 @@ class DeckGridView(wx.ScrolledWindow):
         if not preserve_scroll:
             self._hover_name = None
             self._pressed = None
+        # A reorder is local to the view; any incoming set_cards (deck edit or
+        # reload) supersedes the manual arrangement, so drop the override and any
+        # in-flight drag.
+        self._manual_overrides = False
+        self._reset_drag()
         self._recompute_layout()
         self._prefetch_images()
         if not preserve_scroll:
@@ -484,6 +504,9 @@ class DeckGridView(wx.ScrolledWindow):
             # Oversized deck: draw directly, culled to the repaint region.
             for idx in self._visible_card_indices():
                 self._draw_card(dc, self._card_rect(idx), self._cards[idx])
+        if self._drag_active:
+            self._draw_drop_indicator(dc)
+            self._draw_drag_ghost(dc)
         # Stamp the origin this paint just rendered (and how long it took) so the
         # wheel-latency harness can tell when the view caught up to the scroll
         # input (no-op unless the perf recorder is enabled).
@@ -691,12 +714,31 @@ class DeckGridView(wx.ScrolledWindow):
                     self._fire_action(name, slot)
                     return
 
-        if self._selected_names == {name}:
+        if event.ShiftDown() or event.ControlDown():
+            # Toggle this card's membership in the multi-selection.
+            if name in self._selected_names:
+                self._selected_names.discard(name)
+            else:
+                self._selected_names.add(name)
+            self._notify_selection_for_set()
+        elif self._selected_names == {name}:
+            # Second click on the only selected card clears the selection and
+            # does not start a drag.
             self._selected_names = set()
             self._notify_selection(None)
-        else:
+            self.Refresh()
+            return
+        elif name not in self._selected_names:
             self._selected_names = {name}
             self._notify_selection(card)
+
+        # Prime a potential drag-to-reorder; it only begins once the pointer
+        # moves past the threshold in _on_motion. Names are taken in visual
+        # (grid) order so a multi-card drag keeps its relative arrangement.
+        self._drag_press = point
+        self._drag_names = self._names_in_visual_order(self._selected_names)
+        if not self.HasCapture():
+            self.CaptureMouse()
         self.Refresh()
 
     def begin_marquee_at_screen(self, screen_point: wx.Point, *, additive: bool = False) -> None:
@@ -719,23 +761,52 @@ class DeckGridView(wx.ScrolledWindow):
         elif slot == 2 and self._on_remove:
             self._on_remove(name)
 
-    def _on_left_up(self, _event: wx.MouseEvent) -> None:
+    def _on_left_up(self, event: wx.MouseEvent) -> None:
         if self._marquee.active:
             self._marquee.finish()
             return
+        if self.HasCapture():
+            self.ReleaseMouse()
+        if self._drag_active:
+            self._perform_drop(self._to_logical(event.GetPosition()))
+            self._reset_drag()
+            self.Refresh()
+            return
+        self._drag_press = None
+        self._drag_names = []
         if self._pressed is not None:
             self._pressed = None
             self.Refresh()
 
     def _on_capture_lost(self, _event: wx.MouseCaptureLostEvent) -> None:
         self._marquee.cancel()
+        self._reset_drag()
         self.Refresh()
+
+    def _reset_drag(self) -> None:
+        self._drag_press = None
+        self._drag_active = False
+        self._drag_names = []
+        self._drag_pos = None
+        self._drop_index = None
 
     def _on_motion(self, event: wx.MouseEvent) -> None:
         if self._marquee.active:
             self._marquee.update(event.GetPosition())
             return
         point = self._to_logical(event.GetPosition())
+
+        if self._drag_press is not None and event.LeftIsDown():
+            dx = abs(point.x - self._drag_press.x)
+            dy = abs(point.y - self._drag_press.y)
+            if not self._drag_active and (dx > 4 or dy > 4):
+                self._drag_active = True
+            if self._drag_active:
+                self._drag_pos = point
+                self._drop_index = self._drop_index_at(point)
+                self.Refresh()
+            return
+
         idx = self._hit_test(point)
         hovered = self._cards[idx]["name"] if idx is not None else None
         if hovered == self._hover_name:
@@ -789,6 +860,111 @@ class DeckGridView(wx.ScrolledWindow):
             if card["name"] == name:
                 return card
         return None
+
+    def _notify_selection_for_set(self) -> None:
+        """Report a multi-selection: a lone card is forwarded, a set reports None
+        so the inspector falls back to hover (mirrors the marquee path)."""
+        if len(self._selected_names) == 1:
+            self._notify_selection(self._card_for(next(iter(self._selected_names))))
+        else:
+            self._notify_selection(None)
+
+    # ----- drag-to-reorder -----
+    def _names_in_visual_order(self, names: set[str]) -> list[str]:
+        """Return ``names`` in left-to-right, top-to-bottom grid order."""
+        return [card["name"] for card in self._cards if card["name"] in names]
+
+    def _drop_index_at(self, point: wx.Point) -> int:
+        """Insertion index in ``self._cards`` for a drop at ``point``.
+
+        Cards snap to the nearest cell gap: the x within a cell decides whether
+        the drop lands before or after that column, so dropping on the right
+        half of a cell inserts after it.
+        """
+        cols = max(1, self._cols)
+        n = len(self._cards)
+        if n == 0:
+            return 0
+        row = max(0, point.y // _CELL_HEIGHT)
+        col_f = point.x / _CELL_WIDTH
+        col = int(max(0, min(cols, round(col_f))))
+        idx = int(row) * cols + col
+        return max(0, min(n, idx))
+
+    def _perform_drop(self, point: wx.Point) -> None:
+        """Move the dragged card cells to the insertion point.
+
+        A pure visual rearrangement of ``self._cards`` — zone quantities are
+        untouched, so nothing is reported upward. The new order persists until
+        the next set_cards (a deck edit or reload re-sorts the zone).
+        """
+        if not self._drag_names:
+            return
+        insert_idx = self._drop_index if self._drop_index is not None else len(self._cards)
+        dragged = set(self._drag_names)
+        # Count how many dragged cells precede the insertion point so the index
+        # stays correct once those cells are pulled out of the list.
+        before = sum(1 for card in self._cards[:insert_idx] if card["name"] in dragged)
+        insert_idx -= before
+        moved = [card for card in self._cards if card["name"] in dragged]
+        if not moved:
+            return
+        # Preserve the dragged cards' visual order.
+        order = {name: i for i, name in enumerate(self._drag_names)}
+        moved.sort(key=lambda c: order.get(c["name"], 0))
+        kept = [card for card in self._cards if card["name"] not in dragged]
+        insert_idx = max(0, min(len(kept), insert_idx))
+        self._cards = kept[:insert_idx] + moved + kept[insert_idx:]
+        self._manual_overrides = True
+        self._recompute_layout()
+
+    def _draw_drag_ghost(self, dc: wx.DC) -> None:
+        """Render the dragged card near the cursor, with a count for multi-drag."""
+        if not self._drag_pos or not self._drag_names:
+            return
+        name = self._drag_names[0]
+        rect = wx.Rect(self._drag_pos.x + 8, self._drag_pos.y + 8, _CARD_WIDTH, _CARD_HEIGHT)
+        bitmap = self._image_cache.get(name)
+        if bitmap is not None:
+            dc.DrawBitmap(bitmap, rect.x, rect.y, True)
+        else:
+            dc.DrawBitmap(self._template_for(name), rect.x, rect.y, True)
+        if len(self._drag_names) > 1:
+            badge = f"×{len(self._drag_names)}"
+            dc.SetFont(
+                wx.Font(
+                    DECK_CARD_BASE_FONT_SIZE,
+                    wx.FONTFAMILY_SWISS,
+                    wx.FONTSTYLE_NORMAL,
+                    wx.FONTWEIGHT_BOLD,
+                )
+            )
+            tw, th = dc.GetTextExtent(badge)
+            pad = DECK_CARD_BADGE_PADDING
+            bx = rect.x + rect.width - tw - pad * 3
+            by = rect.y + pad
+            dc.SetBrush(wx.Brush(wx.Colour(*DARK_ACCENT)))
+            dc.SetPen(wx.TRANSPARENT_PEN)
+            dc.DrawRectangle(bx, by, tw + pad * 2, th + pad)
+            dc.SetTextForeground(wx.Colour(*LIGHT_TEXT))
+            dc.DrawText(badge, bx + pad, by + pad // 2)
+
+    def _draw_drop_indicator(self, dc: wx.DC) -> None:
+        """Draw an insertion bar at the gap the drop would land in."""
+        if self._drop_index is None or not self._cards:
+            return
+        cols = max(1, self._cols)
+        idx = self._drop_index
+        row, col = divmod(idx, cols)
+        # An insertion past the last cell of the final row has no next row to
+        # wrap into; render it at the right edge of that last cell instead.
+        if idx == len(self._cards) and col == 0 and idx > 0:
+            row, col = divmod(idx - 1, cols)
+            col += 1
+        x = col * _CELL_WIDTH
+        y = row * _CELL_HEIGHT
+        dc.SetPen(wx.Pen(wx.Colour(*DARK_ACCENT), 3))
+        dc.DrawLine(x, y, x, y + _CARD_HEIGHT)
 
     def _autoscroll_towards(self, client_pos: wx.Point) -> None:
         """Scroll one step toward any viewport edge the pointer is held beyond."""
