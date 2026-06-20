@@ -152,6 +152,8 @@ class IntrospectionMixin(_Base):
             "copy_button": getattr(self.frame, "copy_button", None),
             "save_button": getattr(self.frame, "save_button", None),
             "daily_average_button": getattr(self.frame, "daily_average_button", None),
+            "left_toggle": getattr(self.frame, "left_toggle_btn", None),
+            "inspector_toggle": getattr(self.frame, "inspector_toggle_btn", None),
         }
         return widget_map.get(name)
 

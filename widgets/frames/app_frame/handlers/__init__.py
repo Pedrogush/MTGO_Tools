@@ -15,6 +15,9 @@ from widgets.frames.app_frame.handlers.sideboard_guide_io import (
 from widgets.frames.app_frame.handlers.sideboard_guide_persistence import (
     SideboardGuidePersistenceHandlers,
 )
+from widgets.frames.app_frame.handlers.sideboard_guide_record import (
+    SideboardGuideRecordHandlers,
+)
 
 __all__ = [
     "AppFrameHandlersMixin",
@@ -26,4 +29,5 @@ __all__ = [
     "SideboardGuideEntryHandlers",
     "SideboardGuideImportExportHandlers",
     "SideboardGuidePersistenceHandlers",
+    "SideboardGuideRecordHandlers",
 ]

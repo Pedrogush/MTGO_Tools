@@ -12,6 +12,7 @@ from widgets.panels.compact_radar_panel.properties import (
     _TOP_SIDEBOARD_LIMIT,
     RadarViewMode,
 )
+from widgets.wx_layout import relayout
 
 if TYPE_CHECKING:
     from services.radar_service import RadarData
@@ -33,7 +34,7 @@ class CompactRadarHandlersMixin(_Base):
         self.view_toggle_btn.Show()
         self._populate_card_list()
         self.Show()
-        self.GetParent().Layout()
+        relayout(self.GetParent())
         logger.debug(f"Compact radar displayed: {radar.archetype_name}")
 
     def clear(self) -> None:
@@ -42,7 +43,7 @@ class CompactRadarHandlersMixin(_Base):
         self.status_label.SetLabel("Waiting for opponent\u2026")
         self.card_list.Clear()
         self.view_toggle_btn.Hide()
-        self.GetParent().Layout()
+        relayout(self.GetParent())
 
     def set_loading(self, message: str = "Loading radar data...") -> None:
         self.header_label.SetLabel("Radar: Loading...")
@@ -50,7 +51,7 @@ class CompactRadarHandlersMixin(_Base):
         self.card_list.Clear()
         self.view_toggle_btn.Hide()
         self.Show()
-        self.GetParent().Layout()
+        relayout(self.GetParent())
 
     def set_error(self, error_message: str) -> None:
         self.header_label.SetLabel("Radar: Error")
@@ -58,7 +59,7 @@ class CompactRadarHandlersMixin(_Base):
         self.card_list.Clear()
         self.view_toggle_btn.Hide()
         self.Show()
-        self.GetParent().Layout()
+        relayout(self.GetParent())
 
     # ============= Private Methods =============
 

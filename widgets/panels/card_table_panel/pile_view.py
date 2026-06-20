@@ -102,6 +102,7 @@ class DeckPileView(wx.ScrolledWindow):
         on_hover: Callable[[dict[str, Any]], None] | None,
         get_sort_mode: Callable[[], str] | None = None,
         on_remove: Callable[[str], None] | None = None,
+        on_zone_transfer: Callable[[list[str], wx.Point], bool] | None = None,
     ) -> None:
         super().__init__(parent, style=wx.HSCROLL | wx.VSCROLL)
         self.zone = zone
@@ -111,6 +112,7 @@ class DeckPileView(wx.ScrolledWindow):
         self._on_hover = on_hover
         self._get_sort_mode = get_sort_mode or (lambda: PILE_SORT_MV)
         self._on_remove = on_remove
+        self._on_zone_transfer = on_zone_transfer
 
         self._cards: list[dict[str, Any]] = []
         # piles is a list of (label, [card_entries...]) — card_entries are
@@ -153,6 +155,13 @@ class DeckPileView(wx.ScrolledWindow):
         # wheel notch costs one viewport copy. Rebuilt on content change; the
         # affected pile is patched in place when a card image arrives.
         self._canvas: wx.Bitmap | None = None
+        # The cached canvas is sized to the *content* (pile positions are
+        # width-independent — see _pile_x), NOT the scroll/virtual size, which wx
+        # inflates to the client width. Keeping it content-sized means a pure
+        # resize (e.g. collapsing a side panel) reuses the canvas instead of
+        # re-compositing every card's alpha bitmap — the slow blit that otherwise
+        # stalls the toggle and leaves a visible "void" band (#782 follow-up).
+        self._content_size: wx.Size = wx.Size(0, 0)
 
         self.SetBackgroundColour(DARK_PANEL)
         # AutoBufferedPaintDC requires the window to use BG_STYLE_PAINT so
@@ -243,11 +252,15 @@ class DeckPileView(wx.ScrolledWindow):
         # Pile contents/positions changed — the cached image is stale.
         self._invalidate_canvas()
         if not self._piles:
+            self._content_size = wx.Size(100, 100)
             self.SetVirtualSize((100, 100))
             return
         max_members = max(len(members) for _, members in self._piles)
         height = _PILE_TOP + self._pile_height(max_members) + _PILE_PAD * 2
         width = (_CARD_WIDTH + _PILE_GAP) * len(self._piles) + _PILE_GAP
+        # Canvas tracks the true content extent; the scroll/virtual size may be
+        # inflated to the client by wx, but the canvas must not be (see __init__).
+        self._content_size = wx.Size(width, height)
         self.SetVirtualSize((width, height))
 
     def _pile_x(self, pile_index: int) -> int:
@@ -390,7 +403,7 @@ class DeckPileView(wx.ScrolledWindow):
         Returns ``None`` when there is nothing to draw or the virtual size is
         too large to cache, signalling the caller to draw directly.
         """
-        vsize = self.GetVirtualSize()
+        vsize = self._content_size
         vw, vh = vsize.GetWidth(), vsize.GetHeight()
         if not self._piles or vw <= 0 or vh <= 0:
             return None
@@ -680,7 +693,21 @@ class DeckPileView(wx.ScrolledWindow):
         point = self._to_logical(event.GetPosition())
 
         if self._drag_active:
-            self._drop_at(point)
+            # A drop over the other zone's pane moves those copies there;
+            # otherwise it's a within-view rearrangement.
+            transferred = False
+            if self._on_zone_transfer is not None:
+                names = [
+                    entry["name"]
+                    for uid in self._drag_uids
+                    if (entry := self._find_entry(uid)) is not None
+                ]
+                if names:
+                    transferred = self._on_zone_transfer(
+                        names, self.ClientToScreen(event.GetPosition())
+                    )
+            if not transferred:
+                self._drop_at(point)
             self._drag_active = False
             self._drag_press = None
             self._drag_uids = []

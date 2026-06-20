@@ -1,8 +1,21 @@
 """Shared UI layout constants."""
 
+# Preferred size on first launch / on displays large enough to host it. On a
+# smaller display the frame auto-maximizes instead (see _apply_window_preferences).
 APP_FRAME_SIZE = (1480, 860)
-APP_FRAME_MIN_SIZE = (1480, 760)
+# Hard floor for the window. Sized to fit a budget 13"–14" laptop: such panels
+# are commonly 1366x768 (and some 1280x800), whose taskbar+title-bar leave
+# ~1366x720 / ~1280x752 of usable area. 1200x680 clears both with margin, so the
+# window can shrink to fit rather than being clipped. The collapsible side panels
+# (left sidebar + card inspector) and the 2-column grid floor are what let the
+# real content minimum drop to this size; see _apply_min_size, which raises the
+# floor dynamically when a tall panel (the inspector) is expanded.
+APP_FRAME_MIN_SIZE = (1200, 680)
 APP_FRAME_SUMMARY_MIN_HEIGHT = 90
+
+# Width (px) of the thin gutter buttons that collapse/expand the left sidebar
+# and the right card-inspector column.
+COLLAPSE_TOGGLE_WIDTH = 16
 
 # Research panel — archetype list height for ~3 visible items (px)
 ARCHETYPE_LIST_ITEM_HEIGHT = 22

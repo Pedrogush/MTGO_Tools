@@ -26,7 +26,7 @@ from typing import Any
 import wx
 import wx.grid as gridlib
 
-from utils.constants import DARK_ALT, DARK_BG, DARK_PANEL, LIGHT_TEXT, SUBDUED_TEXT
+from utils.constants import DARK_ACCENT, DARK_ALT, DARK_BG, DARK_PANEL, LIGHT_TEXT, SUBDUED_TEXT
 from widgets.mana_icon_factory import ManaIconFactory
 from widgets.panels.card_table_panel.marquee import MarqueeController
 from widgets.panels.card_table_panel.sorting import (
@@ -99,6 +99,7 @@ class DeckTableView(wx.Panel):
         label_for_column: Callable[[str], str] | None = None,
         on_delta: Callable[[str, int], None] | None = None,
         on_remove: Callable[[str], None] | None = None,
+        on_zone_transfer: Callable[[list[str], wx.Point], bool] | None = None,
     ) -> None:
         super().__init__(parent)
         self.zone = zone
@@ -109,6 +110,7 @@ class DeckTableView(wx.Panel):
         self._labels = label_for_column or _COLUMN_LABELS.get
         self._on_delta = on_delta
         self._on_remove = on_remove
+        self._on_zone_transfer = on_zone_transfer
 
         self._cards: list[dict[str, Any]] = []
         self._rows: list[dict[str, Any]] = []  # cards in current display order
@@ -123,6 +125,17 @@ class DeckTableView(wx.Panel):
         # (possibly multi-) selection, so an echoed None can't wipe the set.
         self._suppress_set_selected: bool = False
         self._marquee_base: set[str] | None = None
+        # Drag-to-reorder state. A reorder rearranges rows visually only — zone
+        # quantities never change, so it stays inside the view (issue #779). The
+        # arranged order lives in self._rows until the next sort / set_cards.
+        self._drag_press: wx.Point | None = None
+        self._drag_active = False
+        self._drag_names: list[str] = []
+        self._drop_row: int | None = None
+        self._manual_overrides = False
+        # Insertion-line feedback is drawn over the native grid with an overlay so
+        # it survives the grid's own repaints without us owning its paint cycle.
+        self._drop_overlay = wx.Overlay()
         # Natural widths populated by _autosize_columns; _fit_to_width starts
         # from these so resizing the panel wider re-expands the columns.
         self._natural_widths: dict[int, int] = {}
@@ -191,6 +204,7 @@ class DeckTableView(wx.Panel):
         # Rubber-band selection lives on the grid's inner window (the surface the
         # rows are drawn on and the one that carries the scroll offset).
         grid_window = self.grid.GetGridWindow()
+        self._grid_window = grid_window
         self._marquee = MarqueeController(
             grid_window,
             to_logical=self._to_logical,
@@ -200,7 +214,6 @@ class DeckTableView(wx.Panel):
         )
 
         self.grid.Bind(gridlib.EVT_GRID_LABEL_LEFT_CLICK, self._on_header_click)
-        self.grid.Bind(gridlib.EVT_GRID_CELL_LEFT_CLICK, self._on_cell_click)
         self.grid.Bind(gridlib.EVT_GRID_SELECT_CELL, self._on_cell_select)
         grid_window.Bind(wx.EVT_LEFT_DOWN, self._on_grid_left_down)
         grid_window.Bind(wx.EVT_LEFT_UP, self._on_grid_left_up)
@@ -212,8 +225,11 @@ class DeckTableView(wx.Panel):
     # ----- public API consumed by CardTablePanel -----
     def set_cards(self, cards: list[dict[str, Any]]) -> None:
         self._cards = list(cards)
-        # Content changed — recompute column widths from the new data.
+        # Content changed — recompute column widths from the new data, and drop
+        # any manual reorder / in-flight drag (the new content re-sorts).
         self._needs_autosize = True
+        self._manual_overrides = False
+        self._reset_drag()
         self._refresh()
 
     def set_selected(self, name: str | None) -> None:
@@ -241,19 +257,26 @@ class DeckTableView(wx.Panel):
         return TABLE_COLUMNS[0]
 
     def _refresh(self) -> None:
-        sorted_cards = sort_table_rows(
+        # An explicit (column) sort supersedes any manual drag arrangement.
+        self._rows = sort_table_rows(
             self._cards, self._get_metadata, self._sort_column, self._sort_descending
         )
-        self._rows = sorted_cards
+        self._populate_grid()
+        if self._needs_autosize and self.grid.GetNumberRows() > 0:
+            self._autosize_columns()
+            self._needs_autosize = False
+
+    def _populate_grid(self) -> None:
+        """Render ``self._rows`` into the grid in their current order (no sort)."""
         self.grid.BeginBatch()
         try:
             current = self.grid.GetNumberRows()
-            needed = len(sorted_cards)
+            needed = len(self._rows)
             if needed > current:
                 self.grid.AppendRows(needed - current)
             elif needed < current:
                 self.grid.DeleteRows(needed, current - needed)
-            for row_idx, card in enumerate(sorted_cards):
+            for row_idx, card in enumerate(self._rows):
                 meta = self._get_metadata(card["name"]) or {}
                 for col_idx, col_id in enumerate(TABLE_COLUMNS):
                     self.grid.SetCellValue(row_idx, col_idx, self._cell_text(card, meta, col_id))
@@ -261,9 +284,6 @@ class DeckTableView(wx.Panel):
             self._update_sort_indicator()
         finally:
             self.grid.EndBatch()
-        if self._needs_autosize and self.grid.GetNumberRows() > 0:
-            self._autosize_columns()
-            self._needs_autosize = False
 
     @staticmethod
     def _cell_text(card: dict[str, Any], meta: Any, col_id: str) -> str:
@@ -388,25 +408,8 @@ class DeckTableView(wx.Panel):
         else:
             self._sort_column = col_id
             self._sort_descending = False
+        self._manual_overrides = False
         self._refresh()
-
-    def _on_cell_click(self, event: gridlib.GridEvent) -> None:
-        row = event.GetRow()
-        if not (0 <= row < len(self._rows)):
-            event.Skip()
-            return
-        card = self._rows[row]
-        if event.GetCol() == _ACTIONS_COL:
-            self._handle_action_click(row, card["name"], event.GetPosition())
-            return
-        if self._selected_names == {card["name"]}:
-            self._selected_names = set()
-            self._apply_selection_highlight()
-            self._notify_selection(None)
-            return
-        self._selected_names = {card["name"]}
-        self._apply_selection_highlight()
-        self._notify_selection(card)
 
     def _handle_action_click(self, row: int, name: str, pos: wx.Point) -> None:
         # Convert the event position (device coords on the grid window) into an
@@ -433,6 +436,16 @@ class DeckTableView(wx.Panel):
         if self._marquee.active:
             self._marquee.update(event.GetPosition())
             return
+        if self._drag_press is not None and event.LeftIsDown():
+            x, y = self.grid.CalcUnscrolledPosition(event.GetPosition())
+            if not self._drag_active and (
+                abs(x - self._drag_press.x) > 4 or abs(y - self._drag_press.y) > 4
+            ):
+                self._drag_active = True
+            if self._drag_active:
+                self._drop_row = self._drop_row_at(y)
+                self._draw_drop_line(self._drop_row)
+            return
         if self._selected_names or self._on_hover is None:
             event.Skip()
             return
@@ -456,23 +469,149 @@ class DeckTableView(wx.Panel):
         self._marquee.begin_at_screen(screen_point, additive=additive)
 
     def _on_grid_left_down(self, event: wx.MouseEvent) -> None:
-        # A press on a real row is left to the grid (cell-click selection); a
-        # press on the empty area below the rows starts a marquee instead.
-        _x, y = self.grid.CalcUnscrolledPosition(event.GetPosition())
+        """Own every press on the grid surface.
+
+        Not skipping to the native grid is what suppresses its press-drag
+        range-select (the "selects everything from the top down" bug, #779): a
+        press on a row selects exactly that row (Shift/Ctrl toggle a set) and
+        primes a drag-to-reorder; a press below the rows starts a marquee.
+        """
+        x, y = self.grid.CalcUnscrolledPosition(event.GetPosition())
         row = self.grid.YToRow(y)
         if row == wx.NOT_FOUND or not (0 <= row < len(self._rows)):
             self._marquee.begin(event.GetPosition(), additive=event.ShiftDown())
             return
-        event.Skip()
+
+        card = self._rows[row]
+        name = card["name"]
+        if self.grid.XToCol(x) == _ACTIONS_COL:
+            # A +/-/x click edits the quantity; never selects or starts a drag.
+            self._handle_action_click(row, name, event.GetPosition())
+            return
+
+        if event.ShiftDown() or event.ControlDown():
+            if name in self._selected_names:
+                self._selected_names.discard(name)
+            else:
+                self._selected_names.add(name)
+            self._apply_selection_highlight()
+            self._notify_selection_for_set()
+        elif self._selected_names == {name}:
+            # Second click on the only selected row clears it; no drag.
+            self._selected_names = set()
+            self._apply_selection_highlight()
+            self._notify_selection(None)
+            return
+        elif name not in self._selected_names:
+            self._selected_names = {name}
+            self._apply_selection_highlight()
+            self._notify_selection(card)
+
+        # Prime a potential drag-to-reorder (begins once the pointer moves).
+        self._drag_press = wx.Point(x, y)
+        self._drag_names = self._names_in_visual_order(self._selected_names)
+        if not self._grid_window.HasCapture():
+            self._grid_window.CaptureMouse()
 
     def _on_grid_left_up(self, event: wx.MouseEvent) -> None:
         if self._marquee.active:
             self._marquee.finish()
             return
+        if self._grid_window.HasCapture():
+            self._grid_window.ReleaseMouse()
+        if self._drag_active:
+            # A drop over the other zone's pane moves the cards there; otherwise
+            # it's a within-zone reorder.
+            transferred = False
+            if self._on_zone_transfer is not None:
+                transferred = self._on_zone_transfer(
+                    self._drag_names, self._grid_window.ClientToScreen(event.GetPosition())
+                )
+            if not transferred:
+                x, y = self.grid.CalcUnscrolledPosition(event.GetPosition())
+                self._perform_drop(self._drop_row_at(y))
+            self._reset_drag()
+            return
+        self._drag_press = None
+        self._drag_names = []
         event.Skip()
 
     def _on_grid_capture_lost(self, _event: wx.MouseCaptureLostEvent) -> None:
         self._marquee.cancel()
+        self._reset_drag()
+
+    # ----- drag-to-reorder -----
+    def _names_in_visual_order(self, names: set[str]) -> list[str]:
+        """Return ``names`` in current top-to-bottom row order."""
+        return [card["name"] for card in self._rows if card["name"] in names]
+
+    def _drop_row_at(self, y_logical: int) -> int:
+        """Insertion row index for a drop at logical y (before the row whose
+        midpoint sits below the cursor)."""
+        n = len(self._rows)
+        for idx in range(n):
+            rect = self.grid.CellToRect(idx, 0)
+            if y_logical < rect.y + rect.height / 2:
+                return idx
+        return n
+
+    def _perform_drop(self, insert_row: int) -> None:
+        """Reorder ``self._rows`` so the dragged rows land at ``insert_row``.
+
+        Visual rearrangement only; zone quantities are untouched and nothing is
+        reported upward. Persists until the next sort / set_cards.
+        """
+        if not self._drag_names:
+            return
+        dragged = set(self._drag_names)
+        before = sum(1 for c in self._rows[:insert_row] if c["name"] in dragged)
+        insert_row -= before
+        order = {name: i for i, name in enumerate(self._drag_names)}
+        moved = sorted(
+            (c for c in self._rows if c["name"] in dragged),
+            key=lambda c: order.get(c["name"], 0),
+        )
+        if not moved:
+            return
+        kept = [c for c in self._rows if c["name"] not in dragged]
+        insert_row = max(0, min(len(kept), insert_row))
+        self._rows = kept[:insert_row] + moved + kept[insert_row:]
+        self._manual_overrides = True
+        self._populate_grid()
+
+    def _draw_drop_line(self, insert_row: int) -> None:
+        """Draw the insertion line over the grid at ``insert_row`` via overlay."""
+        n = len(self._rows)
+        if n == 0:
+            return
+        if insert_row < n:
+            rect = self.grid.CellToRect(insert_row, 0)
+            logical_y = rect.y
+        else:
+            rect = self.grid.CellToRect(n - 1, 0)
+            logical_y = rect.GetBottom()
+        _x, device_y = self.grid.CalcScrolledPosition(0, logical_y)
+        dc = wx.ClientDC(self._grid_window)
+        odc = wx.DCOverlay(self._drop_overlay, dc)
+        odc.Clear()
+        dc.SetPen(wx.Pen(wx.Colour(*DARK_ACCENT), 3))
+        width = self._grid_window.GetClientSize().GetWidth()
+        dc.DrawLine(0, device_y, width, device_y)
+        del odc
+
+    def _reset_drag(self) -> None:
+        self._drag_press = None
+        self._drag_active = False
+        self._drag_names = []
+        self._drop_row = None
+        self._drop_overlay.Reset()
+        self._grid_window.Refresh()
+
+    def _notify_selection_for_set(self) -> None:
+        if len(self._selected_names) == 1:
+            self._notify_selection(self._card_for(next(iter(self._selected_names))))
+        else:
+            self._notify_selection(None)
 
     def _to_logical(self, client_point: wx.Point) -> wx.Point:
         x, y = self.grid.CalcUnscrolledPosition(client_point)

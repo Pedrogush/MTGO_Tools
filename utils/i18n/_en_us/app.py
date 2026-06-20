@@ -48,6 +48,8 @@ MESSAGES: dict[str, str] = {
     "app.label.card_panel": "Card",
     "app.label.left_panel.research": "Research",
     "app.label.left_panel.builder": "Builder",
+    "app.tooltip.toggle_left_panel": "Show/hide the research & builder sidebar",
+    "app.tooltip.toggle_inspector": "Show/hide the card inspector",
     "app.status.collection_not_loaded": "Collection inventory not loaded.",
     "app.status.select_archetype": "Select an archetype to view decks.",
     "app.status.card_db_loading": "Loading card database...",

@@ -62,3 +62,38 @@ def apply_rounded_corner_alpha(image: wx.Image, radius: int) -> wx.Image:
     new_alpha = apply_rounded_corner_alpha_bytes(bytes(img.GetAlpha()), w, h, radius)
     img.SetAlpha(new_alpha)
     return img
+
+
+def composite_rounded_on_background(
+    image: wx.Image, radius: int, bg_rgb: tuple[int, int, int]
+) -> wx.Image:
+    """Flatten a rounded card onto an opaque ``bg_rgb`` background.
+
+    Like :func:`apply_rounded_corner_alpha`, but instead of leaving the corners
+    transparent it blends the card (using the rounded-corner mask as alpha) onto
+    ``bg_rgb`` and returns an image with **no** alpha channel. An opaque bitmap
+    draws via a fast ``BitBlt`` rather than the much slower per-pixel
+    ``AlphaBlend``, which matters when dozens of cards are composited into the
+    cached canvas on every resize — the alpha path is what stalled side-panel
+    toggles and left a visible "void" band (#782 follow-up). Wherever the card is
+    drawn on a ``bg_rgb`` surface (e.g. the grid canvas, cleared to that colour)
+    the result is pixel-identical to the transparent-corner version.
+    """
+    import wx
+
+    img = image.Copy()
+    if not img.HasAlpha():
+        img.InitAlpha()
+    w, h = img.GetWidth(), img.GetHeight()
+    alpha = (
+        np.frombuffer(
+            apply_rounded_corner_alpha_bytes(bytes(img.GetAlpha()), w, h, radius), dtype=np.uint8
+        ).astype(np.float32)
+        / 255.0
+    )
+    rgb = np.frombuffer(bytes(img.GetData()), dtype=np.uint8).astype(np.float32).reshape(-1, 3)
+    bg = np.array(bg_rgb, dtype=np.float32)
+    out = (rgb * alpha[:, None] + bg * (1.0 - alpha[:, None])).astype(np.uint8)
+    result = wx.Image(w, h)
+    result.SetData(out.tobytes())
+    return result
