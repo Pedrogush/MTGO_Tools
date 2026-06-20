@@ -51,6 +51,13 @@ VIEW_MODES = ("grid", "table", "pile")
 
 class CardTablePanel(CardTablePanelHandlersMixin, CardTablePanelPropertiesMixin, wx.Panel):
     GRID_COLUMNS = 4
+    # Minimum columns the workspace must be able to show — this is the *floor*
+    # that sets the deck workspace's minimum width, not the displayed count.
+    # The grid view recomputes how many columns actually fit on every resize
+    # (see grid_view._recompute_layout), so wide windows still fill out fully;
+    # this only governs how narrow the workspace is allowed to get (#785, small
+    # screens). Kept at 2 so the app fits a 1366x768 / 1280x800 laptop.
+    GRID_MIN_COLUMNS = 2
     GRID_GAP = 8
 
     def __init__(

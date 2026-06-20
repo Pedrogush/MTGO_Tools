@@ -251,6 +251,8 @@ class DeckSelectorSessionManager:
         zone_cards: dict[str, list[dict[str, Any]]],
         window_size: tuple[int, int] | None = None,
         screen_pos: tuple[int, int] | None = None,
+        left_collapsed: bool | None = None,
+        inspector_collapsed: bool | None = None,
     ) -> None:
         data = dict(self.settings)
         data.update(
@@ -270,6 +272,10 @@ class DeckSelectorSessionManager:
             data["window_size"] = list(window_size)
         if screen_pos:
             data["screen_pos"] = list(screen_pos)
+        if left_collapsed is not None:
+            data["left_collapsed"] = bool(left_collapsed)
+        if inspector_collapsed is not None:
+            data["inspector_collapsed"] = bool(inspector_collapsed)
 
         current_deck = self.deck_repo.get_current_deck()
         if current_deck:
@@ -322,5 +328,9 @@ class DeckSelectorSessionManager:
         screen_pos = self.settings.get("screen_pos")
         if isinstance(screen_pos, list) and len(screen_pos) == 2:
             result["screen_pos"] = tuple(screen_pos)
+
+        for key in ("left_collapsed", "inspector_collapsed"):
+            if isinstance(self.settings.get(key), bool):
+                result[key] = self.settings[key]
 
         return result

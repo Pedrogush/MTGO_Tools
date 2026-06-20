@@ -16,6 +16,7 @@ class CardTablePanelProto(Protocol):
     """Cross-mixin ``self`` surface for ``CardTablePanel``."""
 
     GRID_COLUMNS: ClassVar[int]
+    GRID_MIN_COLUMNS: ClassVar[int]
     GRID_GAP: ClassVar[int]
 
     zone: str

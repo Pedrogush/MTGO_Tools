@@ -81,6 +81,43 @@ def test_session_manager_persists_and_restores(tmp_path):
     assert data["language"] == "en-US"
 
 
+def test_session_manager_persists_panel_collapse_flags(tmp_path):
+    settings_file = tmp_path / "settings.json"
+    config_file = tmp_path / "config.json"
+    default_dir = tmp_path / "decks"
+    repo = StubDeckRepo()
+    manager = DeckSelectorSessionManager(
+        repo,
+        settings_file=settings_file,
+        config_file=config_file,
+        default_deck_dir=default_dir,
+    )
+
+    base_kwargs = {
+        "current_format": "Modern",
+        "left_mode": "research",
+        "deck_data_source": "both",
+        "zone_cards": {"main": [], "side": [], "out": []},
+    }
+
+    # Absent flags are not invented on restore.
+    manager.save(**base_kwargs)
+    assert "left_collapsed" not in manager.restore_session_state(
+        {"main": [], "side": [], "out": []}
+    )
+
+    # Collapsing persists, and — crucially — expanding again (False) persists too
+    # rather than being dropped as a falsy value.
+    manager.save(**base_kwargs, left_collapsed=True, inspector_collapsed=False)
+    restored = manager.restore_session_state({"main": [], "side": [], "out": []})
+    assert restored["left_collapsed"] is True
+    assert restored["inspector_collapsed"] is False
+
+    data = json.loads(settings_file.read_text(encoding="utf-8"))
+    assert data["left_collapsed"] is True
+    assert data["inspector_collapsed"] is False
+
+
 def test_session_manager_validates_defaults_and_config(tmp_path):
     settings_file = tmp_path / "settings.json"
     settings_file.write_text(

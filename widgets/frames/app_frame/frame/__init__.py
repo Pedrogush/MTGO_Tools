@@ -14,6 +14,7 @@ import wx
 
 from utils.constants import (
     APP_FRAME_SIZE,
+    COLLAPSE_TOGGLE_WIDTH,
     DARK_BG,
     DARK_PANEL,
     LIGHT_TEXT,
@@ -104,6 +105,16 @@ class AppFrame(
         self.builder_panel: DeckBuilderPanel | None = None
         self.out_table: CardTablePanel | None = None
         self.root_panel: wx.Panel | None = None
+        # Collapsible side panels (#small-screen support): the left sidebar and
+        # the right card-inspector column can each be hidden to reclaim width
+        # (and, for the inspector, height). State is restored from settings in
+        # _apply_window_preferences and persisted on every toggle.
+        self.left_panel_window: wx.Panel | None = None
+        self.inspector_panel: wx.Panel | None = None
+        self.left_toggle_btn: wx.Button | None = None
+        self.inspector_toggle_btn: wx.Button | None = None
+        self._left_collapsed: bool = False
+        self._inspector_collapsed: bool = False
         # With both zones visible at once (#781) there is no "selected tab" to
         # tell which zone a searched card should be added to; track the last zone
         # the user interacted with instead (defaults to mainboard).
@@ -138,9 +149,11 @@ class AppFrame(
         self._last_deck_load_time: float = 0.0
 
         self._build_ui()
-        self._apply_window_preferences()
+        # Establish the structural minimum first, then size/place the window
+        # within the available display (which may maximize and/or auto-collapse
+        # the inspector on a small screen, and recompute the minimum to match).
         self._apply_min_size()
-        self.Centre(wx.BOTH)
+        self._apply_window_preferences()
 
         # Seed the card panel with the active format so the Stats tab can
         # render format-level totals before the user touches any selectors.
@@ -162,11 +175,34 @@ class AppFrame(
         root_sizer = wx.BoxSizer(wx.HORIZONTAL)
         self.root_panel.SetSizer(root_sizer)
 
-        left_panel = self._build_left_panel(self.root_panel)
-        root_sizer.Add(left_panel, 0, wx.EXPAND | wx.ALL, PADDING_LG)
+        self.left_panel_window = self._build_left_panel(self.root_panel)
+        root_sizer.Add(self.left_panel_window, 0, wx.EXPAND | wx.ALL, PADDING_LG)
+
+        # Thin full-height gutter button to collapse/expand the left sidebar.
+        self.left_toggle_btn = self._build_collapse_toggle(
+            self.root_panel,
+            on_click=self.toggle_left_panel,
+            tooltip=self._t("app.tooltip.toggle_left_panel"),
+        )
+        root_sizer.Add(self.left_toggle_btn, 0, wx.EXPAND | wx.TOP | wx.BOTTOM, PADDING_LG)
 
         right_container = self._build_right_container(self.root_panel)
         root_sizer.Add(right_container, 1, wx.EXPAND | wx.ALL, PADDING_LG)
+
+    def _build_collapse_toggle(self, parent: wx.Window, *, on_click, tooltip: str) -> wx.Button:
+        """A narrow full-height button used to collapse/expand a side panel.
+
+        The caret label is set by the owning toggle handler to point in the
+        direction the panel will move when clicked.
+        """
+        btn = wx.Button(parent, label="◀", size=(COLLAPSE_TOGGLE_WIDTH, -1), style=wx.BU_EXACTFIT)
+        btn.SetMinSize((COLLAPSE_TOGGLE_WIDTH, -1))
+        btn.SetMaxSize((COLLAPSE_TOGGLE_WIDTH, -1))
+        btn.SetBackgroundColour(DARK_PANEL)
+        btn.SetForegroundColour(LIGHT_TEXT)
+        btn.SetToolTip(tooltip)
+        btn.Bind(wx.EVT_BUTTON, lambda _evt: on_click())
+        return btn
 
     def begin_active_marquee(self, screen_point: wx.Point, *, additive: bool = False) -> None:
         """Start a marquee on the visible deck view from a screen-space press.
@@ -212,18 +248,33 @@ class AppFrame(
         # The deck workspace takes all leftover horizontal space (proportion 1)
         # so a wider window grows the workspace — and the grid view fits more
         # cards per row — rather than leaving empty background (issue #785). The
-        # inspector column stays at its natural width (proportion 0).
+        # inspector column stays at its natural width (proportion 0) and can be
+        # collapsed via the gutter button to hand its width to the workspace.
         deck_workspace = self._build_deck_workspace(right_panel)
-        content_split.Add(deck_workspace, 1, wx.EXPAND | wx.RIGHT, PADDING_LG)
+        content_split.Add(deck_workspace, 1, wx.EXPAND | wx.RIGHT, PADDING_MD)
 
+        self.inspector_toggle_btn = self._build_collapse_toggle(
+            right_panel,
+            on_click=self.toggle_inspector,
+            tooltip=self._t("app.tooltip.toggle_inspector"),
+        )
+        content_split.Add(self.inspector_toggle_btn, 0, wx.EXPAND | wx.RIGHT, PADDING_MD)
+
+        # Inspector column wrapped in a single panel so it can be shown/hidden as
+        # a unit (collapsing reclaims its width and, importantly, its height —
+        # the 360px card image is the tallest element in the layout).
+        self.inspector_panel = wx.Panel(right_panel)
+        self.inspector_panel.SetBackgroundColour(DARK_BG)
         inspector_column = wx.BoxSizer(wx.VERTICAL)
-        content_split.Add(inspector_column, 0, wx.EXPAND)
+        self.inspector_panel.SetSizer(inspector_column)
 
-        inspector_box = self._build_card_inspector(right_panel)
+        inspector_box = self._build_card_inspector(self.inspector_panel)
         inspector_column.Add(inspector_box, 0, wx.EXPAND)
 
-        card_panel_box = self._build_card_panel(right_panel)
+        card_panel_box = self._build_card_panel(self.inspector_panel)
         inspector_column.Add(card_panel_box, 1, wx.EXPAND | wx.TOP, PADDING_MD)
+
+        content_split.Add(self.inspector_panel, 0, wx.EXPAND)
 
         return right_panel
 
