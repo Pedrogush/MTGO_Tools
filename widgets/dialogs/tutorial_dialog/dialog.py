@@ -7,6 +7,7 @@ import wx
 from utils.constants import DARK_BG, DARK_PANEL, LIGHT_TEXT, SUBDUED_TEXT
 from utils.i18n import DEFAULT_LOCALE, translate
 from widgets.dialogs.tutorial_dialog.handlers import TutorialDialogHandlersMixin
+from widgets.wx_layout import relayout
 
 _STEP_KEYS: list[tuple[str, str]] = [
     ("tutorial.step0.title", "tutorial.step0.body"),
@@ -119,7 +120,7 @@ class TutorialDialog(TutorialDialogHandlersMixin, wx.Dialog):
             self._t("tutorial.btn.finish") if is_last else self._t("tutorial.btn.next")
         )
         self._skip_btn.Show(not is_last)
-        self.Layout()
+        relayout(self)
 
 
 def show_tutorial(parent: wx.Window, locale: str = DEFAULT_LOCALE) -> None:

@@ -17,6 +17,7 @@ from widgets.dialogs.tutorial_dialog import show_tutorial
 from widgets.frames.app_frame.handlers.deck_formatting import simple_summary_html
 from widgets.frames.app_frame.handlers.session_logic import should_show_tutorial
 from widgets.frames.mana_keyboard import open_mana_keyboard
+from widgets.wx_layout import set_shown
 
 if TYPE_CHECKING:
     from services.image_service import CardImageRequest
@@ -337,29 +338,27 @@ class AppFrameHandlersMixin(_Base):
 
     def _set_left_collapsed(self, collapsed: bool, *, persist: bool = True) -> None:
         self._left_collapsed = collapsed
-        if self.left_panel_window:
-            self.left_panel_window.Show(not collapsed)
         if self.left_toggle_btn:
             # ▶ invites expanding (panel hidden to the left); ◀ invites collapsing.
             self.left_toggle_btn.SetLabel("▶" if collapsed else "◀")
-        self._relayout_after_toggle()
+        self._relayout_after_toggle(self.left_panel_window, not collapsed)
         if persist:
             self.controller.save_settings(left_collapsed=collapsed)
 
     def _set_inspector_collapsed(self, collapsed: bool, *, persist: bool = True) -> None:
         self._inspector_collapsed = collapsed
-        if self.inspector_panel:
-            self.inspector_panel.Show(not collapsed)
         if self.inspector_toggle_btn:
             # ◀ invites expanding (panel hidden to the right); ▶ invites collapsing.
             self.inspector_toggle_btn.SetLabel("◀" if collapsed else "▶")
-        self._relayout_after_toggle()
+        self._relayout_after_toggle(self.inspector_panel, not collapsed)
         if persist:
             self.controller.save_settings(inspector_collapsed=collapsed)
 
-    def _relayout_after_toggle(self) -> None:
+    def _relayout_after_toggle(self, panel: wx.Window | None, shown: bool) -> None:
         if self.root_panel:
-            self.root_panel.Layout()
+            # set_shown repaints the whole frame so the toggled panel never
+            # leaves ghost pixels over the toolbar (see widgets.wx_layout).
+            set_shown(panel, shown, relayout_from=self.root_panel)
         self._apply_min_size()
 
     def _schedule_settings_save(self) -> None:

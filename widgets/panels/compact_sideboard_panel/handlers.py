@@ -7,6 +7,8 @@ from typing import TYPE_CHECKING
 import wx
 from loguru import logger
 
+from widgets.wx_layout import relayout
+
 if TYPE_CHECKING:
     from widgets.panels.compact_sideboard_panel.protocol import CompactSideboardPanelProto
 
@@ -24,7 +26,7 @@ class CompactSideboardHandlersMixin(_Base):
         self.toggle_btn.Show()
         self._populate_list()
         self.Show()
-        self.GetParent().Layout()
+        relayout(self.GetParent())
         logger.debug(f"Compact sideboard guide displayed for: {archetype_name}")
 
     def clear(self) -> None:
@@ -33,7 +35,7 @@ class CompactSideboardHandlersMixin(_Base):
         self.status_label.SetLabel("Waiting for opponent\u2026")
         self.card_list.Clear()
         self.toggle_btn.Hide()
-        self.GetParent().Layout()
+        relayout(self.GetParent())
 
     def set_no_guide(self, archetype_name: str) -> None:
         self._current_entry = None
@@ -42,7 +44,7 @@ class CompactSideboardHandlersMixin(_Base):
         self.card_list.Clear()
         self.toggle_btn.Hide()
         self.Show()
-        self.GetParent().Layout()
+        relayout(self.GetParent())
 
     def set_no_pinned_deck(self) -> None:
         self._current_entry = None
@@ -51,7 +53,7 @@ class CompactSideboardHandlersMixin(_Base):
         self.card_list.Clear()
         self.toggle_btn.Hide()
         self.Show()
-        self.GetParent().Layout()
+        relayout(self.GetParent())
 
     def _on_toggle_play_draw(self, _event: wx.CommandEvent) -> None:
         self._play_first = not self._play_first

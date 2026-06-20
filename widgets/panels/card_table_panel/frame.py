@@ -25,6 +25,7 @@ from widgets.panels.card_table_panel.sorting import (
     PILE_SORT_TYPE,
 )
 from widgets.panels.card_table_panel.table_view import DeckTableView
+from widgets.wx_layout import relayout
 
 _EMPTY_STATE_HEADING_SIZE = 13
 _EMPTY_STATE_HINT_SIZE = 10
@@ -265,7 +266,7 @@ class CardTablePanel(CardTablePanelHandlersMixin, CardTablePanelPropertiesMixin,
 
     def _update_pile_sort_button_visibility(self) -> None:
         self.pile_sort_button.Show(self.view_mode == "pile")
-        self.Layout()
+        relayout(self)
 
     def _on_view_button(self, mode: str) -> None:
         self.set_view_mode(mode)

@@ -7,6 +7,8 @@ from typing import TYPE_CHECKING
 import wx
 from loguru import logger
 
+from widgets.wx_layout import relayout
+
 if TYPE_CHECKING:
     from widgets.panels.deck_notes_panel.frame import _NoteCardWidget
     from widgets.panels.deck_notes_panel.protocol import DeckNotesPanelProto
@@ -73,7 +75,7 @@ class DeckNotesPanelHandlersMixin(_Base):
         self.scroll_win.Layout()
         self.scroll_win.FitInside()
         self.scroll_win.Thaw()
-        self.Layout()
+        relayout(self)
 
     def _make_card_widget(self, card: dict[str, str]) -> _NoteCardWidget:
         from widgets.panels.deck_notes_panel.frame import _NoteCardWidget
