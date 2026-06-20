@@ -147,7 +147,9 @@ def _run_session(
     client.click(widget)
     time.sleep(post_ms / 1000.0)
     summary = client.stop_video(out_dir=session_dir)
-    print(f"[{label}] captured {summary.get('count')} frames @ {summary.get('fps')} fps", flush=True)
+    print(
+        f"[{label}] captured {summary.get('count')} frames @ {summary.get('fps')} fps", flush=True
+    )
 
     analysis = _analyze_session(session_dir, threshold)
     analysis["capture"] = summary

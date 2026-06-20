@@ -562,9 +562,7 @@ Notes:
     )
 
     # stop-video
-    p = subparsers.add_parser(
-        "stop-video", help="Stop recording and write frames + manifest.json"
-    )
+    p = subparsers.add_parser("stop-video", help="Stop recording and write frames + manifest.json")
     p.add_argument(
         "--out-dir",
         "-o",
