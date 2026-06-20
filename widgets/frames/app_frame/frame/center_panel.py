@@ -97,6 +97,7 @@ class CenterPanelBuilderMixin(_Base):
             on_import_csv=self._on_import_guide,
             on_pin_guide=self._on_pin_guide,
             on_edit_flex_slots=self._on_edit_flex_slots,
+            on_record_guide=self._on_record_guide,
             locale=self.locale,
         )
         self.sideboard_guide_panel.SetToolTip(self._t("tabs.tooltip.sideboard_guide"))

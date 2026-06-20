@@ -11,6 +11,7 @@ import wx
 from loguru import logger
 
 from utils.constants import SUBDUED_TEXT, ZONE_TITLES
+from widgets.wx_layout import relayout
 
 if TYPE_CHECKING:
     from repositories.card_repository import CardDataManager
@@ -387,7 +388,7 @@ class CardInspectorPanelHandlersMixin(_Base):
             self.loading_label.Hide()
         show_details = self._has_selection and (not image_available or self._loading_printing)
         self.details_panel.Show(show_details)
-        self.Layout()
+        relayout(self)
 
     def _notify_selection(self, request: CardImageRequest | None) -> None:
         if self._selected_card_handler:

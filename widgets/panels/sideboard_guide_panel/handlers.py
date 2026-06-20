@@ -6,6 +6,8 @@ from typing import TYPE_CHECKING
 
 import wx
 
+from widgets.wx_layout import relayout
+
 if TYPE_CHECKING:
     from widgets.panels.sideboard_guide_panel.protocol import SideboardGuidePanelProto
 
@@ -37,7 +39,7 @@ class SideboardGuidePanelHandlersMixin(_Base):
             self.warning_label.Show()
         else:
             self.warning_label.Hide()
-        self.Layout()
+        relayout(self)
 
     # ============= Private Methods =============
 
@@ -66,7 +68,7 @@ class SideboardGuidePanelHandlersMixin(_Base):
         self.guide_view.Show(not is_empty)
         self.empty_state_panel.Show(is_empty)
         self.button_row.Show(not is_empty)
-        self.Layout()
+        relayout(self)
 
         # Update exclusions label
         text = ", ".join(self.exclusions) if self.exclusions else "\u2014"
@@ -97,6 +99,10 @@ class SideboardGuidePanelHandlersMixin(_Base):
     def _on_flex_slots_clicked(self, _event: wx.Event) -> None:
         if self.on_edit_flex_slots:
             self.on_edit_flex_slots()
+
+    def _on_record_clicked(self, _event: wx.Event) -> None:
+        if self.on_record_guide:
+            self.on_record_guide()
 
     def set_pinned(self, pinned: bool) -> None:
         if pinned:

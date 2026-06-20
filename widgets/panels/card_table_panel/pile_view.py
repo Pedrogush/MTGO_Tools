@@ -155,6 +155,13 @@ class DeckPileView(wx.ScrolledWindow):
         # wheel notch costs one viewport copy. Rebuilt on content change; the
         # affected pile is patched in place when a card image arrives.
         self._canvas: wx.Bitmap | None = None
+        # The cached canvas is sized to the *content* (pile positions are
+        # width-independent — see _pile_x), NOT the scroll/virtual size, which wx
+        # inflates to the client width. Keeping it content-sized means a pure
+        # resize (e.g. collapsing a side panel) reuses the canvas instead of
+        # re-compositing every card's alpha bitmap — the slow blit that otherwise
+        # stalls the toggle and leaves a visible "void" band (#782 follow-up).
+        self._content_size: wx.Size = wx.Size(0, 0)
 
         self.SetBackgroundColour(DARK_PANEL)
         # AutoBufferedPaintDC requires the window to use BG_STYLE_PAINT so
@@ -245,11 +252,15 @@ class DeckPileView(wx.ScrolledWindow):
         # Pile contents/positions changed — the cached image is stale.
         self._invalidate_canvas()
         if not self._piles:
+            self._content_size = wx.Size(100, 100)
             self.SetVirtualSize((100, 100))
             return
         max_members = max(len(members) for _, members in self._piles)
         height = _PILE_TOP + self._pile_height(max_members) + _PILE_PAD * 2
         width = (_CARD_WIDTH + _PILE_GAP) * len(self._piles) + _PILE_GAP
+        # Canvas tracks the true content extent; the scroll/virtual size may be
+        # inflated to the client by wx, but the canvas must not be (see __init__).
+        self._content_size = wx.Size(width, height)
         self.SetVirtualSize((width, height))
 
     def _pile_x(self, pile_index: int) -> int:
@@ -392,7 +403,7 @@ class DeckPileView(wx.ScrolledWindow):
         Returns ``None`` when there is nothing to draw or the virtual size is
         too large to cache, signalling the caller to draw directly.
         """
-        vsize = self.GetVirtualSize()
+        vsize = self._content_size
         vw, vh = vsize.GetWidth(), vsize.GetHeight()
         if not self._piles or vw <= 0 or vh <= 0:
             return None

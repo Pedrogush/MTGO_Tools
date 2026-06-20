@@ -23,6 +23,8 @@ class SettingsMixin(_Base):
         self,
         window_size: tuple[int, int] | None = None,
         screen_pos: tuple[int, int] | None = None,
+        left_collapsed: bool | None = None,
+        inspector_collapsed: bool | None = None,
     ) -> None:
         self.session_manager.save(
             current_format=self.current_format,
@@ -31,6 +33,8 @@ class SettingsMixin(_Base):
             zone_cards=self.zone_cards,
             window_size=window_size,
             screen_pos=screen_pos,
+            left_collapsed=left_collapsed,
+            inspector_collapsed=inspector_collapsed,
         )
 
     def get_deck_data_source(self) -> str:
