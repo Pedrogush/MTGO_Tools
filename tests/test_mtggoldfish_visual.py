@@ -19,6 +19,7 @@ from repositories.scrapers.mtggoldfish_visual import (
     fetch_deck_text_from_visual_page,
     parse_visual_page,
 )
+from utils.constants.timing import MTGGOLDFISH_REQUEST_TIMEOUT_SECONDS
 
 # Modern Affinity decklist sourced from a real MTGO Challenge result. Picked
 # because it exercises both mainboard and sideboard parsing.
@@ -61,6 +62,20 @@ def test_parse_visual_page_mainboard_only_has_no_separator():
     assert "\n\n" not in text
 
 
+def test_parse_visual_page_sideboard_only_keeps_leading_separator():
+    # Empty mainboard pile + populated sideboard: the formatter still joins on
+    # the blank-line separator, so the output begins with "\n\n".
+    html = _visual_html(main_alts=[], side_alts=["Galvanic Blast", "Galvanic Blast"])
+
+    text = parse_visual_page(html)
+
+    assert text == "\n\n2 Galvanic Blast"
+    main_block, sep, side_block = text.partition("\n\n")
+    assert main_block == ""
+    assert sep == "\n\n"
+    assert side_block == "2 Galvanic Blast"
+
+
 def test_parse_visual_page_skips_blank_alt_text():
     html = _visual_html(main_alts=["Mox Opal", "", "   ", "Ornithopter"])
 
@@ -99,6 +114,11 @@ def test_fetch_deck_text_from_visual_page_offline(mock_get):
     # The fetcher hits the unprotected visual endpoint for the given deck id.
     mock_get.assert_called_once()
     assert mock_get.call_args.args[0] == "https://www.mtggoldfish.com/deck/visual/12345"
+    # impersonate="chrome" is load-bearing: it is what bypasses Cloudflare on the
+    # live endpoint, so dropping it must fail this test rather than only break
+    # in production. The request timeout is pinned to the shared constant.
+    assert mock_get.call_args.kwargs["impersonate"] == "chrome"
+    assert mock_get.call_args.kwargs["timeout"] == MTGGOLDFISH_REQUEST_TIMEOUT_SECONDS
     # raise_for_status must be honoured before parsing.
     mock_response.raise_for_status.assert_called_once()
     # The page text is parsed into the same plain-text decklist contract.
