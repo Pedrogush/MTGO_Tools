@@ -57,6 +57,34 @@ def test_analyze_deck_skips_count_only_lines(deck_service):
     assert stats["unique_sideboard"] == 1
 
 
+def test_analyze_deck_blank_line_switches_to_sideboard_without_header(deck_service):
+    """A blank line alone (no 'Sideboard' header) flips subsequent cards to the sideboard."""
+    deck_text = "2 Island\n\n1 Abrade"
+
+    stats = deck_service.analyze_deck(deck_text)
+
+    assert dict(stats["mainboard_cards"]) == {"Island": 2}
+    assert dict(stats["sideboard_cards"]) == {"Abrade": 1}
+
+
+def test_leading_blank_line_diverges_between_to_dictionary_and_analyze(deck_service):
+    """strip_input makes the two entry points treat a leading blank line differently.
+
+    analyze_deck strips the input first, so the leading blank vanishes and every
+    card stays in the mainboard. deck_to_dictionary keeps the raw input, so the
+    leading blank is a (non-trailing) zone flip and every card lands in the
+    sideboard.
+    """
+    deck_text = "\n2 Island\n1 Abrade"
+
+    deck_dict = deck_service.deck_to_dictionary(deck_text)
+    assert deck_dict == {"Sideboard Island": 2.0, "Sideboard Abrade": 1.0}
+
+    stats = deck_service.analyze_deck(deck_text)
+    assert dict(stats["mainboard_cards"]) == {"Island": 2, "Abrade": 1}
+    assert stats["sideboard_cards"] == []
+
+
 def test_analyze_deck_preserves_fractional_quantities(deck_service):
     """Test that analyze_deck preserves fractional quantities from average decks."""
     deck_text = (
@@ -185,3 +213,33 @@ def test_analyze_deck_keeps_names_that_merely_look_pointer_ish(deck_service):
     mainboard_dict = dict(stats["mainboard_cards"])
 
     assert mainboard_dict == {"Look at Me, I'm the DCI": 1, "R&D's Secret Lair": 3}
+
+
+def test_analyze_deck_strips_uppercase_printing_id_but_not_mid_string(deck_service):
+    """The printing-id suffix match is case-insensitive and anchored to the end.
+
+    An upper-case uuid trailing the name is stripped; a uuid embedded mid-name
+    (with text after it) is left untouched, so it stays part of the card name.
+    """
+    deck_text = (
+        "1 Foo E3285E6B-3E79-4D7C-BF96-D920F973B122\n"
+        "2 Foo e3285e6b-3e79-4d7c-bf96-d920f973b122 Bar\n"
+    )
+
+    stats = deck_service.analyze_deck(deck_text)
+    mainboard_dict = dict(stats["mainboard_cards"])
+
+    assert mainboard_dict == {
+        "Foo": 1,
+        "Foo e3285e6b-3e79-4d7c-bf96-d920f973b122 Bar": 2,
+    }
+
+
+def test_build_card_list_narrows_summed_fractions_to_int(deck_service):
+    """Fractional counts that sum to a whole number are narrowed to int."""
+    deck_text = "0.5 Bolt\n0.5 Bolt\n"
+
+    stats = deck_service.analyze_deck(deck_text)
+
+    assert stats["mainboard_cards"] == [("Bolt", 1)]
+    assert isinstance(stats["mainboard_cards"][0][1], int)
