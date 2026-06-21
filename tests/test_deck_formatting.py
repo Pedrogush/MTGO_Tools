@@ -63,6 +63,14 @@ def test_strip_extra_dates_hyphen_separators():
     assert deck_formatting.strip_extra_dates("Modern-2024-01-02-Challenge") == "Modern Challenge"
 
 
+def test_strip_extra_dates_whole_string_is_date_returns_empty():
+    assert deck_formatting.strip_extra_dates("2024-01-02") == ""
+
+
+def test_strip_extra_dates_date_with_surrounding_pipes_returns_empty():
+    assert deck_formatting.strip_extra_dates("| 2024-01-02 |") == ""
+
+
 # ---------------------------------------------------------------------------
 # format_deck_name
 # ---------------------------------------------------------------------------
@@ -74,6 +82,13 @@ def test_format_deck_name_full():
         "event": "Modern Challenge 2024-01-02",
     }
     assert deck_formatting.format_deck_name(deck) == "Bob, 5-0, 2024-01-02 | Modern Challenge"
+
+
+def test_format_deck_name_normalizes_non_normalized_date():
+    # ``date`` carries an embedded event string; normalize_date must extract
+    # just the YYYY-MM-DD substring before it lands in line one.
+    deck = {"player": "Bob", "date": "Modern Challenge 2024-01-02"}
+    assert deck_formatting.format_deck_name(deck) == "Bob, 2024-01-02"
 
 
 def test_format_deck_name_unknown_when_empty():
@@ -100,6 +115,11 @@ def test_format_deck_name_event_only_keeps_unknown_identity():
 def test_format_deck_list_entry_two_lines():
     deck = {"player": "Bob", "result": "5-0", "date": "2024-01-02", "event": "Modern Challenge"}
     assert deck_formatting.format_deck_list_entry(deck) == "Bob, 5-0, 2024-01-02\nModern Challenge"
+
+
+def test_format_deck_list_entry_normalizes_non_normalized_date():
+    deck = {"player": "Bob", "date": "Modern Challenge 2024-01-02"}
+    assert deck_formatting.format_deck_list_entry(deck) == "Bob, 2024-01-02"
 
 
 def test_format_deck_list_entry_with_mtggoldfish_source_prefix():
@@ -143,6 +163,7 @@ def test_normalize_date_is_reexported():
 
 def test_classify_event_type_is_reexported():
     assert deck_formatting.classify_event_type("Modern Challenge") == "Challenge"
+    assert deck_formatting.classify_event_type("Modern League") == "League"
     assert deck_formatting.classify_event_type("Friday Night") is None
 
 
