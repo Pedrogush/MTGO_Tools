@@ -223,6 +223,73 @@ def test_read_path_blank_input_guards(repo):
     assert repo.get_card_total("modern", "") is None
 
 
+def test_bulk_replace_swallows_raising_entry(repo):
+    # A malformed entry whose ``.get`` itself raises (e.g. a non-dict that
+    # reaches ``replace_format_pool``) must be caught by bulk_replace's guard,
+    # not counted, and must not abort the surrounding valid entries.
+    replaced = repo.bulk_replace(["notadict", _entry()])
+    assert replaced == 1
+    assert repo.get_card_total("modern", "Lightning Bolt") == 40
+
+
+def test_replace_normalizes_and_dedups_card_names(repo):
+    # Whitespace is trimmed, blank names are dropped, duplicate names collapse to
+    # a single row, and a copy_totals entry takes precedence over the bare
+    # ``cards`` listing for the same (post-trim) name.
+    assert (
+        repo.replace_format_pool(
+            _entry(
+                cards=["  Lightning Bolt  ", "Lightning Bolt", "   ", "", "Brainstorm"],
+                copy_totals=[{"card_name": "  Lightning Bolt  ", "copies_played": 40}],
+            )
+        )
+        is True
+    )
+
+    # Only the two distinct, non-blank names survive.
+    assert repo.get_card_names("modern") == {"Lightning Bolt", "Brainstorm"}
+    # copy_totals precedence: the trimmed name carries its copies_played, and the
+    # bare-cards entry for the same name did not reset it to 0.
+    assert repo.get_card_total("modern", "Lightning Bolt") == 40
+    # A card present only in ``cards`` is tracked with a 0 total.
+    assert repo.get_card_total("modern", "Brainstorm") == 0
+    assert repo.get_summary("modern").unique_cards == 2
+
+
+def test_copy_totals_only_card_is_tracked(repo):
+    # A card that appears solely in copy_totals (not in the ``cards`` list) is
+    # still persisted with its recorded total.
+    assert (
+        repo.replace_format_pool(
+            _entry(
+                cards=[],
+                copy_totals=[{"card_name": "Ragavan", "copies_played": 17}],
+            )
+        )
+        is True
+    )
+    assert repo.get_card_names("modern") == {"Ragavan"}
+    assert repo.get_card_total("modern", "Ragavan") == 17
+
+
+def test_get_summary_projects_all_metadata_fields(repo):
+    # The projected generated_at / source / decks_failed fields must round-trip
+    # from the stored snapshot, including a non-zero decks_failed.
+    entry = _entry()
+    entry["generated_at"] = "2026-06-01"
+    entry["source"] = "smoke-source"
+    entry["decks_failed"] = 3
+    entry["total_decks_analyzed"] = 25
+    assert repo.replace_format_pool(entry) is True
+
+    summary = repo.get_summary("modern")
+    assert summary is not None
+    assert summary.generated_at == "2026-06-01"
+    assert summary.source == "smoke-source"
+    assert summary.decks_failed == 3
+    assert summary.total_decks_analyzed == 25
+
+
 def test_copies_played_coercion_falls_back_to_zero(repo):
     # Non-numeric, None, and missing copies_played must coerce to 0 rather than
     # corrupting the stored total or raising.
