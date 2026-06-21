@@ -188,6 +188,23 @@ def test_compute_history_metrics_unfiltered_filtered_is_none() -> None:
     assert out["filtered"] is None
 
 
+def test_compute_history_metrics_filtered_aggregates_full_subdict() -> None:
+    # The filtered branch (a non-empty distinct ``filtered`` list) builds a
+    # sub-dict whose individual aggregates must be asserted, not just its size.
+    matches = [_metric(True, 2, 3, 1), _metric(False, 1, 2, 2)]
+    filtered = [_metric(True, 2, 3, 1)]
+    out = compute_history_metrics(matches, filtered)
+    assert out is not None
+    assert out["filtered"] == {
+        "match_wins": 1,
+        "match_total": 1,
+        "games_won": 2,
+        "games_total": 3,
+        "match_rate": 100.0,
+        "game_rate": 2 / 3 * 100,
+    }
+
+
 def test_compute_history_metrics_zero_games_no_div_by_zero() -> None:
     matches = [_metric(False, 0, 0, 0)]
     out = compute_history_metrics(matches, matches)
@@ -218,6 +235,18 @@ def test_compute_opponent_stats_aggregates() -> None:
     assert out["games_played"] == 5
     assert out["win_pct"] == 50.0
     assert out["mull_rate"] == 20.0
+
+
+def test_compute_opponent_stats_zero_games_no_div_by_zero() -> None:
+    # A single lost match with no games played: the ``mull_rate`` zero-games
+    # guard must avoid a division by zero, and win_pct stays 0.0.
+    out = compute_opponent_stats([_metric(False, 0, 0, 2)])
+    assert out is not None
+    assert out["total"] == 1
+    assert out["wins"] == 0
+    assert out["games_played"] == 0
+    assert out["mull_rate"] == 0.0
+    assert out["win_pct"] == 0.0
 
 
 # -------------------------------------------------------------------------------- _iter_matches
@@ -317,6 +346,27 @@ def test_iter_matches_bad_score_and_missing_fields_default_to_zero() -> None:
     assert row["games_won"] == 0
     assert row["games_total"] == 0
     assert row["total_mulligans"] == 0
+
+
+def test_iter_matches_winner_present_but_no_our_name_is_loss() -> None:
+    mixin = _make_mixin(None)
+    # No players means ``our_name`` is None; the ``winner and our_name`` guard
+    # must short-circuit so ``match_win`` is False even with a winner present.
+    raw = [{"match_score": "2-0", "players": [], "winner": "ghost"}]
+    row = mixin._iter_matches(raw)[0]
+    assert row["match_win"] is False
+
+
+# ------------------------------------------------------------------------------ _get_opponent_name
+def test_get_opponent_name_returns_name() -> None:
+    mixin = _make_mixin(None)
+    assert mixin._get_opponent_name({"_opp_name": "them"}) == "them"
+
+
+def test_get_opponent_name_missing_or_empty_returns_none() -> None:
+    mixin = _make_mixin(None)
+    assert mixin._get_opponent_name({}) is None
+    assert mixin._get_opponent_name({"_opp_name": ""}) is None
 
 
 # ----------------------------------------------------------------------------------- _parse_date
