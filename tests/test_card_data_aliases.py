@@ -16,6 +16,8 @@ def _sample_atomic_payload():
                 "manaValue": 2,
                 "type": "Legendary Creature — Human Wizard",
                 "text": "T: Draw a card, then discard a card.",
+                "power": "0",
+                "toughness": "2",
                 "colors": ["U"],
                 "colorIdentity": ["U"],
                 "legalities": {"modern": "Legal"},
@@ -27,6 +29,7 @@ def _sample_atomic_payload():
                 "manaValue": 0,
                 "type": "Legendary Planeswalker — Jace",
                 "text": "+1: Up to one target creature gets -2/-0 until your next turn.",
+                "loyalty": "5",
                 "colors": ["U"],
                 "colorIdentity": ["U"],
                 "legalities": {"modern": "Legal"},
@@ -63,10 +66,20 @@ def test_build_index_populates_back_face_fields():
     assert entry["type_line"] == "Legendary Creature — Human Wizard"
     assert "Draw a card" in (entry["oracle_text"] or "")
     assert entry["mana_cost"] == "{1}{U}"
+    assert entry["mana_value"] == 2
+    # Front P/T and colors come from the front printing (not swapped/dropped).
+    assert entry["power"] == "0"
+    assert entry["toughness"] == "2"
+    assert entry["colors"] == ["U"]
+    assert entry["color_identity"] == ["U"]
 
     assert entry["back_name"] == "Jace, Telepath Unbound"
     assert entry["back_type_line"] == "Legendary Planeswalker — Jace"
     assert "+1:" in (entry["back_oracle_text"] or "")
+    # Back-face specific fields read from the back printing.
+    assert entry["back_mana_cost"] == ""
+    assert entry["back_loyalty"] == "5"
+    assert entry["back_power"] is None
 
 
 def test_build_index_back_face_when_back_listed_first():
@@ -157,6 +170,37 @@ def test_build_index_merges_and_filters_legalities():
 
     # Banned/Restricted dropped; Legal formats from both printings unioned.
     assert entry["legalities"] == {"legacy": "Legal", "commander": "Legal"}
+
+
+def test_build_index_legalities_union_keeps_legal_across_printings():
+    """A format Legal on one printing stays Legal even if Banned on another.
+
+    ``_merge_legalities`` unions the ``Legal`` formats rather than letting a later
+    printing's non-Legal state override an earlier Legal one.
+    """
+    payload = {
+        "Format Flip": [
+            {
+                "name": "Format Flip",
+                "manaCost": "{1}",
+                "manaValue": 1,
+                "type": "Artifact",
+                "legalities": {"modern": "Legal", "legacy": "Banned"},
+            },
+            {
+                "name": "Format Flip",
+                "manaCost": "{1}",
+                "manaValue": 1,
+                "type": "Artifact",
+                "legalities": {"modern": "Banned", "legacy": "Legal"},
+            },
+        ]
+    }
+    index = build_index(payload)
+    entry = index["cards"][0]
+
+    # Each format Legal on at least one printing survives the union.
+    assert entry["legalities"] == {"modern": "Legal", "legacy": "Legal"}
 
 
 def test_build_index_sorts_cards_and_maps_distinct_indices():
@@ -274,13 +318,6 @@ def test_build_index_leaves_non_numeric_mana_value_unchanged():
     assert entry["mana_value"] == "unknown"
 
 
-def test_build_index_dfc_mana_value():
-    """The existing DFC entry exposes the front-face int mana value."""
-    index = build_index(_sample_atomic_payload())
-    entry = index["cards"][0]
-    assert entry["mana_value"] == 2
-
-
 def test_build_index_skips_non_list_and_empty_variations():
     """Group values that are not non-empty lists are ignored."""
     payload = {
@@ -317,11 +354,11 @@ def test_build_index_skips_printing_without_name():
 
 
 def test_build_index_dfc_without_facenames_derives_back_name_from_canonical():
-    """When a DFC printing has no faceName, the back name comes from the canonical.
+    """When a DFC printing has no faceName, the back face comes from the second printing.
 
-    With no ``faceName`` to match, ``_select_front_back`` falls back to using the
-    first printing as the front face, and ``_apply_back_face`` derives the back
-    name from the half of ``name`` after ``//``.
+    With no ``faceName`` to match, ``_select_front_back`` falls back to printings
+    order: the first printing is the front and the *second* printing is the back.
+    The back name is derived from the half of ``name`` after ``//``.
     """
     canonical = "Front Half // Back Half"
     payload = {
@@ -346,6 +383,11 @@ def test_build_index_dfc_without_facenames_derives_back_name_from_canonical():
     entry = index["cards"][0]
 
     assert entry["type_line"] == "Creature — Front"
+    assert entry["oracle_text"] == "Front text."
+    # The back face is the *second* printing, not a re-read of the front.
+    assert entry["back_type_line"] == "Land"
+    assert entry["back_oracle_text"] == "Back text."
+    assert entry["back_mana_cost"] == ""
     # Back name is derived from the canonical's second half when faceName is absent.
     assert entry["back_name"] == "Back Half"
     # Both halves of the canonical are exposed as aliases.
