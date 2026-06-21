@@ -29,16 +29,23 @@ def _build_bulk_zip(cards: dict[str, list[dict[str, Any]]]) -> bytes:
     return buffer.getvalue()
 
 
-def _card(name: str, mana_cost: str, text: str, color: str | None = None) -> dict[str, Any]:
+def _card(
+    name: str,
+    mana_cost: str,
+    text: str,
+    color: str | None = None,
+    type_line: str = "Instant",
+    legalities: dict[str, str] | None = None,
+) -> dict[str, Any]:
     return {
         "name": name,
         "manaCost": mana_cost,
         "manaValue": 1,
-        "type": "Instant",
+        "type": type_line,
         "text": text,
         "colors": [color] if color else [],
         "colorIdentity": [color] if color else [],
-        "legalities": {"modern": "Legal"},
+        "legalities": {"modern": "Legal"} if legalities is None else legalities,
     }
 
 
@@ -132,6 +139,10 @@ def test_ensure_latest_skips_download_when_meta_matches(tmp_path: Path, monkeypa
 
     assert download_called is False
     assert second_manager.get_card("Opt") is not None
+    # The matching HEAD re-stamps the TTL (_touch_head_checked) so the next
+    # readiness check can take the warm-cache fast path.
+    meta = json.loads((tmp_path / "atomic_cards_meta.json").read_text(encoding="utf-8"))
+    assert meta["head_checked_at"] > 0
 
 
 def test_ensure_latest_downloads_when_meta_differs(tmp_path: Path, monkeypatch):
@@ -208,7 +219,13 @@ def test_reloaded_get_card_shares_card_objects(tmp_path: Path, monkeypatch):
     assert any(card is entry for entry in reloaded._cards or [])
 
 
-def test_ensure_latest_skips_download_when_only_etag_changes(tmp_path: Path, monkeypatch):
+def test_ensure_latest_etag_change_alone_does_not_force_refresh(tmp_path: Path, monkeypatch):
+    """An ETag change with an unchanged size does not trigger a re-download.
+
+    ``ensure_latest`` never compares ETags: the refresh decision is driven
+    purely by ``content-length`` (see card_data_manager.py:71). Here the ETag
+    flips from ``v1`` to ``v2`` while the size stays ``123``, so no GET is made.
+    """
     cards = {"Opt": [_card("Opt", "{U}", "", "U")]}
     initial_headers = {
         "etag": "v1",
@@ -407,8 +424,36 @@ def test_load_card_manager_force_downloads(tmp_path: Path, monkeypatch):
 def test_loaded_manager_query_api(tmp_path: Path, monkeypatch):
     """A loaded manager answers search_cards/available_formats consistently."""
     cards = {
-        "Opt": [_card("Opt", "{U}", "Scry 1, draw a card.", "U")],
-        "Lightning Bolt": [_card("Lightning Bolt", "{R}", "Deal 3 damage.", "R")],
+        "Opt": [
+            _card(
+                "Opt",
+                "{U}",
+                "Scry 1, draw a card.",
+                "U",
+                type_line="Instant",
+                legalities={"modern": "Legal", "legacy": "Legal"},
+            )
+        ],
+        "Lightning Bolt": [
+            _card(
+                "Lightning Bolt",
+                "{R}",
+                "Deal 3 damage.",
+                "R",
+                type_line="Instant",
+                legalities={"legacy": "Legal"},
+            )
+        ],
+        "Llanowar Elves": [
+            _card(
+                "Llanowar Elves",
+                "{G}",
+                "{T}: Add {G}.",
+                "G",
+                type_line="Creature — Elf Druid",
+                legalities={"modern": "Legal"},
+            )
+        ],
     }
     headers = {"etag": "v1", "content-length": "123"}
     _patch_requests(monkeypatch, headers, _build_bulk_zip(cards))
@@ -422,11 +467,21 @@ def test_loaded_manager_query_api(tmp_path: Path, monkeypatch):
     by_color = manager.search_cards(color_identity=["R"])
     assert [c.name for c in by_color] == ["Lightning Bolt"]
 
+    # format_filter keeps only cards Legal in that format (Lightning Bolt is
+    # legacy-only, so it is excluded from a modern query).
+    by_format = manager.search_cards(format_filter="modern")
+    assert sorted(c.name for c in by_format) == ["Llanowar Elves", "Opt"]
+
+    # type_filter is a substring match against the (lowercased) type line.
+    by_type = manager.search_cards(type_filter="creature")
+    assert [c.name for c in by_type] == ["Llanowar Elves"]
+
     limited = manager.search_cards(limit=1)
     assert len(limited) == 1
 
-    # All seeded cards are modern-legal (see ``_card``).
-    assert manager.available_formats() == ["modern"]
+    # available_formats returns the de-duplicated, sorted set of formats in
+    # which at least one card is Legal (see each card's ``legalities`` above).
+    assert manager.available_formats() == ["legacy", "modern"]
 
 
 def test_query_api_requires_loaded_data(tmp_path: Path):
