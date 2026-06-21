@@ -3,11 +3,40 @@
 from __future__ import annotations
 
 import sqlite3
+import sys
 import threading
+import types
 from datetime import datetime
+from typing import Any
 
-from services import image_service as card_images
-from services.image_service import schemas as card_images_schemas
+
+class _WxStub(types.ModuleType):
+    """A permissive ``wx`` stand-in fabricating attributes on demand."""
+
+    def __getattr__(self, name: str) -> Any:  # noqa: D401 - simple stub
+        value: Any = type(name, (), {})
+        setattr(self, name, value)
+        return value
+
+
+def _install_wx_stub() -> None:
+    """Install a ``wx`` stub only when the real module is unavailable.
+
+    ``wx`` is only an indirect import of the image-service package (via
+    ``utils.constants``) and is not importable in the WSL dev environment, so a
+    minimal stub is injected before the import below; on the Windows CI runner
+    the real ``wx`` is used instead.
+    """
+    try:
+        import wx  # noqa: F401
+    except Exception:
+        sys.modules["wx"] = _WxStub("wx")
+
+
+_install_wx_stub()
+
+from services import image_service as card_images  # noqa: E402
+from services.image_service import schemas as card_images_schemas  # noqa: E402
 
 
 def test_card_image_cache_migrates_face_index_column(tmp_path):
@@ -1233,3 +1262,339 @@ def test_download_bulk_metadata_streams_and_records_metadata(tmp_path, monkeypat
     cached_updated, cached_uri = downloader._get_cached_bulk_data_record()
     assert cached_updated == metadata["updated_at"]
     assert cached_uri == metadata["download_uri"]
+
+
+def test_download_bulk_metadata_returns_error_when_metadata_fetch_raises(tmp_path, monkeypatch):
+    """A failing ``_fetch_bulk_metadata`` surfaces as a (False, "Error: ...") result."""
+    downloader, _ = _make_downloader(tmp_path, monkeypatch, bulk_contents=None)
+
+    def _boom():
+        raise RuntimeError("network down")
+
+    monkeypatch.setattr(downloader, "_fetch_bulk_metadata", _boom)
+
+    success, message = downloader.download_bulk_metadata()
+    assert success is False
+    assert "Error" in message
+    assert "network down" in message
+
+
+def test_download_bulk_metadata_returns_error_when_stream_get_fails(tmp_path, monkeypatch):
+    """A non-2xx streaming GET for the bulk file surfaces as a failure and writes nothing."""
+    downloader, bulk_path = _make_downloader(tmp_path, monkeypatch, bulk_contents=None)
+    metadata = {
+        "updated_at": "2024-04-04T00:00:00Z",
+        "download_uri": "http://example.com/bulk.json",
+    }
+    monkeypatch.setattr(downloader, "_fetch_bulk_metadata", lambda: metadata)
+    downloader.session = _FakeSession(
+        responses={metadata["download_uri"]: _FakeResponse(status_ok=False)}
+    )
+
+    success, message = downloader.download_bulk_metadata()
+    assert success is False
+    assert "Error" in message
+    # The streamed file was never written and no metadata row was recorded.
+    assert not bulk_path.exists()
+    assert downloader._get_cached_bulk_data_record() == (None, None)
+
+
+def test_download_bulk_metadata_force_restreams_despite_matching_cache(tmp_path, monkeypatch):
+    """``force=True`` bypasses the current-cache short-circuit and re-streams the file."""
+    downloader, bulk_path = _make_downloader(tmp_path, monkeypatch)
+    metadata = {
+        "updated_at": "2024-01-01T00:00:00Z",
+        "download_uri": "http://example.com/bulk.json",
+    }
+    monkeypatch.setattr(downloader, "_fetch_bulk_metadata", lambda: metadata)
+    downloader.session = _FakeSession(
+        responses={metadata["download_uri"]: _FakeResponse(content=b"[1]")}
+    )
+
+    # Seed a cached row that exactly matches the vendor metadata; without force
+    # this would short-circuit to "Using cached bulk data" and fetch nothing.
+    with sqlite3.connect(downloader.cache.db_path) as conn:
+        conn.execute(
+            """
+            INSERT OR REPLACE INTO bulk_data_meta (id, downloaded_at, total_cards, bulk_data_uri)
+            VALUES (1, ?, ?, ?)
+            """,
+            (metadata["updated_at"], 0, metadata["download_uri"]),
+        )
+        conn.commit()
+
+    success, message = downloader.download_bulk_metadata(force=True)
+    assert success is True
+    assert "downloaded" in message.lower()
+    # The file was re-streamed despite the matching cache.
+    assert downloader.session.calls == [metadata["download_uri"]]
+    assert bulk_path.read_bytes() == b"[1]"
+
+
+def test_download_single_image_reports_missing_uuid(tmp_path):
+    """A card without an ``id`` fails fast with a "No UUID" message and no network call."""
+    cache = card_images.CardImageCache(
+        cache_dir=tmp_path / "cache", db_path=tmp_path / "cache" / "images.db"
+    )
+    downloader = card_images.BulkImageDownloader(cache)
+    downloader.session = _FakeSession()
+
+    success, message = downloader._download_single_image(
+        {"name": "No Id Card", "image_uris": {"normal": "http://img/x.jpg"}}, "normal"
+    )
+    assert success is False
+    assert "No UUID" in message
+    assert "No Id Card" in message
+    assert downloader.session.calls == []
+
+
+def test_download_single_image_reports_no_downloadable_faces(tmp_path):
+    """A two-image DFC whose every face URL 404s reports 'No downloadable faces'."""
+    cache = card_images.CardImageCache(
+        cache_dir=tmp_path / "cache", db_path=tmp_path / "cache" / "images.db"
+    )
+    downloader = card_images.BulkImageDownloader(cache)
+    downloader.session = _FakeSession(
+        responses={
+            "http://img/front.jpg": _FakeResponse(status_ok=False),
+            "http://img/back.jpg": _FakeResponse(status_ok=False),
+        }
+    )
+
+    card = {
+        "id": "uuid-deadfaces",
+        "name": "Front // Back",
+        "set": "mid",
+        "collector_number": "1",
+        "card_faces": [
+            {"name": "Front", "image_uris": {"normal": "http://img/front.jpg"}},
+            {"name": "Back", "image_uris": {"normal": "http://img/back.jpg"}},
+        ],
+    }
+    success, message = downloader._download_single_image(card, "normal")
+    assert success is False
+    assert "No downloadable faces" in message
+    assert "Front // Back" in message
+    # Nothing was persisted for any face.
+    assert cache.get_image_paths_by_uuid("uuid-deadfaces", "normal") == []
+
+
+def test_download_all_images_counts_a_404_card_as_failed(tmp_path, monkeypatch):
+    """A card whose image URL 404s is tallied under ``failed``."""
+    cache_dir = tmp_path / "card_images"
+    bulk_path = cache_dir / "bulk_data.json"
+    bulk_path.parent.mkdir(parents=True, exist_ok=True)
+    import json
+
+    bulk_path.write_text(
+        json.dumps(
+            [
+                {
+                    "name": "Broken Card",
+                    "id": "u-broken",
+                    "set": "set",
+                    "collector_number": "1",
+                    "image_uris": {"normal": "http://img/broken.jpg"},
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(card_images_schemas, "BULK_DATA_CACHE", bulk_path, raising=False)
+    cache = card_images.CardImageCache(cache_dir=cache_dir, db_path=cache_dir / "images.db")
+    downloader = card_images.BulkImageDownloader(cache)
+    downloader.session = _FakeSession(
+        responses={"http://img/broken.jpg": _FakeResponse(status_ok=False)}
+    )
+
+    result = downloader.download_all_images("normal")
+    assert result["success"] is True
+    assert result["total"] == 1
+    assert result["failed"] == 1
+    assert result["downloaded"] == 0
+
+
+def test_download_all_images_honours_max_cards(tmp_path, monkeypatch):
+    """``max_cards`` truncates the bulk list before downloading."""
+    cache_dir = tmp_path / "card_images"
+    _write_bulk_data(cache_dir, monkeypatch)  # seeds three cards
+    cache = card_images.CardImageCache(cache_dir=cache_dir, db_path=cache_dir / "images.db")
+    downloader = card_images.BulkImageDownloader(cache)
+    downloader.session = _FakeSession()
+
+    result = downloader.download_all_images("normal", max_cards=1)
+    assert result["success"] is True
+    assert result["total"] == 1
+    assert result["downloaded"] == 1
+    # Only one card's image was fetched despite three being present in the file.
+    assert len(downloader.session.calls) == 1
+
+
+def test_download_all_images_invokes_progress_callback(tmp_path, monkeypatch):
+    """The progress_callback is invoked with (completed, total, message)."""
+    cache_dir = tmp_path / "card_images"
+    _write_bulk_data(cache_dir, monkeypatch)  # three cards
+    cache = card_images.CardImageCache(cache_dir=cache_dir, db_path=cache_dir / "images.db")
+    downloader = card_images.BulkImageDownloader(cache)
+    downloader.session = _FakeSession()
+
+    # The callback fires every SCRYFALL_DOWNLOAD_PROGRESS_INTERVAL completions;
+    # pin the interval to 1 so each of the three cards triggers a call.
+    monkeypatch.setattr(
+        card_images.downloader, "SCRYFALL_DOWNLOAD_PROGRESS_INTERVAL", 1, raising=False
+    )
+
+    captured: list[tuple[int, int, str]] = []
+    downloader.download_all_images("normal", progress_callback=lambda *a: captured.append(a))
+
+    assert captured, "progress_callback should have been invoked"
+    # Each call reports the running completed count out of the fixed total.
+    assert all(total == 3 for _completed, total, _msg in captured)
+    assert captured[-1][0] == 3
+
+
+def test_download_all_images_returns_error_dict_on_load_failure(tmp_path, monkeypatch):
+    """An exception while reading the bulk file is reported as ``success=False``."""
+    cache_dir = tmp_path / "card_images"
+    bulk_path = cache_dir / "bulk_data.json"
+    bulk_path.parent.mkdir(parents=True, exist_ok=True)
+    bulk_path.write_text("[]", encoding="utf-8")
+    monkeypatch.setattr(card_images_schemas, "BULK_DATA_CACHE", bulk_path, raising=False)
+    cache = card_images.CardImageCache(cache_dir=cache_dir, db_path=cache_dir / "images.db")
+    downloader = card_images.BulkImageDownloader(cache)
+
+    def _boom(_path):
+        raise RuntimeError("corrupt bulk file")
+
+    # The bulk file exists, so we pass the existence guard and fail in fast_load.
+    monkeypatch.setattr("utils.json_io.fast_load", _boom)
+
+    result = downloader.download_all_images("normal")
+    assert result["success"] is False
+    assert "corrupt bulk file" in result["error"]
+
+
+# ---------------------------------------------------------------------------
+# fetch_card_by_name / fetch_printings_by_name public API
+# ---------------------------------------------------------------------------
+
+
+class _JsonResponse:
+    """A _FakeSession response carrying a JSON payload."""
+
+    def __init__(self, payload, status_ok: bool = True):
+        self._payload = payload
+        self._ok = status_ok
+
+    def raise_for_status(self):
+        if not self._ok:
+            raise RuntimeError("HTTP error")
+
+    def json(self):
+        return self._payload
+
+
+class _RecordingSession:
+    """Records (url, params) for each GET and returns queued JSON responses."""
+
+    def __init__(self, responses):
+        # responses: list of _JsonResponse, served in order.
+        self._responses = list(responses)
+        self.calls: list[tuple[str, dict | None]] = []
+        self.headers: dict[str, str] = {}
+
+    def get(self, url, params=None, **_kwargs):
+        self.calls.append((url, params))
+        return self._responses.pop(0)
+
+
+def test_fetch_card_by_name_passes_exact_and_lowercased_set(tmp_path):
+    """fetch_card_by_name sends ``exact`` and a lowercased ``set`` param."""
+    cache = card_images.CardImageCache(
+        cache_dir=tmp_path / "cache", db_path=tmp_path / "cache" / "images.db"
+    )
+    downloader = card_images.BulkImageDownloader(cache)
+    downloader.session = _RecordingSession([_JsonResponse({"id": "x", "name": "Bolt"})])
+
+    result = downloader.fetch_card_by_name("Lightning Bolt", set_code="LEA")
+    assert result == {"id": "x", "name": "Bolt"}
+    _url, params = downloader.session.calls[0]
+    assert params == {"exact": "Lightning Bolt", "set": "lea"}
+
+
+def test_fetch_printings_by_name_concatenates_pages_and_drops_params(tmp_path):
+    """Paginated search results are concatenated; params are dropped after page 1."""
+    cache = card_images.CardImageCache(
+        cache_dir=tmp_path / "cache", db_path=tmp_path / "cache" / "images.db"
+    )
+    downloader = card_images.BulkImageDownloader(cache)
+    downloader.session = _RecordingSession(
+        [
+            _JsonResponse({"data": [{"id": "p1"}], "next_page": "http://api/page2"}),
+            _JsonResponse({"data": [{"id": "p2"}]}),
+        ]
+    )
+
+    results = downloader.fetch_printings_by_name("Lightning Bolt")
+    assert [r["id"] for r in results] == ["p1", "p2"]
+    # Page 1 carries the query params; page 2 follows next_page with params=None.
+    first_url, first_params = downloader.session.calls[0]
+    second_url, second_params = downloader.session.calls[1]
+    assert first_params is not None and first_params["unique"] == "prints"
+    assert second_url == "http://api/page2"
+    assert second_params is None
+
+
+# ---------------------------------------------------------------------------
+# PNG size extension + printing-layer accent behaviour
+# ---------------------------------------------------------------------------
+
+
+def test_download_face_asset_uses_png_extension_for_png_size(tmp_path):
+    """A ``size='png'`` download writes a ``.png`` file (not ``.jpg``)."""
+    cache = card_images.CardImageCache(
+        cache_dir=tmp_path / "cache", db_path=tmp_path / "cache" / "images.db"
+    )
+    downloader = card_images.BulkImageDownloader(cache)
+    downloader.session = _FakeSession()
+
+    success, _, path = downloader._download_face_asset(
+        uuid="uuid-png",
+        face_index=0,
+        name="PNG Card",
+        image_uris={"png": "http://img/card.png"},
+        size="png",
+        card={"set": "set"},
+    )
+    assert success is True
+    assert path is not None and path.suffix == ".png"
+    assert path.exists()
+    assert downloader.session.calls == ["http://img/card.png"]
+
+
+def test_get_image_path_for_printing_does_not_accent_fold(tmp_path):
+    """The set-qualified printing lookup is exact and does NOT strip accents.
+
+    ``get_image_path`` accent-folds as a fallback, but the printing-level lookup
+    must stay exact: querying the ASCII spelling of an accented name with a set
+    code must miss rather than surface the accented row.
+    """
+    cache = card_images.CardImageCache(
+        cache_dir=tmp_path / "cache", db_path=tmp_path / "cache" / "images.db"
+    )
+    accent_file = cache.cache_dir / "normal" / "uuid-lorien-ltr.jpg"
+    accent_file.parent.mkdir(parents=True, exist_ok=True)
+    accent_file.write_bytes(b"accent")
+    cache.add_image(
+        uuid="uuid-lorien-ltr",
+        name="Lórien Revealed",
+        set_code="LTR",
+        collector_number="057",
+        image_size="normal",
+        file_path=accent_file,
+    )
+
+    # Exact accented name + set resolves.
+    assert cache.get_image_path_for_printing("Lórien Revealed", "LTR", "normal") == accent_file
+    # ASCII spelling with the same set must NOT accent-fold at the printing layer.
+    assert cache.get_image_path_for_printing("Lorien Revealed", "LTR", "normal") is None
