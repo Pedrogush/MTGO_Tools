@@ -157,6 +157,49 @@ def test_search_cards_query_none_returns_all(card_repository):
     ]
 
 
+def test_search_cards_types_list_currently_yields_nothing(card_repository):
+    """Pin current behavior: a ``types`` *list* is forwarded but never matches.
+
+    The repository forwards ``types`` straight through as the manager's
+    ``type_filter`` argument, but the manager treats ``type_filter`` as a
+    *string* (``(type_filter or "").strip().lower()``). A list therefore raises
+    ``AttributeError`` inside the manager, which the generic ``except`` swallows,
+    so passing ``types`` as a list returns ``[]`` rather than the matching
+    instants. This documents the latent list/str mismatch; if the plumbing is
+    ever fixed to accept a list, update this expectation.
+    """
+    assert card_repository.search_cards(types=["Instant"]) == []
+
+
+def test_search_cards_types_string_filters_by_type_line(card_repository):
+    """A *string* ``types`` reaches the manager's type-line substring filter.
+
+    Passing the type as a bare string (what the manager actually expects) keeps
+    only the instants and drops the land, proving the type filter is wired to
+    the manager and applied against the type line.
+    """
+    results = card_repository.search_cards(types="Instant")
+
+    assert sorted(card["name"] for card in results) == [
+        "Lightning Bolt",
+        "Lightning Strike",
+    ]
+
+
+def test_search_cards_colors_and_types_combine(card_repository):
+    """Colors and a string type filter intersect (AND), not union."""
+    both = card_repository.search_cards(colors=["R"], types="Instant")
+    assert sorted(card["name"] for card in both) == [
+        "Lightning Bolt",
+        "Lightning Strike",
+    ]
+
+    # The land is blue, so a red color filter excludes it even though its type
+    # line would otherwise match a "Land" type filter.
+    none = card_repository.search_cards(colors=["R"], types="Land")
+    assert none == []
+
+
 def test_search_cards_mana_value_param_is_currently_ignored(card_repository):
     """Pin current behavior: ``mana_value`` is accepted but never applied.
 
@@ -370,6 +413,32 @@ def test_load_collection_from_file_preserves_id(card_repository, tmp_path):
     assert cards[0]["id"] == "12345"
 
 
+def test_load_collection_from_file_omits_id_when_absent(card_repository, tmp_path):
+    """An entry without an 'id' key produces a normalized dict without 'id'.
+
+    Covers the absent-branch of the ``if "id" in entry`` guard: ``id`` is only
+    copied through when present, so a bare entry must not gain a null ``id``.
+    """
+    collection_data = [{"name": "Lightning Bolt", "quantity": 4}]
+    filepath = tmp_path / "collection.json"
+    filepath.write_text(json.dumps(collection_data), encoding="utf-8")
+
+    cards = card_repository.load_collection_from_file(filepath)
+
+    assert len(cards) == 1
+    assert "id" not in cards[0]
+
+
+def test_get_collection_cache_path(card_repository):
+    """``get_collection_cache_path`` points at collection.json under CACHE_DIR."""
+    from utils.constants import CACHE_DIR
+
+    path = card_repository.get_collection_cache_path()
+
+    assert path == CACHE_DIR / "collection.json"
+    assert path.name == "collection.json"
+
+
 # ============= State Management Tests =============
 
 
@@ -413,7 +482,7 @@ def test_set_card_manager(card_repository):
     new_manager = SimpleNamespace()
     card_repository.set_card_manager(new_manager)
 
-    assert card_repository.get_card_manager() == new_manager
+    assert card_repository.get_card_manager() is new_manager
     assert card_repository.is_card_data_ready() is True
 
 
@@ -457,6 +526,27 @@ def test_ensure_card_data_loaded_uses_cached_manager(card_repository, card_manag
 def test_ensure_card_data_loaded_loads_when_no_manager():
     """Test load path runs when no manager is present yet."""
     repo = CardRepository()
+    loaded = SimpleNamespace(is_loaded=True)
+
+    with patch(
+        "repositories.card_repository.state.load_card_manager", return_value=loaded
+    ) as mock_load:
+        result = repo.ensure_card_data_loaded()
+
+    assert result is loaded
+    mock_load.assert_called_once_with()
+    assert repo.get_card_manager() is loaded
+    assert repo.is_card_data_ready() is True
+
+
+def test_ensure_card_data_loaded_loads_when_manager_present_but_not_loaded():
+    """A present-but-unloaded manager falls through to ``load_card_manager``.
+
+    The cached fast-path is gated on ``is_loaded``; when a manager exists but
+    has not finished loading, ``ensure_card_data_loaded`` must reload rather
+    than hand back the stale, empty manager.
+    """
+    repo = CardRepository(card_data_manager=SimpleNamespace(is_loaded=False))
     loaded = SimpleNamespace(is_loaded=True)
 
     with patch(
