@@ -11,33 +11,47 @@ from repositories.card_repository import storage
 from repositories.card_repository.schemas import CardEntry
 
 
-def _sample_index() -> dict:
-    entry = CardEntry(
-        name="Opt",
-        name_lower="opt",
+def _card(name: str, color: str) -> CardEntry:
+    return CardEntry(
+        name=name,
+        name_lower=name.lower(),
         aliases=[],
-        colors=["U"],
-        color_identity=["U"],
+        colors=[color],
+        color_identity=[color],
         legalities={"modern": "Legal"},
-        mana_cost="{U}",
+        mana_cost=f"{{{color}}}",
     )
-    return {"cards": [entry], "cards_by_name": {"opt": 0}}
+
+
+def _sample_index() -> dict:
+    return {"cards": [_card("Opt", "U")], "cards_by_name": {"opt": 0}}
 
 
 def test_resolve_paths_uses_msgpack_extension(tmp_path: Path) -> None:
-    _, index_path, meta_path = storage.resolve_paths(tmp_path)
+    # The first element is the (created) data dir; the index is binary msgpack.
+    base, index_path, meta_path = storage.resolve_paths(tmp_path / "data")
+    assert base == tmp_path / "data"
+    assert base.is_dir()  # resolve_paths must create the directory.
     assert index_path.name == "atomic_cards_index_v3.msgpack"
     assert meta_path.name == "atomic_cards_meta.json"
 
 
 def test_write_then_load_index_round_trip(tmp_path: Path) -> None:
     _, index_path, _ = storage.resolve_paths(tmp_path)
-    storage.write_index(index_path, _sample_index())
+    # Two cards with an alias mapping to index 1 so non-zero index resolution
+    # is exercised (a bug that returned ``cards[0]`` would pass otherwise).
+    index = {
+        "cards": [_card("Opt", "U"), _card("Shock", "R")],
+        "cards_by_name": {"opt": 0, "shock": 1},
+    }
+    storage.write_index(index_path, index)
 
     loaded = storage.load_index(index_path)
     assert loaded.cards[0].name == "Opt"
     # ``cards_by_name`` maps an alias to the index of its record in ``cards``.
     assert loaded.cards[loaded.cards_by_name["opt"]].mana_cost == "{U}"
+    assert loaded.cards[loaded.cards_by_name["shock"]].name == "Shock"
+    assert loaded.cards[loaded.cards_by_name["shock"]].mana_cost == "{R}"
 
 
 def test_load_index_missing_raises(tmp_path: Path) -> None:
@@ -118,7 +132,10 @@ def test_load_meta_missing_returns_none(tmp_path: Path) -> None:
 
 def test_write_then_load_meta_round_trip(tmp_path: Path) -> None:
     _, _, meta_path = storage.resolve_paths(tmp_path)
-    # Includes a non-ASCII value since write_meta passes ensure_ascii=False.
+    # Includes a non-ASCII value to confirm a clean UTF-8 round-trip.
+    # (``write_meta`` forwards ``ensure_ascii=False``, but ``atomic_write_json``
+    # ignores it: msgspec always emits UTF-8 without escaping, so the byte never
+    # depends on that flag.)
     meta = {"etag": "abc123", "source": "Æther Vial", "count": 34000}
     storage.write_meta(meta_path, meta)
     assert storage.load_meta(meta_path) == meta
