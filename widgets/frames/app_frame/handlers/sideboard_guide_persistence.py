@@ -22,6 +22,29 @@ else:
 class SideboardGuidePersistenceHandlers(_Base):
     """Persistence/state I/O for guides, outboards, and the pin indicator."""
 
+    def _parse_card_text(self: AppFrame, text: str) -> dict[str, int]:
+        if not text or not isinstance(text, str):
+            return {}
+
+        result: dict[str, int] = {}
+        lines = text.replace(",", "\n").split("\n")
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+            parts = line.split(None, 1)
+            if len(parts) == 2:
+                qty_str, name = parts
+                qty_str = qty_str.rstrip("x")
+                try:
+                    qty = int(qty_str)
+                    result[name.strip()] = qty
+                    continue
+                except ValueError:
+                    pass
+            result[line] = 1
+        return result
+
     def _persist_outboard_for_current(self: AppFrame) -> None:
         key = self.controller.deck_repo.get_current_deck_key()
         self.controller.outboard_store[key] = self.zone_cards.get("out", [])
