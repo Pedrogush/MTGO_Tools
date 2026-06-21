@@ -54,9 +54,8 @@ def test_render_karsten_deck_basic(averager):
     for _ in range(3):
         buf = averager.add_deck_to_karsten_buffer(buf, "4 Island\n2 Mountain")
     text = averager.render_karsten_deck(buf, main_size=6, side_size=15)
-    lines = text.splitlines()
-    assert "4 Island" in lines
-    assert "2 Mountain" in lines
+    # Assert the full rendered set so extra/malformed lines are caught.
+    assert text.splitlines() == ["4 Island", "2 Mountain"]
 
 
 def test_render_karsten_deck_top_n_selection(averager):
@@ -96,6 +95,27 @@ def test_render_karsten_deck_respects_main_size_cap(averager):
     assert len(lines) == 5
 
 
+def test_render_karsten_deck_respects_side_size_cap(averager):
+    # Build more distinct sideboard unique-copies than side_size; the
+    # mainboard cap is generous so only side_size truncation can shrink the
+    # sideboard. Guards against a regression that drops the sideboard cap or
+    # applies main_size to the sideboard.
+    main = "\n".join(f"1 Card{i}" for i in range(3))
+    side = "\n".join(f"1 Sb{i}" for i in range(10))
+    buf = averager.add_deck_to_karsten_buffer({}, f"{main}\n\n{side}")
+
+    text = averager.render_karsten_deck(buf, main_size=60, side_size=4)
+    lines = text.splitlines()
+
+    sep = lines.index("")
+    main_part = [ln for ln in lines[:sep] if ln.strip()]
+    side_part = [ln for ln in lines[sep + 1 :] if ln.strip()]
+
+    # Mainboard is uncapped here (3 < 60); sideboard truncated to side_size.
+    assert len(main_part) == 3
+    assert len(side_part) == 4
+
+
 # ──────────────────────────── Arithmetic buffer & render ────────────────────
 
 
@@ -104,6 +124,15 @@ def test_add_deck_to_buffer_accumulates(averager):
     buf = averager.add_deck_to_buffer(buf, "4 Lightning Bolt")
     buf = averager.add_deck_to_buffer(buf, "2 Lightning Bolt")
     assert buf["Lightning Bolt"] == 6.0
+
+
+def test_add_deck_to_buffer_keys_sideboard_directly(averager):
+    # The "\n\n" separator marks the sideboard; the parser keys those cards
+    # as "Sideboard {name}". Assert the buffer keying directly rather than
+    # only through render output.
+    buf = averager.add_deck_to_buffer({}, "4 Lightning Bolt\n\n2 Duress")
+    assert buf["Lightning Bolt"] == 4.0
+    assert buf["Sideboard Duress"] == 2.0
 
 
 def test_render_average_deck_integer(averager):
