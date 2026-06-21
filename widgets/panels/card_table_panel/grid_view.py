@@ -66,7 +66,7 @@ from widgets.panels.card_table_panel.card_render import (
     resolve_card_color,
 )
 from widgets.panels.card_table_panel.marquee import RUBBER_AUTOSCROLL_PX, MarqueeController
-from widgets.panels.card_table_panel.pile_view import _ImageCache
+from widgets.panels.card_table_panel.pile_image_cache import _ImageCache
 from widgets.panels.card_table_panel.scrolling import scroll_by_wheel
 
 # Match the grid sizer's old geometry: DECK_CARD_WIDTH×HEIGHT cells with a

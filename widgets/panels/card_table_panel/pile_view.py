@@ -26,12 +26,10 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from pathlib import Path
-from threading import Thread
 from time import perf_counter
 from typing import Any
 
 import wx
-from PIL import Image as PilImage
 
 from utils.constants import (
     CARD_VIEW_SCROLL_RATE,
@@ -40,53 +38,32 @@ from utils.constants import (
     DARK_BG,
     DARK_PANEL,
     DECK_CARD_CORNER_RADIUS,
-    DECK_CARD_HEIGHT,
-    DECK_CARD_WIDTH,
     LIGHT_TEXT,
     SUBDUED_TEXT,
 )
-from utils.image_effects import apply_rounded_corner_alpha
+from widgets.panels.card_table_panel import pile_geometry as geom
 from widgets.panels.card_table_panel import scroll_perf
 from widgets.panels.card_table_panel.marquee import RUBBER_AUTOSCROLL_PX, MarqueeController
+from widgets.panels.card_table_panel.pile_image_cache import ScaledBitmapCache
 from widgets.panels.card_table_panel.scrolling import scroll_by_wheel
 from widgets.panels.card_table_panel.sorting import (
     PILE_SORT_MV,
     group_into_piles,
 )
 
-# Match the grid view's card size and inter-card gap so the two views feel
-# visually consistent.
-_CARD_WIDTH = DECK_CARD_WIDTH
-_CARD_HEIGHT = DECK_CARD_HEIGHT
-_NAME_STRIP_HEIGHT = 32  # visible portion of stacked-above cards
-_PILE_GAP = 8  # gap between piles (matches grid view's GRID_GAP)
-_PILE_PAD = 6  # padding inside a pile column
-_PILE_TOP = _PILE_PAD  # top inset for the first card in a pile
+# Geometry constants live in pile_geometry; re-exported here so existing
+# importers (e.g. tests/ui/test_pile_view_selection.py) keep working unchanged.
+_CARD_WIDTH = geom._CARD_WIDTH
+_CARD_HEIGHT = geom._CARD_HEIGHT
+_NAME_STRIP_HEIGHT = geom._NAME_STRIP_HEIGHT
+_PILE_GAP = geom._PILE_GAP
+_PILE_PAD = geom._PILE_PAD
+_PILE_TOP = geom._PILE_TOP
 
 # Above this virtual width/height (px) we skip the cached full-content bitmap
 # and draw directly (culled), so a pathological pile can't allocate a huge
 # canvas. Comfortably clears any real deck zone.
 _MAX_CANVAS_PX = 20000
-
-
-class _ImageCache:
-    """Tiny LRU-ish cache of scaled card-image bitmaps keyed by name."""
-
-    def __init__(self, max_entries: int = 256) -> None:
-        self._cache: dict[str, wx.Bitmap | None] = {}
-        self._max_entries = max_entries
-
-    def get(self, name: str) -> wx.Bitmap | None:
-        return self._cache.get(name)
-
-    def has(self, name: str) -> bool:
-        return name in self._cache
-
-    def put(self, name: str, bitmap: wx.Bitmap | None) -> None:
-        if len(self._cache) >= self._max_entries:
-            # Drop an arbitrary entry — pile contents change infrequently.
-            self._cache.pop(next(iter(self._cache)))
-        self._cache[name] = bitmap
 
 
 class DeckPileView(wx.ScrolledWindow):
@@ -151,8 +128,16 @@ class DeckPileView(wx.ScrolledWindow):
         self._drag_uids: list[int] = []
         self._drag_pos: wx.Point | None = None
 
-        self._image_cache = _ImageCache()
-        self._image_gen = 0
+        # The scaled-bitmap cache owns its own LRU store and the threaded
+        # loader (including the image-generation guard). It reaches back into
+        # the view through the callables below: the resolvers it loads art with,
+        # an aliveness check for late CallAfters, and the on-loaded patch hook.
+        self._image_cache = ScaledBitmapCache(
+            get_card_image=self._get_card_image,
+            get_printing_image=self._get_printing_image,
+            is_alive=lambda: bool(self),
+            on_loaded=self._patch_card_on_canvas,
+        )
         # Full-content bitmap of every pile (card art only). Scrolling blits a
         # sub-rect of this instead of re-drawing every copy's alpha bitmap, so a
         # wheel notch costs one viewport copy. Rebuilt on content change; the
@@ -217,10 +202,7 @@ class DeckPileView(wx.ScrolledWindow):
                 break
         if stored is None:
             return
-        self._image_cache.put(stored, None)
-        self._image_gen += 1
-        gen = self._image_gen
-        Thread(target=self._image_worker, args=(gen, stored), daemon=True).start()
+        self._image_cache.refresh(stored)
         self.Refresh()
 
     def set_selected(self, name: str | None) -> None:
@@ -268,36 +250,24 @@ class DeckPileView(wx.ScrolledWindow):
         self._prefetch_images()
         self.Refresh()
 
+    # Pile spatial math lives in pile_geometry (pure, widget-free); these thin
+    # delegators keep the call sites and the test-facing method names stable.
     def _pile_height(self, member_count: int) -> int:
-        if member_count <= 0:
-            return _CARD_HEIGHT
-        return _CARD_HEIGHT + (member_count - 1) * _NAME_STRIP_HEIGHT
+        return geom.pile_height(member_count)
 
     def _update_virtual_size(self) -> None:
         # Pile contents/positions changed — the cached image is stale.
         self._invalidate_canvas()
-        if not self._piles:
-            self._content_size = wx.Size(100, 100)
-            self.SetVirtualSize((100, 100))
-            return
-        max_members = max(len(members) for _, members in self._piles)
-        height = _PILE_TOP + self._pile_height(max_members) + _PILE_PAD * 2
-        width = (_CARD_WIDTH + _PILE_GAP) * len(self._piles) + _PILE_GAP
         # Canvas tracks the true content extent; the scroll/virtual size may be
         # inflated to the client by wx, but the canvas must not be (see __init__).
-        self._content_size = wx.Size(width, height)
-        self.SetVirtualSize((width, height))
+        self._content_size = geom.content_size(self._piles)
+        self.SetVirtualSize(self._content_size)
 
     def _pile_x(self, pile_index: int) -> int:
-        return _PILE_GAP + pile_index * (_CARD_WIDTH + _PILE_GAP)
+        return geom.pile_x(pile_index)
 
     def _card_rect(self, pile_index: int, member_index: int, total: int) -> wx.Rect:
-        x = self._pile_x(pile_index)
-        # Bottom card sits at the bottom of the stack; cards higher in the
-        # member list are visually above it (only their name strip showing).
-        bottom_y = _PILE_TOP + self._pile_height(total) - _CARD_HEIGHT
-        y = bottom_y - (total - 1 - member_index) * _NAME_STRIP_HEIGHT
-        return wx.Rect(x, y, _CARD_WIDTH, _CARD_HEIGHT)
+        return geom.card_rect(pile_index, member_index, total)
 
     def _hit_test(self, point: wx.Point) -> tuple[int, int, dict[str, Any]] | None:
         """Return (pile_index, member_index, entry) for the topmost card at point."""
@@ -319,57 +289,10 @@ class DeckPileView(wx.ScrolledWindow):
 
     # ----- image loading -----
     def _prefetch_images(self) -> None:
-        seen: set[str] = set()
-        for _label, members in self._piles:
-            for entry in members:
-                name = entry["name"]
-                if name in seen or self._image_cache.has(name):
-                    continue
-                seen.add(name)
-                self._image_cache.put(name, None)  # mark as loading
-                self._image_gen += 1
-                gen = self._image_gen
-                Thread(target=self._image_worker, args=(gen, name), daemon=True).start()
-
-    def _image_worker(self, gen: int, name: str) -> None:
-        try:
-            path: Path | None = None
-            if self._get_printing_image is not None:
-                try:
-                    path = self._get_printing_image(name)
-                except Exception:
-                    path = None
-                if path and not path.exists():
-                    path = None
-            if path is None:
-                path = self._get_card_image(name, "normal")
-            if not path or not path.exists():
-                wx.CallAfter(self._image_loaded, name, None)
-                return
-            img = PilImage.open(str(path)).convert("RGB")
-            w, h = img.size
-            scale = min(_CARD_WIDTH / w, _CARD_HEIGHT / h)
-            img = img.resize((max(1, int(w * scale)), max(1, int(h * scale))), PilImage.LANCZOS)
-            wx.CallAfter(self._image_loaded, name, img)
-        except Exception:
-            wx.CallAfter(self._image_loaded, name, None)
-
-    def _image_loaded(self, name: str, pil_img: PilImage.Image | None) -> None:
-        try:
-            if not self:
-                return
-        except RuntimeError:
-            return
-        if pil_img is None:
-            self._image_cache.put(name, None)
-        else:
-            w, h = pil_img.size
-            wx_img = wx.Image(w, h)
-            wx_img.SetData(pil_img.tobytes())
-            wx_img = apply_rounded_corner_alpha(wx_img, DECK_CARD_CORNER_RADIUS)
-            self._image_cache.put(name, wx_img.ConvertToBitmap())
-        # A single card's art changed — patch just the piles holding it.
-        self._patch_card_on_canvas(name)
+        # The cache de-dups names and skips anything already cached/loading.
+        self._image_cache.prefetch(
+            [entry["name"] for _label, members in self._piles for entry in members]
+        )
 
     # ----- paint -----
     def _on_paint(self, _event: wx.PaintEvent) -> None:
@@ -893,14 +816,4 @@ class DeckPileView(wx.ScrolledWindow):
         self._update_virtual_size()
 
     def _pile_index_at(self, logical_x: int) -> int | None:
-        if not self._piles:
-            return None
-        # Snap to nearest pile column.
-        best_idx = 0
-        best_dist = abs(self._pile_x(0) + _CARD_WIDTH // 2 - logical_x)
-        for idx in range(1, len(self._piles)):
-            d = abs(self._pile_x(idx) + _CARD_WIDTH // 2 - logical_x)
-            if d < best_dist:
-                best_idx = idx
-                best_dist = d
-        return best_idx
+        return geom.pile_index_at(self._piles, logical_x)
