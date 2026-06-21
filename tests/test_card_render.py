@@ -1,4 +1,12 @@
-"""Tests for the wx-independent card-render helpers."""
+"""Tests for the wx-independent card-render helpers.
+
+The helpers under test are pure, but the schema (``CardEntry``) and the
+``FALLBACK_COLORS`` table are reached through packages whose ``__init__`` /
+module imports pull in ``wx`` (``repositories.card_repository.__init__`` ->
+``utils.constants.keyboard`` and ``widgets.mana_icon_factory.factory``). This
+module therefore only collects on Windows / CI where ``wx`` is installed; it is
+not runnable from a wx-less WSL checkout.
+"""
 
 from __future__ import annotations
 
@@ -53,7 +61,14 @@ def _card_entry(name: str = "", aliases: list[str] | None = None, **kwargs: Any)
         # Falsy aliases (None, "") are skipped by the `if alias` filter; valid
         # ones (including duplicates of base_name) are de-duplicated.
         ({"name": "A"}, {"aliases": [None, "", "A", "Alias1"]}, ["A", "Alias1"]),
+        # A "//" meta name that is NOT among the candidates must not be
+        # spuriously inserted: the promotion branch only reorders an existing
+        # candidate (lines 36-40), it never appends a new one.
+        ({"name": "A"}, {"name": "X // Y", "aliases": ["Alias1"]}, ["A", "Alias1"]),
         ({"name": ""}, {}, []),
+        # Empty base_name with non-empty aliases: no base name is appended, so
+        # only the (filtered) aliases drive the candidate list.
+        ({"name": ""}, {"aliases": ["Foo"]}, ["Foo"]),
         # CardEntry-like object: isinstance(meta, dict) is False but .get() works.
         # When meta.name is a combined DFC name, it is promoted to position 0 so
         # the reliable combined-name → front-face DB entry is tried first.
@@ -94,7 +109,9 @@ def _card_entry(name: str = "", aliases: list[str] | None = None, **kwargs: Any)
         "dfc-combined-base-with-face-aliases",
         "non-list-aliases",
         "falsy-aliases-filtered-and-deduped",
+        "meta-name-combined-not-in-candidates-no-insert",
         "empty-name",
+        "empty-name-with-aliases",
         "cardentry-face-name-promotes-combined-to-front",
         "cardentry-combined-base-no-promotion",
     ],
