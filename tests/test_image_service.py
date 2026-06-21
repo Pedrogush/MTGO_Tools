@@ -1,5 +1,8 @@
 """Tests for ImageService business logic."""
 
+import threading
+import time
+
 import pytest
 
 import services.image_service as image_service
@@ -561,3 +564,190 @@ def test_image_service_callbacks_can_be_cleared(image_service_instance):
 
     service._handle_image_downloaded(_request())
     assert received == []
+
+
+def test_queue_card_image_download_delegates_to_queue(image_service_instance, monkeypatch):
+    """queue_card_image_download forwards to the queue and returns its result."""
+    service = image_service_instance
+    calls = []
+
+    def fake_enqueue(request, *, prioritize):
+        calls.append((request, prioritize))
+        return True
+
+    monkeypatch.setattr(service._download_queue, "enqueue", fake_enqueue)
+    request = _request()
+
+    assert service.queue_card_image_download(request, prioritize=True) is True
+    assert calls == [(request, True)]
+
+
+def test_queue_card_image_download_returns_false_when_skipped(image_service_instance, monkeypatch):
+    """A skipped enqueue (e.g. already cached) propagates False to the caller."""
+    service = image_service_instance
+    monkeypatch.setattr(service._download_queue, "enqueue", lambda request, *, prioritize: False)
+
+    assert service.queue_card_image_download(_request(), prioritize=False) is False
+
+
+def test_set_selected_card_request_delegates_to_queue(image_service_instance, monkeypatch):
+    """set_selected_card_request forwards the request to the queue unchanged."""
+    service = image_service_instance
+    received = []
+    monkeypatch.setattr(service._download_queue, "set_selected_request", received.append)
+    request = _request()
+
+    service.set_selected_card_request(request)
+    assert received == [request]
+
+    received.clear()
+    service.set_selected_card_request(None)
+    assert received == [None]
+
+
+def test_enqueue_already_inflight_returns_false():
+    """An enqueue whose key is already in flight is rejected without queueing."""
+    queue = _build_queue()
+    try:
+        queue.stop()
+        request = _request()
+        with queue._condition:
+            queue._inflight_keys.add(request.queue_key())
+        assert queue.enqueue(request) is False
+        with queue._condition:
+            assert len(queue._queue) == 0
+            assert request.queue_key() not in queue._pending_keys
+    finally:
+        queue.stop()
+
+
+def test_ensure_selected_priority_skips_already_cached():
+    """A cached selected request is never queued."""
+    cache = _FakeCache(cached_keys={("Mirrorpool", "aeoe", "normal")})
+    queue = _build_queue(cache=cache)
+    try:
+        queue.stop()
+        queue.set_selected_request(_request())
+        with queue._condition:
+            assert len(queue._queue) == 0
+            assert len(queue._pending_keys) == 0
+    finally:
+        queue.stop()
+
+
+def test_ensure_selected_priority_skips_inflight():
+    """A selected request already in flight is not re-queued."""
+    queue = _build_queue()
+    try:
+        queue.stop()
+        request = _request()
+        with queue._condition:
+            queue._inflight_keys.add(request.queue_key())
+        queue.set_selected_request(request)
+        with queue._condition:
+            assert request not in queue._queue
+            assert request.queue_key() not in queue._pending_keys
+    finally:
+        queue.stop()
+
+
+def test_ensure_selected_priority_skips_not_fetchable():
+    """A selected request with no fetchable name is ignored."""
+    queue = _build_queue()
+    try:
+        queue.stop()
+        queue.set_selected_request(_request(card_name="   "))
+        with queue._condition:
+            assert len(queue._queue) == 0
+            assert len(queue._pending_keys) == 0
+    finally:
+        queue.stop()
+
+
+def test_set_selected_request_none_is_noop():
+    """Clearing the selection with None queues nothing."""
+    queue = _build_queue()
+    try:
+        queue.stop()
+        queue.set_selected_request(None)
+        with queue._condition:
+            assert len(queue._queue) == 0
+            assert len(queue._pending_keys) == 0
+    finally:
+        queue.stop()
+
+
+def test_worker_loop_downloads_and_notifies():
+    """The running worker drains the queue, downloads, and notifies on success.
+
+    Exercises the real threaded dispatch path: ``_run`` pops the request,
+    submits it to the executor, ``_download_request`` succeeds, and
+    ``_handle_download_complete`` fires ``on_downloaded`` and clears the
+    inflight bookkeeping.
+    """
+    cache = _FakeCache(cached_keys={("Mirrorpool", "aeoe", "normal")})
+    downloader = _FakeDownloader([(True, "ok")])
+    done = threading.Event()
+    downloaded = []
+
+    def on_downloaded(request):
+        downloaded.append(request)
+        done.set()
+
+    queue = CardImageDownloadQueue(cache, on_downloaded=on_downloaded)
+    queue._downloader = downloader
+    try:
+        request = _request()
+        assert queue.enqueue(request) is True
+        assert done.wait(timeout=5.0), "worker never notified completion"
+        assert downloaded == [request]
+        with queue._condition:
+            assert request.queue_key() not in queue._inflight_keys
+            assert queue._inflight_count == 0
+            assert request.queue_key() not in queue._pending_keys
+    finally:
+        queue.stop()
+
+
+def test_worker_loop_recovers_when_download_request_raises():
+    """A ``_download_request`` that raises is swallowed; bookkeeping still clears.
+
+    Drives the ``_handle_download_complete`` exception branch end to end: the
+    executor future resolves to an exception, the done-callback logs and
+    recovers, and the inflight counters return to zero without notifying
+    ``on_downloaded``.
+    """
+    cache = _FakeCache()
+    downloaded = []
+    raised = threading.Event()
+    queue = CardImageDownloadQueue(cache, on_downloaded=downloaded.append)
+
+    def boom(request):
+        raised.set()
+        raise RuntimeError("boom")
+
+    # Replace the unit of work submitted to the executor so the future's
+    # result() raises, exercising the except branch in _handle_download_complete.
+    queue._download_request = boom
+    try:
+        request = _request()
+        assert queue.enqueue(request) is True
+        assert raised.wait(timeout=5.0), "worker never ran the request"
+
+        deadline = time.monotonic() + 5.0
+        while time.monotonic() < deadline:
+            with queue._condition:
+                cleared = (
+                    request.queue_key() not in queue._inflight_keys and queue._inflight_count == 0
+                )
+            if cleared:
+                break
+            queue._stop_event.wait(0.01)
+
+        # The raising work item never lands the image in cache, so no notify.
+        assert downloaded == []
+        with queue._condition:
+            assert request.queue_key() not in queue._inflight_keys
+            assert queue._inflight_count == 0
+    finally:
+        queue.stop()
