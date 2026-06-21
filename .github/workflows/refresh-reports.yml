@@ -51,6 +51,12 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Install d2 (renders the dependency-diagram SVGs)
+        # Without d2 on PATH, generate_dependency_diagrams.py silently skips SVG
+        # rendering and emits only graph.json, so the published reports branch
+        # would carry no rendered diagrams. Install it so the SVGs are produced.
+        run: curl -fsSL https://d2lang.com/install.sh | sh -s --
+
       - name: Publish regenerated reports to the single reports branch
         run: |
           set -euo pipefail
