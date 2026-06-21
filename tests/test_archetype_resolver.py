@@ -160,6 +160,41 @@ class TestFindArchetypeByName:
         result = find_archetype_by_name("UR Murktide", "Modern", repo)
         assert result is None
 
+    @pytest.mark.parametrize("query", ["", "   ", "\t\n"])
+    def test_empty_or_blank_input_returns_none(self, seeded_repo, query):
+        # A blank query normalizes to "", which is a substring of every stored
+        # name; without the empty-input guard the partial-match branch would
+        # silently return the first archetype. Assert it is treated as no-match.
+        result = find_archetype_by_name(query, "Modern", seeded_repo)
+        assert result is None
+
+    def test_archetype_missing_name_key_does_not_match(self, repo, cache_files):
+        # An entry without a "name" key normalizes to "", which is a substring
+        # of any input; it must not spuriously win the partial-match fallback.
+        archetype_cache_file, _ = cache_files
+        _write_archetype_cache(
+            archetype_cache_file,
+            "Modern",
+            [
+                {"href": "/archetype/nameless"},
+                {"name": "UR Murktide", "href": "/archetype/ur-murktide"},
+            ],
+        )
+        result = find_archetype_by_name("Murktide", "Modern", repo)
+        assert result == {"name": "UR Murktide", "href": "/archetype/ur-murktide"}
+
+    def test_only_nameless_archetype_returns_none(self, repo, cache_files):
+        # The lone entry has no name; nothing real to match, so the resolver
+        # must return None rather than the nameless dict.
+        archetype_cache_file, _ = cache_files
+        _write_archetype_cache(
+            archetype_cache_file,
+            "Modern",
+            [{"href": "/archetype/nameless"}],
+        )
+        result = find_archetype_by_name("Murktide", "Modern", repo)
+        assert result is None
+
     def test_uses_default_repo_when_none(self, tmp_path, monkeypatch):
         """When no repo is passed, the default singleton repository is used."""
         archetype_cache_file = tmp_path / "default_archetype_cache.json"
