@@ -25,7 +25,8 @@ from services.collection_service.parsing import build_inventory
 class _FakeCardDataManager:
     """Stand-in for the MTGJSON-backed card index (the seam we don't own).
 
-    Holds a small in-memory ``{name: metadata}`` map keyed case-insensitively so
+    Holds a small in-memory ``{name: metadata}`` map (looked up by exact name,
+    matching the real ``CardDataManager.get_card``) so
     ``CardRepository.get_card_metadata`` runs for real against deterministic data
     instead of a network/disk load. Tests mutate ``cards`` directly.
     """
@@ -219,6 +220,16 @@ def test_load_from_card_list(collection_service):
     assert collection_service.get_owned_count("island") == 20
 
 
+def test_load_from_card_list_non_iterable_raises(collection_service):
+    """A non-iterable cards arg is wrapped as ValueError (cache.py:141-143).
+
+    ``build_inventory`` iterates ``cards``; an int raises TypeError there, which
+    ``load_from_card_list`` translates into a descriptive ValueError.
+    """
+    with pytest.raises(ValueError, match="Failed to parse card list"):
+        collection_service.load_from_card_list(42)  # type: ignore[arg-type]
+
+
 def test_export_to_file(collection_service, tmp_path):
     """Test exporting collection to file."""
     cards = [
@@ -391,10 +402,11 @@ def test_analyze_deck_ownership_strips_sideboard_prefix(collection_service):
 
     analysis = collection_service.analyze_deck_ownership(deck_text)
 
-    # The "Sideboard " prefix is stripped so the requirement keys on "Dismember".
+    # The "Sideboard " prefix is stripped so the requirement keys on "Dismember"
+    # and is fully owned (4/4) rather than reported as a missing raw name.
     assert analysis["total_unique"] == 1
     assert analysis["fully_owned"] == 1
-    assert ("Dismember", 4) not in analysis["missing_cards"]
+    assert analysis["missing_cards"] == []
     # No requirement should retain the raw "Sideboard Dismember" name.
     missing = collection_service.get_missing_cards_list(deck_text)
     assert missing == []
@@ -412,6 +424,42 @@ def test_get_missing_cards_list(collection_service):
     assert len(missing) == 2
     assert ("Lightning Bolt", 2) in missing
     assert ("Island", 4) in missing
+
+
+def test_analyze_deck_ownership_empty_deck(collection_service):
+    """An empty deck text yields the zero-requirement branch (deck_analysis.py:58-59)."""
+    collection_service.set_inventory({"Lightning Bolt": 4})
+
+    analysis = collection_service.analyze_deck_ownership("")
+
+    assert analysis["total_unique"] == 0
+    assert analysis["fully_owned"] == 0
+    assert analysis["partially_owned"] == 0
+    assert analysis["not_owned"] == 0
+    assert analysis["missing_cards"] == []
+    # No requirements -> the percentage falls through to the 0.0 default.
+    assert analysis["ownership_percentage"] == 0.0
+
+
+def test_analyze_deck_ownership_decimal_count_and_junk_lines(collection_service):
+    """Decimal counts are floored via int(float(...)) and junk lines are skipped.
+
+    Exercises the ``int(float(parts[0]))`` parse (deck_analysis.py:31) and the
+    ``except (ValueError, IndexError)`` skip path (deck_analysis.py:38) together.
+    """
+    collection_service.set_inventory({"Lightning Bolt": 4})
+
+    deck_text = """4.0 Lightning Bolt
+Mountain
+not-a-count Island"""
+
+    analysis = collection_service.analyze_deck_ownership(deck_text)
+
+    # "4.0" -> 4 honored; the single-token "Mountain" line has no count and the
+    # "not-a-count" line fails int(float(...)), so both are skipped.
+    assert analysis["total_unique"] == 1
+    assert analysis["fully_owned"] == 1
+    assert analysis["missing_cards"] == []
 
 
 # ============= Collection Statistics Tests =============
@@ -808,6 +856,36 @@ def test_refresh_from_bridge_missing_bridge_routes_to_error(collection_service, 
     )
 
     assert errors == ["MTGO Bridge not found. Build the bridge executable."]
+
+
+def test_refresh_from_bridge_default_fetch_seam(collection_service, tmp_path, monkeypatch):
+    """Omitting fetch_collection resolves the default bridge seam (bridge_refresh.py:40-43).
+
+    Monkeypatches ``mtgo_bridge_service.get_collection_snapshot`` so the real
+    default-binding branch runs without launching the bridge.
+    """
+    import services.mtgo_bridge_service as mtgo_bridge
+
+    cards = [{"name": "Island", "quantity": 10}]
+    fetch = Mock(return_value={"cards": cards})
+    monkeypatch.setattr(mtgo_bridge, "get_collection_snapshot", fetch)
+
+    successes: list[tuple] = []
+    errors: list[str] = []
+
+    result = _run_refresh_and_wait(
+        collection_service,
+        tmp_path,
+        force=True,
+        on_success=lambda path, c: successes.append((path, c)),
+        on_error=errors.append,
+    )
+
+    assert result is True
+    fetch.assert_called_once()
+    assert errors == []
+    assert len(successes) == 1
+    assert successes[0][1] == cards
 
 
 def test_refresh_from_bridge_generic_failure_routes_to_error(collection_service, tmp_path):
