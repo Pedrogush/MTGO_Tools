@@ -166,6 +166,49 @@ def test_sort_by_type_groups_creatures_then_instants_then_lands(deck_meta):
     assert "land" in types[-1] or types[-1].startswith("basic")
 
 
+def test_sort_by_type_orders_all_buckets_creature_through_land():
+    # Drive every type bucket so the full creature→planeswalker→instant→sorcery
+    # →artifact→enchantment→other→land ordering is asserted, including the
+    # instant-between-creature-and-land position the deck fixture can't reach.
+    meta = {
+        "Bear": {"type_line": "Creature — Bear"},
+        "Jace": {"type_line": "Legendary Planeswalker — Jace"},
+        "Bolt": {"type_line": "Instant"},
+        "Divination": {"type_line": "Sorcery"},
+        "Sol Ring": {"type_line": "Artifact"},
+        "Pacifism": {"type_line": "Enchantment — Aura"},
+        "Conspiracy": {"type_line": "Conspiracy"},
+        "Island": {"type_line": "Basic Land — Island"},
+    }
+    cards = [{"name": n, "qty": 1} for n in meta]
+    rows = sort_table_rows(cards, _meta_factory(meta), COL_TYPE)
+    assert [c["name"] for c in rows] == [
+        "Bear",
+        "Jace",
+        "Bolt",
+        "Divination",
+        "Sol Ring",
+        "Pacifism",
+        "Conspiracy",  # unmatched type_line falls into the "other" bucket
+        "Island",
+    ]
+
+
+def test_sort_by_mana_descending_puts_lands_first():
+    # With descending=True the land flag (1) sorts ahead of nonland (0), so the
+    # land floats to the top and the highest mana value follows.
+    meta = {
+        "Forest": {"mana_value": 0, "type_line": "Basic Land — Forest"},
+        "Bear": {"mana_value": 2, "type_line": "Creature — Bear"},
+        "Titan": {"mana_value": 6, "type_line": "Creature — Giant"},
+    }
+    cards = [{"name": n, "qty": 1} for n in meta]
+    rows = sort_table_rows(cards, _meta_factory(meta), COL_MANA, descending=True)
+    names = [c["name"] for c in rows]
+    assert names[0] == "Forest"  # land flag reversed to the front
+    assert names[1:] == ["Titan", "Bear"]  # then highest mana value first
+
+
 def test_sort_by_color_orders_w_u_b_r_g(deck_meta):
     cards, meta = deck_meta
     sorted_rows = sort_table_rows(cards, _meta_factory(meta), COL_COLOR)
@@ -246,12 +289,84 @@ def test_pile_sort_by_color(deck_meta):
     assert "Multicolor" in labels
 
 
+def test_pile_sort_by_color_uses_readable_mono_labels(deck_meta):
+    # Monochrome piles must carry the spelled-out color name, not the raw
+    # WUBRG token, so the pile header reads "Red"/"Green"/"Blue".
+    cards, meta = deck_meta
+    piles = group_into_piles(cards, _meta_factory(meta), PILE_SORT_COLOR)
+    labels = [label for (_order, label), _ in piles]
+    assert "Red" in labels  # Lightning Bolt
+    assert "Green" in labels  # Llanowar Elves
+    assert "Blue" in labels  # Counterspell
+    # Raw single-letter tokens must never leak into the labels.
+    assert not ({"R", "G", "U"} & set(labels))
+
+
 def test_pile_sort_by_type(deck_meta):
     cards, meta = deck_meta
     piles = group_into_piles(cards, _meta_factory(meta), PILE_SORT_TYPE)
     labels = [label for (_order, label), _ in piles]
     assert "Land" in labels
     assert "Creature" in labels
+
+
+def test_pile_sort_by_type_orders_buckets_and_capitalises_labels():
+    # Every type bucket gets its own capitalised pile, ordered creature first
+    # through land last (matching _TYPE_BUCKET_ORDER).
+    meta = {
+        "Bear": {"type_line": "Creature — Bear"},
+        "Jace": {"type_line": "Legendary Planeswalker — Jace"},
+        "Bolt": {"type_line": "Instant"},
+        "Sol Ring": {"type_line": "Artifact"},
+        "Island": {"type_line": "Basic Land — Island"},
+    }
+    cards = [{"name": n, "qty": 1} for n in meta]
+    piles = group_into_piles(cards, _meta_factory(meta), PILE_SORT_TYPE)
+    labels = [label for (_order, label), _ in piles]
+    assert labels == ["Creature", "Planeswalker", "Instant", "Artifact", "Land"]
+
+
+def test_pile_intra_pile_members_ordered_by_mana_value_then_name():
+    # Within a single pile, members sort by mana value then lowercased name so
+    # the stack has a stable visual order regardless of input order.
+    meta = {
+        "Zealous Conscripts": {"mana_value": 5, "type_line": "Creature — Human"},
+        "Acidic Slime": {"mana_value": 5, "type_line": "Creature — Ooze"},
+        "Birds of Paradise": {"mana_value": 1, "type_line": "Creature — Bird"},
+    }
+    # All three land in the same type pile; deliberately unsorted input.
+    cards = [
+        {"name": "Zealous Conscripts", "qty": 1},
+        {"name": "Acidic Slime", "qty": 1},
+        {"name": "Birds of Paradise", "qty": 1},
+    ]
+    piles = group_into_piles(cards, _meta_factory(meta), PILE_SORT_TYPE)
+    _key, members = piles[0]
+    names = [m["name"] for m in members]
+    # MV 1 first; the two MV-5 cards tie on value and fall back to name order.
+    assert names == ["Birds of Paradise", "Acidic Slime", "Zealous Conscripts"]
+
+
+def test_pile_skips_zero_negative_and_missing_quantities():
+    # qty<=0 (and a missing qty) expand to no members, and crucially produce no
+    # empty pile for that card — only the positive-qty card yields a pile.
+    meta = {
+        "Real": {"mana_value": 2, "type_line": "Creature — Bear"},
+        "ZeroQty": {"mana_value": 3, "type_line": "Creature — Ooze"},
+        "NegQty": {"mana_value": 4, "type_line": "Instant"},
+        "NoQty": {"mana_value": 5, "type_line": "Sorcery"},
+    }
+    cards = [
+        {"name": "Real", "qty": 2},
+        {"name": "ZeroQty", "qty": 0},
+        {"name": "NegQty", "qty": -3},
+        {"name": "NoQty"},  # missing qty key
+    ]
+    piles = group_into_piles(cards, _meta_factory(meta), PILE_SORT_MV)
+    counts = {label: len(members) for (_order, label), members in piles}
+    # Only the positive-qty card produces a pile, and no empty piles linger.
+    assert counts == {"2": 2}
+    assert all(members for _key, members in piles)
 
 
 def test_pile_key_for_buckets_high_mana_value_into_seven_plus():
