@@ -117,6 +117,10 @@ def test_image_color_mono_and_multicolor() -> None:
 def test_contrast_color_picks_dark_text_on_light_background() -> None:
     assert generator.contrast_color((240, 240, 240)) == (20, 22, 25)
     assert generator.contrast_color((10, 10, 10)) == (245, 245, 240)
+    # The threshold is strictly greater-than 150: a gray with luminance exactly
+    # 150 stays on the light-text branch, and one tick brighter flips to dark.
+    assert generator.contrast_color((150, 150, 150)) == (245, 245, 240)
+    assert generator.contrast_color((151, 151, 151)) == (20, 22, 25)
 
 
 def test_wrapped_lines_wraps_and_forces_long_words() -> None:
@@ -278,6 +282,16 @@ def _write_bulk_cache(source: Path) -> list[dict]:
             "image_uris": {"normal": "https://example.test/normal.jpg"},
         }
     )
+    cards.append(
+        {
+            "object": "token",  # not a card object
+            "lang": "en",
+            "id": "skip-token",
+            "name": "Apothecary White",
+            "color_identity": ["W"],
+            "image_uris": {"normal": "https://example.test/normal.jpg"},
+        }
+    )
 
     source.parent.mkdir(parents=True, exist_ok=True)
     with source.open("w", encoding="utf-8") as handle:
@@ -318,6 +332,14 @@ def test_write_fixture_end_to_end(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
     assert manifest["printing_count"] == target_count * 2
     assert len(cards) == target_count * 2
     assert manifest["card_names"] == sorted(generator.wanted_names())
+
+    # "Apothecary White" also has skip records sharing its name (wrong language,
+    # missing image, and a non-card token object). selected_printings() must drop
+    # all three and keep only the two valid English card printings.
+    apothecary = index["data"]["apothecary white"]
+    assert [p["id"] for p in apothecary] == ["id-0009", "id-0010"]
+    surviving_ids = {p["id"] for printings in index["data"].values() for p in printings}
+    assert {"skip-lang", "skip-noimage", "skip-notwanted", "skip-token"}.isdisjoint(surviving_ids)
 
     sizes = generator.IMAGE_SPECS
     assert manifest["image_file_count"] == manifest["printing_count"] * len(sizes)
@@ -415,6 +437,66 @@ def test_draw_placeholder_writes_jpg_and_png(tmp_path: Path) -> None:
     with Image.open(png_path) as png:
         assert png.size == (200, 280)
         assert png.format == "PNG"
+
+
+def test_parse_args_returns_paths(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "generate_card_art_selection_fixture.py",
+            "--source",
+            "/tmp/bulk.json",
+            "--image-cache",
+            "/tmp/cache",
+            "--output",
+            "/tmp/out",
+        ],
+    )
+    args = generator.parse_args()
+    assert args.source == Path("/tmp/bulk.json")
+    assert args.image_cache == Path("/tmp/cache")
+    assert args.output == Path("/tmp/out")
+
+
+def test_parse_args_defaults_to_module_constants(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(sys, "argv", ["generate_card_art_selection_fixture.py"])
+    args = generator.parse_args()
+    assert args.source == generator.DEFAULT_SOURCE
+    assert args.image_cache == generator.DEFAULT_IMAGE_CACHE
+    assert args.output == generator.DEFAULT_OUTPUT
+
+
+def test_main_dispatches_parsed_args_to_write_fixture(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, Path] = {}
+
+    def fake_write_fixture(source: Path, image_cache: Path, output: Path) -> None:
+        captured["source"] = source
+        captured["image_cache"] = image_cache
+        captured["output"] = output
+
+    monkeypatch.setattr(generator, "write_fixture", fake_write_fixture)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "generate_card_art_selection_fixture.py",
+            "--source",
+            "/tmp/bulk.json",
+            "--image-cache",
+            "/tmp/cache",
+            "--output",
+            "/tmp/out",
+        ],
+    )
+    generator.main()
+    assert captured == {
+        "source": Path("/tmp/bulk.json"),
+        "image_cache": Path("/tmp/cache"),
+        "output": Path("/tmp/out"),
+    }
 
 
 def test_iter_bulk_cards_skips_brackets_and_trailing_commas(tmp_path: Path) -> None:
