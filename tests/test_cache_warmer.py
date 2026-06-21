@@ -87,6 +87,14 @@ def test_ordered_formats_prepends_unknown_selected():
     assert warmer._ordered_formats() == ["Pauper", "Modern", "Legacy"]
 
 
+def test_ordered_formats_dedupes_case_insensitively():
+    # The selected format differs only in case from one of the known formats, so
+    # the .lower() dedup must drop the duplicate while keeping the selected
+    # spelling first.
+    warmer, _, _ = _make_warmer(current_format="legacy", formats=["Modern", "Legacy"])
+    assert warmer._ordered_formats() == ["legacy", "Modern"]
+
+
 def test_warm_images_uses_first_deck_per_archetype_selected_format_first():
     warmer, fetched, queued = _make_warmer()
 
@@ -278,6 +286,56 @@ def test_warm_images_dedupes_repeated_card_within_a_deck():
     assert fetched == ["1"]
     # "Card One" appears on two lines but is enqueued exactly once.
     assert queued == ["Card One", "Card Two"]
+
+
+def test_warm_images_basic_land_skip_and_dedup_are_case_insensitive():
+    # An uppercase basic land must still be skipped, and the same card in two
+    # different casings must be enqueued only once — both rely on .lower().
+    archetypes = {"Legacy": [{"name": "A", "href": "legacy-a"}]}
+    decks = {"legacy-a": [{"number": "1"}]}
+    deck_text = {"1": "10 ISLAND\n4 Card One\n2 CARD ONE\n1 Card Two\n"}
+    warmer, fetched, queued = _make_warmer(
+        current_format="Legacy",
+        formats=["Legacy"],
+        archetypes=archetypes,
+        decks=decks,
+        deck_text=deck_text,
+    )
+
+    warmer._warm_images()
+
+    assert fetched == ["1"]
+    # "ISLAND" is a basic land regardless of case (skipped); "CARD ONE" is the
+    # same card as "Card One" under .lower() so it is enqueued exactly once,
+    # keeping the first-seen casing.
+    assert queued == ["Card One", "Card Two"]
+
+
+def test_stop_during_start_delay_does_no_work():
+    # With a non-zero start delay, a stop requested during the initial wait must
+    # short-circuit both warmers before any fetch happens.
+    warmer, fetched, queued = _make_warmer()
+    warmer._start_delay = 5.0
+
+    def run_with_delayed_stop(target) -> None:
+        thread = threading.Thread(target=target)
+        thread.start()
+        # Give the thread a moment to reach the start-delay wait, then request
+        # shutdown — the wait must observe the stop event and return promptly.
+        threading.Event().wait(0.05)
+        warmer.stop()
+        thread.join(timeout=2.0)
+        assert not thread.is_alive()
+
+    run_with_delayed_stop(warmer._warm_images)
+    run_with_delayed_stop(warmer._warm_decklists)
+
+    # The stop interrupts the start-delay wait, so no decks are fetched or
+    # images queued.
+    assert fetched == []
+    assert queued == []
+    assert warmer._dl_ok == 0
+    assert warmer._dl_failed == 0
 
 
 def test_warm_decklists_phase1_limit_truncates_top_decks_per_format():
