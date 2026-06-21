@@ -52,7 +52,21 @@ def test_save_to_db_returns_integer_id_and_loads_back(db_repo):
     assert loaded["name"] == "Dimir Control"
     assert loaded["content"] == SAMPLE_DECK
     assert loaded["format"] == "Legacy"
+    # archetype/player/source must survive the INSERT/SELECT roundtrip; a
+    # swapped INSERT parameter order would otherwise pass silently.
+    assert loaded["archetype"] == "Control"
+    assert loaded["player"] == "Tester"
+    assert loaded["source"] == "manual"
     assert loaded["metadata"] == {"foo": "bar"}
+
+
+def test_save_to_db_defaults_metadata_to_empty_dict(db_repo):
+    """Omitting metadata stores '{}', and _row_to_deck decodes it to {}."""
+    deck_id = db_repo.save_to_db("NoMeta", SAMPLE_DECK)
+
+    loaded = db_repo.load_from_db(deck_id)
+    assert loaded is not None
+    assert loaded["metadata"] == {}
 
 
 def test_get_decks_filters_by_format_and_archetype(db_repo):
@@ -219,6 +233,38 @@ def test_get_decks_sort_by_name_orders_descending(db_repo):
     assert names == ["Charlie", "Bravo", "Alpha"]
 
 
+def test_get_decks_default_orders_by_date_saved_descending(db_repo):
+    """The default sort returns rows newest-saved first, and a rejected
+    sort_by falls back to that same date_saved ordering."""
+    import sqlite3
+
+    db_repo.save_to_db("oldest", SAMPLE_DECK)
+    db_repo.save_to_db("middle", SAMPLE_DECK)
+    db_repo.save_to_db("newest", SAMPLE_DECK)
+
+    # Pin controlled date_saved values so the ordering is unambiguous
+    # regardless of how fast the inserts run.
+    dates = {
+        "oldest": "2024-01-01T00:00:00",
+        "middle": "2024-06-01T00:00:00",
+        "newest": "2024-12-01T00:00:00",
+    }
+    with sqlite3.connect(db_repo._get_db_path()) as conn:
+        for name, date_saved in dates.items():
+            conn.execute(
+                "UPDATE decks SET date_saved = ? WHERE name = ?",
+                (date_saved, name),
+            )
+        conn.commit()
+
+    default_order = [d["name"] for d in db_repo.get_decks()]
+    assert default_order == ["newest", "middle", "oldest"]
+
+    # A non-whitelisted sort_by silently falls back to the same ordering.
+    rejected_order = [d["name"] for d in db_repo.get_decks(sort_by="bogus")]
+    assert rejected_order == default_order
+
+
 def test_get_decks_rejects_non_whitelisted_sort_by(db_repo):
     """A non-whitelisted sort_by must silently fall back to date_saved
     ordering rather than being interpolated into the SQL string."""
@@ -363,6 +409,46 @@ def test_sideboard_guide_roundtrip_and_default(deck_repo, temp_dir, monkeypatch)
     assert deck_repo.load_sideboard_guide("deck_a") == guide
 
 
+def test_save_outboard_preserves_other_keys_and_overwrites_same_key(
+    deck_repo, temp_dir, monkeypatch
+):
+    """Saving a second deck's outboard must not clobber the first, and
+    re-saving the same key replaces only that key's value."""
+    _route_stores(monkeypatch, temp_dir)
+
+    deck_repo.save_outboard("deck_a", [{"name": "Bolt", "qty": 4}])
+    deck_repo.save_outboard("deck_b", [{"name": "Opt", "qty": 2}])
+
+    # Both keys coexist after the second save.
+    assert deck_repo.load_outboard("deck_a") == [{"name": "Bolt", "qty": 4}]
+    assert deck_repo.load_outboard("deck_b") == [{"name": "Opt", "qty": 2}]
+
+    # Overwriting deck_a replaces only its value; deck_b is preserved.
+    deck_repo.save_outboard("deck_a", [{"name": "Snap", "qty": 3}])
+    assert deck_repo.load_outboard("deck_a") == [{"name": "Snap", "qty": 3}]
+    assert deck_repo.load_outboard("deck_b") == [{"name": "Opt", "qty": 2}]
+
+
+def test_save_sideboard_guide_preserves_other_keys_and_overwrites_same_key(
+    deck_repo, temp_dir, monkeypatch
+):
+    """The sideboard-guide store follows the same merge/overwrite semantics."""
+    _route_stores(monkeypatch, temp_dir)
+
+    guide_a = [{"vs": "Burn", "in": ["Leyline"], "out": ["Opt"]}]
+    guide_b = [{"vs": "Control", "in": ["Duress"], "out": ["Bolt"]}]
+    deck_repo.save_sideboard_guide("deck_a", guide_a)
+    deck_repo.save_sideboard_guide("deck_b", guide_b)
+
+    assert deck_repo.load_sideboard_guide("deck_a") == guide_a
+    assert deck_repo.load_sideboard_guide("deck_b") == guide_b
+
+    guide_a2 = [{"vs": "Aggro", "in": ["Bolt"], "out": ["Duress"]}]
+    deck_repo.save_sideboard_guide("deck_a", guide_a2)
+    assert deck_repo.load_sideboard_guide("deck_a") == guide_a2
+    assert deck_repo.load_sideboard_guide("deck_b") == guide_b
+
+
 def test_load_json_store_returns_empty_on_corrupt_file(deck_repo, temp_dir, monkeypatch):
     _route_stores(monkeypatch, temp_dir)
     notes_path = temp_dir / "deck_notes.json"
@@ -461,6 +547,41 @@ def test_get_current_deck_key_falls_back_to_lowercased_name(deck_repo):
 def test_get_current_deck_key_manual_when_deck_has_no_href_or_name(deck_repo):
     deck_repo.set_current_deck({"format": "Legacy"})
     assert deck_repo.get_current_deck_key() == "manual"
+
+
+def test_get_current_deck_key_empty_name_pins_to_empty_string(deck_repo):
+    """An explicit empty name (no href) yields the empty string, not the
+    'manual' fallback: the present-but-falsy name short-circuits the
+    ``get("name", "manual")`` default before lowercasing."""
+    deck_repo.set_current_deck({"name": ""})
+    assert deck_repo.get_current_deck_key() == ""
+
+
+# ---------------------------------------------------------------------------
+# UIStateMixin: in-memory accessors + averaging-state reset
+# ---------------------------------------------------------------------------
+
+
+def test_decks_list_accessors_set_get_and_clear(deck_repo):
+    assert deck_repo.get_decks_list() == []
+
+    decks = [{"name": "A"}, {"name": "B"}]
+    deck_repo.set_decks_list(decks)
+    assert deck_repo.get_decks_list() == decks
+
+    deck_repo.clear_decks_list()
+    assert deck_repo.get_decks_list() == []
+
+
+def test_reset_averaging_state_clears_buffer_and_count(deck_repo):
+    deck_repo.set_deck_buffer({"content-1": 2.0})
+    deck_repo.set_decks_added_count(5)
+    assert deck_repo.get_deck_buffer() == {"content-1": 2.0}
+    assert deck_repo.get_decks_added_count() == 5
+
+    deck_repo.reset_averaging_state()
+    assert deck_repo.get_deck_buffer() == {}
+    assert deck_repo.get_decks_added_count() == 0
 
 
 # ---------------------------------------------------------------------------
