@@ -198,6 +198,45 @@ def test_find_latest_rules_url_returns_none_when_missing() -> None:
     assert find_latest_rules_url("<p>no rules link here</p>") is None
 
 
+def test_http_get_text_urllib_fallback_rejects_non_http_scheme(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """When curl_cffi is unavailable, the urllib fallback must refuse non-http(s)
+    schemes (e.g. ``file://``) so a poisoned URL can't read local files."""
+    import builtins
+
+    from services.comp_rules_service import _http_get_text
+
+    real_import = builtins.__import__
+
+    def _no_curl(name: str, *args: object, **kwargs: object):
+        if name == "curl_cffi.requests" or name.startswith("curl_cffi"):
+            raise ImportError("curl_cffi unavailable")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", _no_curl)
+    assert _http_get_text("file:///etc/passwd", timeout=1) is None
+
+
+def test_http_get_bytes_urllib_fallback_rejects_non_http_scheme(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Same scheme guard as the text fetcher, for the byte download path."""
+    import builtins
+
+    from services.comp_rules_service import _http_get_bytes
+
+    real_import = builtins.__import__
+
+    def _no_curl(name: str, *args: object, **kwargs: object):
+        if name == "curl_cffi.requests" or name.startswith("curl_cffi"):
+            raise ImportError("curl_cffi unavailable")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", _no_curl)
+    assert _http_get_bytes("file:///etc/passwd", timeout=1) is None
+
+
 def test_get_keyword_lookup_returns_empty_when_no_cache(tmp_path: Path) -> None:
     svc = CompRulesService(
         cache_path=tmp_path / "comp_rules.txt",
@@ -366,6 +405,60 @@ def test_refresh_redownloads_when_stamp_is_corrupt(
     (tmp_path / "stamp.json").write_bytes(b"{not json")
     assert svc.refresh() is True
     assert (tmp_path / "comp_rules.txt").read_bytes() == _FIXTURE_TXT.encode("utf-8")
+
+
+def test_refresh_redownloads_when_stamp_matches_but_cache_missing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Stamp URL matches the latest URL but the ``.txt`` is gone: the freshness
+    check must fall through to the download branch and recreate the cache."""
+    url = "https://media.wizards.com/2026/downloads/MagicCompRules%2020260227.txt"
+    landing = f'<a href="{url}">link</a>'
+    svc = _make_service_with_stub_http(tmp_path, monkeypatch, landing, _FIXTURE_TXT.encode("utf-8"))
+    # Stamp present and matching, but no cached .txt on disk.
+    (tmp_path / "stamp.json").write_text(f'{{"source_url":"{url}"}}', encoding="utf-8")
+    assert not (tmp_path / "comp_rules.txt").exists()
+    assert svc.refresh() is True
+    assert (tmp_path / "comp_rules.txt").read_bytes() == _FIXTURE_TXT.encode("utf-8")
+
+
+def test_refresh_invalidates_memoized_lookup_after_download(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A successful refresh must drop the memoized parse so the next lookup
+    reflects the freshly downloaded rules rather than serving stale entries."""
+    old_url = "https://media.wizards.com/2026/downloads/MagicCompRules%2020260227.txt"
+    new_url = "https://media.wizards.com/2026/downloads/MagicCompRules%2020260301.txt"
+    new_txt = _FIXTURE_TXT.replace("Flying", "Soaring").replace("flying", "soaring")
+    landing = f'<a href="{new_url}">link</a>'
+    svc = _make_service_with_stub_http(tmp_path, monkeypatch, landing, new_txt.encode("utf-8"))
+    # Pre-populate with the old rules + stamp, then memoize the old parse.
+    (tmp_path / "comp_rules.txt").write_text(_FIXTURE_TXT, encoding="utf-8")
+    (tmp_path / "stamp.json").write_text(f'{{"source_url":"{old_url}"}}', encoding="utf-8")
+    old_lookup = svc.get_keyword_lookup()
+    assert "flying" in old_lookup
+
+    assert svc.refresh() is True
+    new_lookup = svc.get_keyword_lookup()
+    assert new_lookup is not old_lookup
+    assert "soaring" in new_lookup
+    assert "flying" not in new_lookup
+
+
+def test_get_keyword_lookup_returns_empty_when_cache_unreadable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An OSError while reading the cached .txt must degrade to ``{}`` rather
+    than propagating — the lookup is called from the UI thread."""
+    cache = tmp_path / "comp_rules.txt"
+    cache.write_text(_FIXTURE_TXT, encoding="utf-8")
+    svc = CompRulesService(cache_path=cache, stamp_path=tmp_path / "stamp.json")
+
+    def _boom(*args: object, **kwargs: object) -> str:
+        raise OSError("simulated unreadable cache")
+
+    monkeypatch.setattr(Path, "read_text", _boom)
+    assert svc.get_keyword_lookup() == {}
 
 
 # ============================== parse_outline ==============================
