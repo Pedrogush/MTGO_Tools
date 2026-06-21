@@ -82,12 +82,21 @@ class _FakeDC:
 class _FakeList(DeckResultsListPropertiesMixin, DeckResultsListHandlersMixin):
     """Concrete mixin host recording the wx base-class calls under test."""
 
+    # Mirror the sizing constants defined on the real frame so the wx-free
+    # ``OnMeasureItem`` height formula can be exercised without wx.
+    _ITEM_MARGIN = 6
+    _CARD_PADDING = 8
+
     def __init__(self) -> None:
         self._items: list[tuple[bool, tuple]] = []
         self.set_item_count_calls: list[int] = []
         self.refresh_calls = 0
         self.freeze_calls = 0
         self.thaw_calls = 0
+        self._char_height = 14
+
+    def GetCharHeight(self) -> int:
+        return self._char_height
 
     def SetItemCount(self, count: int) -> None:
         self.set_item_count_calls.append(count)
@@ -282,13 +291,21 @@ def test_truncate_breaks_on_word_boundary() -> None:
     assert len(result) <= 8
 
 
-def test_truncate_single_word_char_by_char() -> None:
-    """A single overlong word is cut one char at a time with an ellipsis."""
+def test_truncate_single_word_returns_after_one_cut_even_if_still_too_wide() -> None:
+    """The single-word branch returns immediately, *without* re-checking width.
+
+    "abcdefgh" (8 wide) with ``max_width=5`` is cut once to "abcdefg..." (10
+    wide under the one-pixel-per-char fake) and returned as-is: the branch does
+    not loop, so the result can still exceed ``max_width``. This asserts that
+    early-return invariant rather than the (unmet) width constraint.
+    """
     lst = _FakeList()
 
     result = lst._truncate_to_width(_FakeDC(), "abcdefgh", 5)
 
     assert result == "abcdefg..."  # single-word branch returns on first cut
+    # Documents the no-loop behaviour: the cut result is wider than max_width.
+    assert len(result) > 5
 
 
 def test_truncate_collapses_existing_ellipsis() -> None:
@@ -307,3 +324,138 @@ def test_truncate_collapses_to_bare_ellipsis_when_tiny() -> None:
     result = lst._truncate_to_width(_FakeDC(), "a...", 2)
 
     assert result == "..."
+
+
+# ---------------------------------------------------------------------------
+# GetString — structured/plain/out-of-range data shaping
+# ---------------------------------------------------------------------------
+
+
+def test_get_string_structured_full_row_with_emoji_and_event() -> None:
+    """A structured row joins player/archetype/result/date and appends the event line."""
+    lst = _FakeList()
+    lst.AppendDeck(
+        "player0",
+        "event0",
+        "result0",
+        "date0",
+        emoji="*",
+        archetype="arch0",
+    )
+
+    assert lst.GetString(0) == "* player0, arch0, result0, date0\nevent0"
+
+
+def test_get_string_structured_no_archetype_no_emoji_no_event() -> None:
+    """Empty emoji/archetype/event drop their fragments rather than leaving separators."""
+    lst = _FakeList()
+    lst.AppendDeck("player0", "", "result0", "date0")
+
+    assert lst.GetString(0) == "player0, result0, date0"
+
+
+def test_get_string_plain_row_with_emoji_and_second_line() -> None:
+    """A plain (unstructured) row prefixes the emoji and appends the second line."""
+    lst = _FakeList()
+    lst.Append("✨ winner name\nthe event")
+
+    assert lst.GetString(0) == "✨ winner name\nthe event"
+
+
+def test_get_string_plain_row_single_line_no_emoji() -> None:
+    """A single-line plain row returns just the first line."""
+    lst = _FakeList()
+    lst.Append("just one line")
+
+    assert lst.GetString(0) == "just one line"
+
+
+def test_get_string_out_of_range_returns_empty() -> None:
+    """Indices below zero or past the end return an empty string, never raise."""
+    lst = _FakeList()
+    lst.Append("only row")
+
+    assert lst.GetString(-1) == ""
+    assert lst.GetString(1) == ""
+    assert lst.GetString(99) == ""
+
+
+# ---------------------------------------------------------------------------
+# _split_lines / _split_emoji_prefix edge branches
+# ---------------------------------------------------------------------------
+
+
+def test_split_lines_three_lines_joins_tail() -> None:
+    """Three or more lines collapse into line one plus a space-joined remainder."""
+    lst = _FakeList()
+
+    assert lst._split_lines("one\ntwo\nthree") == ("one", "two three")
+
+
+def test_split_lines_blank_only_returns_empty_pair() -> None:
+    """Whitespace-only input yields two empty strings."""
+    lst = _FakeList()
+
+    assert lst._split_lines("   \n\t\n  ") == ("", "")
+
+
+def test_split_lines_single_line_has_empty_second() -> None:
+    lst = _FakeList()
+
+    assert lst._split_lines("solo") == ("solo", "")
+
+
+def test_split_emoji_prefix_no_space_treats_whole_as_prefix() -> None:
+    """A leading non-ASCII run with no space becomes the prefix, leaving no body."""
+    lst = _FakeList()
+
+    assert lst._split_emoji_prefix("✨winner") == ("✨winner", "")
+
+
+def test_split_emoji_prefix_ascii_start_has_no_prefix() -> None:
+    lst = _FakeList()
+
+    assert lst._split_emoji_prefix("winner name") == ("", "winner name")
+
+
+def test_split_emoji_prefix_empty_string() -> None:
+    lst = _FakeList()
+
+    assert lst._split_emoji_prefix("") == ("", "")
+
+
+# ---------------------------------------------------------------------------
+# GetCount and OnMeasureItem (wx-free sizing)
+# ---------------------------------------------------------------------------
+
+
+def test_get_count_tracks_mutations() -> None:
+    """GetCount reflects appends and the reset performed by Clear."""
+    lst = _FakeList()
+    assert lst.GetCount() == 0
+
+    lst.set_decks(_make_rows(4))
+    assert lst.GetCount() == 4
+
+    lst.Append("extra")
+    assert lst.GetCount() == 5
+
+    lst.Clear()
+    assert lst.GetCount() == 0
+
+
+def test_on_measure_item_height_formula() -> None:
+    """Row height is two char rows + 2px gap plus margin and padding on both sides."""
+    lst = _FakeList()
+    lst._char_height = 14
+
+    # 14*2 + 2 (content) + 6*2 (margins) + 8*2 (padding) = 58
+    assert lst.OnMeasureItem(0) == 58
+
+
+def test_on_measure_item_independent_of_row_index() -> None:
+    """Every row measures the same fixed two-line height regardless of index."""
+    lst = _FakeList()
+    lst.set_decks(_make_rows(3))
+
+    assert lst.OnMeasureItem(0) == lst.OnMeasureItem(2)
