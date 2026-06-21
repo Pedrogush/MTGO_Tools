@@ -69,6 +69,19 @@ def test_analyze_deck_detects_land_keywords():
     assert summary["unique_mainboard"] == 7
 
 
+def test_analyze_deck_land_keyword_false_positive_on_non_land():
+    """The estimated_lands heuristic is a substring match and over-counts non-land
+    cards whose name happens to contain a land-type keyword (e.g. "Island")."""
+    deck_with_decoy = """4 Island Sanctuary
+2 Lightning Bolt
+"""
+    summary = DeckService().analyze_deck(deck_with_decoy)
+    # "Island Sanctuary" is an enchantment, not a land, but "island" is a substring,
+    # so the keyword heuristic counts all 4 copies as lands.
+    assert summary["estimated_lands"] == 4
+    assert summary["mainboard_count"] == 6
+
+
 def test_analyze_deck_no_lands():
     """Verify that decks without lands report 0 estimated_lands."""
     deck_without_lands = """4 Lightning Bolt
@@ -144,6 +157,24 @@ def test_analyze_deck_preserves_fractional_quantities():
     assert isinstance(mainboard_dict["Lightning Bolt"], float)
     assert mainboard_dict["Island"] == 3
     assert isinstance(mainboard_dict["Island"], int)
+
+
+def test_deck_to_dictionary_strips_trailing_printing_id():
+    """A trailing Scryfall printing-id pointer collapses to the bare card name so
+    name-based analysis keeps working on decklists carrying per-card art selections."""
+    deck_with_printing = """4 Ragavan, Nimble Pilferer abcdef12-3456-7890-abcd-ef1234567890
+2 Blood Moon
+"""
+    parsed = DeckService().deck_to_dictionary(deck_with_printing)
+    assert parsed == {"Ragavan, Nimble Pilferer": 4.0, "Blood Moon": 2.0}
+
+
+def test_deck_to_dictionary_keeps_non_printing_id_suffix():
+    """A trailing token that is not a full printing-id UUID is left untouched."""
+    # Missing the final 12-hex block -> not a printing-id pointer.
+    deck_text = "1 Strange Card abcdef12-3456-7890-abcd\n"
+    parsed = DeckService().deck_to_dictionary(deck_text)
+    assert parsed == {"Strange Card abcdef12-3456-7890-abcd": 1.0}
 
 
 def test_deck_to_dictionary_preserves_fractional_quantities():
@@ -311,6 +342,23 @@ def test_read_curr_deck_file_migrates_legacy_file(tmp_path, monkeypatch):
     assert primary.read_text(encoding="utf-8") == "2 Blood Moon\n"
     # Legacy file removed after successful migration.
     assert not legacy.exists()
+
+
+def test_read_curr_deck_file_migrates_legacy_root_file(tmp_path, monkeypatch):
+    """When only the legacy-root file exists, it is read, copied to the primary
+    path, and the legacy copy removed."""
+    primary = tmp_path / "curr_deck.txt"
+    legacy_root = tmp_path / "legacy_root.txt"
+    legacy_root.write_text("1 Otawara, Soaring City\n", encoding="utf-8")
+    monkeypatch.setattr(constants, "CURR_DECK_FILE", primary)
+    monkeypatch.setattr(deck, "LEGACY_CURR_DECK_CACHE", tmp_path / "cache" / "curr_deck.txt")
+    monkeypatch.setattr(deck, "LEGACY_CURR_DECK_ROOT", legacy_root)
+
+    assert read_curr_deck_file() == "1 Otawara, Soaring City\n"
+    # Contents migrated to the primary location.
+    assert primary.read_text(encoding="utf-8") == "1 Otawara, Soaring City\n"
+    # Legacy-root file removed after successful migration.
+    assert not legacy_root.exists()
 
 
 def test_read_curr_deck_file_raises_when_missing(tmp_path, monkeypatch):
