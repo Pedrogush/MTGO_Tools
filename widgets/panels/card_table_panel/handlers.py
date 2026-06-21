@@ -142,6 +142,7 @@ class CardTablePanelHandlersMixin(_Base):
         for card in self.cards:
             if card["name"].lower() in face_keys:
                 self.grid_view.refresh_image(card["name"])
+                self.pile_view.refresh_image(card["name"])
 
     def _notify_selection(self, card: dict[str, Any] | None) -> None:
         if self._on_select:

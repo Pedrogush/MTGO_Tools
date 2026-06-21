@@ -1,14 +1,15 @@
 # Handoff — Issue #792: Deckbuilder card art selection (wx UI wiring)
 
-**Goal for the next session: finish all 4 parts of #792.** Parts 3 & 4 are done and
-merged-pending in **PR #794** (branch `feat/792-deckbuilder-printing-dropdown-and-normalise`).
-**Parts 1 & 2 remain.** This doc tells you exactly where to pick up.
+**Status: all 4 parts of #792 are now implemented** on branch
+`feat/792-deckbuilder-printing-dropdown-and-normalise` (PR #794).
+Parts 3 & 4 landed first; Parts 1 & 2 (board↔inspector art sync + save control)
+are done as of the commit that adds this note. Sections below are kept as the
+design record; the "what was built for parts 1 & 2" summary is at the very end.
 
 ---
 
 ## 0. IMPORTANT: everything is verifiable from WSL. Do not skip live verification.
 
-A previous note claimed wx work "can't be verified off-Windows." **That is false.**
 This repo runs and is driven from WSL via the Windows interop bridge (`/init` + `cmd.exe`),
 using the Windows venv at `env\Scripts\python.exe`. The full pytest suite, ruff/black,
 and the real GUI app (launch + screenshot + drive) all work from this WSL shell.
@@ -201,3 +202,58 @@ parser already has UUID-strip tests in `tests/test_deck_service.py`.
 | Deck repo current-deck state / metadata | `repositories/deck_repository/ui_state.py`, `database.py` |
 | i18n (mirror en-US + pt-BR) | `utils/i18n/_en_us/tabs.py`, `utils/i18n/_pt_br/tabs.py` |
 | Automation CLI | `automation/cli.py`, `automation/README.md` |
+
+---
+
+## 5. What was built for parts 1 & 2 (this session)
+
+**Pure core (`services/deck_service/printing.py`, tested in `tests/test_deck_printing.py`):**
+- `extract_printing_selections(text, index)` → `{name_lower: {"uuid","set"}}` for
+  every card that pins a specific printing (the runtime "what art is this card
+  showing" map).
+- `selected_printing_index(printings, selection)` → which inspector printing
+  index to open on (uuid match, then set, else 0).
+- `merge_printing_selection(text, index, name, uuid, set_code=None)` → re-point
+  one card's line in the decklist text, preserving every other line's pointer.
+- All three delegated on `DeckPrintingMixin`.
+
+**Selection map (single source of truth): `AppFrame._printing_selections`**
+(`widgets/frames/app_frame/frame/__init__.py`). Populated on every deck load by
+`_capture_printing_selections` (`handlers/deck_content.py`) from the *original*
+text — before `format_decklist_on_load` normalisation, which forces a uniform
+precision and would otherwise strip individual pointers. Cards whose printing
+changed vs. the previous deck are tracked in `_changed_printing_names` and their
+board art is force-refreshed via `wx.CallAfter(_apply_changed_printing_art)`
+(a plain `set_cards` reuses the name-keyed cached bitmap and keeps the old art).
+
+**Part 1 — board art follows the chosen printing.** `CardTablePanel` →
+`DeckGridView`/`DeckPileView` take a `get_printing_image` callback; their image
+workers try it first (printing-specific path via `image_cache.get_image_by_uuid`
+/ `get_image_path_for_printing`, queuing a download if missing) before the
+name-based candidates. The resolver is `AppFrame._get_printing_image`
+(`handlers/card_tables.py`). Both views gained a force-reload `refresh_image`
+used by `refresh_card_image`.
+- 1a inspector→board: `set_printing_selected_handler` fires on user prev/next
+  (and Save) → `AppFrame._on_inspector_printing_selected` records the selection
+  + `_refresh_board_card_art(name)`.
+- 1b board→inspector: `_handle_card_focus`/`_flush_hover_preview` pass the saved
+  `selection` into `update_card`, and the inspector opens on it via
+  `selected_printing_index` (sync + async printing-load paths).
+
+**Part 2 — save control** in the inspector (`card_inspector_panel/frame.py` +
+`handlers.py`): an "Auto-save art" checkbox (persists every scrolled-to printing)
+and a "Save art" button (shown when auto-save is off). Persistence merges the
+chosen printing-id pointer into `current_deck_text` (`_persist_printing_selection`),
+so copy/save-to-file/DB carry it (`build_deck_text` reads `current_deck_text`).
+The image column's fixed height was extended so the controls aren't clipped.
+
+**Live verification done (WSL automation):** loaded a 2-card deck pinning Island
+to two different cached printings (`fbb` vs `eld`); the mainboard grid cell
+re-rendered to the matching art (screenshot diff localised to that one cell), and
+`get-deck` round-tripped the printing-id pointers. Full suite: 1501 passed.
+
+**Known limitations / follow-ups:** inspector save-control behaviour (autosave +
+Save button) was verified by unit tests + code, not by a live click (the
+automation CLI can't drive the inspector nav/checkbox or board-card selection).
+Inspector strings are hardcoded English to match the rest of that panel (no
+`_t`), so no i18n keys were added.

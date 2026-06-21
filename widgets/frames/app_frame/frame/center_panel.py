@@ -202,6 +202,9 @@ class CenterPanelBuilderMixin(_Base):
             # The printing-selection dropdown re-pricks art for the whole
             # decklist, so it only belongs on the mainboard header (issue #792).
             on_printing_mode=(self._handle_printing_mode if zone == "main" else None),
+            # All zones resolve a card's chosen printing image the same way so
+            # board art tracks the inspector selection (issue #792, part 1).
+            get_printing_image=self._get_printing_image,
         )
 
     def _persist_deck_view_mode(self, zone: str, mode: str) -> None:

@@ -403,6 +403,72 @@ def decklist_with_printings_to_agnostic(text: str, index: PrintingIndex) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Public: per-card printing selection (drives inspector <-> board art sync)
+# ---------------------------------------------------------------------------
+
+
+def extract_printing_selections(text: str, index: PrintingIndex) -> dict[str, dict[str, Any]]:
+    """Map each card that pins a specific printing to ``{"uuid", "set"}``.
+
+    Walks ``text`` and records, keyed by lower-cased card name, the printing a
+    line points at (via a trailing printing-id or edition token). Cards left
+    agnostic — or whose name is unknown — are omitted. This is the runtime
+    "which printing is this card showing" map the board art and the inspector
+    share (issue #792, part 1).
+    """
+    selections: dict[str, dict[str, Any]] = {}
+    for _count, _is_sideboard, res in _iter_resolved(text, index):
+        if not res.valid or res.printing is None:
+            continue
+        uuid = str(res.printing.get("id") or "") or None
+        set_code = str(res.printing.get("set") or "") or None
+        selections[res.name.lower()] = {"uuid": uuid, "set": set_code}
+    return selections
+
+
+def selected_printing_index(
+    printings: Sequence[Mapping[str, Any]], selection: Mapping[str, Any] | None
+) -> int:
+    """Return the index in ``printings`` matching ``selection`` (uuid then set).
+
+    Used to open the inspector on a card's saved printing (issue #792, part 1b).
+    Falls back to ``0`` when there is no selection or no match.
+    """
+    if not printings or not selection:
+        return 0
+    uuid = selection.get("uuid")
+    if uuid:
+        for idx, printing in enumerate(printings):
+            if str(printing.get("id") or "").lower() == str(uuid).lower():
+                return idx
+    set_code = selection.get("set")
+    if set_code:
+        for idx, printing in enumerate(printings):
+            if str(printing.get("set") or "").upper() == str(set_code).upper():
+                return idx
+    return 0
+
+
+def merge_printing_selection(
+    text: str, index: PrintingIndex, name: str, uuid: str | None, set_code: str | None = None
+) -> str:
+    """Return ``text`` with ``name``'s printing pointer set to ``uuid``/``set``.
+
+    Every other line keeps whatever pointer it already had; the named card's
+    line(s) are re-pointed at the chosen printing (a printing-id when ``uuid`` is
+    given, else the set code, else stripped to agnostic). Used to persist a
+    save-art choice back into the canonical decklist text (issue #792, part 2).
+    """
+    target = name.lower()
+    new_token = uuid or (set_code.upper() if set_code else None)
+    rows: list[tuple[float, str, bool, str | None]] = []
+    for count, is_sideboard, res in _iter_resolved(text, index):
+        token = new_token if res.name.lower() == target else res.token
+        rows.append((count, res.name, is_sideboard, token))
+    return _render(rows)
+
+
+# ---------------------------------------------------------------------------
 # Public: mode dispatch (drives the deckbuilder printing-selection dropdown)
 # ---------------------------------------------------------------------------
 
@@ -470,6 +536,9 @@ __all__ = [
     "decklist_with_oldest_printings",
     "decklist_with_printings_after",
     "decklist_with_printings_to_agnostic",
+    "extract_printing_selections",
     "format_decklist_on_load",
+    "merge_printing_selection",
     "parse_printed_decklist",
+    "selected_printing_index",
 ]

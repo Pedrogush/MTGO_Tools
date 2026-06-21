@@ -114,11 +114,16 @@ class DeckGridView(wx.ScrolledWindow):
         on_delta: Callable[[str, int], None] | None = None,
         on_remove: Callable[[str], None] | None = None,
         on_zone_transfer: Callable[[list[str], wx.Point], bool] | None = None,
+        get_printing_image: Callable[[str], Path | None] | None = None,
     ) -> None:
         super().__init__(parent, style=wx.VSCROLL)
         self.zone = zone
         self._get_metadata = get_metadata
         self._get_card_image = get_card_image
+        # Optional printing-aware image resolver (issue #792): when a card has a
+        # chosen printing, this returns that printing's image path (and may queue
+        # its download); ``None`` means "no specific printing — use the default".
+        self._get_printing_image = get_printing_image
         self._owned_status = owned_status
         self._icon_factory = icon_factory
         self._on_select = on_select
@@ -359,11 +364,23 @@ class DeckGridView(wx.ScrolledWindow):
 
     def _image_worker(self, name: str, gen: int, candidates: list[str]) -> None:
         image_path: Path | None = None
-        for candidate in candidates:
-            path = self._get_card_image(candidate, "normal")
-            if path and path.exists():
-                image_path = path
-                break
+        # Prefer the card's chosen printing (issue #792). Falls through to the
+        # name-based candidates when no printing is selected or its image isn't
+        # cached yet (a download is queued by the resolver; refresh_image reruns
+        # this worker once it arrives).
+        if self._get_printing_image is not None:
+            try:
+                chosen = self._get_printing_image(name)
+            except Exception:
+                chosen = None
+            if chosen and chosen.exists():
+                image_path = chosen
+        if image_path is None:
+            for candidate in candidates:
+                path = self._get_card_image(candidate, "normal")
+                if path and path.exists():
+                    image_path = path
+                    break
         if image_path is None:
             wx.CallAfter(self._image_loaded, name, gen, None)
             return

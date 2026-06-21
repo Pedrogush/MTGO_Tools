@@ -333,3 +333,72 @@ def test_all_printing_modes_are_dispatchable():
         when = "2010-01-01" if mode in printing.DATE_MODES else None
         result = printing.apply_printing_mode("1 Lightning Bolt", INDEX, mode, when)
         assert result.startswith("1 Lightning Bolt")
+
+
+# ---------------------------------------------------------------------------
+# per-card printing selection (inspector <-> board art sync, save control)
+# ---------------------------------------------------------------------------
+
+
+def test_extract_selections_records_id_and_edition_pointers():
+    text = "2 Lightning Bolt bolt-m10\n1 Island UST\n3 Llanowar Elves"
+    selections = printing.extract_printing_selections(text, INDEX)
+    # Printing-id pointer -> uuid + its set.
+    assert selections["lightning bolt"] == {"uuid": "bolt-m10", "set": "M10"}
+    # Edition pointer -> the matched printing's uuid + set.
+    assert selections["island"] == {"uuid": "isl-ust", "set": "UST"}
+    # Agnostic line is omitted entirely.
+    assert "llanowar elves" not in selections
+
+
+def test_extract_selections_skips_unknown_cards():
+    selections = printing.extract_printing_selections("2 Not A Card xyz", INDEX)
+    assert selections == {}
+
+
+def test_selected_printing_index_matches_uuid_then_set():
+    printings = INDEX["lightning bolt"]
+    assert printing.selected_printing_index(printings, {"uuid": "bolt-m10"}) == 1
+    assert printing.selected_printing_index(printings, {"set": "LEA"}) == 2
+    # uuid wins over a conflicting set.
+    assert printing.selected_printing_index(printings, {"uuid": "bolt-lea", "set": "2XM"}) == 2
+
+
+def test_selected_printing_index_defaults_to_zero():
+    printings = INDEX["lightning bolt"]
+    assert printing.selected_printing_index(printings, None) == 0
+    assert printing.selected_printing_index(printings, {"uuid": "missing"}) == 0
+    assert printing.selected_printing_index([], {"uuid": "bolt-m10"}) == 0
+
+
+def test_merge_selection_sets_only_target_card_pointer():
+    text = "2 Lightning Bolt bolt-m10\n1 Island"
+    merged = printing.merge_printing_selection(text, INDEX, "Island", "isl-ust")
+    # Island gains the new pointer; Bolt keeps its existing one.
+    assert merged == "2 Lightning Bolt bolt-m10\n1 Island isl-ust"
+
+
+def test_merge_selection_falls_back_to_set_code_then_agnostic():
+    text = "1 Island"
+    assert printing.merge_printing_selection(text, INDEX, "Island", None, "UST") == "1 Island UST"
+    # No uuid and no set strips the card to agnostic.
+    bolt = "1 Lightning Bolt bolt-m10"
+    assert (
+        printing.merge_printing_selection(bolt, INDEX, "Lightning Bolt", None) == "1 Lightning Bolt"
+    )
+
+
+def test_merge_selection_preserves_sideboard_structure():
+    text = "1 Lightning Bolt\n\nSideboard\n2 Island"
+    merged = printing.merge_printing_selection(text, INDEX, "Island", "isl-lea")
+    assert merged == "1 Lightning Bolt\n\nSideboard\n2 Island isl-lea"
+
+
+def test_selection_helpers_exposed_on_deck_service():
+    service = DeckService(deck_repository=object(), metagame_repository=object())
+    sels = service.extract_printing_selections("1 Island UST", INDEX)
+    assert sels["island"]["set"] == "UST"
+    assert (
+        service.merge_printing_selection("1 Island", INDEX, "Island", "isl-ust")
+        == "1 Island isl-ust"
+    )

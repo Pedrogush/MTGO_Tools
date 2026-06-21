@@ -120,6 +120,15 @@ class AppFrame(
         # the user interacted with instead (defaults to mainboard).
         self._active_deck_zone: str = "main"
         self._deck_sash_initialized: bool = False
+        # Per-card printing selection for the loaded deck (issue #792): maps a
+        # lower-cased card name to ``{"uuid", "set"}`` of the printing the board
+        # art and inspector should show. Derived from the deck text on load and
+        # updated as the user scrolls/saves printings in the inspector.
+        self._printing_selections: dict[str, dict[str, Any]] = {}
+        # Names whose printing changed on the latest load; the board's per-name
+        # image cache must be force-refreshed for these (a plain set_cards reuses
+        # the cached bitmap and would keep showing the previous printing).
+        self._changed_printing_names: set[str] = set()
         # Sideboard-guide record mode (#782): state dict + floating control bar,
         # both None unless a record walk is in progress.
         self._guide_record: dict[str, Any] | None = None

@@ -175,6 +175,34 @@ class DeckContentHandlers(_Base):
             return deck_text
         return normalized
 
+    def _capture_printing_selections(self: AppFrame, deck_text: str) -> None:
+        """Refresh the runtime per-card printing map from ``deck_text`` (#792).
+
+        Records which cards' printing changed versus the previous deck so the
+        board art can be force-refreshed for just those — the views cache art by
+        name and would otherwise keep showing the old printing.
+        """
+        index = getattr(self.controller.image_service, "bulk_data_by_name", None)
+        new_map: dict[str, dict] = {}
+        if index and deck_text.strip():
+            try:
+                new_map = self.controller.deck_service.extract_printing_selections(deck_text, index)
+            except Exception:
+                logger.exception("extract_printing_selections failed; clearing selection map")
+                new_map = {}
+        old_map = self._printing_selections
+        self._changed_printing_names = {
+            name for name in set(old_map) | set(new_map) if old_map.get(name) != new_map.get(name)
+        }
+        self._printing_selections = new_map
+
+    def _apply_changed_printing_art(self: AppFrame) -> None:
+        """Force-refresh board art for cards whose printing changed on load (#792)."""
+        names = self._changed_printing_names
+        self._changed_printing_names = set()
+        for name in names:
+            self._refresh_board_card_art(name)
+
     def _on_deck_content_ready(self: AppFrame, deck_text: str, source: str = "manual") -> None:
         if source in {"manual", "automation", "average"}:
             self.controller.deck_repo.set_current_deck(None)
@@ -185,6 +213,11 @@ class DeckContentHandlers(_Base):
             self.controller.deck_repo.get_current_deck_key(),
         )
         render_t0 = time.perf_counter()
+        # Capture per-card printing choices from the *original* text (issue #792)
+        # before normalisation, which forces a uniform precision and can strip
+        # individual pointers. The runtime map is what drives board art, so it
+        # outlives that downgrade.
+        self._capture_printing_selections(deck_text)
         deck_text = self._normalize_deck_printings(deck_text)
         self.controller.deck_repo.set_current_deck_text(deck_text)
         with perf_phase("analyze_deck + zone sort"):
@@ -205,6 +238,10 @@ class DeckContentHandlers(_Base):
         # — the zone the user is looking at — paints first. They fill in a frame
         # later, which removes their cost from the click-to-visible interval.
         wx.CallAfter(self._render_secondary_zones)
+        # Re-render art for any card whose printing changed (runs after the zones
+        # are populated, including the deferred secondary ones) (issue #792).
+        if self._changed_printing_names:
+            wx.CallAfter(self._apply_changed_printing_art)
         with perf_phase("update_stats"):
             self._update_stats(deck_text)
         self.copy_button.Enable(True)
