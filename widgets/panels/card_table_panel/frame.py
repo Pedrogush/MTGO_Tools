@@ -7,14 +7,16 @@ from typing import Any
 
 import wx
 
-from services.deck_service.printing import DATE_MODES as PRINTING_DATE_MODES
-from services.deck_service.printing import PRINTING_MODES
-from utils.constants import DARK_ACCENT, DARK_ALT, DARK_PANEL, LIGHT_TEXT, SUBDUED_TEXT
+from utils.constants import DARK_PANEL, SUBDUED_TEXT
 from utils.i18n import translate as _i18n_translate
 from widgets.mana_icon_factory import ManaIconFactory
 from widgets.panels.card_table_panel.grid_view import DeckGridView
 from widgets.panels.card_table_panel.handlers import CardTablePanelHandlersMixin
 from widgets.panels.card_table_panel.pile_view import DeckPileView
+from widgets.panels.card_table_panel.placeholders import (
+    build_empty_state,
+    build_loading_state,
+)
 from widgets.panels.card_table_panel.properties import CardTablePanelPropertiesMixin
 from widgets.panels.card_table_panel.sorting import (
     COL_COLOR,
@@ -27,20 +29,7 @@ from widgets.panels.card_table_panel.sorting import (
     PILE_SORT_TYPE,
 )
 from widgets.panels.card_table_panel.table_view import DeckTableView
-from widgets.wx_layout import relayout
-
-_EMPTY_STATE_HEADING_SIZE = 13
-_EMPTY_STATE_HINT_SIZE = 10
-_EMPTY_STATE_HEADING_GAP = 6
-
-_ZONE_EMPTY_HEADING = {
-    "main": "No deck loaded",
-    "side": "Sideboard is empty",
-    "out": "No cards out",
-}
-_ZONE_EMPTY_HINT = {
-    "main": "Select a deck from the list, or load one from file",
-}
+from widgets.panels.card_table_panel.toolbar import CardTablePanelToolbarMixin
 
 # Simplebook page indices (alphabetical-by-mode after the bookend states).
 _PAGE_EMPTY = 0
@@ -52,7 +41,12 @@ _PAGE_LOADING = 4
 VIEW_MODES = ("grid", "table", "pile")
 
 
-class CardTablePanel(CardTablePanelHandlersMixin, CardTablePanelPropertiesMixin, wx.Panel):
+class CardTablePanel(
+    CardTablePanelToolbarMixin,
+    CardTablePanelHandlersMixin,
+    CardTablePanelPropertiesMixin,
+    wx.Panel,
+):
     GRID_COLUMNS = 4
     # Minimum columns the workspace must be able to show — this is the *floor*
     # that sets the deck workspace's minimum width, not the displayed count.
@@ -156,7 +150,7 @@ class CardTablePanel(CardTablePanelHandlersMixin, CardTablePanelPropertiesMixin,
         self._content_book.SetBackgroundColour(DARK_PANEL)
 
         # Page 0: empty state.
-        self._empty_state = self._build_empty_state(self._content_book, zone)
+        self._empty_state = build_empty_state(self._content_book, zone)
         self._content_book.AddPage(self._empty_state, "empty")
 
         # Page 1: grid view — a single custom-drawn canvas (no per-card native
@@ -209,7 +203,7 @@ class CardTablePanel(CardTablePanelHandlersMixin, CardTablePanelPropertiesMixin,
         self._content_book.AddPage(self.pile_view, "pile")
 
         # Page 4: loading state.
-        self._loading_state = self._build_loading_state(self._content_book)
+        self._loading_state = build_loading_state(self._content_book)
         self._content_book.AddPage(self._loading_state, "loading")
 
         outer.Add(self._content_book, 1, wx.EXPAND)
@@ -277,67 +271,6 @@ class CardTablePanel(CardTablePanelHandlersMixin, CardTablePanelPropertiesMixin,
     def _t(self, key: str) -> str:
         return _i18n_translate(self._locale, key)
 
-    def _column_label(self, col_id: str) -> str:
-        return self._t(f"tabs.view.col.{col_id}")
-
-    def _refresh_view_mode_buttons(self) -> None:
-        for mode, btn in self._view_mode_buttons.items():
-            active = mode == self.view_mode
-            btn.SetBackgroundColour(wx.Colour(*(DARK_ACCENT if active else DARK_ALT)))
-            btn.SetForegroundColour(wx.Colour(*LIGHT_TEXT))
-            btn.Refresh()
-
-    def _update_pile_sort_button_visibility(self) -> None:
-        self.pile_sort_button.Show(self.view_mode == "pile")
-        relayout(self)
-
-    def _on_view_button(self, mode: str) -> None:
-        self.set_view_mode(mode)
-
-    def _open_pile_sort_menu(self, _event: wx.CommandEvent) -> None:
-        menu = wx.Menu()
-        items = (
-            (PILE_SORT_MV, self._t("tabs.view.pile_sort.mv")),
-            (PILE_SORT_COLOR, self._t("tabs.view.pile_sort.color")),
-            (PILE_SORT_TYPE, self._t("tabs.view.pile_sort.type")),
-        )
-        for sort_mode, label in items:
-            item = menu.AppendCheckItem(wx.ID_ANY, label)
-            item.Check(sort_mode == self.pile_sort)
-            menu.Bind(wx.EVT_MENU, lambda _evt, m=sort_mode: self.set_pile_sort(m), item)
-        self.PopupMenu(menu, self.pile_sort_button.GetPosition())
-        menu.Destroy()
-
-    def _open_printing_menu(self, _event: wx.CommandEvent) -> None:
-        """Show the printing-selection menu and dispatch the chosen mode."""
-        menu = wx.Menu()
-        for mode in PRINTING_MODES:
-            item = menu.Append(wx.ID_ANY, self._t(f"tabs.view.printing.{mode}"))
-            menu.Bind(wx.EVT_MENU, lambda _evt, m=mode: self._on_printing_choice(m), item)
-        anchor = self.printing_button or self
-        self.PopupMenu(menu, anchor.GetPosition())
-        menu.Destroy()
-
-    def _on_printing_choice(self, mode: str) -> None:
-        if self._on_printing_mode is None:
-            return
-        when: str | None = None
-        if mode in PRINTING_DATE_MODES:
-            dialog = wx.TextEntryDialog(
-                self,
-                self._t("tabs.view.printing.date_prompt"),
-                self._t("tabs.view.printing.date_title"),
-            )
-            try:
-                if dialog.ShowModal() != wx.ID_OK:
-                    return
-                when = dialog.GetValue().strip()
-            finally:
-                dialog.Destroy()
-            if not when:
-                return
-        self._on_printing_mode(mode, when)
-
     def _switch_content_page(self) -> None:
         if not self.cards:
             target = _PAGE_EMPTY
@@ -380,73 +313,6 @@ class CardTablePanel(CardTablePanelHandlersMixin, CardTablePanelPropertiesMixin,
         if self._on_zone_transfer:
             return self._on_zone_transfer(self.zone, names, screen_point)
         return False
-
-    @staticmethod
-    def _build_loading_state(parent: wx.Window) -> wx.Panel:
-        panel = wx.Panel(parent)
-        panel.SetBackgroundColour(DARK_PANEL)
-        sizer = wx.BoxSizer(wx.VERTICAL)
-        panel.SetSizer(sizer)
-
-        sizer.AddStretchSpacer(2)
-        label = wx.StaticText(panel, label="")
-        label.SetForegroundColour(wx.Colour(*SUBDUED_TEXT))
-        label.SetFont(
-            wx.Font(
-                _EMPTY_STATE_HEADING_SIZE,
-                wx.FONTFAMILY_SWISS,
-                wx.FONTSTYLE_NORMAL,
-                wx.FONTWEIGHT_NORMAL,
-            )
-        )
-        sizer.Add(label, 0, wx.ALIGN_CENTER_HORIZONTAL)
-        sizer.AddStretchSpacer(3)
-        panel._label = label  # type: ignore[attr-defined]
-        return panel
-
-    @staticmethod
-    def _build_empty_state(parent: wx.Window, zone: str) -> wx.Panel:
-        panel = wx.Panel(parent)
-        panel.SetBackgroundColour(DARK_PANEL)
-        sizer = wx.BoxSizer(wx.VERTICAL)
-        panel.SetSizer(sizer)
-
-        heading_text = _ZONE_EMPTY_HEADING.get(zone, "")
-        hint_text = _ZONE_EMPTY_HINT.get(zone, "")
-
-        sizer.AddStretchSpacer(2)
-
-        if heading_text:
-            heading = wx.StaticText(panel, label=heading_text)
-            heading.SetForegroundColour(wx.Colour(*SUBDUED_TEXT))
-            heading_font = wx.Font(
-                _EMPTY_STATE_HEADING_SIZE,
-                wx.FONTFAMILY_SWISS,
-                wx.FONTSTYLE_NORMAL,
-                wx.FONTWEIGHT_NORMAL,
-            )
-            heading.SetFont(heading_font)
-            sizer.Add(
-                heading,
-                0,
-                wx.ALIGN_CENTER_HORIZONTAL | wx.BOTTOM,
-                _EMPTY_STATE_HEADING_GAP,
-            )
-
-        if hint_text:
-            hint = wx.StaticText(panel, label=hint_text)
-            hint.SetForegroundColour(wx.Colour(*(max(c - 40, 0) for c in SUBDUED_TEXT)))
-            hint_font = wx.Font(
-                _EMPTY_STATE_HINT_SIZE,
-                wx.FONTFAMILY_SWISS,
-                wx.FONTSTYLE_NORMAL,
-                wx.FONTWEIGHT_NORMAL,
-            )
-            hint.SetFont(hint_font)
-            sizer.Add(hint, 0, wx.ALIGN_CENTER_HORIZONTAL)
-
-        sizer.AddStretchSpacer(3)
-        return panel
 
 
 # Re-export sort-mode tokens for callers that want to programmatically set
