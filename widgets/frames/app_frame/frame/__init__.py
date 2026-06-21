@@ -32,11 +32,14 @@ from widgets.frames.app_frame.handlers import (
     ChildWindowHandlers,
     DataLoadingHandlers,
     DeckContentHandlers,
+    DeckRenderHandlers,
     DeckResearchHandlers,
     SideboardGuideEntryHandlers,
     SideboardGuideImportExportHandlers,
     SideboardGuidePersistenceHandlers,
     SideboardGuideRecordHandlers,
+    ToolbarMenuHandlers,
+    WindowLayoutHandlers,
 )
 from widgets.frames.app_frame.properties import AppFramePropertiesMixin
 from widgets.frames.identify_opponent import MTGOpponentDeckSpy
@@ -57,6 +60,9 @@ if TYPE_CHECKING:
 
 class AppFrame(
     AppFrameHandlersMixin,
+    ToolbarMenuHandlers,
+    WindowLayoutHandlers,
+    DeckRenderHandlers,
     AppFramePropertiesMixin,
     DeckResearchHandlers,
     DeckContentHandlers,
