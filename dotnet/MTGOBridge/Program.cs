@@ -695,9 +695,13 @@ static async Task RunWatchLoopAsync(
         cts.Cancel();
     };
 
-    // MTGOSDK shares a single remoting channel, so the two loops must never call
-    // it concurrently. The fast loop grabs this without blocking and skips its SDK
-    // read (reusing the cached timers) whenever the slow currency scan holds it.
+    // The SDK transport is concurrency-safe, but reads are marshalled onto MTGO's
+    // UI thread server-side, so a long currency scan blocks timer reads anyway
+    // (measured: a concurrent scan stalls the timer loop entirely). The lock keeps
+    // the timer loop responsive instead — it grabs the lock without blocking and
+    // reuses cached timers if the (rare, idle-only) currency scan holds it. The
+    // currency loop additionally pauses while a timer is active, so in steady state
+    // during an event the two never contend.
     using var sdkLock = new SemaphoreSlim(1, 1);
     var cache = new WatchCache();
 
@@ -755,6 +759,7 @@ static async Task RunChallengeTimerLoopAsync(
             try
             {
                 cache.Timers = GetChallengeTimers();
+                cache.HasActiveTimer = cache.Timers.Count > 0;
             }
             catch (Exception ex)
             {
@@ -809,6 +814,9 @@ static async Task RunCurrencyRefreshLoopAsync(
     TimeSpan interval,
     CancellationToken ct)
 {
+    // How often to re-check the active-timer flag while paused.
+    var pausePoll = TimeSpan.FromSeconds(5);
+
     // Let the timer loop take (and warm) the SDK first so its initial reading
     // isn't queued behind a full currency scan.
     try
@@ -822,6 +830,23 @@ static async Task RunCurrencyRefreshLoopAsync(
 
     while (!ct.IsCancellationRequested)
     {
+        // Pause while a challenge timer is being tracked. A currency scan blocks
+        // the timer's reads on MTGO's UI thread (concurrent SDK calls don't help —
+        // they queue server-side), so we simply don't scan while an event is live.
+        // Resume once no timer is active.
+        if (cache.HasActiveTimer)
+        {
+            try
+            {
+                await Task.Delay(pausePoll, ct);
+            }
+            catch (TaskCanceledException)
+            {
+                break;
+            }
+            continue;
+        }
+
         await sdkLock.WaitAsync(ct);
         try
         {
@@ -1274,6 +1299,7 @@ sealed class WatchCache
     private volatile IReadOnlyList<ChallengeTimerSnapshot> _timers =
         Array.Empty<ChallengeTimerSnapshot>();
     private volatile CurrencySnapshot? _currency;
+    private volatile bool _hasActiveTimer;
     private readonly TaskCompletionSource _primed =
         new(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -1281,6 +1307,16 @@ sealed class WatchCache
     {
         get => _timers;
         set => _timers = value;
+    }
+
+    // True while at least one challenge timer is being tracked. The currency loop
+    // watches this and pauses: the SDK serialises reads on MTGO's UI thread, so a
+    // multi-second currency scan would otherwise block fresh timer reads. Pausing
+    // gives the timer exclusive, uninterrupted access whenever an event is live.
+    public bool HasActiveTimer
+    {
+        get => _hasActiveTimer;
+        set => _hasActiveTimer = value;
     }
 
     public CurrencySnapshot? Currency
