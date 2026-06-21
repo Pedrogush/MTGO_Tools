@@ -6,12 +6,34 @@ silently broken (no-op) test-isolation hook, while a genuinely missing optional
 dependency (e.g. ``wx``) stays silent.
 """
 
+import inspect
+import re
 import sys
 import types
 import warnings
+from pathlib import Path
 
 import pytest
 import test_helpers
+
+_REPO_ROOT = Path(test_helpers.__file__).resolve().parent.parent
+# Module-level ``def reset_*(`` declarations (column 0, i.e. not class methods).
+_RESET_DEF_RE = re.compile(r"^def (reset_[a-zA-Z0-9_]+)\(", re.MULTILINE)
+
+
+def _discover_reset_singletons():
+    """Find every module-level ``reset_*`` function under repositories/ and services/.
+
+    Returns a list of ``(name, source_path)`` tuples. These are the global
+    singleton reset hooks the test-isolation harness is expected to invoke.
+    """
+    found = []
+    for package in ("repositories", "services"):
+        for path in sorted((_REPO_ROOT / package).rglob("*.py")):
+            text = path.read_text(encoding="utf-8")
+            for name in _RESET_DEF_RE.findall(text):
+                found.append((name, path))
+    return found
 
 
 @pytest.fixture
@@ -126,3 +148,29 @@ def test_import_error_without_name_warns(monkeypatch):
 
     assert fn() is None
     assert any(module_path in str(c.message) for c in caught)
+
+
+def test_every_reset_singleton_is_wired_into_reset_all_globals():
+    """Guard: each discovered ``reset_*`` singleton must be reset by the harness.
+
+    A new module-level ``reset_*`` function added under repositories/ or
+    services/ that is not wired into ``reset_all_globals()`` leaks its cached
+    instance across the whole test session, defeating isolation. This test
+    fails loudly so the harness is kept in sync.
+    """
+    aggregate_source = "\n".join(
+        inspect.getsource(fn)
+        for fn in (
+            test_helpers.reset_all_services,
+            test_helpers.reset_all_repositories,
+        )
+    )
+
+    discovered = _discover_reset_singletons()
+    assert discovered, "expected to discover at least one reset_* singleton"
+
+    missing = sorted({name for name, _ in discovered if f"{name}()" not in aggregate_source})
+    assert not missing, (
+        "reset_all_globals() does not invoke these reset_* singletons, leaking "
+        f"state between tests: {missing}"
+    )
