@@ -34,6 +34,10 @@ def find_archetype_by_name(
     repo = metagame_repo or get_metagame_repository()
     normalized_input = normalize_archetype_name(archetype_name)
 
+    if not normalized_input:
+        logger.debug("Empty archetype name; no match")
+        return None
+
     try:
         archetypes = repo.get_archetypes_for_format(format_name)
     except Exception:
@@ -49,6 +53,8 @@ def find_archetype_by_name(
     for archetype in archetypes:
         name = archetype.get("name", "")
         normalized_name = normalize_archetype_name(name)
+        if not normalized_name:
+            continue
         if normalized_input in normalized_name or normalized_name in normalized_input:
             logger.debug(f"Partial match: '{archetype_name}' -> '{name}'")
             return archetype
