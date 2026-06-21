@@ -129,13 +129,14 @@ RadarMixin = _load_module(
     "handlers",
     "radar.py",
 ).RadarMixin
-CompactRadarHandlersMixin = _load_module(
+_compact_radar_handlers_module = _load_module(
     "_compact_radar_handlers_under_test",
     "widgets",
     "panels",
     "compact_radar_panel",
     "handlers.py",
-).CompactRadarHandlersMixin
+)
+CompactRadarHandlersMixin = _compact_radar_handlers_module.CompactRadarHandlersMixin
 
 
 # --------------------------------------------------------------------------- #
@@ -187,20 +188,47 @@ class _FakePanel:
         self.clear_calls += 1
 
 
-class _FakeController:
-    def __init__(self, resolved: dict[str, Any] | None) -> None:
-        self._resolved = resolved
+class _RecordingResolver:
+    """Wraps the real resolver, recording each call's arguments.
+
+    Bound onto the host controller as ``find_archetype_by_name`` so the
+    resolution-branch tests drive the *production* resolver
+    (:func:`services.archetype_resolver.find_archetype_by_name`) against a
+    :class:`_FakeRepo` (the network seam) instead of a hand-stubbed return.
+    """
+
+    def __init__(self) -> None:
         self.resolve_calls: list[tuple] = []
 
-    def find_archetype_by_name(self, archetype_name, format_name, repo):
+    def __call__(self, archetype_name, format_name, repo):
+        from services.archetype_resolver import find_archetype_by_name
+
         self.resolve_calls.append((archetype_name, format_name, repo))
-        return self._resolved
+        return find_archetype_by_name(archetype_name, format_name, repo)
+
+
+class _FakeController:
+    """Controller seam that resolves archetypes via the real resolver.
+
+    ``archetypes`` is the list the backing :class:`_FakeRepo` returns for the
+    requested format; the production resolver matches against it. ``resolve_calls``
+    captures the arguments the mixin forwarded.
+    """
+
+    def __init__(self, archetypes: list[dict[str, Any]] | None) -> None:
+        self._resolver = _RecordingResolver()
+        self.repo = _FakeRepo(list(archetypes or []))
+        self.find_archetype_by_name = self._resolver
+
+    @property
+    def resolve_calls(self) -> list[tuple]:
+        return self._resolver.resolve_calls
 
 
 class _FakeHost(RadarMixin):
     """Concrete :class:`RadarMixin` host with the collaborators it touches."""
 
-    def __init__(self, last_seen_decks, resolved):
+    def __init__(self, last_seen_decks, archetypes):
         self.last_seen_decks = last_seen_decks
         self._last_radar_archetype = ""
         self._radar_worker_thread = None
@@ -209,8 +237,9 @@ class _FakeHost(RadarMixin):
         self._last_guide_archetype = "stale"
         self.radar_panel = _FakePanel()
         self.sideboard_panel = _FakePanel()
-        self.controller = _FakeController(resolved)
-        self.metagame_service = types.SimpleNamespace(metagame_repo=object())
+        self.controller = _FakeController(archetypes)
+        # The mixin forwards this repo into the resolver as its network seam.
+        self.metagame_service = types.SimpleNamespace(metagame_repo=self.controller.repo)
         self.radar_service = types.SimpleNamespace(calculate_radar=None)
 
 
@@ -226,28 +255,32 @@ def _join_worker(host: _FakeHost) -> None:
 # --------------------------------------------------------------------------- #
 class TestTriggerRadarLoad:
     def test_no_decks_is_noop(self):
-        host = _FakeHost({}, resolved={"name": "UR Murktide"})
+        host = _FakeHost({}, archetypes=[{"name": "UR Murktide"}])
         host._trigger_radar_load()
         assert host.controller.resolve_calls == []
         assert host._radar_worker_thread is None
 
     def test_unknown_archetype_skipped(self):
-        host = _FakeHost({"Modern": "Unknown"}, resolved={"name": "x"})
+        host = _FakeHost({"Modern": "Unknown"}, archetypes=[{"name": "x"}])
         host._trigger_radar_load()
         assert host.controller.resolve_calls == []
         assert host._last_radar_archetype == ""
 
     def test_unresolved_archetype_sets_error(self):
-        host = _FakeHost({"Modern": "UR Murktide"}, resolved=None)
+        # Repo has no matching archetype, so the real resolver returns None.
+        host = _FakeHost({"Modern": "UR Murktide"}, archetypes=[{"name": "Burn"}])
         host._trigger_radar_load()
-        assert host.controller.resolve_calls  # production resolver was invoked
+        # The production resolver was invoked with the forwarded repo.
+        assert host.controller.resolve_calls == [
+            ("UR Murktide", "Modern", host.metagame_service.metagame_repo)
+        ]
         assert host.radar_panel.set_error_calls == ["Archetype 'UR Murktide' not found"]
         assert host._radar_worker_thread is None
         assert host._last_radar_archetype == ""
 
     def test_valid_archetype_starts_worker_and_sets_loading(self):
         resolved = {"name": "UR Murktide", "href": "/archetype/ur-murktide"}
-        host = _FakeHost({"Modern": "UR Murktide"}, resolved=resolved)
+        host = _FakeHost({"Modern": "UR Murktide"}, archetypes=[resolved])
 
         captured: dict[str, Any] = {}
 
@@ -261,6 +294,7 @@ class TestTriggerRadarLoad:
 
         assert host._last_radar_archetype == "UR Murktide"
         assert any("Loading radar" in m for m in host.radar_panel.set_loading_calls)
+        # The real resolver returned the matching archetype dict from the repo.
         assert captured["args"][0] is resolved
         assert captured["args"][1] == "Modern"
         # On success the worker marshals the radar to _display_radar.
@@ -268,7 +302,7 @@ class TestTriggerRadarLoad:
         assert host.radar_panel.display_radar_calls
 
     def test_duplicate_archetype_skipped(self):
-        host = _FakeHost({"Modern": "UR Murktide"}, resolved={"name": "UR Murktide"})
+        host = _FakeHost({"Modern": "UR Murktide"}, archetypes=[{"name": "UR Murktide"}])
         host._last_radar_archetype = "UR Murktide"
         host._trigger_radar_load()
         # Early-return before resolving / starting a worker.
@@ -276,7 +310,7 @@ class TestTriggerRadarLoad:
         assert host.radar_panel.set_loading_calls == []
 
     def test_in_progress_thread_skipped(self):
-        host = _FakeHost({"Modern": "UR Murktide"}, resolved={"name": "UR Murktide"})
+        host = _FakeHost({"Modern": "UR Murktide"}, archetypes=[{"name": "UR Murktide"}])
 
         started = threading.Event()
         release = threading.Event()
@@ -304,7 +338,7 @@ class TestTriggerRadarLoad:
 # --------------------------------------------------------------------------- #
 class TestGenerateRadarWorker:
     def test_network_failure_sets_error_and_resets_thread(self):
-        host = _FakeHost({"Modern": "UR Murktide"}, resolved={"name": "x"})
+        host = _FakeHost({"Modern": "UR Murktide"}, archetypes=[{"name": "x"}])
         host._radar_worker_thread = "sentinel"
 
         def calculate_radar(*_a, **_k):
@@ -317,7 +351,7 @@ class TestGenerateRadarWorker:
         assert host._radar_worker_thread is None  # finally block ran
 
     def test_cancellation_clears_panel(self):
-        host = _FakeHost({"Modern": "UR Murktide"}, resolved={"name": "x"})
+        host = _FakeHost({"Modern": "UR Murktide"}, archetypes=[{"name": "x"}])
         host._radar_cancel_requested = True
 
         def calculate_radar(archetype_dict, format_name, max_decks, progress_callback):
@@ -334,7 +368,7 @@ class TestGenerateRadarWorker:
         assert host._radar_worker_thread is None
 
     def test_success_displays_radar(self):
-        host = _FakeHost({"Modern": "UR Murktide"}, resolved={"name": "x"})
+        host = _FakeHost({"Modern": "UR Murktide"}, archetypes=[{"name": "x"}])
         radar = _radar(mainboard=[_card("Murktide Regent", 4.0)])
 
         def calculate_radar(archetype_dict, format_name, max_decks, progress_callback):
@@ -355,7 +389,7 @@ class TestGenerateRadarWorker:
 # --------------------------------------------------------------------------- #
 class TestClearRadarDisplay:
     def test_resets_state_and_clears_panels(self):
-        host = _FakeHost({"Modern": "UR Murktide"}, resolved={"name": "x"})
+        host = _FakeHost({"Modern": "UR Murktide"}, archetypes=[{"name": "x"}])
         host._last_radar_archetype = "UR Murktide"
         host.current_radar = _radar()
         host._radar_cancel_requested = False
@@ -433,18 +467,11 @@ class _FakePanelHost(CompactRadarHandlersMixin):
         return self._parent
 
 
-def _view_modes():
-    props = _load_module(
-        "_compact_radar_props_under_test",
-        "widgets",
-        "panels",
-        "compact_radar_panel",
-        "properties.py",
-    )
-    return props.RadarViewMode
-
-
-_RadarViewMode = _view_modes()
+# Use the SAME ``RadarViewMode`` enum the handler module compares against. The
+# handler module imports it from the canonical ``sys.modules`` properties module,
+# so a fresh file-path reload would yield a distinct, non-identical enum and the
+# handler's ``self._view_mode == RadarViewMode.TOP_CARDS`` checks would never match.
+_RadarViewMode = _compact_radar_handlers_module.RadarViewMode
 
 
 class TestCompactRadarSetters:
@@ -483,7 +510,7 @@ class TestCompactRadarSetters:
 class TestCompactRadarFormatting:
     def test_top_cards_line_format_and_clamping(self):
         panel = _FakePanelHost(_RadarViewMode.TOP_CARDS)
-        # 0.3 must clamp up to 1; 95.6% must floor-format to 96 via :.0f rounding.
+        # avg_copies 0.3 must clamp up to 1; inclusion_rate 95.0 renders as "95%".
         panel.current_radar = _radar(
             mainboard=[
                 _card("Lightning Bolt", 4.0, inclusion_rate=95.0),
@@ -501,6 +528,17 @@ class TestCompactRadarFormatting:
         assert "2x Mystical Dispute (60%)" in panel.card_list.lines
         assert "─── Mainboard ───" in panel.card_list.lines
         assert "─── Sideboard ───" in panel.card_list.lines
+
+    def test_top_cards_inclusion_rate_rounds_via_format(self):
+        # The ``:.0f`` format rounds half-to-even at the boundary: 95.6 -> "96".
+        panel = _FakePanelHost(_RadarViewMode.TOP_CARDS)
+        panel.current_radar = _radar(
+            mainboard=[_card("Counterspell", 3.0, inclusion_rate=95.6)],
+        )
+
+        panel._populate_top_cards()
+
+        assert "3x Counterspell (96%)" in panel.card_list.lines
 
     def test_top_cards_respects_limits(self):
         props = _load_module(
@@ -551,6 +589,87 @@ class TestCompactRadarFormatting:
         assert panel.view_toggle_btn.shown is True
         assert panel.shown is True
         assert any("Murktide Regent" in line for line in panel.card_list.lines)
+
+    def test_display_radar_in_full_decklist_mode_uses_full_populator(self):
+        # display_radar -> _populate_card_list must dispatch on the view mode.
+        panel = _FakePanelHost(_RadarViewMode.FULL_DECKLIST)
+        radar = _radar(mainboard=[_card("Murktide Regent", 4.0)])
+
+        panel.display_radar(radar)
+
+        # FULL_DECKLIST lines have no "x" multiplier and carry a count header.
+        assert "4 Murktide Regent" in panel.card_list.lines
+        assert "─── Mainboard (4) ───" in panel.card_list.lines
+        assert not any(line.startswith("4x ") for line in panel.card_list.lines)
+
+
+class TestCompactRadarToggle:
+    def test_toggle_flips_mode_relabels_and_repopulates(self):
+        panel = _FakePanelHost(_RadarViewMode.TOP_CARDS)
+        panel.current_radar = _radar(mainboard=[_card("Murktide Regent", 4.0)])
+
+        panel._on_toggle_view(None)
+
+        assert panel._view_mode is _RadarViewMode.FULL_DECKLIST
+        # Label now advertises the *other* mode you can switch back to.
+        assert panel.view_toggle_btn.label == "Top Cards"
+        # Re-populated in FULL_DECKLIST format.
+        assert "4 Murktide Regent" in panel.card_list.lines
+
+        panel._on_toggle_view(None)
+
+        assert panel._view_mode is _RadarViewMode.TOP_CARDS
+        assert panel.view_toggle_btn.label == "Full Decklist"
+        assert any(line.startswith("4x ") for line in panel.card_list.lines)
+
+    def test_update_toggle_button_label_reflects_mode(self):
+        panel = _FakePanelHost(_RadarViewMode.TOP_CARDS)
+        panel._update_toggle_button_label()
+        assert panel.view_toggle_btn.label == "Full Decklist"
+
+        panel._view_mode = _RadarViewMode.FULL_DECKLIST
+        panel._update_toggle_button_label()
+        assert panel.view_toggle_btn.label == "Top Cards"
+
+
+class TestCompactRadarNoRadarGuards:
+    def test_populate_card_list_no_radar_is_noop(self):
+        panel = _FakePanelHost(_RadarViewMode.TOP_CARDS)
+        panel.current_radar = None
+        panel._populate_card_list()
+        assert panel.card_list.lines == []
+
+    def test_populate_top_cards_no_radar_is_noop(self):
+        panel = _FakePanelHost(_RadarViewMode.TOP_CARDS)
+        panel.current_radar = None
+        panel._populate_top_cards()
+        assert panel.card_list.lines == []
+
+    def test_populate_full_decklist_no_radar_is_noop(self):
+        panel = _FakePanelHost(_RadarViewMode.FULL_DECKLIST)
+        panel.current_radar = None
+        panel._populate_full_decklist()
+        assert panel.card_list.lines == []
+
+
+class TestCompactRadarProperties:
+    def test_view_mode_property_reflects_internal_state(self):
+        props = _load_module(
+            "_compact_radar_props_accessor",
+            "widgets",
+            "panels",
+            "compact_radar_panel",
+            "properties.py",
+        )
+
+        class _Host(props.CompactRadarPropertiesMixin):
+            def __init__(self, mode):
+                self._view_mode = mode
+
+        host = _Host(props.RadarViewMode.FULL_DECKLIST)
+        assert host.view_mode is props.RadarViewMode.FULL_DECKLIST
+        host._view_mode = props.RadarViewMode.TOP_CARDS
+        assert host.view_mode is props.RadarViewMode.TOP_CARDS
 
 
 # --------------------------------------------------------------------------- #
