@@ -26,6 +26,7 @@ class CardInspectorPanelProto(Protocol):
     inspector_printings: list[dict[str, Any]]
     inspector_current_printing: int
     inspector_current_card_name: str | None
+    inspector_selection: dict[str, Any] | None
     printing_label_width: int
     image_cache: Any
     bulk_data_by_name: dict[str, list[dict[str, Any]]] | None
@@ -35,7 +36,9 @@ class CardInspectorPanelProto(Protocol):
     _selected_card_handler: Callable[[CardImageRequest | None], None] | None
     _printings_request_handler: Callable[[str], None] | None
     _printing_changed_handler: Callable[[dict[str, Any] | None], None] | None
+    _printing_selected_handler: Callable[[dict[str, Any], bool], None] | None
     _printings_request_inflight: str | None
+    _autosave_printing: bool
     _has_selection: bool
     _failed_image_requests: set[tuple[str, str]]
     _image_request_name: str | None
@@ -46,6 +49,9 @@ class CardInspectorPanelProto(Protocol):
     image_text_panel: wx.Panel
     image_text_ctrl: ManaSymbolRichCtrl
     nav_panel: wx.Panel
+    save_panel: wx.Panel
+    autosave_checkbox: wx.CheckBox
+    save_art_btn: wx.Button
     prev_btn: wx.Button
     next_btn: wx.Button
     printing_label: wx.StaticText
