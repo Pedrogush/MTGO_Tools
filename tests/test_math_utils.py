@@ -130,6 +130,22 @@ class TestHypergeometricAtLeast:
         prob = hypergeometric_at_least(40, 17, 7, 1)
         assert prob > 0.98
 
+    def test_at_least_two_playset_sums_multiple_buckets(self) -> None:
+        """P(at least 2 copies of a 4-of in 7-card hand) value-checks the multi-term sum.
+
+        Unlike the ``min_successes=1`` cases (which reduce to ``1 - P(0)``), this
+        requires summing the k=2, 3 and 4 buckets, so it exercises the loop body
+        for more than one iteration.
+
+        Reference: https://aetherhub.com/Apps/HyperGeometric
+        Expected: ~6.32%
+        """
+        prob = hypergeometric_at_least(60, 4, 7, 2)
+        assert 0.063 <= prob <= 0.0634
+        # Cross-check against the explicit sum of per-k probabilities.
+        expected = sum(hypergeometric_probability(60, 4, 7, k) for k in range(2, 5))
+        assert prob == pytest.approx(expected)
+
 
 class TestInputValidation:
     """Tests for input validation error handling."""
