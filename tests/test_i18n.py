@@ -1,6 +1,13 @@
 import pytest
 
-from utils.i18n import DEFAULT_LOCALE, MESSAGES, SUPPORTED_LOCALES, normalize_locale, translate
+from utils.i18n import (
+    DEFAULT_LOCALE,
+    LOCALE_LABELS,
+    MESSAGES,
+    SUPPORTED_LOCALES,
+    normalize_locale,
+    translate,
+)
 
 
 def test_normalize_locale_falls_back_to_default_for_unknown_values() -> None:
@@ -58,6 +65,24 @@ def test_translate_formats_params_when_present() -> None:
     )
 
 
+def test_translate_leaves_raw_braces_when_called_without_kwargs() -> None:
+    # A placeholder template invoked with zero kwargs short-circuits before
+    # str.format(), so the literal braces leak through un-substituted. Pin this
+    # behavior so the (easy-to-ship-broken) no-kwargs path is exercised.
+    assert translate("en-US", "app.status.selected_language") == "Selected language: {language}"
+
+
+def test_translate_formats_via_default_locale_fallback(monkeypatch) -> None:
+    # When a supported, non-default locale is missing a placeholder key, translate
+    # falls back to the default locale's template and must still apply str.format().
+    pt_br = dict(MESSAGES["pt-BR"])
+    pt_br.pop("app.status.selected_language")
+    monkeypatch.setitem(MESSAGES, "pt-BR", pt_br)
+    assert translate("pt-BR", "app.status.selected_language", language="X") == MESSAGES[
+        DEFAULT_LOCALE
+    ]["app.status.selected_language"].format(language="X")
+
+
 def test_all_locales_have_identical_key_sets() -> None:
     reference = set(MESSAGES[DEFAULT_LOCALE])
     for locale in SUPPORTED_LOCALES:
@@ -71,7 +96,18 @@ def test_all_locales_have_identical_key_sets() -> None:
         )
 
 
-def test_core_ui_translation_keys_exist_for_all_supported_locales() -> None:
+def test_locale_labels_match_supported_locales() -> None:
+    # Production indexes LOCALE_LABELS[locale] for every supported locale, so a new
+    # locale without a label would KeyError at runtime. Guard the parity invariant.
+    assert set(LOCALE_LABELS) == set(SUPPORTED_LOCALES)
+    for locale in SUPPORTED_LOCALES:
+        label = LOCALE_LABELS[locale]
+        assert isinstance(label, str) and label, f"{locale} has an empty or non-str label"
+
+
+def test_core_ui_translation_keys_exist_in_default_locale() -> None:
+    # The identical-key-sets test already guarantees every locale shares the default
+    # locale's key set, so checking the default locale alone covers all of them.
     required_keys = {
         "app.status.ready",
         "app.status.language_changed",
@@ -117,5 +153,4 @@ def test_core_ui_translation_keys_exist_for_all_supported_locales() -> None:
         "tutorial.step6.title",
         "tutorial.step6.body",
     }
-    for locale in SUPPORTED_LOCALES:
-        assert required_keys.issubset(set(MESSAGES[locale]))
+    assert required_keys.issubset(set(MESSAGES[DEFAULT_LOCALE]))
