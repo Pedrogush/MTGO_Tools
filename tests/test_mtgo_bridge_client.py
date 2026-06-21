@@ -5,6 +5,7 @@ import stat
 import sys
 import textwrap
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -227,6 +228,22 @@ def test_queue_replace_overwrites_stale_item() -> None:
     assert q.empty()
 
 
+def test_queue_replace_full_after_drain_drops_update() -> None:
+    """If the queue stays full even after draining, the update is dropped silently."""
+
+    class _AlwaysFullQueue:
+        """Drains as empty, then rejects every put as Full (e.g. a racing writer)."""
+
+        def get_nowait(self) -> Any:
+            raise queue_mod.Empty
+
+        def put_nowait(self, item: Any) -> None:
+            raise queue_mod.Full
+
+    # Must return without raising; the Full branch only logs and drops.
+    assert bridge_watch._queue_replace(_AlwaysFullQueue(), {"v": 1}) is None
+
+
 # --- _watch_worker (real subprocess streaming parser) ------------------------
 
 
@@ -299,6 +316,22 @@ def test_watch_worker_parses_multiline_object(tmp_path: Path) -> None:
     assert {"timer": 2, "opponent": "alice"} in seen
 
 
+def test_watch_worker_flushes_trailing_object_on_exit(tmp_path: Path) -> None:
+    """A final object emitted without a trailing newline still surfaces as the
+    process exits (the trailing-buffer flush in ``_watch_worker``'s ``finally``)."""
+    bridge = _write_executable_bridge(
+        tmp_path,
+        r"""
+        import sys
+        # No trailing newline: the object only completes as stdout closes on exit.
+        sys.stdout.write('{"timer": 99}')
+        sys.stdout.flush()
+        """,
+    )
+    seen = _run_watch_to_completion(bridge)
+    assert {"timer": 99} in seen
+
+
 # --- BridgeWatcher lifecycle -------------------------------------------------
 
 
@@ -332,6 +365,25 @@ def test_bridge_watcher_latest_nonblocking_empty_returns_none(tmp_path: Path) ->
     watcher.start()
     try:
         assert watcher.latest(block=False) is None
+    finally:
+        watcher.stop()
+
+
+def test_start_watch_helper_starts_streaming_watcher(tmp_path: Path) -> None:
+    """``start_watch`` resolves the path, builds, and starts a live watcher."""
+    bridge = _write_executable_bridge(
+        tmp_path,
+        r"""
+        import sys, time
+        sys.stdout.write('{"timer": 7}\n')
+        sys.stdout.flush()
+        time.sleep(30)
+        """,
+    )
+    watcher = bridge_watch.start_watch(bridge_path=str(bridge))
+    try:
+        assert watcher._process is not None and watcher._process.is_alive()
+        assert watcher.latest(block=True, timeout=20) == {"timer": 7}
     finally:
         watcher.stop()
 
@@ -412,5 +464,20 @@ def test_async_entry_point_returns_future_resolving_payload(tmp_path: Path) -> N
     future = mtgo_bridge_client.fetch_collection_snapshot_async(bridge_path=str(bridge))
     try:
         assert future.result(timeout=30) == {"argv": ["collection"]}
+    finally:
+        future.cancel()
+
+
+def test_history_async_entry_point_returns_future_resolving_payload(tmp_path: Path) -> None:
+    bridge = _write_executable_bridge(
+        tmp_path,
+        r"""
+        import json, sys
+        print(json.dumps({"argv": sys.argv[1:]}))
+        """,
+    )
+    future = mtgo_bridge_client.fetch_match_history_async(bridge_path=str(bridge))
+    try:
+        assert future.result(timeout=30) == {"argv": ["history"]}
     finally:
         future.cancel()
