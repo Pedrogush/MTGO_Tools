@@ -160,6 +160,38 @@ def test_format_pt_empty_strings_render_no_pt() -> None:
     assert ">/<" not in html
 
 
+def test_format_pt_half_filled_power_only_renders_trailing_slash() -> None:
+    """A P/T with only one side filled still renders the ``N/`` fragment.
+
+    The OR guard treats ``power="5", toughness=""`` as a real P/T, so the
+    separator is emitted even though the toughness is blank.
+    """
+    meta = {
+        "name": "Half Power",
+        "mana_cost": "",
+        "type_line": "Creature",
+        "oracle_text": "",
+        "power": "5",
+        "toughness": "",
+    }
+    html = build_card_html(meta, None, _no_png)
+    assert ">5/<" in html
+
+
+def test_format_pt_half_filled_toughness_only_renders_leading_slash() -> None:
+    """Mirror of the power-only case: ``power="", toughness="5"`` -> ``/5``."""
+    meta = {
+        "name": "Half Toughness",
+        "mana_cost": "",
+        "type_line": "Creature",
+        "oracle_text": "",
+        "power": "",
+        "toughness": "5",
+    }
+    html = build_card_html(meta, None, _no_png)
+    assert ">/5<" in html
+
+
 def test_format_pt_prefers_power_toughness_over_loyalty() -> None:
     meta = {
         "name": "Weird Card",
@@ -185,6 +217,12 @@ def test_render_oracle_body_splits_paragraphs_and_italicizes_reminder() -> None:
 def test_build_card_html_empty_meta_renders_placeholder() -> None:
     html = build_card_html(None, None, _no_png, empty_text="Pick a card")
     assert "Pick a card" in html
+
+
+def test_build_card_html_empty_meta_uses_default_placeholder() -> None:
+    """With no ``empty_text`` override, the built-in default text is rendered."""
+    html = build_card_html(None, None, _no_png)
+    assert "Select a card to inspect." in html
 
 
 def test_build_card_html_renders_card_and_printing_fields() -> None:
@@ -309,8 +347,31 @@ def test_build_card_html_renders_back_face_when_present() -> None:
     assert ">4<" in html
 
 
+def test_build_card_html_escapes_footer_collector_and_artist() -> None:
+    """Printing-derived footer fields (collector + artist) are HTML-escaped."""
+    meta = {"name": "X", "mana_cost": "", "type_line": "Instant", "oracle_text": ""}
+    printing = {
+        "set_name": "Set <b>name</b>",
+        "set": "lea",
+        "collector_number": "1 <i>61</i>",
+        "artist": "Christopher & <Rush>",
+    }
+    html = build_card_html(meta, printing, _no_png)
+    # Raw markup from the printing must never reach the output unescaped.
+    assert "<b>name</b>" not in html
+    assert "&lt;b&gt;name&lt;/b&gt;" in html
+    assert "<i>61</i>" not in html
+    assert "1 &lt;i&gt;61&lt;/i&gt;" in html
+    assert "Christopher &amp; &lt;Rush&gt;" in html
+
+
 def test_build_card_html_back_face_falls_back_to_canonical_split() -> None:
-    """If ``back_name`` is missing but the canonical name has ``//``, derive it."""
+    """If ``back_name`` is missing but the canonical name has ``//``, derive it.
+
+    Front/back face text deliberately avoid the word "Ice" so the rendered
+    ``>Ice<`` can only originate from the canonical-split fallback (line 320),
+    isolating that path from any incidental match elsewhere in the HTML.
+    """
     meta = {
         "name": "Fire // Ice",
         "mana_cost": "{1}{R}",
@@ -320,6 +381,9 @@ def test_build_card_html_back_face_falls_back_to_canonical_split() -> None:
         "back_oracle_text": "Tap target permanent. Draw a card.",
         "back_mana_cost": "{1}{U}",
     }
+    # Guard: the fallback name does not appear anywhere in the source fields.
+    assert "Ice" not in meta["back_type_line"]
+    assert "Ice" not in meta["back_oracle_text"]
     html = build_card_html(meta, None, _no_png)
     assert ">Fire<" in html
     assert ">Ice<" in html
@@ -386,6 +450,23 @@ def test_linkify_keywords_skips_inside_reminder_italics() -> None:
     )
     # The leading "Flying" outside the italics gets linked.
     assert out.count('<a href="rule:702.9">') == 1
+
+
+def test_linkify_keywords_resumes_after_closed_skip_region() -> None:
+    """A keyword after a closed ``<i>`` region IS linked (skip_depth balances).
+
+    The keyword inside the italics is skipped; once the ``</i>`` decrements
+    ``skip_depth`` back to zero, the trailing keyword is linked — exactly one
+    anchor total.
+    """
+    lookup = _kw_lookup(("Flying", "702.9"))
+    out = linkify_keywords(
+        "<p><i>Flying creatures soar.</i> Flying</p>",
+        lookup,
+    )
+    # Only the post-italics occurrence is linked; the one inside <i> is not.
+    assert out.count('<a href="rule:702.9">') == 1
+    assert "Flying</font></a>" in out
 
 
 def test_linkify_keywords_does_not_nest_anchors() -> None:
