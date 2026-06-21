@@ -79,8 +79,7 @@ class ArchetypeResolutionMixin(_Base):
 
         Resolution order:
         1. Remote snapshot  (if REMOTE_SNAPSHOTS_ENABLED and not force_refresh)
-        2. Live ``get_archetype_stats`` scrape (also populates the archetype
-           stats cache used by the navigator module)
+        2. Live ``get_archetype_stats`` scrape
         """
         if not force_refresh:
             remote = self._remote_client_or_default()
