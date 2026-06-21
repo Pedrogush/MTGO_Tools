@@ -27,7 +27,10 @@ from utils.constants import CACHE_DIR
 IMAGE_CACHE_DIR = CACHE_DIR / "card_images"
 IMAGE_DB_PATH = IMAGE_CACHE_DIR / "images.db"
 BULK_DATA_CACHE = IMAGE_CACHE_DIR / "bulk_data.json"
-PRINTING_INDEX_VERSION = 4
+# v5: face-name aliases no longer overwrite a real standalone card's printing
+# list (e.g. "Emeritus of Conflict // Lightning Bolt" must not pollute
+# "Lightning Bolt"); bumping forces a rebuild of the cached index (issue #792).
+PRINTING_INDEX_VERSION = 5
 PRINTING_INDEX_CACHE = IMAGE_CACHE_DIR / f"printings_v{PRINTING_INDEX_VERSION}.json"
 
 # Image size options (in order of preference for storage)

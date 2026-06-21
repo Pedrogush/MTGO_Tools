@@ -111,6 +111,42 @@ def test_build_printing_index_sorts_and_counts():
     assert [entry["id"] for entry in entries] == ["uuid-2", "uuid-1"]
 
 
+def test_face_alias_does_not_pollute_a_real_standalone_card():
+    """An adventure/DFC face name that is also a real card must not be aliased.
+
+    "Emeritus of Conflict // Lightning Bolt" has a "Lightning Bolt" face, but the
+    genuine Lightning Bolt printings must stay clean — otherwise the inspector
+    and printing dropdown would offer the adventure card as a Bolt printing
+    (issue #792 regression).
+    """
+    cards = [
+        {
+            "name": "Lightning Bolt",
+            "id": "bolt-real",
+            "set": "lea",
+            "released_at": "1993-08-05",
+        },
+        {
+            "name": "Emeritus of Conflict // Lightning Bolt",
+            "id": "emeritus-combined",
+            "set": "sos",
+            "released_at": "2026-04-24",
+            "card_faces": [
+                {"name": "Emeritus of Conflict"},
+                {"name": "Lightning Bolt"},
+            ],
+        },
+    ]
+
+    by_name, _stats = card_images.build_printing_index(cards)
+
+    # The real Lightning Bolt list is untouched by the adventure card.
+    assert [e["id"] for e in by_name["lightning bolt"]] == ["bolt-real"]
+    # The non-colliding face name still resolves to the combined card.
+    assert [e["id"] for e in by_name["emeritus of conflict"]] == ["emeritus-combined"]
+    assert by_name["emeritus of conflict // lightning bolt"][0]["id"] == "emeritus-combined"
+
+
 def _write_bulk_payload(cache_dir, monkeypatch, printings_path):
     """Write a minimal bulk-data cache and point the schema constants at tmp."""
     bulk_path = cache_dir / "bulk_data.json"
