@@ -108,6 +108,18 @@ def test_load_mixed_id_and_edition_downgrades_to_edition():
     assert format_decklist_on_load(text, INDEX) == "4 Lightning Bolt LEA\n2 Island UST"
 
 
+def test_load_edition_downgrade_drops_pointer_when_printing_has_no_set():
+    # A printing-id line whose matched printing carries no set code cannot be
+    # downgraded to an edition, so under an EDITION-level deck it renders
+    # agnostic (no token) rather than emitting an empty pointer.
+    index = {
+        "setless card": [{"id": "setless-1", "released_at": "2010-01-01"}],
+        "island": INDEX["island"],
+    }
+    text = "1 Setless Card setless-1\n1 Island UST"
+    assert format_decklist_on_load(text, index) == "1 Setless Card\n1 Island UST"
+
+
 def test_load_keeps_editions_when_all_editions():
     text = "4 Lightning Bolt M10\n2 Island UST"
     assert format_decklist_on_load(text, INDEX) == "4 Lightning Bolt M10\n2 Island UST"
@@ -134,6 +146,15 @@ def test_load_empty_when_no_valid_cards():
 
 def test_oldest_printing_selected_by_date_not_position():
     assert decklist_with_oldest_printings("1 Lightning Bolt", INDEX) == "1 Lightning Bolt bolt-lea"
+
+
+def test_oldest_printing_falls_back_to_agnostic_when_all_dates_garbled(warnings):
+    # Every printing has an unparseable date, so no printing is selectable and
+    # the card collapses to agnostic with an "oldest" warning.
+    index = {"junk card": [{"id": "junk-1", "set": "JNK", "released_at": "not-a-date"}]}
+    result = decklist_with_oldest_printings("1 Junk Card", index)
+    assert result == "1 Junk Card"
+    assert "oldest" in "".join(warnings)
 
 
 def test_newest_printing_selected_by_date_not_position():
@@ -274,6 +295,44 @@ def test_helpers_work_against_real_fixture_index():
     assert newest.split(" ")[-1] in ids
 
 
+def _coerce_fixture_date(value: str):
+    """Mirror the module's date coercion for fixture-derived assertions."""
+    from datetime import datetime
+
+    for fmt in ("%Y-%m-%d", "%Y/%m/%d", "%Y"):
+        try:
+            return datetime.strptime(str(value).strip(), fmt).date()
+        except (ValueError, TypeError):
+            continue
+    return None
+
+
+def test_newest_selection_against_real_fixture_picks_the_max_released_id():
+    # Use a card with multiple printings of *distinct* dates so the assertion
+    # pins the exact newest id (max by released_at), not mere membership.
+    fixture = Path(__file__).parent / "fixtures" / "card_art_selection" / "printings_index.json"
+    data = json.loads(fixture.read_text(encoding="utf-8"))["data"]
+
+    multi = next(
+        (
+            (name, ps)
+            for name, ps in data.items()
+            if len({_coerce_fixture_date(p.get("released_at")) for p in ps} - {None}) > 1
+        ),
+        None,
+    )
+    if multi is None:
+        pytest.skip("fixture has no card with multiple distinctly-dated printings")
+    name, printings = multi
+
+    expected = max(
+        (p for p in printings if _coerce_fixture_date(p.get("released_at")) is not None),
+        key=lambda p: _coerce_fixture_date(p.get("released_at")),
+    )["id"]
+    result = decklist_with_newest_printings(f"1 {name}", data)
+    assert result.split(" ")[-1] == expected
+
+
 def test_module_all_is_importable():
     for symbol in printing.__all__:
         assert hasattr(printing, symbol)
@@ -312,6 +371,15 @@ def test_apply_printing_mode_date_modes_use_when():
         printing.apply_printing_mode("1 Lightning Bolt", INDEX, printing.MODE_AFTER, "1995-01-01")
         == "1 Lightning Bolt bolt-m10"
     )
+
+
+def test_apply_printing_mode_date_modes_with_no_when_return_agnostic(warnings):
+    # A date mode dispatched without a ``when`` has no valid cutoff, so it
+    # collapses to the agnostic decklist rather than raising.
+    for mode in printing.DATE_MODES:
+        result = printing.apply_printing_mode("1 Lightning Bolt", INDEX, mode, None)
+        assert result == "1 Lightning Bolt"
+    assert "Invalid date" in "".join(warnings)
 
 
 def test_apply_printing_mode_rejects_unknown_mode():
@@ -392,6 +460,14 @@ def test_merge_selection_preserves_sideboard_structure():
     text = "1 Lightning Bolt\n\nSideboard\n2 Island"
     merged = printing.merge_printing_selection(text, INDEX, "Island", "isl-lea")
     assert merged == "1 Lightning Bolt\n\nSideboard\n2 Island isl-lea"
+
+
+def test_merge_selection_repoints_every_line_of_the_same_card():
+    # The same card appears in both main and sideboard; both lines must be
+    # re-pointed at the chosen printing.
+    text = "2 Island isl-lea\n\nSideboard\n1 Island"
+    merged = printing.merge_printing_selection(text, INDEX, "Island", "isl-ust")
+    assert merged == "2 Island isl-ust\n\nSideboard\n1 Island isl-ust"
 
 
 def test_selection_helpers_exposed_on_deck_service():
