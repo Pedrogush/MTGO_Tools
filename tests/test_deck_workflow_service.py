@@ -3,22 +3,10 @@ from __future__ import annotations
 import pytest
 
 from repositories.deck_repository.repository import DeckRepository
+from repositories.metagame_repository.repository import MetagameRepository
 from services.deck_service.averager import DeckAverager
 from services.deck_service.text_builder import DeckTextBuilder
 from services.deck_workflow_service import DeckWorkflowService
-
-
-class FakeMetagameRepo:
-    def __init__(self) -> None:
-        self.calls: list[tuple[str, dict | None, str, str | None]] = []
-
-    def get_decks_for_archetype(self, archetype, source_filter):
-        self.calls.append(("archetype", archetype, source_filter, None))
-        return [{"name": archetype.get("name"), "number": "1"}]
-
-    def get_all_cached_decks(self, source_filter, mtg_format=None):
-        self.calls.append(("all", None, source_filter, mtg_format))
-        return [{"name": "Any", "number": "2"}]
 
 
 def make_repo(tmp_path) -> DeckRepository:
@@ -26,79 +14,102 @@ def make_repo(tmp_path) -> DeckRepository:
     return DeckRepository(db_path=tmp_path / "decks.sqlite")
 
 
+def make_metagame_repo(tmp_path) -> MetagameRepository:
+    """Real metagame repository backed by isolated on-disk JSON caches."""
+    return MetagameRepository(
+        archetype_list_cache_file=tmp_path / "archetype_list.json",
+        archetype_decks_cache_file=tmp_path / "archetype_decks.json",
+    )
+
+
 def build_service(
     *,
-    deck_repo=None,
+    deck_repo,
     deck_service=None,
     metagame_repo=None,
     **kwargs,
 ):
     return DeckWorkflowService(
-        deck_repo=deck_repo if deck_repo is not None else DeckRepository(),
+        deck_repo=deck_repo,
         deck_service=deck_service if deck_service is not None else DeckAverager(),
-        metagame_repo=metagame_repo or FakeMetagameRepo(),
+        metagame_repo=metagame_repo,
         **kwargs,
     )
 
 
-def test_fetch_archetypes_respects_force_flag():
+def test_fetch_archetypes_respects_force_flag(tmp_path):
     calls: list[tuple[str, bool]] = []
 
     def provider(fmt: str, *, allow_stale: bool):
         calls.append((fmt, allow_stale))
         return [{"name": "Test"}]
 
-    service = build_service(archetype_provider=provider)
+    service = build_service(deck_repo=make_repo(tmp_path), archetype_provider=provider)
     result = service.fetch_archetypes("Modern", force=True)
 
     assert result == [{"name": "Test"}]
     assert calls == [("modern", False)]
 
 
-def test_fetch_archetypes_allows_stale_when_not_forced():
+def test_fetch_archetypes_allows_stale_when_not_forced(tmp_path):
     calls: list[tuple[str, bool]] = []
 
     def provider(fmt: str, *, allow_stale: bool):
         calls.append((fmt, allow_stale))
         return []
 
-    service = build_service(archetype_provider=provider)
+    service = build_service(deck_repo=make_repo(tmp_path), archetype_provider=provider)
     service.fetch_archetypes("Legacy", force=False)
 
     assert calls == [("legacy", True)]
 
 
-def test_load_decks_routes_all_and_archetype_scopes_through_one_use_case():
-    metagame_repo = FakeMetagameRepo()
-    service = build_service(metagame_repo=metagame_repo)
-    archetype = {"name": "Dimir Control"}
+def test_load_decks_routes_all_and_archetype_scopes_through_real_repo(tmp_path):
+    """Drive a real MetagameRepository off isolated caches and assert on deck VALUES."""
+    metagame_repo = make_metagame_repo(tmp_path)
+    archetype = {"name": "Dimir Control", "href": "modern-dimir-control"}
+
+    # Seed the per-archetype deck cache that get_decks_for_archetype reads.
+    metagame_repo._save_cached_decks(
+        archetype["href"],
+        [{"name": "Dimir Control", "number": "1", "source": "mtggoldfish"}],
+    )
+    # Seed the aggregated deck cache that get_all_cached_decks reads.
+    metagame_repo._save_cached_decks(
+        "pioneer-any",
+        [{"name": "Any", "number": "2", "source": "mtgo", "event": "Pioneer Challenge"}],
+    )
+
+    service = build_service(deck_repo=make_repo(tmp_path), metagame_repo=metagame_repo)
 
     archetype_result = service.load_decks(
         scope="archetype", archetype=archetype, source_filter="mtggoldfish"
     )
     all_result = service.load_decks(scope="all", source_filter="mtgo", mtg_format="Pioneer")
 
-    assert archetype_result == [{"name": "Dimir Control", "number": "1"}]
-    assert all_result == [{"name": "Any", "number": "2"}]
-    assert metagame_repo.calls == [
-        ("archetype", archetype, "mtggoldfish", None),
-        ("all", None, "mtgo", "Pioneer"),
+    assert archetype_result == [{"name": "Dimir Control", "number": "1", "source": "mtggoldfish"}]
+    assert all_result == [
+        {"name": "Any", "number": "2", "source": "mtgo", "event": "Pioneer Challenge"}
     ]
 
 
-def test_load_decks_archetype_scope_requires_archetype():
-    service = build_service()
+def test_load_decks_archetype_scope_requires_archetype(tmp_path):
+    service = build_service(
+        deck_repo=make_repo(tmp_path), metagame_repo=make_metagame_repo(tmp_path)
+    )
     with pytest.raises(ValueError, match="Archetype scope requires an archetype"):
         service.load_decks(scope="archetype", archetype=None, source_filter="mtggoldfish")
 
 
-def test_load_decks_rejects_unsupported_scope():
-    service = build_service()
+def test_load_decks_rejects_unsupported_scope(tmp_path):
+    service = build_service(
+        deck_repo=make_repo(tmp_path), metagame_repo=make_metagame_repo(tmp_path)
+    )
     with pytest.raises(ValueError, match="Unsupported deck load scope: bogus"):
         service.load_decks(scope="bogus", source_filter="mtggoldfish")
 
 
-def test_download_deck_text_uses_injected_dependencies():
+def test_download_deck_text_uses_injected_dependencies(tmp_path):
     download_calls: list[tuple[str, str | None]] = []
     reader_calls = 0
 
@@ -110,7 +121,9 @@ def test_download_deck_text_uses_injected_dependencies():
         reader_calls += 1
         return "deck text"
 
-    service = build_service(deck_downloader=downloader, deck_reader=reader)
+    service = build_service(
+        deck_repo=make_repo(tmp_path), deck_downloader=downloader, deck_reader=reader
+    )
     deck_text = service.download_deck_text("123", source_filter="mtgo")
 
     assert deck_text == "deck text"
@@ -184,6 +197,29 @@ def test_build_daily_average_buffer_accumulates_real_card_counts(tmp_path):
         "Island\x003": 1,  # only deck "b" has >=3 Island
     }
     assert progress_calls == [(1, 2), (2, 2)]
+
+
+def test_build_daily_average_buffer_threads_source_filter_to_downloader(tmp_path):
+    """The configured source_filter must reach the injected downloader unchanged."""
+    repo = make_repo(tmp_path)
+    received_filters: list[str | None] = []
+    decklists = {"a": "4 Brainstorm"}
+
+    def downloader(deck_number: str, source_filter: str | None = None) -> None:
+        received_filters.append(source_filter)
+
+    def reader() -> str:
+        return decklists["a"]
+
+    service = build_service(
+        deck_repo=repo,
+        deck_service=DeckAverager(),
+        deck_downloader=downloader,
+        deck_reader=reader,
+    )
+    service.build_daily_average_buffer([{"number": "a"}], source_filter="mtgo")
+
+    assert received_filters == ["mtgo"]
 
 
 def test_build_daily_average_buffer_market_method_sums_quantities(tmp_path):
@@ -284,15 +320,11 @@ def test_save_deck_returns_file_even_when_db_save_fails(tmp_path):
 # --------------------------------------------------------------------------- deck text
 
 
-def test_build_deck_text_prefers_existing_values(tmp_path):
+def test_build_deck_text_prefers_existing_current_text(tmp_path):
     repo = make_repo(tmp_path)
     repo.set_current_deck_text("existing deck")
     service = build_service(deck_repo=repo)
     assert service.build_deck_text({"main": []}) == "existing deck"
-
-    repo.set_current_deck_text("")
-    repo.set_current_deck({"deck_text": "cached deck"})
-    assert service.build_deck_text({}) == "cached deck"
 
 
 @pytest.mark.parametrize("fallback_key", ["deck_text", "content", "text"])
@@ -304,6 +336,28 @@ def test_build_deck_text_falls_back_through_current_deck_keys(tmp_path, fallback
 
     # No zone cards, so the only source is the current-deck fallback keys.
     assert service.build_deck_text({}) == "fallback deck"
+
+
+def test_build_deck_text_falls_through_to_current_deck_when_zones_yield_empty(tmp_path):
+    """Zones are present but the builder yields empty -> current-deck fallback wins."""
+    repo = make_repo(tmp_path)
+    repo.set_current_deck_text("")
+    repo.set_current_deck({"deck_text": "cached deck"})
+    service = build_service(deck_repo=repo, deck_service=DeckTextBuilder())
+
+    # Both zones empty -> build_deck_text_from_zones returns "" -> fall through.
+    assert service.build_deck_text({"main": [], "side": []}) == "cached deck"
+
+
+def test_build_deck_text_falls_through_when_zone_builder_raises(tmp_path):
+    """A malformed zone entry makes the builder raise; the fallback is returned, not raised."""
+    repo = make_repo(tmp_path)
+    repo.set_current_deck_text("")
+    repo.set_current_deck({"deck_text": "cached deck"})
+    service = build_service(deck_repo=repo, deck_service=DeckTextBuilder())
+
+    # Entry missing the required 'qty' key raises KeyError inside the builder.
+    assert service.build_deck_text({"main": [{"name": "Card"}]}) == "cached deck"
 
 
 def test_build_deck_text_uses_zone_cards_when_needed(tmp_path):
