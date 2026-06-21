@@ -73,6 +73,36 @@ def test_load_store_handles_oserror(monkeypatch, tmp_path: Path, store_service: 
     assert any("Failed to read" in message for message in messages)
 
 
+@pytest.mark.parametrize(
+    "payload",
+    [
+        ["Out 2 Bolt", "In 2 Aether Gust"],
+        "just a string",
+        42,
+    ],
+)
+def test_load_store_coerces_non_dict_json_to_empty_dict(
+    payload, tmp_path: Path, store_service: StoreService
+):
+    """Valid-but-non-object JSON is rejected so callers always get a dict[str, Any]."""
+    from loguru import logger
+
+    path = tmp_path / "store.json"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    messages: list[str] = []
+    sink_id = logger.add(messages.append, level="WARNING")
+    try:
+        result = store_service.load_store(path)
+    finally:
+        logger.remove(sink_id)
+
+    # Contract is dict[str, Any]: a top-level list/str/int must not leak through.
+    assert result == {}
+    assert isinstance(result, dict)
+    assert any("not a JSON object" in message for message in messages)
+
+
 def test_load_store_logs_invalid_json_branch(tmp_path: Path, store_service: StoreService):
     """Invalid JSON triggers the JSON-decode logging branch, not the OSError one."""
     from loguru import logger
@@ -100,8 +130,13 @@ def test_save_store_writes_json_payload(tmp_path: Path, store_service: StoreServ
     store_service.save_store(target, data)
 
     assert target.exists()
-    contents = json.loads(target.read_text(encoding="utf-8"))
+    raw = target.read_text(encoding="utf-8")
+    contents = json.loads(raw)
     assert contents == data
+    # save_store requests indent=2; assert the on-disk shape so a dropped
+    # indent (compact single-line output) is caught.
+    assert "\n" in raw
+    assert '  "guides"' in raw
 
 
 def test_save_store_preserves_unicode(tmp_path: Path, store_service: StoreService):
