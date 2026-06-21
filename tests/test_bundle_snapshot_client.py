@@ -232,6 +232,57 @@ def test_missing_stamp_triggers_download(tmp_client: BundleSnapshotClient) -> No
     assert updated is True
 
 
+@pytest.mark.parametrize("bad_applied_at", ["not-a-number", None, [1, 2, 3], {"x": 1}])
+def test_non_numeric_applied_at_treated_as_stale(
+    tmp_client: BundleSnapshotClient, bad_applied_at: Any
+) -> None:
+    """A non-numeric/None applied_at is treated as stale and forces a re-download.
+
+    Guards the ``except (TypeError, ValueError)`` branch in ``_is_stamp_fresh``:
+    a regression that crashed instead of returning ``False`` would fail here.
+    """
+    tmp_client.stamp_file.parent.mkdir(parents=True, exist_ok=True)
+    tmp_client.stamp_file.write_text(
+        json.dumps({"applied_at": bad_applied_at, "generated_at": "2026-03-26T12:00:00Z"}),
+        encoding="utf-8",
+    )
+    assert tmp_client._is_stamp_fresh() is False
+
+    bundle = _make_bundle(manifest={"generated_at": "2026-04-01T00:00:00Z"})
+    with patch.object(tmp_client, "_http_get_bytes", return_value=BundleResponse(content=bundle)):
+        updated, _ = tmp_client.apply()
+    assert updated is True
+
+
+def test_unreadable_stamp_json_treated_as_missing(tmp_client: BundleSnapshotClient) -> None:
+    """Garbage (non-JSON) stamp content is swallowed and triggers a fresh download.
+
+    Exercises the ``except (OSError, ValueError, JSONDecodeError)`` branch in
+    ``_read_stamp``: a corrupt stamp must not crash ``apply()``; instead the
+    bundle is downloaded and a valid stamp is rewritten.
+    """
+    tmp_client.stamp_file.parent.mkdir(parents=True, exist_ok=True)
+    tmp_client.stamp_file.write_text("{ this is not valid json", encoding="utf-8")
+    assert tmp_client._read_stamp() == {}
+
+    bundle = _make_bundle()
+    with patch.object(tmp_client, "_http_get_bytes", return_value=BundleResponse(content=bundle)):
+        updated, _ = tmp_client.apply()
+
+    assert updated is True
+    rewritten = json.loads(tmp_client.stamp_file.read_text())
+    assert rewritten["generated_at"] == "2026-03-26T12:00:00Z"
+    assert isinstance(rewritten["applied_at"], (int, float))
+
+
+def test_non_dict_stamp_json_treated_as_missing(tmp_client: BundleSnapshotClient) -> None:
+    """A well-formed-but-non-dict stamp (e.g. a JSON list) is treated as missing."""
+    tmp_client.stamp_file.parent.mkdir(parents=True, exist_ok=True)
+    tmp_client.stamp_file.write_text(json.dumps(["not", "a", "dict"]), encoding="utf-8")
+    assert tmp_client._read_stamp() == {}
+    assert tmp_client._is_stamp_fresh() is False
+
+
 # ---------------------------------------------------------------------------
 # Conditional request (304) + manifest short-circuit
 # ---------------------------------------------------------------------------
@@ -473,10 +524,40 @@ def test_malformed_archetype_entry_skipped(tmp_client: BundleSnapshotClient) -> 
     ]
     bundle = _make_bundle(archetypes=archetypes, decks=[])
     with patch.object(tmp_client, "_http_get_bytes", return_value=BundleResponse(content=bundle)):
-        tmp_client.apply()  # should not raise
+        updated, archetypes_by_format = tmp_client.apply()  # should not raise
 
     data = json.loads(tmp_client.archetype_list_cache_file.read_text())
     assert "modern" in data
+
+    # The malformed (format-less) entry is filtered out of the returned payload too,
+    # not just the on-disk cache.
+    assert updated is True
+    assert archetypes_by_format is not None
+    assert set(archetypes_by_format) == {"modern"}
+    assert archetypes_by_format["modern"][0]["href"] == "x"
+
+
+def test_all_malformed_archetypes_return_none(tmp_client: BundleSnapshotClient) -> None:
+    """When every archetype entry is malformed, archetypes_by_format is None but updated is True.
+
+    Covers the ``result_archetypes = archetypes_by_format or None`` branch in
+    ``apply()`` when the dict ends up empty.
+    """
+    archetypes = [
+        {"schema_version": "1", "kind": "archetype_list"},  # missing format
+        {
+            "schema_version": "1",
+            "kind": "archetype_list",
+            "format": "",  # empty format
+            "archetypes": [{"name": "X", "href": "x"}],
+        },
+    ]
+    bundle = _make_bundle(archetypes=archetypes, decks=[])
+    with patch.object(tmp_client, "_http_get_bytes", return_value=BundleResponse(content=bundle)):
+        updated, archetypes_by_format = tmp_client.apply()
+
+    assert updated is True
+    assert archetypes_by_format is None
 
 
 def test_deck_entry_missing_href_skipped(tmp_client: BundleSnapshotClient) -> None:
@@ -680,6 +761,21 @@ def test_on_archetypes_ready_exception_does_not_abort_hydration(
     assert radar_repo.get_radar(_FORMAT, _SLUG) is not None
 
 
+def test_on_archetypes_ready_invoked_with_none_when_no_archetypes(
+    tmp_client: BundleSnapshotClient,
+) -> None:
+    """With no usable archetypes the callback still fires exactly once, with None."""
+    calls: list[dict[str, Any] | None] = []
+
+    bundle = _make_bundle(archetypes=[], decks=[])
+    with patch.object(tmp_client, "_http_get_bytes", return_value=BundleResponse(content=bundle)):
+        updated, archetypes_by_format = tmp_client.apply(on_archetypes_ready=calls.append)
+
+    assert updated is True
+    assert archetypes_by_format is None
+    assert calls == [None]
+
+
 # ---------------------------------------------------------------------------
 # Singleton
 # ---------------------------------------------------------------------------
@@ -807,6 +903,43 @@ def test_apply_mtgo_unmatched_archetype_skipped(
     # "Unknown Archetype" (deck 9002) should not be stored
     text = cache.get("9002")
     assert text is None
+
+
+def test_hydrate_mtgo_returns_merged_count_skipping_unmatched(
+    tmp_client: BundleSnapshotClient, tmp_path: Path
+) -> None:
+    """_hydrate_mtgo_decklists returns the count of matched decks (unmatched excluded).
+
+    The entry has two decks but only one ("Boros Energy") matches a known
+    archetype, so the merged total returned must be exactly 1.
+    """
+    from repositories.deck_text_cache import DeckTextCache
+
+    cache = DeckTextCache(db_path=tmp_path / "deck_cache.db")
+    archetype_entries = [
+        {
+            "schema_version": "1",
+            "kind": "archetype_list",
+            "format": _FORMAT,
+            "archetypes": [{"name": "Boros Energy", "href": _SLUG}],
+        }
+    ]
+    with patch("repositories.deck_text_cache.get_deck_cache", return_value=cache):
+        total = tmp_client._hydrate_mtgo_decklists(
+            [_MTGO_DECKLIST_ENTRY], archetype_entries, now=time.time()
+        )
+
+    assert total == 1
+
+
+def test_hydrate_mtgo_returns_zero_when_nothing_matches(
+    tmp_client: BundleSnapshotClient,
+) -> None:
+    """With no matching archetypes, _hydrate_mtgo_decklists returns 0."""
+    total = tmp_client._hydrate_mtgo_decklists(
+        [_MTGO_DECKLIST_ENTRY], archetype_entries=[], now=time.time()
+    )
+    assert total == 0
 
 
 def test_apply_mtgo_preserves_goldfish_decks(
