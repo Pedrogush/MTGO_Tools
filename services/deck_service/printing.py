@@ -402,10 +402,68 @@ def decklist_with_printings_to_agnostic(text: str, index: PrintingIndex) -> str:
     return _render(rows)
 
 
+# ---------------------------------------------------------------------------
+# Public: mode dispatch (drives the deckbuilder printing-selection dropdown)
+# ---------------------------------------------------------------------------
+
+# Mode keys, ordered as they appear in the deckbuilder dropdown. ``newest_by``
+# and ``after`` additionally need a ``when`` date; the rest ignore it.
+MODE_AGNOSTIC = "agnostic"
+MODE_OLDEST = "oldest"
+MODE_NEWEST = "newest"
+MODE_FULL_ART = "full_art"
+MODE_NEWEST_BY = "newest_by"
+MODE_AFTER = "after"
+
+PRINTING_MODES = (
+    MODE_AGNOSTIC,
+    MODE_OLDEST,
+    MODE_NEWEST,
+    MODE_FULL_ART,
+    MODE_NEWEST_BY,
+    MODE_AFTER,
+)
+
+# Modes that require a ``when`` date argument.
+DATE_MODES = (MODE_NEWEST_BY, MODE_AFTER)
+
+
+def apply_printing_mode(text: str, index: PrintingIndex, mode: str, when: Any = None) -> str:
+    """Re-pick every card's printing according to ``mode`` and render the list.
+
+    A thin dispatcher over the ``decklist_with_*`` helpers so UI code can map a
+    single dropdown selection to the right conversion. ``when`` is only used by
+    the date-based modes (:data:`DATE_MODES`). Raises :class:`ValueError` for an
+    unknown ``mode``.
+    """
+    if mode == MODE_AGNOSTIC:
+        return decklist_with_printings_to_agnostic(text, index)
+    if mode == MODE_OLDEST:
+        return decklist_with_oldest_printings(text, index)
+    if mode == MODE_NEWEST:
+        return decklist_with_newest_printings(text, index)
+    if mode == MODE_FULL_ART:
+        return decklist_with_full_art_printings(text, index)
+    if mode == MODE_NEWEST_BY:
+        return decklist_with_newest_printings_by(text, index, when)
+    if mode == MODE_AFTER:
+        return decklist_with_printings_after(text, index, when)
+    raise ValueError(f"Unknown printing mode: {mode!r}")
+
+
 __all__ = [
+    "DATE_MODES",
+    "MODE_AFTER",
+    "MODE_AGNOSTIC",
+    "MODE_FULL_ART",
+    "MODE_NEWEST",
+    "MODE_NEWEST_BY",
+    "MODE_OLDEST",
     "MTG_RELEASE_YEAR",
+    "PRINTING_MODES",
     "ParsedCard",
     "PrintingIndex",
+    "apply_printing_mode",
     "decklist_with_full_art_printings",
     "decklist_with_newest_printings",
     "decklist_with_newest_printings_by",

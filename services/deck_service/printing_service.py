@@ -39,3 +39,8 @@ class DeckPrintingMixin:
 
     def decklist_with_printings_to_agnostic(self, text: str, index: PrintingIndex) -> str:
         return printing.decklist_with_printings_to_agnostic(text, index)
+
+    def apply_printing_mode(
+        self, text: str, index: PrintingIndex, mode: str, when: Any = None
+    ) -> str:
+        return printing.apply_printing_mode(text, index, mode, when)

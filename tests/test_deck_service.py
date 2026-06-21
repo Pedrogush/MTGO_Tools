@@ -158,3 +158,30 @@ def test_build_card_list_narrows_integers_to_int(deck_service):
 
     assert isinstance(mainboard_dict["Island"], int)
     assert isinstance(mainboard_dict["Lightning Bolt"], float)
+
+
+def test_analyze_deck_strips_trailing_printing_id_pointer(deck_service):
+    """A decklist carrying per-card printing ids (issue #792) parses by name.
+
+    The printing-selection helpers render lines as ``N NAME <scryfall-uuid>``;
+    name-based analysis must drop that trailing id rather than fold it into the
+    card name.
+    """
+    uuid_a = "e3285e6b-3e79-4d7c-bf96-d920f973b122"
+    uuid_b = "a1b2c3d4-5e6f-4a8b-9c0d-1e2f3a4b5c6d"
+    deck_text = f"4 Lightning Bolt {uuid_a}\n2 Island {uuid_b}\n"
+
+    stats = deck_service.analyze_deck(deck_text)
+    mainboard_dict = dict(stats["mainboard_cards"])
+
+    assert mainboard_dict == {"Lightning Bolt": 4, "Island": 2}
+
+
+def test_analyze_deck_keeps_names_that_merely_look_pointer_ish(deck_service):
+    """Only a real Scryfall-shaped uuid is stripped; ordinary names are intact."""
+    deck_text = "1 Look at Me, I'm the DCI\n3 R&D's Secret Lair\n"
+
+    stats = deck_service.analyze_deck(deck_text)
+    mainboard_dict = dict(stats["mainboard_cards"])
+
+    assert mainboard_dict == {"Look at Me, I'm the DCI": 1, "R&D's Secret Lair": 3}

@@ -7,6 +7,8 @@ from typing import Any
 
 import wx
 
+from services.deck_service.printing import DATE_MODES as PRINTING_DATE_MODES
+from services.deck_service.printing import PRINTING_MODES
 from utils.constants import DARK_ACCENT, DARK_ALT, DARK_PANEL, LIGHT_TEXT, SUBDUED_TEXT
 from utils.i18n import translate as _i18n_translate
 from widgets.mana_icon_factory import ManaIconFactory
@@ -80,6 +82,7 @@ class CardTablePanel(CardTablePanelHandlersMixin, CardTablePanelPropertiesMixin,
         on_view_mode_change: Callable[[str, str], None] | None = None,
         on_pile_sort_change: Callable[[str, str], None] | None = None,
         on_zone_transfer: Callable[[str, list[str], wx.Point], bool] | None = None,
+        on_printing_mode: Callable[[str, str | None], None] | None = None,
     ) -> None:
         super().__init__(parent)
         self.zone = zone
@@ -96,6 +99,7 @@ class CardTablePanel(CardTablePanelHandlersMixin, CardTablePanelPropertiesMixin,
         self._on_view_mode_change = on_view_mode_change
         self._on_pile_sort_change = on_pile_sort_change
         self._on_zone_transfer = on_zone_transfer
+        self._on_printing_mode = on_printing_mode
 
         self.cards: list[dict[str, Any]] = []
         self.selected_name: str | None = None
@@ -128,6 +132,21 @@ class CardTablePanel(CardTablePanelHandlersMixin, CardTablePanelPropertiesMixin,
         self.pile_sort_button.SetToolTip(self._t("tabs.view.pile_sort"))
         self.pile_sort_button.Bind(wx.EVT_BUTTON, self._open_pile_sort_menu)
         header.Add(self.pile_sort_button, 0, wx.LEFT, 4)
+
+        # Printing-selection dropdown (issue #792, part 3): re-pick the art/edition
+        # used for every card in the deck. Separated from the view buttons by a
+        # ``|`` divider. Only shown when a handler is wired (the mainboard zone).
+        self.printing_button: wx.Button | None = None
+        if self._on_printing_mode is not None:
+            divider = wx.StaticText(self, label="|")
+            divider.SetForegroundColour(SUBDUED_TEXT)
+            header.Add(divider, 0, wx.ALIGN_CENTER_VERTICAL | wx.LEFT, 6)
+            self.printing_button = wx.Button(
+                self, label=self._t("tabs.view.printing"), style=wx.BU_EXACTFIT
+            )
+            self.printing_button.SetToolTip(self._t("tabs.view.printing.tooltip"))
+            self.printing_button.Bind(wx.EVT_BUTTON, self._open_printing_menu)
+            header.Add(self.printing_button, 0, wx.LEFT, 6)
 
         outer.Add(header, 0, wx.EXPAND | wx.BOTTOM, 4)
 
@@ -284,6 +303,36 @@ class CardTablePanel(CardTablePanelHandlersMixin, CardTablePanelPropertiesMixin,
             menu.Bind(wx.EVT_MENU, lambda _evt, m=sort_mode: self.set_pile_sort(m), item)
         self.PopupMenu(menu, self.pile_sort_button.GetPosition())
         menu.Destroy()
+
+    def _open_printing_menu(self, _event: wx.CommandEvent) -> None:
+        """Show the printing-selection menu and dispatch the chosen mode."""
+        menu = wx.Menu()
+        for mode in PRINTING_MODES:
+            item = menu.Append(wx.ID_ANY, self._t(f"tabs.view.printing.{mode}"))
+            menu.Bind(wx.EVT_MENU, lambda _evt, m=mode: self._on_printing_choice(m), item)
+        anchor = self.printing_button or self
+        self.PopupMenu(menu, anchor.GetPosition())
+        menu.Destroy()
+
+    def _on_printing_choice(self, mode: str) -> None:
+        if self._on_printing_mode is None:
+            return
+        when: str | None = None
+        if mode in PRINTING_DATE_MODES:
+            dialog = wx.TextEntryDialog(
+                self,
+                self._t("tabs.view.printing.date_prompt"),
+                self._t("tabs.view.printing.date_title"),
+            )
+            try:
+                if dialog.ShowModal() != wx.ID_OK:
+                    return
+                when = dialog.GetValue().strip()
+            finally:
+                dialog.Destroy()
+            if not when:
+                return
+        self._on_printing_mode(mode, when)
 
     def _switch_content_page(self) -> None:
         if not self.cards:

@@ -145,6 +145,36 @@ class DeckContentHandlers(_Base):
         self._set_status("app.status.deck_download_error", error=error)
         wx.MessageBox(f"Failed to download deck:\n{error}", "Deck Download", wx.OK | wx.ICON_ERROR)
 
+    def _normalize_deck_printings(self: AppFrame, deck_text: str) -> str:
+        """Normalise a decklist's printing pointers on entry (issue #792, part 4).
+
+        Runs :func:`format_decklist_on_load` so a list is stored at the most
+        restrictive printing format that fits every card. Requires the printing
+        index (``ImageService.bulk_data_by_name``); when it has not loaded yet we
+        leave the text untouched. As a safety net we only adopt the normalised
+        text when it preserves every card — ``format_decklist_on_load`` drops
+        names it cannot resolve, and a stale/partial index must never silently
+        delete a card from a freshly loaded deck.
+        """
+        index = getattr(self.controller.image_service, "bulk_data_by_name", None)
+        if not index or not deck_text.strip():
+            return deck_text
+        try:
+            normalized = self.controller.deck_service.format_decklist_on_load(deck_text, index)
+        except Exception:
+            logger.exception("format_decklist_on_load failed; keeping deck text as-is")
+            return deck_text
+        before = self.controller.deck_service.analyze_deck(deck_text)["total_cards"]
+        after = self.controller.deck_service.analyze_deck(normalized)["total_cards"]
+        if after < before:
+            logger.warning(
+                "Printing normalisation would drop cards ({} -> {}); keeping original text",
+                before,
+                after,
+            )
+            return deck_text
+        return normalized
+
     def _on_deck_content_ready(self: AppFrame, deck_text: str, source: str = "manual") -> None:
         if source in {"manual", "automation", "average"}:
             self.controller.deck_repo.set_current_deck(None)
@@ -155,6 +185,7 @@ class DeckContentHandlers(_Base):
             self.controller.deck_repo.get_current_deck_key(),
         )
         render_t0 = time.perf_counter()
+        deck_text = self._normalize_deck_printings(deck_text)
         self.controller.deck_repo.set_current_deck_text(deck_text)
         with perf_phase("analyze_deck + zone sort"):
             stats = self.controller.deck_service.analyze_deck(deck_text)

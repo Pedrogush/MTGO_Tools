@@ -277,3 +277,59 @@ def test_helpers_work_against_real_fixture_index():
 def test_module_all_is_importable():
     for symbol in printing.__all__:
         assert hasattr(printing, symbol)
+
+
+# ---------------------------------------------------------------------------
+# apply_printing_mode: the dropdown dispatcher
+# ---------------------------------------------------------------------------
+
+
+def test_apply_printing_mode_matches_underlying_helpers():
+    text = "1 Lightning Bolt"
+    assert printing.apply_printing_mode(text, INDEX, printing.MODE_AGNOSTIC) == text
+    assert (
+        printing.apply_printing_mode(text, INDEX, printing.MODE_OLDEST)
+        == "1 Lightning Bolt bolt-lea"
+    )
+    assert (
+        printing.apply_printing_mode(text, INDEX, printing.MODE_NEWEST)
+        == "1 Lightning Bolt bolt-2xm"
+    )
+    assert (
+        printing.apply_printing_mode("1 Island", INDEX, printing.MODE_FULL_ART)
+        == "1 Island isl-ust"
+    )
+
+
+def test_apply_printing_mode_date_modes_use_when():
+    assert (
+        printing.apply_printing_mode(
+            "1 Lightning Bolt", INDEX, printing.MODE_NEWEST_BY, "2010-01-01"
+        )
+        == "1 Lightning Bolt bolt-m10"
+    )
+    assert (
+        printing.apply_printing_mode("1 Lightning Bolt", INDEX, printing.MODE_AFTER, "1995-01-01")
+        == "1 Lightning Bolt bolt-m10"
+    )
+
+
+def test_apply_printing_mode_rejects_unknown_mode():
+    with pytest.raises(ValueError):
+        printing.apply_printing_mode("1 Island", INDEX, "nonsense")
+
+
+def test_apply_printing_mode_exposed_on_deck_service():
+    service = DeckService(deck_repository=object(), metagame_repository=object())
+    assert (
+        service.apply_printing_mode("1 Lightning Bolt", INDEX, printing.MODE_NEWEST)
+        == "1 Lightning Bolt bolt-2xm"
+    )
+
+
+def test_all_printing_modes_are_dispatchable():
+    # Every advertised mode must dispatch without raising (date modes need a date).
+    for mode in printing.PRINTING_MODES:
+        when = "2010-01-01" if mode in printing.DATE_MODES else None
+        result = printing.apply_printing_mode("1 Lightning Bolt", INDEX, mode, when)
+        assert result.startswith("1 Lightning Bolt")

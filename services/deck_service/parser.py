@@ -2,9 +2,21 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any
+
+# A trailing Scryfall printing-id pointer (``8-4-4-4-12`` hex), as emitted by the
+# printing-selection helpers (see :mod:`services.deck_service.printing`). It is
+# stripped from the card name so name-based analysis keeps working on decklists
+# that carry per-card art selections. Set-code pointers are intentionally *not*
+# stripped here — they need the printing index to be told apart from real names
+# that happen to end in an upper-case token (e.g. "Look at Me, I'm the DCI").
+_PRINTING_ID_SUFFIX = re.compile(
+    r"\s+[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+    re.IGNORECASE,
+)
 
 
 @dataclass(frozen=True)
@@ -97,7 +109,7 @@ class DeckParserMixin:
                     continue
 
                 card_amount = float(parts[0])
-                card_name = parts[1].strip()
+                card_name = _PRINTING_ID_SUFFIX.sub("", parts[1].strip())
 
                 yield DeckEntry(count=card_amount, name=card_name, is_sideboard=is_sideboard)
             except (ValueError, IndexError):

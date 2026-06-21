@@ -13,7 +13,9 @@ from __future__ import annotations
 from services.deck_service.averager import DeckAverager
 from services.deck_service.parser import DeckParser
 from services.deck_service.printing import (
+    PRINTING_MODES,
     ParsedCard,
+    apply_printing_mode,
     decklist_with_full_art_printings,
     decklist_with_newest_printings,
     decklist_with_newest_printings_by,
@@ -49,8 +51,10 @@ __all__ = [
     "DeckParser",
     "DeckService",
     "DeckTextBuilder",
+    "PRINTING_MODES",
     "ParsedCard",
     "ZoneUpdateResult",
+    "apply_printing_mode",
     "decklist_with_full_art_printings",
     "decklist_with_newest_printings",
     "decklist_with_newest_printings_by",
