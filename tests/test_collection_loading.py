@@ -7,6 +7,7 @@ exhaustively in ``test_card_repository.py`` and are not re-tested here.
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from repositories.card_repository import CardRepository
@@ -29,6 +30,8 @@ def test_collection_service_loads_inventory_from_export(tmp_path):
     # that ownership lookups are case-insensitive (issue #469).
     assert service.get_owned_count("Lightning Bolt") == 5  # 4 + 1 duplicate entry
     assert service.get_owned_count("Island") == 12
+    # Spell Pierce is stored with a numeric-string quantity in the fixture; the
+    # real parser coerces "2" -> 2 (string-quantity coercion).
     assert service.get_owned_count("Spell Pierce") == 2
     # Lookups are case-insensitive regardless of caller casing.
     assert service.get_owned_count("lightning bolt") == 5
@@ -39,39 +42,32 @@ def test_collection_service_short_circuits_when_already_loaded(tmp_path):
     service = CollectionService(card_repository=repo)
 
     temp_file = tmp_path / "collection.json"
-    temp_file.write_text(FIXTURE_PATH.read_text(encoding="utf-8"), encoding="utf-8")
 
-    calls = {"count": 0}
-    original = repo.load_collection_from_file
+    def write(quantity: int) -> None:
+        temp_file.write_text(
+            json.dumps([{"name": "Island", "quantity": quantity}]), encoding="utf-8"
+        )
 
-    def counting_load(path):
-        calls["count"] += 1
-        return original(path)
-
-    repo.load_collection_from_file = counting_load  # type: ignore[method-assign]
-
+    write(7)
     assert service.load_collection(temp_file)
-    assert calls["count"] == 1
+    assert service.get_owned_count("Island") == 7
 
-    # A second load without force must not re-read the file.
+    # Mutate the file on disk, then load again without force: the cached
+    # inventory is reused, so the new quantity is *not* observed.
+    write(20)
     assert service.load_collection(temp_file)
-    assert calls["count"] == 1
+    assert service.get_owned_count("Island") == 7
 
-    # force=True triggers a fresh read.
+    # force=True re-reads the file and the new quantity becomes visible.
     assert service.load_collection(temp_file, force=True)
-    assert calls["count"] == 2
+    assert service.get_owned_count("Island") == 20
 
 
-def test_collection_service_returns_false_on_read_error(tmp_path):
+def test_collection_service_returns_false_on_bad_filepath():
     repo = CardRepository()
     service = CollectionService(card_repository=repo)
 
-    temp_file = tmp_path / "collection.json"
-    temp_file.write_text(FIXTURE_PATH.read_text(encoding="utf-8"), encoding="utf-8")
-
-    def boom(path):
-        raise RuntimeError("disk on fire")
-
-    repo.load_collection_from_file = boom  # type: ignore[method-assign]
-
-    assert service.load_collection(temp_file) is False
+    # Passing a non-Path object makes the real ``filepath.exists()`` probe raise
+    # inside ``load_collection``; the except branch must swallow it and report
+    # failure rather than propagate. No internal method is replaced.
+    assert service.load_collection("not-a-path-object") is False  # type: ignore[arg-type]
