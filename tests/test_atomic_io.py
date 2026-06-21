@@ -46,10 +46,51 @@ def test_atomic_write_json_compact(tmp_path: Path) -> None:
     assert "\n" not in contents
 
 
+def test_atomic_write_json_preserves_non_ascii_as_utf8(tmp_path: Path) -> None:
+    """Non-ASCII must survive as literal UTF-8 bytes, never \\u-escaped.
+
+    This is the central contract: msgspec always emits UTF-8, and the
+    ``ensure_ascii`` flag is accepted but ignored. A regression to
+    ``json.dumps(ensure_ascii=True)`` would silently corrupt accented
+    card names while leaving the roundtrip assertion green, so we pin
+    the on-disk bytes explicitly.
+    """
+    target = tmp_path / "data.json"
+    payload = {"name": "Lim-Dûl's Vault", "set": "Æther"}
+
+    # ensure_ascii=True must be ignored — output stays literal UTF-8.
+    atomic_write_json(target, payload, ensure_ascii=True)
+
+    raw = target.read_bytes()
+    assert "Lim-Dûl's Vault".encode() in raw
+    assert "Æther".encode() in raw
+    assert b"\\u" not in raw
+    assert json.loads(raw.decode("utf-8")) == payload
+
+
+def test_atomic_write_json_separators_is_a_noop(tmp_path: Path) -> None:
+    """The ``separators`` parameter is accepted for API compatibility but ignored."""
+    target = tmp_path / "data.json"
+    payload = {"a": 1, "b": [1, 2, 3]}
+    atomic_write_json(target, payload, separators=(",", ":"))
+    contents = target.read_text(encoding="utf-8")
+    # Default indent=2 still applies; separators has no effect on the output.
+    assert json.loads(contents) == payload
+    assert "\n  " in contents
+
+
 def test_atomic_write_stream_roundtrip(tmp_path: Path) -> None:
     target = tmp_path / "stream.bin"
     atomic_write_stream(target, [b"foo", b"bar", b"baz"])
     assert target.read_bytes() == b"foobarbaz"
+
+
+def test_atomic_write_stream_empty_iterable_truncates(tmp_path: Path) -> None:
+    """An empty iterable writes a valid empty file, truncating prior contents."""
+    target = tmp_path / "stream.bin"
+    target.write_bytes(b"old contents")
+    atomic_write_stream(target, [])
+    assert target.read_bytes() == b""
 
 
 def test_atomic_write_stream_overwrites_existing(tmp_path: Path) -> None:
@@ -111,6 +152,10 @@ def test_replace_reraises_after_exhausting_retries(
 
     with pytest.raises(PermissionError):
         atomic_write_text(target, "new")
+
+    # The finally branch must clean up the orphaned temp file even when
+    # the replace never succeeds, leaving no .data.txt.*.tmp behind.
+    assert list(tmp_path.glob(".data.txt.*.tmp")) == []
 
 
 def test_get_path_lock_is_stable_across_spellings(tmp_path: Path) -> None:
