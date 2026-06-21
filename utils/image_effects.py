@@ -46,6 +46,35 @@ def blend_rgb_bytes(data1: bytes, data2: bytes, w: int, h: int, alpha: float) ->
     return PilImage.blend(pil1, pil2, alpha).tobytes()
 
 
+def composite_rounded_on_background_bytes(
+    rgb_data: bytes,
+    existing_alpha: bytes,
+    w: int,
+    h: int,
+    radius: int,
+    bg_rgb: tuple[int, int, int],
+) -> bytes:
+    """Flatten a rounded card's RGB onto an opaque ``bg_rgb`` background.
+
+    Pure-byte core of :func:`composite_rounded_on_background`. ``rgb_data`` is a
+    ``w*h`` RGB buffer (3 bytes/pixel); ``existing_alpha`` is the matching
+    ``w*h`` per-pixel alpha buffer. The rounded-corner mask is combined with the
+    existing alpha (per-pixel ``min``) and used to blend the card over ``bg_rgb``
+    via ``out = rgb*alpha + bg*(1-alpha)``. Returns a ``w*h`` RGB byte buffer
+    with no alpha channel.
+    """
+    alpha = (
+        np.frombuffer(
+            apply_rounded_corner_alpha_bytes(existing_alpha, w, h, radius), dtype=np.uint8
+        ).astype(np.float32)
+        / 255.0
+    )
+    rgb = np.frombuffer(rgb_data, dtype=np.uint8).astype(np.float32).reshape(-1, 3)
+    bg = np.array(bg_rgb, dtype=np.float32)
+    out = (rgb * alpha[:, None] + bg * (1.0 - alpha[:, None])).astype(np.uint8)
+    return out.tobytes()
+
+
 def apply_rounded_corner_alpha(image: wx.Image, radius: int) -> wx.Image:
     """Return a copy of ``image`` with a rounded-corner alpha mask applied.
 
@@ -85,15 +114,9 @@ def composite_rounded_on_background(
     if not img.HasAlpha():
         img.InitAlpha()
     w, h = img.GetWidth(), img.GetHeight()
-    alpha = (
-        np.frombuffer(
-            apply_rounded_corner_alpha_bytes(bytes(img.GetAlpha()), w, h, radius), dtype=np.uint8
-        ).astype(np.float32)
-        / 255.0
+    out = composite_rounded_on_background_bytes(
+        bytes(img.GetData()), bytes(img.GetAlpha()), w, h, radius, bg_rgb
     )
-    rgb = np.frombuffer(bytes(img.GetData()), dtype=np.uint8).astype(np.float32).reshape(-1, 3)
-    bg = np.array(bg_rgb, dtype=np.float32)
-    out = (rgb * alpha[:, None] + bg * (1.0 - alpha[:, None])).astype(np.uint8)
     result = wx.Image(w, h)
-    result.SetData(out.tobytes())
+    result.SetData(out)
     return result

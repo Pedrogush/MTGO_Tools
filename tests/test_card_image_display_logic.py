@@ -20,6 +20,7 @@ import pytest
 from utils.image_effects import (
     apply_rounded_corner_alpha_bytes,
     blend_rgb_bytes,
+    composite_rounded_on_background_bytes,
     rounded_corner_mask_bytes,
 )
 
@@ -124,11 +125,12 @@ def test_blend_output_length_matches_input():
 
 @pytest.mark.parametrize("alpha", [0.0, 0.35, 1.0])
 def test_blend_non_square_matches_reference(alpha):
-    """Blend must be correct when width != height.
+    """Blend must be correct for a non-square (width != height) buffer.
 
-    ``blend_rgb_bytes`` reconstructs PIL images from ``(w, h)``; swapping the
-    two would only ever be caught by a rectangular image, since square inputs
-    are dimension-symmetric.  This guards against a width/height transposition.
+    The blend is a flat per-byte operation, so a w/h swap is *not* observable
+    here (PIL ``frombytes`` over a contiguous RGB buffer is dimension-invariant).
+    This case simply exercises a rectangular size to confirm the output length
+    and per-pixel math hold when the buffer is not a perfect square.
     """
     nw, nh = 6, 10  # deliberately non-square so w and h are not interchangeable
     rng = random.Random(7)
@@ -278,3 +280,87 @@ def test_corners_preserves_partial_alpha_in_interior():
     assert (
         result[center_idx] == partial_value
     ), f"Interior partial alpha {partial_value} was changed to {result[center_idx]}"
+
+
+# ── composite-on-background tests (exercise composite_rounded_on_background) ───
+
+BG = (33, 66, 99)  # distinctive opaque background colour
+
+
+def test_composite_interior_is_card_rgb():
+    """Fully-opaque interior pixels must equal the card RGB, untouched by bg.
+
+    Inside the rounded rect alpha is 255, so ``rgb*1 + bg*0`` must reproduce the
+    card pixel exactly. A dropped alpha term or a bg/fg swap would surface here.
+    """
+    card_rgb = (200, 40, 150)
+    rgb_in = bytes(list(card_rgb) * (RW * RH))
+    alpha_in = bytes([255] * RW * RH)
+
+    out = composite_rounded_on_background_bytes(rgb_in, alpha_in, RW, RH, radius=4, bg_rgb=BG)
+
+    assert len(out) == RW * RH * 3
+    cx, cy = RW // 2, RH // 2
+    base = (cy * RW + cx) * 3
+    assert tuple(out[base : base + 3]) == card_rgb
+
+
+def test_composite_corner_is_background():
+    """A true corner pixel (mask alpha 0) must become the background colour.
+
+    With alpha 0 the blend is ``rgb*0 + bg*1``; if the ``(1-alpha)`` term were
+    dropped the corner would show the card pixel instead of ``bg``.
+    """
+    card_rgb = (200, 40, 150)
+    rgb_in = bytes(list(card_rgb) * (RW * RH))
+    alpha_in = bytes([255] * RW * RH)
+
+    out = composite_rounded_on_background_bytes(rgb_in, alpha_in, RW, RH, radius=4, bg_rgb=BG)
+
+    assert tuple(out[0:3]) == BG  # top-left corner is outside the rounded rect
+
+
+def test_composite_mid_alpha_is_weighted_blend():
+    """A partially-transparent interior pixel must be the weighted card/bg blend."""
+    card_rgb = (200, 40, 150)
+    rgb_in = bytes(list(card_rgb) * (RW * RH))
+    # Half-transparent everywhere; interior keeps alpha=128 after the mask min.
+    alpha_in = bytes([128] * RW * RH)
+
+    out = composite_rounded_on_background_bytes(rgb_in, alpha_in, RW, RH, radius=4, bg_rgb=BG)
+
+    cx, cy = RW // 2, RH // 2
+    base = (cy * RW + cx) * 3
+    a = 128 / 255.0
+    for k in range(3):
+        expected = int(card_rgb[k] * a + BG[k] * (1.0 - a))
+        assert (
+            abs(out[base + k] - expected) <= 1
+        ), f"channel {k}: expected ~{expected}, got {out[base + k]}"
+
+
+def test_composite_output_has_no_alpha_length():
+    """Output is RGB only (no alpha channel): 3 bytes per pixel."""
+    rgb_in = bytes([10] * RW * RH * 3)
+    alpha_in = bytes([255] * RW * RH)
+    out = composite_rounded_on_background_bytes(rgb_in, alpha_in, RW, RH, radius=2, bg_rgb=BG)
+    assert len(out) == RW * RH * 3
+
+
+def test_composite_respects_existing_transparent_pixel():
+    """An interior pixel already alpha=0 must show the background, not the card.
+
+    The mask is combined with the existing alpha via ``min``, so a transparent
+    interior pixel stays transparent and blends to ``bg``.
+    """
+    card_rgb = (200, 40, 150)
+    rgb_in = bytes(list(card_rgb) * (RW * RH))
+    cx, cy = RW // 2, RH // 2
+    alpha_list = [255] * (RW * RH)
+    alpha_list[cy * RW + cx] = 0
+    alpha_in = bytes(alpha_list)
+
+    out = composite_rounded_on_background_bytes(rgb_in, alpha_in, RW, RH, radius=4, bg_rgb=BG)
+
+    base = (cy * RW + cx) * 3
+    assert tuple(out[base : base + 3]) == BG
