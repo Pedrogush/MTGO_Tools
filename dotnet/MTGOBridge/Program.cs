@@ -675,9 +675,17 @@ static T SafeGet<T>(object? target, string propertyName, T defaultValue = defaul
     }
 }
 
-static async Task RunWatchLoopAsync(JsonSerializerOptions options, TimeSpan? interval = null)
+static async Task RunWatchLoopAsync(
+    JsonSerializerOptions options,
+    TimeSpan? timerInterval = null,
+    TimeSpan? currencyInterval = null)
 {
-    interval ??= TimeSpan.FromMilliseconds(500);
+    // The challenge-timer read is cheap and needs second-level freshness; the
+    // currency read scans the whole frozen collection (seconds, remote) and
+    // changes slowly — leagues run well over an hour — so the two are split into
+    // independent loops at very different cadences instead of one combined tick.
+    timerInterval ??= TimeSpan.FromMilliseconds(500);
+    currencyInterval ??= TimeSpan.FromMinutes(10);
     Console.OutputEncoding = Encoding.UTF8;
 
     using var cts = new CancellationTokenSource();
@@ -687,41 +695,150 @@ static async Task RunWatchLoopAsync(JsonSerializerOptions options, TimeSpan? int
         cts.Cancel();
     };
 
-    while (!cts.IsCancellationRequested)
+    // MTGOSDK shares a single remoting channel, so the two loops must never call
+    // it concurrently. The fast loop grabs this without blocking and skips its SDK
+    // read (reusing the cached timers) whenever the slow currency scan holds it.
+    using var sdkLock = new SemaphoreSlim(1, 1);
+    var cache = new WatchCache();
+
+    // Task.Run so each loop gets its own thread: the SDK reads are synchronous
+    // blocking calls, and SemaphoreSlim.WaitAsync completes synchronously on a
+    // free lock, so without this the first loop would run inline (through its
+    // slow first scan) before the second ever started.
+    var currencyTask = Task.Run(
+        () => RunCurrencyRefreshLoopAsync(sdkLock, cache, currencyInterval.Value, cts.Token),
+        cts.Token);
+    var timerTask = Task.Run(
+        () => RunChallengeTimerLoopAsync(options, sdkLock, cache, timerInterval.Value, cts.Token),
+        cts.Token);
+
+    try
     {
-        WatchSnapshot snapshot;
+        // If either loop exits (cancellation or fatal error), tear the other down.
+        await Task.WhenAny(currencyTask, timerTask);
+    }
+    finally
+    {
+        cts.Cancel();
         try
         {
-            var timers = GetChallengeTimers();
-            var currency = GetCurrencySnapshot();
-            snapshot = new WatchSnapshot(DateTimeOffset.UtcNow, timers, currency, null);
+            await Task.WhenAll(currencyTask, timerTask);
+        }
+        catch (OperationCanceledException)
+        {
+            // Expected on shutdown.
+        }
+    }
+}
+
+// Drives output cadence. Emits one snapshot per tick carrying fresh challenge
+// timers plus the most recently cached currency. Uses a non-blocking lock
+// acquisition so a long currency scan never stalls timer output: if the lock is
+// busy it reuses the previous timer reading for that tick.
+static async Task RunChallengeTimerLoopAsync(
+    JsonSerializerOptions options,
+    SemaphoreSlim sdkLock,
+    WatchCache cache,
+    TimeSpan interval,
+    CancellationToken ct)
+{
+    var primed = false;
+    while (!ct.IsCancellationRequested)
+    {
+        string? error = null;
+        // Until the first reading lands, block for the lock so the timer loop owns
+        // the cold attach; afterwards use a non-blocking grab so the periodic
+        // currency scan can never stall timer output (it reuses cached timers).
+        var gotLock = primed ? await sdkLock.WaitAsync(0, ct) : await TryAcquireAsync(sdkLock, ct);
+        if (gotLock)
+        {
+            try
+            {
+                cache.Timers = GetChallengeTimers();
+            }
+            catch (Exception ex)
+            {
+                error = ex.Message;
+            }
+            finally
+            {
+                // Prime after the first acquired attempt (success or failure) so
+                // the cold attach is paid here and the currency loop can proceed.
+                if (!primed)
+                {
+                    primed = true;
+                    cache.MarkPrimed();
+                }
+                sdkLock.Release();
+            }
+        }
+
+        var snapshot = new WatchSnapshot(DateTimeOffset.UtcNow, cache.Timers, cache.Currency, error);
+        Console.WriteLine(JsonSerializer.Serialize(snapshot, options));
+
+        try
+        {
+            await Task.Delay(interval, ct);
+        }
+        catch (TaskCanceledException)
+        {
+            break;
+        }
+    }
+}
+
+// Blocking lock acquisition that reports cancellation as a bool instead of throwing.
+static async Task<bool> TryAcquireAsync(SemaphoreSlim sdkLock, CancellationToken ct)
+{
+    try
+    {
+        await sdkLock.WaitAsync(ct);
+        return true;
+    }
+    catch (OperationCanceledException)
+    {
+        return false;
+    }
+}
+
+// Refreshes the cached currency on a coarse cadence. Holds the SDK lock for the
+// duration of the (slow) scan; the timer loop keeps emitting meanwhile.
+static async Task RunCurrencyRefreshLoopAsync(
+    SemaphoreSlim sdkLock,
+    WatchCache cache,
+    TimeSpan interval,
+    CancellationToken ct)
+{
+    // Let the timer loop take (and warm) the SDK first so its initial reading
+    // isn't queued behind a full currency scan.
+    try
+    {
+        await cache.Primed.WaitAsync(ct);
+    }
+    catch (OperationCanceledException)
+    {
+        return;
+    }
+
+    while (!ct.IsCancellationRequested)
+    {
+        await sdkLock.WaitAsync(ct);
+        try
+        {
+            cache.Currency = GetCurrencySnapshot();
         }
         catch (Exception ex)
         {
-            CurrencySnapshot fallbackCurrency;
-            try
-            {
-                fallbackCurrency = GetCurrencySnapshot();
-            }
-            catch (Exception innerEx)
-            {
-                fallbackCurrency = new CurrencySnapshot(null, null, null, innerEx.Message);
-            }
-
-            snapshot = new WatchSnapshot(
-                DateTimeOffset.UtcNow,
-                Array.Empty<ChallengeTimerSnapshot>(),
-                fallbackCurrency,
-                ex.Message
-            );
+            cache.Currency = new CurrencySnapshot(null, null, null, ex.Message);
         }
-
-        var line = JsonSerializer.Serialize(snapshot, options);
-        Console.WriteLine(line);
+        finally
+        {
+            sdkLock.Release();
+        }
 
         try
         {
-            await Task.Delay(interval.Value, cts.Token);
+            await Task.Delay(interval, ct);
         }
         catch (TaskCanceledException)
         {
@@ -1148,6 +1265,37 @@ public sealed record WatchSnapshot(
     CurrencySnapshot? Currency,
     string? Error
 );
+
+// Shared between the watch loops: the timer loop publishes fresh timers and reads
+// the currency the currency loop publishes. Fields are volatile because the loops
+// run on different tasks; record/list references are assigned atomically.
+sealed class WatchCache
+{
+    private volatile IReadOnlyList<ChallengeTimerSnapshot> _timers =
+        Array.Empty<ChallengeTimerSnapshot>();
+    private volatile CurrencySnapshot? _currency;
+    private readonly TaskCompletionSource _primed =
+        new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    public IReadOnlyList<ChallengeTimerSnapshot> Timers
+    {
+        get => _timers;
+        set => _timers = value;
+    }
+
+    public CurrencySnapshot? Currency
+    {
+        get => _currency;
+        set => _currency = value;
+    }
+
+    // Completes once the timer loop has taken its first SDK reading. The currency
+    // loop waits on this so the (slow, cold) initial SDK attach is paid by the
+    // priority timer read instead of the currency scan monopolising startup.
+    public Task Primed => _primed.Task;
+
+    public void MarkPrimed() => _primed.TrySetResult();
+}
 
 public sealed record CollectionCard(int Id, string Name, int Quantity);
 
