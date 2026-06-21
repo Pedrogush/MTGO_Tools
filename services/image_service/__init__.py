@@ -5,7 +5,10 @@ Split by responsibility into internal modules:
 - ``schemas``: constants, msgspec decoders, :class:`CardImageRequest`
 - ``path_resolver``: stored-path normalization helpers
 - ``disk_cache``: :class:`CardImageCache` (SQLite + filesystem)
-- ``downloader``: :class:`BulkImageDownloader` + high-level convenience helpers
+- ``downloader``: :class:`BulkImageDownloader` (composed) + high-level helpers
+- ``bulk_metadata``: bulk-metadata lifecycle for the downloader (mixin)
+- ``local_resolver``: local image-index resolution + API fallbacks (mixin)
+- ``image_writer``: per-face image fetch/write/cache record (mixin)
 - ``bulk_data``: bulk data freshness checks and metadata downloads (mixin)
 - ``printing_index``: printing index build/load functions + mixin
 - ``metadata``: on-demand printings metadata lookups (mixin)
