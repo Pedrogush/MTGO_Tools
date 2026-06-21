@@ -1,16 +1,20 @@
 name: Refresh Generated Reports
 
 # LOC_REPORT.md and docs/diagrams/* are derived from the whole source tree, so
-# regenerating them inside every PR caused constant merge conflicts and stale
-# freshness-check failures. Instead of gating PRs on them, this workflow
-# regenerates them once a day (and on demand) and, when either report actually
-# changed, opens a pull request to the default branch.
+# committing them into `main` caused constant merge conflicts and stale
+# freshness-check failures. Instead of merging them back, this workflow
+# publishes them to a single long-lived branch — `automated/reports` — that
+# always mirrors the current default branch with the freshly regenerated
+# reports committed on top.
 #
-# It does NOT push to the default branch directly: `main` is protected by a
-# ruleset ("Changes must be made through a pull request"), so a direct push is
-# rejected (GH013). Each run supersedes the previous one — any still-open PR
-# this job opened is closed (and its branch deleted) before a fresh PR is
-# opened, so at most one automated report PR stands at a time.
+# The branch is rebuilt from `origin/main` and force-pushed in place on every
+# run, so:
+#   * there is exactly ONE report branch (no per-run
+#     `automated/refresh-reports-<run id>` branches piling up), and
+#   * checking it out always shows reports current as of the latest `main`.
+#
+# No pull request is opened: the branch is the published artifact, not
+# something merged into `main` (which no longer tracks these generated files).
 
 on:
   schedule:
@@ -26,12 +30,10 @@ concurrency:
 
 permissions:
   contents: write
-  pull-requests: write
 
 env:
-  # Branch this job opens its PRs from, and the label used to find its own
-  # prior PRs so they can be superseded.
-  PR_LABEL: automated-reports
+  # The single long-lived branch this job force-updates with current reports.
+  REPORTS_BRANCH: automated/reports
   GH_TOKEN: ${{ github.token }}
 
 jobs:
@@ -40,54 +42,40 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Full history so the reports branch can be rebuilt from origin/main.
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      - name: Regenerate reports
-        run: |
-          python scripts/generate_loc_report.py
-          python scripts/generate_dependency_diagrams.py
-
-      - name: Open a PR if either report changed
+      - name: Publish regenerated reports to the single reports branch
         run: |
           set -euo pipefail
 
-          # Only act when LOC_REPORT.md or docs/diagrams actually changed.
-          if [ -z "$(git status --porcelain -- LOC_REPORT.md docs/diagrams)" ]; then
-            echo "Reports already up to date; nothing to do."
-            exit 0
-          fi
-          echo "Detected report changes:"
-          git status --porcelain -- LOC_REPORT.md docs/diagrams
-
-          # Ensure the label this job uses to track its own PRs exists.
-          gh label create "$PR_LABEL" \
-            --color BFD4F2 \
-            --description "Automated daily LOC report / dependency graph refresh" \
-            --force
-
-          # Supersede any still-open PR from a previous run: close it and delete
-          # its branch so only the latest automated report PR ever stands.
-          for pr in $(gh pr list --state open --label "$PR_LABEL" --json number --jq '.[].number'); do
-            echo "Closing superseded automated report PR #$pr"
-            gh pr close "$pr" --delete-branch \
-              --comment "Superseded by a newer automated report refresh (run ${GITHUB_RUN_ID})."
-          done
-
-          branch="automated/refresh-reports-${GITHUB_RUN_ID}"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git switch -c "$branch"
-          git add LOC_REPORT.md docs/diagrams
-          git commit -m "chore: refresh LOC report and dependency diagrams"
-          git push -u origin "$branch"
 
-          gh pr create \
-            --base "${GITHUB_REF_NAME}" \
-            --head "$branch" \
-            --label "$PR_LABEL" \
-            --title "chore: refresh LOC report and dependency diagrams" \
-            --body "Automated daily refresh of \`LOC_REPORT.md\` and \`docs/diagrams/*\` (opened by the \`Refresh Generated Reports\` workflow, run ${GITHUB_RUN_ID}). These files are generated from the whole source tree and are no longer gated in PR CI. Merge to keep the committed reports current; this PR supersedes any earlier automated report PR."
+          # Rebuild the reports branch from a pristine mirror of the branch this
+          # workflow ran on (the default branch). Rebuilding from scratch each
+          # run means the branch never accumulates history and always reflects
+          # the latest main — it mirrors main plus the current reports.
+          git switch -C "$REPORTS_BRANCH" "origin/${GITHUB_REF_NAME}"
+
+          python scripts/generate_loc_report.py
+          python scripts/generate_dependency_diagrams.py
+
+          if [ -z "$(git status --porcelain -- LOC_REPORT.md docs/diagrams)" ]; then
+            echo "Reports already current for ${GITHUB_REF_NAME}@$(git rev-parse --short HEAD); branch just mirrors main."
+          else
+            echo "Detected report changes:"
+            git status --porcelain -- LOC_REPORT.md docs/diagrams
+            git add LOC_REPORT.md docs/diagrams
+            git commit -m "chore: refresh LOC report and dependency diagrams"
+          fi
+
+          # Force-update the single reports branch in place. The branch always
+          # equals current main (+ the generated reports), never merged back.
+          git push --force origin "$REPORTS_BRANCH"
