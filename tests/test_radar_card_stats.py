@@ -130,12 +130,18 @@ def test_get_card_aggregates_rolls_up_archetypes(populated_repo):
     assert bolt.sideboard_archetypes == 0
     assert bolt.mainboard_copies == 85
     assert bolt.mainboard_appearances == 25
+    # Mainboard-only card: the sideboard copies stay zero-filled.
+    assert bolt.sideboard_copies == 0
+    assert bolt.sideboard_appearances == 0
 
     counter = aggregates["Counterspell"]
     assert counter.mainboard_archetypes == 0
     assert counter.sideboard_archetypes == 1
     assert counter.sideboard_copies == 8
     assert counter.sideboard_appearances == 4
+    # Sideboard-only (in modern): the mainboard copies stay zero-filled.
+    assert counter.mainboard_copies == 0
+    assert counter.mainboard_appearances == 0
 
     # Cards not in any archetype still get a zero-filled entry so the UI can render.
     nonsense = aggregates["Nonsense"]
@@ -274,3 +280,90 @@ def test_get_effective_legalities_strips_and_filters(populated_repo):
     # Empty / all-blank input short-circuits to an empty mapping.
     assert service.get_effective_legalities([]) == {}
     assert service.get_effective_legalities(["   ", ""]) == {}
+
+
+def test_get_card_usage_stats_empty_and_blank_names_short_circuit(populated_repo):
+    """The service usage rollup strips names and early-returns on empty input.
+
+    Exercises the ``names``/``if not names`` short-circuit in
+    ``get_card_usage_stats`` (card_stats.py): empty and all-blank inputs yield an
+    empty mapping, and surrounding whitespace is stripped from real names.
+    """
+    service = RadarService(radar_repository=populated_repo)
+
+    # Empty and all-blank inputs short-circuit before touching the repository.
+    assert service.get_card_usage_stats("modern", []) == {}
+    assert service.get_card_usage_stats("modern", ["   ", ""]) == {}
+
+    # Names are stripped, so a padded request keys off the trimmed name.
+    usage = service.get_card_usage_stats("modern", [" Lightning Bolt "])
+    assert list(usage) == ["Lightning Bolt"]
+    assert usage["Lightning Bolt"].mainboard_appearances == 25
+
+
+def test_get_card_aggregates_empty_format_or_names_returns_empty(populated_repo):
+    """Repository aggregate query short-circuits on blank format or empty names.
+
+    Directly exercises the ``if not fmt or not names`` guard in
+    ``get_card_aggregates`` (reads.py) without reaching SQLite.
+    """
+    assert populated_repo.get_card_aggregates("", ["Lightning Bolt"]) == {}
+    assert populated_repo.get_card_aggregates("   ", ["Lightning Bolt"]) == {}
+    assert populated_repo.get_card_aggregates("modern", []) == {}
+    assert populated_repo.get_card_aggregates("modern", ["   ", ""]) == {}
+
+
+def test_get_formats_for_cards_empty_names_returns_empty(populated_repo):
+    """Repository formats query short-circuits on empty / all-blank names.
+
+    Directly exercises the ``if not names`` guard in
+    ``get_formats_for_cards`` (reads.py) without reaching SQLite.
+    """
+    assert populated_repo.get_formats_for_cards([]) == {}
+    assert populated_repo.get_formats_for_cards(["   ", ""]) == {}
+
+
+def test_get_card_aggregates_card_in_both_zones_same_format(tmp_path):
+    """A single card present in both mainboard and sideboard of one format.
+
+    Exercises both the sideboard and mainboard branches of the row-merge loop in
+    ``get_card_aggregates`` (reads.py) for one card, so neither zone's totals
+    clobber the other.
+    """
+    repo = RadarRepository(tmp_path / "radar_cache.db")
+    repo.replace_radar(
+        _radar(
+            fmt="modern",
+            href="modern-flex",
+            name="Flex",
+            decks=10,
+            mb=[
+                _card(
+                    "Engineered Explosives",
+                    appearances=6,
+                    total_copies=9,
+                    avg_copies=1.5,
+                    expected_copies=0.9,
+                ),
+            ],
+            sb=[
+                _card(
+                    "Engineered Explosives",
+                    appearances=3,
+                    total_copies=5,
+                    avg_copies=1.67,
+                    expected_copies=0.5,
+                ),
+            ],
+        )
+    )
+
+    aggregates = repo.get_card_aggregates("modern", ["Engineered Explosives"])
+    card = aggregates["Engineered Explosives"]
+    # Both zones are populated for the same card without one clobbering the other.
+    assert card.mainboard_archetypes == 1
+    assert card.mainboard_copies == 9
+    assert card.mainboard_appearances == 6
+    assert card.sideboard_archetypes == 1
+    assert card.sideboard_copies == 5
+    assert card.sideboard_appearances == 3
