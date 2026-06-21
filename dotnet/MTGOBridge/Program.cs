@@ -309,24 +309,31 @@ static CurrencySnapshot GetCurrencySnapshot()
 static HistorySnapshot GetHistorySnapshot()
 {
     bool historyLoaded = false;
-    string? error = null;
 
-    // ReadGameHistory() returns the full list - use it directly instead of accessing .Items!
-    var rawItems = HistoryManager.ReadGameHistory();
-    if (rawItems == null)
+    // ReadGameHistory() can throw from inside MTGOSDK (e.g. a RuntimeBinderException
+    // when the remote dynamic type drifts from the SDK's expectations). Guard it so a
+    // single failing snapshot returns a structured error instead of crashing the whole
+    // process and corrupting the JSON contract the Python side parses.
+    try
     {
-        return new HistorySnapshot(historyLoaded, Array.Empty<HistoryEntry>(), "History items is null");
-    }
+        // ReadGameHistory() returns the full list - use it directly instead of accessing .Items!
+        var rawItems = HistoryManager.ReadGameHistory();
+        if (rawItems == null)
+        {
+            return new HistorySnapshot(historyLoaded, Array.Empty<HistoryEntry>(), "History items is null");
+        }
 
-    // Process in parallel - each MapHistoryItem call uses reflection anyway
-    // so parallelizing this should give a good speedup
-    var items = rawItems
-        .Select(item => MapHistoryItem(item))
-        .Where(entry => entry != null)
-        .Cast<HistoryEntry>()
-        .ToList();
-    foreach(var item in rawItems) Console.WriteLine(item.GetType().Name);
-    return new HistorySnapshot(historyLoaded, items, error);
+        var items = rawItems
+            .Select(item => MapHistoryItem(item))
+            .Where(entry => entry != null)
+            .Cast<HistoryEntry>()
+            .ToList();
+        return new HistorySnapshot(historyLoaded, items, null);
+    }
+    catch (Exception ex)
+    {
+        return new HistorySnapshot(historyLoaded, Array.Empty<HistoryEntry>(), ex.Message);
+    }
 }
 
 static HistoryEntry? MapHistoryItem(object? item)

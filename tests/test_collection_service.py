@@ -734,6 +734,34 @@ def test_refresh_from_bridge_force_exports_and_succeeds(collection_service, tmp_
     assert "collection_full_trade_" in saved_path.name
 
 
+def test_refresh_from_bridge_items_shape_exports_and_succeeds(collection_service, tmp_path):
+    """The real bridge snapshot exposes cards under "items" (CollectionSnapshot.Items).
+
+    Regression for the key mismatch where the worker read "cards" while
+    ``get_collection_snapshot`` returns the collection dict keyed by "items",
+    causing a full snapshot to be discarded as "No cards in collection data".
+    """
+    cards = [{"id": 12, "name": "Birds of Paradise", "quantity": 1}]
+    fetch = Mock(return_value={"id": 0, "name": "Collection", "items": cards})
+    successes: list[tuple] = []
+    errors: list[str] = []
+
+    _run_refresh_and_wait(
+        collection_service,
+        tmp_path,
+        force=True,
+        on_success=lambda path, c: successes.append((path, c)),
+        on_error=errors.append,
+        fetch_collection=fetch,
+    )
+
+    assert errors == []
+    assert len(successes) == 1
+    saved_path, saved_cards = successes[0]
+    assert saved_cards == cards
+    assert saved_path.exists()
+
+
 def test_refresh_from_bridge_empty_collection_routes_to_error(collection_service, tmp_path):
     """An empty dict from the bridge routes to on_error."""
     fetch = Mock(return_value={})
