@@ -291,6 +291,28 @@ def test_placement_filter_ge_wins_4():
     assert results == ["4-1", "5-0"]
 
 
+def test_placement_filter_eq_wins_5():
+    # Wins uses standard (non-inverted) numeric semantics: "= 5" → only 5-0.
+    result = filter_decks(DECKS, placement_op="=", placement_field="Wins", placement_value="5")
+    assert len(result) == 1
+    assert result[0]["result"] == "5-0"
+
+
+def test_placement_filter_lt_wins_5():
+    # "< 5" reads literally as "fewer than 5 wins" → 4-1 only. This is distinct
+    # from Placement, where "<" is inverted; here it stays a plain operator.gt.
+    result = filter_decks(DECKS, placement_op="<", placement_field="Wins", placement_value="5")
+    assert len(result) == 1
+    assert result[0]["result"] == "4-1"
+
+
+def test_placement_filter_le_wins_4():
+    # "≤ 4" → only 4-1 (4 wins); 5-0 is excluded. Non-inverted semantics.
+    result = filter_decks(DECKS, placement_op="≤", placement_field="Wins", placement_value="4")
+    assert len(result) == 1
+    assert result[0]["result"] == "4-1"
+
+
 def test_placement_filter_excludes_decks_without_parseable_value():
     # Wins filter excludes "1st", "2nd", "Top 8", "7th", "Winner"
     result = filter_decks(DECKS, placement_op="≥", placement_field="Wins", placement_value="0")

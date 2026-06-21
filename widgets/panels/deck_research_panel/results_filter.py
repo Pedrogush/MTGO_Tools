@@ -66,10 +66,8 @@ def parse_placement(result_str: str) -> int | None:
     match = _PLACEMENT_RE.search(result_str)
     if match is None:
         return None
-    try:
-        return int(match.group(1))
-    except ValueError:
-        return None
+    # The capture group is ``\d+``, so ``int()`` cannot raise here.
+    return int(match.group(1))
 
 
 def parse_wins(result_str: str) -> int | None:
@@ -82,10 +80,8 @@ def parse_wins(result_str: str) -> int | None:
     match = _WINS_RE.search(result_str)
     if match is None:
         return None
-    try:
-        return int(match.group(1))
-    except ValueError:
-        return None
+    # The capture group is ``\d+``, so ``int()`` cannot raise here.
+    return int(match.group(1))
 
 
 def _placement_value_for_field(result_str: str, field: str) -> int | None:
