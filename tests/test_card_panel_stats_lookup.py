@@ -79,6 +79,15 @@ def test_find_card_frequency_returns_none_for_empty_list() -> None:
     assert _find_card_frequency([], "Lightning Bolt") is None
 
 
+def test_find_card_frequency_returns_first_match() -> None:
+    # Two entries match the same lookup name; the first encountered wins.
+    first = _Freq(card_name="Lightning Bolt", total_copies=4)
+    second = _Freq(card_name="lightning bolt", total_copies=2)
+    found = _find_card_frequency([first, second], "Lightning Bolt")
+    assert found is first
+    assert found.total_copies == 4
+
+
 def test_stats_lookup_names_strips_surrounding_whitespace() -> None:
     assert _stats_lookup_names("  Lightning Bolt  ") == ["Lightning Bolt"]
 
@@ -142,6 +151,10 @@ def test_archetype_name_returns_none_when_name_missing() -> None:
     assert _mixin(_current_archetype={})._archetype_name() is None
 
 
+def test_archetype_name_returns_none_when_name_present_but_empty() -> None:
+    assert _mixin(_current_archetype={"name": ""})._archetype_name() is None
+
+
 def test_archetype_name_returns_name_when_present() -> None:
     assert _mixin(_current_archetype={"name": "Burn"})._archetype_name() == "Burn"
 
@@ -174,3 +187,15 @@ def test_lookup_side_freq_resolves_from_radar() -> None:
     found = _mixin(_current_radar=radar)._lookup_side_freq("Lightning Bolt")
     assert found is not None
     assert found.total_copies == 2
+
+
+def test_lookup_side_freq_resolves_front_face_from_radar() -> None:
+    radar = SimpleNamespace(
+        mainboard_cards=[],
+        sideboard_cards=[_Freq(card_name="Ajani, Nacatl Pariah", total_copies=3)],
+    )
+    found = _mixin(_current_radar=radar)._lookup_side_freq(
+        "Ajani, Nacatl Pariah // Ajani, Nacatl Avenger"
+    )
+    assert found is not None
+    assert found.total_copies == 3
