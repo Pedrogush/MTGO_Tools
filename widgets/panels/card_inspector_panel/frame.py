@@ -73,6 +73,14 @@ class CardInspectorPanel(
         self._selected_card_handler: Callable[[CardImageRequest | None], None] | None = None
         self._printings_request_handler: Callable[[str], None] | None = None
         self._printing_changed_handler: Callable[[dict[str, Any] | None], None] | None = None
+        # Fired only on user-driven printing changes (prev/next/save) so the
+        # board art + persistence follow the chosen printing (issue #792).
+        self._printing_selected_handler: Callable[[dict[str, Any], bool], None] | None = None
+        # The printing the focused card should open on (issue #792, part 1b).
+        self.inspector_selection: dict[str, Any] | None = None
+        # When True, every scrolled-to printing is persisted immediately; when
+        # False the explicit "Save art" button persists the current printing.
+        self._autosave_printing: bool = False
         self._printings_request_inflight: str | None = None
         self._has_selection = False
         self._failed_image_requests: set[tuple[str, str]] = set()
@@ -164,6 +172,30 @@ class CardInspectorPanel(
         image_column.Add(self.nav_panel, 0, wx.ALIGN_CENTER_HORIZONTAL | wx.TOP, PADDING_MD)
         self.nav_panel.Hide()  # Hidden by default
 
+        # Save-art controls (issue #792, part 2): an "auto-save" checkmark that
+        # persists each scrolled-to printing, or an explicit "Save art" button
+        # shown when auto-save is off. Only visible while a card has multiple
+        # printings to choose between (mirrors nav_panel).
+        self.save_panel = wx.Panel(self.image_column_panel)
+        self.save_panel.SetBackgroundColour(DARK_PANEL)
+        save_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        self.save_panel.SetSizer(save_sizer)
+
+        self.autosave_checkbox = wx.CheckBox(self.save_panel, label="Auto-save art")
+        self.autosave_checkbox.SetForegroundColour(SUBDUED_TEXT)
+        self.autosave_checkbox.SetToolTip("Persist each printing you scroll to for this card")
+        self.autosave_checkbox.Bind(wx.EVT_CHECKBOX, self._on_autosave_toggle)
+        save_sizer.Add(self.autosave_checkbox, 0, wx.ALIGN_CENTER_VERTICAL)
+
+        self.save_art_btn = wx.Button(self.save_panel, label="Save art", style=wx.BU_EXACTFIT)
+        stylize_button(self.save_art_btn)
+        self.save_art_btn.SetToolTip("Save the current printing as this card's art")
+        self.save_art_btn.Bind(wx.EVT_BUTTON, self._on_save_printing)
+        save_sizer.Add(self.save_art_btn, 0, wx.LEFT | wx.ALIGN_CENTER_VERTICAL, PADDING_MD)
+
+        image_column.Add(self.save_panel, 0, wx.ALIGN_CENTER_HORIZONTAL | wx.TOP, PADDING_SM)
+        self.save_panel.Hide()  # Hidden until a card has printings to choose from
+
         # Right column: Card details
         self.details_panel = wx.Panel(self)
         self.details_panel.SetBackgroundColour(DARK_PANEL)
@@ -213,7 +245,12 @@ class CardInspectorPanel(
     def _apply_fixed_sizing(self, image_width: int, nav_btn_size: wx.Size) -> None:
         image_height = getattr(self.card_image_display, "image_height", CARD_IMAGE_DISPLAY_HEIGHT)
         nav_height = nav_btn_size.GetHeight() + PADDING_SM
-        image_column_height = image_height + (PADDING_SM * 2) + nav_height + PADDING_MD
+        # Reserve room for the save-art controls (issue #792) so they aren't
+        # clipped by the otherwise fixed-height image column.
+        save_height = self.save_panel.GetBestSize().GetHeight() + PADDING_SM
+        image_column_height = (
+            image_height + (PADDING_SM * 2) + nav_height + save_height + PADDING_MD
+        )
         column_width = image_width + PADDING_XL + PADDING_MD
 
         self.image_column_panel.SetMinSize((column_width, image_column_height))

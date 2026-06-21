@@ -115,6 +115,11 @@ class RightPanelBuilderMixin(_Base):
         # from the inspector into the card panel so flavor/artist/edition stay
         # in sync with the printing actually shown.
         self.card_inspector_panel.set_printing_changed_handler(self.card_panel.update_printing)
+        # Sync the board art to the printing the user scrolls to / saves, and
+        # persist the choice when auto-save (or the Save-art button) asks (#792).
+        self.card_inspector_panel.set_printing_selected_handler(
+            self._on_inspector_printing_selected
+        )
 
         card_sizer.Add(self.card_panel, 1, wx.EXPAND | wx.ALL, PADDING_SM)
         return card_sizer

@@ -402,16 +402,143 @@ def decklist_with_printings_to_agnostic(text: str, index: PrintingIndex) -> str:
     return _render(rows)
 
 
+# ---------------------------------------------------------------------------
+# Public: per-card printing selection (drives inspector <-> board art sync)
+# ---------------------------------------------------------------------------
+
+
+def extract_printing_selections(text: str, index: PrintingIndex) -> dict[str, dict[str, Any]]:
+    """Map each card that pins a specific printing to ``{"uuid", "set"}``.
+
+    Walks ``text`` and records, keyed by lower-cased card name, the printing a
+    line points at (via a trailing printing-id or edition token). Cards left
+    agnostic — or whose name is unknown — are omitted. This is the runtime
+    "which printing is this card showing" map the board art and the inspector
+    share (issue #792, part 1).
+    """
+    selections: dict[str, dict[str, Any]] = {}
+    for _count, _is_sideboard, res in _iter_resolved(text, index):
+        if not res.valid or res.printing is None:
+            continue
+        uuid = str(res.printing.get("id") or "") or None
+        set_code = str(res.printing.get("set") or "") or None
+        selections[res.name.lower()] = {"uuid": uuid, "set": set_code}
+    return selections
+
+
+def selected_printing_index(
+    printings: Sequence[Mapping[str, Any]], selection: Mapping[str, Any] | None
+) -> int:
+    """Return the index in ``printings`` matching ``selection`` (uuid then set).
+
+    Used to open the inspector on a card's saved printing (issue #792, part 1b).
+    Falls back to ``0`` when there is no selection or no match.
+    """
+    if not printings or not selection:
+        return 0
+    uuid = selection.get("uuid")
+    if uuid:
+        for idx, printing in enumerate(printings):
+            if str(printing.get("id") or "").lower() == str(uuid).lower():
+                return idx
+    set_code = selection.get("set")
+    if set_code:
+        for idx, printing in enumerate(printings):
+            if str(printing.get("set") or "").upper() == str(set_code).upper():
+                return idx
+    return 0
+
+
+def merge_printing_selection(
+    text: str, index: PrintingIndex, name: str, uuid: str | None, set_code: str | None = None
+) -> str:
+    """Return ``text`` with ``name``'s printing pointer set to ``uuid``/``set``.
+
+    Every other line keeps whatever pointer it already had; the named card's
+    line(s) are re-pointed at the chosen printing (a printing-id when ``uuid`` is
+    given, else the set code, else stripped to agnostic). Used to persist a
+    save-art choice back into the canonical decklist text (issue #792, part 2).
+    """
+    target = name.lower()
+    new_token = uuid or (set_code.upper() if set_code else None)
+    rows: list[tuple[float, str, bool, str | None]] = []
+    for count, is_sideboard, res in _iter_resolved(text, index):
+        token = new_token if res.name.lower() == target else res.token
+        rows.append((count, res.name, is_sideboard, token))
+    return _render(rows)
+
+
+# ---------------------------------------------------------------------------
+# Public: mode dispatch (drives the deckbuilder printing-selection dropdown)
+# ---------------------------------------------------------------------------
+
+# Mode keys, ordered as they appear in the deckbuilder dropdown. ``newest_by``
+# and ``after`` additionally need a ``when`` date; the rest ignore it.
+MODE_AGNOSTIC = "agnostic"
+MODE_OLDEST = "oldest"
+MODE_NEWEST = "newest"
+MODE_FULL_ART = "full_art"
+MODE_NEWEST_BY = "newest_by"
+MODE_AFTER = "after"
+
+PRINTING_MODES = (
+    MODE_AGNOSTIC,
+    MODE_OLDEST,
+    MODE_NEWEST,
+    MODE_FULL_ART,
+    MODE_NEWEST_BY,
+    MODE_AFTER,
+)
+
+# Modes that require a ``when`` date argument.
+DATE_MODES = (MODE_NEWEST_BY, MODE_AFTER)
+
+
+def apply_printing_mode(text: str, index: PrintingIndex, mode: str, when: Any = None) -> str:
+    """Re-pick every card's printing according to ``mode`` and render the list.
+
+    A thin dispatcher over the ``decklist_with_*`` helpers so UI code can map a
+    single dropdown selection to the right conversion. ``when`` is only used by
+    the date-based modes (:data:`DATE_MODES`). Raises :class:`ValueError` for an
+    unknown ``mode``.
+    """
+    if mode == MODE_AGNOSTIC:
+        return decklist_with_printings_to_agnostic(text, index)
+    if mode == MODE_OLDEST:
+        return decklist_with_oldest_printings(text, index)
+    if mode == MODE_NEWEST:
+        return decklist_with_newest_printings(text, index)
+    if mode == MODE_FULL_ART:
+        return decklist_with_full_art_printings(text, index)
+    if mode == MODE_NEWEST_BY:
+        return decklist_with_newest_printings_by(text, index, when)
+    if mode == MODE_AFTER:
+        return decklist_with_printings_after(text, index, when)
+    raise ValueError(f"Unknown printing mode: {mode!r}")
+
+
 __all__ = [
+    "DATE_MODES",
+    "MODE_AFTER",
+    "MODE_AGNOSTIC",
+    "MODE_FULL_ART",
+    "MODE_NEWEST",
+    "MODE_NEWEST_BY",
+    "MODE_OLDEST",
     "MTG_RELEASE_YEAR",
+    "PRINTING_MODES",
     "ParsedCard",
     "PrintingIndex",
+    "apply_printing_mode",
     "decklist_with_full_art_printings",
     "decklist_with_newest_printings",
     "decklist_with_newest_printings_by",
     "decklist_with_oldest_printings",
     "decklist_with_printings_after",
     "decklist_with_printings_to_agnostic",
+    "extract_printing_selections",
     "format_decklist_on_load",
+    "merge_printing_selection",
     "parse_printed_decklist",
+    "selected_printing_index",
 ]

@@ -199,6 +199,12 @@ class CenterPanelBuilderMixin(_Base):
             on_view_mode_change=self._persist_deck_view_mode,
             on_pile_sort_change=self._persist_pile_sort_mode,
             on_zone_transfer=self._handle_zone_transfer,
+            # The printing-selection dropdown re-pricks art for the whole
+            # decklist, so it only belongs on the mainboard header (issue #792).
+            on_printing_mode=(self._handle_printing_mode if zone == "main" else None),
+            # All zones resolve a card's chosen printing image the same way so
+            # board art tracks the inspector selection (issue #792, part 1).
+            get_printing_image=self._get_printing_image,
         )
 
     def _persist_deck_view_mode(self, zone: str, mode: str) -> None:
@@ -208,3 +214,28 @@ class CenterPanelBuilderMixin(_Base):
     def _persist_pile_sort_mode(self, zone: str, sort_mode: str) -> None:
         self.controller.session_manager.update_pile_sort_mode(zone, sort_mode)
         self._schedule_settings_save()
+
+    def _handle_printing_mode(self, mode: str, when: str | None = None) -> None:
+        """Re-pick every card's printing for the loaded deck (issue #792, part 3).
+
+        Applies the chosen mode to the current deck text via the printing index
+        and re-renders. The ``"reprint"`` source is intentionally outside the
+        set that resets the current-deck identity, so the loaded deck stays
+        selected. If the printing index has not loaded yet there is nothing we
+        can resolve against, so we just tell the user to retry.
+        """
+        index = getattr(self.controller.image_service, "bulk_data_by_name", None)
+        if not index:
+            from utils.i18n import translate
+
+            wx.MessageBox(
+                translate(self.locale, "tabs.view.printing.no_index"),
+                translate(self.locale, "tabs.view.printing"),
+                wx.OK | wx.ICON_INFORMATION,
+            )
+            return
+        deck_text = self.controller.deck_repo.get_current_deck_text()
+        if not deck_text or not deck_text.strip():
+            return
+        new_text = self.controller.deck_service.apply_printing_mode(deck_text, index, mode, when)
+        self._on_deck_content_ready(new_text, source="reprint")

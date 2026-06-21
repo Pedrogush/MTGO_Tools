@@ -60,7 +60,20 @@ def _collect_face_aliases(card: dict[str, Any], display_name: str) -> set[str]:
 def build_printing_index(
     cards: list[dict[str, Any]],
 ) -> tuple[dict[str, list[dict[str, Any]]], dict[str, int]]:
-    """Build a compact printing index from bulk card data."""
+    """Build a compact printing index from bulk card data.
+
+    Face names are indexed as aliases so a deck listing a single face of an
+    MDFC/split/adventure card still resolves to its printings. A face name that
+    is *also* a real standalone card is left alone, though: e.g. "Emeritus of
+    Conflict // Lightning Bolt" must not inject itself into the genuine
+    "Lightning Bolt" printing list, or the inspector/dropdown would offer that
+    adventure card as a Lightning Bolt printing (issue #792).
+    """
+    primary_names = {
+        (card.get("name") or "").strip().lower()
+        for card in cards
+        if (card.get("name") or "").strip() and card.get("id")
+    }
     by_name: dict[str, list[dict[str, Any]]] = {}
     total_printings = 0
     for card in cards:
@@ -82,7 +95,7 @@ def build_printing_index(
         by_name.setdefault(key, []).append(entry)
         for alias in _collect_face_aliases(card, name):
             alias_key = alias.lower()
-            if alias_key == key:
+            if alias_key == key or alias_key in primary_names:
                 continue
             by_name.setdefault(alias_key, []).append(entry)
         total_printings += 1

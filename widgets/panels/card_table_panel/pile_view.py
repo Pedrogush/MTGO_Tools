@@ -103,11 +103,14 @@ class DeckPileView(wx.ScrolledWindow):
         get_sort_mode: Callable[[], str] | None = None,
         on_remove: Callable[[str], None] | None = None,
         on_zone_transfer: Callable[[list[str], wx.Point], bool] | None = None,
+        get_printing_image: Callable[[str], Path | None] | None = None,
     ) -> None:
         super().__init__(parent, style=wx.HSCROLL | wx.VSCROLL)
         self.zone = zone
         self._get_metadata = get_metadata
         self._get_card_image = get_card_image
+        # Printing-aware image resolver (issue #792); see DeckGridView.
+        self._get_printing_image = get_printing_image
         self._on_select = on_select
         self._on_hover = on_hover
         self._get_sort_mode = get_sort_mode or (lambda: PILE_SORT_MV)
@@ -197,6 +200,28 @@ class DeckPileView(wx.ScrolledWindow):
         """Called when the user changes the pile sort mode."""
         self._manual_overrides = False
         self._rebuild_piles()
+
+    def refresh_image(self, name: str) -> None:
+        """Drop ``name``'s cached art and reload it (e.g. its printing changed).
+
+        Bypasses the ``_prefetch_images`` cached-bitmap skip so a printing swap
+        actually re-renders rather than reusing the previous art (issue #792).
+        """
+        stored: str | None = None
+        for _label, members in self._piles:
+            for entry in members:
+                if entry["name"].lower() == name.lower():
+                    stored = entry["name"]
+                    break
+            if stored:
+                break
+        if stored is None:
+            return
+        self._image_cache.put(stored, None)
+        self._image_gen += 1
+        gen = self._image_gen
+        Thread(target=self._image_worker, args=(gen, stored), daemon=True).start()
+        self.Refresh()
 
     def set_selected(self, name: str | None) -> None:
         """Adopt a single-name selection from another view.
@@ -308,7 +333,16 @@ class DeckPileView(wx.ScrolledWindow):
 
     def _image_worker(self, gen: int, name: str) -> None:
         try:
-            path = self._get_card_image(name, "normal")
+            path: Path | None = None
+            if self._get_printing_image is not None:
+                try:
+                    path = self._get_printing_image(name)
+                except Exception:
+                    path = None
+                if path and not path.exists():
+                    path = None
+            if path is None:
+                path = self._get_card_image(name, "normal")
             if not path or not path.exists():
                 wx.CallAfter(self._image_loaded, name, None)
                 return

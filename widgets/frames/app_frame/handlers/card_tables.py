@@ -6,6 +6,7 @@ import math
 from typing import TYPE_CHECKING, Any
 
 import wx
+from loguru import logger
 
 from utils.constants import ZONE_TITLES
 
@@ -305,8 +306,96 @@ class CardTablesHandler(_Base):
             self.builder_panel.clear_result_selection()
         self._collapse_other_zone_tables(zone)
         meta = self.controller.card_repo.get_card_metadata(card["name"])
-        self.card_inspector_panel.update_card(card, zone=zone, meta=meta)
+        selection = self._printing_selections.get(card["name"].lower())
+        self.card_inspector_panel.update_card(card, zone=zone, meta=meta, selection=selection)
         self._push_card_panel(card, meta)
+
+    # ---- printing selection (issue #792) --------------------------------------
+    def _get_printing_image(self: AppFrame, name: str):
+        """Resolve the chosen printing's board image for ``name``.
+
+        Returns the cached image path for the card's selected printing, or
+        ``None`` when no printing is selected (board falls back to the default
+        art) or its image is not cached yet — in which case a download for that
+        exact printing is queued so a later ``refresh_card_image`` picks it up.
+        Runs on the view's image-decode threads; only SQLite reads + an enqueue.
+        """
+        selection = self._printing_selections.get(name.lower())
+        if not selection:
+            return None
+        uuid = selection.get("uuid")
+        set_code = selection.get("set")
+        cache = self.controller.get_image_cache()
+        path = cache.get_image_by_uuid(uuid, "normal") if uuid else None
+        if path is None and set_code:
+            path = cache.get_image_path_for_printing(name, set_code, "normal")
+        if path is not None:
+            return path
+        try:
+            request = self.controller.CardImageRequest(
+                card_name=name,
+                uuid=uuid,
+                set_code=set_code,
+                collector_number=None,
+                size="normal",
+            )
+            self.controller.image_service.queue_card_image_download(request, prioritize=True)
+        except Exception:
+            logger.debug("Failed to queue printing image for %s", name, exc_info=True)
+        return None
+
+    def _on_inspector_printing_selected(
+        self: AppFrame, printing: dict[str, Any], persist: bool
+    ) -> None:
+        """Apply (and optionally persist) a printing the user chose in the inspector.
+
+        Always updates the runtime selection map + board art (issue #792, part
+        1a); ``persist`` also writes the choice into the deck text so it survives
+        save/copy (part 2 — auto-save or the Save-art button).
+        """
+        name = self.card_inspector_panel.inspector_current_card_name
+        if not name or not printing:
+            return
+        self._record_printing_selection(name, printing)
+        if persist:
+            self._persist_printing_selection(name, printing)
+
+    def _refresh_board_card_art(self: AppFrame, name: str) -> None:
+        """Re-render just ``name``'s art across every zone after a selection change."""
+        for table in (self.main_table, self.side_table, self.out_table):
+            if table:
+                table.refresh_card_image(name)
+
+    def _record_printing_selection(self: AppFrame, name: str, printing: dict[str, Any]) -> None:
+        """Update the runtime selection map and refresh that card's board art."""
+        if not name:
+            return
+        self._printing_selections[name.lower()] = {
+            "uuid": printing.get("id"),
+            "set": printing.get("set"),
+        }
+        self._refresh_board_card_art(name)
+
+    def _persist_printing_selection(self: AppFrame, name: str, printing: dict[str, Any]) -> None:
+        """Write a printing choice into the canonical deck text so it survives.
+
+        Saving / copying the deck reads ``current_deck_text`` (see
+        ``build_deck_text``), so merging the chosen printing-id pointer there is
+        what makes the choice persist into the exported decklist (issue #792,
+        part 2). No-op when the printing index has not loaded.
+        """
+        if not name:
+            return
+        index = getattr(self.controller.image_service, "bulk_data_by_name", None)
+        if not index:
+            return
+        deck_text = self.controller.deck_repo.get_current_deck_text()
+        if not deck_text or not deck_text.strip():
+            return
+        merged = self.controller.deck_service.merge_printing_selection(
+            deck_text, index, name, printing.get("id"), printing.get("set")
+        )
+        self.controller.deck_repo.set_current_deck_text(merged)
 
     def _handle_card_hover(self: AppFrame, zone: str, card: dict[str, Any]) -> None:
         if self._has_selected_card():
@@ -329,7 +418,8 @@ class CardTablesHandler(_Base):
         zone, card = self._pending_hover
         self._pending_hover = None
         meta = self.controller.card_repo.get_card_metadata(card["name"])
-        self.card_inspector_panel.update_card(card, zone=zone, meta=meta)
+        selection = self._printing_selections.get(card["name"].lower())
+        self.card_inspector_panel.update_card(card, zone=zone, meta=meta, selection=selection)
         self._push_card_panel(card, meta)
 
     def _push_card_panel(self: AppFrame, card: dict[str, Any], meta: Any) -> None:

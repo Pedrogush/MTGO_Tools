@@ -39,3 +39,23 @@ class DeckPrintingMixin:
 
     def decklist_with_printings_to_agnostic(self, text: str, index: PrintingIndex) -> str:
         return printing.decklist_with_printings_to_agnostic(text, index)
+
+    def apply_printing_mode(
+        self, text: str, index: PrintingIndex, mode: str, when: Any = None
+    ) -> str:
+        return printing.apply_printing_mode(text, index, mode, when)
+
+    def extract_printing_selections(
+        self, text: str, index: PrintingIndex
+    ) -> dict[str, dict[str, Any]]:
+        return printing.extract_printing_selections(text, index)
+
+    def merge_printing_selection(
+        self,
+        text: str,
+        index: PrintingIndex,
+        name: str,
+        uuid: str | None,
+        set_code: str | None = None,
+    ) -> str:
+        return printing.merge_printing_selection(text, index, name, uuid, set_code)

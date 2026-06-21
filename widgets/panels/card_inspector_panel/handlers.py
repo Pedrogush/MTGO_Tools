@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any
 import wx
 from loguru import logger
 
+from services.deck_service.printing import selected_printing_index
 from utils.constants import SUBDUED_TEXT, ZONE_TITLES
 from widgets.wx_layout import relayout
 
@@ -40,8 +41,10 @@ class CardInspectorPanelHandlersMixin(_Base):
         self._render_mana_cost("")
         self.card_image_display.show_placeholder("Select a card")
         self.nav_panel.Hide()
+        self.save_panel.Hide()
         self.inspector_printings = []
         self.inspector_current_printing = 0
+        self.inspector_selection = None
         self.inspector_current_card_name = None
         self._printings_request_inflight = None
         self._loading_printing = False
@@ -51,10 +54,17 @@ class CardInspectorPanelHandlersMixin(_Base):
         self._set_display_mode(False, show_image_column=True)
 
     def update_card(
-        self, card: dict[str, Any], zone: str | None = None, meta: dict[str, Any] | None = None
+        self,
+        card: dict[str, Any],
+        zone: str | None = None,
+        meta: dict[str, Any] | None = None,
+        selection: dict[str, Any] | None = None,
     ) -> None:
         self.active_zone = zone
         self._has_selection = True
+        # The printing this card should open on (its saved board art), applied
+        # once the printing list is known (issue #792, part 1b).
+        self.inspector_selection = selection
         zone_title = ZONE_TITLES.get(zone, zone.title()) if zone else "Card Search"
         header = f"{card['name']}  ×{card['qty']}  ({zone_title})"
         self.name_label.SetLabel(header)
@@ -122,21 +132,29 @@ class CardInspectorPanelHandlersMixin(_Base):
         """Register a callback fired whenever the displayed printing changes."""
         self._printing_changed_handler = handler
 
-    def _emit_printing_changed(self) -> None:
-        if not self._printing_changed_handler:
-            return
+    def set_printing_selected_handler(
+        self, handler: Callable[[dict[str, Any], bool], None] | None
+    ) -> None:
+        """Register a callback fired on user-driven printing changes (#792).
+
+        ``handler(printing, persist)`` runs on prev/next clicks (``persist`` =
+        the auto-save flag) and on the explicit Save-art button (``persist`` =
+        True). It drives the board-art sync and the save-the-choice behaviour;
+        async loads and resets do not fire it.
+        """
+        self._printing_selected_handler = handler
+
+    def _current_printing_dict(self) -> dict[str, Any] | None:
+        """Return the currently displayed printing as a plain dict, or None."""
         printings = self.inspector_printings
         if not printings:
-            self._printing_changed_handler(None)
-            return
+            return None
         try:
             entry = printings[self.inspector_current_printing]
         except IndexError:
-            self._printing_changed_handler(None)
-            return
+            return None
         if isinstance(entry, dict):
-            self._printing_changed_handler(entry)
-            return
+            return entry
         if hasattr(entry, "get"):
             keys = (
                 "id",
@@ -147,9 +165,34 @@ class CardInspectorPanelHandlersMixin(_Base):
                 "flavor_text",
                 "artist",
             )
-            self._printing_changed_handler({key: entry.get(key) for key in keys})
+            return {key: entry.get(key) for key in keys}
+        return None
+
+    def _emit_printing_changed(self) -> None:
+        if not self._printing_changed_handler:
             return
-        self._printing_changed_handler(None)
+        self._printing_changed_handler(self._current_printing_dict())
+
+    def _emit_printing_selected(self, *, persist: bool) -> None:
+        """Tell the app a printing was chosen for the current card (issue #792)."""
+        if not self._printing_selected_handler:
+            return
+        printing = self._current_printing_dict()
+        if printing is None:
+            return
+        self._printing_selected_handler(printing, persist)
+
+    def _on_autosave_toggle(self, _event: wx.Event) -> None:
+        self._autosave_printing = self.autosave_checkbox.GetValue()
+        # The explicit button is redundant while auto-save is on.
+        self.save_art_btn.Show(not self._autosave_printing)
+        relayout(self.save_panel)
+        # Turning auto-save on persists the printing already on screen.
+        if self._autosave_printing:
+            self._emit_printing_selected(persist=True)
+
+    def _on_save_printing(self, _event: wx.Event) -> None:
+        self._emit_printing_selected(persist=True)
 
     def handle_image_downloaded(self, request: CardImageRequest) -> None:
         self._failed_image_requests.discard(self._failure_key(request))
@@ -177,7 +220,9 @@ class CardInspectorPanelHandlersMixin(_Base):
         if not printings:
             return
         self.inspector_printings = printings
-        self.inspector_current_printing = 0
+        self.inspector_current_printing = selected_printing_index(
+            printings, self.inspector_selection
+        )
         self._emit_printing_changed()
         self._load_current_printing_image()
 
@@ -205,6 +250,10 @@ class CardInspectorPanelHandlersMixin(_Base):
         if self.bulk_data_by_name:
             printings = self.bulk_data_by_name.get(card_name.lower(), [])
             self.inspector_printings = printings
+            # Open on the card's saved printing rather than the list head (#792).
+            self.inspector_current_printing = selected_printing_index(
+                printings, self.inspector_selection
+            )
         elif self.controller.BULK_DATA_CACHE.exists():
             logger.debug(f"Bulk data not loaded yet for {card_name}")
 
@@ -298,6 +347,7 @@ class CardInspectorPanelHandlersMixin(_Base):
                     self._printings_request_handler(card_name)
                     self._loading_printing = True
         self.nav_panel.Hide()
+        self.save_panel.Hide()
         self._notify_selection(active_request)
         self._set_display_mode(image_available, show_image_column=image_available)
         if not image_available and active_request:
@@ -347,8 +397,10 @@ class CardInspectorPanelHandlersMixin(_Base):
             self.prev_btn.Enable(current_idx > 0)
             self.next_btn.Enable(current_idx < len(printings) - 1)
             self.nav_panel.Show()
+            self.save_panel.Show()
         else:
             self.nav_panel.Hide()
+            self.save_panel.Hide()
 
         self._notify_selection(active_request)
         self._set_display_mode(image_available)
@@ -359,12 +411,14 @@ class CardInspectorPanelHandlersMixin(_Base):
         if self.inspector_current_printing > 0:
             self.inspector_current_printing -= 1
             self._emit_printing_changed()
+            self._emit_printing_selected(persist=self._autosave_printing)
             self._load_current_printing_image()
 
     def _on_next_printing(self, _event: wx.Event) -> None:
         if self.inspector_current_printing < len(self.inspector_printings) - 1:
             self.inspector_current_printing += 1
             self._emit_printing_changed()
+            self._emit_printing_selected(persist=self._autosave_printing)
             self._load_current_printing_image()
 
     def _set_printing_label(self, text: str) -> None:
