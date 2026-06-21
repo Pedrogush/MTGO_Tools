@@ -28,7 +28,9 @@ from widgets.frames.app_frame.frame.left_panel import LeftPanelBuilderMixin
 from widgets.frames.app_frame.frame.right_panel import RightPanelBuilderMixin
 from widgets.frames.app_frame.handlers import (
     AppFrameHandlersMixin,
-    CardTablesHandler,
+    CardInspectorPreviewHandlers,
+    CardSelectionHandlers,
+    CardShortcutHandlers,
     ChildWindowHandlers,
     DataLoadingHandlers,
     DeckContentHandlers,
@@ -37,6 +39,7 @@ from widgets.frames.app_frame.handlers import (
     SideboardGuideImportExportHandlers,
     SideboardGuidePersistenceHandlers,
     SideboardGuideRecordHandlers,
+    ZoneEditingHandlers,
 )
 from widgets.frames.app_frame.properties import AppFramePropertiesMixin
 from widgets.frames.identify_opponent import MTGOpponentDeckSpy
@@ -66,7 +69,10 @@ class AppFrame(
     SideboardGuideEntryHandlers,
     SideboardGuideImportExportHandlers,
     SideboardGuideRecordHandlers,
-    CardTablesHandler,
+    ZoneEditingHandlers,
+    CardShortcutHandlers,
+    CardSelectionHandlers,
+    CardInspectorPreviewHandlers,
     LeftPanelBuilderMixin,
     CenterPanelBuilderMixin,
     RightPanelBuilderMixin,
