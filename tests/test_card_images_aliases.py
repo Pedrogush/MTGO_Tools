@@ -91,6 +91,9 @@ def test_build_printing_index_sorts_and_counts():
             "set_name": "Alpha",
             "collector_number": "1",
             "released_at": "2001-01-01",
+            # full_art is truthy-but-not-bool and flavor_text is omitted, so the
+            # bool() coercion and the "" default both get exercised below.
+            "full_art": 1,
         },
         {
             "name": "Test Card",
@@ -109,6 +112,16 @@ def test_build_printing_index_sorts_and_counts():
     assert stats["total_printings"] == 2
     entries = by_name["test card"]
     assert [entry["id"] for entry in entries] == ["uuid-2", "uuid-1"]
+
+    # Per-printing payload normalization: set is upper-cased, missing string
+    # fields default to "", and full_art is coerced to a real bool.
+    newest = entries[0]
+    assert newest["set"] == "DEF"
+    oldest = entries[1]
+    assert oldest["set"] == "ABC"
+    assert oldest["flavor_text"] == ""
+    assert oldest["full_art"] is True
+    assert newest["full_art"] is False
 
 
 def test_face_alias_does_not_pollute_a_real_standalone_card():
@@ -145,6 +158,46 @@ def test_face_alias_does_not_pollute_a_real_standalone_card():
     # The non-colliding face name still resolves to the combined card.
     assert [e["id"] for e in by_name["emeritus of conflict"]] == ["emeritus-combined"]
     assert by_name["emeritus of conflict // lightning bolt"][0]["id"] == "emeritus-combined"
+
+
+def test_face_alias_equal_to_display_name_does_not_self_duplicate():
+    """A card_face whose name equals the card's own display name is skipped.
+
+    Isolates the ``alias.lower() != display_key`` filter in
+    ``_collect_face_aliases`` together with the ``alias_key == key`` guard in
+    ``build_printing_index``: the self-referential face must not create a
+    duplicate entry under the same key.
+    """
+    cards = [
+        {
+            "name": "Solo Card",
+            "id": "solo-1",
+            "set": "abc",
+            "released_at": "2001-01-01",
+            "card_faces": [
+                {"name": "Solo Card"},
+            ],
+        }
+    ]
+
+    by_name, _stats = card_images.build_printing_index(cards)
+
+    # Exactly one entry under the single key — no self-alias duplicate.
+    assert list(by_name.keys()) == ["solo card"]
+    assert [e["id"] for e in by_name["solo card"]] == ["solo-1"]
+
+
+def test_load_printing_index_payload_returns_none_for_corrupt_cache(tmp_path, monkeypatch):
+    """A non-decodable cache file is treated as absent (returns None)."""
+    cache_dir = tmp_path / "card_images"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    printings_path = cache_dir / "printings.json"
+    printings_path.write_text("not valid json {{{", encoding="utf-8")
+
+    monkeypatch.setattr(card_images_schemas, "IMAGE_CACHE_DIR", cache_dir, raising=False)
+    monkeypatch.setattr(card_images_schemas, "PRINTING_INDEX_CACHE", printings_path, raising=False)
+
+    assert card_images.load_printing_index_payload() is None
 
 
 def _write_bulk_payload(cache_dir, monkeypatch, printings_path):
