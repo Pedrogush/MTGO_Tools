@@ -4,13 +4,42 @@ from __future__ import annotations
 
 import json
 import os
+import sys
+import types
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 import pytest
 
-from repositories.card_repository.schemas import CardEntry
-from services.gamelog_service import (
+
+class _WxStub(types.ModuleType):
+    """A permissive ``wx`` stand-in fabricating attributes on demand."""
+
+    def __getattr__(self, name: str) -> Any:  # noqa: D401 - simple stub
+        value: Any = type(name, (), {})
+        setattr(self, name, value)
+        return value
+
+
+def _install_wx_stub() -> None:
+    """Install a ``wx`` stub only when the real module is unavailable.
+
+    ``wx`` is only an indirect import (via ``utils.constants``) of the card
+    repository package referenced below; it is not importable in the WSL dev
+    environment, so a minimal stub is injected first. On the Windows CI runner
+    the real ``wx`` is already importable and left untouched.
+    """
+    try:
+        import wx  # noqa: F401
+    except Exception:
+        sys.modules["wx"] = _WxStub("wx")
+
+
+_install_wx_stub()
+
+from repositories.card_repository.schemas import CardEntry  # noqa: E402
+from services.gamelog_service import (  # noqa: E402
     detect_archetype,
     detect_format_from_cards,
     extract_cards_played,
@@ -195,6 +224,26 @@ class TestExtractCardsPlayed:
         )
         assert extract_cards_played(content, "Alice") == ["Faithless Looting", "Tarmogoyf"]
 
+    def test_extracts_activated_ability_verb(self):
+        content = f"@PAlice activates an ability of {_card_ref('Urza, Lord High Artificer')}"
+        assert extract_cards_played(content, "Alice") == ["Urza, Lord High Artificer"]
+
+    def test_extracts_triggered_ability_verb(self):
+        content = f"@PAlice puts a triggered ability from {_card_ref('Ledger Shredder')}"
+        assert extract_cards_played(content, "Alice") == ["Ledger Shredder"]
+
+    def test_extracts_cycles_verb(self):
+        content = f"@PAlice cycles {_card_ref('Street Wraith')}"
+        assert extract_cards_played(content, "Alice") == ["Street Wraith"]
+
+    def test_casts_with_targeting_captures_only_the_spell(self):
+        # The "casts X targeting Y" pattern must attribute only the cast spell to
+        # the acting player; the targeted (opponent's) permanent is not captured.
+        content = (
+            f"@PAlice casts {_card_ref('Lightning Bolt')} " f"targeting {_card_ref('Goblin Guide')}"
+        )
+        assert extract_cards_played(content, "Alice") == ["Lightning Bolt"]
+
 
 class TestParseMatchScore:
     def test_parses_wins_the_match(self):
@@ -242,6 +291,33 @@ class TestParseMulliganData:
         content = "@PAlice chooses to play first\n@PAlice wins the game"
         assert parse_mulligan_data(content) == {}
 
+    def test_same_game_keeps_deepest_mulligan(self):
+        # Two mulligan lines in the same game: a London mulligan logs each step
+        # ("to six", then "to five"). The per-game value is the max depth, so the
+        # final count for game 1 is 7 - 5 = 2, not the sum of the two lines.
+        content = (
+            "@PAlice chooses to play first\n"
+            "@PAlice mulligans to six cards\n"
+            "@PAlice mulligans to five cards"
+        )
+        assert parse_mulligan_data(content) == {"Alice": [2]}
+
+    def test_unknown_count_word_yields_zero_mulligans(self):
+        # An unrecognised count word falls back to 7 in word_to_num, so 7 - 7 = 0.
+        content = "@PAlice chooses to play first\n@PAlice mulligans to many cards"
+        assert parse_mulligan_data(content) == {"Alice": [0]}
+
+    def test_later_game_only_pads_earlier_games_with_zero(self):
+        # A player who only mulligans in game 3 still gets a 3-element list, with
+        # games 1 and 2 padded to 0 by the range(1, max+1) reconstruction.
+        content = (
+            "@PAlice chooses to play first\n"
+            "@PAlice chooses to not play first\n"
+            "@PAlice chooses to play first\n"
+            "@PAlice mulligans to six cards"
+        )
+        assert parse_mulligan_data(content) == {"Alice": [0, 0, 1]}
+
 
 class TestParseGamelogFileSynthetic:
     """Drive parse_gamelog_file with temp files of synthetic content.
@@ -284,6 +360,45 @@ class TestParseGamelogFileSynthetic:
     def test_returns_none_for_missing_file(self, tmp_path):
         # A path that doesn't exist must be swallowed and return None, not raise.
         assert parse_gamelog_file(str(tmp_path / "does_not_exist.dat")) is None
+
+    def test_concession_counts_toward_winner_in_fallback(self, tmp_path):
+        # No "wins the match" line forces the game-results fallback. A single
+        # concession by Bob makes the opponent (Alice) the match winner: the
+        # fallback credits player1_wins when a game's loser is players[1].
+        content = "\n".join(
+            [
+                "Wed Dec 04 14:23:10 PST 2024",
+                "@PAlice joined the game",
+                "@PBob joined the game",
+                "@PAlice chooses to play first",
+                "@PBob has conceded from the game",
+            ]
+        )
+        path = self._write(tmp_path, content)
+        result = parse_gamelog_file(path)
+        assert result is not None
+        assert result["winner"] == "Alice"
+        assert result["match_score"] == "1-0"
+
+    def test_one_one_tie_yields_winner_none(self, tmp_path):
+        # Each player wins exactly one game and there is no match-result line, so
+        # the fallback count is 1-1 and the winner branch resolves to None.
+        content = "\n".join(
+            [
+                "Wed Dec 04 14:23:10 PST 2024",
+                "@PAlice joined the game",
+                "@PBob joined the game",
+                "@PAlice chooses to play first",
+                "@PAlice wins the game",
+                "@PBob chooses to play first",
+                "@PBob wins the game",
+            ]
+        )
+        path = self._write(tmp_path, content)
+        result = parse_gamelog_file(path)
+        assert result is not None
+        assert result["winner"] is None
+        assert result["match_score"] == "1-1"
 
 
 # ---------------------------------------------------------------------------
@@ -429,6 +544,80 @@ class TestParseAllGamelogs:
         monkeypatch.setattr("services.gamelog_service.service.find_all_gamelog_dirs", lambda: [])
         with pytest.raises(RuntimeError):
             parse_all_gamelogs()
+
+
+# ---------------------------------------------------------------------------
+# Unit tests for the filesystem discovery helpers (tmp_path, no MTGO needed)
+# ---------------------------------------------------------------------------
+
+
+def _touch_gamelog(directory: Path, match_id: str, mtime: float) -> Path:
+    """Create a Match_GameLog_<id>.dat file with a fixed mtime."""
+    directory.mkdir(parents=True, exist_ok=True)
+    f = directory / f"Match_GameLog_{match_id}.dat"
+    f.write_text("x", encoding="latin1")
+    os.utime(f, (mtime, mtime))
+    return f
+
+
+class TestFindGamelogFiles:
+    def test_returns_only_matching_files_newest_first(self, tmp_path):
+        # Three GameLog files with increasing mtimes plus an unrelated file; the
+        # result excludes the non-GameLog file and is sorted newest-first.
+        _touch_gamelog(tmp_path, "1", 1_000)
+        _touch_gamelog(tmp_path, "2", 3_000)
+        _touch_gamelog(tmp_path, "3", 2_000)
+        (tmp_path / "not_a_gamelog.txt").write_text("ignore", encoding="latin1")
+
+        files = find_gamelog_files(str(tmp_path))
+        names = [os.path.basename(f) for f in files]
+        assert names == [
+            "Match_GameLog_2.dat",
+            "Match_GameLog_3.dat",
+            "Match_GameLog_1.dat",
+        ]
+
+    def test_since_date_excludes_older_files(self, tmp_path):
+        # Files older than since_date are filtered out; newer ones are kept.
+        _touch_gamelog(tmp_path, "old", 1_600_000_000)
+        _touch_gamelog(tmp_path, "new", 1_700_000_000)
+
+        cutoff = datetime.fromtimestamp(1_650_000_000)
+        files = find_gamelog_files(str(tmp_path), since_date=cutoff)
+        names = [os.path.basename(f) for f in files]
+        assert names == ["Match_GameLog_new.dat"]
+
+    def test_since_date_keeps_all_when_cutoff_is_old(self, tmp_path):
+        _touch_gamelog(tmp_path, "a", 1_600_000_000)
+        _touch_gamelog(tmp_path, "b", 1_700_000_000)
+
+        cutoff = datetime.fromtimestamp(1_500_000_000)
+        files = find_gamelog_files(str(tmp_path), since_date=cutoff)
+        assert len(files) == 2
+
+
+class TestFindAllGamelogDirs:
+    """Exercise the ClickOnce-tree scan against a synthetic layout under tmp_path."""
+
+    def _appfiles_dir(self, base: Path, hash1: str, hash2: str, app: str, leaf: str) -> Path:
+        # Mirror the production ClickOnce layout:
+        #   {base}/{hash1}/{hash2}/mtgo*/Data/AppFiles/{leaf}/
+        return base / hash1 / hash2 / app / "Data" / "AppFiles" / leaf
+
+    def test_finds_dirs_newest_first_and_excludes_empty(self, tmp_path):
+        older = self._appfiles_dir(tmp_path, "aa", "bb", "mtgo1", "leaf1")
+        newer = self._appfiles_dir(tmp_path, "cc", "dd", "mtgo2", "leaf2")
+        empty = self._appfiles_dir(tmp_path, "ee", "ff", "mtgo3", "leaf3")
+        empty.mkdir(parents=True, exist_ok=True)  # no Match_GameLog_*.dat -> excluded
+
+        _touch_gamelog(older, "1", 1_000)
+        _touch_gamelog(newer, "2", 5_000)
+
+        dirs = find_all_gamelog_dirs(appdata_base=str(tmp_path))
+        assert dirs == [str(newer), str(older)]
+
+    def test_returns_empty_for_base_without_clickonce_tree(self, tmp_path):
+        assert find_all_gamelog_dirs(appdata_base=str(tmp_path)) == []
 
 
 # ---------------------------------------------------------------------------
@@ -579,6 +768,15 @@ class TestDetectFormatFromCards:
         manager = _make_manager(deck)
         result = detect_format_from_cards(list(deck.keys()), manager)
         assert result == "Modern"
+
+    def test_detects_pauper_when_only_pauper_legal(self):
+        # Pauper is last in the priority order, so it is only returned when no
+        # more-restrictive format is in the common intersection. A deck whose
+        # cards are legal solely in Pauper exercises that final branch.
+        deck = self._build_deck({"pauper": "Legal"})
+        manager = _make_manager(deck)
+        result = detect_format_from_cards(list(deck.keys()), manager)
+        assert result == "Pauper"
 
     def test_returns_last_parsed_format_when_no_common_format(self):
         # Two cards each legal in mutually exclusive formats — intersection is empty,
