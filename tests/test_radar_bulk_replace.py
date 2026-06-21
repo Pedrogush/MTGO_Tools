@@ -15,6 +15,7 @@ def _radar(
     href: str,
     name: str,
     decks: int,
+    failed: int = 0,
     mb: list[dict] | None = None,
     sb: list[dict] | None = None,
 ) -> dict:
@@ -24,7 +25,7 @@ def _radar(
         "source": "test",
         "archetype": {"name": name, "href": href},
         "total_decks_analyzed": decks,
-        "decks_failed": 0,
+        "decks_failed": failed,
         "mainboard_cards": mb or [],
         "sideboard_cards": sb or [],
     }
@@ -55,7 +56,12 @@ def repo(tmp_path):
 def test_bulk_replace_persists_all_entries(repo):
     entries = [
         _radar(
-            fmt="modern", href="modern-burn", name="Burn", decks=10, mb=[_card("Bolt", copies=10)]
+            fmt="modern",
+            href="modern-burn",
+            name="Burn",
+            decks=10,
+            failed=3,
+            mb=[_card("Bolt", copies=10)],
         ),
         _radar(fmt="modern", href="modern-prowess", name="Prowess", decks=20),
         _radar(fmt="legacy", href="legacy-control", name="Control", decks=5),
@@ -67,6 +73,9 @@ def test_bulk_replace_persists_all_entries(repo):
     burn = repo.get_radar("modern", "modern-burn")
     assert burn is not None
     assert burn.total_decks_analyzed == 10
+    # ``decks_failed`` is a distinct non-zero value so a column swap with
+    # ``total_decks_analyzed`` cannot pass silently.
+    assert burn.decks_failed == 3
     assert [c.card_name for c in burn.mainboard_cards] == ["Bolt"]
     # Lock the full column mapping and the copy_distribution JSON round-trip so a
     # column-order swap, float/int truncation, or distribution-normalization bug
@@ -95,6 +104,67 @@ def test_bulk_replace_skips_invalid_entries(repo):
 
     assert replaced == 1
     assert repo.get_radar("modern", "modern-burn") is not None
+
+
+def test_bulk_replace_skips_invalid_card_rows(repo):
+    """``_build_rows`` drops non-dict and blank-named cards, keeping valid ones.
+
+    A non-dict element and a card with a missing/blank name must be filtered out
+    while the surrounding valid card still persists -- the radar itself is kept
+    even though some of its card rows are invalid.
+    """
+    entries = [
+        _radar(
+            fmt="modern",
+            href="modern-burn",
+            name="Burn",
+            decks=10,
+            mb=[
+                "not-a-dict",
+                {"card_name": "  ", "appearances": 5},
+                _card("Bolt", copies=10),
+            ],
+        )
+    ]
+
+    replaced = repo.bulk_replace(entries)
+
+    assert replaced == 1
+    burn = repo.get_radar("modern", "modern-burn")
+    assert burn is not None
+    # Only the valid card survives; the bogus rows are silently dropped.
+    assert [c.card_name for c in burn.mainboard_cards] == ["Bolt"]
+
+
+def test_bulk_replace_normalizes_copy_distribution(repo):
+    """``copy_distribution`` blank keys are filtered and non-dicts become ``{}``.
+
+    A blank-key entry must be dropped from the normalized distribution, and a
+    distribution that is not a dict at all must round-trip as an empty mapping.
+    """
+    entries = [
+        _radar(
+            fmt="modern",
+            href="modern-burn",
+            name="Burn",
+            decks=10,
+            mb=[
+                {**_card("Bolt", copies=4), "copy_distribution": {"4": 9, "  ": 7, "2": 3}},
+                {**_card("Helix", copies=4), "copy_distribution": "not-a-dict"},
+            ],
+        )
+    ]
+
+    replaced = repo.bulk_replace(entries)
+
+    assert replaced == 1
+    burn = repo.get_radar("modern", "modern-burn")
+    assert burn is not None
+    by_name = {c.card_name: c for c in burn.mainboard_cards}
+    # Blank key dropped; remaining keys coerced to ints.
+    assert by_name["Bolt"].copy_distribution == {4: 9, 2: 3}
+    # Non-dict distribution normalizes to an empty mapping.
+    assert by_name["Helix"].copy_distribution == {}
 
 
 def test_bulk_replace_overwrites_existing_snapshot(repo):
