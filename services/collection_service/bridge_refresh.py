@@ -70,7 +70,10 @@ class BridgeRefreshMixin(_Base):
                         on_error("Bridge returned empty collection")
                     return
 
-                cards = collection_data.get("cards", [])
+                # The bridge snapshot exposes the card list under "items"
+                # (C# CollectionSnapshot.Items); keep "cards" as a fallback for
+                # any legacy/alternate payload shape.
+                cards = collection_data.get("items") or collection_data.get("cards") or []
                 if not cards:
                     if on_error:
                         on_error("No cards in collection data")

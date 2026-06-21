@@ -10,6 +10,7 @@ import pytest
 
 from services.mtgo_bridge_service import client as mtgo_bridge_client
 from services.mtgo_bridge_service import commands as bridge_commands
+from services.mtgo_bridge_service import discovery as bridge_discovery
 from services.mtgo_bridge_service import watch as bridge_watch
 
 
@@ -59,7 +60,10 @@ def test_resolve_bridge_env_missing_file_falls_back(monkeypatch, tmp_path: Path)
     # the default candidates. With no candidates available, returns None.
     missing = tmp_path / "does_not_exist.exe"
     monkeypatch.setenv("MTGO_BRIDGE_PATH", str(missing))
-    monkeypatch.setattr(mtgo_bridge_client, "_default_bridge_candidates", lambda: [])
+    # _resolve_bridge_path lives in the discovery module and reads that module's
+    # own _default_bridge_candidates global, so the patch must target discovery
+    # (patching the client re-export has no effect once the bridge is built on disk).
+    monkeypatch.setattr(bridge_discovery, "_default_bridge_candidates", lambda: [])
     assert mtgo_bridge_client._resolve_bridge_path(None) is None
 
 

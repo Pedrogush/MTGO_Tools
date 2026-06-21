@@ -285,6 +285,20 @@ def cmd_open_widget(client: AutomationClient, args: argparse.Namespace) -> int:
     return 0 if result.get("opened") else 1
 
 
+def cmd_refresh_collection(client: AutomationClient, args: argparse.Namespace) -> int:
+    """Trigger a collection refresh + export from the MTGO bridge."""
+    result = client.refresh_collection(force=not args.no_force)
+    print(format_output(result, args.json))
+    return 0 if result.get("triggered") else 1
+
+
+def cmd_timer_alert_action(client: AutomationClient, args: argparse.Namespace) -> int:
+    """Drive the open Timer Alert window (start/stop/test)."""
+    result = client.timer_alert_action(args.action)
+    print(format_output(result, args.json))
+    return 0 if result.get("ok") else 1
+
+
 def cmd_get_deck_notes(client: AutomationClient, args: argparse.Namespace) -> int:
     """Get the current deck notes cards."""
     result = client.get_deck_notes()
@@ -496,6 +510,24 @@ Notes:
     # get-builder-results
     subparsers.add_parser("get-builder-results", help="Get builder search result count")
 
+    # refresh-collection
+    p = subparsers.add_parser(
+        "refresh-collection",
+        help="Trigger a collection refresh + export from the MTGO bridge",
+    )
+    p.add_argument(
+        "--no-force",
+        action="store_true",
+        help="Honor the cache freshness window instead of forcing a fetch",
+    )
+
+    # timer-alert-action
+    p = subparsers.add_parser(
+        "timer-alert-action",
+        help="Drive the open Timer Alert window (start/stop/test)",
+    )
+    p.add_argument("action", choices=["start", "stop", "test"], help="Action to perform")
+
     # open-widget
     p = subparsers.add_parser("open-widget", help="Open a widget window")
     p.add_argument(
@@ -621,6 +653,8 @@ Notes:
         "get-scroll-pos": cmd_get_scroll_pos,
         "get-builder-results": cmd_get_builder_results,
         "get-builder-top-item": cmd_get_builder_top_item,
+        "refresh-collection": cmd_refresh_collection,
+        "timer-alert-action": cmd_timer_alert_action,
         "open-widget": cmd_open_widget,
         "screenshot-window": cmd_screenshot_window,
         "get-deck-notes": cmd_get_deck_notes,

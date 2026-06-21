@@ -306,6 +306,19 @@ class AutomationClient:
         """
         return self._send_command("open_widget", widget_name=widget_name)
 
+    def refresh_collection(self, force: bool = True) -> dict[str, Any]:
+        """Trigger a collection refresh + export from the MTGO bridge.
+
+        Drives the real ``refresh_collection_from_bridge`` controller path (background
+        fetch + ``collection_full_trade_*.json`` export). Returns immediately with the
+        resolved ``save_dir``; poll that directory and ``get_status`` for the result.
+        """
+        return self._send_command("refresh_collection", force=force)
+
+    def timer_alert_action(self, action: str) -> dict[str, Any]:
+        """Drive the open Timer Alert window: 'start', 'stop', or 'test'."""
+        return self._send_command("timer_alert_action", action=action)
+
     def get_card_images_loaded(self, zone: str = "main") -> dict[str, Any]:
         """Count how many card panels in a zone have loaded card face images.
 

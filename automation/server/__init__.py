@@ -99,6 +99,8 @@ class AutomationServer(
             "get_builder_top_item": self._handle_get_builder_top_item,
             "scroll_builder_results": self._handle_scroll_builder_results,
             "open_widget": self._handle_open_widget,
+            "refresh_collection": self._handle_refresh_collection,
+            "timer_alert_action": self._handle_timer_alert_action,
             "get_card_images_loaded": self._handle_get_card_images_loaded,
             "get_deck_notes": self._handle_get_deck_notes,
             "set_current_deck": self._handle_set_current_deck,

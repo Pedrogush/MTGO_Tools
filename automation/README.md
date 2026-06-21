@@ -75,6 +75,45 @@ python -m automation.cli screenshot-window match_history --path screenshots/hist
 
 `screenshot-window` returns an error if the named window is not currently open.
 
+## Exercising MTGO bridge features
+
+These commands drive the live MTGO bridge integration end-to-end (they require a
+built `MTGOBridge.exe` and a running, logged-in MTGO client — see
+`dotnet/MTGOBridge/README.md`).
+
+### Collection export
+
+`refresh-collection` runs the same path as the **Load Collection** toolbar menu
+item: it fetches a fresh collection snapshot from the bridge on a background
+thread and writes a `collection_full_trade_*.json` export into the deck save
+directory. The command returns immediately with the resolved `save_dir`; poll
+that directory (and `status`) for the result.
+
+```bash
+python -m automation.cli --json refresh-collection
+# {"triggered": true, "save_dir": "C:\\Users\\you\\Documents\\mtgo_decks"}
+python -m automation.cli status   # "Fetching collection from MTGO..." -> success/fail
+```
+
+Use `--no-force` to honour the cache freshness window instead of forcing a fetch.
+
+### Timer alert
+
+Open the window first, then drive it. `start`/`stop` toggle threshold
+monitoring (which streams challenge timers from the bridge `watch` mode);
+`test` plays the configured alert sound.
+
+```bash
+python -m automation.cli open-widget timer_alert
+python -m automation.cli timer-alert-action test    # play the alert sound
+python -m automation.cli timer-alert-action start   # begin monitoring
+python -m automation.cli timer-alert-action stop
+```
+
+> Note: each bridge invocation pays a one-time-per-MTGO-session cold attach
+> (~2-3 min) while MTGOSDK injects its diagnostic server into the MTGO client;
+> subsequent calls in the same MTGO session are fast.
+
 ## Video capture (recording a transition)
 
 `start-video` / `stop-video` record the main window on a **background thread**,

@@ -179,6 +179,41 @@ class IntrospectionMixin(_Base):
         method()
         return {"opened": True, "widget": widget_name}
 
+    def _handle_refresh_collection(self, force: bool = True) -> dict[str, Any]:
+        """Trigger a collection refresh + export through the real controller path.
+
+        Drives ``AppController.refresh_collection_from_bridge`` (the same code the
+        "Load Collection" toolbar menu item runs), which fetches a snapshot from the
+        MTGO bridge on a background thread and writes a ``collection_full_trade_*.json``
+        export into the deck save directory. Returns immediately; poll ``save_dir`` for
+        the new file and ``get_status`` for the success/failure message.
+        """
+        controller = getattr(self.frame, "controller", None)
+        if controller is None:
+            return {"triggered": False, "error": "Controller not available"}
+        save_dir = getattr(controller, "deck_save_dir", None)
+        controller.refresh_collection_from_bridge(force=force)
+        return {"triggered": True, "save_dir": str(save_dir) if save_dir else None}
+
+    def _handle_timer_alert_action(self, action: str) -> dict[str, Any]:
+        """Drive the open Timer Alert window (start/stop monitoring, test alert)."""
+        win = getattr(self.frame, "timer_window", None)
+        if win is None:
+            return {"ok": False, "error": "Timer alert window is not open"}
+        method_name = {
+            "start": "start_monitoring",
+            "stop": "stop_monitoring",
+            "test": "test_alert",
+        }.get(action)
+        if method_name is None:
+            return {"ok": False, "error": f"Unknown action: {action}"}
+        method = getattr(win, method_name, None)
+        if method is None:
+            return {"ok": False, "error": f"Method not found: {method_name}"}
+        method()
+        status = win.status_text.GetValue() if hasattr(win, "status_text") else None
+        return {"ok": True, "action": action, "status": status}
+
     def _handle_close_app(self) -> dict[str, Any]:
         """Close the application after sending the response."""
         # Schedule Close on the next event-loop iteration so the response is
