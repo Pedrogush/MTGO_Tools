@@ -26,7 +26,7 @@ from typing import Any
 import wx
 import wx.grid as gridlib
 
-from utils.constants import DARK_ACCENT, DARK_ALT, DARK_BG, DARK_PANEL, LIGHT_TEXT, SUBDUED_TEXT
+from utils.constants import DARK_ALT, DARK_BG, DARK_PANEL, LIGHT_TEXT, SUBDUED_TEXT
 from widgets.mana_icon_factory import ManaIconFactory
 from widgets.panels.card_table_panel.marquee import MarqueeController
 from widgets.panels.card_table_panel.sorting import (
@@ -40,11 +40,14 @@ from widgets.panels.card_table_panel.sorting import (
     TABLE_ACTION_SUB,
     TABLE_COLUMNS,
     action_slot_at,
-    card_colors,
-    card_mana_value,
-    card_type_line,
     sort_table_rows,
 )
+from widgets.panels.card_table_panel.table_columns import (
+    COLUMN_WIDTH_CAPS,
+    cell_text,
+    fit_to_width,
+)
+from widgets.panels.card_table_panel.table_dnd import TableDragController
 from widgets.panels.card_table_panel.table_renderers import (
     _ACTIONS_COL_WIDTH,
     _ActionCellRenderer,
@@ -54,21 +57,9 @@ from widgets.panels.card_table_panel.table_renderers import (
     _ManaIconCellRenderer,
 )
 
-# Safety cap on raw oracle text stored in cells. The inline-symbol renderer
-# does pixel-precise ellipsis truncation, but storing massive strings still
-# costs memory in the grid table.
-_MAX_TEXT_CHARS = 400
-
 # Mana/color icons are sized larger than text icons (by 4px) so they fill the
 # row height without top/bottom padding.
 _CELL_ICON_SIZE_BONUS = 4
-
-# Natural-width caps applied during AutoSize. _fit_to_width then shrinks
-# further so the whole row fits the visible viewport.
-_MAX_TYPE_WIDTH = 220
-_MAX_TEXT_WIDTH = 540
-_MIN_TYPE_WIDTH = 70
-_MIN_TEXT_WIDTH = 100
 
 _COLUMN_LABELS: dict[str, str] = {
     COL_MANA: "Mana",
@@ -125,17 +116,10 @@ class DeckTableView(wx.Panel):
         # (possibly multi-) selection, so an echoed None can't wipe the set.
         self._suppress_set_selected: bool = False
         self._marquee_base: set[str] | None = None
-        # Drag-to-reorder state. A reorder rearranges rows visually only — zone
-        # quantities never change, so it stays inside the view (issue #779). The
-        # arranged order lives in self._rows until the next sort / set_cards.
-        self._drag_press: wx.Point | None = None
-        self._drag_active = False
-        self._drag_names: list[str] = []
-        self._drop_row: int | None = None
+        # Drag-to-reorder state lives in the controller (issue #779); a reorder
+        # rearranges rows visually only, so the arranged order lands back in
+        # self._rows via the on_reorder callback until the next sort / set_cards.
         self._manual_overrides = False
-        # Insertion-line feedback is drawn over the native grid with an overlay so
-        # it survives the grid's own repaints without us owning its paint cycle.
-        self._drop_overlay = wx.Overlay()
         # Natural widths populated by _autosize_columns; _fit_to_width starts
         # from these so resizing the panel wider re-expands the columns.
         self._natural_widths: dict[int, int] = {}
@@ -212,6 +196,14 @@ class DeckTableView(wx.Panel):
             on_select=self._marquee_select,
             on_finish=self._marquee_finish,
         )
+        self._drag = TableDragController(
+            self.grid,
+            grid_window,
+            rows=lambda: self._rows,
+            names_in_visual_order=self._names_in_visual_order,
+            on_reorder=self._apply_reorder,
+            on_zone_transfer=self._on_zone_transfer,
+        )
 
         self.grid.Bind(gridlib.EVT_GRID_LABEL_LEFT_CLICK, self._on_header_click)
         self.grid.Bind(gridlib.EVT_GRID_SELECT_CELL, self._on_cell_select)
@@ -229,7 +221,7 @@ class DeckTableView(wx.Panel):
         # any manual reorder / in-flight drag (the new content re-sorts).
         self._needs_autosize = True
         self._manual_overrides = False
-        self._reset_drag()
+        self._drag.reset()
         self._refresh()
 
     def set_selected(self, name: str | None) -> None:
@@ -279,38 +271,11 @@ class DeckTableView(wx.Panel):
             for row_idx, card in enumerate(self._rows):
                 meta = self._get_metadata(card["name"]) or {}
                 for col_idx, col_id in enumerate(TABLE_COLUMNS):
-                    self.grid.SetCellValue(row_idx, col_idx, self._cell_text(card, meta, col_id))
+                    self.grid.SetCellValue(row_idx, col_idx, cell_text(card, meta, col_id))
             self._apply_selection_highlight()
             self._update_sort_indicator()
         finally:
             self.grid.EndBatch()
-
-    @staticmethod
-    def _cell_text(card: dict[str, Any], meta: Any, col_id: str) -> str:
-        if col_id == COL_NAME:
-            qty = card.get("qty", 1)
-            return f"{qty}× {card['name']}"
-        if col_id == COL_MANA:
-            cost = meta.get("mana_cost")
-            if cost:
-                return cost
-            mv = card_mana_value(meta)
-            if mv == 0 and "land" in (card_type_line(meta) or "").lower():
-                return ""
-            return f"{{{int(mv)}}}"
-        if col_id == COL_TYPE:
-            return card_type_line(meta)
-        if col_id == COL_TEXT:
-            text = (meta.get("oracle_text") or "").replace("\n", " ")
-            if len(text) > _MAX_TEXT_CHARS:
-                return text[: _MAX_TEXT_CHARS - 1] + "…"
-            return text
-        if col_id == COL_COLOR:
-            cols = card_colors(meta)
-            if not cols:
-                return "{C}"
-            return "".join(f"{{{c}}}" for c in cols)
-        return ""
 
     def _autosize_columns(self) -> None:
         """Auto-size columns to their content, then fit-to-width.
@@ -320,12 +285,11 @@ class DeckTableView(wx.Panel):
         results are stored in ``_natural_widths`` so :meth:`_fit_to_width` can
         re-expand columns when the viewport grows.
         """
-        caps: dict[str, int] = {COL_TYPE: _MAX_TYPE_WIDTH, COL_TEXT: _MAX_TEXT_WIDTH}
         self._natural_widths = {}
         for idx, col_id in enumerate(TABLE_COLUMNS):
             self.grid.AutoSizeColumn(idx, setAsMin=False)
             size = self.grid.GetColSize(idx)
-            cap = caps.get(col_id)
+            cap = COLUMN_WIDTH_CAPS.get(col_id)
             if cap is not None and size > cap:
                 size = cap
             self._natural_widths[idx] = size
@@ -336,7 +300,8 @@ class DeckTableView(wx.Panel):
 
         Starts from ``_natural_widths`` so a panel resize re-expands the
         columns back toward their natural widths. Other columns (mana, name,
-        color) are never shrunk.
+        color) are never shrunk. The proportional-shrink math lives in
+        :func:`table_columns.fit_to_width`; this only applies the result.
         """
         if not self._natural_widths:
             return
@@ -347,29 +312,14 @@ class DeckTableView(wx.Panel):
         # Reserve room for the fixed actions column so the data columns shrink
         # to fit beside it rather than pushing it off-screen.
         available = self.grid.GetClientSize().GetWidth() - _ACTIONS_COL_WIDTH
-        if available <= 0:
-            return
-        total = sum(self._natural_widths.values())
-        overflow = total - available
-        if overflow <= 0:
-            return
-        type_idx = TABLE_COLUMNS.index(COL_TYPE)
-        text_idx = TABLE_COLUMNS.index(COL_TEXT)
-        type_size = self._natural_widths.get(type_idx, 0)
-        text_size = self._natural_widths.get(text_idx, 0)
-        type_room = max(0, type_size - _MIN_TYPE_WIDTH)
-        text_room = max(0, text_size - _MIN_TEXT_WIDTH)
-        total_room = type_room + text_room
-        if total_room <= 0:
-            return
-        take = min(overflow, total_room)
-        # Text has more filler than type, so distribute proportionally to room.
-        text_take = int(round(take * text_room / total_room))
-        type_take = take - text_take
-        if text_size:
-            self.grid.SetColSize(text_idx, text_size - text_take)
-        if type_size:
-            self.grid.SetColSize(type_idx, type_size - type_take)
+        sizes = fit_to_width(
+            self._natural_widths,
+            available,
+            TABLE_COLUMNS.index(COL_TYPE),
+            TABLE_COLUMNS.index(COL_TEXT),
+        )
+        for idx, size in sizes.items():
+            self.grid.SetColSize(idx, size)
 
     def _on_panel_resize(self, event: wx.SizeEvent) -> None:
         event.Skip()
@@ -436,15 +386,8 @@ class DeckTableView(wx.Panel):
         if self._marquee.active:
             self._marquee.update(event.GetPosition())
             return
-        if self._drag_press is not None and event.LeftIsDown():
-            x, y = self.grid.CalcUnscrolledPosition(event.GetPosition())
-            if not self._drag_active and (
-                abs(x - self._drag_press.x) > 4 or abs(y - self._drag_press.y) > 4
-            ):
-                self._drag_active = True
-            if self._drag_active:
-                self._drop_row = self._drop_row_at(y)
-                self._draw_drop_line(self._drop_row)
+        if self._drag.primed and event.LeftIsDown():
+            self._drag.update(event.GetPosition())
             return
         if self._selected_names or self._on_hover is None:
             event.Skip()
@@ -508,10 +451,7 @@ class DeckTableView(wx.Panel):
             self._notify_selection(card)
 
         # Prime a potential drag-to-reorder (begins once the pointer moves).
-        self._drag_press = wx.Point(x, y)
-        self._drag_names = self._names_in_visual_order(self._selected_names)
-        if not self._grid_window.HasCapture():
-            self._grid_window.CaptureMouse()
+        self._drag.prime(wx.Point(x, y), self._selected_names)
 
     def _on_grid_left_up(self, event: wx.MouseEvent) -> None:
         if self._marquee.active:
@@ -519,93 +459,30 @@ class DeckTableView(wx.Panel):
             return
         if self._grid_window.HasCapture():
             self._grid_window.ReleaseMouse()
-        if self._drag_active:
-            # A drop over the other zone's pane moves the cards there; otherwise
-            # it's a within-zone reorder.
-            transferred = False
-            if self._on_zone_transfer is not None:
-                transferred = self._on_zone_transfer(
-                    self._drag_names, self._grid_window.ClientToScreen(event.GetPosition())
-                )
-            if not transferred:
-                x, y = self.grid.CalcUnscrolledPosition(event.GetPosition())
-                self._perform_drop(self._drop_row_at(y))
-            self._reset_drag()
+        if self._drag.active:
+            self._drag.finish(event.GetPosition())
             return
-        self._drag_press = None
-        self._drag_names = []
+        self._drag.clear_press()
         event.Skip()
 
     def _on_grid_capture_lost(self, _event: wx.MouseCaptureLostEvent) -> None:
         self._marquee.cancel()
-        self._reset_drag()
+        self._drag.reset()
 
     # ----- drag-to-reorder -----
     def _names_in_visual_order(self, names: set[str]) -> list[str]:
         """Return ``names`` in current top-to-bottom row order."""
         return [card["name"] for card in self._rows if card["name"] in names]
 
-    def _drop_row_at(self, y_logical: int) -> int:
-        """Insertion row index for a drop at logical y (before the row whose
-        midpoint sits below the cursor)."""
-        n = len(self._rows)
-        for idx in range(n):
-            rect = self.grid.CellToRect(idx, 0)
-            if y_logical < rect.y + rect.height / 2:
-                return idx
-        return n
-
-    def _perform_drop(self, insert_row: int) -> None:
-        """Reorder ``self._rows`` so the dragged rows land at ``insert_row``.
+    def _apply_reorder(self, new_rows: list[dict[str, Any]]) -> None:
+        """Adopt a drag-reordered row list and re-render (issue #779).
 
         Visual rearrangement only; zone quantities are untouched and nothing is
         reported upward. Persists until the next sort / set_cards.
         """
-        if not self._drag_names:
-            return
-        dragged = set(self._drag_names)
-        before = sum(1 for c in self._rows[:insert_row] if c["name"] in dragged)
-        insert_row -= before
-        order = {name: i for i, name in enumerate(self._drag_names)}
-        moved = sorted(
-            (c for c in self._rows if c["name"] in dragged),
-            key=lambda c: order.get(c["name"], 0),
-        )
-        if not moved:
-            return
-        kept = [c for c in self._rows if c["name"] not in dragged]
-        insert_row = max(0, min(len(kept), insert_row))
-        self._rows = kept[:insert_row] + moved + kept[insert_row:]
+        self._rows = new_rows
         self._manual_overrides = True
         self._populate_grid()
-
-    def _draw_drop_line(self, insert_row: int) -> None:
-        """Draw the insertion line over the grid at ``insert_row`` via overlay."""
-        n = len(self._rows)
-        if n == 0:
-            return
-        if insert_row < n:
-            rect = self.grid.CellToRect(insert_row, 0)
-            logical_y = rect.y
-        else:
-            rect = self.grid.CellToRect(n - 1, 0)
-            logical_y = rect.GetBottom()
-        _x, device_y = self.grid.CalcScrolledPosition(0, logical_y)
-        dc = wx.ClientDC(self._grid_window)
-        odc = wx.DCOverlay(self._drop_overlay, dc)
-        odc.Clear()
-        dc.SetPen(wx.Pen(wx.Colour(*DARK_ACCENT), 3))
-        width = self._grid_window.GetClientSize().GetWidth()
-        dc.DrawLine(0, device_y, width, device_y)
-        del odc
-
-    def _reset_drag(self) -> None:
-        self._drag_press = None
-        self._drag_active = False
-        self._drag_names = []
-        self._drop_row = None
-        self._drop_overlay.Reset()
-        self._grid_window.Refresh()
 
     def _notify_selection_for_set(self) -> None:
         if len(self._selected_names) == 1:
