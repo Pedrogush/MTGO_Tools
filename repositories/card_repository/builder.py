@@ -62,19 +62,21 @@ def _select_front_back(
     if "//" not in canonical_name or len(printings) < 2:
         return printings[0], None
     front_part = canonical_name.split("//", 1)[0].strip().lower()
-    front_printing: dict[str, Any] | None = None
-    back_printing: dict[str, Any] | None = None
-    for printing in printings:
+    front_index: int | None = None
+    for index, printing in enumerate(printings):
         face_name = (printing.get("faceName") or "").strip().lower()
-        if face_name == front_part and front_printing is None:
-            front_printing = printing
-        elif back_printing is None:
-            back_printing = printing
-    if front_printing is None:
-        front_printing = printings[0]
-        if back_printing is None:
-            back_printing = printings[1]
-    return front_printing, back_printing
+        if face_name == front_part:
+            front_index = index
+            break
+    if front_index is None:
+        # No faceName matched the canonical front: fall back to printings order,
+        # treating the first printing as the front and the second as the back.
+        return printings[0], printings[1]
+    back_printing = next(
+        (p for i, p in enumerate(printings) if i != front_index),
+        None,
+    )
+    return printings[front_index], back_printing
 
 
 def _apply_back_face(
