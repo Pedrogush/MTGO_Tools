@@ -8,6 +8,7 @@ import pytest
 
 import widgets.frames.timer_alert as timer_alert
 import widgets.frames.timer_alert.handlers as timer_alert_handlers
+from widgets.frames.timer_alert.properties import TimerAlertPropertiesMixin
 
 TimerAlertFrame = timer_alert.TimerAlertFrame
 
@@ -77,7 +78,9 @@ def _make_monitor_frame(
         frame.play_alert_count += 1
 
     frame._play_alert = _count_play_alert
-    frame._format_seconds = lambda value: f"fmt:{value}"
+    # Use the real formatter so alert text and status values are asserted
+    # against production formatting (mm:ss / hh:mm:ss), not a stub.
+    frame._format_seconds = TimerAlertPropertiesMixin._format_seconds.__get__(frame)
     frame._update_challenge_display = MagicMock()
 
     frame.threshold_panels = panels if panels is not None else [_FakeThresholdPanel(60)]
@@ -186,6 +189,27 @@ def test_on_close_stops_existing_watcher_in_background(monkeypatch) -> None:
     threads[0].target(*threads[0].args)
 
     watcher.stop.assert_called_once_with()
+    event.Skip.assert_called_once_with()
+
+
+def test_on_close_with_no_watcher_skips_thread_and_still_skips_event(monkeypatch) -> None:
+    """When there is no watcher to stop, on_close takes the early return in
+    _stop_watcher_async (no thread spawned) but still propagates the event.
+    """
+    frame = _make_frame()
+    frame._watcher = None
+    frame._watch_timer.IsRunning.return_value = False
+    frame._monitor_timer.IsRunning.return_value = False
+    frame._repeat_timer.IsRunning.return_value = False
+    threads: list[object] = []
+    monkeypatch.setattr(timer_alert.threading, "Thread", _make_fake_thread(threads))
+    event = MagicMock()
+
+    TimerAlertFrame.on_close(frame, event)
+
+    assert frame._closed is True
+    assert frame._watcher is None
+    assert threads == []
     event.Skip.assert_called_once_with()
 
 
@@ -533,8 +557,14 @@ def test_monitor_step_fires_threshold_alerts_once() -> None:
     TimerAlertFrame._monitor_timer_step(frame)
 
     # Both thresholds are at/above 25 remaining seconds, so both fire once.
-    assert frame.alert_messages == ["Timer reached fmt:120", "Timer reached fmt:30"]
+    # Alert text uses the real _format_seconds (mm:ss).
+    assert frame.alert_messages == ["Timer reached 02:00", "Timer reached 00:30"]
     assert frame.triggered_thresholds == {120, 30}
+    # The main "time remaining" status is surfaced with the real-formatted value.
+    assert (
+        "timer.status.challenge_timer",
+        {"value": "00:25"},
+    ) in frame.status_calls
 
     # A second step at the same remaining time does not re-fire.
     frame.alert_messages.clear()
@@ -648,6 +678,33 @@ def test_on_repeat_timer_silent_when_inactive_or_disabled(active, repeat_enabled
     TimerAlertFrame._on_repeat_timer(frame, MagicMock())
 
     assert frame.play_alert_count == 0
+
+
+# ------------------------------------------------------------------ resize
+
+
+def test_on_resize_rewraps_challenge_text_and_skips_event() -> None:
+    frame = _make_frame()
+    frame.challenge_text = MagicMock()
+    frame._challenge_wrap_width = MagicMock(return_value=312)
+    event = MagicMock()
+
+    TimerAlertFrame._on_resize(frame, event)
+
+    frame.challenge_text.Wrap.assert_called_once_with(312)
+    event.Skip.assert_called_once_with()
+
+
+def test_on_resize_skips_wrap_when_no_challenge_text() -> None:
+    frame = _make_frame()
+    frame.challenge_text = None
+    frame._challenge_wrap_width = MagicMock()
+    event = MagicMock()
+
+    TimerAlertFrame._on_resize(frame, event)
+
+    frame._challenge_wrap_width.assert_not_called()
+    event.Skip.assert_called_once_with()
 
 
 # ------------------------------------------------------------------ alert playback
