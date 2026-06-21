@@ -33,6 +33,21 @@ class CardTablePanelProto(Protocol):
     table_view: DeckTableView
     pile_view: DeckPileView
 
+    # Toolbar surface (created in ``CardTablePanel.__init__``) reached by the
+    # toolbar mixin.
+    _locale: str | None
+    _view_mode_buttons: dict[str, wx.Button]
+    pile_sort_button: wx.Button
+    printing_button: wx.Button | None
+    _on_pile_sort_change: Callable[[str, str], None] | None
+    _on_printing_mode: Callable[[str, str | None], None] | None
+
+    def _t(self, key: str) -> str: ...
+
+    def set_view_mode(self, mode: str, *, persist: bool = ...) -> None: ...
+
+    def set_pile_sort(self, sort_mode: str, *, persist: bool = ...) -> None: ...
+
     def _switch_content_page(self) -> None: ...
 
     def _notify_selection(self, card: dict[str, Any] | None) -> None: ...
