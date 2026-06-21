@@ -130,6 +130,48 @@ def test_background_worker_multiple_threads():
     assert sorted(results) == [1, 2, 3]
 
 
+def test_background_worker_prunes_finished_threads():
+    # The tracking list must not accumulate dead Thread objects across many
+    # submissions (callers submit on a timer, e.g. the opponent-tracker poll).
+    # Each runner removes itself on finish, and submit() prunes any stragglers,
+    # so the list stays bounded and drains to empty once everything completes.
+    worker = BackgroundWorker()
+    counter = []
+    lock = threading.Lock()
+    done = threading.Event()
+    total = 50
+
+    def task():
+        with lock:
+            counter.append(1)
+            if len(counter) == total:
+                done.set()
+
+    for _ in range(total):
+        worker.submit(task)
+
+    assert done.wait(timeout=5.0)
+
+    # All tasks ran exactly once.
+    assert len(counter) == total
+
+    # The list never accumulated all 50 threads, and drains to empty once the
+    # runners' self-removal has settled. Poll briefly since removal happens in
+    # each thread's finally block, which races the assertion.
+    deadline = time.monotonic() + 2.0
+    while time.monotonic() < deadline:
+        with worker._lock:
+            remaining = len(worker._threads)
+        if remaining == 0:
+            break
+        time.sleep(0.01)
+
+    with worker._lock:
+        assert worker._threads == []
+
+    worker.shutdown()
+
+
 def test_background_worker_shutdown_timeout():
     worker = BackgroundWorker()
     started = threading.Event()
