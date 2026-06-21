@@ -36,6 +36,7 @@ from automation.server.mana_rendering import ManaRenderingMixin
 from automation.server.screenshot import ScreenshotMixin
 from automation.server.scroll_perf import ScrollPerfMixin
 from automation.server.transport import BUFFER_SIZE, TransportMixin
+from automation.server.video import VideoMixin
 from automation.server.zone_editing import ZoneEditingMixin
 
 if TYPE_CHECKING:
@@ -56,6 +57,7 @@ class AutomationServer(
     BuilderMixin,
     ManaRenderingMixin,
     ScrollPerfMixin,
+    VideoMixin,
 ):
     """Socket server for receiving automation commands."""
 
@@ -112,6 +114,9 @@ class AutomationServer(
             # Mouse-wheel scroll latency instrumentation
             "wheel_scroll_start": self._handle_wheel_scroll_start,
             "get_scroll_perf": self._handle_get_scroll_perf,
+            # Background-thread frame recording (transition capture)
+            "start_video": self._handle_start_video,
+            "stop_video": self._handle_stop_video,
         }
 
 

@@ -67,12 +67,15 @@ class CenterPanelBuilderMixin(_Base):
 
         # Mainboard and Sideboard as top-level tabs
         self._build_deck_tables_tab()
+        # The workspace keeps a *minimum* width that fits GRID_COLUMNS cards
+        # across, but is no longer locked to it (issue #785): all leftover
+        # horizontal space is given to the workspace (see `_build_right_container`
+        # where it is added with a stretch proportion), and each card view fits
+        # as many cards per row as the allotted width allows — the grid view
+        # recomputes its column count on resize.
         deck_tabs_width = CardTablePanel.grid_width()
         self.deck_tabs.SetMinSize((deck_tabs_width, -1))
-        self.deck_tabs.SetMaxSize((deck_tabs_width, -1))
-        detail_box_width = deck_tabs_width + (PADDING_MD * 2)
-        detail_box.SetMinSize((detail_box_width, -1))
-        detail_box.SetMaxSize((detail_box_width, -1))
+        detail_box.SetMinSize((deck_tabs_width + (PADDING_MD * 2), -1))
 
         # Collection status label below the tabs
         self.collection_status_label = wx.StaticText(
@@ -94,6 +97,7 @@ class CenterPanelBuilderMixin(_Base):
             on_import_csv=self._on_import_guide,
             on_pin_guide=self._on_pin_guide,
             on_edit_flex_slots=self._on_edit_flex_slots,
+            on_record_guide=self._on_record_guide,
             locale=self.locale,
         )
         self.sideboard_guide_panel.SetToolTip(self._t("tabs.tooltip.sideboard_guide"))
@@ -124,22 +128,61 @@ class CenterPanelBuilderMixin(_Base):
         return detail_sizer
 
     def _build_deck_tables_tab(self) -> None:
+        """Build the mainboard/sideboard zones as a single vertical split page.
+
+        Both zones are shown at once (mainboard on top, sideboard below) in a
+        draggable :class:`wx.SplitterWindow` so the user can see both and move
+        cards between them, replacing the old one-zone-at-a-time tabs (#781).
+        """
         self.zone_notebook = None
-        self.main_table = self._create_zone_table("main", self._t("tabs.mainboard"))
+        self.deck_split = wx.SplitterWindow(
+            self.deck_tabs, style=wx.SP_LIVE_UPDATE | wx.SP_3DSASH | wx.SP_NO_XP_THEME
+        )
+        self.deck_split.SetBackgroundColour(DARK_PANEL)
+        self.deck_split.SetMinimumPaneSize(80)
+        # Mainboard absorbs more of any extra height on resize.
+        self.deck_split.SetSashGravity(0.6)
+
+        self.main_table = self._create_zone_table(self.deck_split, "main")
         self.main_table.SetToolTip(self._t("tabs.tooltip.mainboard"))
-        self.side_table = self._create_zone_table("side", self._t("tabs.sideboard"))
+        self.side_table = self._create_zone_table(self.deck_split, "side")
         self.side_table.SetToolTip(self._t("tabs.tooltip.sideboard"))
         self.out_table = None
 
+        saved_sash = self.controller.session_manager.get_deck_sash_position()
+        self._deck_sash_initialized = saved_sash > 0
+        self.deck_split.SplitHorizontally(self.main_table, self.side_table, saved_sash)
+        self.deck_split.Bind(wx.EVT_SPLITTER_SASH_POS_CHANGED, self._on_deck_sash_changed)
+        # The real height isn't known at construction; place the default sash
+        # (mainboard ~60%) once the splitter is first sized, unless restored.
+        self.deck_split.Bind(wx.EVT_SIZE, self._on_deck_split_size)
+
+        self.deck_tabs.AddPage(self.deck_split, self._t("tabs.deck_tables"))
+
+    def _on_deck_split_size(self, event: wx.SizeEvent) -> None:
+        event.Skip()
+        if self._deck_sash_initialized:
+            return
+        height = self.deck_split.GetClientSize().GetHeight()
+        if height > 160:
+            self.deck_split.SetSashPosition(int(height * 0.6))
+            self._deck_sash_initialized = True
+
+    def _on_deck_sash_changed(self, event: wx.SplitterEvent) -> None:
+        self._deck_sash_initialized = True
+        self.controller.session_manager.update_deck_sash_position(self.deck_split.GetSashPosition())
+        self._schedule_settings_save()
+        event.Skip()
+
     def _create_zone_table(
-        self, zone: str, tab_name: str, owned_status_func=None
+        self, parent: wx.Window, zone: str, owned_status_func=None
     ) -> CardTablePanel:
         if owned_status_func is None:
             owned_status_func = self.controller.collection_service.get_owned_status
 
         session = self.controller.session_manager
-        table = CardTablePanel(
-            self.deck_tabs,
+        return CardTablePanel(
+            parent,
             zone,
             self.mana_icons,
             self.controller.card_repo.get_card_metadata,
@@ -155,9 +198,8 @@ class CenterPanelBuilderMixin(_Base):
             initial_pile_sort=session.get_pile_sort_mode(zone),
             on_view_mode_change=self._persist_deck_view_mode,
             on_pile_sort_change=self._persist_pile_sort_mode,
+            on_zone_transfer=self._handle_zone_transfer,
         )
-        self.deck_tabs.AddPage(table, tab_name)
-        return table
 
     def _persist_deck_view_mode(self, zone: str, mode: str) -> None:
         self.controller.session_manager.update_deck_view_mode(zone, mode)

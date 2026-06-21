@@ -306,6 +306,22 @@ def cmd_toggle_adv_filters(client: AutomationClient, args: argparse.Namespace) -
     return 0 if result.get("toggled") else 1
 
 
+def cmd_start_video(client: AutomationClient, args: argparse.Namespace) -> int:
+    """Start recording frames of the main window on a background thread."""
+    result = client.start_video(
+        max_frames=args.max_frames, interval_ms=args.interval_ms, method=args.method
+    )
+    print(format_output(result, args.json))
+    return 0 if result.get("recording") else 1
+
+
+def cmd_stop_video(client: AutomationClient, args: argparse.Namespace) -> int:
+    """Stop recording and flush frames to PNGs + manifest.json."""
+    result = client.stop_video(out_dir=args.out_dir)
+    print(format_output(result, args.json))
+    return 0 if "error" not in result else 1
+
+
 def cmd_close_app(client: AutomationClient, args: argparse.Namespace) -> int:
     """Close the running application."""
     result = client.close_app()
@@ -519,6 +535,41 @@ Notes:
         help="Do not expand the advanced filters panel before typing",
     )
 
+    # start-video
+    p = subparsers.add_parser(
+        "start-video", help="Start background frame recording of the main window"
+    )
+    p.add_argument(
+        "--max-frames",
+        type=int,
+        default=240,
+        dest="max_frames",
+        help="Frame cap (memory guard); default 240",
+    )
+    p.add_argument(
+        "--interval-ms",
+        type=float,
+        default=0.0,
+        dest="interval_ms",
+        help="Throttle between grabs in ms; 0 = as fast as possible (default)",
+    )
+    p.add_argument(
+        "--method",
+        choices=["screen", "printwindow"],
+        default="screen",
+        help="screen = literal on-screen pixels (catches ghosts); "
+        "printwindow = re-render widget tree (default: screen)",
+    )
+
+    # stop-video
+    p = subparsers.add_parser("stop-video", help="Stop recording and write frames + manifest.json")
+    p.add_argument(
+        "--out-dir",
+        "-o",
+        dest="out_dir",
+        help="Directory to write frame PNGs + manifest.json (default: temp dir)",
+    )
+
     # toggle-adv-filters
     subparsers.add_parser("toggle-adv-filters", help="Toggle advanced filters in builder panel")
 
@@ -575,6 +626,8 @@ Notes:
         "get-deck-notes": cmd_get_deck_notes,
         "type-into-oracle": cmd_type_into_oracle,
         "toggle-adv-filters": cmd_toggle_adv_filters,
+        "start-video": cmd_start_video,
+        "stop-video": cmd_stop_video,
         "close-app": cmd_close_app,
     }
 

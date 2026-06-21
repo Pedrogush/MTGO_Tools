@@ -30,8 +30,10 @@ class CardTablePanelPropertiesMixin(_Base):
             scrollbar_width = 16
         # Each panel has GRID_GAP right-border, so effective width per column is
         # DECK_CARD_WIDTH + GRID_GAP. The scroller must be wide enough for exactly
-        # GRID_COLUMNS panels plus the vertical scrollbar.
-        return (DECK_CARD_WIDTH + cls.GRID_GAP) * cls.GRID_COLUMNS + scrollbar_width
+        # GRID_MIN_COLUMNS panels plus the vertical scrollbar — this is the
+        # narrowest the workspace may get; it grows to fit more columns when the
+        # window is wider (see grid_view._recompute_layout).
+        return (DECK_CARD_WIDTH + cls.GRID_GAP) * cls.GRID_MIN_COLUMNS + scrollbar_width
 
     def get_selected_card(self) -> dict[str, Any] | None:
         if not self.selected_name:

@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any
 import wx
 
 from utils.constants import BUILDER_SEARCH_DEBOUNCE_MS
+from widgets.wx_layout import set_shown
 
 if TYPE_CHECKING:
     from services.radar_service import RadarData
@@ -27,14 +28,14 @@ class DeckBuilderPanelHandlersMixin(_Base):
         if self._adv_panel is None or self._adv_toggle_btn is None:
             return
         shown = self._adv_panel.IsShown()
-        self._adv_panel.Show(not shown)
         self._adv_toggle_btn.SetLabel(
             self._t("builder.btn.adv_filters_hide")
             if not shown
             else self._t("builder.btn.adv_filters_show")
         )
-        self._adv_panel.Layout()
-        self.Layout()
+        # Show + repaint via the shared helper so the accent-coloured controls
+        # don't leave ghost pixels behind (see widgets.wx_layout).
+        set_shown(self._adv_panel, not shown, relayout_from=self)
 
     def _on_result_item_selected(self, event: wx.ListEvent) -> None:
         if not self.results_ctrl:

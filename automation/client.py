@@ -86,6 +86,31 @@ class AutomationClient:
             kwargs["headless"] = True
         return self._send_command("screenshot", **kwargs)
 
+    def start_video(
+        self, max_frames: int = 240, interval_ms: float = 0.0, method: str = "screen"
+    ) -> dict[str, Any]:
+        """Begin recording frames of the main window on a background thread.
+
+        Returns immediately so the caller can drive the UI (e.g. click a panel
+        toggle) while frames accumulate.  Pair with :meth:`stop_video`.
+        ``method`` is ``"screen"`` (literal on-screen pixels, catches ghost
+        artefacts) or ``"printwindow"`` (re-renders the widget tree).
+        """
+        return self._send_command(
+            "start_video", max_frames=max_frames, interval_ms=interval_ms, method=method
+        )
+
+    def stop_video(self, out_dir: str | None = None) -> dict[str, Any]:
+        """Stop recording and flush frames to PNGs + ``manifest.json``.
+
+        Returns a compact summary (count, duration_s, fps, dir, manifest); the
+        per-frame list is written to the manifest file on disk.
+        """
+        kwargs: dict[str, Any] = {}
+        if out_dir is not None:
+            kwargs["out_dir"] = out_dir
+        return self._send_command("stop_video", **kwargs)
+
     def get_status(self) -> str:
         """Get the status bar text."""
         result = self._send_command("get_status")

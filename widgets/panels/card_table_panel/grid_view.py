@@ -58,7 +58,7 @@ from utils.constants import (
     DECK_CARD_WIDTH,
     LIGHT_TEXT,
 )
-from utils.image_effects import apply_rounded_corner_alpha
+from utils.image_effects import composite_rounded_on_background
 from widgets.mana_icon_factory import ManaIconFactory
 from widgets.panels.card_table_panel import scroll_perf
 from widgets.panels.card_table_panel.card_render import (
@@ -113,6 +113,7 @@ class DeckGridView(wx.ScrolledWindow):
         on_hover: Callable[[dict[str, Any]], None] | None,
         on_delta: Callable[[str, int], None] | None = None,
         on_remove: Callable[[str], None] | None = None,
+        on_zone_transfer: Callable[[list[str], wx.Point], bool] | None = None,
     ) -> None:
         super().__init__(parent, style=wx.VSCROLL)
         self.zone = zone
@@ -124,6 +125,7 @@ class DeckGridView(wx.ScrolledWindow):
         self._on_hover = on_hover
         self._on_delta = on_delta
         self._on_remove = on_remove
+        self._on_zone_transfer = on_zone_transfer
 
         self._cards: list[dict[str, Any]] = []
         # Multi-selection by card name (a single click selects exactly one).
@@ -388,7 +390,11 @@ class DeckGridView(wx.ScrolledWindow):
             w, h = pil_img.size
             wx_img = wx.Image(w, h)
             wx_img.SetData(pil_img.tobytes())
-            wx_img = apply_rounded_corner_alpha(wx_img, DECK_CARD_CORNER_RADIUS)
+            # Flatten onto the canvas background (DARK_PANEL) so the cached
+            # bitmap is opaque and blits via a fast BitBlt — see
+            # composite_rounded_on_background. Grid cells never overlap and sit
+            # on DARK_PANEL, so this is pixel-identical to a transparent corner.
+            wx_img = composite_rounded_on_background(wx_img, DECK_CARD_CORNER_RADIUS, DARK_PANEL)
             self._image_cache.put(name, wx_img.ConvertToBitmap())
         # A single card's art changed — patch just its cell in the cached image.
         self._patch_card_on_canvas(name)
@@ -421,8 +427,10 @@ class DeckGridView(wx.ScrolledWindow):
         dc.DrawRoundedRectangle(rect, DECK_CARD_CORNER_RADIUS)
         self._draw_placeholder_details(dc, rect, name, mana_cost)
         dc.SelectObject(wx.NullBitmap)
-        rounded = apply_rounded_corner_alpha(bitmap.ConvertToImage(), DECK_CARD_CORNER_RADIUS)
-        return rounded.ConvertToBitmap()
+        flat = composite_rounded_on_background(
+            bitmap.ConvertToImage(), DECK_CARD_CORNER_RADIUS, DARK_PANEL
+        )
+        return flat.ConvertToBitmap()
 
     def _draw_placeholder_details(
         self, dc: wx.DC, rect: wx.Rect, name: str, mana_cost: str
@@ -618,9 +626,10 @@ class DeckGridView(wx.ScrolledWindow):
         if bitmap is not None:
             x = rect.x + (rect.width - bitmap.GetWidth()) // 2
             y = rect.y + (rect.height - bitmap.GetHeight()) // 2
-            dc.DrawBitmap(bitmap, x, y, True)
+            # Opaque bitmaps (flattened onto DARK_PANEL) → fast BitBlt, no mask.
+            dc.DrawBitmap(bitmap, x, y, False)
         else:
-            dc.DrawBitmap(self._template_for(name), rect.x, rect.y, True)
+            dc.DrawBitmap(self._template_for(name), rect.x, rect.y, False)
         self._draw_qty(dc, rect, card, False)
 
     def _draw_card(self, dc: wx.DC, rect: wx.Rect, card: dict[str, Any]) -> None:
@@ -768,7 +777,15 @@ class DeckGridView(wx.ScrolledWindow):
         if self.HasCapture():
             self.ReleaseMouse()
         if self._drag_active:
-            self._perform_drop(self._to_logical(event.GetPosition()))
+            # A drop over the other zone's pane moves the cards there; otherwise
+            # it's a within-zone reorder.
+            transferred = False
+            if self._on_zone_transfer is not None:
+                transferred = self._on_zone_transfer(
+                    self._drag_names, self.ClientToScreen(event.GetPosition())
+                )
+            if not transferred:
+                self._perform_drop(self._to_logical(event.GetPosition()))
             self._reset_drag()
             self.Refresh()
             return

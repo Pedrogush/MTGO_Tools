@@ -25,6 +25,7 @@ from widgets.panels.card_table_panel.sorting import (
     PILE_SORT_TYPE,
 )
 from widgets.panels.card_table_panel.table_view import DeckTableView
+from widgets.wx_layout import relayout
 
 _EMPTY_STATE_HEADING_SIZE = 13
 _EMPTY_STATE_HINT_SIZE = 10
@@ -51,6 +52,13 @@ VIEW_MODES = ("grid", "table", "pile")
 
 class CardTablePanel(CardTablePanelHandlersMixin, CardTablePanelPropertiesMixin, wx.Panel):
     GRID_COLUMNS = 4
+    # Minimum columns the workspace must be able to show — this is the *floor*
+    # that sets the deck workspace's minimum width, not the displayed count.
+    # The grid view recomputes how many columns actually fit on every resize
+    # (see grid_view._recompute_layout), so wide windows still fill out fully;
+    # this only governs how narrow the workspace is allowed to get (#785, small
+    # screens). Kept at 2 so the app fits a 1366x768 / 1280x800 laptop.
+    GRID_MIN_COLUMNS = 2
     GRID_GAP = 8
 
     def __init__(
@@ -71,6 +79,7 @@ class CardTablePanel(CardTablePanelHandlersMixin, CardTablePanelPropertiesMixin,
         initial_pile_sort: str = PILE_SORT_MV,
         on_view_mode_change: Callable[[str, str], None] | None = None,
         on_pile_sort_change: Callable[[str, str], None] | None = None,
+        on_zone_transfer: Callable[[str, list[str], wx.Point], bool] | None = None,
     ) -> None:
         super().__init__(parent)
         self.zone = zone
@@ -86,6 +95,7 @@ class CardTablePanel(CardTablePanelHandlersMixin, CardTablePanelPropertiesMixin,
         self._locale = locale
         self._on_view_mode_change = on_view_mode_change
         self._on_pile_sort_change = on_pile_sort_change
+        self._on_zone_transfer = on_zone_transfer
 
         self.cards: list[dict[str, Any]] = []
         self.selected_name: str | None = None
@@ -142,6 +152,7 @@ class CardTablePanel(CardTablePanelHandlersMixin, CardTablePanelPropertiesMixin,
             on_hover=self._handle_view_hover,
             on_delta=lambda name, delta: self._on_delta(self.zone, name, delta),
             on_remove=self._handle_view_remove,
+            on_zone_transfer=self._handle_view_zone_transfer,
         )
         self._content_book.AddPage(self.grid_view, "grid")
 
@@ -156,6 +167,7 @@ class CardTablePanel(CardTablePanelHandlersMixin, CardTablePanelPropertiesMixin,
             label_for_column=self._column_label,
             on_delta=lambda name, delta: self._on_delta(self.zone, name, delta),
             on_remove=self._handle_view_remove,
+            on_zone_transfer=self._handle_view_zone_transfer,
         )
         self._content_book.AddPage(self.table_view, "table")
 
@@ -169,6 +181,7 @@ class CardTablePanel(CardTablePanelHandlersMixin, CardTablePanelPropertiesMixin,
             on_hover=self._handle_view_hover,
             get_sort_mode=lambda: self.pile_sort,
             on_remove=self._handle_view_remove,
+            on_zone_transfer=self._handle_view_zone_transfer,
         )
         self._content_book.AddPage(self.pile_view, "pile")
 
@@ -253,7 +266,7 @@ class CardTablePanel(CardTablePanelHandlersMixin, CardTablePanelPropertiesMixin,
 
     def _update_pile_sort_button_visibility(self) -> None:
         self.pile_sort_button.Show(self.view_mode == "pile")
-        self.Layout()
+        relayout(self)
 
     def _on_view_button(self, mode: str) -> None:
         self.set_view_mode(mode)
@@ -304,6 +317,16 @@ class CardTablePanel(CardTablePanelHandlersMixin, CardTablePanelPropertiesMixin,
         """Remove ``name`` from this panel's zone (grid/pile-view action)."""
         if self._on_remove:
             self._on_remove(self.zone, name)
+
+    def _handle_view_zone_transfer(self, names: list[str], screen_point: wx.Point) -> bool:
+        """Offer a cross-zone drop to the frame; returns True if it was consumed.
+
+        A view calls this when a drag is released; the frame moves the cards to
+        the other zone if the drop landed over that zone's pane (#781).
+        """
+        if self._on_zone_transfer:
+            return self._on_zone_transfer(self.zone, names, screen_point)
+        return False
 
     @staticmethod
     def _build_loading_state(parent: wx.Window) -> wx.Panel:
