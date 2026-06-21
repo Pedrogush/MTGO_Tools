@@ -65,6 +65,14 @@ class TestEventLogger:
         record = json.loads(el.path.read_text(encoding="utf-8").strip())
         assert "data" not in record
 
+    def test_event_with_empty_data_dict_omits_data(self, tmp_path: Path) -> None:
+        """A falsy (empty) ``data`` dict must not add a ``data`` key."""
+        el = EventLogger(tmp_path, enabled=True)
+        el.log("simple_event", {})
+
+        record = json.loads(el.path.read_text(encoding="utf-8").strip())
+        assert "data" not in record
+
     def test_rotation_renames_file(self, tmp_path: Path) -> None:
         el = EventLogger(tmp_path, enabled=True)
         # Override max size to trigger rotation immediately
@@ -74,9 +82,24 @@ class TestEventLogger:
 
         rotated = tmp_path / "events.jsonl.1"
         assert rotated.exists()
+        # The rotated file holds the displaced first event.
+        assert json.loads(rotated.read_text(encoding="utf-8").strip())["event"] == "first_event"
         # New events.jsonl should only contain the second event
         content = el.path.read_text(encoding="utf-8").strip()
         assert json.loads(content)["event"] == "second_event"
+
+    def test_repeated_rotation_overwrites_rotated_file(self, tmp_path: Path) -> None:
+        """A second rotation replaces ``.1`` with the most recently displaced event."""
+        el = EventLogger(tmp_path, enabled=True)
+        el._MAX_BYTES = 1
+        el.log("first_event")  # writes file
+        el.log("second_event")  # first rotation -> .1 holds first_event
+        el.log("third_event")  # second rotation -> .1 overwritten with second_event
+
+        rotated = tmp_path / "events.jsonl.1"
+        assert json.loads(rotated.read_text(encoding="utf-8").strip())["event"] == "second_event"
+        content = el.path.read_text(encoding="utf-8").strip()
+        assert json.loads(content)["event"] == "third_event"
 
     def test_path_property(self, tmp_path: Path) -> None:
         el = EventLogger(tmp_path)
@@ -166,6 +189,17 @@ class TestExportDiagnosticsBundle:
         )
         with zipfile.ZipFile(out) as zf:
             assert "notes.txt" in zf.namelist()
+            assert zf.read("notes.txt").decode() == "Bug: crash on load"
+
+    def test_notes_stripped_on_write(self, tmp_path: Path) -> None:
+        """Surrounding whitespace is trimmed before the note is written."""
+        logs_dir = tmp_path / "logs"
+        logs_dir.mkdir()
+
+        out = export_diagnostics_bundle(
+            tmp_path / "bundle.zip", logs_dir=logs_dir, notes="  Bug: crash on load \n"
+        )
+        with zipfile.ZipFile(out) as zf:
             assert zf.read("notes.txt").decode() == "Bug: crash on load"
 
     def test_notes_omitted_when_empty(self, tmp_path: Path) -> None:
