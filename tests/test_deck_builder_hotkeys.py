@@ -152,8 +152,14 @@ class _Panel(DeckBuilderPanelHandlersMixin):
         first_selected: int = 0,
         *,
         wire_callbacks: bool = True,
+        index_cards: dict[int, dict[str, Any] | None] | None = None,
     ) -> None:
         self._selected = selected
+        # ``index_cards`` lets a test return a distinct card per result row so
+        # the index-based ('+') path can be told apart from the selected-result
+        # path. When omitted, every index resolves to ``selected`` (the prior
+        # behaviour).
+        self._index_cards = index_cards
         self.results_ctrl = _ResultsCtrl(first_selected)
         self.main_calls: list[tuple[str, int]] = []
         self.side_calls: list[tuple[str, int]] = []
@@ -174,6 +180,8 @@ class _Panel(DeckBuilderPanelHandlersMixin):
         return self._selected
 
     def get_result_at_index(self, idx: int) -> dict[str, Any] | None:
+        if self._index_cards is not None:
+            return self._index_cards.get(idx)
         return self._selected
 
 
@@ -208,7 +216,10 @@ def test_digit_adds_copies_to_main(count_key: int, count: int) -> None:
     assert event.skipped is False
 
 
-@pytest.mark.parametrize("count_key, count", [(ord("2"), 2), (ord("3"), 3)])
+@pytest.mark.parametrize(
+    "count_key, count",
+    [(ord("1"), 1), (ord("2"), 2), (ord("3"), 3), (ord("4"), 4)],
+)
 def test_shift_digit_adds_copies_to_side(count_key: int, count: int) -> None:
     panel = _Panel({"name": "Pyroblast"})
     event = _KeyEvent(count_key, shift=True)
@@ -217,11 +228,47 @@ def test_shift_digit_adds_copies_to_side(count_key: int, count: int) -> None:
     assert panel.main_calls == []
 
 
+def test_numpad_digit_adds_copies_to_main() -> None:
+    """A numpad digit must route through dispatch to the mainboard, not just
+    the ``_digit_to_count`` map."""
+    panel = _Panel({"name": "Llanowar Elves"})
+    event = _KeyEvent(_WX.WXK_NUMPAD1)
+    panel._on_result_key_down(event)
+    assert panel.main_calls == [("Llanowar Elves", 1)]
+    assert panel.side_calls == []
+    assert event.skipped is False
+
+
+def test_shift_numpad_digit_adds_copies_to_side() -> None:
+    """Shift + numpad digit must route through dispatch to the sideboard."""
+    panel = _Panel({"name": "Pyroblast"})
+    event = _KeyEvent(_WX.WXK_NUMPAD2, shift=True)
+    panel._on_result_key_down(event)
+    assert panel.side_calls == [("Pyroblast", 2)]
+    assert panel.main_calls == []
+
+
 def test_plus_adds_one_to_active_zone() -> None:
     panel = _Panel({"name": "Island"})
     event = _KeyEvent(ord("+"))
     panel._on_result_key_down(event)
     assert panel.active_zone_calls == ["Island"]
+    assert panel.main_calls == []
+    assert panel.side_calls == []
+
+
+def test_plus_uses_indexed_card_not_selected_result() -> None:
+    """'+' resolves the card via the focused row index (``GetFirstSelected``)
+    through ``get_result_at_index``, distinct from the selected-result lookup
+    used by the digit shortcuts."""
+    panel = _Panel(
+        {"name": "Selected Card"},
+        first_selected=2,
+        index_cards={2: {"name": "Indexed Card"}},
+    )
+    event = _KeyEvent(ord("+"))
+    panel._on_result_key_down(event)
+    assert panel.active_zone_calls == ["Indexed Card"]
     assert panel.main_calls == []
     assert panel.side_calls == []
 
