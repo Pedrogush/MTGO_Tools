@@ -119,6 +119,44 @@ def test_load_cached_archetypes_missing_format(metagame_repo, archetype_cache_fi
     assert result is None
 
 
+def test_load_cached_archetypes_max_age_negative_one_uses_default_ttl(
+    metagame_repo, archetype_cache_file
+):
+    """max_age=-1 is a sentinel meaning 'use the default TTL', not 'ignore age'.
+
+    Distinguishes the -1 branch from max_age=None: an entry older than the
+    default TTL must be treated as a miss, whereas None would return it.
+    """
+    fresh = {
+        "Modern": {"timestamp": time.time(), "items": [{"name": "Fresh"}]},
+    }
+    archetype_cache_file.write_text(json.dumps(fresh), encoding="utf-8")
+    # Fresh entry is returned (default TTL is 3600s from the fixture).
+    assert metagame_repo._load_cached_archetypes("Modern", max_age=-1) == [{"name": "Fresh"}]
+
+    stale = {
+        "Modern": {"timestamp": time.time() - 7200, "items": [{"name": "Stale"}]},
+    }
+    archetype_cache_file.write_text(json.dumps(stale), encoding="utf-8")
+    # Past the default TTL -> miss (unlike max_age=None, which would return it).
+    assert metagame_repo._load_cached_archetypes("Modern", max_age=-1) is None
+    assert metagame_repo._load_cached_archetypes("Modern", max_age=None) == [{"name": "Stale"}]
+
+
+def test_load_cached_decks_max_age_negative_one_uses_default_ttl(
+    metagame_repo, archetype_deck_cache_file
+):
+    """max_age=-1 on the deck cache also resolves to the default TTL, not 'ignore age'."""
+    fresh = {"url": {"timestamp": time.time(), "items": [{"name": "Fresh"}]}}
+    _write_cache(archetype_deck_cache_file, fresh)
+    assert metagame_repo._load_cached_decks("url", max_age=-1) == [{"name": "Fresh"}]
+
+    stale = {"url": {"timestamp": time.time() - 7200, "items": [{"name": "Stale"}]}}
+    _write_cache(archetype_deck_cache_file, stale)
+    assert metagame_repo._load_cached_decks("url", max_age=-1) is None
+    assert metagame_repo._load_cached_decks("url", max_age=None) == [{"name": "Stale"}]
+
+
 # ============= Cache Saving Tests =============
 
 
@@ -202,31 +240,6 @@ def test_load_cached_decks_invalid_json(metagame_repo, archetype_deck_cache_file
     archetype_deck_cache_file.write_text("{not json", encoding="utf-8")
 
     assert metagame_repo._load_cached_decks("url") is None
-
-
-def test_get_all_cached_decks_filters_by_format(metagame_repo, archetype_deck_cache_file):
-    """The 'Any' archetype view must only aggregate decks for the selected format."""
-    _write_cache(
-        archetype_deck_cache_file,
-        {
-            "modern-izzet-cauldron": {
-                "timestamp": time.time(),
-                "items": [{"name": "Izzet Cauldron", "number": "m1", "date": "2026-04-01"}],
-            },
-            "pioneer-rakdos-vampires": {
-                "timestamp": time.time(),
-                "items": [{"name": "Rakdos Vampires", "number": "p1", "date": "2026-04-02"}],
-            },
-            "legacy-beseech-storm": {
-                "timestamp": time.time(),
-                "items": [{"name": "Beseech Storm", "number": "l1", "date": "2026-04-03"}],
-            },
-        },
-    )
-
-    pioneer_decks = metagame_repo.get_all_cached_decks(mtg_format="Pioneer")
-
-    assert [d["number"] for d in pioneer_decks] == ["p1"]
 
 
 def test_get_all_cached_decks_without_format_returns_every_entry(
@@ -343,7 +356,9 @@ def test_stale_while_revalidate_triggers_background_refresh(
 def test_stale_while_revalidate_no_callback_no_background_thread(
     archetype_cache_file, archetype_deck_cache_file, monkeypatch
 ):
-    """No background thread is started when on_background_refresh is not provided."""
+    """No background re-fetch happens when on_background_refresh is not provided."""
+    import threading
+
     repo = MetagameRepository(
         cache_ttl=1,
         archetype_list_cache_file=archetype_cache_file,
@@ -355,12 +370,18 @@ def test_stale_while_revalidate_no_callback_no_background_thread(
         {"Modern": {"timestamp": time.time() - 3600, "items": stale_items}},
     )
 
-    triggered = []
-    monkeypatch.setattr(repo, "_trigger_background_refresh", lambda *a: triggered.append(a))
+    # Spy on the actual network seam the background thread would use.
+    fetched = threading.Event()
+    monkeypatch.setattr(
+        "repositories.metagame_repository.get_archetypes",
+        lambda _fmt: fetched.set() or [{"name": "Fresh"}],
+    )
 
-    repo.get_archetypes_for_format("Modern")
+    result = repo.get_archetypes_for_format("Modern")
 
-    assert triggered == [], "background refresh should not be triggered without a callback"
+    assert result == stale_items
+    # Without a callback, the stale path returns immediately and never scrapes.
+    assert not fetched.wait(timeout=0.5), "no background scrape should run without a callback"
 
 
 def test_stale_while_revalidate_updates_cache_on_refresh(
@@ -428,7 +449,9 @@ def test_stale_while_revalidate_background_failure_is_silent(
 def test_fresh_cache_does_not_trigger_background_refresh(
     archetype_cache_file, archetype_deck_cache_file, monkeypatch
 ):
-    """When cache is fresh, no background refresh is triggered."""
+    """When cache is fresh, no background re-fetch runs and the callback never fires."""
+    import threading
+
     repo = MetagameRepository(
         cache_ttl=3600,
         archetype_list_cache_file=archetype_cache_file,
@@ -440,13 +463,21 @@ def test_fresh_cache_does_not_trigger_background_refresh(
         {"Modern": {"timestamp": time.time(), "items": fresh_items}},
     )
 
-    triggered = []
-    monkeypatch.setattr(repo, "_trigger_background_refresh", lambda *a: triggered.append(a))
+    # Spy on the network seam a background refresh would hit.
+    fetched = threading.Event()
+    monkeypatch.setattr(
+        "repositories.metagame_repository.get_archetypes",
+        lambda _fmt: fetched.set() or [{"name": "Other"}],
+    )
 
-    result = repo.get_archetypes_for_format("Modern", on_background_refresh=lambda _: None)
+    callback_fired = threading.Event()
+    result = repo.get_archetypes_for_format(
+        "Modern", on_background_refresh=lambda _: callback_fired.set()
+    )
 
     assert result == fresh_items
-    assert triggered == [], "background refresh must not fire on a fresh cache hit"
+    assert not fetched.wait(timeout=0.5), "fresh cache hit must not scrape in the background"
+    assert not callback_fired.is_set(), "callback must not fire on a fresh cache hit"
 
 
 # ============= Stale Fallback Tests =============
@@ -714,6 +745,36 @@ def test_cached_path_returns_bundle_mtgo_decks(archetype_cache_file, archetype_d
     assert "GF Deck" in names
 
 
+def test_cached_path_applies_source_filter_and_date_sort(
+    archetype_cache_file, archetype_deck_cache_file
+):
+    """On a cache hit (no force_refresh), source_filter and date-descending sort apply."""
+    repo = MetagameRepository(
+        archetype_list_cache_file=archetype_cache_file,
+        archetype_decks_cache_file=archetype_deck_cache_file,
+    )
+    archetype = {"href": "test-arch", "name": "Test"}
+    cached = [
+        {"name": "GF Old", "date": "2026-03-20", "source": "mtggoldfish", "number": "g1"},
+        {"name": "MTGO New", "date": "2026-03-26", "source": "mtgo", "number": "m1"},
+        {"name": "GF New", "date": "2026-03-25", "source": "mtggoldfish", "number": "g2"},
+        {"name": "MTGO Old", "date": "2026-03-18", "source": "mtgo", "number": "m2"},
+    ]
+    _write_cache(
+        archetype_deck_cache_file,
+        {"test-arch": {"timestamp": time.time(), "items": cached}},
+    )
+
+    # No filter: every source, sorted newest-first.
+    combined = repo.get_decks_for_archetype(archetype)
+    assert [d["name"] for d in combined] == ["MTGO New", "GF New", "GF Old", "MTGO Old"]
+
+    # MTGGoldfish only, still date-descending.
+    goldfish_only = repo.get_decks_for_archetype(archetype, source_filter="mtggoldfish")
+    assert [d["name"] for d in goldfish_only] == ["GF New", "GF Old"]
+    assert all(d["source"] == "mtggoldfish" for d in goldfish_only)
+
+
 def test_saved_cache_after_live_scrape_contains_bundle_mtgo(
     archetype_cache_file, archetype_deck_cache_file, monkeypatch
 ):
@@ -974,6 +1035,32 @@ def test_remote_client_not_used_when_disabled(tmp_path, monkeypatch):
 
     result = repo.get_archetypes_for_format("modern")
     assert result == live_archetypes
+
+
+def test_remote_client_constructed_by_default_when_enabled(tmp_path, monkeypatch):
+    """With no injected client and REMOTE_SNAPSHOTS_ENABLED=True, the default
+    snapshot client is constructed and consulted."""
+    monkeypatch.setattr("repositories.metagame_repository.REMOTE_SNAPSHOTS_ENABLED", True)
+
+    remote_archetypes = [{"name": "UR Murktide"}]
+    default_client = _FakeRemoteClient(archetypes=remote_archetypes)
+    monkeypatch.setattr(
+        "repositories.metagame_repository.archetype_resolution.get_remote_snapshot_client",
+        lambda: default_client,
+    )
+
+    live_calls = []
+    monkeypatch.setattr(
+        "repositories.metagame_repository.get_archetypes",
+        lambda _fmt: live_calls.append(1) or [],
+    )
+
+    repo = _make_repo(tmp_path, remote_client=None)
+    result = repo.get_archetypes_for_format("modern")
+
+    assert result == remote_archetypes
+    assert default_client.archetypes_calls == ["modern"]
+    assert live_calls == [], "live scraper must not run when the default remote client succeeds"
 
 
 # ============= get_all_cached_decks format filter =============
