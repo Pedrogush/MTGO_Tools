@@ -54,6 +54,9 @@ class _FakeMouseEvent:
     def ControlDown(self) -> bool:
         return self._ctrl
 
+    def LeftIsDown(self) -> bool:
+        return False
+
 
 class _FakeWheelEvent:
     """Minimal stand-in for the wx.MouseEvent fields scroll_by_wheel reads."""
@@ -82,14 +85,14 @@ class _FakeWheelEvent:
         return self._shift
 
 
-def _make_view(frame: wx.Frame, on_select):
+def _make_view(frame: wx.Frame, on_select, *, on_hover=None):
     view = DeckPileView(
         frame,
         "main",
         _get_metadata,
         _get_card_image,
         on_select=on_select,
-        on_hover=None,
+        on_hover=on_hover,
     )
     # Mouse capture on a never-shown window is platform-fragile and irrelevant
     # to selection logic; neutralise it.
@@ -179,6 +182,72 @@ def test_multi_copy_selection_survives_round_trip():
 
         assert view._selected_uids == chosen
         assert reported["name"] is None
+    finally:
+        frame.Destroy()
+
+
+def _hover_point(view) -> wx.Point:
+    """A point over the top copy of the (single) pile, usable for hover hits."""
+    ((_label, members),) = view._piles
+    rect = view._card_rect(0, 0, len(members))
+    return wx.Point(rect.x + rect.width // 2, rect.y + _NAME_STRIP_HEIGHT // 2)
+
+
+@pytest.mark.usefixtures("wx_app")
+def test_hover_reports_card_when_nothing_is_selected():
+    """With no selection, moving over a copy reports it via on_hover."""
+    frame = wx.Frame(None)
+    hovered: list = []
+    view = _make_view(frame, lambda _card: None, on_hover=hovered.append)
+    try:
+        view.set_cards([{"name": "Grizzly Bears", "qty": 4}])
+        assert not view._selected_uids
+        ((_label, members),) = view._piles
+        top_uid = members[0]["_uid"]
+
+        view._on_motion(_FakeMouseEvent(_hover_point(view)))
+
+        assert view._hover_uid == top_uid
+        assert hovered == [{"name": "Grizzly Bears", "qty": 1}]
+    finally:
+        frame.Destroy()
+
+
+@pytest.mark.usefixtures("wx_app")
+def test_hover_suppressed_with_exactly_one_selected_copy():
+    """A single selected copy stays the active card; hover must not override it."""
+    frame = wx.Frame(None)
+    hovered: list = []
+    view = _make_view(frame, lambda _card: None, on_hover=hovered.append)
+    try:
+        view.set_cards([{"name": "Grizzly Bears", "qty": 4}])
+        ((_label, members),) = view._piles
+        view._selected_uids = {members[0]["_uid"]}
+
+        view._on_motion(_FakeMouseEvent(_hover_point(view)))
+
+        assert view._hover_uid is None
+        assert hovered == []
+    finally:
+        frame.Destroy()
+
+
+@pytest.mark.usefixtures("wx_app")
+def test_hover_reports_card_with_multi_selection():
+    """'Hover wins' when more than one copy is selected: on_hover still fires."""
+    frame = wx.Frame(None)
+    hovered: list = []
+    view = _make_view(frame, lambda _card: None, on_hover=hovered.append)
+    try:
+        view.set_cards([{"name": "Grizzly Bears", "qty": 4}])
+        ((_label, members),) = view._piles
+        view._selected_uids = {members[1]["_uid"], members[2]["_uid"]}
+        top_uid = members[0]["_uid"]
+
+        view._on_motion(_FakeMouseEvent(_hover_point(view)))
+
+        assert view._hover_uid == top_uid
+        assert hovered == [{"name": "Grizzly Bears", "qty": 1}]
     finally:
         frame.Destroy()
 
