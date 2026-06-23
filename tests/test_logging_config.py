@@ -141,3 +141,47 @@ def test_uses_stdout_when_stderr_unavailable(tmp_path, monkeypatch):
         assert stream_sinks[0]._sink._stream is sys.stdout
     finally:
         logger.remove()
+
+
+def test_falls_back_to_stdout_when_stderr_sink_raises_typeerror(tmp_path, monkeypatch):
+    # ``sys.stderr`` can be present but unusable as a loguru sink (e.g. a
+    # frozen/windowed build whose stderr lacks a real ``write``), in which case
+    # ``logger.add`` raises TypeError. The stream-selection loop must catch that
+    # and fall through to stdout rather than leaving no console sink.
+    monkeypatch.delenv("MTGO_LOG_LEVEL", raising=False)
+
+    real_add = logger.add
+
+    def _add(sink, *args, **kwargs):
+        if sink is sys.stderr:
+            raise TypeError("cannot use stderr as a sink")
+        return real_add(sink, *args, **kwargs)
+
+    monkeypatch.setattr(logger, "add", _add)
+    try:
+        configure_logging(tmp_path)
+        stream_sinks = [h for h in logger._core.handlers.values() if _is_stream_sink(h)]
+        assert len(stream_sinks) == 1
+        assert stream_sinks[0]._sink._stream is sys.stdout
+    finally:
+        logger.remove()
+
+
+def test_file_sink_writes_non_warmup_records_but_drops_warmup(tmp_path, monkeypatch):
+    # The happy-path file sink must actually persist ordinary records while the
+    # warm-up filter keeps the high-volume warm-up records out of the file.
+    monkeypatch.delenv("MTGO_LOG_LEVEL", raising=False)
+    try:
+        log_file = configure_logging(tmp_path)
+        assert log_file is not None
+
+        logger.info("ordinary-record-marker")
+        with logger.contextualize(warmup=True):
+            logger.info("warmup-record-marker")
+    finally:
+        # Removing the sinks flushes and closes the enqueued file handler.
+        logger.remove()
+
+    contents = log_file.read_text(encoding="utf-8")
+    assert "ordinary-record-marker" in contents
+    assert "warmup-record-marker" not in contents
