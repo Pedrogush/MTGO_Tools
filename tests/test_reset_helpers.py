@@ -122,6 +122,47 @@ def test_transitive_missing_optional_dependency_is_silent(monkeypatch):
     assert not caught, [str(c.message) for c in caught]
 
 
+def test_dotted_missing_submodule_warns(fake_module):
+    """A dotted target whose parent exists but submodule is absent must warn.
+
+    Real registrations use dotted paths (e.g. ``repositories.card_repository``).
+    When the parent package is importable but the named submodule is gone
+    (renamed/removed/relocated), Python raises ``ImportError`` with ``exc.name``
+    equal to the *full dotted* ``module_path``. That is indistinguishable from a
+    broken target module, so the safe behaviour is to surface a warning rather
+    than silently no-op.
+    """
+    pkg = fake_module("fake_reset_pkg")
+    pkg.__path__ = []  # mark as a package so submodule import is attempted
+
+    module_path = "fake_reset_pkg.missing_submod"
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        fn = test_helpers._optional_reset(module_path, "reset_z")
+
+    assert fn() is None
+    assert any(module_path in str(c.message) for c in caught)
+
+
+def test_dotted_missing_top_level_package_is_silent():
+    """A dotted target whose *top-level* package is absent stays silent.
+
+    Here ``exc.name`` is the missing top-level package name, which differs from
+    the full dotted ``module_path``. This mirrors the benign case where an
+    optional dependency's whole package tree is not installed, so the
+    resolution should fall back to a no-op without warning.
+    """
+    module_path = "definitely_absent_top_pkg.some_submod"
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        fn = test_helpers._optional_reset(module_path, "reset_w")
+
+    assert fn() is None
+    assert not caught, [str(c.message) for c in caught]
+
+
 def test_import_error_without_name_warns(monkeypatch):
     """An ImportError with no ``.name`` (``exc.name is None``) must warn.
 
