@@ -63,6 +63,34 @@ def test_matches_mana_cost_empty_query():
     assert matches_mana_cost(card_cost, query, "contains") is True
 
 
+def test_matches_mana_cost_contains_generic_token_is_literal():
+    """Generic-mana tokens are matched as literal symbols, not quantities.
+
+    A ``{2}`` generic token only satisfies a card that actually carries a
+    ``{2}`` token; a different generic amount (``{3}``) does not count toward
+    it in 'contains' mode.
+    """
+    assert matches_mana_cost("{3}{G}", "{2}", "contains") is False
+    assert matches_mana_cost("{2}{G}", "{2}", "contains") is True
+
+
+def test_matches_mana_cost_contains_empty_card():
+    """A card with no mana cost cannot contain a required colored symbol."""
+    assert matches_mana_cost("", "{G}", "contains") is False
+
+
+def test_matches_mana_cost_exact_case_insensitive():
+    """Exact matching is case-insensitive on symbol spelling."""
+    assert matches_mana_cost("{2}{g}{g}", "{2}{G}{G}", "exact") is True
+
+
+def test_matches_mana_cost_hybrid_is_atomic():
+    """A hybrid symbol is a single atomic token, not its two component pips."""
+    # {G}{U} (two separate pips) is not the same cost as {G/U} (one hybrid pip).
+    assert matches_mana_cost("{G}{U}", "{G/U}", "exact") is False
+    assert matches_mana_cost("{G/U}", "{G/U}", "exact") is True
+
+
 def test_matches_mana_cost_hybrid_mana():
     """Test matching with hybrid mana symbols."""
     card_cost = "{G/U}{G/U}"
