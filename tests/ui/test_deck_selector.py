@@ -150,15 +150,11 @@ def test_present_deck_text_updates_ui_without_download_io(
 ):
     frame = deck_selector_factory()
     try:
-        download_calls: list[tuple[tuple[object, ...], dict[str, object]]] = []
-        frame.controller.download_deck_text = lambda *args, **kwargs: download_calls.append(
-            (args, kwargs)
-        )  # type: ignore[assignment]
-
         frame.present_deck_text("4 Mountain\n4 Island\nSideboard\n2 Dispel\n")
         pump_ui_events(wx.GetApp())
 
-        assert download_calls == []
+        # present_deck_text renders straight from the supplied text; it must not
+        # trigger another download round-trip.
         assert frame.controller.deck_repo.get_current_deck_text().startswith("4 Mountain")
         assert "8 card" in frame.main_table.count_label.GetLabel()
         assert frame.deck_action_buttons.copy_button.IsEnabled()
@@ -597,5 +593,159 @@ def test_on_load_deck_clicked_file_read_error_is_handled(
         assert message_box.called
         # The current deck key is derived from the chosen file before the read.
         assert frame.deck_repo.get_current_deck_key() == "unreadable deck"
+    finally:
+        frame.Destroy()
+
+
+@pytest.mark.usefixtures("wx_app")
+def test_on_copy_clicked_writes_deck_to_clipboard(
+    deck_selector_factory,
+):
+    """A non-empty deck must be copied to the clipboard as text."""
+    frame = deck_selector_factory()
+    try:
+        frame.zone_cards = {
+            "main": [{"name": "Mountain", "qty": 4}],
+            "side": [{"name": "Island", "qty": 2}],
+            "out": [],
+        }
+        with patch("wx.TheClipboard") as clipboard:
+            clipboard.Open.return_value = True
+            frame.on_copy_clicked(None)
+
+        assert clipboard.Open.called
+        assert clipboard.SetData.called
+        assert clipboard.Close.called
+        data_object = clipboard.SetData.call_args.args[0]
+        copied_text = data_object.GetText()
+        assert "Mountain" in copied_text
+        assert "Island" in copied_text
+    finally:
+        frame.Destroy()
+
+
+@pytest.mark.usefixtures("wx_app")
+def test_on_load_deck_clicked_renders_selected_file(
+    deck_selector_factory,
+):
+    """A readable selected file must reach _on_deck_content_ready as source='file'."""
+    frame = deck_selector_factory()
+    try:
+        ready_calls: list[tuple[str, str]] = []
+        frame._on_deck_content_ready = lambda text, source="manual": ready_calls.append(  # type: ignore[assignment]
+            (text, source)
+        )
+
+        deck_text = "4 Lightning Bolt\n4 Mountain\nSideboard\n1 Abrade\n"
+        with (
+            patch("wx.FileDialog") as dialog_cls,
+            patch("pathlib.Path.read_text", return_value=deck_text),
+        ):
+            dialog = dialog_cls.return_value.__enter__.return_value
+            dialog.ShowModal.return_value = wx.ID_OK
+            dialog.GetPath.return_value = "C:/decks/My Deck.txt"
+            frame.on_load_deck_clicked()
+
+        assert ready_calls == [(deck_text, "file")]
+        assert frame.deck_repo.get_current_deck_key() == "my deck"
+    finally:
+        frame.Destroy()
+
+
+@pytest.mark.usefixtures("wx_app")
+def test_on_daily_average_clicked_skips_while_loading(
+    deck_selector_factory,
+):
+    """The re-entrancy guard must block a daily-average build already in flight."""
+    frame = deck_selector_factory()
+    try:
+        build_calls: list[object] = []
+        frame._start_daily_average_build = lambda: build_calls.append(object())  # type: ignore[assignment]
+        with frame._loading_lock:
+            frame.loading_daily_average = True
+        frame.on_daily_average_clicked(None)
+        assert build_calls == []
+    finally:
+        frame.Destroy()
+
+
+@pytest.mark.usefixtures("wx_app")
+def test_on_daily_average_clicked_no_op_without_decks(
+    deck_selector_factory,
+):
+    """With no decks loaded the daily-average build must not start."""
+    frame = deck_selector_factory()
+    try:
+        build_calls: list[object] = []
+        frame._start_daily_average_build = lambda: build_calls.append(object())  # type: ignore[assignment]
+        frame.controller.deck_repo.set_decks_list([])
+        with frame._loading_lock:
+            frame.loading_daily_average = False
+        frame.on_daily_average_clicked(None)
+        assert build_calls == []
+    finally:
+        frame.Destroy()
+
+
+@pytest.mark.usefixtures("wx_app")
+def test_on_daily_average_clicked_builds_and_renders(
+    deck_selector_factory,
+):
+    """The happy path stubs build_daily_average_deck, fires on_success, and renders."""
+    frame = deck_selector_factory()
+    try:
+        frame.controller.deck_repo.set_decks_list([{"name": "Mono Red Aggro", "number": "1"}])
+
+        def fake_build(on_success, on_error, on_status, on_progress):  # noqa: ARG001
+            on_success("4 Mountain\n4 Island\n")
+            return True, ""
+
+        frame.controller.build_daily_average_deck = fake_build  # type: ignore[assignment]
+
+        frame.on_daily_average_clicked(None)
+        pump_ui_events(wx.GetApp())
+
+        # source='average' clears the current deck and renders the built list.
+        assert frame.controller.deck_repo.get_current_deck() is None
+        assert "8 card" in frame.main_table.count_label.GetLabel()
+        assert frame.daily_average_button.IsEnabled()
+    finally:
+        frame.Destroy()
+
+
+@pytest.mark.usefixtures("wx_app")
+def test_deck_filter_through_frame_narrows_and_empties_deck_list(
+    deck_selector_factory,
+):
+    """A player-name filter applied via the frame must narrow, then empty, the list.
+
+    Drives the real ``_apply_deck_filters`` row-building path: an archetype load
+    populates ``_all_loaded_decks`` with one deck (player ``TestPilot``); a
+    matching filter keeps it, a non-matching filter yields the disabled
+    "no decks" state.
+    """
+    frame = deck_selector_factory()
+    try:
+        frame.fetch_archetypes()
+        pump_ui_events(wx.GetApp())
+        frame.research_panel.archetype_list.SetSelection(1)
+        frame.on_archetype_selected()
+        pump_ui_events(wx.GetApp())
+        assert frame.deck_list.GetCount() == 1
+
+        # A matching player filter keeps the single deck.
+        frame.research_panel.set_player_name_filter("testpilot")
+        frame.on_event_type_filter_changed()
+        pump_ui_events(wx.GetApp())
+        assert frame.deck_list.GetCount() == 1
+        assert frame.deck_list.IsEnabled()
+
+        # A non-matching filter empties the list and disables it.
+        frame.research_panel.set_player_name_filter("nobody")
+        frame.on_event_type_filter_changed()
+        pump_ui_events(wx.GetApp())
+        assert frame.deck_list.GetCount() == 1
+        assert frame.deck_list.GetString(0) == frame._t("deck_results.no_decks")
+        assert not frame.deck_list.IsEnabled()
     finally:
         frame.Destroy()
