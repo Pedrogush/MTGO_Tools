@@ -19,7 +19,11 @@ class StoreService:
             return {}
         try:
             with locked_path(path):
-                return fast_load(path)
+                data = fast_load(path)
+            if not isinstance(data, dict):
+                logger.warning(f"Store at {path} is not a JSON object; ignoring store")
+                return {}
+            return data
         except Exception as exc:
             if isinstance(exc, OSError):
                 logger.warning(f"Failed to read {path}: {exc}")
