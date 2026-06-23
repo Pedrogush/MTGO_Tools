@@ -322,6 +322,71 @@ def test_deck_view_and_pile_sort_modes(tmp_path):
     assert manager.settings["deck_pile_sort_modes"]["side"] == "mv"
 
 
+def test_deck_sash_position_getter_and_setter(tmp_path):
+    manager = _make_manager(tmp_path)
+
+    # No saved position: the getter returns the supplied default (0 means
+    # "no saved position" by contract).
+    assert manager.get_deck_sash_position() == 0
+    assert manager.get_deck_sash_position(default=150) == 150
+
+    # A positive position round-trips.
+    manager.update_deck_sash_position(220)
+    assert manager.settings["deck_sash_position"] == 220
+    assert manager.get_deck_sash_position() == 220
+    assert manager.get_deck_sash_position(default=150) == 220
+
+    # Non-positive and non-int updates are silently dropped, leaving the last
+    # valid value intact.
+    manager.update_deck_sash_position(0)
+    manager.update_deck_sash_position(-5)
+    manager.update_deck_sash_position("300")  # type: ignore[arg-type]
+    assert manager.settings["deck_sash_position"] == 220
+
+
+def test_get_deck_sash_position_coerces_and_clamps(tmp_path):
+    # A stringified int is coerced; a positive value passes through.
+    manager = _make_manager(tmp_path, {"deck_sash_position": "180"})
+    assert manager.get_deck_sash_position() == 180
+
+    # Zero/negative stored values fall back to the default ("no saved position").
+    manager = _make_manager(tmp_path, {"deck_sash_position": 0})
+    assert manager.get_deck_sash_position(default=150) == 150
+    manager = _make_manager(tmp_path, {"deck_sash_position": -10})
+    assert manager.get_deck_sash_position(default=150) == 150
+
+    # A non-numeric stored value falls back to the default rather than raising.
+    manager = _make_manager(tmp_path, {"deck_sash_position": "not-a-number"})
+    assert manager.get_deck_sash_position(default=150) == 150
+
+
+def test_save_drops_omitted_window_size_but_keeps_zero_screen_pos(tmp_path):
+    manager = _make_manager(tmp_path)
+    base_kwargs = {
+        "current_format": "Modern",
+        "left_mode": "builder",
+        "deck_data_source": "mtgo",
+        "zone_cards": {"main": [], "side": [], "out": []},
+    }
+
+    # Omitted (None) window_size leaves no key behind.
+    manager.save(**base_kwargs)
+    data = json.loads(manager.settings_file.read_text(encoding="utf-8"))
+    assert "window_size" not in data
+    assert "screen_pos" not in data
+
+    # screen_pos=(0, 0) is a non-empty tuple, so it persists and restores
+    # rather than being dropped as a falsy coordinate.
+    manager.save(**base_kwargs, window_size=(1024, 768), screen_pos=(0, 0))
+    data = json.loads(manager.settings_file.read_text(encoding="utf-8"))
+    assert data["window_size"] == [1024, 768]
+    assert data["screen_pos"] == [0, 0]
+
+    restored = manager.restore_session_state({"main": [], "side": [], "out": []})
+    assert restored["window_size"] == (1024, 768)
+    assert restored["screen_pos"] == (0, 0)
+
+
 def test_event_type_player_and_date_filters(tmp_path):
     manager = _make_manager(tmp_path)
     assert manager.get_deck_event_type_filter() == "All"
