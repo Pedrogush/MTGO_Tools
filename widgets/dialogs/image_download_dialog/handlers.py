@@ -5,20 +5,19 @@ from __future__ import annotations
 import threading
 from collections.abc import Callable
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import wx
 from loguru import logger
 
-if TYPE_CHECKING:
-    from services.image_service import BulkImageDownloader
+from services.image_service import BulkImageDownloader
 
 
 class ImageDownloadDialogHandlersMixin:
     """Threaded download worker that reports progress to the status bar."""
 
     image_cache: Any
-    image_downloader: BulkImageDownloader
+    image_downloader: BulkImageDownloader | None
     bulk_data_cache_path: Path
     on_status_update: Callable[..., None] | None
 
@@ -38,10 +37,16 @@ class ImageDownloadDialogHandlersMixin:
 
         def worker():
             try:
+                # The image service exposes ``image_downloader`` lazily (it is
+                # ``None`` until first used), so fall back to a fresh instance
+                # here — mirrors the ``or BulkImageDownloader(...)`` pattern used
+                # elsewhere in the image service.
+                downloader = self.image_downloader or BulkImageDownloader(self.image_cache)
+
                 # Ensure bulk data is downloaded
                 if not self.bulk_data_cache_path.exists():
                     wx.CallAfter(self._report_status, "app.status.image_download_metadata")
-                    success, msg = self.image_downloader.download_bulk_metadata(force=False)
+                    success, msg = downloader.download_bulk_metadata(force=False)
                     if not success:
                         wx.CallAfter(
                             self._on_download_failed, f"Failed to download metadata: {msg}"
@@ -49,7 +54,7 @@ class ImageDownloadDialogHandlersMixin:
                         return
 
                 # Download images
-                result = self.image_downloader.download_all_images(
+                result = downloader.download_all_images(
                     size=quality, max_cards=max_cards, progress_callback=progress_callback
                 )
 

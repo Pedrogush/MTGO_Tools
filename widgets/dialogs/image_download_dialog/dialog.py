@@ -40,7 +40,7 @@ class ImageDownloadDialog(
         self,
         parent: wx.Window,
         image_cache: Any,
-        image_downloader: BulkImageDownloader,
+        image_downloader: BulkImageDownloader | None,
         bulk_data_cache_path: Path,
         on_status_update: Callable[[str], None] | None = None,
     ):
