@@ -4,7 +4,7 @@
 
 .DESCRIPTION
     Where test_installer.ps1 only validates the installer *file* (PE header,
-    size, signature), this exercises the actual install → run → uninstall
+    size, signature), this exercises the actual install -> run -> uninstall
     lifecycle and verifies it leaves the machine clean:
 
       1. Snapshots the relevant registry key and directories.
@@ -15,7 +15,7 @@
       4. Uninstalls silently.
       5. Asserts nothing is left behind: the uninstall registry key is gone, the
          install directory (including the post-install bridge download) is gone,
-         and regenerable per-user data (cache/logs/data) is gone — while user
+         and regenerable per-user data (cache/logs/data) is gone - while user
          settings (config) and saved decks are intentionally preserved.
 
     This is what catches the classic installer bugs: an orphaned registry key,
@@ -23,7 +23,7 @@
     the uninstaller doesn't know to remove.
 
 .NOTES
-    Run on Windows in a normal (non-elevated) shell — the installer is a
+    Run on Windows in a normal (non-elevated) shell - the installer is a
     per-user install and needs no administrator privileges.
 
     CAUTION: this uninstalls the app and removes its regenerable per-user data
@@ -180,8 +180,21 @@ if (-not $SkipLaunch) {
         try {
             $app = Start-Process -FilePath $exe -PassThru
             Start-Sleep -Seconds 8
-            if (-not $app.HasExited) { $app.CloseMainWindow() | Out-Null; Start-Sleep -Seconds 2 }
-            if (-not $app.HasExited) { Stop-Process -Id $app.Id -Force -ErrorAction SilentlyContinue }
+            # A PyInstaller onefile app runs as a bootloader that spawns a child
+            # process, so Stop-Process on $app alone leaves the real app (and its
+            # lock on mtgo_tools.exe) alive - which would block the uninstaller
+            # from deleting the exe. Kill the whole tree by PID, then sweep by
+            # name, then wait for every mtgo_tools process to exit so the exe is
+            # unlocked before we uninstall.
+            & taskkill.exe /F /T /PID $app.Id 2>&1 | Out-Null
+            Get-Process -Name mtgo_tools -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+            $killDeadline = (Get-Date).AddSeconds(15)
+            while ((Get-Process -Name mtgo_tools -ErrorAction SilentlyContinue) -and ((Get-Date) -lt $killDeadline)) {
+                Start-Sleep -Milliseconds 500
+            }
+            if (Get-Process -Name mtgo_tools -ErrorAction SilentlyContinue) {
+                Write-Warn-Custom "App process still running after kill; the uninstall-cleanup check may be affected."
+            }
         } catch {
             Write-Warn-Custom "Could not launch the app ($_); continuing with simulated data only."
         }
@@ -241,7 +254,7 @@ if ($script:FailCount -gt 0) {
     Write-Fail "=========================================="
     exit 1
 } else {
-    Write-Pass "ALL TESTS PASSED — install/uninstall path is clean."
+    Write-Pass "ALL TESTS PASSED - install/uninstall path is clean."
     Write-Pass "=========================================="
     exit 0
 }
