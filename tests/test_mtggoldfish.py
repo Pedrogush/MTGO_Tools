@@ -82,16 +82,6 @@ SAMPLE_ARCHETYPE_DECKS_HTML = """
 </html>
 """
 
-SAMPLE_DECK_HTML = """
-<html>
-<body>
-<script>
-initializeDeckComponents(123, 456, "4%20Lightning%20Bolt%0A4%20Counterspell%0A%0A3%20Duress");
-</script>
-</body>
-</html>
-"""
-
 
 @pytest.fixture
 def temp_cache_dir():
@@ -394,6 +384,41 @@ class TestGetArchetypeDecks:
         assert result[1]["player"] == "PlayerTwo"
 
     @patch("repositories.scrapers.mtggoldfish.requests.get")
+    def test_get_archetype_decks_served_from_cache_without_network(self, mock_get, temp_cache_dir):
+        """A fresh cache entry is returned directly and the network is never hit."""
+        cached_decks = [
+            {
+                "date": "Jan 15",
+                "number": "123456",
+                "player": "PlayerOne",
+                "event": "MTGO Challenge",
+                "result": "1st",
+                "name": "modern-cache-hit-archetype",
+                "source": "mtggoldfish",
+            }
+        ]
+        cache_file = temp_cache_dir / "archetype_decks.json"
+        cache_file.write_text(
+            json.dumps(
+                {
+                    "modern-cache-hit-archetype": {
+                        "timestamp": time.time(),
+                        "items": cached_decks,
+                    }
+                }
+            )
+        )
+
+        with patch(
+            "repositories.scrapers.mtggoldfish.ARCHETYPE_DECKS_CACHE_FILE",
+            cache_file,
+        ):
+            result = get_archetype_decks("modern-cache-hit-archetype")
+
+        assert result == cached_decks
+        mock_get.assert_not_called()
+
+    @patch("repositories.scrapers.mtggoldfish.requests.get")
     def test_get_archetype_decks_request_failure(self, mock_get, temp_cache_dir):
         """Test that a request exception is caught and yields an empty result.
 
@@ -464,13 +489,14 @@ class TestGetArchetypeStats:
     """Test get_archetype_stats parallelization and result aggregation."""
 
     def test_parallel_fetch_preserves_archetype_mapping(self, temp_cache_dir):
-        """Each archetype's decks must map back to that archetype, even when the
-        per-archetype fetches run concurrently and complete out of order.
+        """Each archetype's decks must map back to that archetype when the
+        per-archetype fetches run concurrently in the thread pool.
 
-        Submission order is deterministically permuted relative to completion order
-        by blocking each fake fetch until the *last*-submitted archetype has been
-        entered, forcing out-of-order completion so a serial/positional mapping bug
-        would be caught."""
+        A barrier forces all workers to be in flight simultaneously and a per-href
+        delay makes them *finish* in a different order than they were submitted.
+        ``executor.map`` still yields results in submission order, so this guards
+        the name<->decks zip against drift and confirms concurrent cache access is
+        safe; it is not asserting that map reorders results."""
         archetypes = [
             {"name": "Rakdos Midrange", "href": "modern-rakdos-midrange"},
             {"name": "Amulet Titan", "href": "modern-amulet-titan"},
@@ -545,28 +571,62 @@ class TestGetArchetypeStats:
         mock_archetypes.assert_not_called()
         mock_decks.assert_not_called()
 
-    def test_get_archetype_stats_recovers_from_corrupt_cache(self, temp_cache_dir):
+    @patch("repositories.scrapers.mtggoldfish.requests.get")
+    def test_get_archetype_stats_recovers_from_corrupt_cache(self, mock_get, temp_cache_dir):
         """An unreadable (invalid JSON) cache is discarded and stats are recomputed
-        from the network path rather than crashing."""
-        cache_file = temp_cache_dir / "archetype_stats.json"
-        cache_file.write_text("not valid json{{{")
+        from the real get_archetypes/get_archetype_decks pipeline over the mocked
+        network seam rather than crashing.
 
-        archetypes = [{"name": "Rakdos Midrange", "href": "modern-rakdos-midrange"}]
+        Drives the real internal functions (only ``requests.get`` is mocked) so the
+        archetype-page parse, deck-table parse, and lookback bucketing are all
+        exercised end to end."""
+        stats_cache = temp_cache_dir / "archetype_stats.json"
+        stats_cache.write_text("not valid json{{{")
+        list_cache = temp_cache_dir / "archetype_list.json"
+        decks_cache = temp_cache_dir / "archetype_decks.json"
+
+        # The lookback bucket key is an ISO "%Y-%m-%d" string matched as a
+        # case-insensitive substring of each deck's date cell, so emit ISO dates
+        # (one today, one yesterday) to drive a real, non-zero bucket count.
         today = datetime.now().strftime("%Y-%m-%d")
-        decks = [{"date": today, "name": "Rakdos Midrange"}]
+        yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
+        decks_html = f"""
+        <html><body>
+        <table class="table-striped">
+            <tr><th>Date</th><th>Deck</th><th>Player</th><th>Event</th><th>Result</th></tr>
+            <tr><td>{today}</td><td><a href="/deck/123456">x</a></td>
+                <td>PlayerOne</td><td>MTGO Challenge</td><td>1st</td></tr>
+            <tr><td>{yesterday}</td><td><a href="/deck/789012">x</a></td>
+                <td>PlayerTwo</td><td>MTGO League</td><td>5-0</td></tr>
+        </table>
+        </body></html>
+        """
+
+        def fake_get(url, *args, **kwargs):
+            resp = Mock()
+            resp.raise_for_status = Mock()
+            if "/metagame/" in url:
+                resp.text = SAMPLE_METAGAME_HTML
+            else:  # /archetype/<href>/decks
+                resp.text = decks_html
+            return resp
+
+        mock_get.side_effect = fake_get
 
         with (
-            patch.object(mtggoldfish, "get_archetypes", return_value=archetypes) as mock_archetypes,
-            patch.object(mtggoldfish, "get_archetype_decks", return_value=decks) as mock_decks,
-            patch.object(mtggoldfish, "ARCHETYPE_CACHE_FILE", cache_file),
+            patch.object(mtggoldfish, "ARCHETYPE_CACHE_FILE", stats_cache),
+            patch.object(mtggoldfish, "ARCHETYPE_LIST_CACHE_FILE", list_cache),
+            patch.object(mtggoldfish, "ARCHETYPE_DECKS_CACHE_FILE", decks_cache),
         ):
-            result = get_archetype_stats("modern")
+            stats = get_archetype_stats("modern")
 
-        # Recovered: recomputed instead of raising on the corrupt cache.
-        mock_archetypes.assert_called_once()
-        mock_decks.assert_called_once()
-        assert result["modern"]["Rakdos Midrange"]["decks"] == decks
-        assert result["modern"]["Rakdos Midrange"]["results"][today] == 1
+        # Recovered: recomputed (real parse) instead of raising on the corrupt cache.
+        assert set(stats["modern"]) - {"timestamp"} == {"Rakdos Midrange", "Amulet Titan"}
+        rakdos = stats["modern"]["Rakdos Midrange"]
+        # Both sample decks parsed into the archetype.
+        assert {deck["number"] for deck in rakdos["decks"]} == {"123456", "789012"}
+        # Today's lookback bucket counts the single deck dated today.
+        assert rakdos["results"][today] == 1
 
 
 class TestFetchDeckText:
@@ -605,6 +665,22 @@ class TestFetchDeckText:
             "repositories.scrapers.mtggoldfish_visual.fetch_deck_text_from_visual_page"
         ) as mock_visual:
             result = mtggoldfish.fetch_deck_text("123456")
+
+        assert result == "4 Lightning Bolt"
+        mock_visual.assert_not_called()
+
+    def test_fetch_deck_text_both_filter_serves_any_source_from_cache(self, real_cache):
+        """source_filter='both' maps to a source-agnostic lookup (cache_source=None),
+        so an mtggoldfish-sourced entry is served without hitting the visual page.
+
+        This is distinct from passing the literal 'both' through to the DB, which
+        would never match a real 'mtggoldfish' row."""
+        real_cache.set("123456", "4 Lightning Bolt", source="mtggoldfish")
+
+        with patch(
+            "repositories.scrapers.mtggoldfish_visual.fetch_deck_text_from_visual_page"
+        ) as mock_visual:
+            result = mtggoldfish.fetch_deck_text("123456", source_filter="both")
 
         assert result == "4 Lightning Bolt"
         mock_visual.assert_not_called()
@@ -707,6 +783,29 @@ class TestCacheMigration:
         assert not json_path.exists()
         assert json_path.with_suffix(".json.backup").exists()
 
+    def test_migration_survives_backup_rename_failure(self, tmp_path):
+        """If renaming the legacy JSON to its .backup sidecar raises OSError, the
+        decks are still migrated into SQLite and no exception escapes (the original
+        JSON is simply left in place)."""
+        from repositories.deck_text_cache import DeckTextCache
+
+        json_path = tmp_path / "deck_text_cache.json"
+        json_path.write_text(json.dumps({"111": "4 Lightning Bolt"}), encoding="utf-8")
+
+        cache = DeckTextCache(tmp_path / "deck_cache.db")
+        with (
+            patch("repositories.deck_text_cache.get_deck_cache", return_value=cache),
+            patch("repositories.scrapers.mtggoldfish.DECK_TEXT_CACHE_FILE", json_path),
+            patch.object(Path, "rename", side_effect=OSError("read-only fs")),
+        ):
+            mtggoldfish._ensure_cache_migration()  # must not raise
+
+        # Decks still migrated despite the failed backup rename.
+        assert cache.get("111") == "4 Lightning Bolt"
+        # Backup did not happen; original JSON left intact.
+        assert json_path.exists()
+        assert not json_path.with_suffix(".json.backup").exists()
+
     def test_migration_is_noop_when_no_json_cache(self, tmp_path):
         """With no legacy JSON file the migration leaves the SQLite cache empty and
         creates no backup."""
@@ -758,3 +857,13 @@ class TestDownloadDeck:
         assert temp_curr_deck_file.exists()
         assert temp_curr_deck_file.read_text() == deck_text
         mock_fetch.assert_called_once_with("123456", source_filter=None)
+
+    @patch("repositories.scrapers.mtggoldfish.fetch_deck_text")
+    def test_download_deck_forwards_source_filter(self, mock_fetch, temp_curr_deck_file):
+        """A non-None source_filter is forwarded verbatim to fetch_deck_text."""
+        mock_fetch.return_value = "4 Island"
+
+        with patch("repositories.scrapers.mtggoldfish.CURR_DECK_FILE", temp_curr_deck_file):
+            download_deck("123456", source_filter="mtgo")
+
+        mock_fetch.assert_called_once_with("123456", source_filter="mtgo")
