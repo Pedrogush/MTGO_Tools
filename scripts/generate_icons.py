@@ -100,6 +100,21 @@ def render_grid(grid: list[str], head: tuple) -> Image.Image:
     return img
 
 
+def tilt_ccw45(img: Image.Image) -> Image.Image:
+    """Rotate 45 degrees counter-clockwise, kept at the grid resolution.
+
+    Rotating with nearest-neighbour at the small grid size (rather than after
+    upscaling) keeps the pixels chunky through the rotation, so the later
+    upscale to icon sizes stays crisply pixelated instead of blurring the
+    diagonal edges. The result is padded to a square so icon frames stay square.
+    """
+    rot = img.rotate(45, resample=Image.NEAREST, expand=True)
+    side = max(rot.size)
+    canvas = Image.new("RGBA", (side, side), TRANSPARENT)
+    canvas.paste(rot, ((side - rot.width) // 2, (side - rot.height) // 2))
+    return canvas
+
+
 def build_ico(base: Image.Image, sizes: list[int], path: Path) -> None:
     """Assemble a multi-size .ico from nearest-neighbour-upscaled PNG frames."""
     frames = []
@@ -129,7 +144,7 @@ def main() -> None:
     made = []
     for variant, head in VARIANTS.items():
         for shape_name, grid in shapes.items():
-            base = render_grid(grid, head)
+            base = tilt_ccw45(render_grid(grid, head))
             name = f"hammer_{variant}" + (f"_{shape_name}" if shape_name else "")
             build_ico(base, SIZES, out_dir / f"{name}.ico")
             # A large crisp preview for quick visual review.

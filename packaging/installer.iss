@@ -26,6 +26,10 @@ DefaultGroupName={#MyAppName}
 PrivilegesRequired=lowest
 OutputDir=../dist/installer
 OutputBaseFilename=MTGOTools_Setup_v{#MyAppVersion}
+; Icon for the installer executable itself.
+SetupIconFile=../assets/icons/hammer_gold_colossus.ico
+; Icon shown in Apps & Features / Add-Remove Programs (uses the app's own icon).
+UninstallDisplayIcon={app}\{#MyAppExeName}
 Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern

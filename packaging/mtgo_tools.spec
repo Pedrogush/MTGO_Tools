@@ -44,6 +44,7 @@ for rel in [
 binaries = []
 
 entry_point = project_root / "main.py"
+app_icon = project_root / "assets" / "icons" / "hammer_gold_colossus.ico"
 
 # Hidden imports: modules PyInstaller's static analysis can't see, so we find
 # them dynamically. wxPython's richtext extension loads wx._xml/_html/_adv at
@@ -83,6 +84,7 @@ exe = EXE(
     a.datas,
     [],
     name="mtgo_tools",
+    icon=str(app_icon),
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
