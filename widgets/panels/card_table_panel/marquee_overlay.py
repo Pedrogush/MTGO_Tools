@@ -26,15 +26,32 @@ def marquee_bounds(p1: wx.Point, p2: wx.Point) -> wx.Rect:
     return wx.Rect(left, top, right - left, bottom - top)
 
 
+def edge_strips(
+    bounds: tuple[int, int, int, int], border: int = _BORDER
+) -> list[tuple[int, int, int, int]] | None:
+    """Pure ``(x, y, w, h)`` geometry for ``update``: the four framing strips.
+
+    ``bounds`` is the normalised ``(x, y, w, h)`` rectangle. A degenerate box
+    (sub-1px in either dimension) yields ``None`` — the caller should cancel
+    rather than draw. Otherwise the four edge strips (top, bottom, left, right)
+    are returned with each dimension clamped to ``>= 1`` so a thin/short box
+    still produces visible strips. wx-free so the decision is unit-testable.
+    """
+    x, y, w, h = bounds
+    if w < 1 or h < 1:
+        return None
+    return [
+        (x, y, max(1, w), max(1, border)),  # top
+        (x, y + h - border, max(1, w), max(1, border)),  # bottom
+        (x, y, max(1, border), max(1, h)),  # left
+        (x + w - border, y, max(1, border), max(1, h)),  # right
+    ]
+
+
 def edge_rects(outer: wx.Rect, border: int = _BORDER) -> list[wx.Rect]:
     """The four edge strips (top, bottom, left, right) framing ``outer``."""
-    x, y, w, h = outer.x, outer.y, outer.width, outer.height
-    return [
-        wx.Rect(x, y, w, border),  # top
-        wx.Rect(x, y + h - border, w, border),  # bottom
-        wx.Rect(x, y, border, h),  # left
-        wx.Rect(x + w - border, y, border, h),  # right
-    ]
+    strips = edge_strips((outer.x, outer.y, outer.width, outer.height), border)
+    return [wx.Rect(*strip) for strip in (strips or [])]
 
 
 class MarqueeOverlay:
@@ -52,11 +69,12 @@ class MarqueeOverlay:
     def update(self, p1: wx.Point, p2: wx.Point) -> None:
         """Frame the rectangle with the (screen-space) corners ``p1`` and ``p2``."""
         rect = marquee_bounds(p1, p2)
-        if rect.width < 1 or rect.height < 1:
+        edges = edge_strips((rect.x, rect.y, rect.width, rect.height))
+        if edges is None:
             self.cancel()
             return
-        for strip, edge in zip(self._strips, edge_rects(rect)):
-            strip.SetSize(edge.x, edge.y, max(1, edge.width), max(1, edge.height))
+        for strip, (ex, ey, ew, eh) in zip(self._strips, edges):
+            strip.SetSize(ex, ey, ew, eh)
             if not strip.IsShown():
                 strip.Show()
 
