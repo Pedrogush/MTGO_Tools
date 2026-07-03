@@ -181,6 +181,45 @@ def test_primary_worktree_root_falls_back_on_malformed_marker(tmp_path):
     assert paths._primary_worktree_root_from_marker(marker) == worktree_root.resolve()
 
 
+def test_primary_worktree_root_from_real_git_directory(tmp_path):
+    """A regular checkout's .git directory resolves to its parent repo root."""
+    repo_root = tmp_path / "repo"
+    marker = repo_root / ".git"
+    marker.mkdir(parents=True)
+
+    # _resolve_gitdir returns the directory itself; gitdir.name == ".git" so the
+    # resolver returns the directory's parent (the repo root).
+    assert paths._primary_worktree_root_from_marker(marker) == repo_root.resolve()
+
+
+def test_primary_worktree_root_falls_back_for_arbitrary_gitdir_target(tmp_path):
+    """A gitdir pointer to a dir that is neither under 'worktrees' nor named '.git'.
+
+    Exercises the final fallback: the resolved gitdir exists but does not match
+    either the linked-worktree layout or a bare ``.git`` directory, so the
+    resolver returns the marker's own parent.
+    """
+    worktree_root = tmp_path / "worktree"
+    worktree_root.mkdir()
+    target = tmp_path / "elsewhere" / "custom-git-dir"
+    target.mkdir(parents=True)
+    marker = worktree_root / ".git"
+    marker.write_text(f"gitdir: {target}\n", encoding="utf-8")
+
+    assert paths._primary_worktree_root_from_marker(marker) == worktree_root.resolve()
+
+
+def test_find_git_marker_accepts_file_start(tmp_path):
+    """A non-directory start path is resolved from its parent directory."""
+    repo_root = tmp_path / "repo"
+    (repo_root / ".git").mkdir(parents=True)
+    start_file = repo_root / "scripts" / "main.py"
+    start_file.parent.mkdir(parents=True)
+    start_file.write_text("", encoding="utf-8")
+
+    assert paths._find_git_marker(start_file) == repo_root / ".git"
+
+
 def test_running_under_wsl_false_on_non_linux(monkeypatch):
     monkeypatch.setattr(paths.sys, "platform", "win32")
     assert paths._running_under_wsl() is False
