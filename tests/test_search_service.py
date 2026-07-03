@@ -3,7 +3,45 @@
 from types import SimpleNamespace
 from unittest.mock import Mock
 
-from services.search_service import SearchService
+import pytest
+
+from repositories.card_repository import CardRepository, storage
+from repositories.card_repository.builder import build_index
+from repositories.card_repository.card_data_manager import CardDataManager
+from services.format_card_pool_service import FormatCardPoolService
+from services.search_service import (
+    SearchService,
+    get_search_service,
+    reset_search_service,
+)
+
+
+def _atomic_printing(name, *, mana_cost=None, type_line="Instant", text="", legalities=None):
+    """A single raw MTGJSON printing dict for ``build_index``."""
+    return {
+        "name": name,
+        "manaCost": mana_cost,
+        "type": type_line,
+        "text": text,
+        "colors": [],
+        "colorIdentity": [],
+        "legalities": legalities or {},
+    }
+
+
+def make_card_repository(tmp_path, printings):
+    """Build a real ``CardRepository`` over a real, loaded ``CardDataManager``.
+
+    Drives the genuine ``build_index`` -> ``write_index`` -> ``_load_index``
+    pipeline (the same path :mod:`tests.test_card_repository` uses) so the
+    service exercises real query/legality matching instead of a stub that just
+    echoes its inputs.
+    """
+    payload = {p["name"]: [p] for p in printings}
+    manager = CardDataManager(tmp_path)
+    storage.write_index(manager.index_path, build_index(payload))
+    manager._load_index()
+    return CardRepository(card_data_manager=manager)
 
 
 def create_mock_card(
@@ -51,24 +89,75 @@ def test_search_cards_by_name_data_not_loaded():
     assert results == []
 
 
-def test_search_cards_by_name_with_limit():
-    """Test searching with limit."""
-    mock_repo = SimpleNamespace()
-    mock_repo.is_card_data_loaded = Mock(return_value=True)
-    mock_repo.search_cards = Mock(
-        return_value=[
-            {"name": "Card 1"},
-            {"name": "Card 2"},
-            {"name": "Card 3"},
-            {"name": "Card 4"},
-            {"name": "Card 5"},
-        ]
+def test_search_cards_by_name_with_limit(tmp_path):
+    """Test searching with limit against a real repository."""
+    repo = make_card_repository(
+        tmp_path,
+        [_atomic_printing(f"Card {i}") for i in range(1, 6)],
     )
-    service = SearchService(card_repository=mock_repo)
+    service = SearchService(card_repository=repo)
 
     results = service.search_cards_by_name("Card", limit=3)
 
     assert len(results) == 3
+    assert all("Card" in card["name"] for card in results)
+
+
+def test_search_cards_by_name_matches_real_repository(tmp_path):
+    """A name query runs the real repo's matching, not a canned mock list."""
+    repo = make_card_repository(
+        tmp_path,
+        [
+            _atomic_printing("Lightning Bolt"),
+            _atomic_printing("Counterspell"),
+        ],
+    )
+    service = SearchService(card_repository=repo)
+
+    results = service.search_cards_by_name("lightning")
+
+    assert [card["name"] for card in results] == ["Lightning Bolt"]
+
+
+# ============= Package Entry Point Tests =============
+
+
+@pytest.fixture
+def _isolated_default_collaborators(monkeypatch):
+    """Make the default ``SearchService()`` cheap and disk-free.
+
+    The package getters under test build a real ``SearchService`` with no args,
+    which would otherwise construct the default card repository and open the
+    on-disk format-card-pool SQLite DB. Patch the collaborator getters so the
+    singleton/reset behavior can be asserted hermetically.
+    """
+    monkeypatch.setattr(
+        "services.search_service.service.get_card_repository",
+        lambda: SimpleNamespace(),
+    )
+    monkeypatch.setattr(
+        "services.search_service.service.get_format_card_pool_service",
+        lambda: SimpleNamespace(),
+    )
+
+
+def test_get_search_service_caches_singleton(_isolated_default_collaborators):
+    """get_search_service returns the same lazily-created instance on repeat calls."""
+    reset_search_service()
+    first = get_search_service()
+    second = get_search_service()
+
+    assert isinstance(first, SearchService)
+    assert first is second
+
+
+def test_reset_search_service_forces_fresh_instance(_isolated_default_collaborators):
+    """reset_search_service clears the cache so the next call builds a new service."""
+    first = get_search_service()
+    reset_search_service()
+    second = get_search_service()
+
+    assert first is not second
 
 
 # ============= Filter Tests =============
@@ -235,8 +324,9 @@ def test_filter_cards_multiple_criteria():
     assert len(filtered) == 2
 
 
-def test_search_with_builder_filters_uses_format_pool():
+def test_search_with_builder_filters_uses_format_pool(tmp_path):
     """Test that the format-pool toggle narrows results to the local pool."""
+    from repositories.format_card_pool_repository import FormatCardPoolRepository
 
     class FakeCardManager:
         def search_cards(self, query="", format_filter=None):
@@ -245,9 +335,11 @@ def test_search_with_builder_filters_uses_format_pool():
                 create_mock_card(name="Goblin Guide", legalities={"modern": "Legal"}),
             ]
 
-    format_pool_service = SimpleNamespace(
-        get_card_pool_names=Mock(return_value={"Counterspell"}),
-    )
+    # Real service + repository over a temp SQLite DB so the intersection with
+    # the stored pool is computed by the production read path, not a stub.
+    pool_repo = FormatCardPoolRepository(db_path=tmp_path / "format_card_pool.db")
+    pool_repo.replace_format_pool({"format": "modern", "cards": ["Counterspell"]})
+    format_pool_service = FormatCardPoolService(repository=pool_repo)
     service = SearchService(
         card_repository=SimpleNamespace(),
         format_card_pool_service=format_pool_service,
@@ -422,6 +514,36 @@ def test_search_with_builder_filters_mana_branch_exact():
     assert [card["name"] for card in results] == ["Exact Match"]
 
 
+def test_search_with_builder_filters_normalizes_bare_mana_query():
+    """A brace-less mana query (digit run + bare letters) is normalized then matched."""
+    target = create_mock_card(name="Target", mana_cost="{2}{W}{U}")
+    other = create_mock_card(name="Other", mana_cost="{2}{W}")
+    service = SearchService(card_repository=SimpleNamespace())
+
+    # "2wu" exercises the non-brace tokenizer: a multi-digit run plus a bare
+    # letter run that is split into individual {W}/{U} symbols.
+    results = service.search_with_builder_filters(
+        {"mana": "2wu"},
+        _make_builder_manager([target, other]),
+    )
+
+    assert [card["name"] for card in results] == ["Target"]
+
+
+def test_search_with_builder_filters_normalizes_hybrid_mana_query():
+    """A brace-less hybrid token (e.g. ``w/u``) is kept intact during normalization."""
+    hybrid = create_mock_card(name="Hybrid", mana_cost="{W/U}")
+    mono = create_mock_card(name="Mono", mana_cost="{W}")
+    service = SearchService(card_repository=SimpleNamespace())
+
+    results = service.search_with_builder_filters(
+        {"mana": "w/u"},
+        _make_builder_manager([hybrid, mono]),
+    )
+
+    assert [card["name"] for card in results] == ["Hybrid"]
+
+
 # ============= filter_cards mana_cost path =============
 
 
@@ -470,6 +592,25 @@ def test_filter_cards_mana_cost_query_exact_mode():
     assert [card["name"] for card in exact] == ["Exact Match"]
 
 
+def test_filter_cards_mana_cost_query_exact_mode_excludes_card_with_no_cost():
+    """The empty-cost guard also drops cost-less cards in 'exact' mode.
+
+    Without the guard a card with ``mana_cost == ""`` would reach
+    ``matches_mana_cost`` and only the query/card token comparison would decide;
+    the guard short-circuits it to ``False`` regardless of mode.
+    """
+    service = SearchService(card_repository=SimpleNamespace())
+
+    cards = [
+        create_mock_card(name="Exact Match", mana_cost="{G}"),
+        create_mock_card(name="No Cost", mana_cost=""),
+    ]
+
+    filtered = service.filter_cards(cards, mana_cost_query="{G}", mana_cost_mode="exact")
+
+    assert [card["name"] for card in filtered] == ["Exact Match"]
+
+
 # ============= basic_search guard paths =============
 
 
@@ -494,12 +635,18 @@ def test_get_card_suggestions_returns_empty_on_exception():
 
 
 def test_get_card_suggestions_excludes_results_without_name():
-    """Result rows lacking a usable 'name' are dropped from suggestions."""
+    """Result rows lacking a usable 'name' are dropped; named rows pass through.
+
+    Malformed rows (empty/absent ``name``) cannot arise from the real card
+    index, so a stub feeds them deliberately to exercise the defensive guard;
+    the well-formed rows also cover the happy path.
+    """
     mock_repo = SimpleNamespace()
     mock_repo.is_card_data_loaded = Mock(return_value=True)
     mock_repo.search_cards = Mock(
         return_value=[
             {"name": "Lightning Bolt"},
+            {"name": "Lightning Strike"},
             {"name": ""},
             {"set": "LEA"},
         ]
@@ -508,7 +655,7 @@ def test_get_card_suggestions_excludes_results_without_name():
 
     suggestions = service.get_card_suggestions("Light")
 
-    assert suggestions == ["Lightning Bolt"]
+    assert suggestions == ["Lightning Bolt", "Lightning Strike"]
 
 
 # ============= Suggestion Tests =============
@@ -524,23 +671,22 @@ def test_get_card_suggestions_short_query():
     assert suggestions == []
 
 
-def test_get_card_suggestions_success():
-    """Test getting card suggestions."""
-    mock_repo = SimpleNamespace()
-    mock_repo.is_card_data_loaded = Mock(return_value=True)
-    mock_repo.search_cards = Mock(
-        return_value=[
-            {"name": "Lightning Bolt"},
-            {"name": "Lightning Strike"},
-            {"name": "Lightning Helix"},
-        ]
+def test_get_card_suggestions_success(tmp_path):
+    """Suggestions are sourced from the real repo's name matching."""
+    repo = make_card_repository(
+        tmp_path,
+        [
+            _atomic_printing("Lightning Bolt"),
+            _atomic_printing("Lightning Strike"),
+            _atomic_printing("Lightning Helix"),
+            _atomic_printing("Counterspell"),
+        ],
     )
-    service = SearchService(card_repository=mock_repo)
+    service = SearchService(card_repository=repo)
 
     suggestions = service.get_card_suggestions("Light")
 
-    assert len(suggestions) == 3
-    assert "Lightning Bolt" in suggestions
+    assert set(suggestions) == {"Lightning Bolt", "Lightning Strike", "Lightning Helix"}
 
 
 # ============= Deck Search Tests =============
@@ -719,25 +865,33 @@ def test_filter_cards_text_mode_any():
     assert "Neither" not in names
 
 
-def test_search_with_builder_filters_text_mode_any():
-    """search_with_builder_filters 'any' mode requires all words to appear."""
+def test_search_with_builder_filters_text_mode_any_combined_with_type():
+    """The builder threads ``text_mode`` into the filter pipeline alongside type.
+
+    The 'any'-mode word matching itself is covered by
+    ``test_filter_cards_text_mode_any``; this test's builder-specific concern is
+    that the builder applies the text filter together with a type filter, so a
+    card matching the text but failing the type filter is still dropped.
+    """
     service = SearchService(card_repository=SimpleNamespace())
 
     clock = create_mock_card(
         name="Clock of Omens",
+        type_line="Artifact",
         oracle_text="Tap two untapped artifacts you control: Untap target artifact.",
     )
-    tap_only = create_mock_card(name="Tap Card", oracle_text="Tap target creature.")
-    other_card = create_mock_card(name="Other Card", oracle_text="Destroy target creature.")
-
-    filters = {"text": "tap untapped", "text_mode": "any"}
-    results = service.search_with_builder_filters(
-        filters, _make_builder_manager([clock, tap_only, other_card])
+    # Matches the 'any' text filter but is not an Artifact, so the combined
+    # type filter must exclude it.
+    tapper = create_mock_card(
+        name="Untapper",
+        type_line="Creature — Wizard",
+        oracle_text="Tap two untapped permanents you control.",
     )
-    names = [c["name"] for c in results]
-    assert "Clock of Omens" in names
-    assert "Tap Card" not in names
-    assert "Other Card" not in names
+
+    filters = {"text": "tap untapped", "text_mode": "any", "type": "artifact"}
+    results = service.search_with_builder_filters(filters, _make_builder_manager([clock, tapper]))
+
+    assert [card["name"] for card in results] == ["Clock of Omens"]
 
 
 def test_group_cards_by_type_removes_empty_groups():
