@@ -2,6 +2,7 @@
 CLAUDE.md
 AGENTS.md
 env/
+.venv/
 magic_online_metagame_crawler.egg-info/
 config/
 cache/
