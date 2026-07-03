@@ -72,6 +72,7 @@ def test_timed_logs_qualname_and_elapsed():
     mock_logger.debug.assert_called_once()
     call_args = mock_logger.debug.call_args
     template, qualname_arg, elapsed_arg = call_args.args
+    assert template == "{} took {:.4f}s"
     assert "my_func" in qualname_arg
     assert isinstance(elapsed_arg, float)
     assert elapsed_arg >= 0.0
