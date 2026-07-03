@@ -161,6 +161,29 @@ def test_fetch_manifest_rejects_wrong_schema_version(client, monkeypatch):
     assert client._fetch_and_cache_manifest() is None
 
 
+def test_fetch_manifest_returns_data_when_cache_write_fails(client, monkeypatch):
+    # An OSError while persisting the manifest must not stop the fetched data
+    # from being returned (manifest.py write-failure fallback).
+    manifest = _manifest({"modern": {"archetypes_url": "x"}})
+    monkeypatch.setattr(client, "_http_get_json", lambda _url: manifest)
+
+    from pathlib import Path
+
+    real_write_text = Path.write_text
+
+    def fake_write_text(self, *args, **kwargs):
+        if self == client.manifest_file:
+            raise OSError("disk full")
+        return real_write_text(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "write_text", fake_write_text)
+
+    result = client._fetch_and_cache_manifest()
+
+    assert result == manifest
+    assert not client.manifest_file.exists()
+
+
 def test_fetch_manifest_caches_on_success(client, monkeypatch):
     manifest = _manifest({"modern": {"archetypes_url": "x"}})
     monkeypatch.setattr(client, "_http_get_json", lambda _url: manifest)
@@ -287,6 +310,24 @@ def test_get_stats_normalises_to_expected_shape(client, server):
     assert fmt_data["Amulet Titan"]["results"]["2025-03-24"] == 2
 
 
+def test_get_stats_defaults_missing_results_to_empty(client, server):
+    # An archetype entry with no "results" key must normalise to {"results": {}}.
+    artifact_path = "data/latest/modern/metagame_stats.json"
+    server.serve(_MANIFEST_PATH, _manifest({"modern": {"metagame_stats_url": artifact_path}}))
+
+    raw_archetypes = {
+        "UR Murktide": {"results": {"2025-03-24": 5}},
+        "Amulet Titan": {},  # no "results" key at all
+    }
+    server.serve(artifact_path, _stats_artifact(raw_archetypes))
+
+    result = client.get_metagame_stats_for_format("modern")
+
+    assert result is not None
+    assert result["modern"]["Amulet Titan"] == {"results": {}}
+    assert result["modern"]["UR Murktide"]["results"]["2025-03-24"] == 5
+
+
 def test_get_stats_returns_none_when_manifest_unavailable(client, server):
     server.serve(_MANIFEST_PATH, None)
 
@@ -404,6 +445,31 @@ def test_download_artifact_rejects_wrong_schema(client, monkeypatch):
     assert result is None
 
 
+def test_download_artifact_returns_data_when_cache_write_fails(client, monkeypatch):
+    # An OSError while staging the artifact to disk must not prevent the fetched
+    # data from being returned (artifact.py write-failure fallback).
+    artifact = _archetypes_artifact([{"name": "UR Murktide"}])
+    monkeypatch.setattr(client, "_http_get_json", lambda _url: artifact)
+
+    local = client._local_artifact_path("data/latest/modern/archetypes.json")
+
+    from pathlib import Path
+
+    real_write_text = Path.write_text
+
+    def fake_write_text(self, *args, **kwargs):
+        if self == local:
+            raise OSError("disk full")
+        return real_write_text(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "write_text", fake_write_text)
+
+    result = client._download_artifact("data/latest/modern/archetypes.json", local)
+
+    assert result == artifact
+    assert not local.exists()
+
+
 def test_download_artifact_writes_to_disk(client, monkeypatch):
     artifact = _archetypes_artifact([{"name": "UR Murktide"}])
     monkeypatch.setattr(client, "_http_get_json", lambda _url: artifact)
@@ -507,5 +573,80 @@ def test_http_get_json_returns_none_on_network_error(client, monkeypatch, _force
     import urllib.request
 
     monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+
+    assert client._http_get_json("https://example.invalid/x.json") is None
+
+
+class _FakeCurlResponse:
+    """Minimal standin for a curl_cffi ``Response``."""
+
+    def __init__(self, payload: dict | None, raise_for_status_exc: Exception | None = None):
+        self._payload = payload
+        self._raise_for_status_exc = raise_for_status_exc
+
+    def raise_for_status(self):
+        if self._raise_for_status_exc is not None:
+            raise self._raise_for_status_exc
+
+    def json(self):
+        return self._payload
+
+
+def _install_fake_curl_cffi(monkeypatch, get_impl):
+    """Make ``import curl_cffi.requests as requests`` resolve to a stub ``get``.
+
+    This drives the production-default curl_cffi branch in ``_http_get_json``
+    without a real network call. When curl_cffi is installed we patch its
+    ``requests.get`` in place; when it is absent we synthesise the package and
+    its ``requests`` submodule so the import still succeeds.
+    """
+    import sys
+    import types
+
+    try:
+        import curl_cffi.requests as real_requests  # type: ignore[import-untyped]
+
+        monkeypatch.setattr(real_requests, "get", get_impl)
+    except ImportError:
+        pkg = types.ModuleType("curl_cffi")
+        requests_mod = types.ModuleType("curl_cffi.requests")
+        requests_mod.get = get_impl
+        pkg.requests = requests_mod  # so ``curl_cffi.requests`` attr access works
+        monkeypatch.setitem(sys.modules, "curl_cffi", pkg)
+        monkeypatch.setitem(sys.modules, "curl_cffi.requests", requests_mod)
+
+
+def test_http_get_json_curl_cffi_returns_payload(client, monkeypatch):
+    payload = {"schema_version": "1", "formats": {}}
+    seen = {}
+
+    def fake_get(url, impersonate=None, timeout=None):
+        seen["url"] = url
+        seen["impersonate"] = impersonate
+        seen["timeout"] = timeout
+        return _FakeCurlResponse(payload)
+
+    _install_fake_curl_cffi(monkeypatch, fake_get)
+
+    assert client._http_get_json("https://example.invalid/x.json") == payload
+    assert seen["url"] == "https://example.invalid/x.json"
+    assert seen["impersonate"] == "chrome"
+    assert seen["timeout"] == client.request_timeout
+
+
+def test_http_get_json_curl_cffi_error_returns_none_without_urllib_fallback(client, monkeypatch):
+    def fake_get(url, impersonate=None, timeout=None):
+        return _FakeCurlResponse(None, raise_for_status_exc=RuntimeError("HTTP 503"))
+
+    _install_fake_curl_cffi(monkeypatch, fake_get)
+
+    # A curl_cffi failure must short-circuit to None, never falling through to
+    # the urllib path.
+    def boom(*_a, **_k):
+        raise AssertionError("urllib fallback must not run after a curl_cffi error")
+
+    import urllib.request
+
+    monkeypatch.setattr(urllib.request, "urlopen", boom)
 
     assert client._http_get_json("https://example.invalid/x.json") is None
