@@ -15,7 +15,7 @@ Security boundary:
   launched with the explicit `--automation` flag (see `main.py`'s
   `parse_args()`).
 - The packaged Inno Setup installer (`packaging/installer.iss`) and PyInstaller
-  spec (`packaging/magic_online_metagame_crawler.spec`) do **not** pass
+  spec (`packaging/mtgo_tools.spec`) do **not** pass
   `--automation`, so end-user installs never expose this surface.
 - When enabled, the server binds to `127.0.0.1` only (loopback), so it is not
   reachable from other machines on the network.

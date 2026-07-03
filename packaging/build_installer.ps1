@@ -260,7 +260,7 @@ if (-not $SkipPyInstaller) {
     }
 
     # Run PyInstaller with the spec file
-    $SpecFile = Join-Path $ProjectRoot "packaging\magic_online_metagame_crawler.spec"
+    $SpecFile = Join-Path $ProjectRoot "packaging\mtgo_tools.spec"
     if (Test-Path $SpecFile) {
         Write-Info "Using existing spec file..."
         & $PyInstallerPath $SpecFile --clean --noconfirm
@@ -270,13 +270,13 @@ if (-not $SkipPyInstaller) {
             exit 1
         }
     } else {
-        Write-Error-Custom "PyInstaller spec file not found at packaging\magic_online_metagame_crawler.spec"
+        Write-Error-Custom "PyInstaller spec file not found at packaging\mtgo_tools.spec"
         Pop-Location
         exit 1
     }
 
     # Verify the executable was created
-    $ExePath = Join-Path $DistDir "magic_online_metagame_crawler.exe"
+    $ExePath = Join-Path $DistDir "mtgo_tools.exe"
     if (-not (Test-Path $ExePath)) {
         Write-Error-Custom "PyInstaller build failed - executable not found at $ExePath"
         Pop-Location

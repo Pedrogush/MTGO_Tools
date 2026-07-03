@@ -9,6 +9,14 @@ from pathlib import Path
 
 BASE_DATA_DIR_ENV_VAR = "MTGO_TOOLS_BASE_DATA_DIR"
 
+# Folder name for a *installed* build's per-user writable data (config, cache,
+# logs, downloaded card data). Installed builds live in a read-only location
+# (Program Files, or the per-user Programs directory) and must never write next
+# to the executable, so this lives under %LOCALAPPDATA%. It MUST stay in sync
+# with the {localappdata}\... paths cleaned up by packaging/installer.iss
+# ([UninstallDelete]).
+INSTALLED_APP_DATA_DIR_NAME = "MTGO Metagame Deck Builder"
+
 # Matches a WSL mount path like "/mnt/c" or "/mnt/c/foo/bar".
 _WSL_MOUNT_RE = re.compile(r"^/mnt/([a-zA-Z])(?:/(.*))?$")
 # Matches a Windows drive path like "C:\foo\bar" or "C:/foo/bar".
@@ -125,13 +133,27 @@ def _base_dir_from_cwd() -> Path | None:
     return _primary_worktree_root_from_marker(git_marker)
 
 
+def _installed_base_dir() -> Path:
+    """Return the per-user writable data root for an installed (frozen) build.
+
+    The executable is installed to a location the user may not be able to write
+    to (Program Files) or that should stay pristine (the per-user Programs
+    directory), so config/cache/logs/data live under the platform's per-user
+    data directory instead: ``%LOCALAPPDATA%\\<app name>`` on Windows. Falling
+    back to ``~/AppData/Local`` keeps this working if ``LOCALAPPDATA`` is unset.
+    """
+    local_app_data = os.getenv("LOCALAPPDATA")
+    base = Path(local_app_data) if local_app_data else Path.home() / "AppData" / "Local"
+    return (base / INSTALLED_APP_DATA_DIR_NAME).resolve()
+
+
 def _default_base_dir() -> Path:
     """Return the writable base directory for config/cache/logging."""
     env_base_dir = _resolved_env_base_dir()
     if env_base_dir is not None:
         return env_base_dir
     if getattr(sys, "frozen", False):
-        return Path(sys.executable).resolve().parent
+        return _installed_base_dir()
     return _base_dir_from_cwd() or Path(__file__).resolve().parent.parent.parent
 
 

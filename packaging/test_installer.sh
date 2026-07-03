@@ -110,7 +110,7 @@ run_test "Contains MIT License text" "strings '$INSTALLER_FILE' | grep -q 'MIT L
 }
 
 # Test 8: Check for main executable name in installer
-run_test "Contains main executable reference" "strings '$INSTALLER_FILE' | grep -q 'magic_online_metagame_crawler.exe'" || {
+run_test "Contains main executable reference" "strings '$INSTALLER_FILE' | grep -q 'mtgo_tools.exe'" || {
     echo_warn "Main executable reference not found in installer"
 }
 

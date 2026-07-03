@@ -153,16 +153,16 @@ else
 fi
 
 # Run PyInstaller with the spec file
-if [ -f "packaging/magic_online_metagame_crawler.spec" ]; then
+if [ -f "packaging/mtgo_tools.spec" ]; then
     echo_info "Using existing spec file..."
-    pyinstaller packaging/magic_online_metagame_crawler.spec --clean --noconfirm
+    pyinstaller packaging/mtgo_tools.spec --clean --noconfirm
 else
-    echo_error "PyInstaller spec file not found at packaging/magic_online_metagame_crawler.spec"
+    echo_error "PyInstaller spec file not found at packaging/mtgo_tools.spec"
     exit 1
 fi
 
-# Verify the executable was created
-if [ ! -f "$DIST_DIR/magic_online_metagame_crawler/magic_online_metagame_crawler.exe" ]; then
+# Verify the executable was created (spec produces a single-file exe in dist/)
+if [ ! -f "$DIST_DIR/mtgo_tools.exe" ]; then
     echo_error "PyInstaller build failed - executable not found"
     exit 1
 fi

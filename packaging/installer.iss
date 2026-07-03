@@ -5,7 +5,7 @@
 #define MyAppVersion "0.2"
 #define MyAppPublisher "MTGO Metagame Crawler Contributors"
 #define MyAppURL "https://github.com/Pedrogush/MTGO_Tools"
-#define MyAppExeName "magic_online_metagame_crawler.exe"
+#define MyAppExeName "mtgo_tools.exe"
 
 [Setup]
 ; NOTE: The value of AppId uniquely identifies this application. Do not use the same AppId value in installers for other applications.
@@ -18,9 +18,12 @@ AppSupportURL={#MyAppURL}
 AppUpdatesURL={#MyAppURL}
 DefaultDirName={autopf}\{#MyAppName}
 DefaultGroupName={#MyAppName}
-; Uncomment the following line to run in non administrative install mode (install for current user only.)
-PrivilegesRequired=admin
-PrivilegesRequiredOverridesAllowed=dialog
+; Per-user install: no administrator privileges required. With PrivilegesRequired=lowest
+; the {autopf} constant resolves to the user's local Programs directory
+; (%LOCALAPPDATA%\Programs), and the app writes all of its data under
+; %LOCALAPPDATA%\{#MyAppName} (see utils/constants/paths.py), so nothing needs
+; to be written to a location that requires elevation.
+PrivilegesRequired=lowest
 OutputDir=../dist/installer
 OutputBaseFilename=MTGOMetagameBuilder_Setup_v{#MyAppVersion}
 Compression=lzma2/max
@@ -58,12 +61,23 @@ Source: "../README.md"; DestDir: "{app}"; Flags: ignoreversion isreadme
 Source: "../LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 
 [Dirs]
-Name: "{app}\logs"; Permissions: users-modify
-Name: "{app}\config"; Permissions: users-modify
-Name: "{app}\cache"; Permissions: users-modify
-Name: "{app}\decks"; Permissions: users-modify
-Name: "{app}\data"; Permissions: users-modify
-Name: "{app}\mtgo_integration"; Permissions: users-modify
+; Runtime data (config/cache/logs/data) lives under %LOCALAPPDATA%\{#MyAppName},
+; not under {app}, so those directories are created by the app at runtime rather
+; than here. Only the bridge download target lives inside the install directory.
+Name: "{app}\mtgo_integration"
+
+[UninstallDelete]
+; The MTGOBridge is downloaded into {app}\mtgo_integration *after* install (see
+; the [Code] section below), so Setup has no record of those files and the
+; uninstaller would otherwise leave them (and the non-empty {app} folder) behind.
+Type: filesandordirs; Name: "{app}\mtgo_integration"
+; Regenerable per-user data: caches, logs, and downloaded card data. User
+; settings (%LOCALAPPDATA%\{#MyAppName}\config) and saved decks
+; (%USERPROFILE%\Documents\mtgo_decks) are intentionally preserved so a
+; reinstall keeps them.
+Type: filesandordirs; Name: "{localappdata}\{#MyAppName}\cache"
+Type: filesandordirs; Name: "{localappdata}\{#MyAppName}\logs"
+Type: filesandordirs; Name: "{localappdata}\{#MyAppName}\data"
 
 [Icons]
 ; Start Menu shortcuts
@@ -190,12 +204,13 @@ begin
 
   if not DownloadOk then
   begin
-    MsgBox(
-      'MTGO integration could not be downloaded automatically.' + #13#10 +
-      'You can install it manually later from:' + #13#10 +
-      BRIDGE_MANUAL_URL + #13#10#13#10 +
-      'The main application will work without it.' ,
-      mbInformation, MB_OK);
+    if not WizardSilent then
+      MsgBox(
+        'MTGO integration could not be downloaded automatically.' + #13#10 +
+        'You can install it manually later from:' + #13#10 +
+        BRIDGE_MANUAL_URL + #13#10#13#10 +
+        'The main application will work without it.' ,
+        mbInformation, MB_OK);
     Log('Bridge download failed — MTGO integration will be unavailable.');
     Exit;
   end;
@@ -205,12 +220,13 @@ begin
   if not VerifyOk then
   begin
     DeleteFile(ZipPath);
-    MsgBox(
-      'MTGOBridge download failed checksum verification and was discarded.' + #13#10 +
-      'You can install it manually from:' + #13#10 +
-      BRIDGE_MANUAL_URL + #13#10#13#10 +
-      'The main application will work without it.',
-      mbError, MB_OK);
+    if not WizardSilent then
+      MsgBox(
+        'MTGOBridge download failed checksum verification and was discarded.' + #13#10 +
+        'You can install it manually from:' + #13#10 +
+        BRIDGE_MANUAL_URL + #13#10#13#10 +
+        'The main application will work without it.',
+        mbError, MB_OK);
     Log('Bridge SHA-256 mismatch — MTGO integration will be unavailable.');
     Exit;
   end;
@@ -220,11 +236,12 @@ begin
 
   if not ExtractOk then
   begin
-    MsgBox(
-      'MTGOBridge was downloaded but could not be extracted.' + #13#10 +
-      'You can install it manually from:' + #13#10 +
-      BRIDGE_MANUAL_URL,
-      mbInformation, MB_OK);
+    if not WizardSilent then
+      MsgBox(
+        'MTGOBridge was downloaded but could not be extracted.' + #13#10 +
+        'You can install it manually from:' + #13#10 +
+        BRIDGE_MANUAL_URL,
+        mbInformation, MB_OK);
     Log('Bridge extraction failed — MTGO integration will be unavailable.');
   end;
 end;
@@ -238,6 +255,15 @@ var
 begin
   if not IsDotNet9Installed then
   begin
+    // Silent/unattended installs (e.g. the install/uninstall test harness) must
+    // not block on a prompt or mutate the machine by installing runtimes, so we
+    // only offer the interactive .NET install in a normal (visible) install.
+    // .NET is optional — the app runs without it, just without MTGO integration.
+    if WizardSilent then
+    begin
+      Log('.NET 9 not detected; skipping install prompt (silent install).');
+      Exit;
+    end;
     if MsgBox(
       'MTGO integration requires the .NET 9 Runtime, which was not detected.' + #13#10 +
       'Would you like to install it now via winget?',

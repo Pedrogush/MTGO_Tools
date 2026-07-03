@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 
 import wx
 from loguru import logger
@@ -147,6 +148,39 @@ def _ensure_mana_assets() -> None:
         logger.warning(f"Skipping mana asset fetch: {exc}")
 
 
+def _maybe_start_debugpy() -> None:
+    """Optionally start a debugpy server so a packaged build can be debugged.
+
+    Installed builds are windowed (no console) and have no debugger attached, so
+    to step through one the same way you would from the IDE you attach a remote
+    debugger. This is enabled only when ``MTGO_DEBUGPY`` is set, so it is inert
+    in normal use and in shipped builds:
+
+    * ``MTGO_DEBUGPY=1`` listens on the default port (5678).
+    * ``MTGO_DEBUGPY=<port>`` listens on that port instead.
+    * ``MTGO_DEBUGPY_WAIT=1`` blocks startup until the IDE attaches, so you can
+      break on early startup code.
+
+    Then use your IDE's "attach to a running process / port" to connect. Any
+    failure (debugpy not bundled, port in use) is logged and non-fatal.
+    """
+    flag = os.environ.get("MTGO_DEBUGPY")
+    if not flag:
+        return
+    port = int(flag) if flag.isdigit() else 5678
+    try:
+        import debugpy
+
+        debugpy.listen(("127.0.0.1", port))
+        logger.info(f"debugpy listening on 127.0.0.1:{port} — attach your IDE to this process")
+        if os.environ.get("MTGO_DEBUGPY_WAIT"):
+            logger.info("MTGO_DEBUGPY_WAIT set; waiting for a debugger to attach…")
+            debugpy.wait_for_client()
+            logger.info("Debugger attached.")
+    except Exception as exc:  # pragma: no cover - dev-only tooling
+        logger.warning(f"Could not start debugpy ({exc}); continuing without a debugger.")
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="MTGO Metagame Deck Builder")
     parser.add_argument(
@@ -180,6 +214,8 @@ def main() -> None:
     if log_file:
         logger.info(f"Writing logs to {log_file}")
     logger.info(f"Using base data directory: {BASE_DATA_DIR}")
+
+    _maybe_start_debugpy()
 
     _ensure_mana_assets()
 

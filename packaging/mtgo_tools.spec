@@ -50,7 +50,10 @@ a = Analysis(
     pathex=[str(project_root)],
     binaries=binaries,
     datas=datas,
-    hiddenimports=[],
+    # debugpy is bundled so an installed build can be attached to for debugging
+    # via the MTGO_DEBUGPY hook in main.py. It stays dormant unless that env var
+    # is set, so it adds no runtime cost to normal launches.
+    hiddenimports=["debugpy"],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
@@ -68,7 +71,7 @@ exe = EXE(
     a.zipfiles,
     a.datas,
     [],
-    name="magic_online_metagame_crawler",
+    name="mtgo_tools",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

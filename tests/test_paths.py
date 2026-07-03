@@ -307,17 +307,32 @@ def test_safe_cwd_returns_none_on_oserror(monkeypatch):
     assert paths._safe_cwd() is None
 
 
-def test_default_base_dir_uses_executable_dir_when_frozen(tmp_path, monkeypatch):
-    """A frozen (PyInstaller) build resolves the base dir next to the executable."""
-    exe = tmp_path / "dist" / "app.exe"
-    exe.parent.mkdir(parents=True)
-    exe.write_text("", encoding="utf-8")
+def test_default_base_dir_uses_localappdata_when_frozen(tmp_path, monkeypatch):
+    """A frozen (PyInstaller) build resolves the base dir under %LOCALAPPDATA%.
+
+    An installed build must not write next to its executable (Program Files is
+    read-only for standard users), so it uses the per-user data directory.
+    """
+    local_app_data = tmp_path / "AppData" / "Local"
+    local_app_data.mkdir(parents=True)
 
     monkeypatch.delenv(paths.BASE_DATA_DIR_ENV_VAR, raising=False)
+    monkeypatch.setenv("LOCALAPPDATA", str(local_app_data))
     monkeypatch.setattr(paths.sys, "frozen", True, raising=False)
-    monkeypatch.setattr(paths.sys, "executable", str(exe), raising=False)
 
-    assert paths._default_base_dir() == exe.resolve().parent
+    expected = (local_app_data / paths.INSTALLED_APP_DATA_DIR_NAME).resolve()
+    assert paths._default_base_dir() == expected
+
+
+def test_default_base_dir_frozen_falls_back_without_localappdata(tmp_path, monkeypatch):
+    """Without LOCALAPPDATA the frozen base dir falls back to ~/AppData/Local."""
+    monkeypatch.delenv(paths.BASE_DATA_DIR_ENV_VAR, raising=False)
+    monkeypatch.delenv("LOCALAPPDATA", raising=False)
+    monkeypatch.setattr(paths.sys, "frozen", True, raising=False)
+    monkeypatch.setattr(paths.Path, "home", staticmethod(lambda: tmp_path))
+
+    expected = (tmp_path / "AppData" / "Local" / paths.INSTALLED_APP_DATA_DIR_NAME).resolve()
+    assert paths._default_base_dir() == expected
 
 
 def test_ensure_base_dirs_creates_all_directories(tmp_path, monkeypatch):
