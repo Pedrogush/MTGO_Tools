@@ -246,4 +246,11 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    import multiprocessing
+
+    # Frozen (PyInstaller) builds use multiprocessing "spawn", which re-launches
+    # this executable for each child process. freeze_support() makes those
+    # children run their worker target instead of re-starting the whole app
+    # (without it, image-service workers exit without returning a result).
+    multiprocessing.freeze_support()
     main()

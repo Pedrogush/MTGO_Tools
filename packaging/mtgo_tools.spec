@@ -45,15 +45,26 @@ binaries = []
 
 entry_point = project_root / "main.py"
 
+# Hidden imports: modules PyInstaller's static analysis can't see, so we find
+# them dynamically. wxPython's richtext extension loads wx._xml/_html/_adv at
+# runtime, and the first-party packages lazily import their submodules via a
+# package __getattr__. debugpy backs the MTGO_TOOLS_INSTALL_DEBUG hook in main.py.
+from PyInstaller.utils.hooks import collect_submodules  # noqa: E402
+
+# collect_submodules imports each package, so the project root must be on sys.path
+# (at spec-eval time only the spec's own directory is).
+sys.path.insert(0, str(project_root))
+
+hiddenimports = ["debugpy", "wx._xml", "wx._html", "wx._adv"]
+for _pkg in ("widgets", "services", "repositories", "controllers", "utils", "automation"):
+    hiddenimports += collect_submodules(_pkg)
+
 a = Analysis(
     [str(entry_point)],
     pathex=[str(project_root)],
     binaries=binaries,
     datas=datas,
-    # debugpy is bundled so an installed build can be attached to for debugging
-    # via the MTGO_DEBUGPY hook in main.py. It stays dormant unless that env var
-    # is set, so it adds no runtime cost to normal launches.
-    hiddenimports=["debugpy"],
+    hiddenimports=hiddenimports,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
