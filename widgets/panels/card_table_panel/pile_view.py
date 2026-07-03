@@ -705,7 +705,9 @@ class DeckPileView(wx.ScrolledWindow):
             return
 
         # Hover handling — only when no selection or multi-selection.
-        if self._on_hover and len(self._selected_uids) <= 1 and not self._selected_uids:
+        # (With exactly one selected copy, that copy stays the active card and
+        # hover must not override it.)
+        if self._on_hover and len(self._selected_uids) != 1:
             hit = self._hit_test(point)
             if hit is None:
                 if self._hover_uid is not None:
