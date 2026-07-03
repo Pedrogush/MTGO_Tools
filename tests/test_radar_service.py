@@ -339,6 +339,64 @@ def test_export_radar_as_decklist():
     assert "Sideboard" in decklist
 
 
+def test_export_radar_as_decklist_max_cards_caps_each_zone():
+    """``max_cards`` keeps only the top N already-sorted cards per zone."""
+    service = RadarService()
+
+    radar = RadarData(
+        archetype_name="Test Archetype",
+        format_name="Modern",
+        mainboard_cards=[
+            CardFrequency("Lightning Bolt", 10, 40, 4, 4.0, 100.0, 4.0, {4: 10}),
+            CardFrequency("Counterspell", 10, 30, 3, 3.0, 100.0, 3.0, {3: 10}),
+            CardFrequency("Consider", 10, 20, 2, 2.0, 100.0, 2.0, {2: 10}),
+        ],
+        sideboard_cards=[
+            CardFrequency("Abrade", 10, 20, 2, 2.0, 100.0, 2.0, {2: 10}),
+            CardFrequency("Negate", 10, 10, 1, 1.0, 100.0, 1.0, {1: 10}),
+        ],
+        total_decks_analyzed=10,
+        decks_failed=0,
+    )
+
+    decklist = service.export_radar_as_decklist(radar, max_cards=2)
+
+    # Only the first two mainboard cards survive the cap.
+    assert "4 Lightning Bolt" in decklist
+    assert "3 Counterspell" in decklist
+    assert "Consider" not in decklist
+    # Sideboard is capped independently; both sideboard cards fit under max_cards=2.
+    assert "2 Abrade" in decklist
+    assert "1 Negate" in decklist
+
+
+def test_export_radar_as_decklist_applies_min_copy_count_floor():
+    """A card whose avg rounds to 0 is still printed as a single copy (the floor)."""
+    service = RadarService()
+
+    radar = RadarData(
+        archetype_name="Test Archetype",
+        format_name="Modern",
+        mainboard_cards=[
+            # avg_copies rounds to 0, but expected_copies clears the default filter,
+            # so RADAR_MIN_COPY_COUNT keeps it at one copy rather than "0 ...".
+            CardFrequency("Mox Diamond", 1, 1, 1, 0.4, 10.0, 0.04, {1: 1, 0: 9}),
+        ],
+        sideboard_cards=[
+            CardFrequency("Pithing Needle", 1, 1, 1, 0.4, 10.0, 0.04, {1: 1, 0: 9}),
+        ],
+        total_decks_analyzed=10,
+        decks_failed=0,
+    )
+
+    decklist = service.export_radar_as_decklist(radar, min_expected_copies=0.0)
+
+    assert "1 Mox Diamond" in decklist
+    assert "0 Mox Diamond" not in decklist
+    assert "1 Pithing Needle" in decklist
+    assert "0 Pithing Needle" not in decklist
+
+
 def test_get_radar_card_names():
     """Test extracting card names from radar."""
     service = RadarService()
@@ -369,6 +427,9 @@ def test_get_radar_card_names():
     # Test sideboard only
     sideboard = service.get_radar_card_names(radar, "sideboard")
     assert sideboard == {"Card C", "Card D"}
+
+    # An unrecognised zone matches neither branch and yields no cards.
+    assert service.get_radar_card_names(radar, "graveyard") == set()
 
 
 def test_calculate_radar_with_max_decks(radar_service, mock_metagame_repo, sample_archetype):
@@ -487,6 +548,19 @@ def test_calculate_radar_all_decks_fail(
     assert radar.decks_failed == len(sample_decks)
     assert radar.mainboard_cards == []
     assert radar.sideboard_cards == []
+
+
+def test_calculate_radar_reraises_when_deck_listing_fails(
+    radar_service, mock_metagame_repo, sample_archetype
+):
+    """A failure while listing the archetype's decks propagates out of calculate_radar."""
+    mock_metagame_repo.get_decks_for_archetype.side_effect = RuntimeError("listing failed")
+
+    with pytest.raises(RuntimeError, match="listing failed"):
+        radar_service.calculate_radar(sample_archetype, "Modern")
+
+    # The failure happens before any deck download is attempted.
+    mock_metagame_repo.download_deck_content.assert_not_called()
 
 
 def test_calculate_radar_rejects_precomputed_snapshot_larger_than_max_decks(
