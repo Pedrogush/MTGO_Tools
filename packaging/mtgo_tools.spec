@@ -46,6 +46,11 @@ binaries = []
 entry_point = project_root / "main.py"
 app_icon = project_root / "assets" / "icons" / "hammer_gold_colossus.ico"
 
+# Bundle the app icon as data too, so the running app can set it as the window /
+# taskbar icon at runtime (utils/app_icon.py). The EXE icon= below only covers
+# the .exe file icon.
+datas += [(str(app_icon), "assets/icons")]
+
 # Hidden imports: modules PyInstaller's static analysis can't see, so we find
 # them dynamically. wxPython's richtext extension loads wx._xml/_html/_adv at
 # runtime, and the first-party packages lazily import their submodules via a

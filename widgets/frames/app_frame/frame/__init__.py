@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any
 
 import wx
 
+from utils.app_icon import apply_app_icon
 from utils.constants import (
     APP_FRAME_SIZE,
     COLLAPSE_TOGGLE_WIDTH,
@@ -90,6 +91,7 @@ class AppFrame(
             title=translate(controller.get_language(), "app.title.main_frame"),
             size=APP_FRAME_SIZE,
         )
+        apply_app_icon(self)
 
         # Store controller reference - ALL state and business logic goes through this
         self.controller: AppController = controller

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import sys
 
 import wx
 from loguru import logger
@@ -148,6 +149,23 @@ def _ensure_mana_assets() -> None:
         logger.warning(f"Skipping mana asset fetch: {exc}")
 
 
+def _set_windows_app_id() -> None:
+    """Give the app an explicit Windows AppUserModelID.
+
+    Without this, Windows associates the taskbar button with the Python /
+    PyInstaller host process and shows *its* icon; setting an explicit ID makes
+    the taskbar use the app's own window icon and groups it as its own app.
+    """
+    if sys.platform != "win32":
+        return
+    try:
+        import ctypes
+
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("MTGOTools.DeckBuilder")
+    except Exception as exc:  # pragma: no cover - windows-only, best effort
+        logger.debug(f"Could not set AppUserModelID: {exc}")
+
+
 def debugpy_server() -> None:
     # Runs optionally: only starts when the MTGO_TOOLS_INSTALL_DEBUG env var is set.
     """Start a debugpy server so a packaged build can be debugged.
@@ -216,6 +234,7 @@ def main() -> None:
         logger.info(f"Writing logs to {log_file}")
     logger.info(f"Using base data directory: {BASE_DATA_DIR}")
 
+    _set_windows_app_id()
     debugpy_server()
 
     _ensure_mana_assets()
@@ -224,7 +243,6 @@ def main() -> None:
         logger.info(f"Automation mode enabled on port {_automation_port}")
 
     # Install global exception handler for exceptions outside of wx mainloop
-    import sys
     import traceback
 
     def global_exception_handler(exc_type, exc_value, exc_traceback):
