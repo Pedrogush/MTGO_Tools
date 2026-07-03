@@ -46,8 +46,11 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 [Files]
 ; Main executable created by PyInstaller
 Source: "../dist/{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
-; All other files from PyInstaller bundle
-Source: "../dist/*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+; All other files from the PyInstaller bundle (for a onedir build). Exclude the
+; installer output dir, which lives at dist/installer — without this the
+; installer bundles a copy of its own output directory (and any previously built
+; setup .exe) into {app}\installer.
+Source: "../dist/*"; DestDir: "{app}"; Excludes: "installer,installer\*"; Flags: ignoreversion recursesubdirs createallsubdirs
 ; Vendor data directories (if they exist)
 ; NOTE: vendor/mtgosdk is intentionally excluded — the bridge is downloaded at install time.
 #if DirExists('../vendor/mtgo_format_data')
