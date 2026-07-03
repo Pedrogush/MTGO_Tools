@@ -40,6 +40,19 @@ def test_normalize_mana_query_preserves_existing_braces() -> None:
     assert normalize_mana_query("{x}{y}{z}") == "{x}{y}{z}"
 
 
+def test_normalize_mana_query_treats_comma_and_semicolon_as_separators() -> None:
+    # Commas/semicolons split tokens just like whitespace does (factory.py:190).
+    assert normalize_mana_query("w,u;b") == "{W}{U}{B}"
+
+
+def test_normalize_mana_query_drops_dangling_open_brace() -> None:
+    # An unterminated '{' with no matching '}' is skipped, not emitted as an
+    # empty token (factory.py:201-208). The trailing 'g' is still wrapped.
+    assert normalize_mana_query("w{g") == "{W}{G}"
+    # A lone open brace with nothing after it yields no tokens at all.
+    assert normalize_mana_query("{") == ""
+
+
 def test_normalize_symbol_applies_aliases(factory: ManaIconFactory) -> None:
     assert factory._normalize_symbol("{W/U}") == "wu"
     assert factory._normalize_symbol("1/2") == "1-2"
@@ -76,6 +89,31 @@ def test_color_for_key_covers_remaining_branches(factory: ManaIconFactory) -> No
     assert factory._color_for_key("pw") == factory.FALLBACK_COLORS["multicolor"]
 
 
+def test_glyph_fallback_resolves_each_branch(
+    factory: ManaIconFactory, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """_glyph_fallback (bitmap_renderer.py:330-346) tries, in order: the exact
+    key, the slash-stripped compact key, the trailing character, then an
+    uppercase fallback."""
+    monkeypatch.setattr(
+        factory,
+        "_glyph_map",
+        {"w": "W_GLYPH", "wu": "WU_GLYPH", "u": "U_GLYPH"},
+        raising=False,
+    )
+    # Empty/None keys yield no glyph.
+    assert factory._glyph_fallback(None) == ""
+    assert factory._glyph_fallback("") == ""
+    # Direct hit on the exact key.
+    assert factory._glyph_fallback("w") == "W_GLYPH"
+    # Compact hit: "w/u" -> "wu" after stripping the slash.
+    assert factory._glyph_fallback("w/u") == "WU_GLYPH"
+    # Tail hit: "2u" misses, but its last char "u" is mapped.
+    assert factory._glyph_fallback("2u") == "U_GLYPH"
+    # Unmapped key falls through to the uppercased literal.
+    assert factory._glyph_fallback("qq") == "QQ"
+
+
 def test_tokenize_mana_symbols_uppercases_tokens() -> None:
     assert tokenize_mana_symbols("{g}{w/u}{2g}") == ["G", "W/U", "2G"]
     assert tokenize_mana_symbols("") == []
@@ -90,8 +128,12 @@ def wx_app():
 
 
 @pytest.fixture
-def render_factory(wx_app) -> ManaIconFactory:
-    return ManaIconFactory(icon_size=16)
+def render_factory(wx_app, tmp_path) -> ManaIconFactory:
+    factory = ManaIconFactory(icon_size=16)
+    # Pin the PNG cache dir to the test sandbox so png_path_for_symbol writes
+    # land in tmp_path instead of a process-wide temp directory.
+    factory._cache.png_dir = tmp_path
+    return factory
 
 
 def test_bitmap_for_symbol_renders_expected_size(render_factory: ManaIconFactory) -> None:
@@ -110,11 +152,13 @@ def test_bitmap_for_symbol_hires_is_larger_than_final(render_factory: ManaIconFa
     assert hires.GetHeight() > 16  # rendered at _RENDER_SCALE before downscale
 
 
-def test_png_path_for_symbol_writes_and_caches(render_factory: ManaIconFactory) -> None:
+def test_png_path_for_symbol_writes_and_caches(render_factory: ManaIconFactory, tmp_path) -> None:
     path = render_factory.png_path_for_symbol("{B}")
     assert path is not None
     assert path.exists()
     assert path.suffix == ".png"
+    # The PNG lands in the pinned sandbox dir, not a process-wide temp dir.
+    assert path.parent == tmp_path
     # Second call returns the same cached path without rewriting.
     assert render_factory.png_path_for_symbol("{B}") == path
 
@@ -147,6 +191,26 @@ def test_render_empty_cost_shows_placeholder(render_factory: ManaIconFactory) ->
         panel = render_factory.render(frame, "")
         labels = [c for c in panel.GetChildren() if isinstance(c, wx.StaticText)]
         assert any(label.GetLabel() == "—" for label in labels)
+    finally:
+        frame.Destroy()
+
+
+def test_render_non_empty_cost_lays_out_one_bitmap_per_token(
+    render_factory: ManaIconFactory,
+) -> None:
+    """A non-empty cost takes the icon-laying branch (factory.py:66-77): one
+    StaticBitmap per token, no placeholder label, and a min width that scales
+    with the token count."""
+    frame = wx.Frame(None)
+    try:
+        panel = render_factory.render(frame, "{2}{W}{U}")
+        bitmaps = [c for c in panel.GetChildren() if isinstance(c, wx.StaticBitmap)]
+        labels = [c for c in panel.GetChildren() if isinstance(c, wx.StaticText)]
+        assert len(bitmaps) == 3
+        assert labels == []
+        # Min size accounts for all three icons laid out horizontally.
+        assert panel.GetMinSize().GetWidth() >= 3 * render_factory._icon_size
+        assert panel.GetMinSize().GetHeight() > 0
     finally:
         frame.Destroy()
 
@@ -214,6 +278,42 @@ def test_transparent_png_path_renders_standalone_energy(svg_factory: ManaIconFac
 
 def test_transparent_png_path_renders_phyrexian_symbol(svg_factory: ManaIconFactory) -> None:
     path = svg_factory.transparent_png_path("{W/P}", height=20)
+    assert path is not None and path.exists()
+    img = wx.Image(str(path), wx.BITMAP_TYPE_PNG)
+    assert (img.GetWidth(), img.GetHeight()) == (20, 20)
+
+
+def test_transparent_png_path_renders_tap_symbol(svg_factory: ManaIconFactory) -> None:
+    """{T} exercises the 'tap' color-key branch (svg_renderer.py:199-204)."""
+    path = svg_factory.transparent_png_path("{T}", height=20)
+    assert path is not None and path.exists()
+    img = wx.Image(str(path), wx.BITMAP_TYPE_PNG)
+    assert (img.GetWidth(), img.GetHeight()) == (20, 20)
+    assert img.HasAlpha()
+
+
+def test_transparent_png_path_renders_untap_symbol(svg_factory: ManaIconFactory) -> None:
+    """{UNTAP} exercises the dark 'untap' background + tap-glyph branch
+    (svg_renderer.py:202, 228-229)."""
+    path = svg_factory.transparent_png_path("{UNTAP}", height=20)
+    assert path is not None and path.exists()
+    img = wx.Image(str(path), wx.BITMAP_TYPE_PNG)
+    assert (img.GetWidth(), img.GetHeight()) == (20, 20)
+    assert img.HasAlpha()
+
+
+def test_transparent_png_path_unrecognized_token_renders_a_circle(
+    svg_factory: ManaIconFactory,
+) -> None:
+    """An unrecognized token has no glyph, but _draw_svg_background still paints
+    a multicolor fallback circle, so a PNG is produced rather than None.
+
+    This documents the *actual* behaviour: the transparent_png_path docstring
+    claims unrecognized tokens return None, but the color-key lookup falls
+    through to the multicolor fallback (svg_renderer.py:386-404) and a circle is
+    drawn anyway.
+    """
+    path = svg_factory.transparent_png_path("{ZZZ}", height=20)
     assert path is not None and path.exists()
     img = wx.Image(str(path), wx.BITMAP_TYPE_PNG)
     assert (img.GetWidth(), img.GetHeight()) == (20, 20)
