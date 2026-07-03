@@ -1,6 +1,6 @@
 # Architecture
 
-MTGO Metagame Deck Builder is a wxPython desktop application for Windows that provides metagame research, deck building, opponent tracking, and collection management for Magic: The Gathering Online players.
+MTGO Tools is a wxPython desktop application for Windows that provides metagame research, deck building, opponent tracking, and collection management for Magic: The Gathering Online players.
 
 ## Architecture Overview
 

@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    End-to-end install/uninstall path test for the MTGO Metagame Deck Builder.
+    End-to-end install/uninstall path test for the MTGO Tools.
 
 .DESCRIPTION
     Where test_installer.ps1 only validates the installer *file* (PE header,
@@ -27,7 +27,7 @@
     per-user install and needs no administrator privileges.
 
     CAUTION: this uninstalls the app and removes its regenerable per-user data
-    (%LOCALAPPDATA%\MTGO Metagame Deck Builder\{cache,logs,data}). Don't run it
+    (%LOCALAPPDATA%\MTGO Tools\{cache,logs,data}). Don't run it
     on a machine where you have a real install you want to keep. Saved decks
     (~\Documents\mtgo_decks) and settings (config) are preserved.
 
@@ -51,13 +51,13 @@ $ScriptDir   = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ProjectRoot = Split-Path -Parent $ScriptDir
 
 if (-not $InstallerPath) {
-    $InstallerPath = Join-Path $ProjectRoot "dist\installer\MTGOMetagameBuilder_Setup_v0.2.exe"
+    $InstallerPath = Join-Path $ProjectRoot "dist\installer\MTGOTools_Setup_v0.2.exe"
 }
 
 # AppId from installer.iss (the doubled leading brace there escapes to one brace
 # here) with Inno's "_is1" uninstall suffix.
 $AppId       = "{8F9A2D3B-1C4E-5F6A-7B8C-9D0E1F2A3B4C}_is1"
-$AppName     = "MTGO Metagame Deck Builder"   # must match MyAppName / INSTALLED_APP_DATA_DIR_NAME
+$AppName     = "MTGO Tools"   # must match MyAppName / INSTALLED_APP_DATA_DIR_NAME
 $UninstallSubkey = "Software\Microsoft\Windows\CurrentVersion\Uninstall\$AppId"
 
 $DataDir     = Join-Path $env:LOCALAPPDATA $AppName
@@ -104,7 +104,7 @@ function Test-UninstallKeyPresent { return $null -ne (Get-UninstallKey) }
 
 # --- Pre-flight --------------------------------------------------------------
 Write-Info "=========================================="
-Write-Info "MTGO Metagame Builder Install/Uninstall Test"
+Write-Info "MTGO Tools Install/Uninstall Test"
 Write-Info "=========================================="
 Write-Host ""
 

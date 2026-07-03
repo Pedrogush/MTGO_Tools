@@ -1,4 +1,4 @@
-# Build script for creating the MTGO Metagame Deck Builder installer
+# Build script for creating the MTGO Tools installer
 # This script runs on Windows and creates the installer using Inno Setup
 #
 # Prerequisites:
@@ -334,7 +334,7 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 # Step 7: Verify the installer was created
-$InstallerFile = Join-Path $InstallerDir "MTGOMetagameBuilder_Setup_v0.2.exe"
+$InstallerFile = Join-Path $InstallerDir "MTGOTools_Setup_v0.2.exe"
 if (-not (Test-Path $InstallerFile)) {
     Write-Error-Custom "Installer was not created at expected location: $InstallerFile"
     exit 1

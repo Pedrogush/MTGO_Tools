@@ -1,5 +1,5 @@
 #!/bin/bash
-# Test script to verify the MTGO Metagame Deck Builder installer was built correctly
+# Test script to verify the MTGO Tools installer was built correctly
 # This performs basic verification of the installer file
 
 set -e
@@ -7,7 +7,7 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 INSTALLER_DIR="$PROJECT_ROOT/dist/installer"
-INSTALLER_FILE="$INSTALLER_DIR/MTGOMetagameBuilder_Setup_v0.2.exe"
+INSTALLER_FILE="$INSTALLER_DIR/MTGOTools_Setup_v0.2.exe"
 
 # Color output
 RED='\033[0;31m'
@@ -63,7 +63,7 @@ run_test() {
 }
 
 echo_info "=========================================="
-echo_info "MTGO Metagame Builder Installer Test Suite"
+echo_info "MTGO Tools Installer Test Suite"
 echo_info "=========================================="
 echo ""
 
@@ -100,7 +100,7 @@ run_test "Contains Inno Setup signature" "strings '$INSTALLER_FILE' | grep -q 'I
 }
 
 # Test 6: Check for application name in installer
-run_test "Contains application name" "strings '$INSTALLER_FILE' | grep -q 'MTGO Metagame'" || {
+run_test "Contains application name" "strings '$INSTALLER_FILE' | grep -q 'MTGO Tools'" || {
     echo_warn "Application name not found in installer"
 }
 

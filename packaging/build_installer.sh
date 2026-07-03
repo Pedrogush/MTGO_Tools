@@ -1,5 +1,5 @@
 #!/bin/bash
-# Build script for creating the MTGO Metagame Deck Builder installer
+# Build script for creating the MTGO Tools installer
 # This script runs on Linux but creates a Windows installer using Wine + Inno Setup
 #
 # Prerequisites:
@@ -199,7 +199,7 @@ wine "$INNO_SETUP_PATH" "$ISS_FILE_WINDOWS" || {
 }
 
 # Step 8: Verify the installer was created
-INSTALLER_FILE="$INSTALLER_DIR/MTGOMetagameBuilder_Setup_v0.2.exe"
+INSTALLER_FILE="$INSTALLER_DIR/MTGOTools_Setup_v0.2.exe"
 if [ ! -f "$INSTALLER_FILE" ]; then
     echo_error "Installer was not created at expected location: $INSTALLER_FILE"
     exit 1

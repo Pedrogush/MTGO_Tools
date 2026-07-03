@@ -50,7 +50,7 @@ class MetagameWxApp(wx.App):
         return -1
 
     def OnInit(self) -> bool:  # noqa: N802 - wx override
-        logger.info("Starting MTGO Metagame Deck Builder (wx)")
+        logger.info("Starting MTGO Tools (wx)")
         if _automation_enabled:
             logger.info(f"Automation server will start on port {_automation_port}")
         self.loading_frame = LoadingFrame()
@@ -183,7 +183,7 @@ def debugpy_server() -> None:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="MTGO Metagame Deck Builder")
+    parser = argparse.ArgumentParser(description="MTGO Tools")
     parser.add_argument(
         "--automation",
         action="store_true",

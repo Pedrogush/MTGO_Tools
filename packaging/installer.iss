@@ -1,7 +1,7 @@
-; Inno Setup Script for MTGO Metagame Deck Builder
+; Inno Setup Script for MTGO Tools
 ; This script creates a Windows installer with license agreement, custom install directory, and shortcuts
 
-#define MyAppName "MTGO Metagame Deck Builder"
+#define MyAppName "MTGO Tools"
 #define MyAppVersion "0.2"
 #define MyAppPublisher "MTGO Metagame Crawler Contributors"
 #define MyAppURL "https://github.com/Pedrogush/MTGO_Tools"
@@ -25,7 +25,7 @@ DefaultGroupName={#MyAppName}
 ; to be written to a location that requires elevation.
 PrivilegesRequired=lowest
 OutputDir=../dist/installer
-OutputBaseFilename=MTGOMetagameBuilder_Setup_v{#MyAppVersion}
+OutputBaseFilename=MTGOTools_Setup_v{#MyAppVersion}
 Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern

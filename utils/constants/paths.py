@@ -15,7 +15,7 @@ BASE_DATA_DIR_ENV_VAR = "MTGO_TOOLS_BASE_DATA_DIR"
 # to the executable, so this lives under %LOCALAPPDATA%. It MUST stay in sync
 # with the {localappdata}\... paths cleaned up by packaging/installer.iss
 # ([UninstallDelete]).
-INSTALLED_APP_DATA_DIR_NAME = "MTGO Metagame Deck Builder"
+INSTALLED_APP_DATA_DIR_NAME = "MTGO Tools"
 
 # Matches a WSL mount path like "/mnt/c" or "/mnt/c/foo/bar".
 _WSL_MOUNT_RE = re.compile(r"^/mnt/([a-zA-Z])(?:/(.*))?$")
