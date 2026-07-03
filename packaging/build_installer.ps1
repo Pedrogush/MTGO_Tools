@@ -154,7 +154,7 @@ try {
 
     $ManaDir = Join-Path $ProjectRoot "assets\mana"
     if (-not (Test-Path $ManaDir)) {
-        Write-Info "Mana assets missing; fetching andrewgioia/mana…"
+        Write-Info "Mana assets missing; fetching from the Pedrogush/mana fork…"
         $FetchScript = Join-Path $ProjectRoot "scripts\fetch_mana_assets.py"
         if (Test-Path $FetchScript) {
             if (Test-Path $VendorPython) {
