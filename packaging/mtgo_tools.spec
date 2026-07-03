@@ -44,7 +44,7 @@ for rel in [
 binaries = []
 
 entry_point = project_root / "main.py"
-app_icon = project_root / "assets" / "icons" / "hammer_gold_colossus.ico"
+app_icon = project_root / "assets" / "icons" / "hammer.ico"
 
 # Bundle the app icon as data too, so the running app can set it as the window /
 # taskbar icon at runtime (utils/app_icon.py). The EXE icon= below only covers

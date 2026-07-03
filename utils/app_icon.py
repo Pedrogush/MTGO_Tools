@@ -16,7 +16,7 @@ from utils.constants.paths import resource_path
 
 # Must match the icon wired into packaging/mtgo_tools.spec and installer.iss,
 # and be bundled as data by the spec so resource_path() can find it when frozen.
-_APP_ICON_PARTS = ("assets", "icons", "hammer_gold_colossus.ico")
+_APP_ICON_PARTS = ("assets", "icons", "hammer.ico")
 
 _bundle: wx.IconBundle | None = None
 _loaded = False

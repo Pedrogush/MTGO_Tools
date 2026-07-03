@@ -23,7 +23,7 @@ MESSAGES: dict[str, str] = {
     "app.status.image_download_progress": "Baixando imagens de cartas: {completed}/{total} ({details})",
     "app.status.image_download_complete": "Download de imagens de cartas concluído",
     "app.status.image_download_cancelled": "Download de imagens de cartas cancelado",
-    "app.title.main_frame": "Pesquisa e Montagem de Deck MTGO",
+    "app.title.main_frame": "MTGO Tools",
     "app.label.deck_data_source": "Fonte de decks:",
     "app.label.language": "Idioma:",
     "app.menu.deck_data_source": "Fonte de decks",
