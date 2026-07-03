@@ -11,7 +11,7 @@ Prerequisites: Inno Setup 6, Python 3.11+ with PyInstaller, and optionally .NET 
 To customize edit installer.iss to change version, app name, included files, or shortcuts. For distribution sign the installer and generate checksums. The build and test scripts are CI/CD friendly.
 
 Notes:
-- Mana symbol assets are auto-fetched (and bundled) during the build if `assets/mana` is missing.
+- Mana symbol assets are auto-fetched (and bundled) during the build if `assets/mana` is missing. They come from the `Pedrogush/mana` fork of `andrewgioia/mana`, which pins the source so upstream changes never affect us until the fork is synced. The app also self-fetches these assets on first run (see `scripts/fetch_mana_assets.py`).
 
 ## Bridge release flow
 

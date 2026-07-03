@@ -144,7 +144,7 @@ fi
 # Ensure mana assets are present (needed for packaged icons)
 MANA_DIR="$PROJECT_ROOT/assets/mana"
 if [ ! -d "$MANA_DIR" ]; then
-    echo_info "Mana assets missing; fetching andrewgioia/mana…"
+    echo_info "Mana assets missing; fetching from the Pedrogush/mana fork…"
     if ! python3 scripts/fetch_mana_assets.py; then
         echo_warn "Failed to fetch mana assets; mana symbols will not render in the installer build."
     fi

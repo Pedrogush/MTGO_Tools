@@ -121,6 +121,32 @@ class MetagameWxApp(wx.App):
         return True
 
 
+def _ensure_mana_assets() -> None:
+    """Fetch the mana symbol assets on first run if they are missing.
+
+    Runs once, before the UI is built, so mana icons render without a manual
+    ``scripts/fetch_mana_assets.py`` step. On every subsequent launch the assets
+    are already present and this is a cheap local check. Any failure (no network,
+    git unavailable, running frozen) is non-fatal: the mana icon factory falls
+    back to placeholder glyphs, so we log and continue.
+    """
+    try:
+        from scripts.fetch_mana_assets import ensure_mana_assets, mana_assets_present
+
+        if mana_assets_present():
+            return
+        logger.info("Mana assets missing; fetching on first run…")
+        if ensure_mana_assets(quiet=True):
+            logger.info("Mana assets fetched successfully.")
+        else:
+            logger.warning(
+                "Could not fetch mana assets; mana symbols will use fallback glyphs. "
+                "Run scripts/fetch_mana_assets.py to retry."
+            )
+    except Exception as exc:  # pragma: no cover - defensive; never block startup
+        logger.warning(f"Skipping mana asset fetch: {exc}")
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="MTGO Metagame Deck Builder")
     parser.add_argument(
@@ -154,6 +180,8 @@ def main() -> None:
     if log_file:
         logger.info(f"Writing logs to {log_file}")
     logger.info(f"Using base data directory: {BASE_DATA_DIR}")
+
+    _ensure_mana_assets()
 
     if _automation_enabled:
         logger.info(f"Automation mode enabled on port {_automation_port}")
