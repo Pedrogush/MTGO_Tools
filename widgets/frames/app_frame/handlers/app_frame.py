@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 import wx
 from loguru import logger
 
+from services.image_service.priorities import PRIORITY_SELECTED_DECK
 from utils.constants import APP_FRAME_MIN_SIZE, APP_FRAME_SIZE
 from utils.constants.timing import IMAGE_REFRESH_COALESCE_MS
 from utils.i18n import LOCALE_LABELS
@@ -198,7 +199,9 @@ class AppFrameHandlersMixin(_Base):
             for card in self.zone_cards.get(zone) or []
         ]
         if names:
-            self.controller.image_service.prefetch_card_images("deck", names)
+            self.controller.image_service.prefetch_card_images(
+                "deck", names, priority=PRIORITY_SELECTED_DECK
+            )
 
     # ------------------------------------------------------------------ Left panel helpers -------------------------------------------------
     def _show_left_panel(self, mode: str, force: bool = False) -> None:

@@ -11,6 +11,11 @@ from concurrent.futures import ThreadPoolExecutor
 from loguru import logger
 
 from services.image_service.downloader import BulkImageDownloader
+from services.image_service.priorities import (
+    PRIORITY_BACKGROUND,
+    PRIORITY_HOVER,
+    PRIORITY_TIERS,
+)
 from services.image_service.schemas import CardImageRequest
 from utils.constants.timing import (
     IMAGE_DOWNLOAD_INITIAL_BACKOFF_SECONDS,
@@ -39,8 +44,15 @@ class CardImageDownloadQueue:
         self._downloader = BulkImageDownloader(cache)
         self._on_downloaded = on_downloaded
         self._on_failed = on_failed
-        self._queue: deque[CardImageRequest] = deque()
-        self._pending_keys: set[tuple[str, ...]] = set()
+        # One FIFO deque per priority tier; the worker always drains the most
+        # urgent non-empty tier first, so a batch enqueued in display order
+        # resolves in display order and background warm-up traffic can never
+        # delay the selected deck's images (issue #951).
+        self._tiers: dict[int, deque[CardImageRequest]] = {
+            tier: deque() for tier in PRIORITY_TIERS
+        }
+        # key -> priority tier its pending request currently sits in.
+        self._pending_priorities: dict[tuple[str, ...], int] = {}
         self._inflight_keys: set[tuple[str, ...]] = set()
         self._inflight_count = 0
         self._selected_request: CardImageRequest | None = None
@@ -71,11 +83,27 @@ class CardImageDownloadQueue:
             self._selected_request = request
             self._ensure_selected_priority_locked()
 
-    def enqueue(self, request: CardImageRequest, *, prioritize: bool = False) -> bool:
+    def enqueue(
+        self,
+        request: CardImageRequest,
+        *,
+        prioritize: bool = False,
+        priority: int = PRIORITY_BACKGROUND,
+    ) -> bool:
+        """Queue ``request`` at ``priority`` (lower = sooner; FIFO within a tier).
+
+        ``prioritize=True`` is the hover path: the request goes to the *front*
+        of the most urgent tier. A request already pending at a less urgent
+        tier is promoted (moved, never duplicated) when re-enqueued at a more
+        urgent one; re-enqueues at the same or a less urgent tier are dropped.
+        """
         if not request.can_fetch():
             return False
         if self._is_cached(request):
             return False
+        if prioritize:
+            priority = PRIORITY_HOVER
+        priority = self._clamp_priority(priority)
         not_found_key = self._not_found_key(request)
         key = request.queue_key()
         with self._condition:
@@ -91,30 +119,56 @@ class CardImageDownloadQueue:
                 return False
             if key in self._inflight_keys:
                 return False
-            if key in self._pending_keys:
-                if prioritize:
+            pending_priority = self._pending_priorities.get(key)
+            if pending_priority is not None:
+                if priority < pending_priority or prioritize:
                     self._remove_request_by_key_locked(key)
                 else:
                     return False
             if prioritize:
-                self._queue.appendleft(request)
+                self._tiers[priority].appendleft(request)
             else:
-                self._queue.append(request)
-            self._pending_keys.add(key)
+                self._tiers[priority].append(request)
+            self._pending_priorities[key] = priority
             self._condition.notify()
         return True
+
+    @staticmethod
+    def _clamp_priority(priority: int) -> int:
+        return min(max(priority, PRIORITY_TIERS[0]), PRIORITY_TIERS[-1])
+
+    @property
+    def _queue(self) -> tuple[CardImageRequest, ...]:
+        """Flattened snapshot of all pending requests in pop order."""
+        return tuple(request for tier in PRIORITY_TIERS for request in self._tiers[tier])
+
+    @property
+    def _pending_keys(self) -> set[tuple[str, ...]]:
+        return set(self._pending_priorities)
+
+    def _pop_next_locked(self) -> CardImageRequest | None:
+        for tier in PRIORITY_TIERS:
+            if self._tiers[tier]:
+                return self._tiers[tier].popleft()
+        return None
+
+    def _has_pending_locked(self) -> bool:
+        return any(self._tiers[tier] for tier in PRIORITY_TIERS)
 
     def _run(self) -> None:
         while not self._stop_event.is_set():
             with self._condition:
                 while (
-                    not self._queue or self._inflight_count >= self._MAX_CONCURRENT_DOWNLOADS
+                    not self._has_pending_locked()
+                    or self._inflight_count >= self._MAX_CONCURRENT_DOWNLOADS
                 ) and not self._stop_event.is_set():
                     self._condition.wait(timeout=IMAGE_DOWNLOAD_QUEUE_IDLE_WAIT_SECONDS)
                 if self._stop_event.is_set():
                     break
-                request = self._queue.popleft()
-                self._pending_keys.discard(request.queue_key())
+                request = self._pop_next_locked()
+                if request is None:
+                    continue
+                self._pending_priorities.pop(request.queue_key(), None)
                 self._inflight_keys.add(request.queue_key())
                 self._inflight_count += 1
 
@@ -269,17 +323,20 @@ class CardImageDownloadQueue:
         key = request.queue_key()
         if key in self._inflight_keys:
             return
-        if key in self._pending_keys:
+        if key in self._pending_priorities:
             self._remove_request_by_key_locked(key)
-        self._queue.appendleft(request)
-        self._pending_keys.add(key)
+        self._tiers[PRIORITY_HOVER].appendleft(request)
+        self._pending_priorities[key] = PRIORITY_HOVER
         self._condition.notify()
 
     def _remove_request_by_key_locked(self, key: tuple[str, ...]) -> None:
-        for request in list(self._queue):
+        tier = self._pending_priorities.get(key)
+        if tier is None:
+            return
+        for request in self._tiers[tier]:
             if request.queue_key() == key:
-                self._queue.remove(request)
-                self._pending_keys.discard(key)
+                self._tiers[tier].remove(request)
+                self._pending_priorities.pop(key, None)
                 return
 
     def _is_cached(self, request: CardImageRequest) -> bool:

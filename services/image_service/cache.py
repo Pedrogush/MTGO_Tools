@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
+from services.image_service.priorities import PRIORITY_BACKGROUND
 from services.image_service.schemas import CardImageRequest
 
 if TYPE_CHECKING:
@@ -35,8 +36,14 @@ class ImageCacheMixin(_Base):
     ) -> None:
         self._on_printings_loaded = callback
 
-    def queue_card_image_download(self, request: CardImageRequest, *, prioritize: bool) -> bool:
-        enqueued = self._download_queue.enqueue(request, prioritize=prioritize)
+    def queue_card_image_download(
+        self,
+        request: CardImageRequest,
+        *,
+        prioritize: bool,
+        priority: int = PRIORITY_BACKGROUND,
+    ) -> bool:
+        enqueued = self._download_queue.enqueue(request, prioritize=prioritize, priority=priority)
         logger.debug(
             "Queue image request for %s (set=%s, size=%s, collector=%s) -> %s",
             request.card_name,
@@ -50,17 +57,30 @@ class ImageCacheMixin(_Base):
     def set_selected_card_request(self, request: CardImageRequest | None) -> None:
         self._download_queue.set_selected_request(request)
 
-    def prefetch_card_images(self, source: str, names: Iterable[str]) -> None:
+    def prefetch_card_images(
+        self,
+        source: str,
+        names: Iterable[str],
+        *,
+        priority: int = PRIORITY_BACKGROUND,
+        on_batch: Callable[[str, list[str], list[str]], None] | None = None,
+    ) -> None:
         """Batch-prefetch images for the cards a user is likely to view next.
 
         Coalesces per ``source`` and runs off the UI thread; see
         :class:`~services.image_service.prefetcher.ImagePrefetcher`.
         """
-        self._prefetcher.prefetch(source, names)
+        self._prefetcher.prefetch(source, names, priority=priority, on_batch=on_batch)
 
-    def prefetch_card_images_lazy(self, source: str, provider: Callable[[], Iterable[str]]) -> None:
+    def prefetch_card_images_lazy(
+        self,
+        source: str,
+        provider: Callable[[], Iterable[str]],
+        *,
+        priority: int = PRIORITY_BACKGROUND,
+    ) -> None:
         """Batch-prefetch with ``provider`` evaluated on the prefetch thread."""
-        self._prefetcher.prefetch_lazy(source, provider)
+        self._prefetcher.prefetch_lazy(source, provider, priority=priority)
 
     def _handle_image_downloaded(self, request: CardImageRequest) -> None:
         if not self._on_image_downloaded:

@@ -395,20 +395,27 @@ def test_image_service_prefetch_delegates_to_prefetcher(image_service_instance):
     received = []
 
     class _FakePrefetcher:
-        def prefetch(self, source, names):
-            received.append(("eager", source, list(names)))
+        def prefetch(self, source, names, *, priority=None, on_batch=None):
+            received.append(("eager", source, list(names), priority))
 
-        def prefetch_lazy(self, source, provider):
-            received.append(("lazy", source, provider))
+        def prefetch_lazy(self, source, provider, *, priority=None, on_batch=None):
+            received.append(("lazy", source, provider, priority))
 
         def stop(self, timeout=None):
             pass
 
+    from services.image_service.priorities import PRIORITY_RESEARCH_VISIBLE, PRIORITY_SELECTED_DECK
+
     image_service_instance._prefetcher = _FakePrefetcher()
-    image_service_instance.prefetch_card_images("deck", ["Ponder"])
+    image_service_instance.prefetch_card_images("deck", ["Ponder"], priority=PRIORITY_SELECTED_DECK)
     provider = lambda: ["Opt"]  # noqa: E731
-    image_service_instance.prefetch_card_images_lazy("research", provider)
-    assert received == [("eager", "deck", ["Ponder"]), ("lazy", "research", provider)]
+    image_service_instance.prefetch_card_images_lazy(
+        "research", provider, priority=PRIORITY_RESEARCH_VISIBLE
+    )
+    assert received == [
+        ("eager", "deck", ["Ponder"], PRIORITY_SELECTED_DECK),
+        ("lazy", "research", provider, PRIORITY_RESEARCH_VISIBLE),
+    ]
 
 
 def test_enqueue_uuid_miss_falls_back_to_name_set_cache_check():
@@ -592,6 +599,71 @@ def test_request_queue_key_distinguishes_name_only_requests():
     assert bolt.queue_key() != ponder.queue_key()
     # The same card requested twice still dedupes (case-insensitive).
     assert bolt.queue_key() == _request(card_name="lightning bolt", set_code=None).queue_key()
+
+
+def test_enqueue_priority_tiers_drain_most_urgent_first():
+    """Selected-deck requests pop before background warm-up requests that
+    were enqueued earlier, and FIFO order holds within a tier."""
+    from services.image_service.priorities import (
+        PRIORITY_BACKGROUND,
+        PRIORITY_SELECTED_DECK,
+    )
+
+    queue = _build_queue()
+    try:
+        queue.stop()
+        queue.enqueue(_request(card_name="Warmup A", set_code=None), priority=PRIORITY_BACKGROUND)
+        queue.enqueue(_request(card_name="Warmup B", set_code=None), priority=PRIORITY_BACKGROUND)
+        queue.enqueue(_request(card_name="Deck 1", set_code=None), priority=PRIORITY_SELECTED_DECK)
+        queue.enqueue(_request(card_name="Deck 2", set_code=None), priority=PRIORITY_SELECTED_DECK)
+        with queue._condition:
+            popped = [queue._pop_next_locked().card_name for _ in range(4)]
+        assert popped == ["Deck 1", "Deck 2", "Warmup A", "Warmup B"]
+    finally:
+        queue.stop()
+
+
+def test_enqueue_promotes_pending_request_to_better_tier():
+    """Re-enqueueing a pending background request at a better tier moves it
+    (no duplicate); re-enqueueing at the same or a worse tier is a no-op."""
+    from services.image_service.priorities import (
+        PRIORITY_BACKGROUND,
+        PRIORITY_SELECTED_DECK,
+    )
+
+    queue = _build_queue()
+    try:
+        queue.stop()
+        request = _request(card_name="Ponder", set_code=None)
+        assert queue.enqueue(request, priority=PRIORITY_BACKGROUND) is True
+        # Same tier again: duplicate, dropped.
+        assert queue.enqueue(request, priority=PRIORITY_BACKGROUND) is False
+        # Better tier: promoted in place.
+        assert queue.enqueue(request, priority=PRIORITY_SELECTED_DECK) is True
+        with queue._condition:
+            assert len(queue._queue) == 1
+            assert queue._pending_priorities[request.queue_key()] == PRIORITY_SELECTED_DECK
+        # Worse tier afterwards: dropped, stays promoted.
+        assert queue.enqueue(request, priority=PRIORITY_BACKGROUND) is False
+        with queue._condition:
+            assert queue._pending_priorities[request.queue_key()] == PRIORITY_SELECTED_DECK
+    finally:
+        queue.stop()
+
+
+def test_enqueue_prioritize_beats_selected_deck_tier():
+    """The hover path (prioritize=True) still jumps ahead of everything."""
+    from services.image_service.priorities import PRIORITY_SELECTED_DECK
+
+    queue = _build_queue()
+    try:
+        queue.stop()
+        queue.enqueue(_request(card_name="Deck 1", set_code=None), priority=PRIORITY_SELECTED_DECK)
+        queue.enqueue(_request(card_name="Hovered", set_code=None), prioritize=True)
+        with queue._condition:
+            assert queue._queue[0].card_name == "Hovered"
+    finally:
+        queue.stop()
 
 
 def test_enqueue_name_only_batch_keeps_every_card():

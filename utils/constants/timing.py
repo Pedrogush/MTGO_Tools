@@ -126,9 +126,11 @@ CACHE_WARMUP_PROGRESS_INTERVAL = 50
 IMAGE_PREFETCH_BATCH_LIMIT = 100  # max images enqueued per prefetch batch
 IMAGE_PREFETCH_IDLE_WAIT_SECONDS = 0.5  # condition wait timeout when no batches are queued
 IMAGE_PREFETCH_STOP_TIMEOUT_SECONDS = 2.0  # max seconds to wait for worker join on stop
-# The prefetch worker idles this long after startup before running its first
-# batch (mirrors CACHE_WARMUP_START_DELAY_SECONDS) so prefetch downloads never
-# compete with the initial archetype/deck/card-data loads or the first paint.
+# Background-tier prefetch batches idle this long after startup (mirrors
+# CACHE_WARMUP_START_DELAY_SECONDS) so speculative downloads never compete
+# with the initial archetype/deck/card-data loads or the first paint.
+# User-driven batches (the selected deck, visible research decks) bypass the
+# delay — those are the images the user is waiting on right now.
 IMAGE_PREFETCH_START_DELAY_SECONDS = 3.0
 # Downloaded-image UI refreshes are coalesced: completed downloads accumulate
 # and the deck tables repaint at most once per interval, so a mass download

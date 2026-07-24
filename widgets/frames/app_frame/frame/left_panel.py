@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 
 import wx
 
+from services.image_service.priorities import PRIORITY_RESEARCH_VISIBLE
 from utils.constants import DARK_PANEL, FORMAT_OPTIONS
 from utils.perf import timed
 from widgets.panels.deck_builder_panel import DeckBuilderPanel
@@ -98,7 +99,7 @@ class LeftPanelBuilderMixin(_Base):
             on_add_to_side=lambda name, count=1: self._handle_zone_delta("side", name, count),
             on_add_to_active_zone=self._add_search_card_to_active_zone,
             on_prefetch_images=lambda names: self.controller.image_service.prefetch_card_images(
-                "search", names
+                "search", names, priority=PRIORITY_RESEARCH_VISIBLE
             ),
             locale=self.locale,
         )

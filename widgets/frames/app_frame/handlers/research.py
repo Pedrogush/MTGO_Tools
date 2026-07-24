@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any
 import wx
 from loguru import logger
 
+from services.image_service.priorities import PRIORITY_RESEARCH_VISIBLE
 from utils.constants.timing import RESEARCH_PREFETCH_DECK_COUNT
 from widgets.frames.app_frame.handlers.deck_formatting import (
     normalize_date,
@@ -172,7 +173,9 @@ class DeckResearchHandlers(_Base):
                 names.extend(name for name, _qty in cards)
             return names
 
-        self.controller.image_service.prefetch_card_images_lazy("research", _provider)
+        self.controller.image_service.prefetch_card_images_lazy(
+            "research", _provider, priority=PRIORITY_RESEARCH_VISIBLE
+        )
 
     # Async Callback Handlers
     def _on_archetypes_loaded(self: AppFrame, items: list[dict[str, Any]]) -> None:

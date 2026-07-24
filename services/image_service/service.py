@@ -38,7 +38,9 @@ class ImageService(
             on_failed=self._handle_image_download_failed,
         )
         self._prefetcher = ImagePrefetcher(
-            enqueue=lambda request: self._download_queue.enqueue(request, prioritize=False)
+            enqueue=lambda request, priority: self._download_queue.enqueue(
+                request, priority=priority
+            )
         )
         self._printings_lock = threading.Lock()
         self._printings_inflight: set[str] = set()
