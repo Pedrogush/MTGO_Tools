@@ -13,38 +13,29 @@ The install is **per-user and requires no administrator privileges** (`Privilege
 
 **Debugging an installed build:** the shipped executable is windowed (no console), but `debugpy` is bundled so you can attach an IDE debugger the same way you would in the editor. Set `MTGO_TOOLS_INSTALL_DEBUG=1` (or `MTGO_TOOLS_INSTALL_DEBUG=<port>`) before launching to have it listen on 127.0.0.1:5678, then use your IDE's "attach to process/port". Set `MTGO_TOOLS_INSTALL_DEBUG_WAIT=1` to block startup until the debugger attaches (for breaking on early startup code). The hook is inert unless the env var is set. File logs are always written to `%LOCALAPPDATA%\MTGO Tools\logs`; set `MTGO_LOG_LEVEL=DEBUG` for verbose output.
 
-Prerequisites: Inno Setup 6, Python 3.11+ with PyInstaller, and optionally .NET 9 SDK (used to publish a self-contained bridge that bundles the .NET runtime). On Linux the build script uses Wine to run Inno Setup and will automatically download it if not present. Output is created at dist/installer/MTGOTools_Setup_v0.2.exe. The PyInstaller spec is `mtgo_tools.spec`, which produces a single-file `dist/mtgo_tools.exe`.
+Prerequisites: Inno Setup 6, Python 3.11+ with PyInstaller, and the **.NET 9 SDK** (required — used to publish the self-contained MTGO bridge that is shipped inside the installer). The SDK can be installed with no admin rights via `Invoke-WebRequest https://dot.net/v1/dotnet-install.ps1 -OutFile dotnet-install.ps1; .\dotnet-install.ps1 -Channel 9.0`; the build script auto-detects a per-user SDK under `%LOCALAPPDATA%\Microsoft\dotnet`. On Linux the build script uses Wine to run Inno Setup and will automatically download it if not present. Output is created at dist/installer/MTGOTools_Setup_v0.2.exe. The PyInstaller spec is `mtgo_tools.spec`, which produces a single-file `dist/mtgo_tools.exe`.
 
 To customize edit installer.iss to change version, app name, included files, or shortcuts. For distribution sign the installer and generate checksums. The build and test scripts are CI/CD friendly.
 
 Notes:
 - Mana symbol assets are auto-fetched (and bundled) during the build if `assets/mana` is missing. They come from the `Pedrogush/mana` fork of `andrewgioia/mana`, which pins the source so upstream changes never affect us until the fork is synced. The app also self-fetches these assets on first run (see `scripts/fetch_mana_assets.py`).
 
-## Bridge release flow
+## MTGO bridge (bundled)
 
-The .NET `MTGOBridge` artifact is **downloaded at install time** rather than
-bundled inside the installer. This keeps the installer small and lets the
-bridge be re-released independently of the main app. To guarantee integrity
-the download is pinned to a tagged release URL **and** verified against a
-known SHA-256.
+The .NET `MTGOBridge` (source in `dotnet/MTGOBridge/`) is **built from source and
+shipped inside the installer** — there is no install-time download. `build_installer.ps1`
+publishes it self-contained (`dotnet publish -r win-x64 --self-contained -p:PublishSingleFile=true`),
+which bundles the .NET runtime, and `installer.iss` copies the publish output into
+`{app}\mtgo_integration\`. The app resolves it there at runtime
+(`services/mtgo_bridge_service/discovery.py`). This makes MTGO integration work out of
+the box on a clean machine: no network dependency at install time and no separate .NET
+runtime requirement for the user.
 
-`build_installer.ps1` still publishes the local bridge (used for local
-testing and for catching build breakage); the published binaries are *not*
-shipped in the installer.
+The bridge is **mandatory**: `build_installer.ps1` fails if the .NET 9 SDK is missing or
+the publish output is absent, rather than producing an installer without MTGO integration.
+Pass `-SkipDotNetBuild` to reuse an already-published bridge (e.g. for faster iteration on
+the installer itself); the published artifact must still exist or the build aborts.
 
-Cutting a new bridge release:
-
-1. Publish a release in the `Pedrogush/MTGOBridge` repo with a versioned zip
-   asset (e.g. `MTGOBridge-vX.Y.Z.zip`).
-2. Compute the SHA-256 of the published zip, e.g.
-   `Get-FileHash -Algorithm SHA256 MTGOBridge-vX.Y.Z.zip` (PowerShell) or
-   `sha256sum MTGOBridge-vX.Y.Z.zip` (Linux/macOS).
-3. Edit `packaging/installer.iss` and update the three pinned constants
-   together: `BRIDGE_RELEASE_URL`, `BRIDGE_ZIP_FILENAME`, and
-   `BRIDGE_ZIP_SHA256`.
-4. Rebuild the installer and confirm the post-install download succeeds with
-   the new checksum.
-
-If `BRIDGE_ZIP_SHA256` is empty the installer logs a warning and skips
-verification — this is only intended for local debugging. Production
-installers must ship with a populated hash.
+To change the bridge, edit the C# under `dotnet/MTGOBridge/` and rebuild the installer —
+the new binary is picked up automatically. The trade-off of bundling is installer size:
+the self-contained bridge adds the .NET runtime (~60-70 MB) to the setup .exe.
