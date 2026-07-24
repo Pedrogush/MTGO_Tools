@@ -40,8 +40,8 @@ class CardImageDownloadQueue:
         self._on_downloaded = on_downloaded
         self._on_failed = on_failed
         self._queue: deque[CardImageRequest] = deque()
-        self._pending_keys: set[tuple[str, str, str, str]] = set()
-        self._inflight_keys: set[tuple[str, str, str, str]] = set()
+        self._pending_keys: set[tuple[str, ...]] = set()
+        self._inflight_keys: set[tuple[str, ...]] = set()
         self._inflight_count = 0
         self._selected_request: CardImageRequest | None = None
         self._stop_event = threading.Event()
@@ -275,7 +275,7 @@ class CardImageDownloadQueue:
         self._pending_keys.add(key)
         self._condition.notify()
 
-    def _remove_request_by_key_locked(self, key: tuple[str, str, str, str]) -> None:
+    def _remove_request_by_key_locked(self, key: tuple[str, ...]) -> None:
         for request in list(self._queue):
             if request.queue_key() == key:
                 self._queue.remove(request)

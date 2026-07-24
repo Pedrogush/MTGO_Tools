@@ -574,10 +574,40 @@ def test_request_queue_key_uses_uuid_when_present():
     with_uuid = _request(uuid="ABC-123", set_code="aaa", collector_number="7")
     other_set = _request(uuid="ABC-123", set_code="bbb", collector_number="9")
     # Same uuid + size collapse to the same key regardless of set/collector.
-    assert with_uuid.queue_key() == ("uuid", "abc-123", "normal", "")
+    assert with_uuid.queue_key() == ("uuid", "abc-123", "normal", "", "")
     assert with_uuid.queue_key() == other_set.queue_key()
     # A differing size yields a distinct key.
     assert _request(uuid="ABC-123", size="large").queue_key() != with_uuid.queue_key()
+
+
+def test_request_queue_key_distinguishes_name_only_requests():
+    """Name-only requests (no uuid/set) must NOT share a queue key.
+
+    Prefetch and warm-up submit bare card names; when the key omitted the
+    name, an entire 100-card batch collapsed onto one key and the queue
+    dropped all but the first card as a duplicate (issue #951).
+    """
+    bolt = _request(card_name="Lightning Bolt", set_code=None)
+    ponder = _request(card_name="Ponder", set_code=None)
+    assert bolt.queue_key() != ponder.queue_key()
+    # The same card requested twice still dedupes (case-insensitive).
+    assert bolt.queue_key() == _request(card_name="lightning bolt", set_code=None).queue_key()
+
+
+def test_enqueue_name_only_batch_keeps_every_card():
+    """A batch of distinct name-only requests all make it into the queue."""
+    queue = _build_queue()
+    try:
+        queue.stop()
+        names = [f"Card {i}" for i in range(10)]
+        results = [
+            queue.enqueue(_request(card_name=name, set_code=None)) for name in names
+        ]
+        assert results == [True] * len(names)
+        with queue._condition:
+            assert len(queue._queue) == len(names)
+    finally:
+        queue.stop()
 
 
 def test_image_service_download_callback_dispatched(image_service_instance):
