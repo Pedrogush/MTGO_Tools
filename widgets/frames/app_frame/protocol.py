@@ -87,6 +87,7 @@ class AppFrameProto(Protocol):
     _filter_debounce_timer: wx.Timer | None
     _pending_image_refresh_names: set[str]
     _image_refresh_timer: wx.Timer | None
+    _deck_image_perf: dict[str, Any] | None
     _inspector_hover_timer: wx.Timer | None
     _pending_hover: tuple[str, dict[str, Any]] | None
     _pending_deck_restore: bool

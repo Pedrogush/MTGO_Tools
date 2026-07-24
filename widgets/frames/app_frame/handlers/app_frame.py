@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
@@ -170,12 +171,18 @@ class AppFrameHandlersMixin(_Base):
         # and repainting per image floods the UI event loop enough to make the
         # app unusable until the downloads drain.
         self.card_inspector_panel.handle_image_downloaded(request)
+        self._note_deck_image_progress(request.card_name)
         self._pending_image_refresh_names.add(request.card_name)
         if self._image_refresh_timer is None:
             self._image_refresh_timer = wx.Timer(self)
             self.Bind(wx.EVT_TIMER, self._flush_image_refreshes, self._image_refresh_timer)
         if not self._image_refresh_timer.IsRunning():
             self._image_refresh_timer.StartOnce(IMAGE_REFRESH_COALESCE_MS)
+
+    def _handle_image_download_failed(self, request: CardImageRequest, message: str) -> None:
+        # Keep the perf tracker honest: a failed download still resolves the
+        # name, otherwise one 404 would leave the deck timer dangling forever.
+        self._note_deck_image_progress(request.card_name, failed=True)
 
     def _flush_image_refreshes(self, _event: wx.TimerEvent | None = None) -> None:
         names = self._pending_image_refresh_names
@@ -199,9 +206,76 @@ class AppFrameHandlersMixin(_Base):
             for card in self.zone_cards.get(zone) or []
         ]
         if names:
+            # PERF: t0 for the deck-load → all-images-local interval. The
+            # previous deck's tracker (if unfinished) is superseded here.
+            perf = self._deck_image_perf
+            if perf and perf.get("pending"):
+                logger.info(
+                    "PERF | deck images superseded with {} of {} still pending",
+                    len(perf["pending"]),
+                    perf.get("enqueued", 0),
+                )
+            self._deck_image_perf = {
+                "t0": time.perf_counter(),
+                "total_names": len({name.lower() for name in names}),
+                "pending": None,  # filled by _on_deck_prefetch_batch
+                "enqueued": 0,
+                "failed": 0,
+            }
             self.controller.image_service.prefetch_card_images(
-                "deck", names, priority=PRIORITY_SELECTED_DECK
+                "deck",
+                names,
+                priority=PRIORITY_SELECTED_DECK,
+                on_batch=self._on_deck_prefetch_batch,
             )
+
+    def _on_deck_prefetch_batch(
+        self, source: str, enqueued: list[str], skipped: list[str]
+    ) -> None:
+        # Fires on the prefetcher worker thread; marshal to the UI thread.
+        wx.CallAfter(self._begin_deck_image_tracking, enqueued, skipped)
+
+    def _begin_deck_image_tracking(self, enqueued: list[str], skipped: list[str]) -> None:
+        perf = self._deck_image_perf
+        if perf is None:
+            return
+        perf["enqueued"] = len(enqueued)
+        perf["cached"] = len(skipped)
+        if not enqueued:
+            elapsed_ms = (time.perf_counter() - perf["t0"]) * 1000.0
+            logger.info(
+                "PERF | {:>7.1f} ms | === deck images all local "
+                "({} cards, 0 downloads needed) ===",
+                elapsed_ms,
+                perf["total_names"],
+            )
+            self._deck_image_perf = None
+            return
+        perf["pending"] = {name.lower() for name in enqueued}
+
+    def _note_deck_image_progress(self, card_name: str, *, failed: bool = False) -> None:
+        perf = self._deck_image_perf
+        if not perf or not perf.get("pending"):
+            return
+        key = (card_name or "").lower()
+        pending: set[str] = perf["pending"]
+        if key not in pending:
+            return
+        pending.discard(key)
+        if failed:
+            perf["failed"] += 1
+        if pending:
+            return
+        elapsed_ms = (time.perf_counter() - perf["t0"]) * 1000.0
+        logger.info(
+            "PERF | {:>7.1f} ms | === deck images all local "
+            "({} downloaded, {} already cached, {} failed) ===",
+            elapsed_ms,
+            perf["enqueued"] - perf["failed"],
+            perf.get("cached", 0),
+            perf["failed"],
+        )
+        self._deck_image_perf = None
 
     # ------------------------------------------------------------------ Left panel helpers -------------------------------------------------
     def _show_left_panel(self, mode: str, force: bool = False) -> None:

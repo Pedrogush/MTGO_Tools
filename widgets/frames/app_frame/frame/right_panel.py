@@ -82,6 +82,9 @@ class RightPanelBuilderMixin(_Base):
             self.controller.image_service.fetch_printings_by_name_async
         )
         self.controller.image_service.set_image_download_callback(self._handle_image_downloaded)
+        self.controller.image_service.set_image_download_failed_callback(
+            self._handle_image_download_failed
+        )
         self.controller.image_service.set_printings_loaded_callback(
             self.card_inspector_panel.handle_printings_loaded
         )
