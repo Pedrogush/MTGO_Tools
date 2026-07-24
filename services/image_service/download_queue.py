@@ -153,7 +153,10 @@ class CardImageDownloadQueue:
             started_at = time.monotonic()
             try:
                 success, msg = self._downloader.download_card_image_by_name(
-                    request.card_name, request.size, set_code=request.set_code
+                    request.card_name,
+                    request.size,
+                    set_code=request.set_code,
+                    uuid=request.uuid,
                 )
             except Exception as exc:
                 success = False
@@ -282,6 +285,13 @@ class CardImageDownloadQueue:
     def _is_cached(self, request: CardImageRequest) -> bool:
         if not request.card_name:
             return False
+        # A uuid pins the request to one exact printing. Check it first: the
+        # name/set lookups can miss split-layout cards stored under their
+        # combined name. Fall through to the name/set checks on a uuid miss so
+        # a printing satisfied under another identity (e.g. resolved from
+        # stale bulk data) still counts as cached.
+        if request.uuid and self._cache.is_cached(request.uuid, request.size, face_index=0):
+            return True
         if request.set_code:
             return (
                 self._cache.get_image_path_for_printing(

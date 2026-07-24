@@ -9,6 +9,7 @@ from typing import Any, Protocol
 from services.image_service.disk_cache import CardImageCache
 from services.image_service.download_queue import CardImageDownloadQueue
 from services.image_service.downloader import BulkImageDownloader
+from services.image_service.prefetcher import ImagePrefetcher
 from services.image_service.process_worker import ProcessHandle, ProcessWorker
 from services.image_service.schemas import CardImageRequest
 
@@ -26,6 +27,7 @@ class ImageServiceProto(Protocol):
     _on_printings_loaded: Callable[[str, list[dict[str, Any]]], None] | None
 
     _download_queue: CardImageDownloadQueue
+    _prefetcher: ImagePrefetcher
     _printings_lock: threading.Lock
     _printings_inflight: set[str]
 

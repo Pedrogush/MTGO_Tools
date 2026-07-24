@@ -234,6 +234,9 @@ class DeckContentHandlers(_Base):
             self.zone_cards["out"] = self._load_outboard_for_current()
         with perf_phase("main_table.set_cards"):
             self.main_table.set_cards(self.zone_cards["main"])
+        # Batch-prefetch every zone's images right away (runs on a background
+        # thread) so art streams in while the tables render (issue #951).
+        self._prefetch_deck_zone_images()
         # Defer the secondary zones to the next event-loop turn so the mainboard
         # — the zone the user is looking at — paints first. They fill in a frame
         # later, which removes their cost from the click-to-visible interval.

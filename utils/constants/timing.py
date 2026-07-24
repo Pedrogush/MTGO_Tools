@@ -119,6 +119,23 @@ CACHE_WARMUP_DEEP_PASS_MAX_DECKS = 150
 # without logging every individual fetch.
 CACHE_WARMUP_PROGRESS_INTERVAL = 50
 
+# Predictive card-image prefetch (issue #951) — UI surfaces submit the cards a
+# user is likely to look at next (loaded deck zones, top visible research
+# decks, the visible window of the card search) and a background worker feeds
+# them through the shared download queue in bounded batches.
+IMAGE_PREFETCH_BATCH_LIMIT = 100  # max images enqueued per prefetch batch
+IMAGE_PREFETCH_IDLE_WAIT_SECONDS = 0.5  # condition wait timeout when no batches are queued
+IMAGE_PREFETCH_STOP_TIMEOUT_SECONDS = 2.0  # max seconds to wait for worker join on stop
+# Card search results: prefetch everything visible plus this many rows past the
+# bottom, so a small scroll still hits already-local images…
+SEARCH_PREFETCH_LOOKAHEAD_CARDS = 20
+# …and always at least this many rows even when fewer are visible.
+SEARCH_PREFETCH_MIN_CARDS = 30
+SEARCH_PREFETCH_DEBOUNCE_MS = 250  # settle time after scroll/search before prefetching
+# Deck research: prefetch the card images of this many decks from the top of
+# the (filtered) results list — the decks the user is most likely to click.
+RESEARCH_PREFETCH_DECK_COUNT = 3
+
 # Card image download queue — retry and timing configuration
 IMAGE_DOWNLOAD_QUEUE_STOP_TIMEOUT_SECONDS = (
     2.0  # max seconds to wait for queue thread to join on stop

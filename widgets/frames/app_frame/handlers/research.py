@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any
 import wx
 from loguru import logger
 
+from utils.constants.timing import RESEARCH_PREFETCH_DECK_COUNT
 from widgets.frames.app_frame.handlers.deck_formatting import (
     normalize_date,
     simple_summary_html,
@@ -109,11 +110,7 @@ class DeckResearchHandlers(_Base):
         show_source = self.controller.get_deck_data_source() == "both"
         rows = [
             (
-                (
-                    ("🐠" if deck.get("source") == "mtggoldfish" else "🧙🏾‍♂️")
-                    if show_source
-                    else ""
-                ),
+                (("🐠" if deck.get("source") == "mtggoldfish" else "🧙🏾‍♂️") if show_source else ""),
                 deck.get("player", "Unknown"),
                 slug_to_name.get(deck.get("name", ""), deck.get("name", "")),
                 strip_extra_dates(deck.get("event", "")),
@@ -124,6 +121,38 @@ class DeckResearchHandlers(_Base):
         ]
         self.deck_list.set_decks(rows)
         self.deck_list.Enable()
+        self._prefetch_visible_deck_images(filtered)
+
+    def _prefetch_visible_deck_images(self: AppFrame, decks: list[dict[str, Any]]) -> None:
+        """Prefetch card images for the decks at the top of the results list.
+
+        Those are the decks the user is most likely to click next, so their
+        card images should already be local when the deck opens (issue #951).
+        The deck texts are fetched cache-first on the prefetch thread; the
+        text cache dedupes, so a warm start costs no network at all.
+        """
+        top_decks = [dict(deck) for deck in decks[:RESEARCH_PREFETCH_DECK_COUNT]]
+        if not top_decks:
+            return
+        download_deck_text = self.controller.metagame_repo.download_deck_content
+        analyze_deck = self.controller.deck_service.analyze_deck
+
+        def _provider() -> list[str]:
+            names: list[str] = []
+            for deck in top_decks:
+                try:
+                    deck_text = download_deck_text(deck) or ""
+                except Exception as exc:
+                    logger.debug(f"Prefetch: failed to fetch deck {deck.get('number')}: {exc}")
+                    continue
+                if not deck_text:
+                    continue
+                analysis = analyze_deck(deck_text)
+                cards = analysis.get("mainboard_cards", []) + analysis.get("sideboard_cards", [])
+                names.extend(name for name, _qty in cards)
+            return names
+
+        self.controller.image_service.prefetch_card_images_lazy("research", _provider)
 
     # Async Callback Handlers
     def _on_archetypes_loaded(self: AppFrame, items: list[dict[str, Any]]) -> None:

@@ -97,6 +97,9 @@ class LeftPanelBuilderMixin(_Base):
             on_add_to_main=lambda name, count=1: self._handle_zone_delta("main", name, count),
             on_add_to_side=lambda name, count=1: self._handle_zone_delta("side", name, count),
             on_add_to_active_zone=self._add_search_card_to_active_zone,
+            on_prefetch_images=lambda names: self.controller.image_service.prefetch_card_images(
+                "search", names
+            ),
             locale=self.locale,
         )
         self.left_stack.AddPage(self.builder_panel, self._t("app.label.left_panel.builder"))

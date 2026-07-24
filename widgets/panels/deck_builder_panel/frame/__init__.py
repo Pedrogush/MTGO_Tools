@@ -50,6 +50,7 @@ class DeckBuilderPanel(
         on_add_to_main: Callable[..., None] | None = None,
         on_add_to_side: Callable[..., None] | None = None,
         on_add_to_active_zone: Callable[[str], None] | None = None,
+        on_prefetch_images: Callable[[list[str]], None] | None = None,
         locale: str | None = None,
     ) -> None:
         super().__init__(parent)
@@ -68,6 +69,7 @@ class DeckBuilderPanel(
         self._on_add_to_main = on_add_to_main
         self._on_add_to_side = on_add_to_side
         self._on_add_to_active_zone = on_add_to_active_zone
+        self._on_prefetch_images = on_prefetch_images
 
         # State variables
         self.inputs: dict[str, wx.TextCtrl] = {}
@@ -87,6 +89,9 @@ class DeckBuilderPanel(
         self.results_cache: list[dict[str, Any]] = []
         self._search_timer = wx.Timer(self)
         self.Bind(wx.EVT_TIMER, self._on_search_timer, self._search_timer)
+        # Debounces image prefetch while the results list scrolls or refills.
+        self._prefetch_timer = wx.Timer(self)
+        self.Bind(wx.EVT_TIMER, self._on_prefetch_timer, self._prefetch_timer)
 
         # Radar state
         self.active_radar: RadarData | None = None

@@ -167,6 +167,21 @@ class AppFrameHandlersMixin(_Base):
         if self.out_table:
             self.out_table.refresh_card_image(request.card_name)
 
+    def _prefetch_deck_zone_images(self) -> None:
+        """Queue image downloads for every card in the loaded deck's zones.
+
+        The whole deck is "potentially visible" the moment it loads (grid view
+        shows art immediately; hover can land on any row), so batch-prefetch it
+        instead of waiting for per-card mouseover requests (issue #951).
+        """
+        names = [
+            card["name"]
+            for zone in ("main", "side", "out")
+            for card in self.zone_cards.get(zone) or []
+        ]
+        if names:
+            self.controller.image_service.prefetch_card_images("deck", names)
+
     # ------------------------------------------------------------------ Left panel helpers -------------------------------------------------
     def _show_left_panel(self, mode: str, force: bool = False) -> None:
         target = "builder" if mode == "builder" else "research"
@@ -424,6 +439,7 @@ class AppFrameHandlersMixin(_Base):
         self.side_table.set_cards(self.zone_cards["side"])
         if self.out_table:
             self.out_table.set_cards(self.zone_cards["out"])
+        self._prefetch_deck_zone_images()
         deck_text = self.controller.deck_repo.get_current_deck_text()
         if deck_text:
             self._update_stats(deck_text)

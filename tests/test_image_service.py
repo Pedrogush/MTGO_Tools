@@ -112,10 +112,12 @@ def test_is_loading_when_loading(image_service_instance):
 
 
 class _FakeCache:
-    def __init__(self, cached_keys=None):
+    def __init__(self, cached_keys=None, cached_uuids=None):
         # Set of (card_name, set_code, size) / (card_name, size) tuples to
         # report as already cached.
         self._cached_keys = set(cached_keys or ())
+        # Set of (uuid, size) tuples reported cached by is_cached().
+        self._cached_uuids = set(cached_uuids or ())
 
     def get_image_path_for_printing(self, card_name, set_code, size):
         if (card_name, set_code, size) in self._cached_keys:
@@ -127,14 +129,19 @@ class _FakeCache:
             return "path"
         return None
 
+    def is_cached(self, uuid, size="normal", face_index=0):
+        return (uuid, size) in self._cached_uuids
+
 
 class _FakeDownloader:
     def __init__(self, responses):
         self._responses = list(responses)
         self.calls = 0
+        self.uuids: list[str | None] = []
 
-    def download_card_image_by_name(self, name, size, set_code=None):
+    def download_card_image_by_name(self, name, size, set_code=None, uuid=None):
         self.calls += 1
+        self.uuids.append(uuid)
         response = self._responses[self.calls - 1]
         if isinstance(response, Exception):
             raise response
@@ -351,6 +358,66 @@ def test_enqueue_already_cached_returns_false():
         assert queue.enqueue(_request()) is False
         with queue._condition:
             assert len(queue._queue) == 0
+    finally:
+        queue.stop()
+
+
+def test_download_request_passes_uuid_through_to_downloader():
+    """The queue must not discard the printing uuid the inspector selected.
+
+    Resolving purely by name+set can pick a different printing than the one
+    displayed, so the uuid travels with the request (issue #951).
+    """
+    downloader = _FakeDownloader([(True, "ok")])
+    queue = _build_queue(downloader)
+    try:
+        assert queue._download_request(_request(uuid="u-123")) is True
+    finally:
+        queue.stop()
+    assert downloader.uuids == ["u-123"]
+
+
+def test_enqueue_uuid_cached_returns_false():
+    """A request whose exact printing is cached by uuid is skipped, even when
+    the name/set lookup would miss it (split cards are stored under their
+    combined name)."""
+    cache = _FakeCache(cached_uuids={("u-prepare", "normal")})
+    queue = _build_queue(cache=cache)
+    try:
+        assert queue.enqueue(_request(card_name="Emeritus of Conflict", uuid="u-prepare")) is False
+        with queue._condition:
+            assert len(queue._queue) == 0
+    finally:
+        queue.stop()
+
+
+def test_image_service_prefetch_delegates_to_prefetcher(image_service_instance):
+    received = []
+
+    class _FakePrefetcher:
+        def prefetch(self, source, names):
+            received.append(("eager", source, list(names)))
+
+        def prefetch_lazy(self, source, provider):
+            received.append(("lazy", source, provider))
+
+        def stop(self, timeout=None):
+            pass
+
+    image_service_instance._prefetcher = _FakePrefetcher()
+    image_service_instance.prefetch_card_images("deck", ["Ponder"])
+    provider = lambda: ["Opt"]  # noqa: E731
+    image_service_instance.prefetch_card_images_lazy("research", provider)
+    assert received == [("eager", "deck", ["Ponder"]), ("lazy", "research", provider)]
+
+
+def test_enqueue_uuid_miss_falls_back_to_name_set_cache_check():
+    """A uuid miss still honours a name+set cache hit (stale-bulk resolution
+    may have stored the printing under a different uuid)."""
+    cache = _FakeCache(cached_keys={("Mirrorpool", "aeoe", "normal")})
+    queue = _build_queue(cache=cache)
+    try:
+        assert queue.enqueue(_request(uuid="u-other")) is False
     finally:
         queue.stop()
 

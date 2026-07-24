@@ -234,9 +234,45 @@ class CardImageCache:
                 (card_name, set_code, size),
             )
             row = cursor.fetchone()
-            if not row:
-                return None
-            return self._resolve_path(row[0])
+            if row:
+                return self._resolve_path(row[0])
+            # Split/adventure/prepare layouts store their single image under the
+            # combined "Front // Back" name, so a face-name + set request (the
+            # shape the card inspector's hover path produces) must fall back to
+            # the combined-name row — mirroring get_image_path's alias fallback.
+            # Without this the download queue never sees such cards as cached
+            # and re-downloads them on every hover (issue #951).
+            return self._lookup_double_faced_alias_for_printing(conn, card_name, set_code, size)
+
+    def _lookup_double_faced_alias_for_printing(
+        self, conn: sqlite3.Connection, card_name: str, set_code: str, size: str
+    ) -> Path | None:
+        alias = (card_name or "").strip()
+        if not alias or "//" in alias:
+            return None
+
+        alias_lower = alias.lower()
+        patterns = (
+            f"{alias_lower} // %",
+            f"% // {alias_lower}",
+        )
+        for pattern in patterns:
+            cursor = conn.execute(
+                """
+                SELECT file_path
+                FROM card_images
+                WHERE LOWER(name) LIKE ? AND LOWER(set_code) = LOWER(?) AND image_size = ?
+                ORDER BY face_index
+                LIMIT 1
+                """,
+                (pattern, set_code, size),
+            )
+            row = cursor.fetchone()
+            if row:
+                path = self._resolve_path(row[0])
+                if path.exists():
+                    return path
+        return None
 
     def get_image_by_uuid(
         self, uuid: str, size: str = "normal", face_index: int | None = 0

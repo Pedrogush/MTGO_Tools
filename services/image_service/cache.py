@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from typing import TYPE_CHECKING, Any
 
 from loguru import logger
@@ -49,6 +49,18 @@ class ImageCacheMixin(_Base):
 
     def set_selected_card_request(self, request: CardImageRequest | None) -> None:
         self._download_queue.set_selected_request(request)
+
+    def prefetch_card_images(self, source: str, names: Iterable[str]) -> None:
+        """Batch-prefetch images for the cards a user is likely to view next.
+
+        Coalesces per ``source`` and runs off the UI thread; see
+        :class:`~services.image_service.prefetcher.ImagePrefetcher`.
+        """
+        self._prefetcher.prefetch(source, names)
+
+    def prefetch_card_images_lazy(self, source: str, provider: Callable[[], Iterable[str]]) -> None:
+        """Batch-prefetch with ``provider`` evaluated on the prefetch thread."""
+        self._prefetcher.prefetch_lazy(source, provider)
 
     def _handle_image_downloaded(self, request: CardImageRequest) -> None:
         if not self._on_image_downloaded:
