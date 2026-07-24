@@ -39,9 +39,11 @@ class CardImageDownloadQueue:
         *,
         on_downloaded: Callable[[CardImageRequest], None] | None = None,
         on_failed: Callable[[CardImageRequest, str], None] | None = None,
+        warm_local_index: bool = False,
     ) -> None:
         self._cache = cache
         self._downloader = BulkImageDownloader(cache)
+        self._warm_local_index = warm_local_index
         self._on_downloaded = on_downloaded
         self._on_failed = on_failed
         # One FIFO deque per priority tier; the worker always drains the most
@@ -156,6 +158,14 @@ class CardImageDownloadQueue:
         return any(self._tiers[tier] for tier in PRIORITY_TIERS)
 
     def _run(self) -> None:
+        if self._warm_local_index and not self._stop_event.is_set():
+            # Build the bulk-data image index up front (~2s CPU, off the UI
+            # thread) so the first wave of downloads doesn't stall behind the
+            # lazy build under the index lock (issue #951).
+            try:
+                self._downloader.warm_local_index()
+            except Exception as exc:  # pragma: no cover - defensive
+                logger.debug(f"Local image index warm-up failed: {exc}")
         while not self._stop_event.is_set():
             with self._condition:
                 while (

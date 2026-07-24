@@ -25,7 +25,7 @@ class ImageService(
 ):
     """Service for managing card image bulk data and printing indices."""
 
-    def __init__(self):
+    def __init__(self, *, warm_image_index: bool = True):
         self.image_cache = get_cache()
         self.image_downloader: BulkImageDownloader | None = None
         self.bulk_data_by_name: dict[str, list[dict[str, Any]]] | None = None
@@ -36,6 +36,7 @@ class ImageService(
             self.image_cache,
             on_downloaded=self._handle_image_downloaded,
             on_failed=self._handle_image_download_failed,
+            warm_local_index=warm_image_index,
         )
         self._prefetcher = ImagePrefetcher(
             enqueue=lambda request, priority: self._download_queue.enqueue(

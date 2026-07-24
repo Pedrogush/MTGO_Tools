@@ -53,6 +53,16 @@ class LocalResolverMixin(_Base):
             params = None
         return results
 
+    def warm_local_index(self) -> None:
+        """Build the local name -> image index now instead of on first use.
+
+        The build parses the full bulk-data file (~2s); triggered lazily it
+        stalls the first wave of image downloads behind the index lock, so
+        callers that know downloads are coming (the download queue at app
+        startup) warm it up front on a background thread (issue #951).
+        """
+        self._get_local_image_index()
+
     def _resolve_card_locally(
         self, name: str, set_code: str | None = None, uuid: str | None = None
     ) -> BulkCardImage | None:

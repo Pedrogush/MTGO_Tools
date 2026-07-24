@@ -91,6 +91,13 @@ def main() -> int:
         "--keep-cache", action="store_true", help="do not clear the image cache first"
     )
     parser.add_argument("--timeout", type=float, default=180.0, help="give up after this long")
+    parser.add_argument(
+        "--startup-gap",
+        type=float,
+        default=0.0,
+        help="seconds between service creation and the deck load, like a real "
+        "session (lets the eager bulk-index warm finish off the critical path)",
+    )
     args = parser.parse_args()
 
     if not args.keep_cache:
@@ -108,6 +115,8 @@ def main() -> int:
 
     service = ImageService()
     cache = get_cache()
+    if args.startup_gap:
+        time.sleep(args.startup_gap)
 
     batch_done = threading.Event()
     batch_result: dict[str, list[str]] = {}

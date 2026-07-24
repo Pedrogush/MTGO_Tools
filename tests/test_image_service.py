@@ -50,7 +50,9 @@ def image_service_instance():
     leak across the suite (the exact leaked-daemon-thread scenario that has
     crashed CI at interpreter shutdown).
     """
-    service = ImageService()
+    # warm_image_index=False: the eager bulk-index build is a ~2s parse of the
+    # real on-disk bulk data — pure overhead for unit tests.
+    service = ImageService(warm_image_index=False)
     try:
         yield service
     finally:
