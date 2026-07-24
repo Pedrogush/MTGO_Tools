@@ -4,6 +4,8 @@
 from __future__ import annotations
 
 import argparse
+import os
+import sys
 
 import wx
 from loguru import logger
@@ -49,7 +51,7 @@ class MetagameWxApp(wx.App):
         return -1
 
     def OnInit(self) -> bool:  # noqa: N802 - wx override
-        logger.info("Starting MTGO Metagame Deck Builder (wx)")
+        logger.info("Starting MTGO Tools (wx)")
         if _automation_enabled:
             logger.info(f"Automation server will start on port {_automation_port}")
         self.loading_frame = LoadingFrame()
@@ -147,8 +149,59 @@ def _ensure_mana_assets() -> None:
         logger.warning(f"Skipping mana asset fetch: {exc}")
 
 
+def _set_windows_app_id() -> None:
+    """Give the app an explicit Windows AppUserModelID.
+
+    Without this, Windows associates the taskbar button with the Python /
+    PyInstaller host process and shows *its* icon; setting an explicit ID makes
+    the taskbar use the app's own window icon and groups it as its own app.
+    """
+    if sys.platform != "win32":
+        return
+    try:
+        import ctypes
+
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("MTGOTools.DeckBuilder")
+    except Exception as exc:  # pragma: no cover - windows-only, best effort
+        logger.debug(f"Could not set AppUserModelID: {exc}")
+
+
+def debugpy_server() -> None:
+    # Runs optionally: only starts when the MTGO_TOOLS_INSTALL_DEBUG env var is set.
+    """Start a debugpy server so a packaged build can be debugged.
+
+    Installed builds are windowed (no console) and have no debugger attached, so
+    to step through one the same way you would from the IDE you attach a remote
+    debugger. This is enabled only when ``MTGO_TOOLS_INSTALL_DEBUG`` is set, so
+    it is inert in normal use and in shipped builds:
+
+    * ``MTGO_TOOLS_INSTALL_DEBUG=1`` listens on the default port (5678).
+    * ``MTGO_TOOLS_INSTALL_DEBUG=<port>`` listens on that port instead.
+    * ``MTGO_TOOLS_INSTALL_DEBUG_WAIT=1`` blocks startup until the IDE attaches,
+      so you can break on early startup code.
+
+    Then use your IDE's "attach to a running process / port" to connect. Any
+    failure (debugpy not bundled, port in use) is logged and non-fatal.
+    """
+    flag = os.environ.get("MTGO_TOOLS_INSTALL_DEBUG")
+    if not flag:
+        return
+    port = int(flag) if flag.isdigit() else 5678
+    try:
+        import debugpy
+
+        debugpy.listen(("127.0.0.1", port))
+        logger.info(f"debugpy listening on 127.0.0.1:{port} — attach your IDE to this process")
+        if os.environ.get("MTGO_TOOLS_INSTALL_DEBUG_WAIT"):
+            logger.info("MTGO_TOOLS_INSTALL_DEBUG_WAIT set; waiting for a debugger to attach…")
+            debugpy.wait_for_client()
+            logger.info("Debugger attached.")
+    except Exception as exc:  # pragma: no cover - dev-only tooling
+        logger.warning(f"Could not start debugpy ({exc}); continuing without a debugger.")
+
+
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="MTGO Metagame Deck Builder")
+    parser = argparse.ArgumentParser(description="MTGO Tools")
     parser.add_argument(
         "--automation",
         action="store_true",
@@ -181,13 +234,15 @@ def main() -> None:
         logger.info(f"Writing logs to {log_file}")
     logger.info(f"Using base data directory: {BASE_DATA_DIR}")
 
+    _set_windows_app_id()
+    debugpy_server()
+
     _ensure_mana_assets()
 
     if _automation_enabled:
         logger.info(f"Automation mode enabled on port {_automation_port}")
 
     # Install global exception handler for exceptions outside of wx mainloop
-    import sys
     import traceback
 
     def global_exception_handler(exc_type, exc_value, exc_traceback):
@@ -209,4 +264,11 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    import multiprocessing
+
+    # Frozen (PyInstaller) builds use multiprocessing "spawn", which re-launches
+    # this executable for each child process. freeze_support() makes those
+    # children run their worker target instead of re-starting the whole app
+    # (without it, image-service workers exit without returning a result).
+    multiprocessing.freeze_support()
     main()

@@ -1,4 +1,4 @@
-# Build script for creating the MTGO Metagame Deck Builder installer
+# Build script for creating the MTGO Tools installer
 # This script runs on Windows and creates the installer using Inno Setup
 #
 # Prerequisites:
@@ -260,7 +260,7 @@ if (-not $SkipPyInstaller) {
     }
 
     # Run PyInstaller with the spec file
-    $SpecFile = Join-Path $ProjectRoot "packaging\magic_online_metagame_crawler.spec"
+    $SpecFile = Join-Path $ProjectRoot "packaging\mtgo_tools.spec"
     if (Test-Path $SpecFile) {
         Write-Info "Using existing spec file..."
         & $PyInstallerPath $SpecFile --clean --noconfirm
@@ -270,13 +270,13 @@ if (-not $SkipPyInstaller) {
             exit 1
         }
     } else {
-        Write-Error-Custom "PyInstaller spec file not found at packaging\magic_online_metagame_crawler.spec"
+        Write-Error-Custom "PyInstaller spec file not found at packaging\mtgo_tools.spec"
         Pop-Location
         exit 1
     }
 
     # Verify the executable was created
-    $ExePath = Join-Path $DistDir "magic_online_metagame_crawler.exe"
+    $ExePath = Join-Path $DistDir "mtgo_tools.exe"
     if (-not (Test-Path $ExePath)) {
         Write-Error-Custom "PyInstaller build failed - executable not found at $ExePath"
         Pop-Location
@@ -334,7 +334,7 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 # Step 7: Verify the installer was created
-$InstallerFile = Join-Path $InstallerDir "MTGOMetagameBuilder_Setup_v0.2.exe"
+$InstallerFile = Join-Path $InstallerDir "MTGOTools_Setup_v0.2.exe"
 if (-not (Test-Path $InstallerFile)) {
     Write-Error-Custom "Installer was not created at expected location: $InstallerFile"
     exit 1

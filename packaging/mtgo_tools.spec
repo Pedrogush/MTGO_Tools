@@ -44,13 +44,33 @@ for rel in [
 binaries = []
 
 entry_point = project_root / "main.py"
+app_icon = project_root / "assets" / "icons" / "hammer.ico"
+
+# Bundle the app icon as data too, so the running app can set it as the window /
+# taskbar icon at runtime (utils/app_icon.py). The EXE icon= below only covers
+# the .exe file icon.
+datas += [(str(app_icon), "assets/icons")]
+
+# Hidden imports: modules PyInstaller's static analysis can't see, so we find
+# them dynamically. wxPython's richtext extension loads wx._xml/_html/_adv at
+# runtime, and the first-party packages lazily import their submodules via a
+# package __getattr__. debugpy backs the MTGO_TOOLS_INSTALL_DEBUG hook in main.py.
+from PyInstaller.utils.hooks import collect_submodules  # noqa: E402
+
+# collect_submodules imports each package, so the project root must be on sys.path
+# (at spec-eval time only the spec's own directory is).
+sys.path.insert(0, str(project_root))
+
+hiddenimports = ["debugpy", "wx._xml", "wx._html", "wx._adv"]
+for _pkg in ("widgets", "services", "repositories", "controllers", "utils", "automation"):
+    hiddenimports += collect_submodules(_pkg)
 
 a = Analysis(
     [str(entry_point)],
     pathex=[str(project_root)],
     binaries=binaries,
     datas=datas,
-    hiddenimports=[],
+    hiddenimports=hiddenimports,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
@@ -68,7 +88,8 @@ exe = EXE(
     a.zipfiles,
     a.datas,
     [],
-    name="magic_online_metagame_crawler",
+    name="mtgo_tools",
+    icon=str(app_icon),
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

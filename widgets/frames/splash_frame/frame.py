@@ -7,6 +7,7 @@ from collections.abc import Callable
 
 import wx
 
+from utils.app_icon import apply_app_icon
 from utils.constants import DARK_BG, DARK_PANEL, LIGHT_TEXT
 from widgets.frames.splash_frame.handlers import LoadingFrameHandlersMixin
 from widgets.frames.splash_frame.properties import LoadingFramePropertiesMixin
@@ -18,10 +19,11 @@ class LoadingFrame(LoadingFrameHandlersMixin, LoadingFramePropertiesMixin, wx.Fr
     def __init__(self, min_duration: float = 0.25, max_duration: float = 1.8) -> None:
         super().__init__(
             None,
-            title="Loading MTGO Deck Builder",
+            title="Loading MTGO Tools",
             style=wx.BORDER_NONE | wx.STAY_ON_TOP,
             size=(420, 120),
         )
+        apply_app_icon(self)
         self._start = time.monotonic()
         self._min_duration = min_duration
         self._max_duration = max_duration
@@ -47,7 +49,7 @@ class LoadingFrame(LoadingFrameHandlersMixin, LoadingFramePropertiesMixin, wx.Fr
         frame_sizer.Add(panel, 1, wx.EXPAND | wx.ALL, 12)
         self.SetSizer(frame_sizer)
 
-        title = wx.StaticText(panel, label="Loading MTGOTools...")
+        title = wx.StaticText(panel, label="Loading MTGO Tools...")
         title.SetForegroundColour(LIGHT_TEXT)
         font = title.GetFont()
         font.SetPointSize(font.GetPointSize() + 4)

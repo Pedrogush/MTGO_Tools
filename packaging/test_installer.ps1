@@ -1,4 +1,4 @@
-# Test script to verify the MTGO Metagame Deck Builder installer was built correctly
+# Test script to verify the MTGO Tools installer was built correctly
 # This performs basic verification of the installer file on Windows
 
 $ErrorActionPreference = "Stop"
@@ -6,7 +6,7 @@ $ErrorActionPreference = "Stop"
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ProjectRoot = Split-Path -Parent $ScriptDir
 $InstallerDir = Join-Path $ProjectRoot "dist\installer"
-$InstallerFile = Join-Path $InstallerDir "MTGOMetagameBuilder_Setup_v0.2.exe"
+$InstallerFile = Join-Path $InstallerDir "MTGOTools_Setup_v0.2.exe"
 
 function Write-Info {
     param([string]$Message)
@@ -70,7 +70,7 @@ function Run-Test {
 }
 
 Write-Info "=========================================="
-Write-Info "MTGO Metagame Builder Installer Test Suite"
+Write-Info "MTGO Tools Installer Test Suite"
 Write-Info "=========================================="
 Write-Host ""
 

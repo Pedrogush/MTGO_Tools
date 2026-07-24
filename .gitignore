@@ -8,7 +8,10 @@ config/
 cache/
 decks/
 logs/
-/assets/
+/assets/*
+# ...but track the hand-made app icons (mana assets are auto-fetched and stay ignored)
+!/assets/icons/
+!/assets/icons/*.ico
 /stubs/
 /logs/
 /screenshots/

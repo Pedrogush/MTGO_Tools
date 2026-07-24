@@ -62,7 +62,7 @@ for _assembly in ("WindowsBase", "PresentationCore", "PresentationFramework", "S
     _add_reference(_assembly, _shared_dirs)
 
 _publish_dir = Path(
-    r"C:\Users\Pedro\Documents\GitHub\magic_online_metagame_crawler\dotnet\MTGOBridge\bin\Release\net9.0-windows7.0\win-x64\publish"
+    r"C:\Users\Pedro\Documents\GitHub\mtgo_tools\dotnet\MTGOBridge\bin\Release\net9.0-windows7.0\win-x64\publish"
 )
 for _dll in ("MTGOSDK.Win32.dll", "MTGOSDK.dll"):
     _path = _publish_dir / _dll
