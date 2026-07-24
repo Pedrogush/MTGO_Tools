@@ -124,7 +124,7 @@ try {
     }
     $FallbackPython = Get-Command python -ErrorAction SilentlyContinue
     $PythonPath = $null
-    if (Test-Path $VendorPython) {
+    if ($VendorPython -and (Test-Path $VendorPython)) {
         $PythonPath = $VendorPython
     } elseif ($FallbackPython) {
         $PythonPath = $FallbackPython.Source
