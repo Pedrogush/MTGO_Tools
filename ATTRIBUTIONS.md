@@ -50,7 +50,8 @@ update accordingly.
 
 **Author:** Videre Project
 
-**License:** MIT
+**License:** Apache-2.0 (upstream also ships a `NOTICE` file that must be
+preserved when redistributing the SDK or its binaries)
 
 **What we use:**
 - MTGOSDK library for MTGO client interaction
@@ -78,7 +79,7 @@ We identified a bug in `HistoricalMatch.Opponents` where string-to-User conversi
 
 **Author:** Videre Project
 
-**License:** MIT
+**License:** Apache-2.0
 
 **What we use:**
 - Architecture patterns for MTGOSDK integration
@@ -182,8 +183,10 @@ This project was developed with assistance from **Claude** (Anthropic), an AI as
 This project is released under the **MIT License** (see `LICENSE` in the
 repo root). We have audited adapted code and dependencies:
 
-- **MTGOSDK** (videre-project): MIT License — compatible.
-- **videre-project/Tracker**: MIT License — compatible (architecture
+- **MTGOSDK** (videre-project): Apache-2.0 License — compatible one-way
+  (our code stays MIT, the SDK stays Apache-2.0). Its `LICENSE` and
+  `NOTICE` files must accompany any redistribution of SDK binaries.
+- **videre-project/Tracker**: Apache-2.0 License — compatible (architecture
   inspiration only, no source reuse).
 - **Python libraries**: All declared deps in `requirements.txt` /
   `requirements-dev.txt` are under OSI-approved permissive licenses
