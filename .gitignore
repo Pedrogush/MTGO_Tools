@@ -56,3 +56,5 @@ build/
 # local install
 *.egg-info/
 issues/
+# uv-generated lockfile — the project pins deps via pyproject/venv, not uv
+uv.lock

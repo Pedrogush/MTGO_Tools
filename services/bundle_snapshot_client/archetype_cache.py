@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any
 from loguru import logger
 
 from utils.atomic_io import atomic_write_json, locked_path
+from utils.deck_dates import repair_future_date
 from utils.perf import timed
 
 if TYPE_CHECKING:
@@ -70,6 +71,11 @@ class ArchetypeCacheMixin(_Base):
                 decks = entry.get("decks")
                 if not href or not isinstance(decks, list):
                     continue
+                # The bundle carries upstream dates verbatim; repair impossible
+                # future dates (day/month transpositions) before caching.
+                for deck in decks:
+                    if isinstance(deck, dict) and deck.get("date"):
+                        deck["date"] = repair_future_date(str(deck["date"]))
                 existing[href] = {"timestamp": now, "items": decks}
 
             try:
@@ -134,7 +140,7 @@ class ArchetypeCacheMixin(_Base):
                         deck_texts.append((deck_id, deck_text, "mtgo"))
                     date_raw = deck.get("date", "")
                     metadata: dict[str, Any] = {
-                        "date": date_raw[:10] if date_raw else "",
+                        "date": repair_future_date(date_raw[:10]) if date_raw else "",
                         "number": deck_id,
                         "player": deck.get("player", ""),
                         "event": deck.get("event", ""),
