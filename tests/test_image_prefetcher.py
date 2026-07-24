@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import threading
+import time
 
 from services.image_service.prefetcher import ImagePrefetcher
 
@@ -91,13 +92,30 @@ def test_prefetch_runs_batch_on_worker_thread():
             done.set()
         return True
 
-    prefetcher = ImagePrefetcher(_enqueue)
+    prefetcher = ImagePrefetcher(_enqueue, start_delay=0.0)
     try:
         prefetcher.prefetch("deck", ["Lightning Bolt", "Ponder"])
         assert done.wait(timeout=5.0), "prefetch batch never ran"
     finally:
         prefetcher.stop()
     assert sorted(req.card_name for req in requests) == ["Lightning Bolt", "Ponder"]
+
+
+def test_worker_idles_through_start_delay_and_stop_interrupts_it():
+    requests = []
+    prefetcher = ImagePrefetcher(lambda req: requests.append(req) or True, start_delay=60.0)
+    try:
+        prefetcher.prefetch("deck", ["Lightning Bolt"])
+        time.sleep(0.2)
+        # Still inside the start delay: the submission is held, not run.
+        assert requests == []
+        with prefetcher._condition:
+            assert "deck" in prefetcher._pending
+    finally:
+        started = time.monotonic()
+        prefetcher.stop()
+        # stop() must interrupt the start delay rather than wait it out.
+        assert time.monotonic() - started < 5.0
 
 
 def test_prefetch_after_stop_is_a_noop():

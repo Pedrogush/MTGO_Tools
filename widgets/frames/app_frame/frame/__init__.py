@@ -144,6 +144,10 @@ class AppFrame(
 
         self._save_timer: wx.Timer | None = None
         self._filter_debounce_timer: wx.Timer | None = None
+        # Coalesced downloaded-image refreshes: completed downloads accumulate
+        # here and the deck tables repaint in one pass per timer tick.
+        self._pending_image_refresh_names: set[str] = set()
+        self._image_refresh_timer: wx.Timer | None = None
         self.mana_icons = ManaIconFactory()
         self.tracker_window: MTGOpponentDeckSpy | None = None
         self.timer_window: TimerAlertFrame | None = None

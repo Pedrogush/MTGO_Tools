@@ -27,6 +27,7 @@ from services.image_service.schemas import CardImageRequest
 from utils.constants.timing import (
     IMAGE_PREFETCH_BATCH_LIMIT,
     IMAGE_PREFETCH_IDLE_WAIT_SECONDS,
+    IMAGE_PREFETCH_START_DELAY_SECONDS,
     IMAGE_PREFETCH_STOP_TIMEOUT_SECONDS,
 )
 
@@ -45,10 +46,12 @@ class ImagePrefetcher:
         *,
         batch_limit: int = IMAGE_PREFETCH_BATCH_LIMIT,
         size: str = "normal",
+        start_delay: float = IMAGE_PREFETCH_START_DELAY_SECONDS,
     ) -> None:
         self._enqueue = enqueue
         self._batch_limit = batch_limit
         self._size = size
+        self._start_delay = start_delay
         # Latest pending provider per source; newer submissions replace older
         # ones so only the most recent prediction for each surface runs.
         self._pending: dict[str, NamesProvider] = {}
@@ -91,6 +94,12 @@ class ImagePrefetcher:
 
     # ------------------------------------------------------------------ worker
     def _run(self) -> None:
+        # Idle before the first batch so prefetch downloads never compete with
+        # the app's initial loads or first paint (same pattern as CacheWarmer).
+        # Submissions arriving during the delay are held in _pending and run
+        # once it elapses; a stop request interrupts the wait immediately.
+        if self._stop_event.wait(self._start_delay):
+            return
         while not self._stop_event.is_set():
             with self._condition:
                 while not self._pending and not self._stop_event.is_set():

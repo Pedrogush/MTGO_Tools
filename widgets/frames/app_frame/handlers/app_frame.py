@@ -9,6 +9,7 @@ import wx
 from loguru import logger
 
 from utils.constants import APP_FRAME_MIN_SIZE, APP_FRAME_SIZE
+from utils.constants.timing import IMAGE_REFRESH_COALESCE_MS
 from utils.i18n import LOCALE_LABELS
 from utils.runtime_flags import is_automation_enabled
 from widgets.dialogs.help_dialog import show_help
@@ -161,11 +162,28 @@ class AppFrameHandlersMixin(_Base):
         self._schedule_settings_save()
 
     def _handle_image_downloaded(self, request: CardImageRequest) -> None:
+        # The inspector update is cheap (a no-op unless the download matches
+        # the card currently shown) and hover latency matters, so it stays
+        # immediate. The table refreshes are coalesced: a mass download (empty
+        # cache + warm-up/prefetch) completes hundreds of images per minute,
+        # and repainting per image floods the UI event loop enough to make the
+        # app unusable until the downloads drain.
         self.card_inspector_panel.handle_image_downloaded(request)
-        self.main_table.refresh_card_image(request.card_name)
-        self.side_table.refresh_card_image(request.card_name)
-        if self.out_table:
-            self.out_table.refresh_card_image(request.card_name)
+        self._pending_image_refresh_names.add(request.card_name)
+        if self._image_refresh_timer is None:
+            self._image_refresh_timer = wx.Timer(self)
+            self.Bind(wx.EVT_TIMER, self._flush_image_refreshes, self._image_refresh_timer)
+        if not self._image_refresh_timer.IsRunning():
+            self._image_refresh_timer.StartOnce(IMAGE_REFRESH_COALESCE_MS)
+
+    def _flush_image_refreshes(self, _event: wx.TimerEvent | None = None) -> None:
+        names = self._pending_image_refresh_names
+        self._pending_image_refresh_names = set()
+        for name in names:
+            self.main_table.refresh_card_image(name)
+            self.side_table.refresh_card_image(name)
+            if self.out_table:
+                self.out_table.refresh_card_image(name)
 
     def _prefetch_deck_zone_images(self) -> None:
         """Queue image downloads for every card in the loaded deck's zones.

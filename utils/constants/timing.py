@@ -126,6 +126,14 @@ CACHE_WARMUP_PROGRESS_INTERVAL = 50
 IMAGE_PREFETCH_BATCH_LIMIT = 100  # max images enqueued per prefetch batch
 IMAGE_PREFETCH_IDLE_WAIT_SECONDS = 0.5  # condition wait timeout when no batches are queued
 IMAGE_PREFETCH_STOP_TIMEOUT_SECONDS = 2.0  # max seconds to wait for worker join on stop
+# The prefetch worker idles this long after startup before running its first
+# batch (mirrors CACHE_WARMUP_START_DELAY_SECONDS) so prefetch downloads never
+# compete with the initial archetype/deck/card-data loads or the first paint.
+IMAGE_PREFETCH_START_DELAY_SECONDS = 3.0
+# Downloaded-image UI refreshes are coalesced: completed downloads accumulate
+# and the deck tables repaint at most once per interval, so a mass download
+# (empty cache + warm-up) can never flood the UI event loop.
+IMAGE_REFRESH_COALESCE_MS = 250
 # Card search results: prefetch everything visible plus this many rows past the
 # bottom, so a small scroll still hits already-local images…
 SEARCH_PREFETCH_LOOKAHEAD_CARDS = 20
