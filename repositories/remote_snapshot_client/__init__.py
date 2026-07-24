@@ -1,6 +1,6 @@
 """Remote Snapshot Client package — consumes published metagame artifacts.
 
-This package downloads and stages snapshots from the MTGO_Scrapes_Repository so
+This package downloads and stages snapshots from the MTGO_Tools_Data repo so
 the app can resolve archetype lists, deck metadata, and metagame stats without
 hitting MTGGoldfish directly in the common path.
 
