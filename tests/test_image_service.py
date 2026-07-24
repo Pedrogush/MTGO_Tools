@@ -674,9 +674,7 @@ def test_enqueue_name_only_batch_keeps_every_card():
     try:
         queue.stop()
         names = [f"Card {i}" for i in range(10)]
-        results = [
-            queue.enqueue(_request(card_name=name, set_code=None)) for name in names
-        ]
+        results = [queue.enqueue(_request(card_name=name, set_code=None)) for name in names]
         assert results == [True] * len(names)
         with queue._condition:
             assert len(queue._queue) == len(names)

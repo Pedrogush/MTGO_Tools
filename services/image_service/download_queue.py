@@ -50,9 +50,7 @@ class CardImageDownloadQueue:
         # urgent non-empty tier first, so a batch enqueued in display order
         # resolves in display order and background warm-up traffic can never
         # delay the selected deck's images (issue #951).
-        self._tiers: dict[int, deque[CardImageRequest]] = {
-            tier: deque() for tier in PRIORITY_TIERS
-        }
+        self._tiers: dict[int, deque[CardImageRequest]] = {tier: deque() for tier in PRIORITY_TIERS}
         # key -> priority tier its pending request currently sits in.
         self._pending_priorities: dict[tuple[str, ...], int] = {}
         self._inflight_keys: set[tuple[str, ...]] = set()

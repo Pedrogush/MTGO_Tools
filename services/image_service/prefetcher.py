@@ -143,7 +143,9 @@ class ImagePrefetcher:
                 source, (priority, provider, on_batch) = batch
             self._run_batch(source, provider, priority=priority, on_batch=on_batch)
 
-    def _next_batch_locked(self) -> tuple[str, tuple[int, NamesProvider, BatchCallback | None]] | None:
+    def _next_batch_locked(
+        self,
+    ) -> tuple[str, tuple[int, NamesProvider, BatchCallback | None]] | None:
         """Pop the most urgent runnable submission, or None to keep waiting.
 
         Background-tier submissions are held until the startup grace deadline;

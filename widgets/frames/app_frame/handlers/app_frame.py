@@ -229,9 +229,7 @@ class AppFrameHandlersMixin(_Base):
                 on_batch=self._on_deck_prefetch_batch,
             )
 
-    def _on_deck_prefetch_batch(
-        self, source: str, enqueued: list[str], skipped: list[str]
-    ) -> None:
+    def _on_deck_prefetch_batch(self, source: str, enqueued: list[str], skipped: list[str]) -> None:
         # Fires on the prefetcher worker thread; marshal to the UI thread.
         wx.CallAfter(self._begin_deck_image_tracking, enqueued, skipped)
 

@@ -274,9 +274,7 @@ class CacheWarmer:
                 )
                 if self._wait(self._fast_throttle):
                     return
-        logger.info(
-            f"Cache warm-up: image pre-fetch complete ({len(queued_names)} cards queued)"
-        )
+        logger.info(f"Cache warm-up: image pre-fetch complete ({len(queued_names)} cards queued)")
 
     def _warm_deck_images(
         self,

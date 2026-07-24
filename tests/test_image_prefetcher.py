@@ -126,9 +126,7 @@ def test_background_batches_idle_through_start_delay_and_stop_interrupts_it():
 def test_user_driven_batch_bypasses_start_delay():
     """A selected-deck batch must run immediately, even during the delay."""
     done = threading.Event()
-    prefetcher = ImagePrefetcher(
-        lambda req, prio: done.set() or True, start_delay=60.0
-    )
+    prefetcher = ImagePrefetcher(lambda req, prio: done.set() or True, start_delay=60.0)
     try:
         prefetcher.prefetch("deck", ["Lightning Bolt"], priority=PRIORITY_SELECTED_DECK)
         assert done.wait(timeout=5.0), "user-driven batch was held by the start delay"

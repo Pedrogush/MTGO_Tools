@@ -138,8 +138,10 @@ def main() -> int:
     enqueued = batch_result["enqueued"]
     skipped = batch_result["skipped"]
     batch_ms = (time.perf_counter() - t0) * 1000.0
-    print(f"Batch submitted in {batch_ms:.0f} ms: {len(enqueued)} to download, "
-          f"{len(skipped)} already local/queued")
+    print(
+        f"Batch submitted in {batch_ms:.0f} ms: {len(enqueued)} to download, "
+        f"{len(skipped)} already local/queued"
+    )
 
     remaining = set(enqueued)
     completion_ms: list[float] = []
@@ -166,7 +168,10 @@ def main() -> int:
     print(f"RESULT | downloaded {downloaded}/{len(enqueued)} images")
     if completion_ms:
         completion_ms.sort()
-        p = lambda q: completion_ms[min(len(completion_ms) - 1, int(q * len(completion_ms)))]  # noqa: E731
+
+        def p(q: float) -> float:
+            return completion_ms[min(len(completion_ms) - 1, int(q * len(completion_ms)))]
+
         print(f"RESULT | first image  {completion_ms[0]:>8.0f} ms")
         print(f"RESULT | 50% local    {p(0.50):>8.0f} ms")
         print(f"RESULT | 90% local    {p(0.90):>8.0f} ms")
