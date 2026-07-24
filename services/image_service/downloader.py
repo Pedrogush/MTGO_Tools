@@ -64,9 +64,9 @@ class BulkImageDownloader(
         self._local_image_index_lock = threading.Lock()
 
     def download_card_image_by_name(
-        self, name: str, size: str = "normal", set_code: str | None = None
+        self, name: str, size: str = "normal", set_code: str | None = None, uuid: str | None = None
     ) -> tuple[bool, str]:
-        card = self._resolve_card_locally(name, set_code=set_code)
+        card = self._resolve_card_locally(name, set_code=set_code, uuid=uuid)
         if card is None:
             card = self.fetch_card_by_name(name, set_code=set_code)
         return self._download_single_image(card, size)

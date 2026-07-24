@@ -99,6 +99,9 @@ class ResultsPaneBuilderMixin(_Base):
         results.Bind(wx.EVT_LEFT_DOWN, self._on_results_left_down)
         results.Bind(wx.EVT_LIST_ITEM_ACTIVATED, self._on_result_activated)
         results.Bind(wx.EVT_KEY_DOWN, self._on_result_key_down)
+        # The virtual list emits cache hints for each row range it is about to
+        # draw — the scroll signal driving image prefetch (issue #951).
+        results.Bind(wx.EVT_LIST_CACHE_HINT, self._on_results_cache_hint)
         parent_sizer.Add(results, 1, wx.EXPAND | wx.LEFT, PADDING_MD)
         self.results_ctrl = results
 

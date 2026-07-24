@@ -50,7 +50,9 @@ def image_service_instance():
     leak across the suite (the exact leaked-daemon-thread scenario that has
     crashed CI at interpreter shutdown).
     """
-    service = ImageService()
+    # warm_image_index=False: the eager bulk-index build is a ~2s parse of the
+    # real on-disk bulk data — pure overhead for unit tests.
+    service = ImageService(warm_image_index=False)
     try:
         yield service
     finally:
@@ -112,10 +114,12 @@ def test_is_loading_when_loading(image_service_instance):
 
 
 class _FakeCache:
-    def __init__(self, cached_keys=None):
+    def __init__(self, cached_keys=None, cached_uuids=None):
         # Set of (card_name, set_code, size) / (card_name, size) tuples to
         # report as already cached.
         self._cached_keys = set(cached_keys or ())
+        # Set of (uuid, size) tuples reported cached by is_cached().
+        self._cached_uuids = set(cached_uuids or ())
 
     def get_image_path_for_printing(self, card_name, set_code, size):
         if (card_name, set_code, size) in self._cached_keys:
@@ -127,14 +131,19 @@ class _FakeCache:
             return "path"
         return None
 
+    def is_cached(self, uuid, size="normal", face_index=0):
+        return (uuid, size) in self._cached_uuids
+
 
 class _FakeDownloader:
     def __init__(self, responses):
         self._responses = list(responses)
         self.calls = 0
+        self.uuids: list[str | None] = []
 
-    def download_card_image_by_name(self, name, size, set_code=None):
+    def download_card_image_by_name(self, name, size, set_code=None, uuid=None):
         self.calls += 1
+        self.uuids.append(uuid)
         response = self._responses[self.calls - 1]
         if isinstance(response, Exception):
             raise response
@@ -355,6 +364,73 @@ def test_enqueue_already_cached_returns_false():
         queue.stop()
 
 
+def test_download_request_passes_uuid_through_to_downloader():
+    """The queue must not discard the printing uuid the inspector selected.
+
+    Resolving purely by name+set can pick a different printing than the one
+    displayed, so the uuid travels with the request (issue #951).
+    """
+    downloader = _FakeDownloader([(True, "ok")])
+    queue = _build_queue(downloader)
+    try:
+        assert queue._download_request(_request(uuid="u-123")) is True
+    finally:
+        queue.stop()
+    assert downloader.uuids == ["u-123"]
+
+
+def test_enqueue_uuid_cached_returns_false():
+    """A request whose exact printing is cached by uuid is skipped, even when
+    the name/set lookup would miss it (split cards are stored under their
+    combined name)."""
+    cache = _FakeCache(cached_uuids={("u-prepare", "normal")})
+    queue = _build_queue(cache=cache)
+    try:
+        assert queue.enqueue(_request(card_name="Emeritus of Conflict", uuid="u-prepare")) is False
+        with queue._condition:
+            assert len(queue._queue) == 0
+    finally:
+        queue.stop()
+
+
+def test_image_service_prefetch_delegates_to_prefetcher(image_service_instance):
+    received = []
+
+    class _FakePrefetcher:
+        def prefetch(self, source, names, *, priority=None, on_batch=None):
+            received.append(("eager", source, list(names), priority))
+
+        def prefetch_lazy(self, source, provider, *, priority=None, on_batch=None):
+            received.append(("lazy", source, provider, priority))
+
+        def stop(self, timeout=None):
+            pass
+
+    from services.image_service.priorities import PRIORITY_RESEARCH_VISIBLE, PRIORITY_SELECTED_DECK
+
+    image_service_instance._prefetcher = _FakePrefetcher()
+    image_service_instance.prefetch_card_images("deck", ["Ponder"], priority=PRIORITY_SELECTED_DECK)
+    provider = lambda: ["Opt"]  # noqa: E731
+    image_service_instance.prefetch_card_images_lazy(
+        "research", provider, priority=PRIORITY_RESEARCH_VISIBLE
+    )
+    assert received == [
+        ("eager", "deck", ["Ponder"], PRIORITY_SELECTED_DECK),
+        ("lazy", "research", provider, PRIORITY_RESEARCH_VISIBLE),
+    ]
+
+
+def test_enqueue_uuid_miss_falls_back_to_name_set_cache_check():
+    """A uuid miss still honours a name+set cache hit (stale-bulk resolution
+    may have stored the printing under a different uuid)."""
+    cache = _FakeCache(cached_keys={("Mirrorpool", "aeoe", "normal")})
+    queue = _build_queue(cache=cache)
+    try:
+        assert queue.enqueue(_request(uuid="u-other")) is False
+    finally:
+        queue.stop()
+
+
 def test_enqueue_prioritize_front_loads_and_dedups():
     queue = _build_queue()
     try:
@@ -507,10 +583,103 @@ def test_request_queue_key_uses_uuid_when_present():
     with_uuid = _request(uuid="ABC-123", set_code="aaa", collector_number="7")
     other_set = _request(uuid="ABC-123", set_code="bbb", collector_number="9")
     # Same uuid + size collapse to the same key regardless of set/collector.
-    assert with_uuid.queue_key() == ("uuid", "abc-123", "normal", "")
+    assert with_uuid.queue_key() == ("uuid", "abc-123", "normal", "", "")
     assert with_uuid.queue_key() == other_set.queue_key()
     # A differing size yields a distinct key.
     assert _request(uuid="ABC-123", size="large").queue_key() != with_uuid.queue_key()
+
+
+def test_request_queue_key_distinguishes_name_only_requests():
+    """Name-only requests (no uuid/set) must NOT share a queue key.
+
+    Prefetch and warm-up submit bare card names; when the key omitted the
+    name, an entire 100-card batch collapsed onto one key and the queue
+    dropped all but the first card as a duplicate (issue #951).
+    """
+    bolt = _request(card_name="Lightning Bolt", set_code=None)
+    ponder = _request(card_name="Ponder", set_code=None)
+    assert bolt.queue_key() != ponder.queue_key()
+    # The same card requested twice still dedupes (case-insensitive).
+    assert bolt.queue_key() == _request(card_name="lightning bolt", set_code=None).queue_key()
+
+
+def test_enqueue_priority_tiers_drain_most_urgent_first():
+    """Selected-deck requests pop before background warm-up requests that
+    were enqueued earlier, and FIFO order holds within a tier."""
+    from services.image_service.priorities import (
+        PRIORITY_BACKGROUND,
+        PRIORITY_SELECTED_DECK,
+    )
+
+    queue = _build_queue()
+    try:
+        queue.stop()
+        queue.enqueue(_request(card_name="Warmup A", set_code=None), priority=PRIORITY_BACKGROUND)
+        queue.enqueue(_request(card_name="Warmup B", set_code=None), priority=PRIORITY_BACKGROUND)
+        queue.enqueue(_request(card_name="Deck 1", set_code=None), priority=PRIORITY_SELECTED_DECK)
+        queue.enqueue(_request(card_name="Deck 2", set_code=None), priority=PRIORITY_SELECTED_DECK)
+        with queue._condition:
+            popped = [queue._pop_next_locked().card_name for _ in range(4)]
+        assert popped == ["Deck 1", "Deck 2", "Warmup A", "Warmup B"]
+    finally:
+        queue.stop()
+
+
+def test_enqueue_promotes_pending_request_to_better_tier():
+    """Re-enqueueing a pending background request at a better tier moves it
+    (no duplicate); re-enqueueing at the same or a worse tier is a no-op."""
+    from services.image_service.priorities import (
+        PRIORITY_BACKGROUND,
+        PRIORITY_SELECTED_DECK,
+    )
+
+    queue = _build_queue()
+    try:
+        queue.stop()
+        request = _request(card_name="Ponder", set_code=None)
+        assert queue.enqueue(request, priority=PRIORITY_BACKGROUND) is True
+        # Same tier again: duplicate, dropped.
+        assert queue.enqueue(request, priority=PRIORITY_BACKGROUND) is False
+        # Better tier: promoted in place.
+        assert queue.enqueue(request, priority=PRIORITY_SELECTED_DECK) is True
+        with queue._condition:
+            assert len(queue._queue) == 1
+            assert queue._pending_priorities[request.queue_key()] == PRIORITY_SELECTED_DECK
+        # Worse tier afterwards: dropped, stays promoted.
+        assert queue.enqueue(request, priority=PRIORITY_BACKGROUND) is False
+        with queue._condition:
+            assert queue._pending_priorities[request.queue_key()] == PRIORITY_SELECTED_DECK
+    finally:
+        queue.stop()
+
+
+def test_enqueue_prioritize_beats_selected_deck_tier():
+    """The hover path (prioritize=True) still jumps ahead of everything."""
+    from services.image_service.priorities import PRIORITY_SELECTED_DECK
+
+    queue = _build_queue()
+    try:
+        queue.stop()
+        queue.enqueue(_request(card_name="Deck 1", set_code=None), priority=PRIORITY_SELECTED_DECK)
+        queue.enqueue(_request(card_name="Hovered", set_code=None), prioritize=True)
+        with queue._condition:
+            assert queue._queue[0].card_name == "Hovered"
+    finally:
+        queue.stop()
+
+
+def test_enqueue_name_only_batch_keeps_every_card():
+    """A batch of distinct name-only requests all make it into the queue."""
+    queue = _build_queue()
+    try:
+        queue.stop()
+        names = [f"Card {i}" for i in range(10)]
+        results = [queue.enqueue(_request(card_name=name, set_code=None)) for name in names]
+        assert results == [True] * len(names)
+        with queue._condition:
+            assert len(queue._queue) == len(names)
+    finally:
+        queue.stop()
 
 
 def test_image_service_download_callback_dispatched(image_service_instance):

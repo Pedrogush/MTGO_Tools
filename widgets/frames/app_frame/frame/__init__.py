@@ -144,6 +144,14 @@ class AppFrame(
 
         self._save_timer: wx.Timer | None = None
         self._filter_debounce_timer: wx.Timer | None = None
+        # Coalesced downloaded-image refreshes: completed downloads accumulate
+        # here and the deck tables repaint in one pass per timer tick.
+        self._pending_image_refresh_names: set[str] = set()
+        self._image_refresh_timer: wx.Timer | None = None
+        # PERF tracking (issue #951): deck-load → all-deck-images-local timing.
+        # Set when a deck's zone prefetch is submitted; cleared when the last
+        # of its images lands (or replaced by the next deck load).
+        self._deck_image_perf: dict[str, Any] | None = None
         self.mana_icons = ManaIconFactory()
         self.tracker_window: MTGOpponentDeckSpy | None = None
         self.timer_window: TimerAlertFrame | None = None

@@ -11,6 +11,7 @@ from services.image_service.cache import ImageCacheMixin
 from services.image_service.download_queue import CardImageDownloadQueue
 from services.image_service.downloader import BulkImageDownloader, get_cache
 from services.image_service.metadata import PrintingsFetchMixin
+from services.image_service.prefetcher import ImagePrefetcher
 from services.image_service.printing_index import PrintingIndexMixin
 from services.image_service.process_worker import ProcessHandle, ProcessWorker
 from services.image_service.schemas import CardImageRequest
@@ -24,7 +25,7 @@ class ImageService(
 ):
     """Service for managing card image bulk data and printing indices."""
 
-    def __init__(self):
+    def __init__(self, *, warm_image_index: bool = True):
         self.image_cache = get_cache()
         self.image_downloader: BulkImageDownloader | None = None
         self.bulk_data_by_name: dict[str, list[dict[str, Any]]] | None = None
@@ -35,6 +36,12 @@ class ImageService(
             self.image_cache,
             on_downloaded=self._handle_image_downloaded,
             on_failed=self._handle_image_download_failed,
+            warm_local_index=warm_image_index,
+        )
+        self._prefetcher = ImagePrefetcher(
+            enqueue=lambda request, priority: self._download_queue.enqueue(
+                request, priority=priority
+            )
         )
         self._printings_lock = threading.Lock()
         self._printings_inflight: set[str] = set()
@@ -44,6 +51,7 @@ class ImageService(
         self._printings_handle: ProcessHandle | None = None
 
     def shutdown(self) -> None:
+        self._prefetcher.stop()
         self._download_queue.stop()
         if self._bulk_download_handle:
             self._process_worker.terminate(self._bulk_download_handle)

@@ -9,6 +9,8 @@ from typing import TYPE_CHECKING, Any
 import wx
 from loguru import logger
 
+from services.image_service.priorities import PRIORITY_RESEARCH_VISIBLE
+from utils.constants.timing import RESEARCH_PREFETCH_DECK_COUNT
 from widgets.frames.app_frame.handlers.deck_formatting import (
     normalize_date,
     simple_summary_html,
@@ -63,6 +65,26 @@ class DeckResearchHandlers(_Base):
         self.card_panel.update_archetype(archetype, radar_data=None)
         self._load_decks(scope="archetype", archetype=archetype)
         self._load_radar_in_background(archetype)
+
+    def on_bundle_decks_ready(self: AppFrame) -> None:
+        """Refresh the deck list after the remote bundle hydrates the caches.
+
+        On a cold cache the optimistic startup deck load races ahead of the
+        bundle apply and finds nothing; once the bundle lands, reload the
+        current selection — but only when the list is actually empty, so a
+        healthy startup never repeats its (expensive) deck load.
+        """
+        if self._all_loaded_decks:
+            return
+        with self._loading_lock:
+            if self.loading_archetypes or self.loading_decks:
+                return
+        idx = self.research_panel.get_selected_archetype_index()
+        if 0 < idx <= len(self.filtered_archetypes):
+            archetype = self.filtered_archetypes[idx - 1]
+            self._load_decks(scope="archetype", archetype=archetype)
+        else:
+            self._load_decks(scope="all")
 
     def on_event_type_filter_changed(self: AppFrame) -> None:
         self._apply_deck_filters()
@@ -124,6 +146,40 @@ class DeckResearchHandlers(_Base):
         ]
         self.deck_list.set_decks(rows)
         self.deck_list.Enable()
+        self._prefetch_visible_deck_images(filtered)
+
+    def _prefetch_visible_deck_images(self: AppFrame, decks: list[dict[str, Any]]) -> None:
+        """Prefetch card images for the decks at the top of the results list.
+
+        Those are the decks the user is most likely to click next, so their
+        card images should already be local when the deck opens (issue #951).
+        The deck texts are fetched cache-first on the prefetch thread; the
+        text cache dedupes, so a warm start costs no network at all.
+        """
+        top_decks = [dict(deck) for deck in decks[:RESEARCH_PREFETCH_DECK_COUNT]]
+        if not top_decks:
+            return
+        download_deck_text = self.controller.metagame_repo.download_deck_content
+        analyze_deck = self.controller.deck_service.analyze_deck
+
+        def _provider() -> list[str]:
+            names: list[str] = []
+            for deck in top_decks:
+                try:
+                    deck_text = download_deck_text(deck) or ""
+                except Exception as exc:
+                    logger.debug(f"Prefetch: failed to fetch deck {deck.get('number')}: {exc}")
+                    continue
+                if not deck_text:
+                    continue
+                analysis = analyze_deck(deck_text)
+                cards = analysis.get("mainboard_cards", []) + analysis.get("sideboard_cards", [])
+                names.extend(name for name, _qty in cards)
+            return names
+
+        self.controller.image_service.prefetch_card_images_lazy(
+            "research", _provider, priority=PRIORITY_RESEARCH_VISIBLE
+        )
 
     # Async Callback Handlers
     def _on_archetypes_loaded(self: AppFrame, items: list[dict[str, Any]]) -> None:

@@ -9,7 +9,7 @@ MESSAGES: dict[str, str] = {
     "toolbar.radar": "Radar",
     "toolbar.settings": "Configurações",
     "toolbar.load_collection": "Carregar Coleção",
-    "toolbar.download_card_images": "Baixar Imagens de Cartas",
+    "toolbar.download_card_images": "Ativar Modo de Imagens Offline",
     "toolbar.update_card_database": "Atualizar Banco de Cartas",
     "toolbar.export_diagnostics": "Exportar Diagnóstico",
     "toolbar.show_tutorial": "Mostrar Tutorial",

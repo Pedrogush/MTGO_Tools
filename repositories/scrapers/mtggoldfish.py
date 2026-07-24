@@ -147,9 +147,12 @@ def _save_cached_archetype_decks(archetype: str, items: list[dict]):
 
 
 def get_archetype_decks(archetype: str):
-    # Check cache first
+    # Check cache first. An empty cached list counts as a miss: the remote
+    # bundle hydrates empty MTGGoldfish deck lists for archetypes whose recent
+    # results are MTGO-only, and honouring that [] here would keep the scrape
+    # from ever running for them.
     cached = _load_cached_archetype_decks(archetype)
-    if cached is not None:
+    if cached:
         logger.debug(f"Using cached decks for archetype {archetype}")
         return cached
 

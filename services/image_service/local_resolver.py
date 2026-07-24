@@ -53,7 +53,19 @@ class LocalResolverMixin(_Base):
             params = None
         return results
 
-    def _resolve_card_locally(self, name: str, set_code: str | None = None) -> BulkCardImage | None:
+    def warm_local_index(self) -> None:
+        """Build the local name -> image index now instead of on first use.
+
+        The build parses the full bulk-data file (~2s); triggered lazily it
+        stalls the first wave of image downloads behind the index lock, so
+        callers that know downloads are coming (the download queue at app
+        startup) warm it up front on a background thread (issue #951).
+        """
+        self._get_local_image_index()
+
+    def _resolve_card_locally(
+        self, name: str, set_code: str | None = None, uuid: str | None = None
+    ) -> BulkCardImage | None:
         """Resolve a card's image metadata from the locally-cached bulk data.
 
         Returns ``None`` on any miss (no bulk data, name absent, or no
@@ -66,6 +78,13 @@ class LocalResolverMixin(_Base):
         entries = index.get((name or "").strip().lower())
         if not entries:
             return None
+        if uuid:
+            wanted_uuid = uuid.strip().lower()
+            for entry in entries:
+                if (entry.id or "").strip().lower() == wanted_uuid:
+                    return entry
+            # The exact printing isn't in the local bulk data; fall through to
+            # the set/name resolution below rather than failing outright.
         if set_code:
             wanted = set_code.strip().lower()
             for entry in entries:
@@ -109,6 +128,17 @@ class LocalResolverMixin(_Base):
                 self._local_image_index_mtime = mtime
                 return self._local_image_index
 
+            # A face name that is *also* a real standalone card must not alias
+            # into that card's entry list (e.g. "Emeritus of Conflict //
+            # Lightning Bolt" must not resolve for "Lightning Bolt"), matching
+            # the guard build_printing_index applies (issue #792). Without it
+            # this index and the printing index disagree, so the hover path can
+            # download a different card than the one the inspector shows.
+            primary_names = {
+                (card.name or "").strip().lower()
+                for card in cards
+                if (card.name or "").strip() and card.id
+            }
             index: dict[str, list[BulkCardImage]] = {}
             for card in cards:
                 name = (card.name or "").strip()
@@ -121,7 +151,7 @@ class LocalResolverMixin(_Base):
                 # mirroring Scryfall's exact-name face matching.
                 for alias in _collect_face_aliases(card, name):
                     alias_key = alias.lower()
-                    if alias_key != key:
+                    if alias_key != key and alias_key not in primary_names:
                         index.setdefault(alias_key, []).append(card)
             self._local_image_index = index
             self._local_image_index_mtime = mtime

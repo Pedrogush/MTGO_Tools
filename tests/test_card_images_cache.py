@@ -530,6 +530,16 @@ def _write_bulk_data(cache_dir, monkeypatch):
                     "card_faces": [{"name": "Fire"}, {"name": "Ice"}],
                     "image_uris": {"normal": "http://img/fireice.jpg"},
                 },
+                # Prepare-layout card whose second face shares its name with a
+                # real standalone card (issues #792/#951).
+                {
+                    "name": "Emeritus of Conflict // Lightning Bolt",
+                    "id": "u-prepare",
+                    "set": "sos",
+                    "collector_number": "103",
+                    "card_faces": [{"name": "Emeritus of Conflict"}, {"name": "Lightning Bolt"}],
+                    "image_uris": {"normal": "http://img/emeritus-sos.jpg"},
+                },
             ]
         ),
         encoding="utf-8",
@@ -584,6 +594,81 @@ def test_resolve_card_locally_resolves_face_name(tmp_path, monkeypatch):
     card = downloader._resolve_card_locally("Fire")
     assert card is not None
     assert card.get("id") == "u-fireice"
+
+
+def test_resolve_card_locally_prefers_uuid(tmp_path, monkeypatch):
+    """A uuid pins resolution to the exact printing, beating name/set order."""
+    cache_dir = tmp_path / "card_images"
+    _write_bulk_data(cache_dir, monkeypatch)
+    cache = card_images.CardImageCache(cache_dir=cache_dir, db_path=cache_dir / "images.db")
+    downloader = card_images.BulkImageDownloader(cache)
+
+    card = downloader._resolve_card_locally("Lightning Bolt", set_code="LEA", uuid="u-m11")
+    assert card is not None
+    assert card.get("id") == "u-m11"
+
+
+def test_resolve_card_locally_uuid_miss_falls_back_to_set(tmp_path, monkeypatch):
+    """A uuid absent from local bulk data falls back to set/name resolution."""
+    cache_dir = tmp_path / "card_images"
+    _write_bulk_data(cache_dir, monkeypatch)
+    cache = card_images.CardImageCache(cache_dir=cache_dir, db_path=cache_dir / "images.db")
+    downloader = card_images.BulkImageDownloader(cache)
+
+    card = downloader._resolve_card_locally("Lightning Bolt", set_code="M11", uuid="u-unknown")
+    assert card is not None
+    assert card.get("id") == "u-m11"
+
+
+def test_local_index_face_alias_never_shadows_real_card(tmp_path, monkeypatch):
+    """A face name that is also a real standalone card must resolve to the
+    real card, matching the printing index's primary-name guard (#792): the
+    prepare card "Emeritus of Conflict // Lightning Bolt" must never be
+    returned for "Lightning Bolt"."""
+    cache_dir = tmp_path / "card_images"
+    _write_bulk_data(cache_dir, monkeypatch)
+    cache = card_images.CardImageCache(cache_dir=cache_dir, db_path=cache_dir / "images.db")
+    downloader = card_images.BulkImageDownloader(cache)
+
+    index = downloader._get_local_image_index()
+    bolt_ids = {entry.get("id") for entry in index["lightning bolt"]}
+    assert bolt_ids == {"u-lea", "u-m11"}
+
+    # The face name unique to the prepare card still aliases to it.
+    card = downloader._resolve_card_locally("Emeritus of Conflict")
+    assert card is not None
+    assert card.get("id") == "u-prepare"
+
+
+def test_hover_request_for_prepare_face_downloads_and_registers_cached(tmp_path, monkeypatch):
+    """Regression for issue #951's hover 'beep': a face-name + set request for
+    a prepare-layout card must download locally AND be visible to the download
+    queue's cache check afterwards, or every hover re-downloads the card."""
+    cache_dir = tmp_path / "card_images"
+    _write_bulk_data(cache_dir, monkeypatch)
+    cache = card_images.CardImageCache(cache_dir=cache_dir, db_path=cache_dir / "images.db")
+    downloader = card_images.BulkImageDownloader(cache)
+    downloader.session = _FakeSession()
+
+    def _no_api(*_args, **_kwargs):
+        raise AssertionError("fetch_card_by_name should not be called on a local hit")
+
+    monkeypatch.setattr(downloader, "fetch_card_by_name", _no_api)
+
+    success, message = downloader.download_card_image_by_name(
+        "Emeritus of Conflict", "normal", set_code="SOS"
+    )
+    assert success is True, message
+    assert downloader.session.calls == ["http://img/emeritus-sos.jpg"]
+
+    # Stored under the combined name…
+    assert cache.get_image_path("Emeritus of Conflict // Lightning Bolt", "normal") is not None
+    # …and the printing-scoped lookup used by CardImageDownloadQueue._is_cached
+    # resolves it through the split-name alias fallback for either face.
+    assert cache.get_image_path_for_printing("Emeritus of Conflict", "SOS", "normal") is not None
+    assert cache.get_image_path_for_printing("Lightning Bolt", "SOS", "normal") is not None
+    # A different set still misses.
+    assert cache.get_image_path_for_printing("Emeritus of Conflict", "ZZZ", "normal") is None
 
 
 def test_download_by_name_uses_local_index_before_api(tmp_path, monkeypatch):
@@ -1200,9 +1285,9 @@ def test_download_all_images_downloads_every_card_from_bulk_file(tmp_path, monke
     result = downloader.download_all_images("normal")
 
     assert result["success"] is True
-    # The seeded bulk file holds three cards.
-    assert result["total"] == 3
-    assert result["downloaded"] == 3
+    # The seeded bulk file holds four cards.
+    assert result["total"] == 4
+    assert result["downloaded"] == 4
     assert result["skipped"] == 0
     assert result["failed"] == 0
     # Every card's image URL was fetched and persisted to the cache.
@@ -1210,10 +1295,12 @@ def test_download_all_images_downloads_every_card_from_bulk_file(tmp_path, monke
         "http://img/bolt-lea.jpg",
         "http://img/bolt-m11.jpg",
         "http://img/fireice.jpg",
+        "http://img/emeritus-sos.jpg",
     }
     assert cache.get_image_by_uuid("u-lea", "normal").exists()
     assert cache.get_image_by_uuid("u-m11", "normal").exists()
     assert cache.get_image_by_uuid("u-fireice", "normal").exists()
+    assert cache.get_image_by_uuid("u-prepare", "normal").exists()
 
 
 def test_download_all_images_skips_already_cached_cards(tmp_path, monkeypatch):
@@ -1225,14 +1312,14 @@ def test_download_all_images_skips_already_cached_cards(tmp_path, monkeypatch):
     downloader.session = _FakeSession()
 
     first = downloader.download_all_images("normal")
-    assert first["downloaded"] == 3
+    assert first["downloaded"] == 4
 
     # Fresh session so any re-fetch would be visible in calls.
     downloader.session = _FakeSession()
     second = downloader.download_all_images("normal")
 
     assert second["success"] is True
-    assert second["skipped"] == 3
+    assert second["skipped"] == 4
     assert second["downloaded"] == 0
     assert downloader.session.calls == []
 
@@ -1433,13 +1520,13 @@ def test_download_all_images_honours_max_cards(tmp_path, monkeypatch):
 def test_download_all_images_invokes_progress_callback(tmp_path, monkeypatch):
     """The progress_callback is invoked with (completed, total, message)."""
     cache_dir = tmp_path / "card_images"
-    _write_bulk_data(cache_dir, monkeypatch)  # three cards
+    _write_bulk_data(cache_dir, monkeypatch)  # four cards
     cache = card_images.CardImageCache(cache_dir=cache_dir, db_path=cache_dir / "images.db")
     downloader = card_images.BulkImageDownloader(cache)
     downloader.session = _FakeSession()
 
     # The callback fires every SCRYFALL_DOWNLOAD_PROGRESS_INTERVAL completions;
-    # pin the interval to 1 so each of the three cards triggers a call.
+    # pin the interval to 1 so each of the four cards triggers a call.
     monkeypatch.setattr(
         card_images.downloader, "SCRYFALL_DOWNLOAD_PROGRESS_INTERVAL", 1, raising=False
     )
@@ -1449,8 +1536,8 @@ def test_download_all_images_invokes_progress_callback(tmp_path, monkeypatch):
 
     assert captured, "progress_callback should have been invoked"
     # Each call reports the running completed count out of the fixed total.
-    assert all(total == 3 for _completed, total, _msg in captured)
-    assert captured[-1][0] == 3
+    assert all(total == 4 for _completed, total, _msg in captured)
+    assert captured[-1][0] == 4
 
 
 def test_download_all_images_returns_error_dict_on_load_failure(tmp_path, monkeypatch):

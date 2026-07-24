@@ -551,6 +551,89 @@ def test_get_decks_recovers_from_corrupt_cache(
     assert cached["modern-living-end"]["items"] == fresh_decks
 
 
+def test_get_decks_empty_cached_list_falls_back_to_live_scrape(
+    archetype_cache_file, archetype_deck_cache_file, monkeypatch
+):
+    """A fresh-but-empty cached deck list must not block the live scrape.
+
+    The remote bundle publishes empty MTGGoldfish deck lists for archetypes
+    whose recent results are MTGO-only; treating that [] as a cache hit made
+    every such archetype permanently show "No decks" (issue observed after the
+    scrapes-repo restructure).
+    """
+    repo = MetagameRepository(
+        cache_ttl=3600,
+        archetype_list_cache_file=archetype_cache_file,
+        archetype_decks_cache_file=archetype_deck_cache_file,
+    )
+    _write_cache(
+        archetype_deck_cache_file,
+        {"modern-4c-hollowone": {"timestamp": time.time(), "items": []}},
+    )
+    fresh_decks = [{"name": "4c HollowOne", "date": "2026-07-24", "source": "mtggoldfish"}]
+    monkeypatch.setattr(
+        "repositories.metagame_repository.get_archetype_decks", lambda _href: fresh_decks
+    )
+
+    result = repo.get_decks_for_archetype({"href": "modern-4c-hollowone", "name": "4c HollowOne"})
+
+    assert result == fresh_decks
+    cached = json.loads(archetype_deck_cache_file.read_text(encoding="utf-8"))
+    assert cached["modern-4c-hollowone"]["items"] == fresh_decks
+
+
+def test_get_decks_empty_cached_list_scrape_failure_returns_empty(
+    archetype_cache_file, archetype_deck_cache_file, monkeypatch
+):
+    """If the fallback scrape fails, a stale empty list renders as "no decks"
+    rather than surfacing an error dialog."""
+    repo = MetagameRepository(
+        cache_ttl=3600,
+        archetype_list_cache_file=archetype_cache_file,
+        archetype_decks_cache_file=archetype_deck_cache_file,
+    )
+    _write_cache(
+        archetype_deck_cache_file,
+        {"modern-4c-hollowone": {"timestamp": time.time(), "items": []}},
+    )
+
+    def _boom(_href):
+        raise RuntimeError("goldfish unreachable")
+
+    monkeypatch.setattr("repositories.metagame_repository.get_archetype_decks", _boom)
+
+    result = repo.get_decks_for_archetype({"href": "modern-4c-hollowone", "name": "4c HollowOne"})
+
+    assert result == []
+
+
+def test_get_decks_empty_cache_preserves_bundle_mtgo_entries(
+    archetype_cache_file, archetype_deck_cache_file, monkeypatch
+):
+    """A live refresh triggered by the empty-goldfish fallback must keep the
+    MTGO decks the bundle merged into the same cache entry."""
+    repo = MetagameRepository(
+        cache_ttl=3600,
+        archetype_list_cache_file=archetype_cache_file,
+        archetype_decks_cache_file=archetype_deck_cache_file,
+    )
+    mtgo_deck = {"name": "Ruby Storm", "number": "1", "date": "2026-07-24", "source": "mtgo"}
+    _write_cache(
+        archetype_deck_cache_file,
+        {"modern-ruby-storm": {"timestamp": time.time() - 7200, "items": [mtgo_deck]}},
+    )
+    fresh_decks = [
+        {"name": "Ruby Storm", "number": "2", "date": "2026-07-23", "source": "mtggoldfish"}
+    ]
+    monkeypatch.setattr(
+        "repositories.metagame_repository.get_archetype_decks", lambda _href: fresh_decks
+    )
+    # cache_ttl=3600 and the entry is 2h old -> expired -> live scrape path.
+    result = repo.get_decks_for_archetype({"href": "modern-ruby-storm", "name": "Ruby Storm"})
+
+    assert mtgo_deck in result and fresh_decks[0] in result
+
+
 # ============= Deck Date Parsing and Sorting Tests =============
 
 

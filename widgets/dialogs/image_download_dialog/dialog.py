@@ -1,4 +1,4 @@
-"""Dialog for downloading card images from Scryfall with progress tracking."""
+"""Dialog for enabling offline images mode (bulk card-image download)."""
 
 from __future__ import annotations
 
@@ -19,22 +19,14 @@ if TYPE_CHECKING:
 class ImageDownloadDialog(
     ImageDownloadDialogHandlersMixin, ImageDownloadDialogPropertiesMixin, wx.Dialog
 ):
-    """Dialog for configuring and executing bulk card image downloads."""
+    """Explains offline images mode and confirms the one-time bulk download.
 
-    QUALITY_OPTIONS = [
-        "Small (146x204, ~100KB/card, ~8GB total)",
-        "Normal (488x680, ~300KB/card, ~25GB total)",
-        "Large (672x936, ~500KB/card, ~40GB total)",
-        "PNG (745x1040, ~700KB/card, ~55GB total)",
-    ]
-
-    AMOUNT_OPTIONS = [
-        "Test mode (first 100 cards)",
-        "First 1,000 cards",
-        "First 5,000 cards",
-        "First 10,000 cards",
-        "All cards (~80,000+)",
-    ]
+    The app works without this: images are prefetched in the background and
+    fetched on demand as cards are browsed (issue #951). Enabling offline mode
+    trades ~12 GB of disk for having *every* card image local, so nothing ever
+    needs the network again. Only the medium ("normal") Scryfall size is
+    downloaded — it reads well on both low- and high-resolution monitors.
+    """
 
     def __init__(
         self,
@@ -44,7 +36,7 @@ class ImageDownloadDialog(
         bulk_data_cache_path: Path,
         on_status_update: Callable[[str], None] | None = None,
     ):
-        super().__init__(parent, title="Download Card Images", size=(450, 320))
+        super().__init__(parent, title="Offline Images Mode", size=(460, 320))
         self.SetBackgroundColour(DARK_BG)
 
         self.image_cache = image_cache
@@ -61,7 +53,7 @@ class ImageDownloadDialog(
         panel.SetSizer(sizer)
 
         # Title
-        title = wx.StaticText(panel, label="Download Card Images from Scryfall")
+        title = wx.StaticText(panel, label="Enable Offline Images Mode")
         title.SetForegroundColour(LIGHT_TEXT)
         title_font = title.GetFont()
         title_font.PointSize += 2
@@ -69,36 +61,35 @@ class ImageDownloadDialog(
         title.SetFont(title_font)
         sizer.Add(title, 0, wx.ALL, 10)
 
-        # Image quality selection
-        quality_label = wx.StaticText(panel, label="Image Quality:")
-        quality_label.SetForegroundColour(LIGHT_TEXT)
-        sizer.Add(quality_label, 0, wx.LEFT | wx.RIGHT | wx.TOP, 10)
-
-        self.quality_choice = wx.Choice(panel, choices=self.QUALITY_OPTIONS)
-        self.quality_choice.SetSelection(1)  # Default to Normal
-        sizer.Add(self.quality_choice, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
-
-        # Download amount selection
-        amount_label = wx.StaticText(panel, label="Download Amount:")
-        amount_label.SetForegroundColour(LIGHT_TEXT)
-        sizer.Add(amount_label, 0, wx.LEFT | wx.RIGHT | wx.TOP, 10)
-
-        self.amount_choice = wx.Choice(panel, choices=self.AMOUNT_OPTIONS)
-        self.amount_choice.SetSelection(0)  # Default to Test mode
-        sizer.Add(self.amount_choice, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
-
-        # Info text
-        info_text = wx.StaticText(
+        # What this is for
+        purpose_text = wx.StaticText(
             panel,
             label=(
-                "Note: Images are downloaded from Scryfall's CDN (no rate limits).\n"
-                "This may take 30-60 minutes for all cards depending on your connection.\n"
-                "You can use the app while downloading."
+                "Normally, card images are fetched over the internet as you browse — "
+                "the app predicts what you are about to look at and downloads those "
+                "images a few seconds ahead of you.\n\n"
+                "Offline images mode instead downloads a medium-quality image for every "
+                "Magic card (100,000+ images) up front, so every card displays instantly "
+                "and keeps working with no internet connection at all."
             ),
         )
-        info_text.SetForegroundColour(SUBDUED_TEXT)
-        info_text.Wrap(420)
-        sizer.Add(info_text, 0, wx.ALL, 10)
+        purpose_text.SetForegroundColour(LIGHT_TEXT)
+        purpose_text.Wrap(430)
+        sizer.Add(purpose_text, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
+
+        # The tradeoff
+        tradeoff_text = wx.StaticText(
+            panel,
+            label=(
+                "Tradeoff: this uses about 12.2 GB of disk space. The download runs in "
+                "the background and typically takes 30-60 minutes depending on your "
+                "connection; you can keep using the app while it runs. If it is "
+                "interrupted, enabling it again skips the images you already have."
+            ),
+        )
+        tradeoff_text.SetForegroundColour(SUBDUED_TEXT)
+        tradeoff_text.Wrap(430)
+        sizer.Add(tradeoff_text, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
 
         # Buttons
         button_sizer = wx.BoxSizer(wx.HORIZONTAL)
@@ -107,9 +98,9 @@ class ImageDownloadDialog(
         cancel_btn = wx.Button(panel, wx.ID_CANCEL, label="Cancel")
         button_sizer.Add(cancel_btn, 0, wx.RIGHT, 6)
 
-        download_btn = wx.Button(panel, wx.ID_OK, label="Download")
-        download_btn.SetDefault()
-        button_sizer.Add(download_btn, 0)
+        enable_btn = wx.Button(panel, wx.ID_OK, label="Enable Offline Mode")
+        enable_btn.SetDefault()
+        button_sizer.Add(enable_btn, 0)
 
         sizer.Add(button_sizer, 0, wx.EXPAND | wx.ALL, 10)
 

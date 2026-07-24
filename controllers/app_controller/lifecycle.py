@@ -10,7 +10,6 @@ from loguru import logger
 from utils.constants import MTGO_BRIDGE_SHUTDOWN_TIMEOUT_SECONDS
 
 if TYPE_CHECKING:
-
     from controllers.app_controller.protocol import AppControllerProto
     from widgets.frames.app_frame import AppFrame
 
@@ -81,6 +80,13 @@ class LifecycleMixin(_Base):
             return get_bundle_snapshot_client().apply(on_archetypes_ready=_surface_archetypes)
 
         def _on_bundle_done(result: tuple[bool, dict[str, list[dict[str, Any]]] | None]) -> None:
+            # The optimistic startup deck load can race ahead of the bundle
+            # apply on a cold cache and find nothing ("No decks for Any").
+            # Now that the deck caches are hydrated, let the frame refresh the
+            # deck list if it is currently empty — regardless of whether the
+            # archetype list itself changed.
+            if result and result[0] and callbacks:
+                callbacks.on_bundle_decks_ready()
             if surfaced_from_bundle:
                 # The bundle's archetypes for the current format were already
                 # handled during phase 1 by _surface_archetypes (surfaced if
@@ -160,6 +166,15 @@ class LifecycleMixin(_Base):
             cards = analysis.get("mainboard_cards", []) + analysis.get("sideboard_cards", [])
             return [name for name, _count in cards]
 
+        def _get_cached_deck_text(deck: dict) -> str:
+            # Cache-only lookup for the exhaustive image sweep — never scrapes.
+            from repositories.deck_text_cache import get_deck_cache
+
+            number = str(deck.get("number") or "")
+            if not number:
+                return ""
+            return get_deck_cache().get(number) or ""
+
         self._cache_warmer = CacheWarmer(
             get_current_format=lambda: self.current_format,
             formats=list(FORMAT_OPTIONS),
@@ -167,9 +182,10 @@ class LifecycleMixin(_Base):
             get_decks_for_archetype=self.metagame_repo.get_decks_for_archetype,
             download_deck_text=self.metagame_repo.download_deck_content,
             extract_card_names=_extract_card_names,
-            enqueue_image=lambda request: self.image_service.queue_card_image_download(
-                request, prioritize=False
+            enqueue_image=lambda request, priority: self.image_service.queue_card_image_download(
+                request, prioritize=False, priority=priority
             ),
+            get_cached_deck_text=_get_cached_deck_text,
         )
         self._cache_warmer.start()
 

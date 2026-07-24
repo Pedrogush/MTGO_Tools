@@ -7,6 +7,12 @@ from typing import TYPE_CHECKING, Any
 import wx
 
 from utils.constants import BUILDER_SEARCH_DEBOUNCE_MS
+from utils.constants.timing import (
+    IMAGE_PREFETCH_BATCH_LIMIT,
+    SEARCH_PREFETCH_DEBOUNCE_MS,
+    SEARCH_PREFETCH_LOOKAHEAD_CARDS,
+    SEARCH_PREFETCH_MIN_CARDS,
+)
 from widgets.wx_layout import set_shown
 
 if TYPE_CHECKING:
@@ -185,6 +191,49 @@ class DeckBuilderPanelHandlersMixin(_Base):
         if self.status_label:
             count = len(results)
             self.status_label.SetLabel(f"Showing {count} card{'s' if count != 1 else ''}.")
+        self._schedule_results_prefetch()
+
+    # ============= Image prefetch (issue #951) =============
+
+    def _on_results_cache_hint(self, event: wx.ListEvent) -> None:
+        # Fired by the virtual list whenever it is about to draw a new range of
+        # rows — i.e. on every scroll. Debounced so a scroll storm collapses
+        # into one prefetch of the final window.
+        event.Skip()
+        self._schedule_results_prefetch()
+
+    def _schedule_results_prefetch(self) -> None:
+        if not self._on_prefetch_images or not self._prefetch_timer:
+            return
+        if self._prefetch_timer.IsRunning():
+            self._prefetch_timer.Stop()
+        self._prefetch_timer.StartOnce(SEARCH_PREFETCH_DEBOUNCE_MS)
+
+    def _on_prefetch_timer(self, _event: wx.TimerEvent) -> None:
+        self._flush_results_prefetch()
+
+    def _flush_results_prefetch(self) -> None:
+        """Prefetch images for the search rows the user can see or soon will.
+
+        The window runs from the top of the list down to a little past the
+        visible bottom (so a small scroll still lands on cached images), never
+        fewer than SEARCH_PREFETCH_MIN_CARDS when results are short, and never
+        more than IMAGE_PREFETCH_BATCH_LIMIT so a browse-all search can't
+        commit the app to downloading thousands of images.
+        """
+        if not self._on_prefetch_images or not self.results_ctrl:
+            return
+        results = self.results_cache
+        if not results:
+            return
+        top = max(0, self.results_ctrl.GetTopItem())
+        per_page = max(0, self.results_ctrl.GetCountPerPage())
+        end = top + per_page + SEARCH_PREFETCH_LOOKAHEAD_CARDS
+        end = min(len(results), max(end, SEARCH_PREFETCH_MIN_CARDS))
+        start = max(0, end - IMAGE_PREFETCH_BATCH_LIMIT)
+        names = [card.get("name", "") for card in results[start:end] if card.get("name")]
+        if names:
+            self._on_prefetch_images(names)
 
     def clear_result_selection(self) -> None:
         if not self.results_ctrl:

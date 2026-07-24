@@ -180,12 +180,16 @@ class CardImageRequest:
     collector_number: str | None
     size: str = "normal"
 
-    def queue_key(self) -> tuple[str, str, str, str]:
+    def queue_key(self) -> tuple[str, str, str, str, str]:
         if self.uuid:
-            return ("uuid", self.uuid.lower(), self.size, "")
+            return ("uuid", self.uuid.lower(), self.size, "", "")
+        # The card name MUST be part of the key: prefetch/warmup requests
+        # carry neither uuid nor set/collector, and without the name every
+        # such request collapses onto one key — the queue then drops all but
+        # the first card of a 100-card batch as a "duplicate" (issue #951).
         set_code = (self.set_code or "").lower()
         collector = (self.collector_number or "").lower()
-        return ("set", set_code, collector, self.size)
+        return ("set", (self.card_name or "").lower(), set_code, collector, self.size)
 
     def can_fetch(self) -> bool:
         return bool((self.card_name or "").strip())

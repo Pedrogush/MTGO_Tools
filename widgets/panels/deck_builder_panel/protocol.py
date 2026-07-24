@@ -29,6 +29,7 @@ class DeckBuilderPanelProto(Protocol):
     _on_add_to_main: Callable[..., None] | None
     _on_add_to_side: Callable[..., None] | None
     _on_add_to_active_zone: Callable[[str], None] | None
+    _on_prefetch_images: Callable[[list[str]], None] | None
 
     inputs: dict[str, wx.TextCtrl]
     mana_exact_cb: wx.CheckBox | None
@@ -46,6 +47,7 @@ class DeckBuilderPanelProto(Protocol):
     _adv_toggle_btn: wx.Button | None
     results_cache: list[dict[str, Any]]
     _search_timer: wx.Timer
+    _prefetch_timer: wx.Timer
 
     active_radar: RadarData | None
     radar_enabled: bool

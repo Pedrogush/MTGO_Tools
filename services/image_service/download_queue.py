@@ -11,6 +11,11 @@ from concurrent.futures import ThreadPoolExecutor
 from loguru import logger
 
 from services.image_service.downloader import BulkImageDownloader
+from services.image_service.priorities import (
+    PRIORITY_BACKGROUND,
+    PRIORITY_HOVER,
+    PRIORITY_TIERS,
+)
 from services.image_service.schemas import CardImageRequest
 from utils.constants.timing import (
     IMAGE_DOWNLOAD_INITIAL_BACKOFF_SECONDS,
@@ -34,14 +39,21 @@ class CardImageDownloadQueue:
         *,
         on_downloaded: Callable[[CardImageRequest], None] | None = None,
         on_failed: Callable[[CardImageRequest, str], None] | None = None,
+        warm_local_index: bool = False,
     ) -> None:
         self._cache = cache
         self._downloader = BulkImageDownloader(cache)
+        self._warm_local_index = warm_local_index
         self._on_downloaded = on_downloaded
         self._on_failed = on_failed
-        self._queue: deque[CardImageRequest] = deque()
-        self._pending_keys: set[tuple[str, str, str, str]] = set()
-        self._inflight_keys: set[tuple[str, str, str, str]] = set()
+        # One FIFO deque per priority tier; the worker always drains the most
+        # urgent non-empty tier first, so a batch enqueued in display order
+        # resolves in display order and background warm-up traffic can never
+        # delay the selected deck's images (issue #951).
+        self._tiers: dict[int, deque[CardImageRequest]] = {tier: deque() for tier in PRIORITY_TIERS}
+        # key -> priority tier its pending request currently sits in.
+        self._pending_priorities: dict[tuple[str, ...], int] = {}
+        self._inflight_keys: set[tuple[str, ...]] = set()
         self._inflight_count = 0
         self._selected_request: CardImageRequest | None = None
         self._stop_event = threading.Event()
@@ -71,11 +83,27 @@ class CardImageDownloadQueue:
             self._selected_request = request
             self._ensure_selected_priority_locked()
 
-    def enqueue(self, request: CardImageRequest, *, prioritize: bool = False) -> bool:
+    def enqueue(
+        self,
+        request: CardImageRequest,
+        *,
+        prioritize: bool = False,
+        priority: int = PRIORITY_BACKGROUND,
+    ) -> bool:
+        """Queue ``request`` at ``priority`` (lower = sooner; FIFO within a tier).
+
+        ``prioritize=True`` is the hover path: the request goes to the *front*
+        of the most urgent tier. A request already pending at a less urgent
+        tier is promoted (moved, never duplicated) when re-enqueued at a more
+        urgent one; re-enqueues at the same or a less urgent tier are dropped.
+        """
         if not request.can_fetch():
             return False
         if self._is_cached(request):
             return False
+        if prioritize:
+            priority = PRIORITY_HOVER
+        priority = self._clamp_priority(priority)
         not_found_key = self._not_found_key(request)
         key = request.queue_key()
         with self._condition:
@@ -91,30 +119,64 @@ class CardImageDownloadQueue:
                 return False
             if key in self._inflight_keys:
                 return False
-            if key in self._pending_keys:
-                if prioritize:
+            pending_priority = self._pending_priorities.get(key)
+            if pending_priority is not None:
+                if priority < pending_priority or prioritize:
                     self._remove_request_by_key_locked(key)
                 else:
                     return False
             if prioritize:
-                self._queue.appendleft(request)
+                self._tiers[priority].appendleft(request)
             else:
-                self._queue.append(request)
-            self._pending_keys.add(key)
+                self._tiers[priority].append(request)
+            self._pending_priorities[key] = priority
             self._condition.notify()
         return True
 
+    @staticmethod
+    def _clamp_priority(priority: int) -> int:
+        return min(max(priority, PRIORITY_TIERS[0]), PRIORITY_TIERS[-1])
+
+    @property
+    def _queue(self) -> tuple[CardImageRequest, ...]:
+        """Flattened snapshot of all pending requests in pop order."""
+        return tuple(request for tier in PRIORITY_TIERS for request in self._tiers[tier])
+
+    @property
+    def _pending_keys(self) -> set[tuple[str, ...]]:
+        return set(self._pending_priorities)
+
+    def _pop_next_locked(self) -> CardImageRequest | None:
+        for tier in PRIORITY_TIERS:
+            if self._tiers[tier]:
+                return self._tiers[tier].popleft()
+        return None
+
+    def _has_pending_locked(self) -> bool:
+        return any(self._tiers[tier] for tier in PRIORITY_TIERS)
+
     def _run(self) -> None:
+        if self._warm_local_index and not self._stop_event.is_set():
+            # Build the bulk-data image index up front (~2s CPU, off the UI
+            # thread) so the first wave of downloads doesn't stall behind the
+            # lazy build under the index lock (issue #951).
+            try:
+                self._downloader.warm_local_index()
+            except Exception as exc:  # pragma: no cover - defensive
+                logger.debug(f"Local image index warm-up failed: {exc}")
         while not self._stop_event.is_set():
             with self._condition:
                 while (
-                    not self._queue or self._inflight_count >= self._MAX_CONCURRENT_DOWNLOADS
+                    not self._has_pending_locked()
+                    or self._inflight_count >= self._MAX_CONCURRENT_DOWNLOADS
                 ) and not self._stop_event.is_set():
                     self._condition.wait(timeout=IMAGE_DOWNLOAD_QUEUE_IDLE_WAIT_SECONDS)
                 if self._stop_event.is_set():
                     break
-                request = self._queue.popleft()
-                self._pending_keys.discard(request.queue_key())
+                request = self._pop_next_locked()
+                if request is None:
+                    continue
+                self._pending_priorities.pop(request.queue_key(), None)
                 self._inflight_keys.add(request.queue_key())
                 self._inflight_count += 1
 
@@ -153,7 +215,10 @@ class CardImageDownloadQueue:
             started_at = time.monotonic()
             try:
                 success, msg = self._downloader.download_card_image_by_name(
-                    request.card_name, request.size, set_code=request.set_code
+                    request.card_name,
+                    request.size,
+                    set_code=request.set_code,
+                    uuid=request.uuid,
                 )
             except Exception as exc:
                 success = False
@@ -266,22 +331,32 @@ class CardImageDownloadQueue:
         key = request.queue_key()
         if key in self._inflight_keys:
             return
-        if key in self._pending_keys:
+        if key in self._pending_priorities:
             self._remove_request_by_key_locked(key)
-        self._queue.appendleft(request)
-        self._pending_keys.add(key)
+        self._tiers[PRIORITY_HOVER].appendleft(request)
+        self._pending_priorities[key] = PRIORITY_HOVER
         self._condition.notify()
 
-    def _remove_request_by_key_locked(self, key: tuple[str, str, str, str]) -> None:
-        for request in list(self._queue):
+    def _remove_request_by_key_locked(self, key: tuple[str, ...]) -> None:
+        tier = self._pending_priorities.get(key)
+        if tier is None:
+            return
+        for request in self._tiers[tier]:
             if request.queue_key() == key:
-                self._queue.remove(request)
-                self._pending_keys.discard(key)
+                self._tiers[tier].remove(request)
+                self._pending_priorities.pop(key, None)
                 return
 
     def _is_cached(self, request: CardImageRequest) -> bool:
         if not request.card_name:
             return False
+        # A uuid pins the request to one exact printing. Check it first: the
+        # name/set lookups can miss split-layout cards stored under their
+        # combined name. Fall through to the name/set checks on a uuid miss so
+        # a printing satisfied under another identity (e.g. resolved from
+        # stale bulk data) still counts as cached.
+        if request.uuid and self._cache.is_cached(request.uuid, request.size, face_index=0):
+            return True
         if request.set_code:
             return (
                 self._cache.get_image_path_for_printing(
