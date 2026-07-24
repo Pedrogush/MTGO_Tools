@@ -166,6 +166,15 @@ class LifecycleMixin(_Base):
             cards = analysis.get("mainboard_cards", []) + analysis.get("sideboard_cards", [])
             return [name for name, _count in cards]
 
+        def _get_cached_deck_text(deck: dict) -> str:
+            # Cache-only lookup for the exhaustive image sweep — never scrapes.
+            from repositories.deck_text_cache import get_deck_cache
+
+            number = str(deck.get("number") or "")
+            if not number:
+                return ""
+            return get_deck_cache().get(number) or ""
+
         self._cache_warmer = CacheWarmer(
             get_current_format=lambda: self.current_format,
             formats=list(FORMAT_OPTIONS),
@@ -173,9 +182,10 @@ class LifecycleMixin(_Base):
             get_decks_for_archetype=self.metagame_repo.get_decks_for_archetype,
             download_deck_text=self.metagame_repo.download_deck_content,
             extract_card_names=_extract_card_names,
-            enqueue_image=lambda request: self.image_service.queue_card_image_download(
-                request, prioritize=False
+            enqueue_image=lambda request, priority: self.image_service.queue_card_image_download(
+                request, prioritize=False, priority=priority
             ),
+            get_cached_deck_text=_get_cached_deck_text,
         )
         self._cache_warmer.start()
 

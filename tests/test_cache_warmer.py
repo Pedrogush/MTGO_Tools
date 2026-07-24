@@ -37,6 +37,7 @@ def _make_warmer(
 
     fetched: list[str] = []
     queued: list[str] = []
+    queued_priorities: dict[str, int] = {}
 
     def get_archetypes(fmt: str) -> list[dict[str, Any]]:
         return archetypes.get(fmt, [])
@@ -57,8 +58,9 @@ def _make_warmer(
                 names.append(parts[1])
         return names
 
-    def enqueue(request) -> None:
+    def enqueue(request, priority) -> None:
         queued.append(request.card_name)
+        queued_priorities[request.card_name] = priority
 
     warmer = CacheWarmer(
         get_current_format=lambda: current_format,
@@ -74,6 +76,7 @@ def _make_warmer(
         top_decks_per_format=6,
         progress_interval=50,
     )
+    warmer._queued_priorities = queued_priorities  # test-only introspection
     return warmer, fetched, queued
 
 
@@ -95,16 +98,56 @@ def test_ordered_formats_dedupes_case_insensitively():
     assert warmer._ordered_formats() == ["legacy", "Modern"]
 
 
-def test_warm_images_uses_first_deck_per_archetype_selected_format_first():
+def test_warm_images_phases_research_panel_then_selected_format_then_rest():
+    from services.image_service.priorities import (
+        PRIORITY_BACKGROUND,
+        PRIORITY_FORMAT_ALL,
+        PRIORITY_RESEARCH_FORMATS,
+    )
+
     warmer, fetched, queued = _make_warmer()
 
     warmer._warm_images()
 
-    # Legacy archetypes (A, B) processed before Modern (C); each uses decks[0].
-    assert fetched == ["1", "3", "4"]
+    # Phase 1 (research-panel decks, formats A→Z): Legacy decks 1, 3 then
+    # Modern deck 4. Phase 2 (all of selected Legacy): adds deck 2. Phase 3
+    # (all of remaining Modern): adds deck 5. No deck scanned twice.
+    assert fetched == ["1", "3", "4", "2", "5"]
     # Basic land "Island" from deck 1 is skipped; real cards are queued.
     assert "Island" not in queued
-    assert set(queued) == {"Card One", "Card Three", "Card Four"}
+    assert set(queued) == {"Card One", "Card Two", "Card Three", "Card Four", "Card Five"}
+    # Each phase enqueues at its download-queue tier.
+    assert warmer._queued_priorities == {
+        "Card One": PRIORITY_RESEARCH_FORMATS,
+        "Card Three": PRIORITY_RESEARCH_FORMATS,
+        "Card Four": PRIORITY_RESEARCH_FORMATS,
+        "Card Two": PRIORITY_FORMAT_ALL,
+        "Card Five": PRIORITY_BACKGROUND,
+    }
+
+
+def test_warm_images_deep_phases_use_cache_only_deck_texts():
+    """With a cache-only getter injected, phases 2/3 never hit the network
+    path — decks whose text is not local are skipped, not scraped."""
+    warmer, fetched, queued = _make_warmer()
+    local_texts = {"5": "4 Card Five\n"}  # deck 2 (Legacy) has no local text
+    lookups: list[str] = []
+
+    def cached_text(deck):
+        number = str(deck.get("number"))
+        lookups.append(number)
+        return local_texts.get(number, "")
+
+    warmer._get_cached_deck_text = cached_text
+
+    warmer._warm_images()
+
+    # Phase 1 still fetches through the network-capable path (decks 1, 3, 4);
+    # the deep phases only consult the local cache (decks 2 and 5).
+    assert fetched == ["1", "3", "4"]
+    assert lookups == ["2", "5"]
+    # Deck 2's text is not local, so "Card Two" is never queued this session.
+    assert set(queued) == {"Card One", "Card Three", "Card Four", "Card Five"}
 
 
 def test_warm_decklists_phases_and_dedup():
@@ -228,9 +271,10 @@ def test_failing_deck_source_swallowed_and_other_archetypes_continue():
 
     warmer._warm_images()
 
-    # _safe_decks swallows A's failure (no deck 1); B (deck 3) and C (deck 4) warm.
-    assert fetched == ["3", "4"]
-    assert set(queued) == {"Card Three", "Card Four"}
+    # _safe_decks swallows A's failure (no decks 1/2); B (deck 3) and C
+    # (decks 4, then 5 in the deep pass) still warm normally.
+    assert fetched == ["3", "4", "5"]
+    assert set(queued) == {"Card Three", "Card Four", "Card Five"}
 
 
 def test_failing_deck_text_counts_as_failed_and_warming_continues():

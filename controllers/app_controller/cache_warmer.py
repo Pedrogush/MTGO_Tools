@@ -4,9 +4,22 @@ Two independent daemon threads, started a few seconds after the app finishes its
 initial loads, progressively fill the on-disk caches so that the data a user is
 most likely to open next is already local by the time they click:
 
-* :meth:`CacheWarmer._warm_images` — for every archetype in every format, pick
-  the archetype's most recent decklist and queue a card-image download for each
-  card in it. The currently selected format is warmed first.
+* :meth:`CacheWarmer._warm_images` — queue card-image downloads in the order a
+  user is likely to need them (issue #951), each phase enqueuing at a matching
+  download-queue priority tier so warm-up traffic can never delay the images
+  of the deck open in the UI:
+
+  1. the decks the research panel would show for each format, walking formats
+     alphabetically (``PRIORITY_RESEARCH_FORMATS``);
+  2. every deck of the currently selected format (``PRIORITY_FORMAT_ALL``);
+  3. every deck of every remaining format, alphabetically
+     (``PRIORITY_BACKGROUND``) — the "every competitively played card
+     eventually" sweep.
+
+  Phases 2 and 3 read deck texts through ``get_cached_deck_text`` (cache-only,
+  no network) when it is provided, so the exhaustive sweep only covers decks
+  whose text is already local (the bundle snapshot and the decklist warmer
+  hydrate more over time) instead of committing to thousands of scrapes.
 
 * :meth:`CacheWarmer._warm_decklists` — progressively hydrate the deck-text
   cache. First the headline list of each of the top few archetypes for *every*
@@ -39,6 +52,11 @@ from typing import Any
 
 from loguru import logger
 
+from services.image_service.priorities import (
+    PRIORITY_BACKGROUND,
+    PRIORITY_FORMAT_ALL,
+    PRIORITY_RESEARCH_FORMATS,
+)
 from services.image_service.schemas import CardImageRequest
 from utils.constants.timing import (
     CACHE_WARMUP_DEEP_PASS_MAX_DECKS,
@@ -48,6 +66,7 @@ from utils.constants.timing import (
     CACHE_WARMUP_SLOW_THROTTLE_SECONDS,
     CACHE_WARMUP_START_DELAY_SECONDS,
     CACHE_WARMUP_TOP_DECKS_PER_FORMAT,
+    RESEARCH_PREFETCH_DECK_COUNT,
 )
 
 # Basic lands are trivially available, appear in nearly every deck, and would
@@ -71,11 +90,13 @@ class CacheWarmer:
         get_decks_for_archetype: Callable[[dict[str, Any]], list[dict[str, Any]]],
         download_deck_text: Callable[[dict[str, Any]], str],
         extract_card_names: Callable[[str], list[str]],
-        enqueue_image: Callable[[CardImageRequest], None],
+        enqueue_image: Callable[[CardImageRequest, int], None],
+        get_cached_deck_text: Callable[[dict[str, Any]], str] | None = None,
         start_delay: float = CACHE_WARMUP_START_DELAY_SECONDS,
         fast_throttle: float = CACHE_WARMUP_FAST_THROTTLE_SECONDS,
         slow_throttle: float = CACHE_WARMUP_SLOW_THROTTLE_SECONDS,
         top_decks_per_format: int = CACHE_WARMUP_TOP_DECKS_PER_FORMAT,
+        research_deck_count: int = RESEARCH_PREFETCH_DECK_COUNT,
         progress_interval: int = CACHE_WARMUP_PROGRESS_INTERVAL,
     ) -> None:
         self._get_current_format = get_current_format
@@ -83,12 +104,14 @@ class CacheWarmer:
         self._get_archetypes = get_archetypes
         self._get_decks_for_archetype = get_decks_for_archetype
         self._download_deck_text = download_deck_text
+        self._get_cached_deck_text = get_cached_deck_text
         self._extract_card_names = extract_card_names
         self._enqueue_image = enqueue_image
         self._start_delay = start_delay
         self._fast_throttle = fast_throttle
         self._slow_throttle = slow_throttle
         self._top_decks_per_format = top_decks_per_format
+        self._research_deck_count = research_deck_count
         self._progress_interval = max(1, progress_interval)
 
         # Decklist-warmer running tallies (only touched by its single thread).
@@ -199,33 +222,105 @@ class CacheWarmer:
     def _warm_images(self) -> None:
         if self._wait(self._start_delay):
             return
-        logger.info("Cache warm-up: pre-fetching card images (selected format first)")
-        count = 0
-        for fmt in self._ordered_formats():
+        formats = self._ordered_formats()
+        if not formats:
+            return
+        selected = formats[0]
+        alphabetical = sorted(formats, key=str.lower)
+        # Card names already enqueued this session (an earlier = more urgent
+        # phase wins) and deck numbers already scanned, so no deck's text is
+        # fetched twice and no card is enqueued twice.
+        queued_names: set[str] = set()
+        scanned: set[str] = set()
+
+        # Phase 1: the decks the research panel would show for each format,
+        # walking formats alphabetically. These fetch through the normal
+        # cache-first deck-text path (few decks, worth the network on a miss).
+        logger.info("Cache warm-up: warming research-panel deck images (formats A→Z)")
+        for fmt in alphabetical:
             if self._stopped():
                 return
-            logger.info(f"Cache warm-up: warming images for {fmt}")
-            for archetype in self._safe_archetypes(fmt):
-                if self._stopped():
-                    return
-                decks = self._safe_decks(archetype)
-                if not decks:
-                    continue
-                # Pick the archetype's most recent decklist (decks are sorted
-                # date-descending) and warm an image for each of its cards.
-                deck_text = self._safe_deck_text(decks[0])
-                if not deck_text:
-                    continue
-                for name in self._card_names(deck_text):
-                    if self._stopped():
-                        return
-                    self._queue_image(name)
-                    count += 1
-                # The image warmer is part of the fast initial pass (one deck
-                # per archetype), so it stays at the fast throttle throughout.
+            for deck in self._iter_format_decks(
+                fmt, per_archetype=1, limit=self._research_deck_count
+            ):
+                self._warm_deck_images(
+                    deck, PRIORITY_RESEARCH_FORMATS, queued_names, scanned, cached_only=False
+                )
                 if self._wait(self._fast_throttle):
                     return
-        logger.info(f"Cache warm-up: image pre-fetch complete ({count} cards queued)")
+
+        # Phase 2: every deck of the selected format; Phase 3: every deck of
+        # the remaining formats, alphabetically. Cache-only deck texts — the
+        # sweep covers whatever decklists are already local and grows as the
+        # decklist warmer / bundle hydrate more, instead of committing to
+        # thousands of scrapes.
+        logger.info(f"Cache warm-up: warming all local {selected} deck images")
+        for deck in self._iter_format_decks(selected, per_archetype=None, limit=None):
+            self._warm_deck_images(
+                deck, PRIORITY_FORMAT_ALL, queued_names, scanned, cached_only=True
+            )
+            if self._wait(self._fast_throttle):
+                return
+
+        for fmt in alphabetical:
+            if fmt.lower() == selected.lower():
+                continue
+            if self._stopped():
+                return
+            logger.info(f"Cache warm-up: warming all local {fmt} deck images")
+            for deck in self._iter_format_decks(fmt, per_archetype=None, limit=None):
+                self._warm_deck_images(
+                    deck, PRIORITY_BACKGROUND, queued_names, scanned, cached_only=True
+                )
+                if self._wait(self._fast_throttle):
+                    return
+        logger.info(
+            f"Cache warm-up: image pre-fetch complete ({len(queued_names)} cards queued)"
+        )
+
+    def _warm_deck_images(
+        self,
+        deck: dict[str, Any],
+        priority: int,
+        queued_names: set[str],
+        scanned: set[str],
+        *,
+        cached_only: bool,
+    ) -> None:
+        """Queue an image download at ``priority`` for each new card of ``deck``."""
+        number = str(deck.get("number") or "")
+        if number and number in scanned:
+            return
+        if cached_only:
+            deck_text = self._safe_local_deck_text(deck)
+        else:
+            deck_text = self._safe_deck_text(deck)
+        if number:
+            scanned.add(number)
+        if not deck_text:
+            return
+        for name in self._card_names(deck_text):
+            if self._stopped():
+                return
+            key = name.lower()
+            if key in queued_names:
+                continue
+            queued_names.add(key)
+            self._queue_image(name, priority)
+
+    def _safe_local_deck_text(self, deck: dict[str, Any]) -> str:
+        """Deck text from the local cache only — never the network.
+
+        Falls back to the normal (cache-first, network-on-miss) path when no
+        cache-only getter was injected.
+        """
+        if self._get_cached_deck_text is None:
+            return self._safe_deck_text(deck)
+        try:
+            return self._get_cached_deck_text(deck) or ""
+        except Exception as exc:
+            logger.debug(f"Warm-up: cached deck text lookup failed for {deck.get('number')}: {exc}")
+            return ""
 
     def _card_names(self, deck_text: str) -> list[str]:
         names: list[str] = []
@@ -238,7 +333,7 @@ class CacheWarmer:
             names.append(name)
         return names
 
-    def _queue_image(self, card_name: str) -> None:
+    def _queue_image(self, card_name: str, priority: int) -> None:
         try:
             self._enqueue_image(
                 CardImageRequest(
@@ -247,7 +342,8 @@ class CacheWarmer:
                     set_code=None,
                     collector_number=None,
                     size="normal",
-                )
+                ),
+                priority,
             )
         except Exception as exc:  # pragma: no cover - defensive
             logger.debug(f"Warm-up: failed to queue image for {card_name}: {exc}")
