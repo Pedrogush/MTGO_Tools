@@ -35,7 +35,13 @@ class DeckOperationsMixin(_Base):
 
         if not force_refresh:
             cached = self._load_cached_decks(archetype_href)
-            if cached is not None:
+            # An empty cached list is treated as a miss, not a hit: the remote
+            # bundle publishes empty MTGGoldfish deck lists for archetypes
+            # whose recent results are MTGO-only (goldfish scraping upstream is
+            # now partitioned to paper events), and returning that [] here
+            # would permanently block the live-scrape fallback below from ever
+            # finding the archetype's decks.
+            if cached:
                 logger.debug(f"Using cached decks for {archetype_name}")
                 return self._sort_decks_by_date(self._filter_decks_by_source(cached, source_filter))
 
@@ -53,7 +59,9 @@ class DeckOperationsMixin(_Base):
         except Exception as exc:
             logger.error(f"Failed to fetch decks for {archetype_name}: {exc}")
             cached = self._load_cached_decks(archetype_href, max_age=None)
-            if cached:
+            if cached is not None:
+                # Even a stale empty list beats surfacing an error dialog: it
+                # renders as "no decks" while the next click retries the scrape.
                 logger.warning(f"Returning stale cached decks for {archetype_name}")
                 return self._sort_decks_by_date(self._filter_decks_by_source(cached, source_filter))
             raise

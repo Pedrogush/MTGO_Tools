@@ -18,6 +18,7 @@ class UICallbacks:
     on_status: Callable[[str], None]
     on_archetypes_success: Callable[..., None]
     on_archetypes_error: Callable[..., None]
+    on_bundle_decks_ready: Callable[[], None]
     on_collection_loaded: Callable[[dict[str, Any]], None]
     on_collection_not_found: Callable[[], None]
     on_collection_refresh_success: Callable[..., None]
@@ -56,6 +57,7 @@ class AppControllerUIHelpers:
                 frame._on_archetypes_loaded, archetypes
             ),
             on_archetypes_error=lambda error: wx.CallAfter(frame._on_archetypes_error, error),
+            on_bundle_decks_ready=lambda: wx.CallAfter(frame.on_bundle_decks_ready),
             on_collection_loaded=_on_collection_loaded,
             on_collection_not_found=lambda: wx.CallAfter(
                 frame.collection_status_label.SetLabel,

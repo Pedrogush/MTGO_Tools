@@ -65,6 +65,26 @@ class DeckResearchHandlers(_Base):
         self._load_decks(scope="archetype", archetype=archetype)
         self._load_radar_in_background(archetype)
 
+    def on_bundle_decks_ready(self: AppFrame) -> None:
+        """Refresh the deck list after the remote bundle hydrates the caches.
+
+        On a cold cache the optimistic startup deck load races ahead of the
+        bundle apply and finds nothing; once the bundle lands, reload the
+        current selection — but only when the list is actually empty, so a
+        healthy startup never repeats its (expensive) deck load.
+        """
+        if self._all_loaded_decks:
+            return
+        with self._loading_lock:
+            if self.loading_archetypes or self.loading_decks:
+                return
+        idx = self.research_panel.get_selected_archetype_index()
+        if 0 < idx <= len(self.filtered_archetypes):
+            archetype = self.filtered_archetypes[idx - 1]
+            self._load_decks(scope="archetype", archetype=archetype)
+        else:
+            self._load_decks(scope="all")
+
     def on_event_type_filter_changed(self: AppFrame) -> None:
         self._apply_deck_filters()
 

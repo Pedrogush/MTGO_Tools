@@ -10,7 +10,6 @@ from loguru import logger
 from utils.constants import MTGO_BRIDGE_SHUTDOWN_TIMEOUT_SECONDS
 
 if TYPE_CHECKING:
-
     from controllers.app_controller.protocol import AppControllerProto
     from widgets.frames.app_frame import AppFrame
 
@@ -81,6 +80,13 @@ class LifecycleMixin(_Base):
             return get_bundle_snapshot_client().apply(on_archetypes_ready=_surface_archetypes)
 
         def _on_bundle_done(result: tuple[bool, dict[str, list[dict[str, Any]]] | None]) -> None:
+            # The optimistic startup deck load can race ahead of the bundle
+            # apply on a cold cache and find nothing ("No decks for Any").
+            # Now that the deck caches are hydrated, let the frame refresh the
+            # deck list if it is currently empty — regardless of whether the
+            # archetype list itself changed.
+            if result and result[0] and callbacks:
+                callbacks.on_bundle_decks_ready()
             if surfaced_from_bundle:
                 # The bundle's archetypes for the current format were already
                 # handled during phase 1 by _surface_archetypes (surfaced if
