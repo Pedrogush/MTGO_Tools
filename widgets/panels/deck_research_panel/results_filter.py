@@ -5,7 +5,10 @@ from __future__ import annotations
 import operator as _op
 import re
 from collections.abc import Callable
+from datetime import date
 from typing import Any
+
+from utils.deck_dates import repair_future_date
 
 PLACEMENT_OP_NONE = "-"
 PLACEMENT_OPERATORS: tuple[str, ...] = (PLACEMENT_OP_NONE, ">", "≥", "≤", "<", "=")
@@ -47,12 +50,17 @@ def _classify_event_type(event_str: str) -> str | None:
     return None
 
 
-def _normalize_date(value: str) -> str:
-    """Extract the first YYYY-MM-DD substring from *value*, or return *value* as-is."""
+def _normalize_date(value: str, today: date | None = None) -> str:
+    """Extract the first YYYY-MM-DD substring from *value*, or return *value* as-is.
+
+    Extracted dates pass through :func:`repair_future_date`, so the UI never
+    displays an impossible future date: upstream day/month transpositions are
+    swapped back, and unrepairable future dates render blank.
+    """
     if not value:
         return ""
     match = re.search(r"\d{4}-\d{2}-\d{2}", value)
-    return match.group(0) if match else value
+    return repair_future_date(match.group(0), today) if match else value
 
 
 def parse_placement(result_str: str) -> int | None:

@@ -28,6 +28,7 @@ from utils.constants import (
     MTGGOLDFISH_STATS_READ_TIMEOUT_SECONDS,
     ONE_DAY_SECONDS,
 )
+from utils.deck_dates import repair_future_date
 from utils.json_io import fast_load
 from utils.perf import timed
 
@@ -181,7 +182,10 @@ def get_archetype_decks(archetype: str):
         tds: list[bs4.Tag] = tr.find_all("td")
         decks.append(
             {
-                "date": tds[GOLDFISH_DECK_TABLE_COL_DATE].text.strip(),
+                # MTGGoldfish serves paper-event dates verbatim as entered by
+                # the store, occasionally day/month-transposed — repair
+                # impossible future dates before they enter the cache.
+                "date": repair_future_date(tds[GOLDFISH_DECK_TABLE_COL_DATE].text.strip()),
                 "number": tds[GOLDFISH_DECK_TABLE_COL_NUMBER]
                 .select_one("a")
                 .attrs.get("href")
