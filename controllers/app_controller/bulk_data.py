@@ -35,6 +35,10 @@ class BulkDataMixin(_Base):
         self._bulk_check_worker_active = True
 
         def worker():
+            # First run: decompress the installer-bundled bulk snapshot (if any)
+            # before checking, so a fresh install starts warm instead of racing
+            # a cold download. No-op once the cache is populated.
+            self.image_service.seed_image_cache_if_needed()
             return self.image_service.check_bulk_data_exists()
 
         def success_handler(result: tuple[bool, str]):
@@ -53,6 +57,9 @@ class BulkDataMixin(_Base):
             def _on_download_complete(msg: str) -> None:
                 on_download_complete(msg)
                 self.load_bulk_data_into_memory(on_status, force=True)
+                # The local index now exists: re-attempt any images that failed
+                # while it was still downloading (cold-start self-heal).
+                self.image_service.retry_failed_image_downloads()
 
             def _on_download_failed(msg: str) -> None:
                 on_download_failed(msg)
@@ -120,6 +127,9 @@ class BulkDataMixin(_Base):
             self._bulk_check_worker_active = False
             on_download_complete(msg)
             self.load_bulk_data_into_memory(on_status, force=True)
+            # Re-attempt any images that failed against the per-card API while
+            # the freshly-downloaded index was unavailable (cold-start self-heal).
+            self.image_service.retry_failed_image_downloads()
 
         def _on_download_failed(msg: str) -> None:
             self._bulk_check_worker_active = False

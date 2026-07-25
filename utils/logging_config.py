@@ -24,17 +24,27 @@ def _warmup_filter(record) -> bool:
     return not record["extra"].get("warmup")
 
 
+# The persistent file always captures at the lowest level so an installed
+# build keeps a full history of events — invaluable for diagnosing user-only
+# issues (e.g. the cold-start image 429 storm) after the fact, since the
+# windowed build has no console to watch. The console sink stays at the
+# ``MTGO_LOG_LEVEL`` (default INFO) so dev runs aren't drowned in TRACE noise.
+FILE_LOG_LEVEL = "TRACE"
+
+
 def configure_logging(logs_dir: Path) -> Path | None:
     """
     Configure loguru to emit to stderr and a rolling file in the given logs directory.
 
-    The log level defaults to ``INFO`` but can be lowered via the
-    ``MTGO_LOG_LEVEL`` environment variable (e.g. ``DEBUG``) to surface the
-    ``utils.perf.timed`` per-step timings used for cold-start profiling.
+    The **console** sink level defaults to ``INFO`` and can be changed via the
+    ``MTGO_LOG_LEVEL`` environment variable. The **file** sink always records at
+    ``TRACE`` (:data:`FILE_LOG_LEVEL`) — including the background warm-up traffic
+    that is filtered off the console — so the installed build retains a complete
+    event history for support and post-mortem debugging.
 
     Returns the file path in use when file logging is available, otherwise None.
     """
-    level = os.environ.get("MTGO_LOG_LEVEL", "INFO").upper()
+    console_level = os.environ.get("MTGO_LOG_LEVEL", "INFO").upper()
     logger.remove()
     for stream_name in ("stderr", "stdout"):
         stream = getattr(sys, stream_name, None)
@@ -43,7 +53,7 @@ def configure_logging(logs_dir: Path) -> Path | None:
         try:
             logger.add(
                 stream,
-                level=level,
+                level=console_level,
                 backtrace=True,
                 diagnose=True,
                 enqueue=True,
@@ -59,13 +69,15 @@ def configure_logging(logs_dir: Path) -> Path | None:
         log_file = logs_dir / f"mtgo_tools_{datetime.now():%Y%m%d_%H%M%S}.log"
         logger.add(
             log_file,
-            level=level,
-            rotation="5 MB",
-            retention=5,
+            level=FILE_LOG_LEVEL,
+            rotation="10 MB",
+            retention=10,
             backtrace=True,
             diagnose=True,
             enqueue=True,
-            filter=_warmup_filter,
+            # No _warmup_filter here: the file keeps the full history, warm-up
+            # included, which is exactly the traffic needed to debug the image
+            # prefetch/warm pipeline in an installed build.
         )
     except Exception as exc:
         logger.warning(f"File logging disabled; unable to write to {logs_dir}: {exc}")

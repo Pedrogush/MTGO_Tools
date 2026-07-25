@@ -20,6 +20,18 @@ else:
 class BulkDataMixin(_Base):
     """Bulk data freshness + download handling."""
 
+    def seed_image_cache_if_needed(self) -> list[str]:
+        """Decompress the installer-bundled bulk snapshot on first run.
+
+        Returns the names of any files written. Runs before the existence check
+        so a fresh install finds the bulk data already present and skips the
+        cold-start download entirely. Safe to call every startup; it's a no-op
+        once the cache is populated.
+        """
+        from services.image_service.seed import seed_image_cache_if_needed
+
+        return [path.name for path in seed_image_cache_if_needed()]
+
     def check_bulk_data_exists(self) -> tuple[bool, str]:
         from services.image_service import schemas as _schemas
 

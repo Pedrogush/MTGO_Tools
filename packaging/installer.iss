@@ -63,6 +63,13 @@ Source: "../dist/{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
 ; installer output dir, which lives at dist/installer — without this the
 ; installer bundles a copy of its own output directory (and any previously built
 ; setup .exe) into {app}\installer.
+;
+; This recursive rule is ALSO how the bundled bulk-data seed ships: build_installer.ps1
+; writes dist/seed/bulk_data.json.gz (Scryfall's default_cards, gzipped ~130 MB),
+; so it installs to {app}\seed\bulk_data.json.gz. On first run the app decompresses
+; it into the image cache (services/image_service/seed.py) so a fresh install starts
+; warm instead of racing a cold download. If the seed step was skipped, dist/seed
+; simply doesn't exist and nothing is shipped — the app falls back to downloading.
 Source: "../dist/*"; DestDir: "{app}"; Excludes: "installer,installer\*"; Flags: ignoreversion recursesubdirs createallsubdirs
 ; MTGO integration bridge — a self-contained .NET publish that bundles its own
 ; runtime. Built by build_installer.ps1 (dotnet publish -r win-x64

@@ -57,6 +57,15 @@ class ImageCacheMixin(_Base):
     def set_selected_card_request(self, request: CardImageRequest | None) -> None:
         self._download_queue.set_selected_request(request)
 
+    def retry_failed_image_downloads(self) -> int:
+        """Re-attempt downloads that failed before the bulk index was ready.
+
+        Call once the bulk metadata has been (re)downloaded: cold-start misses
+        that failed against the per-card API — and any other transient failures
+        — are re-queued, now that they resolve locally. Returns the count.
+        """
+        return self._download_queue.retry_deferred_failures()
+
     def prefetch_card_images(
         self,
         source: str,

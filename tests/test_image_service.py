@@ -730,3 +730,84 @@ def test_image_service_callbacks_can_be_cleared(image_service_instance):
 
     service._handle_image_downloaded(_request())
     assert received == []
+
+
+class _FakeFuture:
+    """Minimal ``Future`` stand-in for driving _handle_download_complete."""
+
+    def __init__(self, *, result=None, exc=None):
+        self._result = result
+        self._exc = exc
+
+    def result(self):
+        if self._exc is not None:
+            raise self._exc
+        return self._result
+
+
+class _AlwaysOk:
+    """Downloader that always succeeds — safe if the worker thread runs."""
+
+    def download_card_image_by_name(self, name, size, set_code=None, uuid=None):
+        return True, "ok"
+
+
+def test_deferred_retry_remembers_non_permanent_failure():
+    """A non-permanent failure is held and re-queued by retry_deferred_failures."""
+    queue = _build_queue(_AlwaysOk())
+    request = _request(card_name="Colossus Hammer", set_code=None)
+
+    queue._handle_download_complete(request, _FakeFuture(result=False))
+    assert request.queue_key() in queue._deferred_failures
+
+    # Stop the worker first so the retry's enqueue doesn't kick off processing;
+    # enqueue still records the request and reports it was queued.
+    queue.stop()
+    assert queue.retry_deferred_failures() == 1
+    assert queue._deferred_failures == {}
+
+
+def test_deferred_retry_skips_permanent_failure():
+    """Permanent (not-found) failures are never remembered — retry can't help."""
+    queue = _build_queue(_AlwaysOk())
+    request = _request(card_name="Ghost Card", set_code="xyz")
+    queue._add_not_found_key(queue._not_found_key(request))
+    try:
+        queue._handle_download_complete(request, _FakeFuture(result=False))
+        assert queue._deferred_failures == {}
+    finally:
+        queue.stop()
+
+
+def test_deferred_retry_skips_already_cached_on_retry():
+    """A card cached by the time we retry is dropped by enqueue (count 0)."""
+    cache = _FakeCache(cached_keys={("Colossus Hammer", "normal")})
+    queue = _build_queue(_AlwaysOk(), cache=cache)
+    request = _request(card_name="Colossus Hammer", set_code=None)
+
+    queue._handle_download_complete(request, _FakeFuture(result=False))
+    queue.stop()
+    assert queue.retry_deferred_failures() == 0
+    assert queue._deferred_failures == {}
+
+
+def test_deferred_failures_are_capped(monkeypatch):
+    """The deferred set is bounded so a long outage can't grow it unbounded."""
+    import services.image_service.download_queue as dq
+
+    monkeypatch.setattr(dq, "IMAGE_DEFERRED_RETRY_MAX", 2)
+    queue = _build_queue(_AlwaysOk())
+    try:
+        for i in range(5):
+            queue._handle_download_complete(
+                _request(card_name=f"Card {i}", set_code=None), _FakeFuture(result=False)
+            )
+        assert len(queue._deferred_failures) == 2
+    finally:
+        queue.stop()
+
+
+def test_retry_failed_image_downloads_delegates(image_service_instance):
+    """ImageService.retry_failed_image_downloads delegates to the queue."""
+    service = image_service_instance
+    assert service.retry_failed_image_downloads() == 0

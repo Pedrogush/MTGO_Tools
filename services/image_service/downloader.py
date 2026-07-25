@@ -23,14 +23,15 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
 
-import requests
 from loguru import logger
 
+from services.image_service.batch_resolver import ScryfallBatchResolver
 from services.image_service.bulk_metadata import BulkMetadataMixin
 from services.image_service.disk_cache import CardImageCache
 from services.image_service.image_writer import ImageWriterMixin
 from services.image_service.local_resolver import LocalResolverMixin
 from services.image_service.schemas import BulkCardImage
+from services.image_service.scryfall_session import ScryfallSession
 from utils.atomic_io import locked_path
 from utils.constants import (
     SCRYFALL_DOWNLOAD_PROGRESS_INTERVAL,
@@ -54,21 +55,40 @@ class BulkImageDownloader(
     def __init__(self, cache: CardImageCache, max_workers: int = SCRYFALL_MAX_DOWNLOAD_WORKERS):
         self.cache = cache
         self.max_workers = max_workers
-        self.session = requests.Session()
-        self.session.headers.update({"User-Agent": "MTGOMetagameCrawler/1.0"})
+        # Rate-limited session: paces Scryfall *API* traffic across all workers
+        # and honors Retry-After on 429 so a cold start (per-card API fallback
+        # before the local bulk index exists) can't trip Scryfall's limiter.
+        self.session = ScryfallSession()
         # Lazily-built name -> [card records with image_uris] map from the
         # locally-cached bulk data. Resolving image URLs locally avoids a
         # blocking Scryfall ``/cards/named`` round-trip per uncached card.
         self._local_image_index: dict[str, list[BulkCardImage]] | None = None
         self._local_image_index_mtime: float | None = None
         self._local_image_index_lock = threading.Lock()
+        # Cold-start resolution misses (before the local index exists) are
+        # coalesced into batched /cards/collection lookups instead of a
+        # per-card /cards/named storm that trips Scryfall's rate limiter. The
+        # single-card fallback is late-bound so overriding fetch_card_by_name
+        # (tests, subclasses) is honored.
+        self._batch_resolver = ScryfallBatchResolver(
+            self.session,
+            lambda name, set_code: self.fetch_card_by_name(name, set_code=set_code),
+        )
 
     def download_card_image_by_name(
         self, name: str, size: str = "normal", set_code: str | None = None, uuid: str | None = None
     ) -> tuple[bool, str]:
         card = self._resolve_card_locally(name, set_code=set_code, uuid=uuid)
         if card is None:
-            card = self.fetch_card_by_name(name, set_code=set_code)
+            # Not in the local bulk index (cold start, or a card absent from
+            # bulk data): resolve via the debounced batch resolver, which fires
+            # one /cards/collection for the whole active burst.
+            card = self._batch_resolver.resolve(name, set_code=set_code, uuid=uuid)
+        if card is None:
+            # The batch lookup returned no match for this identifier: a genuine
+            # "no such card". Phrase it so the queue treats it as a permanent
+            # failure (no retry) rather than a transient error.
+            return False, f"Card image not found for {name}: 404 not found"
         return self._download_single_image(card, size)
 
     def download_all_images(

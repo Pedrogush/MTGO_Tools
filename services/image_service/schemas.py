@@ -45,6 +45,10 @@ IMAGE_SIZES = {
 BULK_DATA_URL = "https://api.scryfall.com/bulk-data/default-cards"
 SCRYFALL_CARD_NAMED_URL = "https://api.scryfall.com/cards/named"
 SCRYFALL_CARD_SEARCH_URL = "https://api.scryfall.com/cards/search"
+# Batch metadata lookup: up to 75 card identifiers per POST. Used to resolve a
+# whole burst of cold-start image requests in one call instead of one
+# /cards/named GET per card (which tripped Scryfall's rate limiter).
+SCRYFALL_CARD_COLLECTION_URL = "https://api.scryfall.com/cards/collection"
 
 
 # ---------------------------------------------------------------------------

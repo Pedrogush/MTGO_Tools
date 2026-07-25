@@ -14,7 +14,12 @@ param(
     # Reuse an already-published bridge instead of rebuilding it. The bridge is
     # still REQUIRED: if the published artifact is missing, the build fails
     # rather than shipping an installer without MTGO integration.
-    [switch]$SkipDotNetBuild = $false
+    [switch]$SkipDotNetBuild = $false,
+    # Skip downloading the bundled bulk-data seed. Without the seed, a fresh
+    # install downloads the card database on first run (works, just slower to
+    # warm up). Provided as an escape hatch for offline builds; normal releases
+    # should ship the seed so first-run is instant.
+    [switch]$SkipBulkSeed = $false
 )
 
 $ErrorActionPreference = "Stop"
@@ -321,6 +326,38 @@ if (-not $SkipPyInstaller) {
     Pop-Location
 } else {
     Write-Info "Skipping PyInstaller build (using existing executable)"
+}
+
+# Step 3b: Build the bundled bulk-data seed.
+#
+# Downloads Scryfall's default_cards bulk file (gzip transfer, ~130 MB) and
+# writes it to dist/seed/bulk_data.json.gz. The onefile "dist/*" [Files] rule in
+# installer.iss ships everything under dist (except installer/), so the seed
+# lands at {app}\seed\bulk_data.json.gz, which the app decompresses into its
+# image cache on first run (services/image_service/seed.py). This makes a fresh
+# install start warm instead of racing a cold download.
+if (-not $SkipBulkSeed) {
+    Write-Info "Building bundled bulk-data seed (this downloads ~130 MB)..."
+    $SeedScript = Join-Path $ProjectRoot "scripts\build_bulk_seed.py"
+    $SeedOut = Join-Path $DistDir "seed\bulk_data.json.gz"
+    if (-not $PythonPath) {
+        Write-Warn "Python not found; cannot build the bulk-data seed."
+    } elseif (-not (Test-Path $SeedScript)) {
+        Write-Warn "Bulk seed script not found at $SeedScript"
+    } else {
+        & $PythonPath $SeedScript --out $SeedOut
+        if ($LASTEXITCODE -ne 0) {
+            Write-Warn "Bulk seed build failed (exit code $LASTEXITCODE)."
+        } elseif (-not (Test-Path $SeedOut)) {
+            Write-Warn "Bulk seed build reported success but $SeedOut is missing."
+        } else {
+            $SeedSizeMb = "{0:N1} MB" -f ((Get-Item $SeedOut).Length / 1MB)
+            Write-Info "Bulk-data seed ready: $SeedOut ($SeedSizeMb)"
+        }
+    }
+    Fail-On-Warnings
+} else {
+    Write-Info "Skipping bulk-data seed build (-SkipBulkSeed); first run will download it."
 }
 
 # Step 4: Build the .NET bridge (REQUIRED)
