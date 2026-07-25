@@ -2,7 +2,16 @@
 ; This script creates a Windows installer with license agreement, custom install directory, and shortcuts
 
 #define MyAppName "MTGO Tools"
-#define MyAppVersion "0.2"
+; Single source of truth for the version is the repo-root VERSION file. It is
+; owned by the semver automation (scripts/next_version.py + the Versioning CI
+; workflow), which bumps it from conventional-commit messages. Read it here at
+; compile time so the installer and its output filename always match.
+#define VerFile FileOpen(AddBackslash(SourcePath) + "..\VERSION")
+#define MyAppVersion Trim(FileRead(VerFile))
+#expr FileClose(VerFile)
+#if MyAppVersion == ""
+  #error VERSION file is missing or empty (expected at repo root)
+#endif
 #define MyAppPublisher "MTGO Metagame Crawler Contributors"
 #define MyAppURL "https://github.com/Pedrogush/MTGO_Tools"
 #define MyAppExeName "mtgo_tools.exe"

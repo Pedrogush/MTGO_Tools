@@ -25,6 +25,17 @@ $ProjectRoot = Split-Path -Parent $ScriptDir
 $DistDir = Join-Path $ProjectRoot "dist"
 $InstallerDir = Join-Path $DistDir "installer"
 
+# Version is the single source of truth in the repo-root VERSION file, owned by
+# the semver automation (scripts/next_version.py + the Versioning CI workflow).
+# installer.iss reads the same file, so the output filename below matches it.
+$VersionFile = Join-Path $ProjectRoot "VERSION"
+if (-not (Test-Path $VersionFile)) {
+    Write-Host "[ERROR] VERSION file not found at $VersionFile" -ForegroundColor Red
+    exit 1
+}
+$AppVersion = (Get-Content -Raw $VersionFile).Trim()
+$InstallerFileName = "MTGOTools_Setup_v$AppVersion.exe"
+
 function Write-Info {
     param([string]$Message)
     Write-Host "[INFO] $Message" -ForegroundColor Green
@@ -392,7 +403,7 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 # Step 7: Verify the installer was created
-$InstallerFile = Join-Path $InstallerDir "MTGOTools_Setup_v0.2.exe"
+$InstallerFile = Join-Path $InstallerDir $InstallerFileName
 if (-not (Test-Path $InstallerFile)) {
     Write-Error-Custom "Installer was not created at expected location: $InstallerFile"
     exit 1

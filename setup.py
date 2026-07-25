@@ -13,9 +13,19 @@ def load_requirements(filename: str) -> list[str]:
     return requirements
 
 
+def read_version() -> str:
+    """Single source of truth: the repo-root VERSION file.
+
+    Owned by the semver automation (scripts/next_version.py + the Versioning CI
+    workflow), which bumps it from conventional-commit messages. pyproject.toml
+    declares ``version`` dynamic; this supplies it.
+    """
+    return Path(__file__).with_name("VERSION").read_text(encoding="utf-8").strip()
+
+
 setuptools.setup(
     name="mtg_metagame_tools",
-    version="0.2",
+    version=read_version(),
     author="yochi",
     author_email="pedrogush@gmail.com",
     description="MTG Metagame Analysis: Opponent tracking and deck research tools for MTGO",
