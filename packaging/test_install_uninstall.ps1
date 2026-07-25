@@ -51,7 +51,9 @@ $ScriptDir   = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ProjectRoot = Split-Path -Parent $ScriptDir
 
 if (-not $InstallerPath) {
-    $InstallerPath = Join-Path $ProjectRoot "dist\installer\MTGOTools_Setup_v0.2.exe"
+    # Version comes from the repo-root VERSION file (single source of truth).
+    $AppVersion = (Get-Content -Raw (Join-Path $ProjectRoot "VERSION")).Trim()
+    $InstallerPath = Join-Path $ProjectRoot "dist\installer\MTGOTools_Setup_v$AppVersion.exe"
 }
 
 # AppId from installer.iss (the doubled leading brace there escapes to one brace

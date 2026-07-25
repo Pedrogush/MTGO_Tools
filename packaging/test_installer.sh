@@ -7,7 +7,9 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 INSTALLER_DIR="$PROJECT_ROOT/dist/installer"
-INSTALLER_FILE="$INSTALLER_DIR/MTGOTools_Setup_v0.2.exe"
+# Version comes from the repo-root VERSION file (single source of truth).
+APP_VERSION="$(tr -d '[:space:]' < "$PROJECT_ROOT/VERSION")"
+INSTALLER_FILE="$INSTALLER_DIR/MTGOTools_Setup_v${APP_VERSION}.exe"
 
 # Color output
 RED='\033[0;31m'

@@ -6,7 +6,9 @@ $ErrorActionPreference = "Stop"
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ProjectRoot = Split-Path -Parent $ScriptDir
 $InstallerDir = Join-Path $ProjectRoot "dist\installer"
-$InstallerFile = Join-Path $InstallerDir "MTGOTools_Setup_v0.2.exe"
+# Version comes from the repo-root VERSION file (single source of truth).
+$AppVersion = (Get-Content -Raw (Join-Path $ProjectRoot "VERSION")).Trim()
+$InstallerFile = Join-Path $InstallerDir "MTGOTools_Setup_v$AppVersion.exe"
 
 function Write-Info {
     param([string]$Message)

@@ -199,7 +199,9 @@ wine "$INNO_SETUP_PATH" "$ISS_FILE_WINDOWS" || {
 }
 
 # Step 8: Verify the installer was created
-INSTALLER_FILE="$INSTALLER_DIR/MTGOTools_Setup_v0.2.exe"
+# Version comes from the repo-root VERSION file (single source of truth).
+APP_VERSION="$(tr -d '[:space:]' < "$PROJECT_ROOT/VERSION")"
+INSTALLER_FILE="$INSTALLER_DIR/MTGOTools_Setup_v${APP_VERSION}.exe"
 if [ ! -f "$INSTALLER_FILE" ]; then
     echo_error "Installer was not created at expected location: $INSTALLER_FILE"
     exit 1

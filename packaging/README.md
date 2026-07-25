@@ -13,7 +13,17 @@ The install is **per-user and requires no administrator privileges** (`Privilege
 
 **Debugging an installed build:** the shipped executable is windowed (no console), but `debugpy` is bundled so you can attach an IDE debugger the same way you would in the editor. Set `MTGO_TOOLS_INSTALL_DEBUG=1` (or `MTGO_TOOLS_INSTALL_DEBUG=<port>`) before launching to have it listen on 127.0.0.1:5678, then use your IDE's "attach to process/port". Set `MTGO_TOOLS_INSTALL_DEBUG_WAIT=1` to block startup until the debugger attaches (for breaking on early startup code). The hook is inert unless the env var is set. File logs are always written to `%LOCALAPPDATA%\MTGO Tools\logs`; set `MTGO_LOG_LEVEL=DEBUG` for verbose output.
 
-Prerequisites: Inno Setup 6, Python 3.11+ with PyInstaller, and the **.NET 9 SDK** (required — used to publish the self-contained MTGO bridge that is shipped inside the installer). The SDK can be installed with no admin rights via `Invoke-WebRequest https://dot.net/v1/dotnet-install.ps1 -OutFile dotnet-install.ps1; .\dotnet-install.ps1 -Channel 9.0`; the build script auto-detects a per-user SDK under `%LOCALAPPDATA%\Microsoft\dotnet`. On Linux the build script uses Wine to run Inno Setup and will automatically download it if not present. Output is created at dist/installer/MTGOTools_Setup_v0.2.exe. The PyInstaller spec is `mtgo_tools.spec`, which produces a single-file `dist/mtgo_tools.exe`.
+Prerequisites: Inno Setup 6, Python 3.11+ with PyInstaller, and the **.NET 9 SDK** (required — used to publish the self-contained MTGO bridge that is shipped inside the installer). The SDK can be installed with no admin rights via `Invoke-WebRequest https://dot.net/v1/dotnet-install.ps1 -OutFile dotnet-install.ps1; .\dotnet-install.ps1 -Channel 9.0`; the build script auto-detects a per-user SDK under `%LOCALAPPDATA%\Microsoft\dotnet`. On Linux the build script uses Wine to run Inno Setup and will automatically download it if not present. Output is created at `dist/installer/MTGOTools_Setup_v<VERSION>.exe`, where `<VERSION>` comes from the repo-root `VERSION` file. The PyInstaller spec is `mtgo_tools.spec`, which produces a single-file `dist/mtgo_tools.exe`.
+
+## Versioning
+
+The installer version is **not** hardcoded here — `installer.iss` reads the
+repo-root `VERSION` file at compile time (via ISPP `FileRead`), and the build/test
+scripts derive the `MTGOTools_Setup_v<VERSION>.exe` filename from the same file.
+`VERSION` is the single source of truth and is bumped automatically from
+conventional-commit messages by `scripts/next_version.py` and the Versioning CI
+workflow. To ship a specific version manually, edit `VERSION` and rebuild. See
+[`../docs/VERSIONING.md`](../docs/VERSIONING.md) for the full scheme.
 
 To customize edit installer.iss to change version, app name, included files, or shortcuts. For distribution sign the installer and generate checksums. The build and test scripts are CI/CD friendly.
 
