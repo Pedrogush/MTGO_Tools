@@ -83,6 +83,24 @@ ATOMIC_DATA_HEAD_TTL_SECONDS = ONE_DAY_SECONDS
 # Deck Builder Panel — search debounce
 BUILDER_SEARCH_DEBOUNCE_MS = 300  # milliseconds to wait after last filter change before searching
 
+# Scryfall API rate limiting. Scryfall asks clients to keep API traffic to
+# ~10 requests/second (a 50-100 ms gap) and to honor Retry-After on 429. The
+# image pipeline runs up to 10 concurrent workers, and on a cold start (before
+# the local bulk index exists) every card is a per-card /cards/named API call,
+# so without a shared throttle those workers trip the limiter within seconds.
+# All API requests across every session/worker share one budget via this gap.
+SCRYFALL_API_MIN_INTERVAL_SECONDS = 0.1  # min gap between Scryfall *API* requests (≈10/s)
+SCRYFALL_API_MAX_429_RETRIES = 4  # times to honor Retry-After before giving up on a 429
+SCRYFALL_API_RETRY_AFTER_FALLBACK_SECONDS = 1.0  # wait when a 429 omits Retry-After
+SCRYFALL_API_RETRY_AFTER_MAX_SECONDS = 10.0  # clamp so a hostile Retry-After can't stall a worker
+# Cold-start metadata resolution is batched: when the local bulk index isn't
+# available yet (fresh install, before bulk_data.json finishes downloading),
+# resolution misses are collected for this debounce window and resolved in a
+# single /cards/collection POST instead of one /cards/named GET per card. A lone
+# miss in the window still uses the per-card /cards/named endpoint.
+IMAGE_BATCH_RESOLVE_DEBOUNCE_SECONDS = 0.5  # collect the active fetch burst before firing
+SCRYFALL_COLLECTION_MAX_IDENTIFIERS = 75  # Scryfall's hard cap per /cards/collection request
+
 # Scryfall bulk image downloader — download configuration
 SCRYFALL_REQUEST_TIMEOUT_SECONDS = 30  # timeout for individual Scryfall API/image requests
 SCRYFALL_BULK_STREAM_TIMEOUT_SECONDS = 120  # timeout for streaming the bulk data download
@@ -158,3 +176,9 @@ IMAGE_DOWNLOAD_INITIAL_BACKOFF_SECONDS = 0.5  # initial backoff delay before fir
 IMAGE_DOWNLOAD_SLOW_THRESHOLD_SECONDS = (
     1.5  # elapsed time above which a "successful" download is treated as failed
 )
+# Self-heal guard: non-permanent download failures (e.g. a transient error, or a
+# cold-start miss before the local bulk index existed) are remembered and
+# re-attempted once the index becomes available — the moment those retries can
+# actually succeed. Bounds how many are held so a long offline stretch can't grow
+# the set without limit.
+IMAGE_DEFERRED_RETRY_MAX = 5000

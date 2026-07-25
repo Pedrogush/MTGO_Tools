@@ -26,6 +26,10 @@ from utils.constants import CACHE_DIR
 # Image cache configuration
 IMAGE_CACHE_DIR = CACHE_DIR / "card_images"
 IMAGE_DB_PATH = IMAGE_CACHE_DIR / "images.db"
+# The bulk file is stored gzip-compressed on disk (~5x smaller) under this
+# unchanged filename; readers go through services.image_service.bulk_store
+# (decode_bulk_bytes), which also transparently reads a legacy uncompressed
+# file. Do not read this path directly with a JSON parser.
 BULK_DATA_CACHE = IMAGE_CACHE_DIR / "bulk_data.json"
 # v5: face-name aliases no longer overwrite a real standalone card's printing
 # list (e.g. "Emeritus of Conflict // Lightning Bolt" must not pollute
@@ -45,6 +49,10 @@ IMAGE_SIZES = {
 BULK_DATA_URL = "https://api.scryfall.com/bulk-data/default-cards"
 SCRYFALL_CARD_NAMED_URL = "https://api.scryfall.com/cards/named"
 SCRYFALL_CARD_SEARCH_URL = "https://api.scryfall.com/cards/search"
+# Batch metadata lookup: up to 75 card identifiers per POST. Used to resolve a
+# whole burst of cold-start image requests in one call instead of one
+# /cards/named GET per card (which tripped Scryfall's rate limiter).
+SCRYFALL_CARD_COLLECTION_URL = "https://api.scryfall.com/cards/collection"
 
 
 # ---------------------------------------------------------------------------

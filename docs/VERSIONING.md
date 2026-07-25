@@ -57,14 +57,14 @@ considered already-bumped, and later runs are no-ops. So the number set when the
 PR first earns a bump is the number it keeps as more commits land. Because the
 installer build reads `VERSION`, the PR's installer is versioned to match.
 
-> **One-time setup (recommended):** a commit pushed with the default
-> `GITHUB_TOKEN` does **not** trigger other workflows, so on a checks-gated repo
-> the bump commit would sit on the PR without CI and block merge. Set a repo
-> secret **`VERSION_BOT_TOKEN`** = a fine-grained PAT with *Contents: read/write*
-> on this repo; the bump push then triggers CI normally. Without it, the bump is
-> still committed but you must re-run CI on that commit before merging. The bot
-> only ever pushes to **PR branches**, never to `main`. Fork PRs are skipped
-> (their token is read-only).
+> **Optional — CI on the bump commit:** a commit pushed with the default
+> `GITHUB_TOKEN` does **not** trigger other workflows, so CI won't re-run on the
+> bump commit itself. `main`'s ruleset doesn't require status checks, so this
+> doesn't block merging and **no setup is needed**. If you'd like CI to run on
+> the bump commit too, set a repo secret **`VERSION_BOT_TOKEN`** = a fine-grained
+> PAT with *Contents: read/write* on this repo and the bump push will trigger CI
+> normally. The bot only ever pushes to **PR branches**, never to `main`. Fork
+> PRs are skipped (their token is read-only).
 
 ## What this means for you
 

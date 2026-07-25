@@ -18,6 +18,7 @@ from services.image_service.priorities import (
 )
 from services.image_service.schemas import CardImageRequest
 from utils.constants.timing import (
+    IMAGE_DEFERRED_RETRY_MAX,
     IMAGE_DOWNLOAD_INITIAL_BACKOFF_SECONDS,
     IMAGE_DOWNLOAD_MAX_RETRIES,
     IMAGE_DOWNLOAD_QUEUE_IDLE_WAIT_SECONDS,
@@ -55,6 +56,10 @@ class CardImageDownloadQueue:
         self._pending_priorities: dict[tuple[str, ...], int] = {}
         self._inflight_keys: set[tuple[str, ...]] = set()
         self._inflight_count = 0
+        # Non-permanent failures held for a later retry (see
+        # _remember_deferred_failure_locked / retry_deferred_failures). Keyed by
+        # queue_key so repeated failures of one card don't accumulate.
+        self._deferred_failures: dict[tuple[str, ...], CardImageRequest] = {}
         self._selected_request: CardImageRequest | None = None
         self._stop_event = threading.Event()
         self._lock = threading.Lock()
@@ -316,8 +321,51 @@ class CardImageDownloadQueue:
             key = request.queue_key()
             self._inflight_keys.discard(key)
             self._inflight_count = max(0, self._inflight_count - 1)
+            if not success:
+                self._remember_deferred_failure_locked(request, key)
             self._ensure_selected_priority_locked()
             self._condition.notify()
+
+    def _remember_deferred_failure_locked(
+        self, request: CardImageRequest, key: tuple[str, ...]
+    ) -> None:
+        """Hold a non-permanent failure for a later retry.
+
+        Permanent failures (recorded in ``_NOT_FOUND_KEYS``) are excluded — they
+        can never succeed, so retrying wastes work. Everything else (a transient
+        error, or a cold-start miss before the local bulk index existed) is
+        remembered so :meth:`retry_deferred_failures` can re-attempt it once the
+        index is available, healing the "image never appears until you hover"
+        gap. The upstream prefetcher/warm-up each dedupe per session, so without
+        this a failed card is otherwise never re-fed.
+        """
+        if self._is_not_found_key_blocked(self._not_found_key(request)):
+            return
+        if key not in self._deferred_failures and len(self._deferred_failures) >= (
+            IMAGE_DEFERRED_RETRY_MAX
+        ):
+            return
+        self._deferred_failures[key] = request
+
+    def retry_deferred_failures(self) -> int:
+        """Re-enqueue previously-failed downloads; returns how many were queued.
+
+        Called when the local bulk index becomes available (a cold-start bulk
+        download completing), i.e. the moment those retries can succeed. Already
+        cached / not-found / in-flight requests are dropped by ``enqueue``.
+        """
+        with self._condition:
+            pending = list(self._deferred_failures.values())
+            self._deferred_failures.clear()
+        requeued = sum(
+            1 for request in pending if self.enqueue(request, priority=PRIORITY_BACKGROUND)
+        )
+        if requeued:
+            logger.info(
+                f"Retrying {requeued} previously-failed card image download(s) "
+                "after bulk index refresh."
+            )
+        return requeued
 
     def _ensure_selected_priority_locked(self) -> None:
         request = self._selected_request

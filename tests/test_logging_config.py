@@ -8,7 +8,7 @@ from pathlib import Path
 
 from loguru import logger
 
-from utils.logging_config import _warmup_filter, configure_logging
+from utils.logging_config import FILE_LOG_LEVEL, _warmup_filter, configure_logging
 
 
 class _Level:
@@ -35,7 +35,8 @@ def test_warmup_filter_passes_non_warmup_records():
     assert _warmup_filter(_record(warmup=False, level_name="DEBUG")) is True
 
 
-def _captured_levels(logs_dir, monkeypatch, env_value):
+def _captured_sinks(logs_dir, monkeypatch, env_value):
+    """Return ``(is_stream_sink, levelno)`` for each configured sink."""
     if env_value is None:
         monkeypatch.delenv("MTGO_LOG_LEVEL", raising=False)
     else:
@@ -45,24 +46,45 @@ def _captured_levels(logs_dir, monkeypatch, env_value):
     try:
         # loguru exposes the configured sinks via the private handler registry;
         # their `levelno` reflects the threshold each sink will emit at.
-        return sorted(h.levelno for h in logger._core.handlers.values())
+        return [(_is_stream_sink(h), h.levelno) for h in logger._core.handlers.values()]
     finally:
         logger.remove()
 
 
-def test_default_level_is_info(tmp_path, monkeypatch):
-    info_no = logger.level("INFO").no
-    assert all(no == info_no for no in _captured_levels(tmp_path, monkeypatch, None))
+def _console_levels(sinks):
+    return [levelno for is_stream, levelno in sinks if is_stream]
 
 
-def test_debug_level_via_env(tmp_path, monkeypatch):
-    debug_no = logger.level("DEBUG").no
-    assert all(no == debug_no for no in _captured_levels(tmp_path, monkeypatch, "DEBUG"))
+def _file_levels(sinks):
+    return [levelno for is_stream, levelno in sinks if not is_stream]
+
+
+def test_console_default_level_is_info(tmp_path, monkeypatch):
+    # The console sink follows MTGO_LOG_LEVEL (default INFO); the file sink
+    # always records at TRACE so the install keeps a full event history.
+    sinks = _captured_sinks(tmp_path, monkeypatch, None)
+    assert _console_levels(sinks) == [logger.level("INFO").no]
+    assert _file_levels(sinks) == [logger.level(FILE_LOG_LEVEL).no]
+
+
+def test_console_debug_level_via_env(tmp_path, monkeypatch):
+    # Raising MTGO_LOG_LEVEL affects the console only; the file stays at TRACE.
+    sinks = _captured_sinks(tmp_path, monkeypatch, "DEBUG")
+    assert _console_levels(sinks) == [logger.level("DEBUG").no]
+    assert _file_levels(sinks) == [logger.level(FILE_LOG_LEVEL).no]
 
 
 def test_env_level_is_case_insensitive(tmp_path, monkeypatch):
-    debug_no = logger.level("DEBUG").no
-    assert all(no == debug_no for no in _captured_levels(tmp_path, monkeypatch, "debug"))
+    sinks = _captured_sinks(tmp_path, monkeypatch, "debug")
+    assert _console_levels(sinks) == [logger.level("DEBUG").no]
+
+
+def test_file_sink_records_at_trace(tmp_path, monkeypatch):
+    # Even with a raised console level, the file floor is TRACE (the lowest),
+    # so nothing is lost from the persistent history.
+    assert FILE_LOG_LEVEL == "TRACE"
+    sinks = _captured_sinks(tmp_path, monkeypatch, "WARNING")
+    assert _file_levels(sinks) == [logger.level("TRACE").no]
 
 
 def test_returns_log_file_path_under_logs_dir(tmp_path, monkeypatch):

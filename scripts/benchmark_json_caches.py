@@ -9,8 +9,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import statistics
 import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -20,6 +22,7 @@ from services.image_service import (
     BULK_DATA_CACHE,
     PRINTING_INDEX_CACHE,
 )
+from services.image_service.bulk_store import decode_bulk_bytes, is_gzip
 from services.image_service.schemas import (
     _bulk_cards_decoder,
     _printing_index_decoder,
@@ -70,6 +73,28 @@ def _benchmark(path: Path, iterations: int, label: str) -> None:
         logger.warning(f"{label} cache not found at {path}")
         return
 
+    # The bulk cache is stored gzip-compressed on disk (bulk_store). This tool
+    # measures JSON *decode* speed, so materialize the decompressed JSON to a
+    # temp file once and benchmark that; otherwise every variant would just fail
+    # to parse the gzip bytes. `original_path` is kept for the typed-schema
+    # selection, since `read_path` may now be the decompressed temp file.
+    original_path = path
+    temp_path: Path | None = None
+    raw = path.read_bytes()
+    if is_gzip(raw):
+        fd, tmp_name = tempfile.mkstemp(suffix=".json")
+        temp_path = Path(tmp_name)
+        with os.fdopen(fd, "wb") as fh:
+            fh.write(decode_bulk_bytes(raw))
+        path = temp_path
+    try:
+        _benchmark_decoded(path, original_path=original_path, iterations=iterations, label=label)
+    finally:
+        if temp_path is not None:
+            temp_path.unlink(missing_ok=True)
+
+
+def _benchmark_decoded(path: Path, *, original_path: Path, iterations: int, label: str) -> None:
     size_mb = path.stat().st_size / (1024 * 1024)
     logger.info(f"\n{'='*60}")
     logger.info(f"{label} ({size_mb:.1f} MB)  —  {iterations} iteration(s)")
@@ -96,7 +121,7 @@ def _benchmark(path: Path, iterations: int, label: str) -> None:
     _summarise("msgspec Any", msgspec_any_times)
 
     # msgspec typed (only available for known schemas)
-    if path == PRINTING_INDEX_CACHE:
+    if original_path == PRINTING_INDEX_CACHE:
         logger.info("--- msgspec PrintingIndexPayload (typed schema) ---")
         typed_times = _benchmark_variant(
             path,
@@ -105,7 +130,7 @@ def _benchmark(path: Path, iterations: int, label: str) -> None:
             lambda p: _printing_index_decoder.decode(p.read_bytes()),
         )
         _summarise("msgspec typed", typed_times)
-    elif path == BULK_DATA_CACHE:
+    elif original_path == BULK_DATA_CACHE:
         logger.info("--- msgspec list[BulkCard] (typed schema, partial fields) ---")
         typed_times = _benchmark_variant(
             path,
