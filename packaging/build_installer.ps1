@@ -4,10 +4,16 @@
 # Prerequisites:
 # - Inno Setup 6 installed (https://jrsoftware.org/isdl.php)
 # - PyInstaller installed (pip install pyinstaller)
-# - .NET 9 SDK (optional, if you want to rebuild the bridge)
+# - .NET 9 SDK (REQUIRED): the MTGO bridge is built self-contained and shipped
+#   inside the installer, so the build fails if it cannot be produced. A per-user
+#   SDK under %LOCALAPPDATA%\Microsoft\dotnet is detected automatically (install
+#   with no admin via https://dot.net/v1/dotnet-install.ps1 -Channel 9.0).
 
 param(
     [switch]$SkipPyInstaller = $false,
+    # Reuse an already-published bridge instead of rebuilding it. The bridge is
+    # still REQUIRED: if the published artifact is missing, the build fails
+    # rather than shipping an installer without MTGO integration.
     [switch]$SkipDotNetBuild = $false
 )
 
@@ -105,10 +111,20 @@ Write-Info "Updating vendor data..."
 Push-Location $ProjectRoot
 try {
     $VendorUpdateScript = Join-Path $ProjectRoot "scripts\update_vendor_data.py"
-    $VendorPython = Join-Path $ProjectRoot "env\Scripts\python.exe"
+    # Prefer the project virtualenv (which has the build deps like defusedxml and
+    # PyInstaller). The venv is named ".venv" here; "env" is kept as a fallback for
+    # other setups. A bare "python" on PATH is the last resort - on this machine
+    # that resolves to a uv-managed interpreter whose "pip install" is blocked.
+    $VendorPython = $null
+    foreach ($cand in @(
+        (Join-Path $ProjectRoot ".venv\Scripts\python.exe"),
+        (Join-Path $ProjectRoot "env\Scripts\python.exe")
+    )) {
+        if (Test-Path $cand) { $VendorPython = $cand; break }
+    }
     $FallbackPython = Get-Command python -ErrorAction SilentlyContinue
     $PythonPath = $null
-    if (Test-Path $VendorPython) {
+    if ($VendorPython -and (Test-Path $VendorPython)) {
         $PythonPath = $VendorPython
     } elseif ($FallbackPython) {
         $PythonPath = $FallbackPython.Source
@@ -157,7 +173,7 @@ try {
         Write-Info "Mana assets missing; fetching from the Pedrogush/mana fork…"
         $FetchScript = Join-Path $ProjectRoot "scripts\fetch_mana_assets.py"
         if (Test-Path $FetchScript) {
-            if (Test-Path $VendorPython) {
+            if ($VendorPython -and (Test-Path $VendorPython)) {
                 & $VendorPython $FetchScript
             } elseif ($FallbackPython) {
                 & $FallbackPython.Source $FetchScript
@@ -222,11 +238,18 @@ Write-Info "Inno Setup found at: $InnoSetupPath"
 function Find-PyInstallerPath {
     param([string]$ProjectRoot)
 
-    $explicit = Join-Path $ProjectRoot "env\Scripts\pyinstaller.exe"
-    Write-Info "Looking for PyInstaller at explicit path: $explicit"
-    if (Test-Path $explicit) {
-        Write-Info "PyInstaller found explicitly."
-        return $explicit
+    # Prefer the project virtualenv (".venv" here, "env" as a fallback) before a
+    # PyInstaller on PATH, so the build uses the same interpreter that has the
+    # project's build dependencies installed.
+    foreach ($explicit in @(
+        (Join-Path $ProjectRoot ".venv\Scripts\pyinstaller.exe"),
+        (Join-Path $ProjectRoot "env\Scripts\pyinstaller.exe")
+    )) {
+        Write-Info "Looking for PyInstaller at explicit path: $explicit"
+        if (Test-Path $explicit) {
+            Write-Info "PyInstaller found explicitly."
+            return $explicit
+        }
     }
 
     $fromEnv = Get-Command pyinstaller -ErrorAction SilentlyContinue
@@ -289,34 +312,69 @@ if (-not $SkipPyInstaller) {
     Write-Info "Skipping PyInstaller build (using existing executable)"
 }
 
-# Step 4: Check for .NET bridge (optional)
-if (-not $SkipDotNetBuild) {
-    $BridgePath = Join-Path $ProjectRoot "dotnet\MTGOBridge\bin\Release\net9.0-windows7.0\win-x64\publish\MTGOBridge.exe"
-    if (-not (Test-Path $BridgePath)) {
-        Write-Info ".NET bridge not found at expected location; building..."
-
-        # Check for dotnet SDK
-        $DotNetCheck = Get-Command dotnet -ErrorAction SilentlyContinue
-        if ($DotNetCheck) {
-            Push-Location (Join-Path $ProjectRoot "dotnet\MTGOBridge")
-            Write-Info "Building .NET bridge as self-contained single file (bundles .NET runtime)..."
-            & dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -warnaserror
-            Pop-Location
-
-            if (-not (Test-Path $BridgePath)) {
-                Write-Error-Custom ".NET bridge build completed but executable not found at $BridgePath"
-                exit 1
-            }
-
-            Write-Info ".NET bridge build complete!"
-        } else {
-            Write-Error-Custom ".NET SDK not found. Install .NET 9 SDK or rerun with -SkipDotNetBuild."
-            exit 1
-        }
-    } else {
-        Write-Info ".NET bridge found at: $BridgePath"
+# Step 4: Build the .NET bridge (REQUIRED)
+#
+# The bridge is a self-contained .NET publish (bundles its own runtime) and is
+# shipped inside the installer by installer.iss. It is therefore mandatory: if
+# the published artifact cannot be produced or found, we fail rather than ship an
+# installer without MTGO integration.
+function Find-DotNetPath {
+    # Prefer an explicit dotnet on PATH, then the per-user install location used
+    # by dotnet-install.ps1 (%LOCALAPPDATA%\Microsoft\dotnet), then the standard
+    # machine-wide location. Mirrors how PyInstaller/Python are resolved above.
+    $fromEnv = Get-Command dotnet -ErrorAction SilentlyContinue
+    if ($fromEnv) {
+        Write-Info "dotnet found via PATH: $($fromEnv.Path)"
+        return $fromEnv.Source
     }
+    $candidates = @(
+        (Join-Path $env:LOCALAPPDATA "Microsoft\dotnet\dotnet.exe"),
+        (Join-Path $env:ProgramFiles "dotnet\dotnet.exe")
+    )
+    foreach ($candidate in $candidates) {
+        if ($candidate -and (Test-Path $candidate)) {
+            Write-Info "dotnet found at: $candidate"
+            return $candidate
+        }
+    }
+    return $null
 }
+
+$BridgeProject = Join-Path $ProjectRoot "dotnet\MTGOBridge"
+$BridgePublishDir = Join-Path $BridgeProject "bin\Release\net9.0-windows7.0\win-x64\publish"
+$BridgePath = Join-Path $BridgePublishDir "MTGOBridge.exe"
+
+if ($SkipDotNetBuild) {
+    Write-Info "Skipping .NET bridge build (-SkipDotNetBuild); reusing existing publish output."
+} else {
+    $DotNetPath = Find-DotNetPath
+    if (-not $DotNetPath) {
+        Write-Error-Custom ".NET 9 SDK not found. The bridge is shipped inside the installer and cannot be skipped."
+        Write-Error-Custom "Install it with no admin rights via:"
+        Write-Error-Custom "  Invoke-WebRequest https://dot.net/v1/dotnet-install.ps1 -OutFile dotnet-install.ps1; .\dotnet-install.ps1 -Channel 9.0"
+        exit 1
+    }
+    Push-Location $BridgeProject
+    Write-Info "Building .NET bridge as self-contained single file (bundles .NET runtime)..."
+    & $DotNetPath publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -warnaserror
+    $BridgeExit = $LASTEXITCODE
+    Pop-Location
+    if ($BridgeExit -ne 0) {
+        Write-Error-Custom ".NET bridge build failed (exit code $BridgeExit)."
+        exit 1
+    }
+    Write-Info ".NET bridge build complete!"
+}
+
+# Hard requirement: the published bridge MUST exist before we compile the
+# installer, regardless of whether we just built it or reused an existing build.
+if (-not (Test-Path $BridgePath)) {
+    Write-Error-Custom "MTGO bridge not found at $BridgePath"
+    Write-Error-Custom "The installer ships the bridge from this path; refusing to build without it."
+    Write-Error-Custom "Run without -SkipDotNetBuild (and with the .NET 9 SDK installed) to build it."
+    exit 1
+}
+Write-Info "MTGO bridge ready: $BridgePath"
 Fail-On-Warnings
 
 # Step 5: Create installer output directory

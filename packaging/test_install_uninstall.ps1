@@ -14,13 +14,13 @@
          run) under %LOCALAPPDATA%.
       4. Uninstalls silently.
       5. Asserts nothing is left behind: the uninstall registry key is gone, the
-         install directory (including the post-install bridge download) is gone,
-         and regenerable per-user data (cache/logs/data) is gone - while user
+         install directory (including the bundled bridge) is gone, and
+         regenerable per-user data (cache/logs/data) is gone - while user
          settings (config) and saved decks are intentionally preserved.
 
     This is what catches the classic installer bugs: an orphaned registry key,
-    or files created after install (the downloaded bridge, runtime caches) that
-    the uninstaller doesn't know to remove.
+    or files (the bundled bridge, runtime caches) that the uninstaller doesn't
+    know to remove.
 
 .NOTES
     Run on Windows in a normal (non-elevated) shell - the installer is a
@@ -157,6 +157,13 @@ Run-Test "App did NOT write data into the install dir" {
     -not (Test-Path (Join-Path $InstallDir "config")) -and
     -not (Test-Path (Join-Path $InstallDir "cache"))
 }
+Run-Test "MTGO bridge bundled in install dir" {
+    # The bridge is built from source and shipped inside the installer (see
+    # installer.iss / build_installer.ps1), not downloaded at install time. It
+    # must land where the app looks for it: {app}\mtgo_integration\MTGOBridge.exe
+    # (services/mtgo_bridge_service/discovery.py).
+    $InstallDir -and (Test-Path (Join-Path $InstallDir "mtgo_integration\MTGOBridge.exe"))
+}
 
 # --- Simulate runtime data ---------------------------------------------------
 # The app creates these on first run (utils/constants/paths.py). We seed marker
@@ -224,7 +231,7 @@ Run-Test "Uninstall registry key removed" { -not (Test-UninstallKeyPresent) }
 Run-Test "Install directory fully removed" {
     -not $InstallDir -or -not (Test-Path $InstallDir)
 }
-Run-Test "Downloaded bridge removed with install dir" {
+Run-Test "Bundled bridge removed with install dir" {
     -not $InstallDir -or -not (Test-Path (Join-Path $InstallDir "mtgo_integration"))
 }
 Run-Test "Regenerable cache removed on uninstall" { -not (Test-Path (Join-Path $DataDir "cache")) }

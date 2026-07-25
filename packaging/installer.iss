@@ -55,8 +55,18 @@ Source: "../dist/{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
 ; installer bundles a copy of its own output directory (and any previously built
 ; setup .exe) into {app}\installer.
 Source: "../dist/*"; DestDir: "{app}"; Excludes: "installer,installer\*"; Flags: ignoreversion recursesubdirs createallsubdirs
+; MTGO integration bridge — a self-contained .NET publish that bundles its own
+; runtime. Built by build_installer.ps1 (dotnet publish -r win-x64
+; --self-contained) and shipped here so MTGO integration works out of the box:
+; no install-time download and no separate .NET runtime requirement on the user's
+; machine. The app resolves it at {app}\mtgo_integration\MTGOBridge.exe
+; (see services/mtgo_bridge_service/discovery.py). Intentionally NOT wrapped in a
+; #if DirExists guard: if the bridge was not built, ISCC must fail rather than
+; silently ship an installer without MTGO integration.
+Source: "../dotnet/MTGOBridge/bin/Release/net9.0-windows7.0/win-x64/publish/*"; DestDir: "{app}\mtgo_integration"; Flags: ignoreversion recursesubdirs createallsubdirs
 ; Vendor data directories (if they exist)
-; NOTE: vendor/mtgosdk is intentionally excluded — the bridge is downloaded at install time.
+; NOTE: vendor/mtgosdk (C# SDK sources) is intentionally excluded; the compiled,
+; self-contained bridge is bundled above and needs nothing else at runtime.
 #if DirExists('../vendor/mtgo_format_data')
 Source: "../vendor/mtgo_format_data/*"; DestDir: "{app}/vendor/mtgo_format_data"; Flags: ignoreversion recursesubdirs createallsubdirs
 #endif
@@ -69,14 +79,15 @@ Source: "../LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 
 [Dirs]
 ; Runtime data (config/cache/logs/data) lives under %LOCALAPPDATA%\{#MyAppName},
-; not under {app}, so those directories are created by the app at runtime rather
-; than here. Only the bridge download target lives inside the install directory.
-Name: "{app}\mtgo_integration"
+; not under {app}, so the app creates those directories at runtime. The bundled
+; MTGO bridge ships into {app}\mtgo_integration via the [Files] section above, so
+; nothing needs to be pre-created here.
 
 [UninstallDelete]
-; The MTGOBridge is downloaded into {app}\mtgo_integration *after* install (see
-; the [Code] section below), so Setup has no record of those files and the
-; uninstaller would otherwise leave them (and the non-empty {app} folder) behind.
+; The bundled bridge files in {app}\mtgo_integration are recorded by Setup and
+; removed automatically on uninstall. This entry additionally sweeps anything the
+; bridge writes next to itself at runtime, so the folder is left empty and removed
+; rather than orphaned.
 Type: filesandordirs; Name: "{app}\mtgo_integration"
 ; Regenerable per-user data: caches, logs, and downloaded card data. User
 ; settings (%LOCALAPPDATA%\{#MyAppName}\config) and saved decks
@@ -97,206 +108,3 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 [Run]
 ; Option to launch the application after installation
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
-
-[Code]
-// ---------------------------------------------------------------------------
-// Bridge download constants
-//
-// The bridge artifact is intentionally downloaded at install time (rather than
-// bundled) so the installer stays small and the bridge can be republished
-// independently. The download is pinned to a specific release tag *and*
-// verified against a known SHA-256 to guarantee integrity. When publishing a
-// new bridge release, update all three values together: URL, ZIP filename,
-// and SHA-256. See packaging/README.md ("Bridge release flow") for details.
-// ---------------------------------------------------------------------------
-const
-  BRIDGE_RELEASE_URL   = 'https://github.com/Pedrogush/MTGOBridge/releases/download/v1.0.0/MTGOBridge-v1.0.0.zip';
-  BRIDGE_MANUAL_URL    = 'https://github.com/Pedrogush/MTGOBridge/releases/latest';
-  BRIDGE_ZIP_FILENAME  = 'MTGOBridge-v1.0.0.zip';
-  // SHA-256 of MTGOBridge-v1.0.0.zip. Empty string disables verification
-  // (only intended for local debugging — production builds MUST set this).
-  BRIDGE_ZIP_SHA256    = '';
-  DOTNET9_WINGET_ID    = 'Microsoft.DotNet.Runtime.9';
-
-// ---------------------------------------------------------------------------
-// .NET 9 detection
-// ---------------------------------------------------------------------------
-function IsDotNet9Installed: Boolean;
-var
-  ResultCode: Integer;
-begin
-  // dotnet --list-runtimes exits 0 even when no matching runtime is found;
-  // we use a simple presence check via "dotnet" availability and version list.
-  Result := Exec('powershell.exe',
-    '-NoProfile -NonInteractive -Command "dotnet --list-runtimes 2>$null | '
-    + 'Select-String ''Microsoft.NETCore.App 9\.''"',
-    '', SW_HIDE, ewWaitUntilTerminated, ResultCode) and (ResultCode = 0);
-end;
-
-// ---------------------------------------------------------------------------
-// PowerShell-based HTTP download helper
-// ---------------------------------------------------------------------------
-function DownloadFilePS(const Url, Dest: String): Boolean;
-var
-  ResultCode: Integer;
-  Script: String;
-begin
-  Script := Format(
-    'Invoke-WebRequest -Uri ''%s'' -OutFile ''%s'' -UseBasicParsing', [Url, Dest]);
-  Result := Exec('powershell.exe',
-    '-NoProfile -NonInteractive -Command "' + Script + '"',
-    '', SW_HIDE, ewWaitUntilTerminated, ResultCode) and (ResultCode = 0);
-end;
-
-// ---------------------------------------------------------------------------
-// PowerShell-based SHA-256 verification helper
-//
-// Returns True if the file at FilePath has a SHA-256 hash matching ExpectedHash
-// (case-insensitive). An empty ExpectedHash skips verification and returns True
-// — this is only intended for local/debug builds.
-// ---------------------------------------------------------------------------
-function VerifySha256PS(const FilePath, ExpectedHash: String): Boolean;
-var
-  ResultCode: Integer;
-  Script: String;
-begin
-  if Trim(ExpectedHash) = '' then
-  begin
-    Log('Bridge SHA-256 verification skipped (no expected hash configured).');
-    Result := True;
-    Exit;
-  end;
-
-  // Get-FileHash exits 0 regardless; we let PowerShell perform the comparison
-  // and translate the result into the process exit code.
-  // Keep the args array on the same line as the format string: Inno Setup reads
-  // any line beginning with '[' (even inside [Code]) as a section header, so a
-  // line that starts with '[FilePath, ExpectedHash]' aborts compilation.
-  Script := Format(
-    '$h = (Get-FileHash -Algorithm SHA256 -Path ''%s'').Hash; '
-    + 'if ($h -ieq ''%s'') { exit 0 } else { Write-Error "SHA256 mismatch: $h"; exit 1 }', [FilePath, ExpectedHash]);
-  Result := Exec('powershell.exe',
-    '-NoProfile -NonInteractive -Command "' + Script + '"',
-    '', SW_HIDE, ewWaitUntilTerminated, ResultCode) and (ResultCode = 0);
-end;
-
-// ---------------------------------------------------------------------------
-// PowerShell-based zip extraction helper
-// ---------------------------------------------------------------------------
-function ExtractZipPS(const ZipPath, DestDir: String): Boolean;
-var
-  ResultCode: Integer;
-  Script: String;
-begin
-  Script := Format(
-    'Expand-Archive -Path ''%s'' -DestinationPath ''%s'' -Force', [ZipPath, DestDir]);
-  Result := Exec('powershell.exe',
-    '-NoProfile -NonInteractive -Command "' + Script + '"',
-    '', SW_HIDE, ewWaitUntilTerminated, ResultCode) and (ResultCode = 0);
-end;
-
-// ---------------------------------------------------------------------------
-// Bridge download + extraction
-// ---------------------------------------------------------------------------
-procedure DownloadBridge;
-var
-  ZipPath, IntegrationDir: String;
-  DownloadOk, VerifyOk, ExtractOk: Boolean;
-begin
-  IntegrationDir := ExpandConstant('{app}\mtgo_integration');
-  ZipPath        := ExpandConstant('{tmp}\') + BRIDGE_ZIP_FILENAME;
-
-  Log('Downloading MTGOBridge from ' + BRIDGE_RELEASE_URL);
-  DownloadOk := DownloadFilePS(BRIDGE_RELEASE_URL, ZipPath);
-
-  if not DownloadOk then
-  begin
-    if not WizardSilent then
-      MsgBox(
-        'MTGO integration could not be downloaded automatically.' + #13#10 +
-        'You can install it manually later from:' + #13#10 +
-        BRIDGE_MANUAL_URL + #13#10#13#10 +
-        'The main application will work without it.' ,
-        mbInformation, MB_OK);
-    Log('Bridge download failed — MTGO integration will be unavailable.');
-    Exit;
-  end;
-
-  Log('Verifying MTGOBridge SHA-256 checksum');
-  VerifyOk := VerifySha256PS(ZipPath, BRIDGE_ZIP_SHA256);
-  if not VerifyOk then
-  begin
-    DeleteFile(ZipPath);
-    if not WizardSilent then
-      MsgBox(
-        'MTGOBridge download failed checksum verification and was discarded.' + #13#10 +
-        'You can install it manually from:' + #13#10 +
-        BRIDGE_MANUAL_URL + #13#10#13#10 +
-        'The main application will work without it.',
-        mbError, MB_OK);
-    Log('Bridge SHA-256 mismatch — MTGO integration will be unavailable.');
-    Exit;
-  end;
-
-  Log('Extracting MTGOBridge to ' + IntegrationDir);
-  ExtractOk := ExtractZipPS(ZipPath, IntegrationDir);
-
-  if not ExtractOk then
-  begin
-    if not WizardSilent then
-      MsgBox(
-        'MTGOBridge was downloaded but could not be extracted.' + #13#10 +
-        'You can install it manually from:' + #13#10 +
-        BRIDGE_MANUAL_URL,
-        mbInformation, MB_OK);
-    Log('Bridge extraction failed — MTGO integration will be unavailable.');
-  end;
-end;
-
-// ---------------------------------------------------------------------------
-// .NET 9 detection and prompt
-// ---------------------------------------------------------------------------
-procedure CheckAndPromptDotNet9;
-var
-  ResultCode: Integer;
-begin
-  if not IsDotNet9Installed then
-  begin
-    // Silent/unattended installs (e.g. the install/uninstall test harness) must
-    // not block on a prompt or mutate the machine by installing runtimes, so we
-    // only offer the interactive .NET install in a normal (visible) install.
-    // .NET is optional — the app runs without it, just without MTGO integration.
-    if WizardSilent then
-    begin
-      Log('.NET 9 not detected; skipping install prompt (silent install).');
-      Exit;
-    end;
-    if MsgBox(
-      'MTGO integration requires the .NET 9 Runtime, which was not detected.' + #13#10 +
-      'Would you like to install it now via winget?',
-      mbConfirmation, MB_YESNO) = IDYES then
-    begin
-      Exec('winget.exe',
-        'install --id ' + DOTNET9_WINGET_ID + ' --silent --accept-source-agreements'
-        + ' --accept-package-agreements',
-        '', SW_SHOW, ewWaitUntilTerminated, ResultCode);
-      if ResultCode <> 0 then
-        MsgBox(
-          'winget installation may not have completed.' + #13#10 +
-          'Please install .NET 9 Runtime manually from https://dotnet.microsoft.com/download/dotnet/9.0',
-          mbInformation, MB_OK);
-    end;
-  end;
-end;
-
-// ---------------------------------------------------------------------------
-// Post-install step
-// ---------------------------------------------------------------------------
-procedure CurStepChanged(CurStep: TSetupStep);
-begin
-  if CurStep = ssPostInstall then
-  begin
-    CheckAndPromptDotNet9;
-    DownloadBridge;
-  end;
-end;
