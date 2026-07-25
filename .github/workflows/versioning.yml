@@ -1,96 +1,96 @@
-# Automated semantic versioning from conventional-commit messages.
+# Automated semantic versioning, committed onto the PR branch.
 #
-# On every push to main this recomputes the version from the commits landed
-# since the last vX.Y.Z tag (see scripts/next_version.py):
-#   feat: -> minor, fix:/perf: -> patch, <type>!: or "BREAKING CHANGE" -> major.
-# When a release-worthy change is present it bumps the repo-root VERSION file,
-# commits it as "chore(release): vX.Y.Z [skip ci]", and pushes a matching tag.
-# The build reads VERSION, so the next installer is versioned automatically.
+# Work here is gated behind PRs and nothing bot-driven pushes to main. So instead
+# of bumping the version after merge, this computes the version a PR should carry
+# and commits it ONTO THE PR BRANCH, relative to the branch it targets:
 #
-# REQUIREMENTS / CAVEATS (needs a one-time repo setting):
-#   * This job pushes a commit + tag to main. It needs `contents: write` (set
-#     below) AND the ability to push to main. If main has branch protection that
-#     blocks direct pushes, either allow github-actions[bot] to bypass it, or
-#     switch this job to open a PR instead of pushing. Without that, the push
-#     step fails (the version simply won't advance; nothing else breaks).
-#   * Pushes made with GITHUB_TOKEN do not themselves trigger further workflow
-#     runs, so this cannot loop. The [skip ci] guard is belt-and-suspenders.
+#   feat: -> minor, fix:/perf: -> patch, <type>!: or "BREAKING CHANGE" -> major
+#   (see scripts/next_version.py). The base version is VERSION as it exists on
+#   the target branch; the bump is the largest across the PR's commits.
+#
+# Runs once per PR: the moment VERSION on the branch differs from the base it is
+# considered "already bumped" and every later run is a no-op, so the number set
+# when the PR first earned a bump is the number it keeps, even as more commits
+# land. The build reads VERSION, so the resulting installer is versioned to match.
+#
+# TOKEN / CI NOTE (one-time choice):
+#   A commit pushed with the default GITHUB_TOKEN does NOT trigger other
+#   workflows, so on a checks-gated repo the bump commit would sit on the PR
+#   without CI and block merge. To avoid that, set a repo secret
+#   VERSION_BOT_TOKEN = a fine-grained PAT with "Contents: read/write" on this
+#   repo; the push then triggers CI normally on the bump commit. Without the
+#   secret this falls back to GITHUB_TOKEN and still commits the bump, but you
+#   must re-run CI on that commit yourself before merging. The bot only ever
+#   pushes to PR branches, never to main.
 name: Versioning
 
 on:
-  push:
-    branches: [main]
+  pull_request:
+    types: [opened, synchronize, reopened]
 
 permissions:
   contents: write
 
 concurrency:
-  group: versioning
+  group: versioning-pr-${{ github.event.pull_request.number }}
   cancel-in-progress: false
 
 jobs:
   bump:
-    name: Bump version from commits
+    name: Bump version on the PR branch
     runs-on: ubuntu-latest
-    # Don't run on our own release commit (defence in depth; GITHUB_TOKEN pushes
-    # already don't retrigger workflows).
-    if: >-
-      !contains(github.event.head_commit.message, '[skip ci]') &&
-      !startsWith(github.event.head_commit.message, 'chore(release):')
+    # Same-repo PRs only: fork PRs get a read-only token and no secrets, so the
+    # bot cannot (and should not) push to a fork's branch.
+    if: github.event.pull_request.head.repo.full_name == github.repository
     steps:
-      - name: Checkout (full history + tags)
+      - name: Checkout PR branch (full history)
         uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.pull_request.head.ref }}
           fetch-depth: 0
+          # Prefer a PAT so the bump commit triggers CI; fall back to the
+          # built-in token (commits, but won't retrigger CI). See header note.
+          token: ${{ secrets.VERSION_BOT_TOKEN || github.token }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      - name: Compute version
-        id: ver
+      - name: Compute and commit version bump
+        env:
+          BASE: ${{ github.event.pull_request.base.ref }}
+          HEAD: ${{ github.event.pull_request.head.ref }}
         run: |
-          current=$(python scripts/next_version.py current)
-          next=$(python scripts/next_version.py next)
-          bump=$(python scripts/next_version.py bump)
-          echo "current=$current" >> "$GITHUB_OUTPUT"
-          echo "next=$next"       >> "$GITHUB_OUTPUT"
-          echo "bump=$bump"        >> "$GITHUB_OUTPUT"
-          echo "Current: $current | Bump: $bump | Next: $next"
+          set -euo pipefail
+          git fetch --no-tags origin "$BASE"
 
-      - name: Configure git identity
-        run: |
+          base_ver="$(git show "origin/$BASE:VERSION" 2>/dev/null | tr -d '[:space:]' || true)"
+          if [ -z "$base_ver" ]; then
+            echo "Base branch '$BASE' has no VERSION file (bootstrap); nothing to do."
+            exit 0
+          fi
+
+          head_ver="$(tr -d '[:space:]' < VERSION)"
+          if [ "$head_ver" != "$base_ver" ]; then
+            echo "VERSION already bumped on this branch ($base_ver -> $head_ver); keeping it."
+            exit 0
+          fi
+
+          next="$(python scripts/next_version.py next --base "origin/$BASE")"
+          if [ "$next" = "$base_ver" ]; then
+            echo "No release-worthy commits vs origin/$BASE; version stays $base_ver."
+            exit 0
+          fi
+
+          python scripts/next_version.py apply --base "origin/$BASE"
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-      - name: Ensure baseline tag exists
-        run: |
-          current="${{ steps.ver.outputs.current }}"
-          if git rev-parse -q --verify "refs/tags/v$current" >/dev/null; then
-            echo "Baseline tag v$current already exists."
-          else
-            echo "Creating baseline tag v$current at current HEAD."
-            git tag "v$current"
-            git push origin "v$current"
-          fi
-
-      - name: Apply bump, commit, and tag
-        if: steps.ver.outputs.next != steps.ver.outputs.current
-        run: |
-          next="${{ steps.ver.outputs.next }}"
-          python scripts/next_version.py apply
           git add VERSION
-          git commit -m "chore(release): v$next [skip ci]"
-          git tag "v$next"
-          git push origin HEAD:main
-          git push origin "v$next"
-          echo "Released v$next"
+          git commit -m "chore(version): set VERSION to $next"
+          git push origin "HEAD:$HEAD"
 
-      - name: Summary
-        run: |
-          if [ "${{ steps.ver.outputs.next }}" != "${{ steps.ver.outputs.current }}" ]; then
-            echo "### Released v${{ steps.ver.outputs.next }} (${{ steps.ver.outputs.bump }} bump)" >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo "### No release-worthy commits since v${{ steps.ver.outputs.current }}; version unchanged." >> "$GITHUB_STEP_SUMMARY"
-          fi
+          {
+            echo "### Version set to \`$next\` (was \`$base_ver\` on \`$BASE\`)"
+            echo "Committed to this PR branch. It stays fixed as more commits land."
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -16,13 +16,11 @@ Everything else reads from it, so a bump is a one-line change in one place:
 | `packaging/test_installer*.{ps1,sh}`, `test_install_uninstall.ps1` | same filename derivation |
 | `pyproject.toml` | `version` is declared `dynamic`; `setup.py` supplies it by reading `VERSION` |
 
-`vX.Y.Z` git tags mark releases and are what the automation diffs against to
-decide the next number.
-
 ## How the number is computed
 
-`scripts/next_version.py` scans conventional-commit messages since the most
-recent `vX.Y.Z` tag and picks the largest applicable bump:
+`scripts/next_version.py` compares a PR against the branch it targets: the base
+version is `VERSION` **as it exists on the base branch**, and the bump is the
+largest applicable one across the PR's commits (`base..HEAD`):
 
 | Commit | Bump |
 | --- | --- |
@@ -31,37 +29,42 @@ recent `vX.Y.Z` tag and picks the largest applicable bump:
 | `fix: …` or `perf: …` | **patch** (`1.0.1`) |
 | `refactor`, `chore`, `docs`, `test`, `style`, `ci`, merges, … | no release |
 
-Precedence is major > minor > patch. If nothing release-worthy landed since the
-last tag, the version is unchanged.
+Precedence is major > minor > patch. If the PR has nothing release-worthy, the
+version is unchanged.
 
-Run it locally (no dependencies beyond git + Python):
+Run it locally (no dependencies beyond git + Python). `--base` points at the
+branch a PR targets:
 
 ```bash
-python scripts/next_version.py current   # what VERSION currently says
-python scripts/next_version.py bump      # major | minor | patch | none
-python scripts/next_version.py next      # the version the next release would get
-python scripts/next_version.py apply     # write the next version into VERSION
+python scripts/next_version.py current                  # what VERSION currently says
+python scripts/next_version.py bump --base origin/main   # major | minor | patch | none
+python scripts/next_version.py next --base origin/main   # version this PR should carry
+python scripts/next_version.py apply --base origin/main  # write that version into VERSION
 ```
 
 ## CI automation
 
-`.github/workflows/versioning.yml` runs on every push to `main`. It:
+Work is gated behind PRs and **nothing bot-driven pushes to `main`**. So the
+version is decided in the PR, not after merge. `.github/workflows/versioning.yml`
+runs on `pull_request` (opened / synchronize / reopened) and:
 
-1. ensures a baseline `v<current>` tag exists;
-2. computes the next version from the commits since the last tag;
-3. if a release is warranted, writes `VERSION`, commits it as
-   `chore(release): vX.Y.Z [skip ci]`, and pushes the commit plus a `vX.Y.Z` tag.
+1. computes the version this PR should carry, relative to its base branch;
+2. if a bump is warranted, writes `VERSION` and commits it **onto the PR branch**
+   as `chore(version): set VERSION to X.Y.Z`.
 
-Because the installer build reads `VERSION`, the next installer is versioned
-automatically — no manual edits.
+It runs **once**: as soon as the branch's `VERSION` differs from the base it is
+considered already-bumped, and later runs are no-ops. So the number set when the
+PR first earns a bump is the number it keeps as more commits land. Because the
+installer build reads `VERSION`, the PR's installer is versioned to match.
 
-> **One-time setup:** the job pushes a commit and tag to `main`, so it needs
-> `contents: write` (already set in the workflow) **and** permission to push to
-> `main`. If `main` has branch protection that blocks direct pushes, allow
-> `github-actions[bot]` to bypass it (or change the job to open a PR instead).
-> Without that, only the push step fails and the version simply won't advance —
-> nothing else breaks. Pushes made with `GITHUB_TOKEN` don't retrigger
-> workflows, so the release commit can't cause a loop.
+> **One-time setup (recommended):** a commit pushed with the default
+> `GITHUB_TOKEN` does **not** trigger other workflows, so on a checks-gated repo
+> the bump commit would sit on the PR without CI and block merge. Set a repo
+> secret **`VERSION_BOT_TOKEN`** = a fine-grained PAT with *Contents: read/write*
+> on this repo; the bump push then triggers CI normally. Without it, the bump is
+> still committed but you must re-run CI on that commit before merging. The bot
+> only ever pushes to **PR branches**, never to `main`. Fork PRs are skipped
+> (their token is read-only).
 
 ## What this means for you
 
