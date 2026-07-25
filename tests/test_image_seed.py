@@ -1,10 +1,17 @@
-"""Tests for first-run bulk-data seeding from a bundled snapshot."""
+"""Tests for first-run bulk-data seeding from a bundled snapshot.
+
+The cache stores the bulk file gzip-compressed, which is the seed's own format,
+so seeding is a verbatim copy of ``bulk_data.json.gz`` onto ``bulk_data.json``;
+readers decompress it in memory via ``bulk_store.decode_bulk_bytes``.
+"""
 
 from __future__ import annotations
 
 import gzip
 
 import services.image_service.schemas as schemas
+import services.image_service.seed as seed_module
+from services.image_service.bulk_store import decode_bulk_bytes
 from services.image_service.seed import seed_image_cache_if_needed
 
 
@@ -21,12 +28,15 @@ def test_seeds_bulk_data_when_absent(tmp_path, monkeypatch):
     seed_dir = tmp_path / "seed"
     seed_dir.mkdir()
     payload = b'[{"name": "Lightning Bolt"}]'
-    _write_gz(seed_dir / "bulk_data.json.gz", payload)
+    gz = seed_dir / "bulk_data.json.gz"
+    _write_gz(gz, payload)
 
     written = seed_image_cache_if_needed(source_dir=seed_dir)
 
     assert written == [target]
-    assert target.read_bytes() == payload
+    # Copied verbatim (still gzip on disk) and decodes back to the payload.
+    assert target.read_bytes() == gz.read_bytes()
+    assert decode_bulk_bytes(target.read_bytes()) == payload
 
 
 def test_does_not_overwrite_existing_cache(tmp_path, monkeypatch):
@@ -66,19 +76,23 @@ def test_missing_seed_file_is_skipped(tmp_path, monkeypatch):
     assert not target.exists()
 
 
-def test_corrupt_seed_does_not_raise_and_leaves_no_partial(tmp_path, monkeypatch):
+def test_copy_failure_is_swallowed_and_leaves_no_partial(tmp_path, monkeypatch):
     cache_dir = tmp_path / "cache" / "card_images"
     target = cache_dir / "bulk_data.json"
     monkeypatch.setattr(schemas, "BULK_DATA_CACHE", target)
 
     seed_dir = tmp_path / "seed"
     seed_dir.mkdir()
-    # Not valid gzip → decompression raises, must be swallowed and leave no file.
-    (seed_dir / "bulk_data.json.gz").write_bytes(b"not gzip at all")
+    _write_gz(seed_dir / "bulk_data.json.gz", b'[{"name": "Seed"}]')
+
+    def _boom(*_args, **_kwargs):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(seed_module.shutil, "copyfileobj", _boom)
 
     written = seed_image_cache_if_needed(source_dir=seed_dir)
 
     assert written == []
     assert not target.exists()
-    # No leftover temp files in the target directory.
+    # The temp file is cleaned up on failure.
     assert list(cache_dir.glob("*.seedtmp")) == []

@@ -4,8 +4,13 @@ A fresh install otherwise has to download Scryfall's ~130 MB (gzipped) bulk
 metadata before the local image index exists; until it lands, every card image
 falls back to per-card API lookups. To make a cold start behave like a warm one,
 the installer ships ``bulk_data.json.gz`` alongside the executable and this
-module decompresses it into the image cache on first launch — so the bulk file
-is already present and image resolution is local from the very first deck view.
+module places it into the image cache on first launch — so the bulk file is
+already present and image resolution is local from the very first deck view.
+
+The cache stores the bulk file gzip-compressed (see
+:mod:`services.image_service.bulk_store`), which is exactly the seed's format, so
+seeding is a verbatim copy — no decompression — landing the compact ~130 MB form
+directly.
 
 Only the bulk file is seeded; the compact printing index
 (``printings_v<N>.json``) is rebuilt from it locally on first launch (a few
@@ -18,7 +23,6 @@ self-correcting, never a permanent pin.
 
 from __future__ import annotations
 
-import gzip
 import os
 import shutil
 import sys
@@ -33,8 +37,7 @@ from utils.constants.paths import resource_path
 # Env override so a dev/test run can point at a seed directory explicitly.
 SEED_DIR_ENV_VAR = "MTGO_TOOLS_SEED_DIR"
 
-# Stream in 1 MiB chunks: decompressing ~130 MB → ~620 MB should not buffer the
-# whole file in memory.
+# Stream the copy in 1 MiB chunks rather than buffering the whole file.
 _COPY_CHUNK_BYTES = 1024 * 1024
 
 
@@ -58,13 +61,17 @@ def _seed_targets() -> list[tuple[str, Path]]:
     return [(f"{bulk.name}.gz", bulk)]
 
 
-def _decompress_atomic(gz_path: Path, target: Path) -> None:
-    """Stream-decompress *gz_path* into *target* via a temp file + atomic rename."""
+def _copy_atomic(gz_path: Path, target: Path) -> None:
+    """Copy the gzip seed to *target* verbatim via a temp file + atomic rename.
+
+    The cache stores the bulk file gzip-compressed, which is the seed's format,
+    so this is a plain byte copy — no decompression.
+    """
     target.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp_name = tempfile.mkstemp(dir=str(target.parent), suffix=".seedtmp")
     tmp_path = Path(tmp_name)
     try:
-        with os.fdopen(fd, "wb") as out, gzip.open(gz_path, "rb") as src:
+        with os.fdopen(fd, "wb") as out, open(gz_path, "rb") as src:
             shutil.copyfileobj(src, out, length=_COPY_CHUNK_BYTES)
         os.replace(tmp_path, target)
     except BaseException:
@@ -89,7 +96,7 @@ def seed_image_cache_if_needed(source_dir: Path | None = None) -> list[Path]:
         if target.exists() or not gz_path.is_file():
             continue
         try:
-            _decompress_atomic(gz_path, target)
+            _copy_atomic(gz_path, target)
         except Exception as exc:
             logger.warning(f"Failed to seed {target.name} from {gz_path}: {exc}")
             continue

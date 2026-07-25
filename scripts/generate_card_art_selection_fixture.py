@@ -10,6 +10,7 @@ tests can exercise art-selection rules without HTTP.
 from __future__ import annotations
 
 import argparse
+import gzip
 import json
 import re
 import shutil
@@ -105,7 +106,17 @@ def parse_args() -> argparse.Namespace:
 
 
 def iter_bulk_cards(path: Path):
-    with path.open(encoding="utf-8") as handle:
+    # The bulk file is stored gzip-compressed on disk (bulk_store); a legacy
+    # uncompressed cache is still supported. Detect by magic bytes and open
+    # accordingly, keeping the line-streaming so we never buffer the whole file.
+    with path.open("rb") as probe:
+        is_gzip = probe.read(2) == b"\x1f\x8b"
+    open_handle = (
+        (lambda: gzip.open(path, "rt", encoding="utf-8"))
+        if is_gzip
+        else (lambda: path.open(encoding="utf-8"))
+    )
+    with open_handle() as handle:
         for raw_line in handle:
             line = raw_line.strip()
             if not line or line in {"[", "]"}:

@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Any
 import msgspec
 from loguru import logger
 
+from services.image_service.bulk_store import decode_bulk_bytes
 from services.image_service.schemas import (
     BULK_DATA_CACHE,
     IMAGE_CACHE_DIR,
@@ -154,7 +155,7 @@ def ensure_printing_index_cache(force: bool = False) -> dict[str, Any]:
 
     logger.info("Building card printings index from bulk data…")
     with locked_path(_schemas.BULK_DATA_CACHE):
-        raw = _schemas.BULK_DATA_CACHE.read_bytes()
+        raw = decode_bulk_bytes(_schemas.BULK_DATA_CACHE.read_bytes())
     cards = _bulk_cards_decoder.decode(raw)
 
     by_name, stats = build_printing_index(cards)

@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
+from services.image_service.bulk_store import decode_bulk_bytes
 from services.image_service.schemas import (
     SCRYFALL_CARD_NAMED_URL,
     SCRYFALL_CARD_SEARCH_URL,
@@ -120,7 +121,7 @@ class LocalResolverMixin(_Base):
 
             try:
                 with locked_path(bulk_path):
-                    raw = bulk_path.read_bytes()
+                    raw = decode_bulk_bytes(bulk_path.read_bytes())
                 cards = _bulk_card_images_decoder.decode(raw)
             except Exception as exc:
                 logger.warning(f"Failed to build local image index from bulk data: {exc}")

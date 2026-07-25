@@ -37,6 +37,7 @@ _install_wx_stub()
 
 from services import image_service as card_images  # noqa: E402
 from services.image_service import schemas as card_images_schemas  # noqa: E402
+from services.image_service.bulk_store import decode_bulk_bytes  # noqa: E402
 
 
 def test_card_image_cache_migrates_face_index_column(tmp_path):
@@ -1343,7 +1344,8 @@ def test_download_bulk_metadata_streams_and_records_metadata(tmp_path, monkeypat
     assert "downloaded" in message.lower()
     # The bulk file was streamed to disk with the served content.
     assert bulk_path.exists()
-    assert bulk_path.read_bytes() == b"[]"
+    # Stored gzip-compressed on disk; decodes back to the served content.
+    assert decode_bulk_bytes(bulk_path.read_bytes()) == b"[]"
     assert downloader.session.calls == [metadata["download_uri"]]
     # The vendor metadata was persisted so a subsequent run can short-circuit.
     cached_updated, cached_uri = downloader._get_cached_bulk_data_record()
@@ -1415,7 +1417,7 @@ def test_download_bulk_metadata_force_restreams_despite_matching_cache(tmp_path,
     assert "downloaded" in message.lower()
     # The file was re-streamed despite the matching cache.
     assert downloader.session.calls == [metadata["download_uri"]]
-    assert bulk_path.read_bytes() == b"[1]"
+    assert decode_bulk_bytes(bulk_path.read_bytes()) == b"[1]"
 
 
 def test_download_single_image_reports_missing_uuid(tmp_path):
@@ -1550,11 +1552,11 @@ def test_download_all_images_returns_error_dict_on_load_failure(tmp_path, monkey
     cache = card_images.CardImageCache(cache_dir=cache_dir, db_path=cache_dir / "images.db")
     downloader = card_images.BulkImageDownloader(cache)
 
-    def _boom(_path):
+    def _boom(_data):
         raise RuntimeError("corrupt bulk file")
 
-    # The bulk file exists, so we pass the existence guard and fail in fast_load.
-    monkeypatch.setattr("utils.json_io.fast_load", _boom)
+    # The bulk file exists, so we pass the existence guard and fail in decode.
+    monkeypatch.setattr("utils.json_io.fast_decode", _boom)
 
     result = downloader.download_all_images("normal")
     assert result["success"] is False

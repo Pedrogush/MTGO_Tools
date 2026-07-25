@@ -27,6 +27,7 @@ from loguru import logger
 
 from services.image_service.batch_resolver import ScryfallBatchResolver
 from services.image_service.bulk_metadata import BulkMetadataMixin
+from services.image_service.bulk_store import decode_bulk_bytes
 from services.image_service.disk_cache import CardImageCache
 from services.image_service.image_writer import ImageWriterMixin
 from services.image_service.local_resolver import LocalResolverMixin
@@ -106,10 +107,10 @@ class BulkImageDownloader(
             }
 
         try:
-            from utils.json_io import fast_load
+            from utils.json_io import fast_decode
 
             with locked_path(_schemas.BULK_DATA_CACHE):
-                cards_data = fast_load(_schemas.BULK_DATA_CACHE)
+                cards_data = fast_decode(decode_bulk_bytes(_schemas.BULK_DATA_CACHE.read_bytes()))
             if max_cards:
                 cards_data = cards_data[:max_cards]
 

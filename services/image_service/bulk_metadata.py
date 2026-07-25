@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
+from services.image_service.bulk_store import gzip_chunks
 from services.image_service.schemas import BULK_DATA_URL, UTC
 from utils.atomic_io import atomic_write_stream
 from utils.constants import (
@@ -117,9 +118,13 @@ class BulkMetadataMixin(_Base):
             )
             resp.raise_for_status()
 
+            # Store gzip-compressed on disk (~5x smaller); readers decompress in
+            # memory via bulk_store.decode_bulk_bytes. iter_content already
+            # decodes the HTTP transfer encoding, so we re-compress the decoded
+            # JSON stream ourselves as it is written.
             atomic_write_stream(
                 _schemas.BULK_DATA_CACHE,
-                resp.iter_content(chunk_size=SCRYFALL_DOWNLOAD_CHUNK_SIZE),
+                gzip_chunks(resp.iter_content(chunk_size=SCRYFALL_DOWNLOAD_CHUNK_SIZE)),
             )
 
             # Update database metadata (defer card count to avoid parsing 500MB file)

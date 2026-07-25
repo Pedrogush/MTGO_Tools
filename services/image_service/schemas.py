@@ -26,6 +26,10 @@ from utils.constants import CACHE_DIR
 # Image cache configuration
 IMAGE_CACHE_DIR = CACHE_DIR / "card_images"
 IMAGE_DB_PATH = IMAGE_CACHE_DIR / "images.db"
+# The bulk file is stored gzip-compressed on disk (~5x smaller) under this
+# unchanged filename; readers go through services.image_service.bulk_store
+# (decode_bulk_bytes), which also transparently reads a legacy uncompressed
+# file. Do not read this path directly with a JSON parser.
 BULK_DATA_CACHE = IMAGE_CACHE_DIR / "bulk_data.json"
 # v5: face-name aliases no longer overwrite a real standalone card's printing
 # list (e.g. "Emeritus of Conflict // Lightning Bolt" must not pollute
