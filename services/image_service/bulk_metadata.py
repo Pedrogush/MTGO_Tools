@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
-from services.image_service.bulk_store import gzip_chunks
+from services.image_service.bulk_store import gunzip_chunks, gzip_chunks, jsonl_to_json_array
 from services.image_service.schemas import BULK_DATA_URL, UTC
 from utils.atomic_io import atomic_write_stream
 from utils.constants import (
@@ -42,6 +42,17 @@ class BulkMetadataMixin(_Base):
         resp.raise_for_status()
         return resp.json()
 
+    @staticmethod
+    def _bulk_download_uri(metadata: dict[str, Any]) -> str | None:
+        """The URI to download the bulk file from.
+
+        Scryfall retired ``download_uri`` (JSON array) in favour of
+        ``jsonl_download_uri`` (JSONL); the old URLs now 404. Only the JSONL key
+        is read — falling back to ``download_uri`` would hand a JSON array to the
+        JSONL-to-array rewrite in :meth:`download_bulk_metadata` and corrupt it.
+        """
+        return metadata.get("jsonl_download_uri")
+
     def _get_cached_bulk_data_record(self) -> tuple[str | None, str | None]:
         with sqlite3.connect(self.cache.db_path, timeout=SQLITE_CONNECTION_TIMEOUT_SECONDS) as conn:
             row = conn.execute(
@@ -59,7 +70,7 @@ class BulkMetadataMixin(_Base):
         from services.image_service import schemas as _schemas
 
         metadata = self._fetch_bulk_metadata()
-        download_uri = metadata.get("download_uri")
+        download_uri = self._bulk_download_uri(metadata)
         updated_at = metadata.get("updated_at")
 
         if not _schemas.BULK_DATA_CACHE.exists():
@@ -91,7 +102,7 @@ class BulkMetadataMixin(_Base):
             logger.exception("Failed to fetch bulk data metadata")
             return False, f"Error: {exc}"
 
-        download_uri = metadata.get("download_uri")
+        download_uri = self._bulk_download_uri(metadata)
         if not download_uri:
             return False, "No download URI in bulk data response"
 
@@ -110,7 +121,7 @@ class BulkMetadataMixin(_Base):
 
         try:
             logger.info(f"Downloading bulk data from {download_uri}")
-            logger.info(f"Size: {metadata.get('size', 0) / BYTES_PER_MB:.1f} MB")
+            logger.info(f"Size: {metadata.get('compressed_size', 0) / BYTES_PER_MB:.1f} MB")
 
             # Download with progress
             resp = self.session.get(
@@ -118,13 +129,19 @@ class BulkMetadataMixin(_Base):
             )
             resp.raise_for_status()
 
-            # Store gzip-compressed on disk (~5x smaller); readers decompress in
-            # memory via bulk_store.decode_bulk_bytes. iter_content already
-            # decodes the HTTP transfer encoding, so we re-compress the decoded
-            # JSON stream ourselves as it is written.
+            # Upstream now serves gzipped JSONL as file content (Content-Type:
+            # application/gzip, no Content-Encoding), so iter_content hands back
+            # the compressed bytes rather than decoding them for us. Decompress,
+            # rewrite the JSONL back into the JSON array the readers expect, and
+            # re-compress for storage — all streamed, so the ~620 MB decoded file
+            # is never held in memory.
             atomic_write_stream(
                 _schemas.BULK_DATA_CACHE,
-                gzip_chunks(resp.iter_content(chunk_size=SCRYFALL_DOWNLOAD_CHUNK_SIZE)),
+                gzip_chunks(
+                    jsonl_to_json_array(
+                        gunzip_chunks(resp.iter_content(chunk_size=SCRYFALL_DOWNLOAD_CHUNK_SIZE))
+                    )
+                ),
             )
 
             # Update database metadata (defer card count to avoid parsing 500MB file)
