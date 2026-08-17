@@ -12,6 +12,7 @@ except ImportError:  # Python 3.10
 
     UTC = timezone.utc  # noqa: F811,UP017
 
+from services.image_service.bulk_store import decode_bulk_bytes
 from services.image_service.disk_cache import CardImageCache
 from services.image_service.downloader import BulkImageDownloader
 from services.image_service.printing_index import build_printing_index
@@ -42,8 +43,11 @@ def build_printing_index_worker(
     if bulk_mtime is None:
         raise FileNotFoundError("Bulk data cache not found; cannot build printings index")
 
+    # The bulk file is stored gzip-compressed on disk (bulk_store), so the raw
+    # bytes must be decoded before msgspec sees them — a legacy uncompressed
+    # cache passes through untouched.
     with locked_path(bulk_path):
-        raw = bulk_path.read_bytes()
+        raw = decode_bulk_bytes(bulk_path.read_bytes())
     cards = _bulk_cards_decoder.decode(raw)
 
     by_name, stats = build_printing_index(cards)
