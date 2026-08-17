@@ -78,9 +78,10 @@ anything touching a live game.
 Versions follow [semver](https://semver.org) and are derived automatically from
 [Conventional Commit](https://www.conventionalcommits.org) messages — `feat:` →
 minor, `fix:`/`perf:` → patch, `!`/`BREAKING CHANGE` → major. The repo-root
-`VERSION` file is the single source of truth; a CI workflow bumps and tags it on
-merges to `main`. Write conventional-commit subjects and the number takes care of
-itself. Full details in [`docs/VERSIONING.md`](docs/VERSIONING.md).
+`VERSION` file is the single source of truth: a CI workflow computes the bump and
+commits it onto the PR branch, and merging to `main` publishes a GitHub Release
+with the built installer. Write conventional-commit subjects and the number takes
+care of itself. Full details in [`docs/VERSIONING.md`](docs/VERSIONING.md).
 
 ### Automation CLI
 

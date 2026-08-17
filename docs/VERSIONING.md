@@ -66,6 +66,33 @@ installer build reads `VERSION`, the PR's installer is versioned to match.
 > normally. The bot only ever pushes to **PR branches**, never to `main`. Fork
 > PRs are skipped (their token is read-only).
 
+## Publishing the release
+
+The number is decided in the PR; **merging it is what makes the release real**.
+`.github/workflows/release.yml` runs on every push to `main` and asks one
+question: does the tag `v<VERSION>` already exist?
+
+- **No** → build the installer from `main`, verify it, create the tag, and
+  publish a GitHub Release with `MTGOTools_Setup_v<VERSION>.exe` attached.
+- **Yes** → that version already shipped; the run is a no-op.
+
+Using the tag as the guard (rather than watching for changes to `VERSION`) keeps
+the workflow **idempotent**: it cannot double-publish, and a release that failed
+halfway is retried by pushing again or dispatching the workflow manually. The
+check itself runs on a cheap Ubuntu job, so the ~10-minute Windows build only
+starts when there is genuinely something to ship.
+
+The tag is created *after* the installer builds and passes `test_installer.ps1`,
+so a failed build never leaves a tag behind to clean up.
+
+Release notes are the auto-generated commit changelog, prefixed with install
+instructions and the installer's **SHA256**. The installer is not code-signed
+yet, so that checksum is the only integrity check a user currently has — Windows
+SmartScreen will warn on first run either way.
+
+> **Not yet automated:** in-app update checks ([#142](https://github.com/Pedrogush/MTGO_Tools/issues/142)).
+> Users still download and re-run the installer to update.
+
 ## What this means for you
 
 Write conventional-commit subjects and the version takes care of itself:
