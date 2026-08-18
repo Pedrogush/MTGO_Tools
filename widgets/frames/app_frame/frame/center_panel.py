@@ -8,8 +8,6 @@ import wx
 from wx.lib.agw import flatnotebook as fnb
 
 from utils.constants import (
-    DARK_ACCENT,
-    DARK_BG,
     DARK_PANEL,
     LIGHT_TEXT,
     PADDING_MD,
@@ -17,6 +15,7 @@ from utils.constants import (
     SUBDUED_TEXT,
 )
 from utils.perf import timed
+from widgets.notebook import DEFAULT_AGW_STYLE, make_flat_notebook
 from widgets.panels.card_table_panel import CardTablePanel
 from widgets.panels.deck_notes_panel import DeckNotesPanel
 from widgets.panels.deck_stats_panel import DeckStatsPanel
@@ -38,22 +37,9 @@ class CenterPanelBuilderMixin(_Base):
     """
 
     def _create_notebook(self, parent: wx.Window) -> fnb.FlatNotebook:
-        notebook = fnb.FlatNotebook(
-            parent,
-            agwStyle=(
-                fnb.FNB_FANCY_TABS
-                | fnb.FNB_SMART_TABS
-                | fnb.FNB_NO_X_BUTTON
-                | fnb.FNB_NO_NAV_BUTTONS
-            ),
-        )
-        notebook.SetTabAreaColour(DARK_PANEL)
-        notebook.SetActiveTabColour(DARK_ACCENT)
-        notebook.SetNonActiveTabTextColour(SUBDUED_TEXT)
-        notebook.SetActiveTabTextColour(wx.Colour(12, 14, 18))
-        notebook.SetBackgroundColour(DARK_BG)
-        notebook.SetForegroundColour(LIGHT_TEXT)
-        return notebook
+        # FNB_SMART_TABS on top of the shared default: the Ctrl+Tab overlay earns
+        # its keep in the multi-tab deck workspace and nowhere else.
+        return make_flat_notebook(parent, agw_style=DEFAULT_AGW_STYLE | fnb.FNB_SMART_TABS)
 
     @timed
     def _build_deck_workspace(self, parent: wx.Window) -> wx.StaticBoxSizer:

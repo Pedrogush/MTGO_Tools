@@ -19,6 +19,7 @@ from utils.constants import DARK_ALT, DARK_PANEL, LIGHT_TEXT
 from utils.i18n import translate
 from widgets.frames.radar.handlers import RadarFrameHandlersMixin, RadarPanelHandlersMixin
 from widgets.frames.radar.properties import RadarFramePropertiesMixin, RadarPanelPropertiesMixin
+from widgets.stylize import stylize_choice, stylize_scrollable
 
 if TYPE_CHECKING:
     from services.radar_service import RadarData
@@ -92,6 +93,8 @@ class RadarPanel(RadarPanelHandlersMixin, RadarPanelPropertiesMixin, wx.Panel):
         self.mainboard_list.AppendTextColumn(self._t("radar.col.max"), width=60)
         self.mainboard_list.SetBackgroundColour(DARK_ALT)
         self.mainboard_list.SetForegroundColour(LIGHT_TEXT)
+        # After the columns, so the native header child exists to be themed.
+        stylize_scrollable(self.mainboard_list)
         self._bind_tooltip_handlers(self.mainboard_list)
         mainboard_box_sizer.Add(self.mainboard_list, 1, wx.EXPAND | wx.ALL, 6)
 
@@ -108,6 +111,8 @@ class RadarPanel(RadarPanelHandlersMixin, RadarPanelPropertiesMixin, wx.Panel):
         self.sideboard_list.AppendTextColumn(self._t("radar.col.max"), width=60)
         self.sideboard_list.SetBackgroundColour(DARK_ALT)
         self.sideboard_list.SetForegroundColour(LIGHT_TEXT)
+        # After the columns, so the native header child exists to be themed.
+        stylize_scrollable(self.sideboard_list)
         self._bind_tooltip_handlers(self.sideboard_list)
         sideboard_box_sizer.Add(self.sideboard_list, 1, wx.EXPAND | wx.ALL, 6)
 
@@ -162,8 +167,7 @@ class RadarFrame(RadarFrameHandlersMixin, RadarFramePropertiesMixin, wx.Frame):
         selection_sizer.Add(label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 6)
 
         self.archetype_choice = wx.Choice(panel)
-        self.archetype_choice.SetBackgroundColour(DARK_ALT)
-        self.archetype_choice.SetForegroundColour(LIGHT_TEXT)
+        stylize_choice(self.archetype_choice)
         selection_sizer.Add(self.archetype_choice, 1, wx.RIGHT, 6)
 
         self.generate_btn = wx.Button(panel, label=self._t("radar.dialog.generate"))

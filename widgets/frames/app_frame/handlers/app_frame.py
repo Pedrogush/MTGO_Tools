@@ -313,8 +313,7 @@ class AppFrameHandlersMixin(_Base):
         if not enqueued:
             elapsed_ms = (time.perf_counter() - perf["t0"]) * 1000.0
             logger.info(
-                "PERF | {:>7.1f} ms | === deck images all local "
-                "({} cards, 0 downloads needed) ===",
+                "PERF | {:>7.1f} ms | === deck images all local ({} cards, 0 downloads needed) ===",
                 elapsed_ms,
                 perf["total_names"],
             )
@@ -497,6 +496,13 @@ class AppFrameHandlersMixin(_Base):
             return
         self.root_panel.Layout()
         min_size = self.root_panel.GetSizer().GetMinSize()
+        # The status strip is a sibling of root_panel, not a wx.StatusBar, so
+        # ClientToWindowSize no longer accounts for it — add it back by hand or the
+        # floor sits one strip short and the strip is what gets squeezed.
+        if self.status_bar:
+            min_size = wx.Size(
+                min_size.GetWidth(), min_size.GetHeight() + self.status_bar.GetSize().GetHeight()
+            )
         try:
             min_size = self.ClientToWindowSize(min_size)
         except AttributeError:

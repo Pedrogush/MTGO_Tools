@@ -1,10 +1,17 @@
-"""Small wx styling helpers shared by the timer alert frame's section builders."""
+"""Small wx styling helpers shared by the timer alert frame's section builders.
+
+The widget-level helpers delegate to :mod:`widgets.stylize` so the timer window
+picks up the phase-1 native-control theming (dark dropdowns, dark checkbox
+glyphs, dark spin arrows) instead of quietly re-implementing an older subset of
+it. The button helpers stay local; phase 2 folds them into ``stylize_button``.
+"""
 
 from __future__ import annotations
 
 import wx
 
-from utils.constants import DARK_ACCENT, DARK_ALT, DARK_BG, DARK_PANEL, LIGHT_TEXT
+from utils.constants import DARK_ACCENT, DARK_BG, DARK_PANEL, LIGHT_TEXT
+from widgets.stylize import stylize_checkbox, stylize_choice, stylize_spinctrl
 
 
 class StylingMixin:
@@ -21,12 +28,13 @@ class StylingMixin:
         return text
 
     def _stylize_choice(self, choice: wx.Choice) -> None:
-        choice.SetBackgroundColour(DARK_ALT)
-        choice.SetForegroundColour(LIGHT_TEXT)
+        stylize_choice(choice)
 
     def _stylize_spin(self, ctrl: wx.SpinCtrl) -> None:
-        ctrl.SetBackgroundColour(DARK_ALT)
-        ctrl.SetForegroundColour(LIGHT_TEXT)
+        stylize_spinctrl(ctrl)
+
+    def _stylize_checkbox(self, ctrl: wx.CheckBox) -> None:
+        stylize_checkbox(ctrl)
 
     def _stylize_primary_button(self, button: wx.Button) -> None:
         button.SetBackgroundColour(DARK_ACCENT)

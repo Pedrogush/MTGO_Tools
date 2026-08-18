@@ -19,6 +19,7 @@ from utils.constants import DARK_ALT, DARK_BG, DARK_PANEL, LIGHT_TEXT, SUBDUED_T
 from utils.i18n import translate
 from widgets.frames.metagame_analysis.handlers import MetagameAnalysisHandlersMixin
 from widgets.frames.metagame_analysis.properties import MetagameAnalysisPropertiesMixin
+from widgets.stylize import stylize_choice
 
 
 class MetagameAnalysisFrame(
@@ -83,8 +84,7 @@ class MetagameAnalysisFrame(
             ],
         )
         self.format_choice.SetSelection(0)
-        self.format_choice.SetBackgroundColour(DARK_ALT)
-        self.format_choice.SetForegroundColour(LIGHT_TEXT)
+        stylize_choice(self.format_choice)
         self.format_choice.Bind(wx.EVT_CHOICE, self.on_format_change)
         toolbar.Add(self.format_choice, 0, wx.RIGHT, 12)
 

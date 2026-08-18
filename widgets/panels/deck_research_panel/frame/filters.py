@@ -13,7 +13,13 @@ import wx
 from utils.constants import PADDING_MD
 from widgets.panels.deck_research_panel.frame.centered_choice import _CenteredChoice
 from widgets.panels.deck_research_panel.results_filter import PLACEMENT_FIELDS, PLACEMENT_OPERATORS
-from widgets.stylize import stylize_button, stylize_choice, stylize_label, stylize_textctrl
+from widgets.stylize import (
+    stylize_button,
+    stylize_choice,
+    stylize_combobox,
+    stylize_label,
+    stylize_textctrl,
+)
 
 if TYPE_CHECKING:
     from widgets.panels.deck_research_panel.protocol import DeckResearchPanelProto
@@ -68,6 +74,7 @@ class FiltersBuilderMixin(_Base):
         archetype_col.Add(archetype_label, 0)
 
         self.archetype_combo = wx.ComboBox(self, style=wx.CB_READONLY)
+        stylize_combobox(self.archetype_combo)
         if tip := self._labels.get("archetypes_tooltip", ""):
             self.archetype_combo.SetToolTip(tip)
         self.archetype_combo.Bind(wx.EVT_COMBOBOX, lambda _evt: self._on_archetype_selected())
@@ -99,7 +106,8 @@ class FiltersBuilderMixin(_Base):
         stylize_choice(self.event_type_choice)
         if self._on_event_type_filter is not None:
             self.event_type_choice.Bind(
-                wx.EVT_CHOICE, lambda _evt: self._on_event_type_filter()  # type: ignore[misc]
+                wx.EVT_CHOICE,
+                lambda _evt: self._on_event_type_filter(),  # type: ignore[misc]
             )
         event_date_row.Add(self.event_type_choice, 1, wx.EXPAND | wx.RIGHT, PADDING_MD)
 
@@ -131,7 +139,8 @@ class FiltersBuilderMixin(_Base):
         stylize_choice(self.placement_op_choice)
         if self._on_placement_filter is not None:
             self.placement_op_choice.Bind(
-                wx.EVT_COMBOBOX, lambda _evt: self._on_placement_filter()  # type: ignore[misc]
+                wx.EVT_COMBOBOX,
+                lambda _evt: self._on_placement_filter(),  # type: ignore[misc]
             )
         placement_row.Add(self.placement_op_choice, 0, wx.EXPAND | wx.RIGHT, PADDING_MD)
 
@@ -140,7 +149,8 @@ class FiltersBuilderMixin(_Base):
         stylize_choice(self.placement_field_choice)
         if self._on_placement_filter is not None:
             self.placement_field_choice.Bind(
-                wx.EVT_COMBOBOX, lambda _evt: self._on_placement_filter()  # type: ignore[misc]
+                wx.EVT_COMBOBOX,
+                lambda _evt: self._on_placement_filter(),  # type: ignore[misc]
             )
         placement_row.Add(self.placement_field_choice, 0, wx.EXPAND | wx.RIGHT, PADDING_MD)
 
@@ -149,7 +159,8 @@ class FiltersBuilderMixin(_Base):
         stylize_textctrl(self.placement_value_filter)
         if self._on_placement_filter is not None:
             self.placement_value_filter.Bind(
-                wx.EVT_TEXT, lambda _evt: self._on_placement_filter()  # type: ignore[misc]
+                wx.EVT_TEXT,
+                lambda _evt: self._on_placement_filter(),  # type: ignore[misc]
             )
         placement_row.Add(self.placement_value_filter, 1, wx.EXPAND)
 
@@ -160,7 +171,8 @@ class FiltersBuilderMixin(_Base):
         stylize_textctrl(self.player_name_filter)
         if self._on_player_name_filter is not None:
             self.player_name_filter.Bind(
-                wx.EVT_TEXT, lambda _evt: self._on_player_name_filter()  # type: ignore[misc]
+                wx.EVT_TEXT,
+                lambda _evt: self._on_player_name_filter(),  # type: ignore[misc]
             )
         row3.Add(self.player_name_filter, 1, wx.EXPAND)
         sizer.Add(row3, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_MD)

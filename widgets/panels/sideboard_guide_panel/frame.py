@@ -21,7 +21,7 @@ from utils.constants.ui_layout import (
 )
 from widgets.panels.sideboard_guide_panel.handlers import SideboardGuidePanelHandlersMixin
 from widgets.panels.sideboard_guide_panel.properties import SideboardGuidePanelPropertiesMixin
-from widgets.stylize import stylize_button
+from widgets.stylize import stylize_button, stylize_scrollable
 
 
 class SideboardGuidePanel(
@@ -81,6 +81,8 @@ class SideboardGuidePanel(
         self.guide_view.AppendTextColumn(self._t("guide.col.notes"), width=GUIDE_COL_NOTES_WIDTH)
         self.guide_view.SetBackgroundColour(DARK_ALT)
         self.guide_view.SetForegroundColour(LIGHT_TEXT)
+        # After the columns, so the native header child exists to be themed.
+        stylize_scrollable(self.guide_view)
         sizer.Add(self.guide_view, 1, wx.EXPAND | wx.ALL, PADDING_MD)
 
         # Empty state panel (shown when there are no entries)

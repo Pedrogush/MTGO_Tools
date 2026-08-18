@@ -54,6 +54,7 @@ from widgets.mana_icon_factory import ManaIconFactory
 from widgets.panels.card_table_panel import CardTablePanel
 from widgets.panels.deck_builder_panel import DeckBuilderPanel
 from widgets.panels.deck_research_panel import DeckResearchPanel
+from widgets.status_bar import ThemedStatusBar
 
 if TYPE_CHECKING:
     from controllers.app_controller import AppController
@@ -194,12 +195,22 @@ class AppFrame(
     @timed
     def _build_ui(self) -> None:
         self.SetBackgroundColour(DARK_BG)
-        self._setup_status_bar()
+
+        # The frame owns a vertical sizer now: the content panel above, the status
+        # strip below. Before phase 1 the frame had no sizer at all — wx auto-sized
+        # its single child panel to the client area and CreateStatusBar reserved
+        # the strip's height itself. A second child needs the layout spelled out.
+        frame_sizer = wx.BoxSizer(wx.VERTICAL)
+        self.SetSizer(frame_sizer)
 
         self.root_panel = wx.Panel(self)
         self.root_panel.SetBackgroundColour(DARK_BG)
         root_sizer = wx.BoxSizer(wx.HORIZONTAL)
         self.root_panel.SetSizer(root_sizer)
+        frame_sizer.Add(self.root_panel, 1, wx.EXPAND)
+
+        self._setup_status_bar()
+        frame_sizer.Add(self.status_bar, 0, wx.EXPAND)
 
         self.left_panel_window = self._build_left_panel(self.root_panel)
         root_sizer.Add(self.left_panel_window, 0, wx.EXPAND | wx.ALL, PADDING_LG)
@@ -258,15 +269,11 @@ class AppFrame(
         # means the passive update note can't be overwritten by the next status
         # message, and can't steal width from it either.
         #
-        # STB_SHOW_TIPS is dropped because wx asserts if a tooltip is set
-        # manually while it is on, and _on_update_available needs one to say the
-        # note is clickable. What is given up is wx's automatic tooltip for
-        # *ellipsized* field text — which the short status messages here rarely
-        # trigger, and never for the fixed-width update field.
-        self.status_bar = self.CreateStatusBar(2, style=wx.STB_DEFAULT_STYLE & ~wx.STB_SHOW_TIPS)
+        # An own-drawn strip rather than wx.StatusBar: wxMSW honours the status
+        # bar's background colour and silently ignores its foreground, which left
+        # the app's main feedback channel at 1.40:1. See widgets.status_bar.
+        self.status_bar = ThemedStatusBar(self, 2)
         self.status_bar.SetStatusWidths([-1, STATUS_BAR_UPDATE_FIELD_WIDTH])
-        self.status_bar.SetBackgroundColour(DARK_PANEL)
-        self.status_bar.SetForegroundColour(LIGHT_TEXT)
         self._set_status("app.status.ready")
 
     @timed

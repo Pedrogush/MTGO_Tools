@@ -194,18 +194,60 @@ def test_multiline_textctrl_still_bumps_the_point_size(frame: object) -> None:
     assert multi.GetFont().GetPointSize() == plain.GetFont().GetPointSize() + 1
 
 
-def test_choice_still_uses_the_native_theme(frame: object) -> None:
-    """Phase 1 flips CHOICE_USES_NATIVE_THEME; until then this must not change."""
-    assert stylize.CHOICE_USES_NATIVE_THEME is True
+def test_choice_is_themed_dark(frame: object) -> None:
+    """Phase 1 flipped CHOICE_USES_NATIVE_THEME; dropdowns are dark now."""
+    assert stylize.CHOICE_USES_NATIVE_THEME is False
+    choice = wx.Choice(frame, choices=["a"])
+    stylize.stylize_choice(choice)
+    assert _rgb(choice.GetBackgroundColour()) == T.SURFACE_ALT
+    assert _rgb(choice.GetForegroundColour()) == T.TEXT_PRIMARY
+
+
+def test_choice_native_path_is_still_reachable(frame: object, monkeypatch: object) -> None:
+    """The pre-phase-1 rendering stays one flag away, so the change is reversible."""
+    monkeypatch.setattr(stylize, "CHOICE_USES_NATIVE_THEME", True)
     choice = wx.Choice(frame, choices=["a"])
     stylize.stylize_choice(choice)
     assert _rgb(choice.GetForegroundColour()) == (0, 0, 0)
 
 
-def test_choice_dark_path_uses_theme_tokens(frame: object, monkeypatch: object) -> None:
-    """The phase-1 branch is a one-line flag change; prove the branch works now."""
-    monkeypatch.setattr(stylize, "CHOICE_USES_NATIVE_THEME", False)
+def test_combobox_is_themed(frame: object) -> None:
+    """Same Win32 control as wx.Choice, same constraints, its own entry point."""
+    ctrl = wx.ComboBox(frame, choices=["a"], style=wx.CB_READONLY)
+    stylize.stylize_combobox(ctrl)
+    assert _rgb(ctrl.GetBackgroundColour()) == T.SURFACE_ALT
+    assert _rgb(ctrl.GetForegroundColour()) == T.TEXT_PRIMARY
+
+
+def test_checkbox_is_themed(frame: object) -> None:
+    ctrl = wx.CheckBox(frame, label="Exact symbols")
+    stylize.stylize_checkbox(ctrl, surface="panel")
+    assert _rgb(ctrl.GetBackgroundColour()) == T.SURFACE_PANEL
+    assert _rgb(ctrl.GetForegroundColour()) == T.TEXT_PRIMARY
+
+
+def test_checkbox_accepts_a_tone(frame: object) -> None:
+    ctrl = wx.CheckBox(frame, label="Auto-save art")
+    stylize.stylize_checkbox(ctrl, surface="panel", tone="secondary")
+    assert _rgb(ctrl.GetForegroundColour()) == T.TEXT_SECONDARY
+
+
+def test_spinctrl_is_themed(frame: object) -> None:
+    ctrl = wx.SpinCtrl(frame, min=0, max=10, initial=1)
+    stylize.stylize_spinctrl(ctrl)
+    assert _rgb(ctrl.GetBackgroundColour()) == T.SURFACE_ALT
+    assert _rgb(ctrl.GetForegroundColour()) == T.TEXT_PRIMARY
+
+
+def test_list_ctrl_rows_are_themed(frame: object) -> None:
+    ctrl = wx.ListCtrl(frame, style=wx.LC_REPORT)
+    ctrl.InsertColumn(0, "Card")
+    stylize.stylize_list_ctrl(ctrl, surface="panel")
+    assert _rgb(ctrl.GetBackgroundColour()) == T.SURFACE_PANEL
+    assert _rgb(ctrl.GetForegroundColour()) == T.TEXT_PRIMARY
+
+
+def test_disable_native_theme_is_safe_to_call(frame: object) -> None:
+    """It must never raise: every stylize entry point calls it unconditionally."""
     choice = wx.Choice(frame, choices=["a"])
-    stylize.stylize_choice(choice)
-    assert _rgb(choice.GetBackgroundColour()) == T.SURFACE_ALT
-    assert _rgb(choice.GetForegroundColour()) == T.TEXT_PRIMARY
+    assert isinstance(stylize.disable_native_theme(choice), bool)

@@ -106,6 +106,13 @@ CONTRAST_PAIRS: list[tuple[str, RGB, RGB, float, str]] = [
     *_on_every_surface("SUCCESS_TEXT", T.SUCCESS_TEXT, BODY_TEXT, "success message text"),
     *_on_every_surface("WARNING_TEXT", T.WARNING_TEXT, BODY_TEXT, "inline warning labels"),
     *_on_every_surface("DANGER_TEXT", T.DANGER_TEXT, BODY_TEXT, "error message text"),
+    (
+        "STATUS_BAR_FG on STATUS_BAR_BG",
+        T.STATUS_BAR_FG,
+        T.STATUS_BAR_BG,
+        BODY_TEXT,
+        "the app's primary feedback channel; measured 1.40:1 before phase 1",
+    ),
     # Foreground-on-fill pairs: each *_FILL ships with the only foreground allowed on it.
     (
         "ACCENT_ON_PRIMARY on ACCENT_PRIMARY",

@@ -10,7 +10,7 @@ import wx
 
 from utils.constants import DARK_ALT, DARK_BG, LIGHT_TEXT, SUBDUED_TEXT
 from utils.i18n import translate
-from widgets.stylize import stylize_textctrl
+from widgets.stylize import stylize_choice, stylize_textctrl
 
 NOTE_TYPES = ["General", "Matchup", "Sideboard Plan", "Custom"]
 
@@ -84,8 +84,7 @@ class _NoteCardWidget(wx.Panel):
 
         translated_types = [translate(locale, _NOTE_TYPE_I18N_KEYS.get(k, k)) for k in NOTE_TYPES]
         self.type_choice = wx.Choice(self, choices=translated_types)
-        self.type_choice.SetBackgroundColour(DARK_ALT)
-        self.type_choice.SetForegroundColour(LIGHT_TEXT)
+        stylize_choice(self.type_choice)
         note_type = card.get("type", "General")
         idx = NOTE_TYPES.index(note_type) if note_type in NOTE_TYPES else 0
         self.type_choice.SetSelection(idx)

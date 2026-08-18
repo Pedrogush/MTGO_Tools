@@ -31,7 +31,7 @@ from widgets.panels.card_image_display import CardImageDisplay
 from widgets.panels.card_inspector_panel.handlers import CardInspectorPanelHandlersMixin
 from widgets.panels.card_inspector_panel.properties import CardInspectorPanelPropertiesMixin
 from widgets.panels.mana_rich_text_ctrl import ManaSymbolRichCtrl
-from widgets.stylize import stylize_button
+from widgets.stylize import stylize_button, stylize_checkbox
 
 if TYPE_CHECKING:
     from repositories.card_repository import CardDataManager
@@ -182,7 +182,7 @@ class CardInspectorPanel(
         self.save_panel.SetSizer(save_sizer)
 
         self.autosave_checkbox = wx.CheckBox(self.save_panel, label="Auto-save art")
-        self.autosave_checkbox.SetForegroundColour(SUBDUED_TEXT)
+        stylize_checkbox(self.autosave_checkbox, surface="panel", tone="secondary")
         self.autosave_checkbox.SetToolTip("Persist each printing you scroll to for this card")
         self.autosave_checkbox.Bind(wx.EVT_CHECKBOX, self._on_autosave_toggle)
         save_sizer.Add(self.autosave_checkbox, 0, wx.ALIGN_CENTER_VERTICAL)
