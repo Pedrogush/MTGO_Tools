@@ -21,6 +21,7 @@ from utils.constants import (
     LIGHT_TEXT,
     PADDING_LG,
     PADDING_MD,
+    STATUS_BAR_UPDATE_FIELD_WIDTH,
 )
 from utils.i18n import SUPPORTED_LOCALES, translate
 from utils.perf import timed
@@ -251,7 +252,19 @@ class AppFrame(
             begin(screen_point, additive=additive)
 
     def _setup_status_bar(self) -> None:
-        self.status_bar = self.CreateStatusBar()
+        # Two fields: transient status text on the left (everything _set_status
+        # writes), and a fixed-width slot on the right that stays empty unless
+        # an update is available — see _on_update_available. Keeping them apart
+        # means the passive update note can't be overwritten by the next status
+        # message, and can't steal width from it either.
+        #
+        # STB_SHOW_TIPS is dropped because wx asserts if a tooltip is set
+        # manually while it is on, and _on_update_available needs one to say the
+        # note is clickable. What is given up is wx's automatic tooltip for
+        # *ellipsized* field text — which the short status messages here rarely
+        # trigger, and never for the fixed-width update field.
+        self.status_bar = self.CreateStatusBar(2, style=wx.STB_DEFAULT_STYLE & ~wx.STB_SHOW_TIPS)
+        self.status_bar.SetStatusWidths([-1, STATUS_BAR_UPDATE_FIELD_WIDTH])
         self.status_bar.SetBackgroundColour(DARK_PANEL)
         self.status_bar.SetForegroundColour(LIGHT_TEXT)
         self._set_status("app.status.ready")

@@ -3,7 +3,7 @@
 # Feature flag: disable MTGO decklist scraping until the new service is integrated.
 import os
 
-from utils.constants.app import APP_NAME, BRIDGE_PATH
+from utils.constants.app import APP_NAME, APP_VERSION, BRIDGE_PATH
 from utils.constants.colors import (
     CALC_BUTTON_GREEN,
     DARK_ACCENT,
@@ -83,6 +83,7 @@ from utils.constants.paths import (
     REMOTE_SNAPSHOT_CACHE_DIR,
     REMOTE_SNAPSHOT_MANIFEST_FILE,
     SAVED_DECKS_DB_FILE,
+    UPDATE_CHECK_CACHE_FILE,
     ensure_base_dirs,
 )
 from utils.constants.radar import (
@@ -153,6 +154,8 @@ from utils.constants.timing import (
     SCRYFALL_REQUEST_TIMEOUT_SECONDS,
     SQLITE_BUSY_TIMEOUT_MS,
     SQLITE_CONNECTION_TIMEOUT_SECONDS,
+    UPDATE_CHECK_INTERVAL_SECONDS,
+    UPDATE_CHECK_REQUEST_TIMEOUT_SECONDS,
 )
 from utils.constants.ui_images import (
     BUILDER_MANA_CANVAS_WIDTH,
@@ -224,6 +227,7 @@ from utils.constants.ui_layout import (
     PADDING_SM,
     PADDING_XL,
     PADDING_XS,
+    STATUS_BAR_UPDATE_FIELD_WIDTH,
 )
 from utils.constants.ui_timer import (
     TIMER_ALERT_CHALLENGE_WRAP_WIDTH,
@@ -264,6 +268,7 @@ DECK_SELECTOR_MANA_ICON_SIZE = int(26 * 0.7)
 
 __all__ = [
     "APP_NAME",
+    "APP_VERSION",
     "BRIDGE_PATH",
     "CALC_COPIES_DEFAULT",
     "CALC_COPIES_MAX",
@@ -324,6 +329,7 @@ __all__ = [
     "RADAR_MIN_EXPECTED_COPIES_DEFAULT",
     "BASE_DATA_DIR",
     "CACHE_DIR",
+    "UPDATE_CHECK_CACHE_FILE",
     "CARD_DATA_DIR",
     "CONFIG_DIR",
     "CONFIG_FILE",
@@ -376,6 +382,7 @@ __all__ = [
     "BUILDER_NAME_COL_DEFAULT_WIDTH",
     "BUILDER_NAME_COL_MIN_WIDTH",
     "COLLAPSE_TOGGLE_WIDTH",
+    "STATUS_BAR_UPDATE_FIELD_WIDTH",
     "PADDING_BASE",
     "PADDING_LG",
     "PADDING_MD",
@@ -469,6 +476,8 @@ __all__ = [
     "DEFAULT_BULK_DATA_MAX_AGE_DAYS",
     "METAGAME_CACHE_TTL_SECONDS",
     "ONE_DAY_SECONDS",
+    "UPDATE_CHECK_INTERVAL_SECONDS",
+    "UPDATE_CHECK_REQUEST_TIMEOUT_SECONDS",
     "ONE_HOUR_SECONDS",
     "SCRYFALL_BULK_STREAM_TIMEOUT_SECONDS",
     "SCRYFALL_DOWNLOAD_CHUNK_SIZE",

@@ -13,6 +13,7 @@ from controllers.app_controller.decks import DeckManagementMixin
 from controllers.app_controller.lifecycle import LifecycleMixin
 from controllers.app_controller.settings import SettingsMixin
 from controllers.app_controller.ui_callbacks import UICallbacks
+from controllers.app_controller.updates import UpdateCheckMixin
 from controllers.session_manager import DeckSelectorSessionManager
 from services import mtgo_bridge_service
 from services.archetype_resolver import find_archetype_by_name
@@ -53,6 +54,7 @@ from utils.perf import timed
 
 if TYPE_CHECKING:
     from controllers.app_controller.cache_warmer import CacheWarmer
+    from services.update_service import UpdateInfo
     from widgets.frames.app_frame import AppFrame
 
 
@@ -63,6 +65,7 @@ class AppController(
     CollectionMixin,
     BulkDataMixin,
     SettingsMixin,
+    UpdateCheckMixin,
     LifecycleMixin,
 ):
 
@@ -155,6 +158,7 @@ class AppController(
         self.frame: AppFrame | None = None
         self._bulk_check_worker_active = False
         self._cache_warmer: CacheWarmer | None = None
+        self._available_update: UpdateInfo | None = None
 
     # ----- Backward-compat repository accessors -----
     # Widgets, handlers, and a few tests still reach for ``controller.card_repo``,

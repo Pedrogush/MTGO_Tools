@@ -305,6 +305,35 @@ def test_event_logging_enabled_round_trips(tmp_path):
     assert manager.get_event_logging_enabled() is True
 
 
+def test_update_check_enabled_defaults_on_and_round_trips(tmp_path):
+    manager = _make_manager(tmp_path)
+    # Opt-out, not opt-in: a user who never opens the settings menu is the one
+    # who most needs to be told a new version exists.
+    assert manager.get_update_check_enabled() is True
+    manager.update_update_check_enabled(False)
+    assert manager.settings["update_check_enabled"] is False
+    assert manager.get_update_check_enabled() is False
+
+
+def test_update_check_enabled_persists_across_a_save(tmp_path):
+    manager = _make_manager(tmp_path)
+    manager.update_update_check_enabled(False)
+    manager.save(
+        current_format="Modern",
+        left_mode="research",
+        deck_data_source="both",
+        zone_cards={"main": [], "side": [], "out": []},
+    )
+
+    reloaded = DeckSelectorSessionManager(
+        StubDeckRepo(),
+        settings_file=manager.settings_file,
+        config_file=manager.config_file,
+        default_deck_dir=manager.default_deck_dir,
+    )
+    assert reloaded.get_update_check_enabled() is False
+
+
 def test_deck_view_and_pile_sort_modes(tmp_path):
     manager = _make_manager(tmp_path)
     assert manager.get_deck_view_mode("main") == "grid"

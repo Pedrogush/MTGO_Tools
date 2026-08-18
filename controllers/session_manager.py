@@ -109,6 +109,18 @@ class DeckSelectorSessionManager:
     def update_event_logging_enabled(self, enabled: bool) -> None:
         self.settings["event_logging_enabled"] = bool(enabled)
 
+    def get_update_check_enabled(self, default: bool = True) -> bool:
+        """Whether the app may ask GitHub about newer releases (issue #142).
+
+        Defaults to on: a user who never opens the settings menu is exactly the
+        one who otherwise never learns a fix shipped. Opting out is one click.
+        """
+        value = self.settings.get("update_check_enabled", default)
+        return bool(value)
+
+    def update_update_check_enabled(self, enabled: bool) -> None:
+        self.settings["update_check_enabled"] = bool(enabled)
+
     _VALID_DECK_VIEW_MODES = {"grid", "table", "pile"}
     _VALID_PILE_SORTS = {"mv", "color", "type"}
 

@@ -10,6 +10,7 @@ from loguru import logger
 
 if TYPE_CHECKING:
     from controllers.app_controller import AppController
+    from services.update_service import UpdateInfo
     from widgets.frames.app_frame import AppFrame
 
 
@@ -26,6 +27,7 @@ class UICallbacks:
     on_bulk_download_needed: Callable[[str], None]
     on_bulk_download_complete: Callable[[str], None]
     on_bulk_download_failed: Callable[[str], None]
+    on_update_available: Callable[[UpdateInfo], None]
 
 
 class AppControllerUIHelpers:
@@ -71,4 +73,5 @@ class AppControllerUIHelpers:
             on_bulk_download_needed=lambda reason: logger.info(f"Bulk data needs update: {reason}"),
             on_bulk_download_complete=lambda msg: wx.CallAfter(frame._on_bulk_data_downloaded, msg),
             on_bulk_download_failed=lambda msg: wx.CallAfter(frame._on_bulk_data_failed, msg),
+            on_update_available=lambda info: wx.CallAfter(frame._on_update_available, info),
         )

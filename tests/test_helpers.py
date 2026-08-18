@@ -84,6 +84,7 @@ reset_comp_rules_service = _optional_reset(
 reset_card_service = _optional_reset("services.card_service", "reset_card_service")
 reset_metagame_service = _optional_reset("services.metagame_service", "reset_metagame_service")
 reset_radar_service = _optional_reset("services.radar_service", "reset_radar_service")
+reset_update_service = _optional_reset("services.update_service", "reset_update_service")
 reset_remote_snapshot_client = _optional_reset(
     "repositories.remote_snapshot_client", "reset_remote_snapshot_client"
 )
@@ -102,6 +103,7 @@ def reset_all_services() -> None:
     reset_radar_service()
     reset_search_service()
     reset_image_service()
+    reset_update_service()
 
 
 def reset_all_repositories() -> None:

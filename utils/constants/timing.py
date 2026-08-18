@@ -70,6 +70,15 @@ REMOTE_SNAPSHOT_REQUEST_TIMEOUT_SECONDS = 30
 # only bounds how often that cheap revalidation HEAD/GET round-trip happens.
 REMOTE_SNAPSHOT_BUNDLE_MAX_AGE_SECONDS = 6 * ONE_HOUR_SECONDS
 
+# In-app update check (issue #142) — how often the app asks the GitHub Releases
+# API whether a newer version has shipped. Deliberately coarse: releases land at
+# most a few times a week, the answer is a passive status-bar note nobody is
+# waiting on, and the unauthenticated GitHub API budget is 60 requests/hour per
+# IP — which a user behind a shared/NAT'd address shares with everything else on
+# it. Once a day keeps a ten-launches-a-day user at one request.
+UPDATE_CHECK_INTERVAL_SECONDS = ONE_DAY_SECONDS
+UPDATE_CHECK_REQUEST_TIMEOUT_SECONDS = 10
+
 # SQLite cache settings
 SQLITE_CONNECTION_TIMEOUT_SECONDS = 30.0
 SQLITE_BUSY_TIMEOUT_MS = 30000

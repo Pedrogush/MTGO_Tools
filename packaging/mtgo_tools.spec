@@ -51,6 +51,12 @@ app_icon = project_root / "assets" / "icons" / "hammer.ico"
 # the .exe file icon.
 datas += [(str(app_icon), "assets/icons")]
 
+# The repo-root VERSION file is the single source of truth for the running
+# version (utils/constants/app.py reads it via resource_path). The in-app update
+# check compares it against the latest published release, so a build that
+# shipped without it could never tell whether it was current.
+datas += [(str(project_root / "VERSION"), ".")]
+
 # Hidden imports: modules PyInstaller's static analysis can't see, so we find
 # them dynamically. wxPython's richtext extension loads wx._xml/_html/_adv at
 # runtime, and the first-party packages lazily import their submodules via a

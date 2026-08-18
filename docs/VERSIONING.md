@@ -90,8 +90,25 @@ instructions and the installer's **SHA256**. The installer is not code-signed
 yet, so that checksum is the only integrity check a user currently has — Windows
 SmartScreen will warn on first run either way.
 
-> **Not yet automated:** in-app update checks ([#142](https://github.com/Pedrogush/MTGO_Tools/issues/142)).
-> Users still download and re-run the installer to update.
+## Telling the user a release exists
+
+The published release is also what the app itself reads. On startup
+`services/update_service.py` asks the GitHub API for the latest release, parses
+its `v<VERSION>` tag, and compares it against the running `VERSION` — the same
+tag this workflow creates, which is the whole contract between the two.
+
+The check is background-only and best-effort: it never blocks startup, and being
+offline, rate-limited, or served an unfamiliar payload all resolve to "no update
+info" rather than an error. The answer is cached with a timestamp and refreshed
+at most once every `UPDATE_CHECK_INTERVAL_SECONDS` (24 h), including across
+restarts, so repeat launches make one request a day. When a newer version does
+exist the app says so in the right-hand status-bar field and in the settings
+menu; clicking either opens the release page. The whole thing can be turned off
+from **⚙ → Check for updates**.
+
+> **Not yet automated:** downloading and applying the update
+> ([#142](https://github.com/Pedrogush/MTGO_Tools/issues/142)). The app points at
+> the release page; users still download and re-run the installer.
 
 ## What this means for you
 
