@@ -13,6 +13,7 @@ from utils.constants.ui_windows import (
     GUIDE_IMPORT_OPTIONS_DIALOG_HEIGHT,
     GUIDE_IMPORT_OPTIONS_DIALOG_WIDTH,
 )
+from widgets.checkbox import DarkCheckBox
 from widgets.frames.app_frame.handlers.sideboard_guide_csv import (
     export_guide_to_csv,
     import_guide_from_csv,
@@ -92,7 +93,7 @@ class SideboardGuideImportExportHandlers(_Base):
         panel = wx.Panel(options_dlg)
         sizer = wx.BoxSizer(wx.VERTICAL)
 
-        enable_double_checkbox = wx.CheckBox(panel, label="Enable double entries")
+        enable_double_checkbox = DarkCheckBox(panel, label="Enable double entries")
         stylize_checkbox(enable_double_checkbox)
         enable_double_checkbox.SetToolTip(
             "If unchecked, will overwrite existing entries for matching archetypes. "

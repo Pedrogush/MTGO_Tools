@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from html import escape
 from typing import Any
 
-from utils.constants import DARK_ACCENT, DARK_ALT, DARK_PANEL, LIGHT_TEXT, SUBDUED_TEXT
+from utils.constants import BORDER_SUBTLE, DARK_ALT, DARK_PANEL, LIGHT_TEXT, SUBDUED_TEXT
 from utils.i18n import translate
 
 
@@ -69,7 +69,9 @@ class MetagameAnalysisPropertiesMixin:
 
         arrow_color = "#43d17b" if direction_class == "up" else "#ff6464"
         dark_panel = self._rgb_to_hex(DARK_PANEL)
-        dark_accent = self._rgb_to_hex(DARK_ACCENT)
+        # A 1px rule around a metric card is ornament, not emphasis; it was the
+        # accent purely because the accent was the only non-neutral in the app.
+        card_border = self._rgb_to_hex(BORDER_SUBTLE)
         light_text = self._rgb_to_hex(LIGHT_TEXT)
         subdued_text = self._rgb_to_hex(SUBDUED_TEXT)
 
@@ -77,7 +79,7 @@ class MetagameAnalysisPropertiesMixin:
 <table cellspacing='0' cellpadding='0' width='100%'>
   <tr>
     <td align='center'>
-      <table cellspacing='1' cellpadding='0' bgcolor='{dark_accent}' width='96%'>
+      <table cellspacing='1' cellpadding='0' bgcolor='{card_border}' width='96%'>
         <tr>
           <td bgcolor='{dark_panel}'>
             <table cellspacing='0' cellpadding='4' width='100%'>
@@ -89,7 +91,7 @@ class MetagameAnalysisPropertiesMixin:
               <tr>
                 <td colspan='3'>
                   <font color='{subdued_text}' size='2'>
-                    {escape(self._t('metagame.changes.now'))} {current_val:.1f}% | {escape(self._t('metagame.changes.previous'))} {previous_val:.1f}%
+                    {escape(self._t("metagame.changes.now"))} {current_val:.1f}% | {escape(self._t("metagame.changes.previous"))} {previous_val:.1f}%
                   </font>
                 </td>
               </tr>

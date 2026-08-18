@@ -3,15 +3,22 @@
 The widget-level helpers delegate to :mod:`widgets.stylize` so the timer window
 picks up the phase-1 native-control theming (dark dropdowns, dark checkbox
 glyphs, dark spin arrows) instead of quietly re-implementing an older subset of
-it. The button helpers stay local; phase 2 folds them into ``stylize_button``.
+it. The button helpers are now thin wrappers over ``stylize_button`` as well; they
+stay as methods only because the section builders call them through ``self``.
 """
 
 from __future__ import annotations
 
 import wx
 
-from utils.constants import DARK_ACCENT, DARK_BG, DARK_PANEL, LIGHT_TEXT
-from widgets.stylize import stylize_checkbox, stylize_choice, stylize_spinctrl
+from utils.constants import DARK_BG, LIGHT_TEXT
+from widgets.checkbox import DarkCheckBox
+from widgets.stylize import (
+    stylize_button,
+    stylize_checkbox,
+    stylize_choice,
+    stylize_spinctrl,
+)
 
 
 class StylingMixin:
@@ -33,19 +40,11 @@ class StylingMixin:
     def _stylize_spin(self, ctrl: wx.SpinCtrl) -> None:
         stylize_spinctrl(ctrl)
 
-    def _stylize_checkbox(self, ctrl: wx.CheckBox) -> None:
+    def _stylize_checkbox(self, ctrl: DarkCheckBox) -> None:
         stylize_checkbox(ctrl)
 
     def _stylize_primary_button(self, button: wx.Button) -> None:
-        button.SetBackgroundColour(DARK_ACCENT)
-        button.SetForegroundColour(wx.Colour(12, 14, 18))
-        font = button.GetFont()
-        font.MakeBold()
-        button.SetFont(font)
+        stylize_button(button, kind="primary")
 
     def _stylize_secondary_button(self, button: wx.Button) -> None:
-        button.SetBackgroundColour(DARK_PANEL)
-        button.SetForegroundColour(LIGHT_TEXT)
-        font = button.GetFont()
-        font.MakeBold()
-        button.SetFont(font)
+        stylize_button(button, kind="secondary")

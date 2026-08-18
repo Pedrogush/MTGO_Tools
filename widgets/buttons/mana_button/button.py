@@ -9,8 +9,8 @@ from collections.abc import Callable
 
 import wx
 
-from utils.constants import DARK_ALT, LIGHT_TEXT
 from widgets.mana_icon_factory import ManaIconFactory, ManaIconResources
+from widgets.stylize import stylize_button
 
 
 def get_mana_font(size: int = 14, parent_font: wx.Font | None = None) -> wx.Font:
@@ -66,8 +66,10 @@ def create_mana_button(
         "C": "Colorless",
         "X": "X (variable)",
     }
-    btn.SetBackgroundColour(DARK_ALT)
-    btn.SetForegroundColour(LIGHT_TEXT)
+    # Routed through the one button system so these lose wxMSW's light 2px
+    # frame along with every other button, and so the "All" button beside them
+    # can be given the same face by name rather than by copying a hex (G4).
+    stylize_button(btn, kind="ghost")
     btn.SetToolTip(_TOKEN_LABELS.get(token, token))
     btn.Bind(wx.EVT_BUTTON, lambda _evt, sym=token: handler(sym))
     return btn

@@ -75,14 +75,14 @@ class DeckNotesPanel(
         outer.Add(toolbar, 0, wx.EXPAND | wx.ALL, 6)
 
         add_btn = wx.Button(self, label=self._t("notes.btn.add"))
-        stylize_button(add_btn)
+        stylize_button(add_btn, kind="primary")
         add_btn.Bind(wx.EVT_BUTTON, self._on_add_note)
         toolbar.Add(add_btn, 0, wx.RIGHT, 6)
 
         toolbar.AddStretchSpacer(1)
 
         self.save_btn = wx.Button(self, label=self._t("notes.btn.save"))
-        stylize_button(self.save_btn)
+        stylize_button(self.save_btn, kind="secondary")
         self.save_btn.Bind(wx.EVT_BUTTON, self._on_save_clicked)
         toolbar.Add(self.save_btn, 0)
 

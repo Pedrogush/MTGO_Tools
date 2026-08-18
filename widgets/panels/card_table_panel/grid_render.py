@@ -18,14 +18,15 @@ from typing import Any
 import wx
 
 from utils.constants import (
-    DARK_ACCENT,
     DARK_ALT,
     DARK_PANEL,
-    DECK_CARD_ACTION_BUTTON_FG,
-    DECK_CARD_ACTIVE_BORDER_WIDTH,
     DECK_CARD_BADGE_PADDING,
     DECK_CARD_BASE_FONT_SIZE,
     DECK_CARD_CORNER_RADIUS,
+    SELECTION_BORDER,
+    SELECTION_BORDER_WIDTH,
+    SURFACE_RAISED,
+    TEXT_PRIMARY,
 )
 from widgets.panels.card_table_panel.grid_layout import (
     _ACTION_BUTTON_RADIUS,
@@ -126,7 +127,7 @@ class GridRenderMixin:
             rect = self._card_rect(idx)
             if is_selected:
                 self._draw_qty(dc, rect, card, True)
-                dc.SetPen(wx.Pen(wx.Colour(*DARK_ACCENT), DECK_CARD_ACTIVE_BORDER_WIDTH))
+                dc.SetPen(wx.Pen(wx.Colour(*SELECTION_BORDER), SELECTION_BORDER_WIDTH))
                 dc.SetBrush(wx.TRANSPARENT_BRUSH)
                 dc.DrawRoundedRectangle(rect, DECK_CARD_CORNER_RADIUS)
             if self._shows_actions(name):
@@ -160,7 +161,7 @@ class GridRenderMixin:
         self._draw_card_static(dc, rect, card)
         if is_selected:
             self._draw_qty(dc, rect, card, True)
-            dc.SetPen(wx.Pen(wx.Colour(*DARK_ACCENT), DECK_CARD_ACTIVE_BORDER_WIDTH))
+            dc.SetPen(wx.Pen(wx.Colour(*SELECTION_BORDER), SELECTION_BORDER_WIDTH))
             dc.SetBrush(wx.TRANSPARENT_BRUSH)
             dc.DrawRoundedRectangle(rect, DECK_CARD_CORNER_RADIUS)
 
@@ -182,7 +183,10 @@ class GridRenderMixin:
         )
         tw, th = dc.GetTextExtent(text)
         pad = DECK_CARD_BADGE_PADDING
-        badge_bg = DARK_ACCENT if is_selected else DARK_ALT
+        # The selected badge used to be a solid accent block on top of the art.
+        # Selection is already carried by the 2px accent edge around the whole
+        # card, so the badge only has to lift off the unselected one.
+        badge_bg = SURFACE_RAISED if is_selected else DARK_ALT
         dc.SetBrush(wx.Brush(wx.Colour(*badge_bg)))
         dc.SetPen(wx.TRANSPARENT_PEN)
         dc.DrawRectangle(rect.x + pad, rect.y + pad, tw + pad * 2, th + pad)
@@ -201,12 +205,16 @@ class GridRenderMixin:
         for idx, (button_rect, glyph) in enumerate(
             zip(self._action_button_rects(rect), _ACTION_GLYPHS)
         ):
+            # Three saturated accent chips on every hovered card was the densest
+            # accent in the app after the toolbar, and it made `+`, `-` and `x`
+            # read as three primary actions. Neutral raised chips instead; the
+            # glyph is what says what each one does.
             pressed = self._pressed == (name, idx)
-            bg = tuple(max(0, c - 40) for c in DARK_ACCENT) if pressed else DARK_ACCENT
+            bg = DARK_ALT if pressed else SURFACE_RAISED
             dc.SetBrush(wx.Brush(wx.Colour(*bg)))
             dc.SetPen(wx.TRANSPARENT_PEN)
             dc.DrawRoundedRectangle(button_rect, _ACTION_BUTTON_RADIUS)
-            dc.SetTextForeground(wx.Colour(*DECK_CARD_ACTION_BUTTON_FG))
+            dc.SetTextForeground(wx.Colour(*TEXT_PRIMARY))
             gw, gh = dc.GetTextExtent(glyph)
             dc.DrawText(
                 glyph,

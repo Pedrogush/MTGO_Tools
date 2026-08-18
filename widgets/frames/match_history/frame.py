@@ -18,7 +18,7 @@ from loguru import logger
 from utils.i18n import translate
 from widgets.frames.match_history.handlers import MatchHistoryHandlersMixin
 from widgets.frames.match_history.properties import MatchHistoryPropertiesMixin
-from widgets.stylize import stylize_scrollable
+from widgets.stylize import stylize_button, stylize_scrollable
 
 DARK_BG = wx.Colour(20, 22, 27)
 DARK_PANEL = wx.Colour(34, 39, 46)
@@ -210,11 +210,7 @@ class MatchHistoryFrame(MatchHistoryHandlersMixin, MatchHistoryPropertiesMixin, 
             dv_ctrl.GetColumn(1).SetWidth(col0_w)
 
     def _stylize_button(self, button: wx.Button) -> None:
-        button.SetBackgroundColour(DARK_PANEL)
-        button.SetForegroundColour(LIGHT_TEXT)
-        font = button.GetFont()
-        font.MakeBold()
-        button.SetFont(font)
+        stylize_button(button, kind="secondary")
 
 
 def main() -> None:

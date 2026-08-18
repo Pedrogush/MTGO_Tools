@@ -35,7 +35,6 @@ from PIL import Image as PilImage
 
 from utils.constants import (
     CARD_VIEW_SCROLL_RATE,
-    DARK_ACCENT,
     DARK_ALT,
     DARK_BG,
     DARK_PANEL,
@@ -43,6 +42,8 @@ from utils.constants import (
     DECK_CARD_HEIGHT,
     DECK_CARD_WIDTH,
     LIGHT_TEXT,
+    SELECTION_BORDER,
+    SELECTION_BORDER_WIDTH,
     SUBDUED_TEXT,
 )
 from utils.image_effects import apply_rounded_corner_alpha
@@ -511,7 +512,10 @@ class DeckPileView(wx.ScrolledWindow):
                     continue
                 dc.SetBrush(wx.TRANSPARENT_BRUSH)
                 if is_selected:
-                    dc.SetPen(wx.Pen(wx.Colour(*DARK_ACCENT), 3))
+                    # C9/G1: the pile view drew its own 3px accent outline while
+                    # the grid drew a different one; both are the selection token
+                    # at its declared width now.
+                    dc.SetPen(wx.Pen(wx.Colour(*SELECTION_BORDER), SELECTION_BORDER_WIDTH))
                 else:
                     dc.SetPen(wx.Pen(wx.Colour(*SUBDUED_TEXT), 1, wx.PENSTYLE_DOT))
                 # Only the bottom card of a pile is fully visible; the rest show

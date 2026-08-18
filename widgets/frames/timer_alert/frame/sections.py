@@ -23,6 +23,7 @@ from utils.constants import (
     TIMER_ALERT_SCROLL_RATE_Y,
     TIMER_ALERT_STATUS_MIN_HEIGHT,
 )
+from widgets.checkbox import DarkCheckBox
 from widgets.frames.timer_alert.frame.threshold_panel import SOUND_OPTIONS
 from widgets.stylize import stylize_scrollable
 
@@ -39,8 +40,8 @@ class SectionsBuilderMixin:
     sound_choice: wx.Choice
     poll_interval_ctrl: wx.SpinCtrl
     repeat_interval_ctrl: wx.SpinCtrl
-    start_alert_checkbox: wx.CheckBox
-    repeat_alarm_checkbox: wx.CheckBox
+    start_alert_checkbox: DarkCheckBox
+    repeat_alarm_checkbox: DarkCheckBox
     status_text: wx.TextCtrl
     challenge_text: wx.StaticText | None
 
@@ -117,12 +118,12 @@ class SectionsBuilderMixin:
         sizer.Add(options_grid, 0, wx.LEFT | wx.RIGHT | wx.EXPAND, PADDING_XL)
 
         # Checkboxes
-        self.start_alert_checkbox = wx.CheckBox(panel, label=self._t("timer.check.start_alert"))
+        self.start_alert_checkbox = DarkCheckBox(panel, label=self._t("timer.check.start_alert"))
         self.start_alert_checkbox.SetValue(True)
         self._stylize_checkbox(self.start_alert_checkbox)
         sizer.Add(self.start_alert_checkbox, 0, wx.LEFT | wx.RIGHT | wx.TOP, PADDING_XL)
 
-        self.repeat_alarm_checkbox = wx.CheckBox(panel, label=self._t("timer.check.repeat_alarm"))
+        self.repeat_alarm_checkbox = DarkCheckBox(panel, label=self._t("timer.check.repeat_alarm"))
         self.repeat_alarm_checkbox.SetValue(False)
         self._stylize_checkbox(self.repeat_alarm_checkbox)
         sizer.Add(self.repeat_alarm_checkbox, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_XL)

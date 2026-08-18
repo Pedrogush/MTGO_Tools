@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-import wx
+from widgets.checkbox import DarkCheckBox
 
 
 class FeedbackDialogPropertiesMixin:
     """Public state accessors for :class:`FeedbackDialog`."""
 
-    _event_log_check: wx.CheckBox
+    _event_log_check: DarkCheckBox
 
     @property
     def event_logging_enabled(self) -> bool:

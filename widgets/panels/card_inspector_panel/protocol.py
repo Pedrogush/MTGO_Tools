@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any, Protocol
 
 import wx
 
+from widgets.checkbox import DarkCheckBox
 from widgets.mana_icon_factory import ManaIconFactory
 from widgets.panels.card_image_display import CardImageDisplay
 from widgets.panels.mana_rich_text_ctrl import ManaSymbolRichCtrl
@@ -50,7 +51,7 @@ class CardInspectorPanelProto(Protocol):
     image_text_ctrl: ManaSymbolRichCtrl
     nav_panel: wx.Panel
     save_panel: wx.Panel
-    autosave_checkbox: wx.CheckBox
+    autosave_checkbox: DarkCheckBox
     save_art_btn: wx.Button
     prev_btn: wx.Button
     next_btn: wx.Button

@@ -28,8 +28,7 @@ class MetagameVisualizationMixin:
 
     def update_visualization(self) -> None:
         logger.debug(
-            f"update_visualization called, offset={self.base_day_offset}, "
-            f"days={self.current_days}"
+            f"update_visualization called, offset={self.base_day_offset}, days={self.current_days}"
         )
         if not self.stats_data:
             logger.warning("No stats data available for visualization")

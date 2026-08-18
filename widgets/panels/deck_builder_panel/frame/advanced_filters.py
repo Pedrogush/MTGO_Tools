@@ -35,7 +35,7 @@ class AdvancedFiltersBuilderMixin(_Base):
 
     def _build_advanced_filters(self, parent_sizer: wx.Sizer) -> None:
         adv_toggle_btn = wx.Button(self, label=self._t("builder.btn.adv_filters_show"))
-        stylize_button(adv_toggle_btn)
+        stylize_button(adv_toggle_btn, kind="secondary")
         adv_toggle_btn.Bind(wx.EVT_BUTTON, self._on_adv_toggle)
         parent_sizer.Add(adv_toggle_btn, 0, wx.ALIGN_CENTER_HORIZONTAL | wx.BOTTOM, PADDING_MD)
         self._adv_toggle_btn = adv_toggle_btn

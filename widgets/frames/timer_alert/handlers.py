@@ -14,6 +14,8 @@ from typing import TYPE_CHECKING, Any
 import wx
 from loguru import logger
 
+from widgets.checkbox import DarkCheckBox
+
 if TYPE_CHECKING:
     from services.mtgo_bridge_service.client import BridgeWatcher
     from widgets.frames.timer_alert.frame import ThresholdPanel
@@ -59,8 +61,8 @@ class TimerAlertHandlersMixin:
     sound_choice: wx.Choice
     poll_interval_ctrl: wx.SpinCtrl
     repeat_interval_ctrl: wx.SpinCtrl
-    start_alert_checkbox: wx.CheckBox
-    repeat_alarm_checkbox: wx.CheckBox
+    start_alert_checkbox: DarkCheckBox
+    repeat_alarm_checkbox: DarkCheckBox
 
     # ------------------------------------------------------------------ monitoring
     def start_monitoring(self) -> None:

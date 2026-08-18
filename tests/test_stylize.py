@@ -17,6 +17,7 @@ from utils.constants import theme as T
 wx = pytest.importorskip("wx")
 
 from widgets import stylize  # noqa: E402
+from widgets.checkbox import DarkCheckBox  # noqa: E402
 
 
 @pytest.fixture(scope="module")
@@ -155,12 +156,91 @@ def test_default_button_is_unchanged_from_before_the_rewrite(frame: object) -> N
     assert button.GetFont().GetWeight() == wx.FONTWEIGHT_BOLD
 
 
-@pytest.mark.parametrize("kind", ["secondary", "ghost", "danger", "success"])
+@pytest.mark.parametrize("kind", ["secondary", "ghost", "danger", "success", "toggle"])
 def test_non_primary_kinds_drop_the_accent_fill_and_the_bold(frame: object, kind: str) -> None:
     button = wx.Button(frame, label="x")
     stylize.stylize_button(button, kind=kind)
     assert _rgb(button.GetBackgroundColour()) != T.ACCENT_PRIMARY
     assert button.GetFont().GetWeight() != wx.FONTWEIGHT_BOLD
+
+
+@pytest.mark.parametrize("kind", ["primary", "secondary", "ghost", "danger", "success", "toggle"])
+def test_every_kind_strips_the_native_frame(frame: object, kind: str) -> None:
+    """wxMSW's 2px light-grey button frame is unreachable; only removal is."""
+    button = wx.Button(frame, label="x")
+    assert not button.GetWindowStyleFlag() & wx.BORDER_NONE
+    stylize.stylize_button(button, kind=kind)
+    assert button.GetWindowStyleFlag() & wx.BORDER_NONE
+
+
+def test_stripping_the_frame_is_idempotent(frame: object) -> None:
+    """The view toggles are re-stylized on every switch; this must not churn."""
+    button = wx.Button(frame, label="x", style=wx.BORDER_NONE)
+    before = button.GetWindowStyleFlag()
+    stylize.strip_native_button_frame(button)
+    assert button.GetWindowStyleFlag() == before
+
+
+def test_selected_toggle_is_the_selection_token(frame: object) -> None:
+    button = wx.Button(frame, label="Grid")
+    stylize.stylize_button(button, kind="toggle", selected=True, surface="panel")
+    assert _rgb(button.GetBackgroundColour()) == T.SELECTION_FILL_ON_PANEL
+    assert _rgb(button.GetForegroundColour()) == T.SELECTION_TEXT
+    assert _rgb(button.GetBackgroundColour()) != T.ACCENT_PRIMARY
+
+
+def test_a_ghost_chip_steps_up_so_it_does_not_vanish_into_its_surface(frame: object) -> None:
+    """SURFACE_ALT is 1.32:1 on the base surface and 1.10:1 on a panel."""
+    on_base = wx.Button(frame, label="Match History")
+    on_panel = wx.Button(frame, label="Grid")
+    stylize.stylize_button(on_base, kind="ghost")
+    stylize.stylize_button(on_panel, kind="ghost", surface="panel")
+    assert _rgb(on_base.GetBackgroundColour()) == T.SURFACE_ALT
+    assert _rgb(on_panel.GetBackgroundColour()) == T.SURFACE_RAISED
+    for button, surface in ((on_base, T.SURFACE_BASE), (on_panel, T.SURFACE_PANEL)):
+        fill = _rgb(button.GetBackgroundColour())
+        assert T.contrast_ratio(fill, surface) >= stylize._MIN_CHIP_CONTRAST
+
+
+def test_a_toggle_can_be_deselected_again(frame: object) -> None:
+    """Bold has to come back off, or a toggle stays bold forever after one click."""
+    button = wx.Button(frame, label="Grid")
+    stylize.stylize_button(button, kind="toggle", selected=True)
+    assert button.GetFont().GetWeight() == wx.FONTWEIGHT_BOLD
+    stylize.stylize_button(button, kind="toggle", selected=False)
+    assert button.GetFont().GetWeight() == wx.FONTWEIGHT_NORMAL
+    assert _rgb(button.GetBackgroundColour()) == T.SURFACE_ALT
+
+
+def test_a_button_disabled_before_styling_is_painted_disabled(frame: object) -> None:
+    """Half the app's Disable() calls happen before stylize_button, half after."""
+    button = wx.Button(frame, label="Save Deck")
+    button.Disable()
+    stylize.stylize_button(button, kind="primary")
+    assert _rgb(button.GetBackgroundColour()) == T.DISABLED_FILL
+
+
+def test_a_button_disabled_after_styling_repaints_on_idle(frame: object) -> None:
+    """C-b: wxMSW greys the label and leaves the fill saturated on its own."""
+    button = wx.Button(frame, label="Save Deck")
+    stylize.stylize_button(button, kind="primary")
+    assert _rgb(button.GetBackgroundColour()) == T.ACCENT_PRIMARY
+    button.Disable()
+    button.ProcessEvent(wx.UpdateUIEvent(button.GetId()))
+    assert _rgb(button.GetBackgroundColour()) == T.DISABLED_FILL
+    button.Enable()
+    button.ProcessEvent(wx.UpdateUIEvent(button.GetId()))
+    assert _rgb(button.GetBackgroundColour()) == T.ACCENT_PRIMARY
+
+
+def test_re_enabling_restores_the_kind_it_was_given(frame: object) -> None:
+    button = wx.Button(frame, label="Flex Slots")
+    stylize.stylize_button(button, kind="success")
+    button.Disable()
+    button.ProcessEvent(wx.UpdateUIEvent(button.GetId()))
+    button.Enable()
+    button.ProcessEvent(wx.UpdateUIEvent(button.GetId()))
+    assert _rgb(button.GetBackgroundColour()) == T.SUCCESS_FILL
 
 
 def test_disabled_button_loses_chroma(frame: object) -> None:
@@ -220,16 +300,23 @@ def test_combobox_is_themed(frame: object) -> None:
 
 
 def test_checkbox_is_themed(frame: object) -> None:
-    ctrl = wx.CheckBox(frame, label="Exact symbols")
+    ctrl = DarkCheckBox(frame, label="Exact symbols")
     stylize.stylize_checkbox(ctrl, surface="panel")
     assert _rgb(ctrl.GetBackgroundColour()) == T.SURFACE_PANEL
     assert _rgb(ctrl.GetForegroundColour()) == T.TEXT_PRIMARY
 
 
 def test_checkbox_accepts_a_tone(frame: object) -> None:
-    ctrl = wx.CheckBox(frame, label="Auto-save art")
+    ctrl = DarkCheckBox(frame, label="Auto-save art")
     stylize.stylize_checkbox(ctrl, surface="panel", tone="secondary")
     assert _rgb(ctrl.GetForegroundColour()) == T.TEXT_SECONDARY
+
+
+def test_a_native_checkbox_still_gets_the_partial_fix(frame: object) -> None:
+    """Not a call site any more, but the entry point must not blow up on one."""
+    ctrl = wx.CheckBox(frame, label="Exact symbols")
+    stylize.stylize_checkbox(ctrl, surface="panel")
+    assert _rgb(ctrl.GetBackgroundColour()) == T.SURFACE_PANEL
 
 
 def test_spinctrl_is_themed(frame: object) -> None:

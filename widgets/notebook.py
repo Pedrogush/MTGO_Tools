@@ -17,8 +17,8 @@ import wx
 from wx.lib.agw import flatnotebook as fnb
 
 from utils.constants.theme import (
-    ACCENT_ON_PRIMARY,
-    ACCENT_PRIMARY,
+    SELECTION_FILL_ON_PANEL,
+    SELECTION_TEXT,
     SURFACE_BASE,
     SURFACE_PANEL,
     TEXT_PRIMARY,
@@ -39,11 +39,25 @@ DEFAULT_AGW_STYLE = fnb.FNB_NO_X_BUTTON | fnb.FNB_NO_NAV_BUTTONS
 
 
 def stylize_notebook(notebook: fnb.FlatNotebook) -> None:
-    """Paint a ``FlatNotebook`` with the app's tokens."""
+    """Paint a ``FlatNotebook`` with the app's tokens.
+
+    The active tab uses the **selection** token, not a saturated accent fill.
+    Phase 1 dropped ``FNB_FANCY_TABS``, which made ``SetActiveTabColour`` take
+    effect for the first time and turned the active tab into a solid
+    ``ACCENT_PRIMARY`` block in two places. Phase 2 owns the accent budget and
+    made that call: an active tab is a *selected item among peers* — exactly what
+    the deck rows, the card views and the Grid/Table/Pile toggles are — so it gets
+    the one selection idiom rather than a private one. Giving it the saturated
+    fill would also have put the loudest colour in the app immediately above the
+    card art it competes with.
+
+    ``SELECTION_TEXT`` on ``SELECTION_FILL_ON_PANEL`` measures 4.91:1; the plain
+    tab renderer bolds the active label, so the state survives without colour.
+    """
     notebook.SetTabAreaColour(wx.Colour(*SURFACE_PANEL))
-    notebook.SetActiveTabColour(wx.Colour(*ACCENT_PRIMARY))
+    notebook.SetActiveTabColour(wx.Colour(*SELECTION_FILL_ON_PANEL))
     notebook.SetNonActiveTabTextColour(wx.Colour(*TEXT_SECONDARY))
-    notebook.SetActiveTabTextColour(wx.Colour(*ACCENT_ON_PRIMARY))
+    notebook.SetActiveTabTextColour(wx.Colour(*SELECTION_TEXT))
     notebook.SetBackgroundColour(wx.Colour(*SURFACE_BASE))
     notebook.SetForegroundColour(wx.Colour(*TEXT_PRIMARY))
 

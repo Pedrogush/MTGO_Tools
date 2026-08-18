@@ -9,6 +9,7 @@ import wx
 from loguru import logger
 
 from utils.diagnostics import export_diagnostics_bundle
+from widgets.checkbox import DarkCheckBox
 
 
 class FeedbackDialogHandlersMixin:
@@ -16,7 +17,7 @@ class FeedbackDialogHandlersMixin:
 
     _logs_dir: Path
     _notes_ctrl: wx.TextCtrl
-    _include_events_check: wx.CheckBox
+    _include_events_check: DarkCheckBox
     _export_btn: wx.Button
     _status_label: wx.StaticText
 

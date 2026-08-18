@@ -249,20 +249,6 @@ CONTRAST_PAIRS += [
         "widgets/panels/mana_rich_text_ctrl/frame.py:119; measured 1.89:1 before phase 0",
     ),
     (
-        "LIGHT_TEXT on CALC_BUTTON_GREEN",
-        colors.LIGHT_TEXT,
-        T.from_hex(colors.CALC_BUTTON_GREEN),
-        BODY_TEXT,
-        "identify_opponent calculator 'Calculate' button",
-    ),
-    (
-        "DECK_CARD_ACTION_BUTTON_FG on FLEX_SLOT_BUTTON_COLOR",
-        colors.DECK_CARD_ACTION_BUTTON_FG,
-        colors.FLEX_SLOT_BUTTON_COLOR,
-        BODY_TEXT,
-        "sideboard guide 'Flex Slots' button; measured 4.14:1 before phase 0",
-    ),
-    (
         "WARNING_LABEL_COLOR on DARK_PANEL",
         colors.WARNING_LABEL_COLOR,
         colors.DARK_PANEL,
@@ -276,36 +262,68 @@ CONTRAST_PAIRS += [
         BODY_TEXT,
         "sideboard card selector flex-slot rows",
     ),
-    (
-        "DECK_CARD_ACTION_BUTTON_FG on DARK_ACCENT",
-        colors.DECK_CARD_ACTION_BUTTON_FG,
-        colors.DARK_ACCENT,
-        BODY_TEXT,
-        "deck grid per-card + - x action buttons",
-    ),
 ]
 
-#: Pairs that cannot be fixed inside phase 0 because the fix is a design decision
-#: belonging to a later phase. id -> reason. Never widen a threshold instead of
-#: adding a row here.
-KNOWN_FAILURES: dict[str, str] = {
-    "DECK_CARD_ACTION_BUTTON_FG on PIN_BUTTON_COLOR": (
-        "PIN_BUTTON_COLOR (#8C5AD2) is a bespoke purple with no semantic role, and "
-        "stylize_button paints TEXT_ON_FILL over it: 4.15:1. It is not aliased to a "
-        "semantic token because 'pin for tracker' is not success/warning/danger. "
-        "Phase 2 (#962, C2) makes it a secondary button and the constant disappears."
-    ),
-}
-
+# ---------------------------------------------------------------------------
+# Phase 2: the button system and the one selection idiom
+# ---------------------------------------------------------------------------
+# Every pairing stylize_button can produce, plus the selection token as it is
+# actually painted. wxMSW cannot draw a border on a wx.Button, so a selected
+# toggle is identified by its *label* colour rather than by an outline -- which
+# means that label has to clear AA as body text, not as a non-text boundary.
 CONTRAST_PAIRS += [
     (
-        "DECK_CARD_ACTION_BUTTON_FG on PIN_BUTTON_COLOR",
-        colors.DECK_CARD_ACTION_BUTTON_FG,
-        colors.PIN_BUTTON_COLOR,
+        "SELECTION_TEXT on SELECTION_FILL_ON_ALT",
+        T.SELECTION_TEXT,
+        T.SELECTION_FILL_ON_ALT,
         BODY_TEXT,
-        "sideboard guide 'Pin for Tracker' button",
+        "selected Grid/Table/Pile toggle: fill + accent label, no border available",
+    ),
+    (
+        "SELECTION_TEXT on SELECTION_FILL_ON_PANEL",
+        T.SELECTION_TEXT,
+        T.SELECTION_FILL_ON_PANEL,
+        BODY_TEXT,
+        "active FlatNotebook tab",
+    ),
+    (
+        "TEXT_SECONDARY on SURFACE_ALT (ghost button)",
+        T.TEXT_SECONDARY,
+        T.SURFACE_ALT,
+        BODY_TEXT,
+        "toolbar / view-toggle / pager buttons, kind='ghost'",
+    ),
+    (
+        "TEXT_PRIMARY on SURFACE_RAISED (secondary button)",
+        T.TEXT_PRIMARY,
+        T.SURFACE_RAISED,
+        BODY_TEXT,
+        "kind='secondary' (the default for non-primary buttons) and the "
+        "per-card + - x chips drawn over card art",
+    ),
+    (
+        "ACCENT_ON_PRIMARY on ACCENT_PRIMARY (checked DarkCheckBox)",
+        T.ACCENT_ON_PRIMARY,
+        T.ACCENT_PRIMARY,
+        NON_TEXT,
+        "the tick inside a checked box",
+    ),
+    (
+        "BORDER_STRONG on SURFACE_ALT (unchecked DarkCheckBox)",
+        T.BORDER_STRONG,
+        T.SURFACE_ALT,
+        NON_TEXT,
+        "the box edge is the only thing marking an unchecked checkbox",
     ),
 ]
+
+#: Pairs that cannot be fixed inside the current phase because the fix is a design
+#: decision belonging to a later one. id -> reason. Never widen a threshold instead
+#: of adding a row here.
+#:
+#: Phase 0's single entry (DECK_CARD_ACTION_BUTTON_FG on PIN_BUTTON_COLOR) is gone:
+#: phase 2 deleted PIN_BUTTON_COLOR and made the Pin button a secondary one.
+KNOWN_FAILURES: dict[str, str] = {}
 
 
 @pytest.mark.parametrize(
@@ -681,5 +699,4 @@ def test_surface_aliases_did_not_change_value() -> None:
 def test_aliases_point_at_the_semantic_tokens() -> None:
     assert colors.HINT_TEXT is T.TEXT_PLACEHOLDER
     assert colors.WARNING_LABEL_COLOR is T.WARNING_TEXT
-    assert colors.FLEX_SLOT_BUTTON_COLOR is T.SUCCESS_FILL
     assert colors.FLEX_SLOT_HIGHLIGHT_COLOR is T.SUCCESS_SURFACE

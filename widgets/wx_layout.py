@@ -6,8 +6,8 @@ Showing/hiding widgets and re-running ``Layout()`` *at runtime* (collapsing a
 panel, toggling advanced filters, swapping a page) does not, on its own, force
 the enclosing top-level window to repaint. On Windows (MSW) this leaves "ghost"
 pixels behind — most visibly from native ``wx.Button`` controls that were given
-a custom background colour (see :func:`widgets.stylize.stylize_button`, which
-paints buttons in ``DARK_ACCENT``). The stale rectangle survives until some
+a custom background colour — which, since phase 2 of the redesign, is *every*
+button (see :func:`widgets.stylize.stylize_button`). The stale rectangle survives until some
 *external* event (minimising and restoring the window, or a resize) triggers a
 full ``WM_ERASEBKGND`` + repaint.
 

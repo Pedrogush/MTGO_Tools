@@ -6,12 +6,12 @@ import wx
 
 from utils.constants import (
     DARK_BG,
-    DARK_PANEL,
     LIGHT_TEXT,
     OPPONENT_TRACKER_LABEL_WRAP_WIDTH,
     OPPONENT_TRACKER_SECTION_PADDING,
     SUBDUED_TEXT,
 )
+from widgets.stylize import stylize_button
 
 
 class HeaderBuilderMixin:
@@ -37,11 +37,7 @@ class HeaderBuilderMixin:
         label.SetFont(font)
 
     def _stylize_secondary_button(self, button: wx.Button) -> None:
-        button.SetBackgroundColour(DARK_PANEL)
-        button.SetForegroundColour(LIGHT_TEXT)
-        font = button.GetFont()
-        font.MakeBold()
-        button.SetFont(font)
+        stylize_button(button, kind="secondary")
 
     def _build_header(self, panel: wx.Panel, outer_sizer: wx.Sizer) -> None:
         self.deck_label = wx.StaticText(panel, label=self._t("tracker.label.not_detected"))

@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import wx
 
-from utils.constants import DARK_ACCENT
+from utils.constants import SELECTION_BORDER
 
 # Thickness, in px, of the rendered outline.
 _BORDER = 2
@@ -63,7 +63,7 @@ class MarqueeOverlay:
     @staticmethod
     def _make_strip(parent: wx.Window) -> wx.PopupWindow:
         strip = wx.PopupWindow(parent, flags=wx.BORDER_NONE)
-        strip.SetBackgroundColour(wx.Colour(*DARK_ACCENT))
+        strip.SetBackgroundColour(wx.Colour(*SELECTION_BORDER))
         return strip
 
     def update(self, p1: wx.Point, p2: wx.Point) -> None:

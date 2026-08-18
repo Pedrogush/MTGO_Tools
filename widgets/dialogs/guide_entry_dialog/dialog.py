@@ -8,6 +8,7 @@ import wx
 
 from utils.constants import DARK_ALT, DARK_BG, LIGHT_TEXT
 from utils.i18n import translate
+from widgets.checkbox import DarkCheckBox
 from widgets.dialogs.guide_entry_dialog.handlers import GuideEntryDialogHandlersMixin
 from widgets.dialogs.guide_entry_dialog.properties import GuideEntryDialogPropertiesMixin
 from widgets.panels.sideboard_card_selector import SideboardCardSelector
@@ -122,7 +123,7 @@ class GuideEntryDialog(GuideEntryDialogHandlersMixin, GuideEntryDialogProperties
         panel_sizer.Add(self.notes_ctrl, 0, wx.EXPAND | wx.ALL, 4)
 
         # Enable double entries checkbox
-        self.enable_double_checkbox = wx.CheckBox(
+        self.enable_double_checkbox = DarkCheckBox(
             panel, label=self._t("guide.dialog.double_entries")
         )
         stylize_checkbox(self.enable_double_checkbox)

@@ -319,8 +319,7 @@ def test_refresh_downloads_when_stamp_missing(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     landing = (
-        '<a href="https://media.wizards.com/2026/downloads/'
-        'MagicCompRules%2020260227.txt">link</a>'
+        '<a href="https://media.wizards.com/2026/downloads/MagicCompRules%2020260227.txt">link</a>'
     )
     svc = _make_service_with_stub_http(tmp_path, monkeypatch, landing, _FIXTURE_TXT.encode("utf-8"))
     assert svc.refresh() is True

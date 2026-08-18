@@ -12,7 +12,7 @@ def deck_service():
 
 
 def test_deck_to_dictionary_preserves_fractional_counts(deck_service):
-    deck_text = "2 Island\n" "0.5 Consider\n" "\n" "Sideboard\n" "1.25 Dismember\n"
+    deck_text = "2 Island\n0.5 Consider\n\nSideboard\n1.25 Dismember\n"
 
     deck_dict = deck_service.deck_to_dictionary(deck_text)
 
@@ -88,13 +88,7 @@ def test_leading_blank_line_diverges_between_to_dictionary_and_analyze(deck_serv
 def test_analyze_deck_preserves_fractional_quantities(deck_service):
     """Test that analyze_deck preserves fractional quantities from average decks."""
     deck_text = (
-        "4 Island\n"
-        "2.5 Lightning Bolt\n"
-        "1.33 Consider\n"
-        "\n"
-        "Sideboard\n"
-        "3 Counterspell\n"
-        "1.67 Dismember\n"
+        "4 Island\n2.5 Lightning Bolt\n1.33 Consider\n\nSideboard\n3 Counterspell\n1.67 Dismember\n"
     )
 
     stats = deck_service.analyze_deck(deck_text)
@@ -117,15 +111,7 @@ def test_analyze_deck_preserves_fractional_quantities(deck_service):
 
 
 def test_analyze_deck_merges_duplicate_entries(deck_service):
-    deck_text = (
-        "2 Lightning Bolt\n"
-        "1 Lightning Bolt\n"
-        "3 Island\n"
-        "\n"
-        "Sideboard\n"
-        "1 Abrade\n"
-        "2 Abrade\n"
-    )
+    deck_text = "2 Lightning Bolt\n1 Lightning Bolt\n3 Island\n\nSideboard\n1 Abrade\n2 Abrade\n"
 
     stats = deck_service.analyze_deck(deck_text)
 
@@ -142,7 +128,7 @@ def test_analyze_deck_merges_duplicate_entries(deck_service):
 
 def test_analyze_deck_estimates_lands_from_mainboard(deck_service):
     """estimated_lands sums mainboard cards whose name matches a land keyword."""
-    deck_text = "4 Island\n" "3 Mountain\n" "4 Lightning Bolt\n" "\n" "Sideboard\n" "2 Swamp\n"
+    deck_text = "4 Island\n3 Mountain\n4 Lightning Bolt\n\nSideboard\n2 Swamp\n"
 
     stats = deck_service.analyze_deck(deck_text)
 
@@ -162,7 +148,7 @@ def test_analyze_deck_counts_multi_keyword_land_once(deck_service):
 
 def test_analyze_deck_skips_malformed_lines(deck_service):
     """Lines without a numeric count or a card name are skipped, not errors."""
-    deck_text = "Deck\n" "Burn\n" "x Lightning Bolt\n" "2 Island\n" "1.5 Consider\n"
+    deck_text = "Deck\nBurn\nx Lightning Bolt\n2 Island\n1.5 Consider\n"
 
     stats = deck_service.analyze_deck(deck_text)
 

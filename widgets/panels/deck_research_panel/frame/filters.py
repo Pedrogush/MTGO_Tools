@@ -40,7 +40,8 @@ class FiltersBuilderMixin(_Base):
         if self._on_switch_to_builder is None:
             return
         builder_btn = wx.Button(self, label=self._labels.get("switch_to_builder", "Deck Builder"))
-        stylize_button(builder_btn)
+        # F2: a full-width saturated bar reads as a section header, not a switch.
+        stylize_button(builder_btn, kind="secondary")
         builder_btn.Bind(wx.EVT_BUTTON, lambda _evt: self._on_switch_to_builder())  # type: ignore[misc]
         sizer.Add(builder_btn, 0, wx.EXPAND | wx.ALL, PADDING_MD)
 

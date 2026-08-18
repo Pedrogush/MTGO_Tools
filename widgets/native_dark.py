@@ -10,7 +10,8 @@ colours on them. Measured on wxWidgets 3.2.8 / wxPython 4.2.4, that does not wor
   ``SetForegroundColour`` while it is visual-styled — nine construction orders
   were screenshotted and all render the same light grey.
 * ``wx.CheckBox`` honours the label colours but the box **glyph** is drawn by the
-  theme and stays white.
+  theme and stays white — phase 2 replaced the control outright with the
+  own-drawn :class:`widgets.checkbox.DarkCheckBox`.
 * ``wx.ListCtrl``'s header is a separate native ``SysHeader32``.
   ``SetHeaderAttr`` returns ``True`` and applies only the foreground, which makes
   a white header *less* readable, not more.

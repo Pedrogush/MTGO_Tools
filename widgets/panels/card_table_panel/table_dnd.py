@@ -21,7 +21,7 @@ from typing import Any
 import wx
 import wx.grid as gridlib
 
-from utils.constants import DARK_ACCENT
+from utils.constants import SELECTION_BORDER
 
 # Pointer travel (logical px) before a primed press becomes an active drag, so a
 # plain click that wobbles slightly still selects rather than reorders.
@@ -184,7 +184,7 @@ class TableDragController:
         dc = wx.ClientDC(self._grid_window)
         odc = wx.DCOverlay(self._overlay, dc)
         odc.Clear()
-        dc.SetPen(wx.Pen(wx.Colour(*DARK_ACCENT), 3))
+        dc.SetPen(wx.Pen(wx.Colour(*SELECTION_BORDER), 3))
         width = self._grid_window.GetClientSize().GetWidth()
         dc.DrawLine(0, device_y, width, device_y)
         del odc

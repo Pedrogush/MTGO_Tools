@@ -5,18 +5,15 @@ import os
 
 from utils.constants.app import APP_NAME, APP_VERSION, BRIDGE_PATH
 from utils.constants.colors import (
-    CALC_BUTTON_GREEN,
     DARK_ACCENT,
     DARK_ALT,
     DARK_BG,
     DARK_PANEL,
     DECK_CARD_ACTION_BUTTON_FG,
     DECK_CARD_IMAGE_BG,
-    FLEX_SLOT_BUTTON_COLOR,
     FLEX_SLOT_HIGHLIGHT_COLOR,
     HINT_TEXT,
     LIGHT_TEXT,
-    PIN_BUTTON_COLOR,
     SUBDUED_TEXT,
     WARNING_LABEL_COLOR,
 )
@@ -150,6 +147,7 @@ from utils.constants.theme import (
     SELECTION_FILL_ON_PANEL,
     SELECTION_FILL_ON_RAISED,
     SELECTION_FILLS,
+    SELECTION_TEXT,
     SPACE_GRID,
     SPACE_LG,
     SPACE_MD,
@@ -363,7 +361,6 @@ __all__ = [
     "MAINBOARD_MIN_CARDS",
     "MAINBOARD_TARGET_CARDS",
     "SIDEBOARD_MAX_CARDS",
-    "CALC_BUTTON_GREEN",
     "DARK_ACCENT",
     "DARK_ALT",
     "DARK_BG",
@@ -572,9 +569,7 @@ __all__ = [
     "COMP_RULES_STAMP_FILE",
     "COMP_RULES_TXT_FILE",
     "DECK_SELECTOR_MANA_ICON_SIZE",
-    "FLEX_SLOT_BUTTON_COLOR",
     "FLEX_SLOT_HIGHLIGHT_COLOR",
-    "PIN_BUTTON_COLOR",
     "WARNING_LABEL_COLOR",
     # --- design tokens (utils.constants.theme) ---
     "ACCENT_ON_PRIMARY",
@@ -609,6 +604,7 @@ __all__ = [
     "SELECTION_FILL_ON_PANEL",
     "SELECTION_FILL_ON_RAISED",
     "SELECTION_FILLS",
+    "SELECTION_TEXT",
     "SPACE_GRID",
     "SPACE_LG",
     "SPACE_MD",

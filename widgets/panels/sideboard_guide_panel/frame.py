@@ -12,7 +12,7 @@ import wx
 import wx.dataview as dv
 
 from utils.constants import DARK_ALT, DARK_PANEL, LIGHT_TEXT, SUBDUED_TEXT
-from utils.constants.colors import FLEX_SLOT_BUTTON_COLOR, PIN_BUTTON_COLOR, WARNING_LABEL_COLOR
+from utils.constants.colors import WARNING_LABEL_COLOR
 from utils.constants.ui_layout import (
     GUIDE_COL_ARCHETYPE_WIDTH,
     GUIDE_COL_CARDS_WIDTH,
@@ -99,13 +99,13 @@ class SideboardGuidePanel(
         empty_label.SetForegroundColour(SUBDUED_TEXT)
         empty_sizer.Add(empty_label, 0, wx.ALIGN_CENTER | wx.ALL, PADDING_MD)
         self.empty_cta_btn = wx.Button(self.empty_state_panel, label=self._t("guide.btn.cta"))
-        stylize_button(self.empty_cta_btn)
+        stylize_button(self.empty_cta_btn, kind="primary")
         self.empty_cta_btn.Bind(wx.EVT_BUTTON, self._on_add_clicked)
         empty_sizer.Add(self.empty_cta_btn, 0, wx.ALIGN_CENTER | wx.ALL, PADDING_MD)
         # Recording is most useful when starting from an empty guide, so surface
         # it in the empty state too (the button row is hidden there).
         self.empty_record_btn = wx.Button(self.empty_state_panel, label=self._t("guide.btn.record"))
-        stylize_button(self.empty_record_btn)
+        stylize_button(self.empty_record_btn, kind="secondary")
         self.empty_record_btn.SetToolTip(self._t("guide.tooltip.record"))
         self.empty_record_btn.Bind(wx.EVT_BUTTON, self._on_record_clicked)
         empty_sizer.Add(self.empty_record_btn, 0, wx.ALIGN_CENTER | wx.ALL, PADDING_MD)
@@ -123,12 +123,12 @@ class SideboardGuidePanel(
         sizer.Add(self.button_row, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_MD)
 
         self.add_btn = wx.Button(self.button_row, label=self._t("guide.btn.add"))
-        stylize_button(self.add_btn)
+        stylize_button(self.add_btn, kind="primary")
         self.add_btn.Bind(wx.EVT_BUTTON, self._on_add_clicked)
         buttons.Add(self.add_btn, 0, wx.RIGHT, PADDING_MD)
 
         self.record_btn = wx.Button(self.button_row, label=self._t("guide.btn.record"))
-        stylize_button(self.record_btn)
+        stylize_button(self.record_btn, kind="secondary")
         self.record_btn.SetToolTip(self._t("guide.tooltip.record"))
         self.record_btn.Bind(wx.EVT_BUTTON, self._on_record_clicked)
         if self.on_record_guide is None:
@@ -136,33 +136,34 @@ class SideboardGuidePanel(
         buttons.Add(self.record_btn, 0, wx.RIGHT, PADDING_MD)
 
         self.edit_btn = wx.Button(self.button_row, label=self._t("guide.btn.edit"))
-        stylize_button(self.edit_btn)
+        stylize_button(self.edit_btn, kind="secondary")
         self.edit_btn.Bind(wx.EVT_BUTTON, self._on_edit_clicked)
         buttons.Add(self.edit_btn, 0, wx.RIGHT, PADDING_MD)
 
         self.remove_btn = wx.Button(self.button_row, label=self._t("guide.btn.delete"))
-        stylize_button(self.remove_btn)
+        # The one destructive control in the row; it was indistinguishable from
+        # "Export" before.
+        stylize_button(self.remove_btn, kind="danger")
         self.remove_btn.Bind(wx.EVT_BUTTON, self._on_remove_clicked)
         buttons.Add(self.remove_btn, 0, wx.RIGHT, PADDING_MD)
 
         self.exclusions_btn = wx.Button(self.button_row, label=self._t("guide.btn.exclusions"))
-        stylize_button(self.exclusions_btn)
+        stylize_button(self.exclusions_btn, kind="secondary")
         self.exclusions_btn.Bind(wx.EVT_BUTTON, self._on_exclusions_clicked)
         buttons.Add(self.exclusions_btn, 0, wx.RIGHT, PADDING_MD)
 
         self.export_btn = wx.Button(self.button_row, label=self._t("guide.btn.export"))
-        stylize_button(self.export_btn)
+        stylize_button(self.export_btn, kind="secondary")
         self.export_btn.Bind(wx.EVT_BUTTON, self._on_export_clicked)
         buttons.Add(self.export_btn, 0, wx.RIGHT, PADDING_MD)
 
         self.import_btn = wx.Button(self.button_row, label=self._t("guide.btn.import"))
-        stylize_button(self.import_btn)
+        stylize_button(self.import_btn, kind="secondary")
         self.import_btn.Bind(wx.EVT_BUTTON, self._on_import_clicked)
         buttons.Add(self.import_btn, 0, wx.RIGHT, PADDING_MD)
 
         self.flex_slots_btn = wx.Button(self.button_row, label=self._t("guide.btn.flex_slots"))
-        stylize_button(self.flex_slots_btn)
-        self.flex_slots_btn.SetBackgroundColour(wx.Colour(*FLEX_SLOT_BUTTON_COLOR))
+        stylize_button(self.flex_slots_btn, kind="success")
         self.flex_slots_btn.SetToolTip(self._t("guide.tooltip.flex_slots"))
         self.flex_slots_btn.Bind(wx.EVT_BUTTON, self._on_flex_slots_clicked)
         if self.on_edit_flex_slots is None:
@@ -172,8 +173,9 @@ class SideboardGuidePanel(
         buttons.AddStretchSpacer(1)
 
         self.pin_btn = wx.Button(self.button_row, label=self._t("guide.btn.pin"))
-        stylize_button(self.pin_btn)
-        self.pin_btn.SetBackgroundColour(wx.Colour(*PIN_BUTTON_COLOR))
+        # Retires PIN_BUTTON_COLOR, a bespoke purple with no semantic role and
+        # the contrast suite's one documented xfail.
+        stylize_button(self.pin_btn, kind="secondary")
         self.pin_btn.SetToolTip(
             "Pin this deck's sideboard guide so the Opponent Tracker can look up matchup plans automatically."
         )

@@ -30,6 +30,7 @@ from widgets.panels.card_table_panel.sorting import (
 )
 from widgets.panels.card_table_panel.table_view import DeckTableView
 from widgets.panels.card_table_panel.toolbar import CardTablePanelToolbarMixin
+from widgets.stylize import stylize_button
 
 # Simplebook page indices (alphabetical-by-mode after the bookend states).
 _PAGE_EMPTY = 0
@@ -125,6 +126,9 @@ class CardTablePanel(
             header.Add(btn, 0, wx.LEFT, 4)
 
         self.pile_sort_button = wx.Button(self, label="⋯", style=wx.BU_EXACTFIT)
+        # F3: this and the printing button below rendered in the system's light
+        # button face — the only two unthemed buttons left on the main window.
+        stylize_button(self.pile_sort_button, kind="ghost", surface="panel")
         self.pile_sort_button.SetToolTip(self._t("tabs.view.pile_sort"))
         self.pile_sort_button.Bind(wx.EVT_BUTTON, self._open_pile_sort_menu)
         header.Add(self.pile_sort_button, 0, wx.LEFT, 4)
@@ -140,6 +144,7 @@ class CardTablePanel(
             self.printing_button = wx.Button(
                 self, label=self._t("tabs.view.printing"), style=wx.BU_EXACTFIT
             )
+            stylize_button(self.printing_button, kind="ghost", surface="panel")
             self.printing_button.SetToolTip(self._t("tabs.view.printing.tooltip"))
             self.printing_button.Bind(wx.EVT_BUTTON, self._open_printing_menu)
             header.Add(self.printing_button, 0, wx.LEFT, 6)

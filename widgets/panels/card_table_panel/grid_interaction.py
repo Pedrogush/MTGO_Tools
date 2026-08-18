@@ -23,10 +23,10 @@ from typing import Any
 import wx
 
 from utils.constants import (
-    DARK_ACCENT,
     DECK_CARD_BADGE_PADDING,
     DECK_CARD_BASE_FONT_SIZE,
     LIGHT_TEXT,
+    SELECTION_BORDER,
 )
 from widgets.panels.card_table_panel.grid_layout import (
     _CARD_HEIGHT,
@@ -296,7 +296,7 @@ class GridInteractionMixin:
             pad = DECK_CARD_BADGE_PADDING
             bx = rect.x + rect.width - tw - pad * 3
             by = rect.y + pad
-            dc.SetBrush(wx.Brush(wx.Colour(*DARK_ACCENT)))
+            dc.SetBrush(wx.Brush(wx.Colour(*SELECTION_BORDER)))
             dc.SetPen(wx.TRANSPARENT_PEN)
             dc.DrawRectangle(bx, by, tw + pad * 2, th + pad)
             dc.SetTextForeground(wx.Colour(*LIGHT_TEXT))
@@ -316,7 +316,7 @@ class GridInteractionMixin:
             col += 1
         x = col * _CELL_WIDTH
         y = row * _CELL_HEIGHT
-        dc.SetPen(wx.Pen(wx.Colour(*DARK_ACCENT), 3))
+        dc.SetPen(wx.Pen(wx.Colour(*SELECTION_BORDER), 3))
         dc.DrawLine(x, y, x, y + _CARD_HEIGHT)
 
     def _autoscroll_towards(self, client_pos: wx.Point) -> None:

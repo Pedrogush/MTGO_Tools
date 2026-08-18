@@ -127,6 +127,13 @@ SELECTION_FILL_ON_RAISED = mix(ACCENT_PRIMARY, SURFACE_RAISED, SELECTION_ALPHA) 
 SELECTION_BORDER = ACCENT_PRIMARY
 SELECTION_BORDER_WIDTH = 2
 
+#: The label colour for a control that is *selected* rather than filled: the
+#: view-mode toggles, the active notebook tab, a selected row's emphasis text.
+#: ACCENT_PRIMARY itself only reaches 3.72:1 as text on SURFACE_ALT, so anything
+#: that has to be *read* as accent uses ACCENT_TEXT. 4.54:1 on the tightest
+#: selection fill (SELECTION_FILL_ON_ALT), 4.91:1 on panel.
+SELECTION_TEXT = ACCENT_TEXT
+
 #: Selection fills keyed by the surface they sit on, for phases that need to pick
 #: one dynamically.
 SELECTION_FILLS: dict[str, RGB] = {

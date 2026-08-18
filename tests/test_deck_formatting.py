@@ -178,5 +178,5 @@ def test_simple_summary_html_escapes_and_breaks():
 
 def test_simple_summary_html_full_template():
     assert deck_formatting.simple_summary_html("hi") == (
-        '<html><body bgcolor="#22272E" text="#ECECEC">' '<font size="2">hi</font>' "</body></html>"
+        '<html><body bgcolor="#22272E" text="#ECECEC"><font size="2">hi</font></body></html>'
     )
