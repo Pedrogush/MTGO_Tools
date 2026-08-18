@@ -111,7 +111,7 @@ pass. Validate on Windows before trusting a wx-touching change:
 
 ```bash
 # from WSL, against a checkout on the C: drive:
-cmd.exe /c "cd /d C:\Claude\MTGO_Tools && env\Scripts\python.exe -m pytest -q"
+cmd.exe /c "cd /d C:\Claude\MTGO_Tools && .venv\Scripts\python.exe -m pytest -q"
 ```
 
 Tests, the Windows installer build, .NET build, type checking, and security scans
