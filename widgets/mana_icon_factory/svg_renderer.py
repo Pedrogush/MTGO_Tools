@@ -199,7 +199,9 @@ class SvgRendererMixin:
         color_key = (
             key[0]
             if _is_phyrexian(key)
-            else key if key in {"tap", "untap"} else self._svg_color_key_for(key)
+            else key
+            if key in {"tap", "untap"}
+            else self._svg_color_key_for(key)
         )
         self._draw_filled_circle(gctx, cx, cy, radius, self._svg_color_for(color_key))
 
