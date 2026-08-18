@@ -86,6 +86,12 @@ class SettingsMixin(_Base):
         self.event_logger.enabled = enabled
         self.session_manager.update_event_logging_enabled(enabled)
 
+    def get_update_check_enabled(self) -> bool:
+        return self.session_manager.get_update_check_enabled()
+
+    def set_update_check_enabled(self, enabled: bool) -> None:
+        self.session_manager.update_update_check_enabled(enabled)
+
     def get_current_format(self) -> str:
         return self.current_format
 

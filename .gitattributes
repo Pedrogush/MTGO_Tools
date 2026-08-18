@@ -1,0 +1,8 @@
+# Shell scripts must arrive as LF regardless of the checkout's core.autocrlf.
+#
+# The repo is normally cloned onto a Windows path and the scripts are run from
+# WSL (see README "Development"). With core.autocrlf=true — the Windows default —
+# a checkout rewrites them to CRLF, and bash then reads the shebang as
+# `/usr/bin/env bash\r`, failing with "bad interpreter: ... ^M". Every .sh here
+# is already stored LF, so this pins existing behavior rather than changing it.
+*.sh text eol=lf

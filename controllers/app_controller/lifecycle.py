@@ -157,6 +157,12 @@ class LifecycleMixin(_Base):
         # the initial loads above.
         self._start_cache_warmup()
 
+        # Step 8: Ask GitHub whether a newer release has shipped (issue #142).
+        # One small request at most once a day, on a worker thread, surfaced as
+        # a passive status-bar note — so it can neither delay startup nor
+        # interrupt the user, and being offline is a no-op.
+        self.check_for_update()
+
     def _start_cache_warmup(self) -> None:
         from controllers.app_controller.cache_warmer import CacheWarmer
         from utils.constants.formats import FORMAT_OPTIONS

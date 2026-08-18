@@ -1,0 +1,155 @@
+# Publish a GitHub Release whenever main carries a version that hasn't shipped.
+#
+# This is the last step of the versioning model in docs/VERSIONING.md: the number
+# is decided in the PR (versioning.yml commits VERSION onto the PR branch), and
+# merging that PR is what makes it real. So there is nothing to hand-pick here —
+# the workflow reads VERSION on main and asks a single question: does the tag
+# `v<VERSION>` already exist?
+#
+#   no  -> build the installer from main, tag, and publish the release
+#   yes -> that version already shipped; do nothing
+#
+# That guard (rather than a `paths: [VERSION]` filter) is what makes this safe to
+# run on every push: it is idempotent, it cannot double-publish, and a release
+# that failed halfway is retried simply by pushing again or dispatching manually.
+# The guard runs on a cheap ubuntu job so the expensive Windows build is only
+# started when there is genuinely something to ship.
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  check:
+    name: Check for an unreleased version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.gate.outputs.version }}
+      should_release: ${{ steps.gate.outputs.should_release }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # tags, so the "already released?" check is accurate
+
+      - name: Decide whether to release
+        id: gate
+        run: |
+          set -euo pipefail
+          version="$(tr -d '[:space:]' < VERSION)"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+          if git rev-parse -q --verify "refs/tags/v$version" >/dev/null; then
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+            echo "v$version is already tagged; nothing to release." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "should_release=true" >> "$GITHUB_OUTPUT"
+            echo "### Releasing \`v$version\`" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  release:
+    name: Build and publish v${{ needs.check.outputs.version }}
+    needs: check
+    if: needs.check.outputs.should_release == 'true'
+    runs-on: windows-latest
+    env:
+      VERSION: ${{ needs.check.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+          pip install pyinstaller
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "9.0.x"
+
+      - name: Install Inno Setup
+        run: choco install innosetup -y
+
+      # Same build the PR CI exercises, so what ships here is what was tested —
+      # including the bundled bulk-data seed, which a release must carry (a
+      # seedless install works but cold-starts with a ~130 MB download).
+      - name: Build installer
+        run: |
+          cd packaging
+          .\build_installer.ps1
+
+      - name: Verify installer
+        run: |
+          cd packaging
+          .\test_installer.ps1
+
+      # Published so users can verify a 180+ MB unsigned executable they
+      # downloaded over the internet. The app is not code-signed yet, so this
+      # checksum is currently the only integrity check available to them.
+      - name: Compute SHA256
+        id: hash
+        shell: pwsh
+        run: |
+          $file = "dist/installer/MTGOTools_Setup_v$env:VERSION.exe"
+          $sha = (Get-FileHash -Algorithm SHA256 -Path $file).Hash.ToLower()
+          "sha256=$sha" >> $env:GITHUB_OUTPUT
+
+      # The tag is created here rather than earlier so it is only ever written
+      # once a verified installer exists — a failed build leaves no tag behind
+      # and the next push retries cleanly.
+      - name: Tag and publish release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA256: ${{ steps.hash.outputs.sha256 }}
+        run: |
+          set -euo pipefail
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "v$VERSION" -m "MTGO Tools v$VERSION"
+          git push origin "v$VERSION"
+
+          cat > notes.md <<EOF
+          ## Install
+
+          Download \`MTGOTools_Setup_v$VERSION.exe\` below and run it. It installs
+          per-user under \`%LOCALAPPDATA%\\MTGO Tools\` — no admin rights required.
+
+          The installer is not code-signed yet, so Windows SmartScreen will warn on
+          first run. Verify the download instead:
+
+          \`\`\`
+          SHA256: $SHA256
+          \`\`\`
+          \`\`\`powershell
+          Get-FileHash -Algorithm SHA256 .\\MTGOTools_Setup_v$VERSION.exe
+          \`\`\`
+          EOF
+
+          # --notes is prepended to --generate-notes' changelog (gh documents
+          # that pairing for --notes specifically, not --notes-file), so the
+          # install instructions lead and the commit changelog follows.
+          gh release create "v$VERSION" \
+            "dist/installer/MTGOTools_Setup_v$VERSION.exe" \
+            --title "MTGO Tools v$VERSION" \
+            --notes "$(cat notes.md)" \
+            --generate-notes
+
+          echo "Published https://github.com/${{ github.repository }}/releases/tag/v$VERSION" >> "$GITHUB_STEP_SUMMARY"

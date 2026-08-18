@@ -66,6 +66,50 @@ installer build reads `VERSION`, the PR's installer is versioned to match.
 > normally. The bot only ever pushes to **PR branches**, never to `main`. Fork
 > PRs are skipped (their token is read-only).
 
+## Publishing the release
+
+The number is decided in the PR; **merging it is what makes the release real**.
+`.github/workflows/release.yml` runs on every push to `main` and asks one
+question: does the tag `v<VERSION>` already exist?
+
+- **No** → build the installer from `main`, verify it, create the tag, and
+  publish a GitHub Release with `MTGOTools_Setup_v<VERSION>.exe` attached.
+- **Yes** → that version already shipped; the run is a no-op.
+
+Using the tag as the guard (rather than watching for changes to `VERSION`) keeps
+the workflow **idempotent**: it cannot double-publish, and a release that failed
+halfway is retried by pushing again or dispatching the workflow manually. The
+check itself runs on a cheap Ubuntu job, so the ~10-minute Windows build only
+starts when there is genuinely something to ship.
+
+The tag is created *after* the installer builds and passes `test_installer.ps1`,
+so a failed build never leaves a tag behind to clean up.
+
+Release notes are the auto-generated commit changelog, prefixed with install
+instructions and the installer's **SHA256**. The installer is not code-signed
+yet, so that checksum is the only integrity check a user currently has — Windows
+SmartScreen will warn on first run either way.
+
+## Telling the user a release exists
+
+The published release is also what the app itself reads. On startup
+`services/update_service.py` asks the GitHub API for the latest release, parses
+its `v<VERSION>` tag, and compares it against the running `VERSION` — the same
+tag this workflow creates, which is the whole contract between the two.
+
+The check is background-only and best-effort: it never blocks startup, and being
+offline, rate-limited, or served an unfamiliar payload all resolve to "no update
+info" rather than an error. The answer is cached with a timestamp and refreshed
+at most once every `UPDATE_CHECK_INTERVAL_SECONDS` (24 h), including across
+restarts, so repeat launches make one request a day. When a newer version does
+exist the app says so in the right-hand status-bar field and in the settings
+menu; clicking either opens the release page. The whole thing can be turned off
+from **⚙ → Check for updates**.
+
+> **Not yet automated:** downloading and applying the update
+> ([#142](https://github.com/Pedrogush/MTGO_Tools/issues/142)). The app points at
+> the release page; users still download and re-run the installer.
+
 ## What this means for you
 
 Write conventional-commit subjects and the version takes care of itself:

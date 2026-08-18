@@ -53,14 +53,35 @@ already gives you the exact tool versions CI runs. See
 `.github/VALIDATION_QUICKSTART.md` for the pre-commit validation flow that
 mirrors CI (lint, format, compile, security).
 
+### Running on Linux / WSLg
+
+The runtime target is Windows, but the UI is plain wxPython and runs unmodified
+on GTK3, which is handy for iterating on UI code without a Windows round-trip.
+`scripts/run_linux.sh` sets that up: PyPI ships no Linux wheel for wxPython, so
+it installs one from the wxPython "extras" index and skips the Windows-only pins
+(`pythonnet`, `pyautogui`, `pynput` — they only back the MTGO bridge and screen
+automation, which need the Windows MTGO client anyway).
+
+```bash
+scripts/run_linux.sh --setup --fetch-libs   # one-time
+scripts/run_linux.sh                        # launch
+```
+
+`--fetch-libs` unpacks the system libraries the wx wheel links against into the
+venv, for when you don't have root; with root, `apt-get install libsdl2-2.0-0
+libsm6 libnotify4 libpcre2-32-0` covers it. MTGO integration is inert here — the
+bridge needs the Windows client — so this is for UI and data work, not for
+anything touching a live game.
+
 ### Versioning
 
 Versions follow [semver](https://semver.org) and are derived automatically from
 [Conventional Commit](https://www.conventionalcommits.org) messages — `feat:` →
 minor, `fix:`/`perf:` → patch, `!`/`BREAKING CHANGE` → major. The repo-root
-`VERSION` file is the single source of truth; a CI workflow bumps and tags it on
-merges to `main`. Write conventional-commit subjects and the number takes care of
-itself. Full details in [`docs/VERSIONING.md`](docs/VERSIONING.md).
+`VERSION` file is the single source of truth: a CI workflow computes the bump and
+commits it onto the PR branch, and merging to `main` publishes a GitHub Release
+with the built installer. Write conventional-commit subjects and the number takes
+care of itself. Full details in [`docs/VERSIONING.md`](docs/VERSIONING.md).
 
 ### Automation CLI
 

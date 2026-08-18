@@ -37,7 +37,7 @@ _install_wx_stub()
 
 from services import image_service as card_images  # noqa: E402
 from services.image_service import schemas as card_images_schemas  # noqa: E402
-from services.image_service.bulk_store import decode_bulk_bytes  # noqa: E402
+from services.image_service.bulk_store import decode_bulk_bytes, gzip_chunks  # noqa: E402
 
 
 def test_card_image_cache_migrates_face_index_column(tmp_path):
@@ -144,7 +144,7 @@ def test_is_bulk_data_outdated_respects_cached_metadata(tmp_path, monkeypatch):
 
     metadata = {
         "updated_at": "2024-01-01T00:00:00Z",
-        "download_uri": "http://example.com/bulk",
+        "jsonl_download_uri": "http://example.com/bulk",
     }
     monkeypatch.setattr(downloader, "_fetch_bulk_metadata", lambda: metadata)
 
@@ -154,14 +154,14 @@ def test_is_bulk_data_outdated_respects_cached_metadata(tmp_path, monkeypatch):
             INSERT OR REPLACE INTO bulk_data_meta (id, downloaded_at, total_cards, bulk_data_uri)
             VALUES (1, ?, ?, ?)
             """,
-            (metadata["updated_at"], 0, metadata["download_uri"]),
+            (metadata["updated_at"], 0, metadata["jsonl_download_uri"]),
         )
         conn.commit()
 
     is_outdated, returned_metadata = downloader.is_bulk_data_outdated()
 
     assert is_outdated is False
-    assert returned_metadata["download_uri"] == metadata["download_uri"]
+    assert returned_metadata["jsonl_download_uri"] == metadata["jsonl_download_uri"]
 
 
 def test_get_image_path_caches_first_db_hit(tmp_path):
@@ -747,7 +747,10 @@ def _make_downloader(tmp_path, monkeypatch, bulk_contents="[]"):
 def test_is_bulk_data_outdated_when_cache_file_missing(tmp_path, monkeypatch):
     """No on-disk bulk file => outdated, regardless of vendor metadata."""
     downloader, bulk_path = _make_downloader(tmp_path, monkeypatch, bulk_contents=None)
-    metadata = {"updated_at": "2024-01-01T00:00:00Z", "download_uri": "http://example.com/bulk"}
+    metadata = {
+        "updated_at": "2024-01-01T00:00:00Z",
+        "jsonl_download_uri": "http://example.com/bulk",
+    }
     monkeypatch.setattr(downloader, "_fetch_bulk_metadata", lambda: metadata)
 
     assert not bulk_path.exists()
@@ -759,7 +762,10 @@ def test_is_bulk_data_outdated_when_cache_file_missing(tmp_path, monkeypatch):
 def test_is_bulk_data_outdated_when_metadata_mismatches_cache(tmp_path, monkeypatch):
     """A different updated_at/uri than the cached row => outdated."""
     downloader, _ = _make_downloader(tmp_path, monkeypatch)
-    metadata = {"updated_at": "2024-02-02T00:00:00Z", "download_uri": "http://example.com/new"}
+    metadata = {
+        "updated_at": "2024-02-02T00:00:00Z",
+        "jsonl_download_uri": "http://example.com/new",
+    }
     monkeypatch.setattr(downloader, "_fetch_bulk_metadata", lambda: metadata)
 
     with sqlite3.connect(downloader.cache.db_path) as conn:
@@ -1024,6 +1030,15 @@ class _FakeResponse:
             yield self.content[i : i + chunk_size]
 
 
+def _jsonl_gz(*records: bytes) -> bytes:
+    """A bulk body as Scryfall now serves it: gzipped JSONL, one card per line.
+
+    The gzip is file content rather than a transfer encoding, so — like the real
+    thing — nothing decodes it before the downloader sees it.
+    """
+    return b"".join(gzip_chunks([b"\n".join(records)]))
+
+
 class _FakeSession:
     """Minimal requests.Session stand-in recording GET calls."""
 
@@ -1234,7 +1249,10 @@ def test_download_single_image_multi_face_split_card_one_physical_image(tmp_path
 def test_download_bulk_metadata_uses_cache_when_current(tmp_path, monkeypatch):
     """Matching vendor metadata short-circuits without downloading."""
     downloader, _ = _make_downloader(tmp_path, monkeypatch)
-    metadata = {"updated_at": "2024-01-01T00:00:00Z", "download_uri": "http://example.com/bulk"}
+    metadata = {
+        "updated_at": "2024-01-01T00:00:00Z",
+        "jsonl_download_uri": "http://example.com/bulk",
+    }
     monkeypatch.setattr(downloader, "_fetch_bulk_metadata", lambda: metadata)
     downloader.session = _FakeSession()
 
@@ -1244,7 +1262,7 @@ def test_download_bulk_metadata_uses_cache_when_current(tmp_path, monkeypatch):
             INSERT OR REPLACE INTO bulk_data_meta (id, downloaded_at, total_cards, bulk_data_uri)
             VALUES (1, ?, ?, ?)
             """,
-            (metadata["updated_at"], 0, metadata["download_uri"]),
+            (metadata["updated_at"], 0, metadata["jsonl_download_uri"]),
         )
         conn.commit()
 
@@ -1256,13 +1274,39 @@ def test_download_bulk_metadata_uses_cache_when_current(tmp_path, monkeypatch):
 
 
 def test_download_bulk_metadata_rejects_missing_download_uri(tmp_path, monkeypatch):
-    """A metadata payload without download_uri is an error."""
+    """A metadata payload without ``jsonl_download_uri`` is an error.
+
+    Notably also covers the retired ``download_uri`` key: it is deliberately not
+    honoured as a fallback, since that URL serves a JSON array which the
+    JSONL-to-array rewrite would corrupt.
+    """
     downloader, _ = _make_downloader(tmp_path, monkeypatch)
     monkeypatch.setattr(downloader, "_fetch_bulk_metadata", lambda: {"updated_at": "x"})
 
     success, message = downloader.download_bulk_metadata()
     assert success is False
     assert "download URI" in message
+
+
+def test_retired_download_uri_key_is_not_used(tmp_path, monkeypatch):
+    """The pre-JSONL ``download_uri`` key must not be treated as a usable URI.
+
+    Those URLs 404 now, and if one ever came back it would serve a JSON array —
+    which the JSONL-to-array rewrite in the download path would wrap a second
+    time, silently corrupting the cache. Rejecting outright is the safe failure.
+    """
+    downloader, _ = _make_downloader(tmp_path, monkeypatch)
+    monkeypatch.setattr(
+        downloader,
+        "_fetch_bulk_metadata",
+        lambda: {"updated_at": "x", "download_uri": "http://example.com/legacy.json.gz"},
+    )
+    downloader.session = _FakeSession()
+
+    success, message = downloader.download_bulk_metadata()
+    assert success is False
+    assert "download URI" in message
+    assert downloader.session.calls == []  # nothing was fetched
 
 
 def test_download_all_images_errors_when_bulk_file_missing(tmp_path, monkeypatch):
@@ -1330,12 +1374,12 @@ def test_download_bulk_metadata_streams_and_records_metadata(tmp_path, monkeypat
     downloader, bulk_path = _make_downloader(tmp_path, monkeypatch, bulk_contents=None)
     metadata = {
         "updated_at": "2024-03-03T00:00:00Z",
-        "download_uri": "http://example.com/bulk.json",
-        "size": 1024,
+        "jsonl_download_uri": "http://example.com/bulk.jsonl.gz",
+        "compressed_size": 1024,
     }
     monkeypatch.setattr(downloader, "_fetch_bulk_metadata", lambda: metadata)
     downloader.session = _FakeSession(
-        responses={metadata["download_uri"]: _FakeResponse(content=b"[]")}
+        responses={metadata["jsonl_download_uri"]: _FakeResponse(content=_jsonl_gz())}
     )
 
     success, message = downloader.download_bulk_metadata()
@@ -1346,11 +1390,11 @@ def test_download_bulk_metadata_streams_and_records_metadata(tmp_path, monkeypat
     assert bulk_path.exists()
     # Stored gzip-compressed on disk; decodes back to the served content.
     assert decode_bulk_bytes(bulk_path.read_bytes()) == b"[]"
-    assert downloader.session.calls == [metadata["download_uri"]]
+    assert downloader.session.calls == [metadata["jsonl_download_uri"]]
     # The vendor metadata was persisted so a subsequent run can short-circuit.
     cached_updated, cached_uri = downloader._get_cached_bulk_data_record()
     assert cached_updated == metadata["updated_at"]
-    assert cached_uri == metadata["download_uri"]
+    assert cached_uri == metadata["jsonl_download_uri"]
 
 
 def test_download_bulk_metadata_returns_error_when_metadata_fetch_raises(tmp_path, monkeypatch):
@@ -1373,11 +1417,11 @@ def test_download_bulk_metadata_returns_error_when_stream_get_fails(tmp_path, mo
     downloader, bulk_path = _make_downloader(tmp_path, monkeypatch, bulk_contents=None)
     metadata = {
         "updated_at": "2024-04-04T00:00:00Z",
-        "download_uri": "http://example.com/bulk.json",
+        "jsonl_download_uri": "http://example.com/bulk.jsonl.gz",
     }
     monkeypatch.setattr(downloader, "_fetch_bulk_metadata", lambda: metadata)
     downloader.session = _FakeSession(
-        responses={metadata["download_uri"]: _FakeResponse(status_ok=False)}
+        responses={metadata["jsonl_download_uri"]: _FakeResponse(status_ok=False)}
     )
 
     success, message = downloader.download_bulk_metadata()
@@ -1393,11 +1437,11 @@ def test_download_bulk_metadata_force_restreams_despite_matching_cache(tmp_path,
     downloader, bulk_path = _make_downloader(tmp_path, monkeypatch)
     metadata = {
         "updated_at": "2024-01-01T00:00:00Z",
-        "download_uri": "http://example.com/bulk.json",
+        "jsonl_download_uri": "http://example.com/bulk.jsonl.gz",
     }
     monkeypatch.setattr(downloader, "_fetch_bulk_metadata", lambda: metadata)
     downloader.session = _FakeSession(
-        responses={metadata["download_uri"]: _FakeResponse(content=b"[1]")}
+        responses={metadata["jsonl_download_uri"]: _FakeResponse(content=_jsonl_gz(b"1"))}
     )
 
     # Seed a cached row that exactly matches the vendor metadata; without force
@@ -1408,7 +1452,7 @@ def test_download_bulk_metadata_force_restreams_despite_matching_cache(tmp_path,
             INSERT OR REPLACE INTO bulk_data_meta (id, downloaded_at, total_cards, bulk_data_uri)
             VALUES (1, ?, ?, ?)
             """,
-            (metadata["updated_at"], 0, metadata["download_uri"]),
+            (metadata["updated_at"], 0, metadata["jsonl_download_uri"]),
         )
         conn.commit()
 
@@ -1416,7 +1460,7 @@ def test_download_bulk_metadata_force_restreams_despite_matching_cache(tmp_path,
     assert success is True
     assert "downloaded" in message.lower()
     # The file was re-streamed despite the matching cache.
-    assert downloader.session.calls == [metadata["download_uri"]]
+    assert downloader.session.calls == [metadata["jsonl_download_uri"]]
     assert decode_bulk_bytes(bulk_path.read_bytes()) == b"[1]"
 
 

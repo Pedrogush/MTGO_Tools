@@ -196,6 +196,7 @@ DECK_MONITOR_CACHE_FILE = CACHE_DIR / "deck_monitor_cache.json"
 ARCHETYPE_CACHE_FILE = CACHE_DIR / "archetype_cache.json"
 ARCHETYPE_LIST_CACHE_FILE = CACHE_DIR / "archetype_list.json"
 MTGO_ARTICLES_CACHE_FILE = CACHE_DIR / "mtgo_articles.json"
+UPDATE_CHECK_CACHE_FILE = CACHE_DIR / "update_check.json"
 DECK_CACHE_DB_FILE = CACHE_DIR / "deck_cache.db"
 DECK_TEXT_CACHE_FILE = CACHE_DIR / "deck_text_cache.json"  # Individual deck content
 ARCHETYPE_DECKS_CACHE_FILE = CACHE_DIR / "archetype_decks_cache.json"  # Deck lists per archetype

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+import webbrowser
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
@@ -24,6 +25,7 @@ from widgets.wx_layout import set_shown
 
 if TYPE_CHECKING:
     from services.image_service import CardImageRequest
+    from services.update_service import UpdateInfo
     from widgets.frames.app_frame.protocol import AppFrameProto
 
     _Base = AppFrameProto
@@ -40,6 +42,17 @@ class AppFrameHandlersMixin(_Base):
 
     def _open_toolbar_settings_menu(self, anchor: wx.Window) -> None:
         menu = wx.Menu()
+        # The update entry leads the menu only while an update is pending, so
+        # the status-bar note has a discoverable counterpart without the menu
+        # carrying a permanently dead item.
+        available_update = self.controller.get_available_update()
+        if available_update is not None:
+            self._append_menu_item(
+                menu,
+                self._t("app.menu.get_update", version=available_update.version),
+                self._open_release_page,
+            )
+            menu.AppendSeparator()
         self._append_menu_item(
             menu,
             self._t("toolbar.load_collection"),
@@ -119,6 +132,13 @@ class AppFrameHandlersMixin(_Base):
             current_value=str(self.controller.get_average_hours()),
             on_select=lambda v: self._apply_average_hours(int(v)),
         )
+        menu.AppendSeparator()
+        self._append_check_item(
+            menu,
+            self._t("app.menu.check_for_updates"),
+            checked=self.controller.get_update_check_enabled(),
+            on_toggle=self._apply_update_check_enabled,
+        )
         anchor.PopupMenu(menu)
         menu.Destroy()
 
@@ -127,6 +147,19 @@ class AppFrameHandlersMixin(_Base):
     ) -> wx.MenuItem:
         item = menu.Append(wx.ID_ANY, label)
         menu.Bind(wx.EVT_MENU, lambda _evt, cb=handler: cb(), item)
+        return item
+
+    def _append_check_item(
+        self,
+        menu: wx.Menu,
+        label: str,
+        *,
+        checked: bool,
+        on_toggle: Callable[[bool], None],
+    ) -> wx.MenuItem:
+        item = menu.AppendCheckItem(wx.ID_ANY, label)
+        item.Check(checked)
+        menu.Bind(wx.EVT_MENU, lambda evt, cb=on_toggle: cb(evt.IsChecked()), item)
         return item
 
     def _append_radio_submenu(
@@ -162,6 +195,44 @@ class AppFrameHandlersMixin(_Base):
     def _apply_average_hours(self, hours: int) -> None:
         self.controller.set_average_hours(hours)
         self._schedule_settings_save()
+
+    def _apply_update_check_enabled(self, enabled: bool) -> None:
+        self.controller.set_update_check_enabled(enabled)
+        self._schedule_settings_save()
+
+    def _on_update_available(self, info: UpdateInfo) -> None:
+        """Surface a newer release passively — a status-bar note, never a dialog.
+
+        People open this app to research decks mid-tournament; a modal on launch
+        would interrupt exactly the moment they can least afford it. The note
+        sits in the right-hand status field until it is clicked (the settings
+        menu carries the same action), and the app is untouched otherwise.
+        """
+        if not self.status_bar:
+            return
+        self.status_bar.SetStatusText(
+            self._t("app.status.update_available", version=info.version), 1
+        )
+        self.status_bar.SetToolTip(self._t("app.tooltip.update_available", version=info.version))
+        self.status_bar.Bind(wx.EVT_LEFT_DOWN, self._on_status_bar_click)
+
+    def _on_status_bar_click(self, event: wx.MouseEvent) -> None:
+        # Scoped to the update field: a click on the status *message* must stay
+        # inert rather than launching a browser out of nowhere.
+        if self.status_bar and self.status_bar.GetFieldRect(1).Contains(event.GetPosition()):
+            self._open_release_page()
+            return
+        event.Skip()
+
+    def _open_release_page(self) -> None:
+        """Open the release page for the pending update in the default browser."""
+        update = self.controller.get_available_update()
+        if update is None:
+            return
+        try:
+            webbrowser.open(update.release_url)
+        except Exception as exc:  # pragma: no cover - depends on the desktop environment
+            logger.warning(f"Unable to open release page {update.release_url!r}: {exc}")
 
     def _handle_image_downloaded(self, request: CardImageRequest) -> None:
         # The inspector update is cheap (a no-op unless the download matches

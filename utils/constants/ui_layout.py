@@ -17,6 +17,11 @@ APP_FRAME_SUMMARY_MIN_HEIGHT = 90
 # and the right card-inspector column.
 COLLAPSE_TOGGLE_WIDTH = 16
 
+# Width (px) of the status bar's right-hand field, which holds the "update
+# available" note (issue #142) and is empty the rest of the time. Fixed rather
+# than proportional so the status message on the left keeps all remaining width.
+STATUS_BAR_UPDATE_FIELD_WIDTH = 200
+
 # Research panel — archetype list height for ~3 visible items (px)
 ARCHETYPE_LIST_ITEM_HEIGHT = 22
 ARCHETYPE_LIST_VISIBLE_ITEMS = 3

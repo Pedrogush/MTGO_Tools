@@ -20,6 +20,7 @@ from utils.diagnostics import EventLogger
 
 if TYPE_CHECKING:
     from controllers.app_controller.ui_callbacks import UICallbacks
+    from services.update_service import UpdateInfo
     from widgets.frames.app_frame import AppFrame
 
 
@@ -73,6 +74,7 @@ class AppControllerProto(Protocol):
     _worker: BackgroundWorker
     frame: AppFrame | None
     _bulk_check_worker_active: bool
+    _available_update: UpdateInfo | None
 
     # Cross-mixin methods
     def fetch_archetypes(
@@ -84,6 +86,7 @@ class AppControllerProto(Protocol):
     ) -> None: ...
 
     def get_deck_data_source(self) -> str: ...
+    def get_update_check_enabled(self) -> bool: ...
     def load_bulk_data_into_memory(
         self, on_status: Callable[[str], None], force: bool = False
     ) -> None: ...
