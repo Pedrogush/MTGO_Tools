@@ -73,8 +73,7 @@ ALL_TESTS = (
 )
 
 _AVAILABLE_GROUPS = (
-    "launch, builder, scrollbar, wheel, mana, mana_input, notes, buttons, widgets, "
-    "images, golden"
+    "launch, builder, scrollbar, wheel, mana, mana_input, notes, buttons, widgets, images, golden"
 )
 
 

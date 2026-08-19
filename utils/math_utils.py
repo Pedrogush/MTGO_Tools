@@ -37,8 +37,7 @@ def hypergeometric_probability(
 
     if successes_in_pop > population:
         raise ValueError(
-            f"Successes in population ({successes_in_pop}) cannot exceed "
-            f"population ({population})"
+            f"Successes in population ({successes_in_pop}) cannot exceed population ({population})"
         )
     if sample_size > population:
         raise ValueError(f"Sample size ({sample_size}) cannot exceed population ({population})")
@@ -49,8 +48,7 @@ def hypergeometric_probability(
         )
     if successes_in_sample > sample_size:
         raise ValueError(
-            f"Successes in sample ({successes_in_sample}) cannot exceed "
-            f"sample size ({sample_size})"
+            f"Successes in sample ({successes_in_sample}) cannot exceed sample size ({sample_size})"
         )
 
     # Check if we have enough cards to satisfy the draw

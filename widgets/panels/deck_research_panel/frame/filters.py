@@ -99,7 +99,8 @@ class FiltersBuilderMixin(_Base):
         stylize_choice(self.event_type_choice)
         if self._on_event_type_filter is not None:
             self.event_type_choice.Bind(
-                wx.EVT_CHOICE, lambda _evt: self._on_event_type_filter()  # type: ignore[misc]
+                wx.EVT_CHOICE,
+                lambda _evt: self._on_event_type_filter(),  # type: ignore[misc]
             )
         event_date_row.Add(self.event_type_choice, 1, wx.EXPAND | wx.RIGHT, PADDING_MD)
 
@@ -131,7 +132,8 @@ class FiltersBuilderMixin(_Base):
         stylize_choice(self.placement_op_choice)
         if self._on_placement_filter is not None:
             self.placement_op_choice.Bind(
-                wx.EVT_COMBOBOX, lambda _evt: self._on_placement_filter()  # type: ignore[misc]
+                wx.EVT_COMBOBOX,
+                lambda _evt: self._on_placement_filter(),  # type: ignore[misc]
             )
         placement_row.Add(self.placement_op_choice, 0, wx.EXPAND | wx.RIGHT, PADDING_MD)
 
@@ -140,7 +142,8 @@ class FiltersBuilderMixin(_Base):
         stylize_choice(self.placement_field_choice)
         if self._on_placement_filter is not None:
             self.placement_field_choice.Bind(
-                wx.EVT_COMBOBOX, lambda _evt: self._on_placement_filter()  # type: ignore[misc]
+                wx.EVT_COMBOBOX,
+                lambda _evt: self._on_placement_filter(),  # type: ignore[misc]
             )
         placement_row.Add(self.placement_field_choice, 0, wx.EXPAND | wx.RIGHT, PADDING_MD)
 
@@ -149,7 +152,8 @@ class FiltersBuilderMixin(_Base):
         stylize_textctrl(self.placement_value_filter)
         if self._on_placement_filter is not None:
             self.placement_value_filter.Bind(
-                wx.EVT_TEXT, lambda _evt: self._on_placement_filter()  # type: ignore[misc]
+                wx.EVT_TEXT,
+                lambda _evt: self._on_placement_filter(),  # type: ignore[misc]
             )
         placement_row.Add(self.placement_value_filter, 1, wx.EXPAND)
 
@@ -160,7 +164,8 @@ class FiltersBuilderMixin(_Base):
         stylize_textctrl(self.player_name_filter)
         if self._on_player_name_filter is not None:
             self.player_name_filter.Bind(
-                wx.EVT_TEXT, lambda _evt: self._on_player_name_filter()  # type: ignore[misc]
+                wx.EVT_TEXT,
+                lambda _evt: self._on_player_name_filter(),  # type: ignore[misc]
             )
         row3.Add(self.player_name_filter, 1, wx.EXPAND)
         sizer.Add(row3, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_MD)

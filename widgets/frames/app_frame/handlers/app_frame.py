@@ -313,8 +313,7 @@ class AppFrameHandlersMixin(_Base):
         if not enqueued:
             elapsed_ms = (time.perf_counter() - perf["t0"]) * 1000.0
             logger.info(
-                "PERF | {:>7.1f} ms | === deck images all local "
-                "({} cards, 0 downloads needed) ===",
+                "PERF | {:>7.1f} ms | === deck images all local ({} cards, 0 downloads needed) ===",
                 elapsed_ms,
                 perf["total_names"],
             )
