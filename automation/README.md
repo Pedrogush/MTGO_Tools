@@ -65,8 +65,11 @@ python -m automation.cli screenshot --path screenshots/main.png
 ### Capturing a secondary window
 
 Use `open-widget` to open the window first, then `screenshot-window` to capture
-it. Supported window names: `opponent_tracker`, `timer_alert`, `match_history`,
-`metagame`, `top_cards`, `mana_keyboard`.
+it.
+
+`open-widget` reaches all six companion windows: `opponent_tracker`,
+`timer_alert`, `match_history`, `metagame`, `top_cards`, `radar`.
+`screenshot-window` takes those six plus `mana_keyboard`.
 
 ```bash
 python -m automation.cli open-widget match_history
@@ -74,6 +77,24 @@ python -m automation.cli screenshot-window match_history --path screenshots/hist
 ```
 
 `screenshot-window` returns an error if the named window is not currently open.
+
+### Driving the menu bar
+
+The six buttons that used to open these windows became a menu bar in phase 3b of
+#962, so `click toolbar --label "Match History"` no longer exists. `menu` replaces
+it, and also reaches the twelve preference items that used to sit behind the gear:
+
+```bash
+python -m automation.cli --json menu                       # list every menu
+python -m automation.cli menu "Tools/Radar"                # open a window
+python -m automation.cli menu "Settings/Language/pt-BR"    # pick a radio option
+python -m automation.cli menu "Settings/Check for updates" # flip a checkbox
+```
+
+`menu` runs the item's handler directly rather than popping the menu up: a real
+`wx.PopupMenu` runs a nested modal loop on the main thread, which stops the
+automation socket being serviced for as long as the menu is open (§5.5 of the UI
+review). `list-widgets` reports the bar under `menu_bar`, with its titles.
 
 ## Exercising MTGO bridge features
 
@@ -83,7 +104,7 @@ built `MTGOBridge.exe` and a running, logged-in MTGO client — see
 
 ### Collection export
 
-`refresh-collection` runs the same path as the **Load Collection** toolbar menu
+`refresh-collection` runs the same path as the **File > Load Collection** menu
 item: it fetches a fresh collection snapshot from the bridge on a background
 thread and writes a `collection_full_trade_*.json` export into the deck save
 directory. The command returns immediately with the resolved `save_dir`; poll

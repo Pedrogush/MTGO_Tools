@@ -7,8 +7,8 @@ from typing import TYPE_CHECKING, Any, Protocol
 import wx
 import wx.lib.agw.flatnotebook as fnb
 
-from widgets.buttons.toolbar_buttons import ToolbarButtons
 from widgets.mana_icon_factory import ManaIconFactory
+from widgets.menu_bar import AppMenuBar, MenuEntry, MenuSpec
 from widgets.panels.card_inspector_panel import CardInspectorPanel
 from widgets.panels.card_panel import CardPanel
 from widgets.panels.card_table_panel import CardTablePanel
@@ -55,7 +55,7 @@ class AppFrameProto(Protocol):
     research_panel: Any
     builder_panel: Any
     out_table: CardTablePanel | None
-    toolbar: ToolbarButtons
+    menu_bar: AppMenuBar
     zone_notebook: fnb.FlatNotebook | None
     deck_source_choice: wx.Choice | None
     language_choice: wx.Choice | None
@@ -104,6 +104,11 @@ class AppFrameProto(Protocol):
     mana_keyboard_window: ManaKeyboardFrame | None
 
     # Cross-mixin methods
+    def menu_specs(self) -> list[MenuSpec]: ...
+    def _file_menu_entries(self) -> list[MenuEntry]: ...
+    def _tools_menu_entries(self) -> list[MenuEntry]: ...
+    def _settings_menu_entries(self) -> list[MenuEntry]: ...
+    def _help_menu_entries(self) -> list[MenuEntry]: ...
     def _t(self, key: str, **kwargs: object) -> str: ...
     def _set_status(self, key: str, **kwargs: object) -> None: ...
     def _has_deck_loaded(self) -> bool: ...

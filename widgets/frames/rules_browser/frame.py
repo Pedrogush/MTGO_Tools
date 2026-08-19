@@ -13,7 +13,7 @@ if TYPE_CHECKING:
     from services.comp_rules_service import CompRulesService, Section, Subsection
 from utils.i18n import translate
 from widgets.frames.rules_browser.html_render import render_outline_to_html
-from widgets.stylize import apply_base_font
+from widgets.stylize import init_top_level_window
 
 
 class RulesBrowserFrame(wx.Frame):
@@ -38,7 +38,7 @@ class RulesBrowserFrame(wx.Frame):
             size=(900, 720),
             style=wx.DEFAULT_FRAME_STYLE,
         )
-        apply_base_font(self)
+        init_top_level_window(self)
         self._locale = locale
         self.controller = controller
         self._service: CompRulesService = controller.comp_rules_service

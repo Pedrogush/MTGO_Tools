@@ -51,11 +51,12 @@ from widgets.frames.radar import RadarFrame
 from widgets.frames.timer_alert import TimerAlertFrame
 from widgets.frames.top_cards import TopCardsFrame
 from widgets.mana_icon_factory import ManaIconFactory
+from widgets.menu_bar import AppMenuBar
 from widgets.panels.card_table_panel import CardTablePanel
 from widgets.panels.deck_builder_panel import DeckBuilderPanel
 from widgets.panels.deck_research_panel import DeckResearchPanel
 from widgets.status_bar import ThemedStatusBar
-from widgets.stylize import apply_base_font
+from widgets.stylize import init_top_level_window
 
 if TYPE_CHECKING:
     from controllers.app_controller import AppController
@@ -94,7 +95,7 @@ class AppFrame(
             title=translate(controller.get_language(), "app.title.main_frame"),
             size=APP_FRAME_SIZE,
         )
-        apply_base_font(self)
+        init_top_level_window(self)
         apply_app_icon(self)
 
         # Store controller reference - ALL state and business logic goes through this
@@ -205,6 +206,14 @@ class AppFrame(
         frame_sizer = wx.BoxSizer(wx.VERTICAL)
         self.SetSizer(frame_sizer)
 
+        # The menu bar spans the whole window, above both columns. It used to be
+        # six buttons plus a gear inside the *right* column, which made the
+        # right column's minimum width the greater of "the toolbar" and "the
+        # content under it" -- and put a row of secondary actions inside the
+        # deck workspace's own column, where it does not belong.
+        self.menu_bar = AppMenuBar(self, self.menu_specs())
+        frame_sizer.Add(self.menu_bar, 0, wx.EXPAND | wx.LEFT | wx.TOP, SPACE_SM)
+
         self.root_panel = wx.Panel(self)
         self.root_panel.SetBackgroundColour(DARK_BG)
         root_sizer = wx.BoxSizer(wx.HORIZONTAL)
@@ -292,9 +301,6 @@ class AppFrame(
         right_panel.SetBackgroundColour(DARK_BG)
         right_sizer = wx.BoxSizer(wx.VERTICAL)
         right_panel.SetSizer(right_sizer)
-
-        self.toolbar = self._build_toolbar(right_panel)
-        right_sizer.Add(self.toolbar, 0, wx.EXPAND | wx.BOTTOM, SPACE_SM)
 
         content_split = wx.BoxSizer(wx.HORIZONTAL)
         right_sizer.Add(content_split, 1, wx.EXPAND | wx.BOTTOM, SPACE_MD)

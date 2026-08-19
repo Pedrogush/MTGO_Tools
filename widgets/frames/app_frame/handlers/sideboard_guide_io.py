@@ -18,7 +18,7 @@ from widgets.frames.app_frame.handlers.sideboard_guide_csv import (
     export_guide_to_csv,
     import_guide_from_csv,
 )
-from widgets.stylize import apply_base_font, stylize_checkbox
+from widgets.stylize import init_top_level_window, stylize_checkbox
 
 if TYPE_CHECKING:
     from widgets.frames.app_frame import AppFrame
@@ -90,7 +90,7 @@ class SideboardGuideImportExportHandlers(_Base):
             title="Import Options",
             size=(GUIDE_IMPORT_OPTIONS_DIALOG_WIDTH, GUIDE_IMPORT_OPTIONS_DIALOG_HEIGHT),
         )
-        apply_base_font(options_dlg)
+        init_top_level_window(options_dlg)
         panel = wx.Panel(options_dlg)
         sizer = wx.BoxSizer(wx.VERTICAL)
 

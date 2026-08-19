@@ -12,7 +12,7 @@ from widgets.checkbox import DarkCheckBox
 from widgets.dialogs.guide_entry_dialog.handlers import GuideEntryDialogHandlersMixin
 from widgets.dialogs.guide_entry_dialog.properties import GuideEntryDialogPropertiesMixin
 from widgets.panels.sideboard_card_selector import SideboardCardSelector
-from widgets.stylize import apply_base_font, stylize_checkbox, stylize_combobox
+from widgets.stylize import init_top_level_window, stylize_checkbox, stylize_combobox
 
 
 class GuideEntryDialog(GuideEntryDialogHandlersMixin, GuideEntryDialogPropertiesMixin, wx.Dialog):
@@ -30,7 +30,7 @@ class GuideEntryDialog(GuideEntryDialogHandlersMixin, GuideEntryDialogProperties
     ) -> None:
         self._locale = locale
         super().__init__(parent, title="Sideboard Guide Entry", size=(1100, 750))
-        apply_base_font(self)
+        init_top_level_window(self)
 
         main_sizer = wx.BoxSizer(wx.VERTICAL)
         self.SetSizer(main_sizer)

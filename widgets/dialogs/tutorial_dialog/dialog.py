@@ -15,7 +15,7 @@ from utils.constants import (
 )
 from utils.i18n import DEFAULT_LOCALE, translate
 from widgets.dialogs.tutorial_dialog.handlers import TutorialDialogHandlersMixin
-from widgets.stylize import apply_base_font, apply_type_level
+from widgets.stylize import apply_type_level, init_top_level_window
 from widgets.wx_layout import relayout
 
 _STEP_KEYS: list[tuple[str, str]] = [
@@ -40,7 +40,7 @@ class TutorialDialog(TutorialDialogHandlersMixin, wx.Dialog):
             size=(540, 420),
             style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER,
         )
-        apply_base_font(self)
+        init_top_level_window(self)
         self.SetBackgroundColour(DARK_BG)
         self._step = 0
         self._total = len(_STEP_KEYS)

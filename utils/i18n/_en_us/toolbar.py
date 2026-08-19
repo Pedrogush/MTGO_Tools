@@ -1,4 +1,10 @@
-"""Toolbar UI strings. (English (United States))"""
+"""Menu-bar UI strings. (English (United States))
+
+The ``toolbar.*`` prefix is kept: phase 3b turned the toolbar into a menu bar and
+the six window names plus the seven former gear actions carry over verbatim, so
+renaming ~15 keys would have churned both locale files for no reader benefit.
+The ``menu.*`` keys below are the ones the bar itself adds.
+"""
 
 MESSAGES: dict[str, str] = {
     "toolbar.opponent_tracker": "Opponent Tracker",
@@ -8,6 +14,11 @@ MESSAGES: dict[str, str] = {
     "toolbar.top_cards": "Top Cards",
     "toolbar.radar": "Radar",
     "toolbar.settings": "Settings",
+    "menu.file": "File",
+    "menu.tools": "Tools",
+    "menu.settings": "Settings",
+    "menu.help": "Help",
+    "menu.exit": "Exit",
     "toolbar.load_collection": "Load Collection",
     "toolbar.download_card_images": "Enable Offline Images Mode",
     "toolbar.update_card_database": "Update Card Database",

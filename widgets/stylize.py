@@ -138,6 +138,7 @@ from widgets.checkbox import DarkCheckBox
 from widgets.native_dark import (
     THEME_EXPLORER,
     THEME_INPUT,
+    apply_dark_caption,
     apply_dark_list_header,
     apply_dark_native_headers,
     apply_dark_theme,
@@ -201,6 +202,12 @@ _BUTTON_KINDS: dict[str, _ButtonSpec] = {
     # idiom, which is the same token the deck rows, the card views and the active
     # notebook tab use.
     "toggle": (SURFACE_ALT, TEXT_SECONDARY, False),
+    # No chip at all until pointed at: the menu-bar titles. A menu bar is the one
+    # place where a *row* of chips would be wrong -- the affordance is the row's
+    # position at the top of the window, not each title's fill -- so this is the
+    # single kind that opts out of the neutral ladder and paints its own surface.
+    # widgets.menu_bar swaps it for "ghost" on hover and while its menu is open.
+    "flat": (SURFACE_BASE, TEXT_SECONDARY, False),
     # Applied by stylize_button(..., enabled=False); loses chroma, not just
     # contrast. wxMSW greys a disabled button's *label* and leaves the background
     # it was given at full saturation, so a disabled primary stays bright blue
@@ -217,6 +224,10 @@ _SELECTED_BOLD = True
 
 #: Neutral fills, darkest to lightest.
 _NEUTRAL_LADDER: tuple[_RGB, ...] = (SURFACE_BASE, SURFACE_PANEL, SURFACE_ALT, SURFACE_RAISED)
+
+#: Kinds whose fill is deliberately *not* stepped up to stay visible on its
+#: background. Only ``flat``, whose whole point is to be invisible at rest.
+_UNSTEPPED_KINDS = frozenset({"flat"})
 
 #: How much lighter than its background a neutral chip has to be before it reads
 #: as a button at all. Measured off the surface scale: SURFACE_ALT on
@@ -294,6 +305,25 @@ def apply_base_font(window: wx.Window) -> None:
     is sufficient — there is no per-widget work.
     """
     window.SetFont(theme_font())
+
+
+def init_top_level_window(window: wx.Window) -> None:
+    """Everything a new ``wx.Frame`` / ``wx.Dialog`` / ``wx.MiniFrame`` needs first.
+
+    One call rather than two at each of the app's top-level windows, because both
+    halves have the same constraint — they must run immediately after
+    ``super().__init__()``, before any child is built and before ``Show()`` — and
+    because a window that gets one and not the other is a bug that is invisible
+    until someone screenshots it:
+
+    * :func:`apply_base_font`, since top-level windows never inherit a font.
+    * :func:`widgets.native_dark.apply_dark_caption`, since Windows' process-wide
+      dark mode does not reach the title bar. Phase 1 enabled dark mode and
+      everything *inside* the windows went dark; the captions stayed ``#FFFFFF``
+      for two more phases because nothing was measuring them.
+    """
+    apply_base_font(window)
+    apply_dark_caption(window)
 
 
 def type_font(
@@ -658,8 +688,9 @@ def stylize_button(
 
     :param kind: ``primary`` (accent fill, near-black bold label — at most one per
         surface), ``secondary`` (the default for everything else), ``ghost``
-        (chrome that must not compete: toolbar, view toggles, pager),
-        ``toggle`` (a button carrying an on/off state), ``danger`` or ``success``.
+        (chrome that must not compete: view toggles, pager), ``flat`` (no chip at
+        all until hovered — the menu-bar titles), ``toggle`` (a button carrying an
+        on/off state), ``danger`` or ``success``.
     :param enabled: ``False`` paints the disabled tokens, which drop chroma rather
         than merely dimming the fill. Pass it whenever the call site also calls
         ``Disable()`` — wxMSW greys the *label* by itself and leaves the
@@ -685,7 +716,8 @@ def stylize_button(
         background, foreground, bold = SELECTION_FILLS[surface], _SELECTED_FG, _SELECTED_BOLD
     else:
         background, foreground, bold = _BUTTON_KINDS[kind]
-        background = _neutral_fill(background, surface)
+        if kind not in _UNSTEPPED_KINDS:
+            background = _neutral_fill(background, surface)
 
     strip_native_button_frame(button)
     button.SetBackgroundColour(_colour(background))

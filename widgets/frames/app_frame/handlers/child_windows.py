@@ -28,27 +28,19 @@ class ChildWindowHandlers(_Base):
     """Open/close auxiliary frames, feedback dialog, and main-window close."""
 
     def open_opponent_tracker(self: AppFrame) -> None:
-        existing = getattr(self, "tracker_window", None)
-        if widget_exists(existing):
-            existing.Raise()
-            return
-
-        def on_tracker_close(evt: wx.CloseEvent, attr: str) -> None:
-            self._handle_child_close(evt, attr)
-            self.Show()
-            self.Raise()
-
-        window = open_child_window(
+        # F1 (review): this used to Hide() the main window while the other five
+        # companion windows opened alongside it -- identical signifier, radically
+        # different behaviour, and the reason the review's first capture pass
+        # produced an apparently-blank main window. It now opens like the rest.
+        open_child_window(
             self,
             "tracker_window",
             MTGOpponentDeckSpy,
             "Opponent Tracker",
-            on_tracker_close,
+            self._handle_child_close,
             controller=self.controller,
             locale=self.locale,
         )
-        if window is not None:
-            self.Hide()
 
     def open_timer_alert(self: AppFrame) -> None:
         open_child_window(

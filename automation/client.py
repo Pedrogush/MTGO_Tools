@@ -128,7 +128,7 @@ class AutomationClient:
         """Click a button by widget name and optional label.
 
         Args:
-            widget: Name of the widget container (e.g., 'toolbar', 'deck_list')
+            widget: Name of the widget container (e.g., 'menu_bar', 'deck_list')
             label: Optional button label to click within the widget
 
         Returns:
@@ -299,12 +299,25 @@ class AutomationClient:
         return self._send_command("scroll_builder_results", items=items)
 
     def open_widget(self, widget_name: str) -> dict[str, Any]:
-        """Open a top-level widget window.
+        """Open one of the six companion windows.
 
         Args:
-            widget_name: 'opponent_tracker', 'match_history', 'timer_alert', or 'metagame'
+            widget_name: 'opponent_tracker', 'match_history', 'timer_alert',
+                'metagame', 'top_cards' or 'radar'
         """
         return self._send_command("open_widget", widget_name=widget_name)
+
+    def menu(self, path: str | None = None) -> dict[str, Any]:
+        """List the menu bar, or activate one item.
+
+        Args:
+            path: 'Tools/Radar', or 'Settings/Language/pt-BR' for a radio option.
+                Omit to get the whole tree back instead.
+
+        The item's handler runs directly; the menu is never popped up, because
+        ``wx.PopupMenu`` blocks the thread that services this socket (§5.5).
+        """
+        return self._send_command("menu", **({"path": path} if path is not None else {}))
 
     def refresh_collection(self, force: bool = True) -> dict[str, Any]:
         """Trigger a collection refresh + export from the MTGO bridge.

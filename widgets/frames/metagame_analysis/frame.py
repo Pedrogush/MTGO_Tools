@@ -28,7 +28,7 @@ from utils.constants import (
 from utils.i18n import translate
 from widgets.frames.metagame_analysis.handlers import MetagameAnalysisHandlersMixin
 from widgets.frames.metagame_analysis.properties import MetagameAnalysisPropertiesMixin
-from widgets.stylize import apply_base_font, apply_type_level, stylize_button, stylize_choice
+from widgets.stylize import apply_type_level, init_top_level_window, stylize_button, stylize_choice
 
 
 class MetagameAnalysisFrame(
@@ -49,7 +49,7 @@ class MetagameAnalysisFrame(
             size=(980, 660),
             style=style,
         )
-        apply_base_font(self)
+        init_top_level_window(self)
         self._locale = locale
         self.controller = controller
 

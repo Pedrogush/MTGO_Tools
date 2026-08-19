@@ -17,7 +17,7 @@ from utils.constants import DARK_BG, FORMAT_OPTIONS, LIGHT_TEXT, SPACE_SM, SPACE
 from utils.i18n import translate
 from widgets.frames.top_cards.handlers import TopCardsHandlersMixin
 from widgets.frames.top_cards.properties import TopCardsPropertiesMixin
-from widgets.stylize import apply_base_font, stylize_button, stylize_choice, stylize_list_ctrl
+from widgets.stylize import init_top_level_window, stylize_button, stylize_choice, stylize_list_ctrl
 
 if TYPE_CHECKING:
     from services.format_card_pool_service import FormatCardPoolService
@@ -45,7 +45,7 @@ class TopCardsFrame(TopCardsHandlersMixin, TopCardsPropertiesMixin, wx.Frame):
             size=(1200, 700),
             style=style,
         )
-        apply_base_font(self)
+        init_top_level_window(self)
         self._locale = locale
         self.controller = controller
         self._service: FormatCardPoolService = controller.format_card_pool_service

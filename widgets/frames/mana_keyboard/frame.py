@@ -8,7 +8,7 @@ import wx
 
 from utils.constants import DARK_BG, FULL_MANA_SYMBOLS, LIGHT_TEXT, SPACE_SM, SPACE_XS
 from widgets.mana_icon_factory import ManaIconFactory, type_global_mana_symbol
-from widgets.stylize import apply_base_font
+from widgets.stylize import init_top_level_window
 
 
 class ManaKeyboardFrame(wx.Frame):
@@ -24,7 +24,7 @@ class ManaKeyboardFrame(wx.Frame):
             size=(620, 330),
             style=wx.CAPTION | wx.CLOSE_BOX | wx.FRAME_TOOL_WINDOW | wx.STAY_ON_TOP,
         )
-        apply_base_font(self)
+        init_top_level_window(self)
         panel = wx.Panel(self)
         panel.SetBackgroundColour(DARK_BG)
         root = wx.BoxSizer(wx.VERTICAL)

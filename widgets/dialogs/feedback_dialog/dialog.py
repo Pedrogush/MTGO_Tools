@@ -11,7 +11,7 @@ from utils.constants import DARK_BG, DARK_PANEL, LIGHT_TEXT, SPACE_SM, SUBDUED_T
 from widgets.checkbox import DarkCheckBox
 from widgets.dialogs.feedback_dialog.handlers import FeedbackDialogHandlersMixin
 from widgets.dialogs.feedback_dialog.properties import FeedbackDialogPropertiesMixin
-from widgets.stylize import apply_base_font, apply_type_level, stylize_checkbox
+from widgets.stylize import apply_type_level, init_top_level_window, stylize_checkbox
 
 
 class FeedbackDialog(FeedbackDialogHandlersMixin, FeedbackDialogPropertiesMixin, wx.Dialog):
@@ -28,7 +28,7 @@ class FeedbackDialog(FeedbackDialogHandlersMixin, FeedbackDialogPropertiesMixin,
         event_logging_enabled: bool = False,
     ) -> None:
         super().__init__(parent, title="Export Diagnostics / Send Feedback", size=(480, 380))
-        apply_base_font(self)
+        init_top_level_window(self)
         self.SetBackgroundColour(DARK_BG)
 
         self._logs_dir = logs_dir

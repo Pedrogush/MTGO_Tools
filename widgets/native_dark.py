@@ -34,6 +34,16 @@ future Windows that drops the ordinals degrades to exactly today's rendering
 rather than raising. :func:`is_app_dark_mode_enabled` lets callers pick a
 fallback; :func:`widgets.stylize.disable_native_theme` is the one this app uses.
 
+What the OS theme does **not** reach: the title bar
+---------------------------------------------------
+``SetPreferredAppMode(ForceDark)`` darkens controls, menus and scrollbars but
+leaves every window's **caption** in the light theme -- measured in phase 3b at
+``#FFFFFF`` with black text, on the main frame and on a bare probe frame alike,
+with and without a menu bar. The caption belongs to DWM, not to uxtheme, and is
+switched per-window with ``DwmSetWindowAttribute``; see
+:func:`apply_dark_caption`, which every top-level window calls through
+:func:`widgets.stylize.init_top_level_window`.
+
 What the OS theme costs us
 --------------------------
 A dark-mode ``wx.Choice`` is painted in Windows' own ``#333333``, not the app's
@@ -66,6 +76,17 @@ _FORCE_DARK = 2
 
 _WM_THEMECHANGED = 0x031A
 _LVM_GETHEADER = 0x1000 + 31
+
+#: ``DWMWA_USE_IMMERSIVE_DARK_MODE``. Microsoft moved it: it is attribute **20**
+#: on Windows 10 build 18985+ (1903 and later, including every Windows 11) and
+#: attribute **19** on 1809-1903 (builds 17763-18984), where 20 returns
+#: ``E_INVALIDARG``. Both are tried, 20 first -- the order matters, because on
+#: 1903+ attribute 19 is a *different*, valid attribute
+#: (``DWMWA_USE_HOSTBACKDROPBRUSH``) that would succeed while doing nothing.
+#: Below 1809 neither exists and the caption stays light, which is the
+#: documented degradation.
+_DWMWA_USE_IMMERSIVE_DARK_MODE = 20
+_DWMWA_USE_IMMERSIVE_DARK_MODE_1809 = 19
 
 #: Theme class names. ``DarkMode_CFD`` ("common file dialog") is the dark variant
 #: for edit/combo controls; ``DarkMode_Explorer`` covers buttons, checkboxes and
@@ -169,6 +190,48 @@ def apply_dark_theme(window: wx.Window, theme: str = THEME_EXPLORER) -> bool:
     return _apply_theme_to_handle(handle, theme)
 
 
+def apply_dark_caption(window: wx.Window) -> bool:
+    """Ask DWM to draw ``window``'s title bar dark. Returns whether it took.
+
+    Deliberately **not** gated on :func:`is_app_dark_mode_enabled`, unlike the
+    uxtheme helpers above. Those choose between two ways of theming a control
+    and must not fight each other; this one is independent -- the app paints its
+    own client area dark whether or not the uxtheme ordinals were available, so
+    a light caption is wrong in either case.
+
+    Call it once per top-level window, after ``super().__init__()`` (the HWND has
+    to exist) and before ``Show()``. Applying it to a window with no caption --
+    the splash frame, the rule popup -- is harmless: DWM returns an error for the
+    handle and this returns ``False``.
+    """
+    if os.name != "nt":
+        return False
+    try:
+        handle = window.GetHandle()
+    except Exception:  # pragma: no cover - defensive
+        return False
+    if not handle:
+        return False
+    try:
+        dwm = ctypes.windll.dwmapi  # type: ignore[attr-defined]
+    except Exception:  # pragma: no cover - depends on the Windows build
+        return False
+    enabled = ctypes.c_int(1)
+    for attribute in (_DWMWA_USE_IMMERSIVE_DARK_MODE, _DWMWA_USE_IMMERSIVE_DARK_MODE_1809):
+        try:
+            result = dwm.DwmSetWindowAttribute(
+                ctypes.c_void_p(handle),
+                ctypes.c_uint(attribute),
+                ctypes.byref(enabled),
+                ctypes.sizeof(enabled),
+            )
+        except Exception:  # pragma: no cover - depends on the Windows build
+            return False
+        if result == 0:
+            return True
+    return False
+
+
 def _enumerate_descendants(handle: int) -> list[tuple[int, str]]:
     """Every descendant HWND of ``handle`` with its Win32 class name."""
     found: list[tuple[int, str]] = []
@@ -240,6 +303,7 @@ __all__ = [
     "THEME_EXPLORER",
     "THEME_INPUT",
     "THEME_LIST_HEADER",
+    "apply_dark_caption",
     "apply_dark_list_header",
     "apply_dark_native_headers",
     "apply_dark_theme",
