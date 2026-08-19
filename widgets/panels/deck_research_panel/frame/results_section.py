@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 import wx
 import wx.html
 
-from utils.constants import DARK_PANEL, LIGHT_TEXT, PADDING_MD
+from utils.constants import DARK_PANEL, LIGHT_TEXT, SPACE_SM
 from widgets.buttons.deck_action_buttons import DeckActionButtons
 from widgets.lists.deck_results_list import DeckResultsList
 
@@ -44,9 +44,7 @@ class ResultsSectionBuilderMixin(_Base):
                 "save_deck_tooltip": self._labels.get("save_deck_tooltip", ""),
             },
         )
-        sizer.Add(
-            self.deck_action_buttons, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_MD
-        )
+        sizer.Add(self.deck_action_buttons, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, SPACE_SM)
 
         summary_box = wx.StaticBox(
             self, label=self._labels.get("archetype_summary", "Archetype Summary")
@@ -63,7 +61,7 @@ class ResultsSectionBuilderMixin(_Base):
         self.summary_text.SetBorders(-1)
         self.summary_text.SetMinSize((-1, 62))
         summary_sizer.Add(self.summary_text, 1, wx.EXPAND)
-        sizer.Add(summary_sizer, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_MD)
+        sizer.Add(summary_sizer, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, SPACE_SM)
 
         results_box = wx.StaticBox(self, label=self._labels.get("deck_results", "Deck Results"))
         results_box.SetForegroundColour(LIGHT_TEXT)
@@ -73,8 +71,8 @@ class ResultsSectionBuilderMixin(_Base):
         self.deck_list = DeckResultsList(results_box)
         if self._on_deck_selected is not None:
             self.deck_list.Bind(wx.EVT_LISTBOX, lambda _evt: self._on_deck_selected())  # type: ignore[misc]
-        results_sizer.Add(self.deck_list, 1, wx.EXPAND | wx.ALL, PADDING_MD)
-        sizer.Add(results_sizer, 1, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_MD)
+        results_sizer.Add(self.deck_list, 1, wx.EXPAND | wx.ALL, SPACE_SM)
+        sizer.Add(results_sizer, 1, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, SPACE_SM)
 
         self.daily_average_button = self.deck_action_buttons.daily_average_button
         self.copy_button = self.deck_action_buttons.copy_button

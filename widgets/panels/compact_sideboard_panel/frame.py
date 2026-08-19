@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import wx
 
-from utils.constants import DARK_BG, DARK_PANEL, LIGHT_TEXT, PADDING_SM, SUBDUED_TEXT
+from utils.constants import DARK_BG, DARK_PANEL, LIGHT_TEXT, SPACE_XS, SUBDUED_TEXT
 from utils.constants.ui_layout import COMPACT_SIDEBOARD_TOGGLE_BTN_SIZE
 from widgets.panels.compact_sideboard_panel.handlers import CompactSideboardHandlersMixin
 
@@ -31,7 +31,7 @@ class CompactSideboardPanel(CompactSideboardHandlersMixin, wx.Panel):
         self.SetSizer(sizer)
 
         header = wx.BoxSizer(wx.HORIZONTAL)
-        sizer.Add(header, 0, wx.EXPAND | wx.ALL, PADDING_SM)
+        sizer.Add(header, 0, wx.EXPAND | wx.ALL, SPACE_XS)
 
         self.header_label = wx.StaticText(self, label="Guide: —")
         self.header_label.SetForegroundColour(LIGHT_TEXT)
@@ -44,13 +44,13 @@ class CompactSideboardPanel(CompactSideboardHandlersMixin, wx.Panel):
         self.toggle_btn.SetForegroundColour(LIGHT_TEXT)
         self.toggle_btn.Bind(wx.EVT_BUTTON, self._on_toggle_play_draw)
         self.toggle_btn.Hide()
-        header.Add(self.toggle_btn, 0, wx.LEFT, PADDING_SM)
+        header.Add(self.toggle_btn, 0, wx.LEFT, SPACE_XS)
 
         self.status_label = wx.StaticText(self, label="")
         self.status_label.SetForegroundColour(SUBDUED_TEXT)
-        sizer.Add(self.status_label, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_SM)
+        sizer.Add(self.status_label, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, SPACE_XS)
 
         self.card_list = wx.ListBox(self, style=wx.LB_SINGLE)
         self.card_list.SetBackgroundColour(DARK_BG)
         self.card_list.SetForegroundColour(LIGHT_TEXT)
-        sizer.Add(self.card_list, 1, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_SM)
+        sizer.Add(self.card_list, 1, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, SPACE_XS)

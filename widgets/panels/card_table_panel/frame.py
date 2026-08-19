@@ -7,7 +7,7 @@ from typing import Any
 
 import wx
 
-from utils.constants import DARK_PANEL, SUBDUED_TEXT
+from utils.constants import DARK_PANEL, SPACE_SM, SPACE_XS, SUBDUED_TEXT
 from utils.i18n import translate as _i18n_translate
 from widgets.mana_icon_factory import ManaIconFactory
 from widgets.panels.card_table_panel.grid_view import DeckGridView
@@ -123,7 +123,7 @@ class CardTablePanel(
             btn.SetToolTip(self._t(f"tabs.view.tooltip.{mode}"))
             btn.Bind(wx.EVT_BUTTON, lambda _evt, m=mode: self._on_view_button(m))
             self._view_mode_buttons[mode] = btn
-            header.Add(btn, 0, wx.LEFT, 4)
+            header.Add(btn, 0, wx.LEFT, SPACE_XS)
 
         self.pile_sort_button = wx.Button(self, label="⋯", style=wx.BU_EXACTFIT)
         # F3: this and the printing button below rendered in the system's light
@@ -131,7 +131,7 @@ class CardTablePanel(
         stylize_button(self.pile_sort_button, kind="ghost", surface="panel")
         self.pile_sort_button.SetToolTip(self._t("tabs.view.pile_sort"))
         self.pile_sort_button.Bind(wx.EVT_BUTTON, self._open_pile_sort_menu)
-        header.Add(self.pile_sort_button, 0, wx.LEFT, 4)
+        header.Add(self.pile_sort_button, 0, wx.LEFT, SPACE_XS)
 
         # Printing-selection dropdown (issue #792, part 3): re-pick the art/edition
         # used for every card in the deck. Separated from the view buttons by a
@@ -140,16 +140,16 @@ class CardTablePanel(
         if self._on_printing_mode is not None:
             divider = wx.StaticText(self, label="|")
             divider.SetForegroundColour(SUBDUED_TEXT)
-            header.Add(divider, 0, wx.ALIGN_CENTER_VERTICAL | wx.LEFT, 6)
+            header.Add(divider, 0, wx.ALIGN_CENTER_VERTICAL | wx.LEFT, SPACE_SM)
             self.printing_button = wx.Button(
                 self, label=self._t("tabs.view.printing"), style=wx.BU_EXACTFIT
             )
             stylize_button(self.printing_button, kind="ghost", surface="panel")
             self.printing_button.SetToolTip(self._t("tabs.view.printing.tooltip"))
             self.printing_button.Bind(wx.EVT_BUTTON, self._open_printing_menu)
-            header.Add(self.printing_button, 0, wx.LEFT, 6)
+            header.Add(self.printing_button, 0, wx.LEFT, SPACE_SM)
 
-        outer.Add(header, 0, wx.EXPAND | wx.BOTTOM, 4)
+        outer.Add(header, 0, wx.EXPAND | wx.BOTTOM, SPACE_XS)
 
         self._content_book = wx.Simplebook(self)
         self._content_book.SetBackgroundColour(DARK_PANEL)

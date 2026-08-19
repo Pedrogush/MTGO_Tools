@@ -7,7 +7,7 @@ from typing import Any
 import wx
 import wx.lib.scrolledpanel as scrolled
 
-from utils.constants import DARK_ALT, DARK_PANEL, LIGHT_TEXT, SUBDUED_TEXT
+from utils.constants import DARK_ALT, DARK_PANEL, LIGHT_TEXT, SPACE_SM, SPACE_XS, SUBDUED_TEXT
 from utils.constants.colors import FLEX_SLOT_HIGHLIGHT_COLOR
 from widgets.panels.sideboard_card_selector.handlers import SideboardCardSelectorHandlersMixin
 from widgets.panels.sideboard_card_selector.properties import (
@@ -45,13 +45,13 @@ class SideboardCardSelector(
         title_label = wx.StaticText(self, label=title)
         title_label.SetForegroundColour(LIGHT_TEXT)
         title_label.SetFont(title_label.GetFont().Bold())
-        sizer.Add(title_label, 0, wx.ALL, 4)
+        sizer.Add(title_label, 0, wx.ALL, SPACE_XS)
 
         self.count_label = wx.StaticText(
             self, label=self._t("guide.selector.cards_selected", count=0)
         )
         self.count_label.SetForegroundColour(SUBDUED_TEXT)
-        sizer.Add(self.count_label, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 4)
+        sizer.Add(self.count_label, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, SPACE_XS)
 
         self.scroll_panel = scrolled.ScrolledPanel(self, style=wx.VSCROLL)
         stylize_scrollable(self.scroll_panel, surface="alt")
@@ -59,7 +59,7 @@ class SideboardCardSelector(
 
         self.card_sizer = wx.BoxSizer(wx.VERTICAL)
         self.scroll_panel.SetSizer(self.card_sizer)
-        sizer.Add(self.scroll_panel, 1, wx.EXPAND | wx.ALL, 4)
+        sizer.Add(self.scroll_panel, 1, wx.EXPAND | wx.ALL, SPACE_XS)
 
         self._build_card_list()
 
@@ -80,7 +80,7 @@ class SideboardCardSelector(
 
             qty_label = wx.StaticText(row_panel, label="  0", size=(30, -1), style=wx.ALIGN_RIGHT)
             qty_label.SetForegroundColour(LIGHT_TEXT)
-            row_sizer.Add(qty_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 4)
+            row_sizer.Add(qty_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, SPACE_XS)
 
             btn_panel = wx.Panel(row_panel)
             btn_panel.SetBackgroundColour(row_bg)
@@ -96,28 +96,28 @@ class SideboardCardSelector(
 
             dec_btn = wx.Button(btn_panel, label="−", size=(28, 28))
             dec_btn.Bind(wx.EVT_BUTTON, lambda evt, name=card_name: self._decrement(name))
-            btn_sizer.Add(dec_btn, 0, wx.LEFT, 2)
+            btn_sizer.Add(dec_btn, 0, wx.LEFT, SPACE_XS)
 
             zero_btn = wx.Button(btn_panel, label="↓", size=(28, 28))
             zero_btn.SetToolTip("Set to 0")
             zero_btn.Bind(wx.EVT_BUTTON, lambda evt, name=card_name: self._set_zero(name))
-            btn_sizer.Add(zero_btn, 0, wx.LEFT, 2)
+            btn_sizer.Add(zero_btn, 0, wx.LEFT, SPACE_XS)
 
             max_btn = wx.Button(btn_panel, label="↑", size=(28, 28))
             max_btn.SetToolTip(f"Set to max ({max_qty})")
             max_btn.Bind(
                 wx.EVT_BUTTON, lambda evt, name=card_name, max_q=max_qty: self._set_max(name, max_q)
             )
-            btn_sizer.Add(max_btn, 0, wx.LEFT, 2)
+            btn_sizer.Add(max_btn, 0, wx.LEFT, SPACE_XS)
 
-            row_sizer.Add(btn_panel, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 8)
+            row_sizer.Add(btn_panel, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, SPACE_SM)
 
             flex_tag = " [flex]" if is_flex else ""
             name_label = wx.StaticText(row_panel, label=f"{card_name} (max {max_qty}){flex_tag}")
             name_label.SetForegroundColour(LIGHT_TEXT)
             row_sizer.Add(name_label, 1, wx.ALIGN_CENTER_VERTICAL)
 
-            self.card_sizer.Add(row_panel, 0, wx.EXPAND | wx.BOTTOM, 2)
+            self.card_sizer.Add(row_panel, 0, wx.EXPAND | wx.BOTTOM, SPACE_XS)
             self.card_widgets[card_name] = (qty_label, row_panel)
 
         self.scroll_panel.Layout()

@@ -19,8 +19,8 @@ from utils.constants import (
     DARK_BG,
     DARK_PANEL,
     LIGHT_TEXT,
-    PADDING_LG,
-    PADDING_MD,
+    SPACE_MD,
+    SPACE_SM,
     STATUS_BAR_UPDATE_FIELD_WIDTH,
 )
 from utils.i18n import SUPPORTED_LOCALES, translate
@@ -55,6 +55,7 @@ from widgets.panels.card_table_panel import CardTablePanel
 from widgets.panels.deck_builder_panel import DeckBuilderPanel
 from widgets.panels.deck_research_panel import DeckResearchPanel
 from widgets.status_bar import ThemedStatusBar
+from widgets.stylize import apply_base_font
 
 if TYPE_CHECKING:
     from controllers.app_controller import AppController
@@ -93,6 +94,7 @@ class AppFrame(
             title=translate(controller.get_language(), "app.title.main_frame"),
             size=APP_FRAME_SIZE,
         )
+        apply_base_font(self)
         apply_app_icon(self)
 
         # Store controller reference - ALL state and business logic goes through this
@@ -212,8 +214,15 @@ class AppFrame(
         self._setup_status_bar()
         frame_sizer.Add(self.status_bar, 0, wx.EXPAND)
 
+        # Each gap is applied by exactly one child. Giving all three wx.ALL put
+        # SPACE_MD on both sides of every boundary, so the collapse gutter sat in
+        # a 48px well and the window spent 80px of its minimum width on chrome.
+        # Now: SPACE_MD at the two window edges, SPACE_SM either side of the
+        # gutter. Same visual rhythm, 16px of minimum width back.
         self.left_panel_window = self._build_left_panel(self.root_panel)
-        root_sizer.Add(self.left_panel_window, 0, wx.EXPAND | wx.ALL, PADDING_LG)
+        root_sizer.Add(
+            self.left_panel_window, 0, wx.EXPAND | wx.LEFT | wx.TOP | wx.BOTTOM, SPACE_MD
+        )
 
         # Thin full-height gutter button to collapse/expand the left sidebar.
         self.left_toggle_btn = self._build_collapse_toggle(
@@ -221,10 +230,10 @@ class AppFrame(
             on_click=self.toggle_left_panel,
             tooltip=self._t("app.tooltip.toggle_left_panel"),
         )
-        root_sizer.Add(self.left_toggle_btn, 0, wx.EXPAND | wx.TOP | wx.BOTTOM, PADDING_LG)
+        root_sizer.Add(self.left_toggle_btn, 0, wx.EXPAND | wx.ALL, SPACE_SM)
 
         right_container = self._build_right_container(self.root_panel)
-        root_sizer.Add(right_container, 1, wx.EXPAND | wx.ALL, PADDING_LG)
+        root_sizer.Add(right_container, 1, wx.EXPAND | wx.RIGHT | wx.TOP | wx.BOTTOM, SPACE_MD)
 
     def _build_collapse_toggle(self, parent: wx.Window, *, on_click, tooltip: str) -> wx.Button:
         """A narrow full-height button used to collapse/expand a side panel.
@@ -285,10 +294,10 @@ class AppFrame(
         right_panel.SetSizer(right_sizer)
 
         self.toolbar = self._build_toolbar(right_panel)
-        right_sizer.Add(self.toolbar, 0, wx.EXPAND | wx.BOTTOM, PADDING_MD)
+        right_sizer.Add(self.toolbar, 0, wx.EXPAND | wx.BOTTOM, SPACE_SM)
 
         content_split = wx.BoxSizer(wx.HORIZONTAL)
-        right_sizer.Add(content_split, 1, wx.EXPAND | wx.BOTTOM, PADDING_LG)
+        right_sizer.Add(content_split, 1, wx.EXPAND | wx.BOTTOM, SPACE_MD)
 
         # The deck workspace takes all leftover horizontal space (proportion 1)
         # so a wider window grows the workspace — and the grid view fits more
@@ -296,14 +305,14 @@ class AppFrame(
         # inspector column stays at its natural width (proportion 0) and can be
         # collapsed via the gutter button to hand its width to the workspace.
         deck_workspace = self._build_deck_workspace(right_panel)
-        content_split.Add(deck_workspace, 1, wx.EXPAND | wx.RIGHT, PADDING_MD)
+        content_split.Add(deck_workspace, 1, wx.EXPAND | wx.RIGHT, SPACE_SM)
 
         self.inspector_toggle_btn = self._build_collapse_toggle(
             right_panel,
             on_click=self.toggle_inspector,
             tooltip=self._t("app.tooltip.toggle_inspector"),
         )
-        content_split.Add(self.inspector_toggle_btn, 0, wx.EXPAND | wx.RIGHT, PADDING_MD)
+        content_split.Add(self.inspector_toggle_btn, 0, wx.EXPAND | wx.RIGHT, SPACE_SM)
 
         # Inspector column wrapped in a single panel so it can be shown/hidden as
         # a unit (collapsing reclaims its width and, importantly, its height —
@@ -317,7 +326,7 @@ class AppFrame(
         inspector_column.Add(inspector_box, 0, wx.EXPAND)
 
         card_panel_box = self._build_card_panel(self.inspector_panel)
-        inspector_column.Add(card_panel_box, 1, wx.EXPAND | wx.TOP, PADDING_MD)
+        inspector_column.Add(card_panel_box, 1, wx.EXPAND | wx.TOP, SPACE_SM)
 
         content_split.Add(self.inspector_panel, 0, wx.EXPAND)
 

@@ -1,6 +1,12 @@
 """Timer alert UI constants."""
 
-TIMER_ALERT_FRAME_SIZE = (420, 400)
+# Height raised from 400 in phase 3. 400 never fitted the content: the panel's
+# best height measured 491px before this phase, so ~90px -- the whole threshold
+# list, which is the point of the window -- was already below the bottom edge
+# and the "Active Challenge Timer" box was the first thing to go when the 4px
+# spacing scale added 32px. Sized to the measured best height plus the frame's
+# own chrome rather than to a round number.
+TIMER_ALERT_FRAME_SIZE = (420, 580)
 TIMER_ALERT_THRESHOLD_INPUT_SIZE = (80, -1)
 TIMER_ALERT_REMOVE_BUTTON_SIZE = (30, -1)
 TIMER_ALERT_STATUS_MIN_HEIGHT = 80

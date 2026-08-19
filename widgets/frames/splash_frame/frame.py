@@ -8,9 +8,10 @@ from collections.abc import Callable
 import wx
 
 from utils.app_icon import apply_app_icon
-from utils.constants import DARK_BG, DARK_PANEL, LIGHT_TEXT
+from utils.constants import DARK_BG, DARK_PANEL, LIGHT_TEXT, SPACE_MD
 from widgets.frames.splash_frame.handlers import LoadingFrameHandlersMixin
 from widgets.frames.splash_frame.properties import LoadingFramePropertiesMixin
+from widgets.stylize import apply_base_font, apply_type_level
 
 
 class LoadingFrame(LoadingFrameHandlersMixin, LoadingFramePropertiesMixin, wx.Frame):
@@ -23,6 +24,7 @@ class LoadingFrame(LoadingFrameHandlersMixin, LoadingFramePropertiesMixin, wx.Fr
             style=wx.BORDER_NONE | wx.STAY_ON_TOP,
             size=(420, 120),
         )
+        apply_base_font(self)
         apply_app_icon(self)
         self._start = time.monotonic()
         self._min_duration = min_duration
@@ -46,15 +48,13 @@ class LoadingFrame(LoadingFrameHandlersMixin, LoadingFramePropertiesMixin, wx.Fr
         outer = wx.BoxSizer(wx.VERTICAL)
         panel.SetSizer(outer)
         frame_sizer = wx.BoxSizer(wx.VERTICAL)
-        frame_sizer.Add(panel, 1, wx.EXPAND | wx.ALL, 12)
+        frame_sizer.Add(panel, 1, wx.EXPAND | wx.ALL, SPACE_MD)
         self.SetSizer(frame_sizer)
 
         title = wx.StaticText(panel, label="Loading MTGO Tools...")
         title.SetForegroundColour(LIGHT_TEXT)
-        font = title.GetFont()
-        font.SetPointSize(font.GetPointSize() + 4)
-        font.MakeBold()
-        title.SetFont(font)
+        # The only string in a 420x120 window: title level, not an ad-hoc +4pt.
+        apply_type_level(title, "title")
         title.Wrap(320)
         outer.AddStretchSpacer(1)
         outer.Add(title, 0, wx.ALIGN_CENTER_HORIZONTAL)

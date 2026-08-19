@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import wx
 
+from utils.constants.theme import SPACE_SM
+from widgets.stylize import type_font
+
 
 class DeckResultsListHandlersMixin:
     """Public setters, drawing overrides, and sizing helpers for :class:`DeckResultsList`."""
@@ -11,8 +14,8 @@ class DeckResultsListHandlersMixin:
     _ITEM_MARGIN: int
     _CARD_RADIUS: int
     _CARD_PADDING: int
-    _MIN_FONT_SIZE: int
-    _RIGHT_COL_RATIO: float
+    _ROW_GAP: int
+    _row_height: int | None
 
     _items: list[tuple[bool, tuple]]
     _line_one_color: wx.Colour
@@ -109,16 +112,6 @@ class DeckResultsListHandlersMixin:
             text = f"{words[0].rstrip()}..."
         return text
 
-    def _fit_font_to_width(self, dc: wx.DC, text: str, font: wx.Font, max_width: int) -> wx.Font:
-        sized = wx.Font(font)
-        for pt in range(font.GetPointSize(), self._MIN_FONT_SIZE - 1, -1):
-            sized.SetPointSize(pt)
-            dc.SetFont(sized)
-            w, _ = dc.GetTextExtent(text)
-            if w <= max_width:
-                return sized
-        return sized
-
     # ------------------------------------------------------------------
     # VListBox drawing overrides
     # ------------------------------------------------------------------
@@ -148,8 +141,7 @@ class DeckResultsListHandlersMixin:
 
         self._paint_card(dc, card_rect, self.IsSelected(n))
 
-        font = self.GetFont()
-        font.SetWeight(wx.FONTWEIGHT_BOLD)
+        font = type_font("body", base=self.GetFont(), bold=True)
         dc.SetFont(font)
 
         emoji_w = 0
@@ -160,11 +152,15 @@ class DeckResultsListHandlersMixin:
         line_one_width, line_one_height = dc.GetTextExtent(line_one)
         total_line_one_width = emoji_w + line_one_width
 
-        base_font = self.GetFont()
-        base_font.SetWeight(wx.FONTWEIGHT_NORMAL)
+        # H3. This used to shrink the font one point at a time until the string
+        # fitted, which made type size a function of string length rather than
+        # importance -- the strongest possible violation of "size encodes
+        # hierarchy", and one that got *worse* at a 10pt base because the loop
+        # had further to run. Fixed caption size, ellipsis when it overflows.
+        line_two_font = type_font("caption", base=self.GetFont())
         if line_two:
-            line_two_font = self._fit_font_to_width(dc, line_two, base_font, max_text_width)
             dc.SetFont(line_two_font)
+            line_two = self._truncate_to_width(dc, line_two, max_text_width)
             line_two_width, line_two_height = dc.GetTextExtent(line_two)
         else:
             line_two_width = 0
@@ -175,7 +171,6 @@ class DeckResultsListHandlersMixin:
         start_y = card_rect.y + (card_rect.height - content_height) // 2
         line_one_start_x = center_x - (total_line_one_width // 2)
 
-        font.SetWeight(wx.FONTWEIGHT_BOLD)
         dc.SetFont(font)
 
         if emoji_prefix:
@@ -193,8 +188,13 @@ class DeckResultsListHandlersMixin:
     def _draw_deck_item(self, dc: wx.DC, rect: wx.Rect, n: int, data: tuple) -> None:
         """Left/right split card layout for structured deck entries.
 
-        Left column:  emoji + player name (bold), event (small/subdued below)
-        Right column: date (bold, right-aligned), result (small/subdued, right-aligned)
+        H2 -- the hierarchy is inverted from what shipped before. Each row used
+        to read player+archetype (bold body), event (caption), **date (bold
+        body)**, record (caption): the loudest string in the right column was
+        the date, and the ``5-0`` / ``7-1`` that people actually scan a results
+        list for was the smallest and dimmest thing on the row. The record is
+        now the heading-level element and the date the caption beside the event,
+        so the two columns read identity / result rather than identity / when.
         """
         emoji, player, archetype, event, result, date = data
         primary_fg = self._line_one_color
@@ -205,70 +205,81 @@ class DeckResultsListHandlersMixin:
 
         self._paint_card(dc, card_rect, self.IsSelected(n))
 
-        # Column boundaries — split the inner content area 70/30
-        inner_w = card_rect.width - (self._CARD_PADDING * 2)
-        right_col_w = int(inner_w * self._RIGHT_COL_RATIO)
-        left_col_w = inner_w - right_col_w - 4
-
         inner_left = card_rect.x + self._CARD_PADDING
         inner_right = card_rect.x + card_rect.width - self._CARD_PADDING
         inner_top = card_rect.y + self._CARD_PADDING
-        inner_h = card_rect.height - (self._CARD_PADDING * 2)
-        row_h = inner_h // 2
+        inner_w = card_rect.width - (self._CARD_PADDING * 2)
 
-        # --- Bold font for primary rows ---
-        bold_font = self.GetFont()
-        bold_font.SetWeight(wx.FONTWEIGHT_BOLD)
-        dc.SetFont(bold_font)
-        _, line_h = dc.GetTextExtent("Ay")
+        title_font = type_font("body", base=self.GetFont(), bold=True)
+        record_font = type_font("heading", base=self.GetFont())
+        caption_font = type_font("caption", base=self.GetFont())
 
-        top_y = inner_top + max(0, (row_h - line_h) // 2)
+        dc.SetFont(record_font)
+        record_w, record_h = dc.GetTextExtent(result or "0-0")
+        dc.SetFont(title_font)
+        _, title_h = dc.GetTextExtent("Ay")
+        dc.SetFont(caption_font)
+        _, caption_h = dc.GetTextExtent("Ay")
+        date_w, _ = dc.GetTextExtent(date) if date else (0, 0)
 
-        # --- Small font for secondary rows ---
-        small_font = self.GetFont()
-        small_font.SetWeight(wx.FONTWEIGHT_NORMAL)
-        for pt in range(small_font.GetPointSize() - 1, self._MIN_FONT_SIZE - 1, -1):
-            small_font.SetPointSize(pt)
-            dc.SetFont(small_font)
-            _, sh = dc.GetTextExtent("Ay")
-            if sh <= row_h:
-                break
-        dc.SetFont(small_font)
-        _, small_h = dc.GetTextExtent("Ay")
-        bottom_y = inner_top + row_h + max(0, (row_h - small_h) // 2)
+        top_h = max(title_h, record_h)
+        # The right column is sized to its own content rather than to a fixed
+        # 30% of the row: a record is at most five glyphs and a date ten, so a
+        # ratio split spent width the left column needed for the archetype name.
+        right_col_w = max(record_w, date_w)
+        left_col_w = max(0, inner_w - right_col_w - SPACE_SM)
 
-        # --- Draw left column ---
-        # Top: emoji + player name
-        dc.SetFont(bold_font)
+        top_y = inner_top
+        bottom_y = inner_top + top_h + self._ROW_GAP
+
+        # --- left column: who, then which event -----------------------------
+        dc.SetFont(title_font)
         dc.SetTextForeground(primary_fg)
         player_arch = f"{player}, {archetype}" if archetype else player
         player_text = f"{emoji} {player_arch}".strip() if emoji else player_arch
-        player_truncated = self._truncate_to_width(dc, player_text, left_col_w)
-        dc.DrawText(player_truncated, inner_left, top_y)
+        dc.DrawText(
+            self._truncate_to_width(dc, player_text, left_col_w),
+            inner_left,
+            top_y + max(0, (top_h - title_h) // 2),
+        )
 
-        # Bottom: event name
-        dc.SetFont(small_font)
+        dc.SetFont(caption_font)
         dc.SetTextForeground(secondary_fg)
-        event_truncated = self._truncate_to_width(dc, event, left_col_w)
-        dc.DrawText(event_truncated, inner_left, bottom_y)
+        dc.DrawText(self._truncate_to_width(dc, event, left_col_w), inner_left, bottom_y)
 
-        # --- Draw right column ---
-        # Top: date (right-aligned)
-        dc.SetFont(bold_font)
-        dc.SetTextForeground(primary_fg)
-        if date:
-            date_w, _ = dc.GetTextExtent(date)
-            dc.DrawText(date, inner_right - date_w, top_y)
-
-        # Bottom: result (right-aligned)
-        dc.SetFont(small_font)
-        dc.SetTextForeground(secondary_fg)
+        # --- right column: the result, then when ----------------------------
         if result:
-            result_w, _ = dc.GetTextExtent(result)
-            dc.DrawText(result, inner_right - result_w, bottom_y)
+            dc.SetFont(record_font)
+            dc.SetTextForeground(primary_fg)
+            width, _ = dc.GetTextExtent(result)
+            dc.DrawText(result, inner_right - width, top_y + max(0, (top_h - record_h) // 2))
+
+        if date:
+            dc.SetFont(caption_font)
+            dc.SetTextForeground(secondary_fg)
+            dc.DrawText(date, inner_right - date_w, bottom_y)
+
+    def _measure_row_height(self) -> int:
+        """Row height in pixels, derived from the type scale.
+
+        The tallest thing on a structured row is the heading-level record and
+        the shortest the caption-level event/date, so all three fonts are
+        measured: that is what keeps the row honest when the base font moves.
+        Plain rows are body over caption and are never taller.
+        """
+        dc = wx.ClientDC(self)
+        heights = []
+        for level, bold in (("heading", None), ("body", True), ("caption", None)):
+            dc.SetFont(type_font(level, base=self.GetFont(), bold=bold))
+            heights.append(dc.GetTextExtent("Ay")[1])
+        heading_h, body_h, caption_h = heights
+        content_height = max(heading_h, body_h) + self._ROW_GAP + caption_h
+        return content_height + (self._ITEM_MARGIN * 2) + (self._CARD_PADDING * 2)
 
     def OnMeasureItem(self, n: int) -> int:
-        line_height = self.GetCharHeight()
-        # Both plain two-line items and structured deck items use two rows
-        content_height = line_height * 2 + 2
-        return content_height + (self._ITEM_MARGIN * 2) + (self._CARD_PADDING * 2)
+        # Cached: wx.VListBox calls this once per item and the list runs to
+        # thousands of rows, so measuring three fonts on a fresh ClientDC every
+        # time would be a per-row DC allocation during scrolling.
+        if self._row_height is None:
+            self._row_height = self._measure_row_height()
+        return self._row_height

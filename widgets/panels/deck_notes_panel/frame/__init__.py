@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING
 
 import wx
 
-from utils.constants import DARK_ALT, DARK_PANEL, SUBDUED_TEXT
+from utils.constants import DARK_ALT, DARK_PANEL, SPACE_MD, SPACE_SM, SUBDUED_TEXT
 from widgets.panels.deck_notes_panel.frame.note_card_widget import (
     NOTE_TYPES,
     _migrate,
@@ -72,12 +72,12 @@ class DeckNotesPanel(
 
         # ── Toolbar ─────────────────────────────────────────────────────────
         toolbar = wx.BoxSizer(wx.HORIZONTAL)
-        outer.Add(toolbar, 0, wx.EXPAND | wx.ALL, 6)
+        outer.Add(toolbar, 0, wx.EXPAND | wx.ALL, SPACE_SM)
 
         add_btn = wx.Button(self, label=self._t("notes.btn.add"))
         stylize_button(add_btn, kind="primary")
         add_btn.Bind(wx.EVT_BUTTON, self._on_add_note)
-        toolbar.Add(add_btn, 0, wx.RIGHT, 6)
+        toolbar.Add(add_btn, 0, wx.RIGHT, SPACE_SM)
 
         toolbar.AddStretchSpacer(1)
 
@@ -106,10 +106,10 @@ class DeckNotesPanel(
             style=wx.ALIGN_CENTRE_HORIZONTAL,
         )
         empty_label.SetForegroundColour(SUBDUED_TEXT)
-        empty_sizer.Add(empty_label, 0, wx.ALIGN_CENTER | wx.ALL, 12)
+        empty_sizer.Add(empty_label, 0, wx.ALIGN_CENTER | wx.ALL, SPACE_MD)
         empty_sizer.AddStretchSpacer(1)
         self.empty_state_panel.Hide()
-        outer.Add(self.empty_state_panel, 1, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 6)
+        outer.Add(self.empty_state_panel, 1, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, SPACE_SM)
 
 
 __all__ = [

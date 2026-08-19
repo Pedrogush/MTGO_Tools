@@ -6,8 +6,9 @@ from collections.abc import Callable
 
 import wx
 
-from utils.constants import DARK_BG, FULL_MANA_SYMBOLS, LIGHT_TEXT
+from utils.constants import DARK_BG, FULL_MANA_SYMBOLS, LIGHT_TEXT, SPACE_SM, SPACE_XS
 from widgets.mana_icon_factory import ManaIconFactory, type_global_mana_symbol
+from widgets.stylize import apply_base_font
 
 
 class ManaKeyboardFrame(wx.Frame):
@@ -23,6 +24,7 @@ class ManaKeyboardFrame(wx.Frame):
             size=(620, 330),
             style=wx.CAPTION | wx.CLOSE_BOX | wx.FRAME_TOOL_WINDOW | wx.STAY_ON_TOP,
         )
+        apply_base_font(self)
         panel = wx.Panel(self)
         panel.SetBackgroundColour(DARK_BG)
         root = wx.BoxSizer(wx.VERTICAL)
@@ -30,13 +32,13 @@ class ManaKeyboardFrame(wx.Frame):
 
         info = wx.StaticText(panel, label="Click a symbol to type it anywhere")
         info.SetForegroundColour(LIGHT_TEXT)
-        root.Add(info, 0, wx.ALIGN_CENTER | wx.ALL, 8)
+        root.Add(info, 0, wx.ALIGN_CENTER | wx.ALL, SPACE_SM)
 
         wrap = wx.WrapSizer(wx.HORIZONTAL)
         for token in FULL_MANA_SYMBOLS:
             btn = create_button(panel, token, on_symbol)
-            wrap.Add(btn, 0, wx.ALL, 4)
-        root.Add(wrap, 1, wx.ALIGN_CENTER_HORIZONTAL | wx.ALL, 10)
+            wrap.Add(btn, 0, wx.ALL, SPACE_XS)
+        root.Add(wrap, 1, wx.ALIGN_CENTER_HORIZONTAL | wx.ALL, SPACE_SM)
         self.CentreOnParent()
 
 

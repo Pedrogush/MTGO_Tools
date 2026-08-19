@@ -11,9 +11,8 @@ from utils.constants import (
     DARK_PANEL,
     FORMAT_OPTIONS,
     LIGHT_TEXT,
-    PADDING_MD,
-    PADDING_SM,
-    PADDING_XS,
+    SPACE_SM,
+    SPACE_XS,
 )
 from widgets.panels.mana_rich_text_ctrl import ManaSymbolRichCtrl
 from widgets.stylize import stylize_button, stylize_choice, stylize_label, stylize_textctrl
@@ -37,7 +36,7 @@ class AdvancedFiltersBuilderMixin(_Base):
         adv_toggle_btn = wx.Button(self, label=self._t("builder.btn.adv_filters_show"))
         stylize_button(adv_toggle_btn, kind="secondary")
         adv_toggle_btn.Bind(wx.EVT_BUTTON, self._on_adv_toggle)
-        parent_sizer.Add(adv_toggle_btn, 0, wx.ALIGN_CENTER_HORIZONTAL | wx.BOTTOM, PADDING_MD)
+        parent_sizer.Add(adv_toggle_btn, 0, wx.ALIGN_CENTER_HORIZONTAL | wx.BOTTOM, SPACE_SM)
         self._adv_toggle_btn = adv_toggle_btn
 
         adv_panel = wx.Panel(self)
@@ -45,7 +44,7 @@ class AdvancedFiltersBuilderMixin(_Base):
         adv_sizer = wx.BoxSizer(wx.VERTICAL)
         adv_panel.SetSizer(adv_sizer)
         adv_panel.Hide()
-        parent_sizer.Add(adv_panel, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, PADDING_MD)
+        parent_sizer.Add(adv_panel, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, SPACE_SM)
         self._adv_panel = adv_panel
 
         self._build_type_line_filter(adv_panel, adv_sizer)
@@ -55,20 +54,20 @@ class AdvancedFiltersBuilderMixin(_Base):
 
     def _build_type_line_filter(self, pwin: wx.Panel, adv_sizer: wx.Sizer) -> None:
         lbl = wx.StaticText(pwin, label=self._t("builder.field.type_line"))
-        stylize_label(lbl, True)
-        adv_sizer.Add(lbl, 0, wx.ALIGN_CENTER_HORIZONTAL | wx.TOP, PADDING_MD)
+        stylize_label(lbl, subtle=True, level="body")
+        adv_sizer.Add(lbl, 0, wx.ALIGN_CENTER_HORIZONTAL | wx.TOP, SPACE_SM)
         type_ctrl = wx.TextCtrl(pwin)
         stylize_textctrl(type_ctrl)
         type_ctrl.SetHint(self._t("builder.hint.type_line"))
         type_ctrl.SetToolTip("Filter cards by type line (e.g. Creature, Instant)")
         type_ctrl.Bind(wx.EVT_TEXT, self._on_filters_changed)
         self.inputs["type"] = type_ctrl
-        adv_sizer.Add(type_ctrl, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_SM)
+        adv_sizer.Add(type_ctrl, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, SPACE_XS)
 
     def _build_oracle_text_filter(self, pwin: wx.Panel, adv_sizer: wx.Sizer) -> None:
         lbl = wx.StaticText(pwin, label=self._t("builder.field.oracle_text"))
-        stylize_label(lbl, True)
-        adv_sizer.Add(lbl, 0, wx.ALIGN_CENTER_HORIZONTAL, PADDING_MD)
+        stylize_label(lbl, subtle=True, level="body")
+        adv_sizer.Add(lbl, 0, wx.ALIGN_CENTER_HORIZONTAL, SPACE_SM)
         text_ctrl = ManaSymbolRichCtrl(
             pwin,
             self.mana_icons,
@@ -87,7 +86,7 @@ class AdvancedFiltersBuilderMixin(_Base):
         text_ctrl.Bind(wx.EVT_TEXT, self._on_filters_changed)
         self.inputs["text"] = text_ctrl
         text_row = wx.BoxSizer(wx.HORIZONTAL)
-        text_row.Add(text_ctrl, 1, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, PADDING_SM)
+        text_row.Add(text_ctrl, 1, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, SPACE_XS)
         text_mode_choice = wx.Choice(pwin, choices=["=", "≈"])
         text_mode_choice.SetSelection(0)
         stylize_choice(text_mode_choice)
@@ -95,12 +94,12 @@ class AdvancedFiltersBuilderMixin(_Base):
         self.text_mode_choice = text_mode_choice
         text_mode_choice.Bind(wx.EVT_CHOICE, self._on_filters_changed)
         text_row.Add(text_mode_choice, 0, wx.ALIGN_CENTER_VERTICAL)
-        adv_sizer.Add(text_row, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_SM)
+        adv_sizer.Add(text_row, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, SPACE_XS)
 
     def _build_mana_value_filter(self, pwin: wx.Panel, adv_sizer: wx.Sizer) -> None:
         mv_label = wx.StaticText(pwin, label=self._t("builder.field.mana_value"))
-        stylize_label(mv_label, True)
-        adv_sizer.Add(mv_label, 0, wx.ALIGN_CENTER_HORIZONTAL, PADDING_MD)
+        stylize_label(mv_label, subtle=True, level="body")
+        adv_sizer.Add(mv_label, 0, wx.ALIGN_CENTER_HORIZONTAL, SPACE_SM)
         mv_row = wx.BoxSizer(wx.HORIZONTAL)
         mv_value = wx.TextCtrl(pwin)
         stylize_textctrl(mv_value)
@@ -108,7 +107,7 @@ class AdvancedFiltersBuilderMixin(_Base):
         mv_value.SetToolTip("Enter a mana value (converted mana cost) to filter by")
         self.mv_value = mv_value
         mv_value.Bind(wx.EVT_TEXT, self._on_filters_changed)
-        mv_row.Add(mv_value, 1, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, PADDING_SM)
+        mv_row.Add(mv_value, 1, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, SPACE_XS)
         mv_choice = wx.Choice(pwin, choices=["-", "<", "≤", "=", "≥", ">"])
         mv_choice.SetSelection(0)
         stylize_choice(mv_choice)
@@ -116,7 +115,7 @@ class AdvancedFiltersBuilderMixin(_Base):
         self.mv_comparator = mv_choice
         mv_choice.Bind(wx.EVT_CHOICE, self._on_filters_changed)
         mv_row.Add(mv_choice, 0, wx.ALIGN_CENTER_VERTICAL)
-        adv_sizer.Add(mv_row, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_SM)
+        adv_sizer.Add(mv_row, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, SPACE_XS)
 
     def _build_color_and_format_filters(self, pwin: wx.Panel, adv_sizer: wx.Sizer) -> None:
         # Color Identity Filter + Format (side by side)
@@ -125,8 +124,8 @@ class AdvancedFiltersBuilderMixin(_Base):
         # Left: color identity label + controls
         color_col = wx.BoxSizer(wx.VERTICAL)
         color_label = wx.StaticText(pwin, label=self._t("builder.filter.color_identity"))
-        stylize_label(color_label, True)
-        color_col.Add(color_label, 0, wx.ALIGN_CENTER_HORIZONTAL | wx.BOTTOM, PADDING_XS)
+        stylize_label(color_label, subtle=True, level="body")
+        color_col.Add(color_label, 0, wx.ALIGN_CENTER_HORIZONTAL | wx.BOTTOM, SPACE_XS)
         color_controls = wx.BoxSizer(wx.HORIZONTAL)
         color_mode = wx.Choice(pwin, choices=["-", "≥", "=", "≠"])
         color_mode.SetSelection(0)
@@ -134,7 +133,7 @@ class AdvancedFiltersBuilderMixin(_Base):
         color_mode.SetToolTip("≥ includes, = exactly, ≠ excludes the selected colors")
         self.color_mode_choice = color_mode
         color_mode.Bind(wx.EVT_CHOICE, self._on_filters_changed)
-        color_controls.Add(color_mode, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, PADDING_SM)
+        color_controls.Add(color_mode, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, SPACE_XS)
         _color_names = {
             "W": "White",
             "U": "Blue",
@@ -181,16 +180,16 @@ class AdvancedFiltersBuilderMixin(_Base):
                 wx.EVT_LEAVE_WINDOW,
                 lambda evt, b=_btn_ref: (b.SetBackgroundColour(DARK_ALT), b.Refresh(), evt.Skip()),
             )
-            color_controls.Add(btn, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, PADDING_XS)
+            color_controls.Add(btn, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, SPACE_XS)
             self.color_checks[code] = btn
         color_col.Add(color_controls, 0)
-        color_format_row.Add(color_col, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, PADDING_MD)
+        color_format_row.Add(color_col, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, SPACE_SM)
 
         # Right: format label + choice
         format_col = wx.BoxSizer(wx.VERTICAL)
         format_label = wx.StaticText(pwin, label=self._t("builder.filter.format"))
-        stylize_label(format_label, True)
-        format_col.Add(format_label, 0, wx.ALIGN_CENTER_HORIZONTAL | wx.BOTTOM, PADDING_XS)
+        stylize_label(format_label, subtle=True, level="body")
+        format_col.Add(format_label, 0, wx.ALIGN_CENTER_HORIZONTAL | wx.BOTTOM, SPACE_XS)
         format_choice = wx.Choice(
             pwin, choices=[self._t("builder.format.any")] + list(FORMAT_OPTIONS)
         )
@@ -202,4 +201,4 @@ class AdvancedFiltersBuilderMixin(_Base):
         format_col.Add(format_choice, 0, wx.ALIGN_CENTER_HORIZONTAL)
         color_format_row.Add(format_col, 0, wx.ALIGN_CENTER_VERTICAL)
 
-        adv_sizer.Add(color_format_row, 0, wx.ALIGN_CENTER_HORIZONTAL | wx.BOTTOM, PADDING_SM)
+        adv_sizer.Add(color_format_row, 0, wx.ALIGN_CENTER_HORIZONTAL | wx.BOTTOM, SPACE_XS)

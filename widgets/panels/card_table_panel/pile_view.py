@@ -54,7 +54,7 @@ from widgets.panels.card_table_panel.sorting import (
     PILE_SORT_MV,
     group_into_piles,
 )
-from widgets.stylize import stylize_scrollable
+from widgets.stylize import stylize_scrollable, type_font
 
 # Match the grid view's card size and inter-card gap so the two views feel
 # visually consistent.
@@ -584,7 +584,7 @@ class DeckPileView(wx.ScrolledWindow):
         dc.SetPen(wx.Pen(wx.Colour(*DARK_BG), 1))
         dc.DrawRoundedRectangle(rect.x, rect.y, rect.width, rect.height, DECK_CARD_CORNER_RADIUS)
         dc.SetTextForeground(wx.Colour(*LIGHT_TEXT))
-        dc.SetFont(wx.Font(9, wx.FONTFAMILY_SWISS, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
+        dc.SetFont(type_font("caption", bold=True))
         text = self._fit_text(dc, name, rect.width - 8)
         dc.DrawText(text, rect.x + 4, rect.y + 8)
 

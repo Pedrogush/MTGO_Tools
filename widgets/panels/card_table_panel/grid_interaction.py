@@ -24,7 +24,6 @@ import wx
 
 from utils.constants import (
     DECK_CARD_BADGE_PADDING,
-    DECK_CARD_BASE_FONT_SIZE,
     LIGHT_TEXT,
     SELECTION_BORDER,
 )
@@ -36,6 +35,7 @@ from widgets.panels.card_table_panel.grid_layout import (
 )
 from widgets.panels.card_table_panel.marquee import RUBBER_AUTOSCROLL_PX
 from widgets.panels.card_table_panel.scrolling import scroll_by_wheel
+from widgets.stylize import type_font
 
 
 class GridInteractionMixin:
@@ -284,14 +284,7 @@ class GridInteractionMixin:
             dc.DrawBitmap(self._template_for(name), rect.x, rect.y, True)
         if len(self._drag_names) > 1:
             badge = f"×{len(self._drag_names)}"
-            dc.SetFont(
-                wx.Font(
-                    DECK_CARD_BASE_FONT_SIZE,
-                    wx.FONTFAMILY_SWISS,
-                    wx.FONTSTYLE_NORMAL,
-                    wx.FONTWEIGHT_BOLD,
-                )
-            )
+            dc.SetFont(type_font("body", bold=True))
             tw, th = dc.GetTextExtent(badge)
             pad = DECK_CARD_BADGE_PADDING
             bx = rect.x + rect.width - tw - pad * 3

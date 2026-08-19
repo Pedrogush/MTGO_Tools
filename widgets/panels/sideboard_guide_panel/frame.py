@@ -17,7 +17,7 @@ from utils.constants.ui_layout import (
     GUIDE_COL_ARCHETYPE_WIDTH,
     GUIDE_COL_CARDS_WIDTH,
     GUIDE_COL_NOTES_WIDTH,
-    PADDING_MD,
+    SPACE_SM,
 )
 from widgets.panels.sideboard_guide_panel.handlers import SideboardGuidePanelHandlersMixin
 from widgets.panels.sideboard_guide_panel.properties import SideboardGuidePanelPropertiesMixin
@@ -83,7 +83,7 @@ class SideboardGuidePanel(
         self.guide_view.SetForegroundColour(LIGHT_TEXT)
         # After the columns, so the native header child exists to be themed.
         stylize_scrollable(self.guide_view)
-        sizer.Add(self.guide_view, 1, wx.EXPAND | wx.ALL, PADDING_MD)
+        sizer.Add(self.guide_view, 1, wx.EXPAND | wx.ALL, SPACE_SM)
 
         # Empty state panel (shown when there are no entries)
         self.empty_state_panel = wx.Panel(self)
@@ -97,35 +97,35 @@ class SideboardGuidePanel(
             style=wx.ALIGN_CENTRE_HORIZONTAL,
         )
         empty_label.SetForegroundColour(SUBDUED_TEXT)
-        empty_sizer.Add(empty_label, 0, wx.ALIGN_CENTER | wx.ALL, PADDING_MD)
+        empty_sizer.Add(empty_label, 0, wx.ALIGN_CENTER | wx.ALL, SPACE_SM)
         self.empty_cta_btn = wx.Button(self.empty_state_panel, label=self._t("guide.btn.cta"))
         stylize_button(self.empty_cta_btn, kind="primary")
         self.empty_cta_btn.Bind(wx.EVT_BUTTON, self._on_add_clicked)
-        empty_sizer.Add(self.empty_cta_btn, 0, wx.ALIGN_CENTER | wx.ALL, PADDING_MD)
+        empty_sizer.Add(self.empty_cta_btn, 0, wx.ALIGN_CENTER | wx.ALL, SPACE_SM)
         # Recording is most useful when starting from an empty guide, so surface
         # it in the empty state too (the button row is hidden there).
         self.empty_record_btn = wx.Button(self.empty_state_panel, label=self._t("guide.btn.record"))
         stylize_button(self.empty_record_btn, kind="secondary")
         self.empty_record_btn.SetToolTip(self._t("guide.tooltip.record"))
         self.empty_record_btn.Bind(wx.EVT_BUTTON, self._on_record_clicked)
-        empty_sizer.Add(self.empty_record_btn, 0, wx.ALIGN_CENTER | wx.ALL, PADDING_MD)
+        empty_sizer.Add(self.empty_record_btn, 0, wx.ALIGN_CENTER | wx.ALL, SPACE_SM)
         if self.on_record_guide is None:
             self.empty_record_btn.Disable()
         empty_sizer.AddStretchSpacer(1)
         self.empty_state_panel.Hide()
-        sizer.Add(self.empty_state_panel, 1, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_MD)
+        sizer.Add(self.empty_state_panel, 1, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, SPACE_SM)
 
         # Button row (hidden in empty state)
         self.button_row = wx.Panel(self)
         self.button_row.SetBackgroundColour(DARK_PANEL)
         buttons = wx.BoxSizer(wx.HORIZONTAL)
         self.button_row.SetSizer(buttons)
-        sizer.Add(self.button_row, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_MD)
+        sizer.Add(self.button_row, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, SPACE_SM)
 
         self.add_btn = wx.Button(self.button_row, label=self._t("guide.btn.add"))
         stylize_button(self.add_btn, kind="primary")
         self.add_btn.Bind(wx.EVT_BUTTON, self._on_add_clicked)
-        buttons.Add(self.add_btn, 0, wx.RIGHT, PADDING_MD)
+        buttons.Add(self.add_btn, 0, wx.RIGHT, SPACE_SM)
 
         self.record_btn = wx.Button(self.button_row, label=self._t("guide.btn.record"))
         stylize_button(self.record_btn, kind="secondary")
@@ -133,34 +133,34 @@ class SideboardGuidePanel(
         self.record_btn.Bind(wx.EVT_BUTTON, self._on_record_clicked)
         if self.on_record_guide is None:
             self.record_btn.Disable()
-        buttons.Add(self.record_btn, 0, wx.RIGHT, PADDING_MD)
+        buttons.Add(self.record_btn, 0, wx.RIGHT, SPACE_SM)
 
         self.edit_btn = wx.Button(self.button_row, label=self._t("guide.btn.edit"))
         stylize_button(self.edit_btn, kind="secondary")
         self.edit_btn.Bind(wx.EVT_BUTTON, self._on_edit_clicked)
-        buttons.Add(self.edit_btn, 0, wx.RIGHT, PADDING_MD)
+        buttons.Add(self.edit_btn, 0, wx.RIGHT, SPACE_SM)
 
         self.remove_btn = wx.Button(self.button_row, label=self._t("guide.btn.delete"))
         # The one destructive control in the row; it was indistinguishable from
         # "Export" before.
         stylize_button(self.remove_btn, kind="danger")
         self.remove_btn.Bind(wx.EVT_BUTTON, self._on_remove_clicked)
-        buttons.Add(self.remove_btn, 0, wx.RIGHT, PADDING_MD)
+        buttons.Add(self.remove_btn, 0, wx.RIGHT, SPACE_SM)
 
         self.exclusions_btn = wx.Button(self.button_row, label=self._t("guide.btn.exclusions"))
         stylize_button(self.exclusions_btn, kind="secondary")
         self.exclusions_btn.Bind(wx.EVT_BUTTON, self._on_exclusions_clicked)
-        buttons.Add(self.exclusions_btn, 0, wx.RIGHT, PADDING_MD)
+        buttons.Add(self.exclusions_btn, 0, wx.RIGHT, SPACE_SM)
 
         self.export_btn = wx.Button(self.button_row, label=self._t("guide.btn.export"))
         stylize_button(self.export_btn, kind="secondary")
         self.export_btn.Bind(wx.EVT_BUTTON, self._on_export_clicked)
-        buttons.Add(self.export_btn, 0, wx.RIGHT, PADDING_MD)
+        buttons.Add(self.export_btn, 0, wx.RIGHT, SPACE_SM)
 
         self.import_btn = wx.Button(self.button_row, label=self._t("guide.btn.import"))
         stylize_button(self.import_btn, kind="secondary")
         self.import_btn.Bind(wx.EVT_BUTTON, self._on_import_clicked)
-        buttons.Add(self.import_btn, 0, wx.RIGHT, PADDING_MD)
+        buttons.Add(self.import_btn, 0, wx.RIGHT, SPACE_SM)
 
         self.flex_slots_btn = wx.Button(self.button_row, label=self._t("guide.btn.flex_slots"))
         stylize_button(self.flex_slots_btn, kind="success")
@@ -168,7 +168,7 @@ class SideboardGuidePanel(
         self.flex_slots_btn.Bind(wx.EVT_BUTTON, self._on_flex_slots_clicked)
         if self.on_edit_flex_slots is None:
             self.flex_slots_btn.Disable()
-        buttons.Add(self.flex_slots_btn, 0, wx.RIGHT, PADDING_MD)
+        buttons.Add(self.flex_slots_btn, 0, wx.RIGHT, SPACE_SM)
 
         buttons.AddStretchSpacer(1)
 
@@ -189,10 +189,10 @@ class SideboardGuidePanel(
             self, label=f"{self._t('guide.label.exclusions')}: \u2014"
         )
         self.exclusions_label.SetForegroundColour(SUBDUED_TEXT)
-        sizer.Add(self.exclusions_label, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_MD)
+        sizer.Add(self.exclusions_label, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, SPACE_SM)
 
         # Warning label (hidden by default)
         self.warning_label = wx.StaticText(self, label="")
         self.warning_label.SetForegroundColour(wx.Colour(*WARNING_LABEL_COLOR))
         self.warning_label.Hide()
-        sizer.Add(self.warning_label, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_MD)
+        sizer.Add(self.warning_label, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, SPACE_SM)

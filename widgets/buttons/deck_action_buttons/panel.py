@@ -8,6 +8,7 @@ from collections.abc import Callable
 
 import wx
 
+from utils.constants import SPACE_MD, SPACE_SM
 from widgets.buttons.deck_action_buttons.handlers import DeckActionButtonsHandlersMixin
 from widgets.buttons.deck_action_buttons.properties import DeckActionButtonsPropertiesMixin
 from widgets.stylize import stylize_button
@@ -39,9 +40,14 @@ class DeckActionButtons(DeckActionButtonsHandlersMixin, DeckActionButtonsPropert
         col_sizer = wx.BoxSizer(wx.VERTICAL)
         self.SetSizer(col_sizer)
 
-        # Row 1: Load Deck | Save Deck
+        # S3. These two rows are two different action groups -- deck file I/O
+        # above, derived-data actions below -- and they used to sit 2px apart
+        # while the buttons *within* each row sat 4px apart. A gap that is
+        # smaller between groups than within them is proximity working against
+        # the grouping, which is why the four read as one block. The row gap is
+        # now 2x the intra-row gap.
         row1 = wx.BoxSizer(wx.HORIZONTAL)
-        col_sizer.Add(row1, 0, wx.EXPAND | wx.BOTTOM, 4)
+        col_sizer.Add(row1, 0, wx.EXPAND | wx.BOTTOM, SPACE_MD)
 
         self.load_button = wx.Button(self, label=self._labels.get("load_deck", "Load Deck"))
         # The one primary action of the deck-results section: everything else here
@@ -50,7 +56,7 @@ class DeckActionButtons(DeckActionButtonsHandlersMixin, DeckActionButtonsPropert
         if tip := self._labels.get("load_deck_tooltip"):
             self.load_button.SetToolTip(tip)
         self.load_button.Bind(wx.EVT_BUTTON, self._on_load_clicked)
-        row1.Add(self.load_button, 1, wx.RIGHT, 6)
+        row1.Add(self.load_button, 1, wx.RIGHT, SPACE_SM)
 
         self.save_button = wx.Button(self, label=self._labels.get("save_deck", "Save Deck"))
         stylize_button(self.save_button, kind="secondary")
@@ -72,7 +78,7 @@ class DeckActionButtons(DeckActionButtonsHandlersMixin, DeckActionButtonsPropert
             self.daily_average_button.SetToolTip(tip)
         self.daily_average_button.Disable()
         self.daily_average_button.Bind(wx.EVT_BUTTON, self._on_daily_average_clicked)
-        row2.Add(self.daily_average_button, 1, wx.RIGHT, 6)
+        row2.Add(self.daily_average_button, 1, wx.RIGHT, SPACE_SM)
 
         self.copy_button = wx.Button(self, label=self._labels.get("copy", "Copy"))
         stylize_button(self.copy_button, kind="secondary")

@@ -13,7 +13,10 @@ so that phase 0 can land without moving a single pixel:
 * ``stylize_label(label)`` / ``stylize_label(label, True)`` behave exactly as
   before, including the blanket bold. Passing ``level=`` switches the label onto
   the type scale, where **only headings are bold** — that is the fix for the root
-  cause that bold currently marks nothing (29 ``MakeBold`` sites app-wide).
+  cause that bold marked nothing. Phase 3 audited the explicit sites: 21 of them
+  in 18 files at the time (not the 31/21 the plan carried -- phase 2 had already
+  deleted four copy-pasted local ``_stylize_button`` helpers), and 19 are gone.
+  The two that remain are mana-glyph rasterisation, not text hierarchy.
 * ``stylize_button(button)`` still paints the saturated accent fill; ``kind=``
   selects secondary / ghost / danger / success variants.
 * ``stylize_choice`` now themes the dropdown dark (phase 1, finding C1). See the
@@ -73,6 +76,31 @@ scrollbars           not reachable from wx at all; dark process-wide via
 
 Anything marked "via Windows' own dark mode" goes through
 :mod:`widgets.native_dark`, which is enabled once at startup.
+
+What wxMSW does with **fonts and sizes** (measured in phase 3)
+--------------------------------------------------------------
+* A child inherits its parent's font **at construction time only**, at every
+  depth and across every widget class the app uses -- ``StaticText``,
+  ``Button``, ``TextCtrl``, ``Choice``, ``CheckBox``, ``ListCtrl``,
+  ``SpinCtrl``, ``StaticBox``, ``ListBox`` all reported the parent's 10pt.
+* A widget that already exists when its parent's font changes keeps the old
+  size, **and so does a widget created afterwards** if there is an intermediate
+  panel: the panel captured its own font at *its* construction, and new children
+  inherit the panel, not the frame. So the call really does have to be the first
+  thing after ``super().__init__()``, not merely "before the widget you care
+  about".
+* **Top-level windows never inherit.** ``wx.Frame``, ``wx.Dialog`` and
+  ``wx.MiniFrame`` constructed with a 10pt parent all reported the 9pt system
+  default. Hence one :func:`apply_base_font` per top-level window (18 of them).
+* ``wx.Button.GetBestSize()`` has a **hard floor of 75x23 at 9pt and 75x25 at
+  10pt, whatever the label** -- it is the Win32 default button size, not a
+  text measurement. Any button given an explicit size under that reports a
+  best-size deficit even when its label fits comfortably, so "best size >
+  current size" is necessary but not sufficient evidence of clipping on a
+  button; look at the pixels too. Button chrome around a label measures ~24px
+  horizontally, which is the number to size a labelled button by.
+* Text the app paints itself with ``dc.SetFont()`` is invisible to font
+  inheritance. :func:`type_font` exists for exactly those surfaces.
 """
 
 from __future__ import annotations
@@ -268,6 +296,33 @@ def apply_base_font(window: wx.Window) -> None:
     window.SetFont(theme_font())
 
 
+def type_font(
+    level: str = "body",
+    *,
+    base: wx.Font | None = None,
+    bold: bool | None = None,
+) -> wx.Font:
+    """A ``wx.Font`` at ``level`` on the type scale, for **own-drawn** text.
+
+    Font inheritance reaches every real widget, but it cannot reach text a
+    control paints itself with ``dc.SetFont()`` — the deck rows, the card grid,
+    the pile view. Those used to hard-code point sizes (9, 10, 11), which is why
+    the own-drawn surfaces were the only places in the app whose type did not
+    move when the base font did. They call this instead.
+
+    :param base: the face to derive from; defaults to the app's UI face.
+    :param bold: override the level's default weight. Glyph runs (``+``/``-``/
+        ``x`` chips) set this ``True`` because bold is buying legibility at 10pt
+        on top of card art, not marking a heading.
+    """
+    font = wx.Font(base) if base is not None else theme_font()
+    font.SetPointSize(font_point_size(base_point_size(), level))
+    if bold is None:
+        bold = level in TYPE_BOLD_LEVELS
+    font.SetWeight(wx.FONTWEIGHT_BOLD if bold else wx.FONTWEIGHT_NORMAL)
+    return font
+
+
 def apply_type_level(window: wx.Window, level: str, *, base_pt: int | None = None) -> None:
     """Put ``window``'s font on the type scale at ``level``.
 
@@ -337,21 +392,27 @@ def stylize_textctrl(
     multiline: bool = False,
     *,
     placeholder: str | None = None,
+    level: str | None = None,
 ) -> None:
     """Theme a text input.
 
-    :param multiline: legacy switch that bumps the point size by 1. Retained for
-        the one call site that uses it; phase 3 replaces it with ``level=``.
+    :param multiline: legacy switch that bumped the point size by 1 -- an
+        off-ladder step of 1.11x, below the perceptual floor. Superseded by
+        ``level=``; kept only so a caller that passes it does not change size.
+    :param level: type-scale level for the field's text.
     :param placeholder: sets the native hint text. The colour token is
         ``TEXT_PLACEHOLDER``; on wxMSW the native hint ignores it, which is why
         ``stylize_placeholder_label`` exists for the drawn-label idiom.
     """
     ctrl.SetBackgroundColour(_colour(SURFACE_ALT))
     ctrl.SetForegroundColour(_colour(TEXT_PRIMARY))
-    font = ctrl.GetFont()
-    if multiline:
-        font.SetPointSize(font.GetPointSize() + 1)
-    ctrl.SetFont(font)
+    if level is not None:
+        apply_type_level(ctrl, level)
+    else:
+        font = ctrl.GetFont()
+        if multiline:
+            font.SetPointSize(font.GetPointSize() + 1)
+        ctrl.SetFont(font)
     if placeholder is not None:
         ctrl.SetHint(placeholder)
 

@@ -7,12 +7,13 @@ from typing import TYPE_CHECKING
 import wx
 import wx.html
 
-from utils.constants import DARK_PANEL, LIGHT_TEXT, PADDING_SM
+from utils.constants import DARK_PANEL, LIGHT_TEXT, SPACE_XS
 
 if TYPE_CHECKING:
     from services.comp_rules_service import CompRulesService, Section, Subsection
 from utils.i18n import translate
 from widgets.frames.rules_browser.html_render import render_outline_to_html
+from widgets.stylize import apply_base_font
 
 
 class RulesBrowserFrame(wx.Frame):
@@ -37,6 +38,7 @@ class RulesBrowserFrame(wx.Frame):
             size=(900, 720),
             style=wx.DEFAULT_FRAME_STYLE,
         )
+        apply_base_font(self)
         self._locale = locale
         self.controller = controller
         self._service: CompRulesService = controller.comp_rules_service
@@ -68,7 +70,7 @@ class RulesBrowserFrame(wx.Frame):
             style=wx.html.HW_SCROLLBAR_AUTO | wx.NO_BORDER,
         )
         self.doc.SetBackgroundColour(DARK_PANEL)
-        self.doc.SetBorders(PADDING_SM)
+        self.doc.SetBorders(SPACE_XS)
 
         self.splitter.SplitVertically(self.tree, self.doc, sashPosition=300)
         self.splitter.SetMinimumPaneSize(180)

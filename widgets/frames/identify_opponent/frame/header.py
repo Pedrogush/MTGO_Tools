@@ -11,7 +11,7 @@ from utils.constants import (
     OPPONENT_TRACKER_SECTION_PADDING,
     SUBDUED_TEXT,
 )
-from widgets.stylize import stylize_button
+from widgets.stylize import apply_type_level, stylize_button
 
 
 class HeaderBuilderMixin:
@@ -26,27 +26,24 @@ class HeaderBuilderMixin:
     load_arch_btn: wx.Button
 
     def _stylize_label(
-        self, label: wx.StaticText, *, bold: bool = False, subtle: bool = False
+        self, label: wx.StaticText, *, level: str = "body", subtle: bool = False
     ) -> None:
         label.SetForegroundColour(SUBDUED_TEXT if subtle else LIGHT_TEXT)
         label.SetBackgroundColour(DARK_BG)
-        font = label.GetFont()
-        if bold:
-            font.MakeBold()
-            font.SetPointSize(font.GetPointSize() + 1)
-        label.SetFont(font)
+        apply_type_level(label, level)
 
     def _stylize_secondary_button(self, button: wx.Button) -> None:
         stylize_button(button, kind="secondary")
 
     def _build_header(self, panel: wx.Panel, outer_sizer: wx.Sizer) -> None:
         self.deck_label = wx.StaticText(panel, label=self._t("tracker.label.not_detected"))
-        self._stylize_label(self.deck_label)
+        # The opponent's deck is this window's headline.
+        self._stylize_label(self.deck_label, level="heading")
         self.deck_label.Wrap(OPPONENT_TRACKER_LABEL_WRAP_WIDTH)
         outer_sizer.Add(self.deck_label, 0, wx.ALL | wx.EXPAND, OPPONENT_TRACKER_SECTION_PADDING)
 
         self.status_label = wx.StaticText(panel, label=self._t("tracker.label.watching"))
-        self._stylize_label(self.status_label, subtle=True)
+        self._stylize_label(self.status_label, level="caption", subtle=True)
         self.status_label.Wrap(OPPONENT_TRACKER_LABEL_WRAP_WIDTH)
         outer_sizer.Add(
             self.status_label,

@@ -8,6 +8,7 @@ from collections.abc import Callable
 
 import wx
 
+from utils.constants import SPACE_SM, SPACE_XS
 from widgets.stylize import stylize_button
 
 
@@ -65,7 +66,7 @@ class ToolbarButtons(wx.Panel):
         )
 
         self._button_row.AddStretchSpacer(1)
-        self._add_divider(gap=10)
+        self._add_divider(gap=SPACE_SM)
         self.settings_button = wx.Button(self, label=labels.get("settings", "\u2699"))
         stylize_button(self.settings_button, kind="ghost")
         self.settings_button.SetToolTip(labels.get("settings_tooltip", "Settings"))
@@ -85,7 +86,7 @@ class ToolbarButtons(wx.Panel):
         label: str,
         handler: Callable[[], None] | None,
         *,
-        margin: int = 6,
+        margin: int = SPACE_XS,
         tooltip: str = "",
     ) -> wx.Button:
         button = wx.Button(self, label=label)
@@ -102,10 +103,10 @@ class ToolbarButtons(wx.Panel):
         self._button_row.Add(button, 0, wx.RIGHT, margin)
         return button
 
-    def _add_divider(self, gap: int = 8) -> None:
+    def _add_divider(self, gap: int = SPACE_SM) -> None:
         self._button_row.AddSpacer(gap)
         line = wx.StaticLine(self, style=wx.LI_VERTICAL)
-        self._button_row.Add(line, 0, wx.EXPAND | wx.TOP | wx.BOTTOM, 4)
+        self._button_row.Add(line, 0, wx.EXPAND | wx.TOP | wx.BOTTOM, SPACE_XS)
         self._button_row.AddSpacer(gap)
 
 

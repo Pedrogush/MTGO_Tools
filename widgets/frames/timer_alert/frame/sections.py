@@ -8,10 +8,9 @@ from utils.constants import (
     DARK_ALT,
     DARK_PANEL,
     LIGHT_TEXT,
-    PADDING_BASE,
-    PADDING_MD,
-    PADDING_SM,
-    PADDING_XL,
+    SPACE_MD,
+    SPACE_SM,
+    SPACE_XS,
     SUBDUED_TEXT,
     TIMER_ALERT_CHALLENGE_WRAP_WIDTH,
     TIMER_ALERT_POLL_INTERVAL_MAX_MS,
@@ -56,7 +55,7 @@ class SectionsBuilderMixin:
             box_parent, label="Enter time in MM:SS format (e.g., 05:00 for 5 minutes)"
         )
         instructions.SetForegroundColour(SUBDUED_TEXT)
-        threshold_sizer.Add(instructions, 0, wx.ALL, PADDING_SM)
+        threshold_sizer.Add(instructions, 0, wx.ALL, SPACE_XS)
 
         # Scrollable threshold container
         self.threshold_container = wx.ScrolledWindow(box_parent, style=wx.VSCROLL)
@@ -64,19 +63,19 @@ class SectionsBuilderMixin:
         self.threshold_container.SetScrollRate(0, TIMER_ALERT_SCROLL_RATE_Y)
         self.threshold_container_sizer = wx.BoxSizer(wx.VERTICAL)
         self.threshold_container.SetSizer(self.threshold_container_sizer)
-        threshold_sizer.Add(self.threshold_container, 1, wx.EXPAND | wx.ALL, PADDING_SM)
+        threshold_sizer.Add(self.threshold_container, 1, wx.EXPAND | wx.ALL, SPACE_XS)
 
         self._add_threshold_panel()
 
         add_btn = wx.Button(box_parent, label="+ Add Another Threshold")
         self._stylize_secondary_button(add_btn)
         add_btn.Bind(wx.EVT_BUTTON, lambda _evt: self._add_threshold_panel())
-        threshold_sizer.Add(add_btn, 0, wx.ALL, PADDING_SM)
+        threshold_sizer.Add(add_btn, 0, wx.ALL, SPACE_XS)
 
-        sizer.Add(threshold_sizer, 1, wx.ALL | wx.EXPAND, PADDING_XL)
+        sizer.Add(threshold_sizer, 1, wx.ALL | wx.EXPAND, SPACE_MD)
 
     def _build_options_section(self, panel: wx.Panel, sizer: wx.Sizer) -> None:
-        options_grid = wx.FlexGridSizer(cols=2, hgap=PADDING_BASE, vgap=PADDING_BASE)
+        options_grid = wx.FlexGridSizer(cols=2, hgap=SPACE_SM, vgap=SPACE_SM)
         options_grid.AddGrowableCol(1, 1)
 
         options_grid.Add(
@@ -115,32 +114,32 @@ class SectionsBuilderMixin:
         self._stylize_spin(self.repeat_interval_ctrl)
         options_grid.Add(self.repeat_interval_ctrl, 0, wx.EXPAND)
 
-        sizer.Add(options_grid, 0, wx.LEFT | wx.RIGHT | wx.EXPAND, PADDING_XL)
+        sizer.Add(options_grid, 0, wx.LEFT | wx.RIGHT | wx.EXPAND, SPACE_MD)
 
         # Checkboxes
         self.start_alert_checkbox = DarkCheckBox(panel, label=self._t("timer.check.start_alert"))
         self.start_alert_checkbox.SetValue(True)
         self._stylize_checkbox(self.start_alert_checkbox)
-        sizer.Add(self.start_alert_checkbox, 0, wx.LEFT | wx.RIGHT | wx.TOP, PADDING_XL)
+        sizer.Add(self.start_alert_checkbox, 0, wx.LEFT | wx.RIGHT | wx.TOP, SPACE_MD)
 
         self.repeat_alarm_checkbox = DarkCheckBox(panel, label=self._t("timer.check.repeat_alarm"))
         self.repeat_alarm_checkbox.SetValue(False)
         self._stylize_checkbox(self.repeat_alarm_checkbox)
-        sizer.Add(self.repeat_alarm_checkbox, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_XL)
+        sizer.Add(self.repeat_alarm_checkbox, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, SPACE_MD)
 
         # Control buttons
         button_row = wx.BoxSizer(wx.HORIZONTAL)
-        sizer.Add(button_row, 0, wx.ALL | wx.EXPAND, PADDING_XL)
+        sizer.Add(button_row, 0, wx.ALL | wx.EXPAND, SPACE_MD)
 
         start_btn = wx.Button(panel, label=self._t("timer.btn.start"))
         self._stylize_primary_button(start_btn)
         start_btn.Bind(wx.EVT_BUTTON, lambda _evt: self.start_monitoring())
-        button_row.Add(start_btn, 0, wx.RIGHT, PADDING_MD)
+        button_row.Add(start_btn, 0, wx.RIGHT, SPACE_SM)
 
         stop_btn = wx.Button(panel, label=self._t("timer.btn.stop"))
         self._stylize_secondary_button(stop_btn)
         stop_btn.Bind(wx.EVT_BUTTON, lambda _evt: self.stop_monitoring())
-        button_row.Add(stop_btn, 0, wx.RIGHT, PADDING_MD)
+        button_row.Add(stop_btn, 0, wx.RIGHT, SPACE_SM)
 
         test_btn = wx.Button(panel, label=self._t("timer.btn.test"))
         self._stylize_secondary_button(test_btn)
@@ -156,7 +155,7 @@ class SectionsBuilderMixin:
         self.status_text.SetMinSize((-1, TIMER_ALERT_STATUS_MIN_HEIGHT))
         self.status_text.SetBackgroundColour(DARK_ALT)
         self.status_text.SetForegroundColour(LIGHT_TEXT)
-        sizer.Add(self.status_text, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, PADDING_XL)
+        sizer.Add(self.status_text, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, SPACE_MD)
 
         # Challenge timer display
         challenge_box = wx.StaticBox(panel, label=self._t("timer.section.challenge"))
@@ -167,5 +166,5 @@ class SectionsBuilderMixin:
         self.challenge_text.SetForegroundColour(LIGHT_TEXT)
         self.challenge_text.SetBackgroundColour(DARK_PANEL)
         self.challenge_text.Wrap(TIMER_ALERT_CHALLENGE_WRAP_WIDTH)
-        challenge_sizer.Add(self.challenge_text, 0, wx.ALL | wx.EXPAND, PADDING_BASE)
-        sizer.Add(challenge_sizer, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, PADDING_XL)
+        challenge_sizer.Add(self.challenge_text, 0, wx.ALL | wx.EXPAND, SPACE_SM)
+        sizer.Add(challenge_sizer, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, SPACE_MD)

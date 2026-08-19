@@ -33,7 +33,7 @@ from utils.constants import (
     DARK_PANEL,
     LIGHT_TEXT,
 )
-from widgets.stylize import stylize_button, stylize_spinctrl
+from widgets.stylize import apply_type_level, stylize_button, stylize_spinctrl
 
 
 class CalculatorPanelBuilderMixin:
@@ -61,9 +61,7 @@ class CalculatorPanelBuilderMixin:
         # Title
         title = wx.StaticText(self.calc_panel, label="Hypergeometric Calculator")
         title.SetForegroundColour(LIGHT_TEXT)
-        title_font = title.GetFont()
-        title_font.MakeBold()
-        title.SetFont(title_font)
+        apply_type_level(title, "heading")
         calc_sizer.Add(title, 0, wx.ALL, CALC_SECTION_PADDING)
 
         self._build_calculator_inputs(calc_sizer)

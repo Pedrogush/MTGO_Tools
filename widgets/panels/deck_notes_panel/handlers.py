@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 import wx
 from loguru import logger
 
+from utils.constants import SPACE_XS
 from widgets.wx_layout import relayout
 
 if TYPE_CHECKING:
@@ -66,7 +67,7 @@ class DeckNotesPanelHandlersMixin(_Base):
         for card in self._cards:
             widget = self._make_card_widget(card)
             self._card_widgets.append(widget)
-            self.cards_sizer.Add(widget, 0, wx.EXPAND | wx.ALL, 4)
+            self.cards_sizer.Add(widget, 0, wx.EXPAND | wx.ALL, SPACE_XS)
 
         has_cards = bool(self._cards)
         self.scroll_win.Show(has_cards)

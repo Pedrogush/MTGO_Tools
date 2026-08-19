@@ -7,11 +7,11 @@ from pathlib import Path
 
 import wx
 
-from utils.constants import DARK_BG, DARK_PANEL, LIGHT_TEXT, SUBDUED_TEXT
+from utils.constants import DARK_BG, DARK_PANEL, LIGHT_TEXT, SPACE_SM, SUBDUED_TEXT
 from widgets.checkbox import DarkCheckBox
 from widgets.dialogs.feedback_dialog.handlers import FeedbackDialogHandlersMixin
 from widgets.dialogs.feedback_dialog.properties import FeedbackDialogPropertiesMixin
-from widgets.stylize import stylize_checkbox
+from widgets.stylize import apply_base_font, apply_type_level, stylize_checkbox
 
 
 class FeedbackDialog(FeedbackDialogHandlersMixin, FeedbackDialogPropertiesMixin, wx.Dialog):
@@ -28,6 +28,7 @@ class FeedbackDialog(FeedbackDialogHandlersMixin, FeedbackDialogPropertiesMixin,
         event_logging_enabled: bool = False,
     ) -> None:
         super().__init__(parent, title="Export Diagnostics / Send Feedback", size=(480, 380))
+        apply_base_font(self)
         self.SetBackgroundColour(DARK_BG)
 
         self._logs_dir = logs_dir
@@ -46,10 +47,8 @@ class FeedbackDialog(FeedbackDialogHandlersMixin, FeedbackDialogPropertiesMixin,
         # Heading
         title = wx.StaticText(panel, label="Export Diagnostics")
         title.SetForegroundColour(LIGHT_TEXT)
-        font = title.GetFont()
-        font.PointSize += 2
-        title.SetFont(font.Bold())
-        sizer.Add(title, 0, wx.ALL, 10)
+        apply_type_level(title, "title")
+        sizer.Add(title, 0, wx.ALL, SPACE_SM)
 
         # Description
         desc = wx.StaticText(
@@ -61,12 +60,12 @@ class FeedbackDialog(FeedbackDialogHandlersMixin, FeedbackDialogPropertiesMixin,
         )
         desc.SetForegroundColour(SUBDUED_TEXT)
         desc.Wrap(440)
-        sizer.Add(desc, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
+        sizer.Add(desc, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, SPACE_SM)
 
         # Notes area
         notes_label = wx.StaticText(panel, label="Notes (optional):")
         notes_label.SetForegroundColour(LIGHT_TEXT)
-        sizer.Add(notes_label, 0, wx.LEFT | wx.RIGHT | wx.TOP, 10)
+        sizer.Add(notes_label, 0, wx.LEFT | wx.RIGHT | wx.TOP, SPACE_SM)
 
         self._notes_ctrl = wx.TextCtrl(
             panel,
@@ -75,7 +74,7 @@ class FeedbackDialog(FeedbackDialogHandlersMixin, FeedbackDialogPropertiesMixin,
         )
         self._notes_ctrl.SetBackgroundColour(DARK_PANEL)
         self._notes_ctrl.SetForegroundColour(LIGHT_TEXT)
-        sizer.Add(self._notes_ctrl, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
+        sizer.Add(self._notes_ctrl, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, SPACE_SM)
 
         # Opt-in event logging checkbox
         self._event_log_check = DarkCheckBox(
@@ -83,7 +82,7 @@ class FeedbackDialog(FeedbackDialogHandlersMixin, FeedbackDialogPropertiesMixin,
         )
         stylize_checkbox(self._event_log_check, surface="panel")
         self._event_log_check.SetValue(self._event_logging_enabled)
-        sizer.Add(self._event_log_check, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
+        sizer.Add(self._event_log_check, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, SPACE_SM)
 
         event_log_desc = wx.StaticText(
             panel,
@@ -91,18 +90,18 @@ class FeedbackDialog(FeedbackDialogHandlersMixin, FeedbackDialogPropertiesMixin,
         )
         event_log_desc.SetForegroundColour(SUBDUED_TEXT)
         event_log_desc.Wrap(440)
-        sizer.Add(event_log_desc, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
+        sizer.Add(event_log_desc, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, SPACE_SM)
 
         # Include events in export checkbox
         self._include_events_check = DarkCheckBox(panel, label="Include event log in export")
         stylize_checkbox(self._include_events_check, surface="panel")
         self._include_events_check.SetValue(True)
-        sizer.Add(self._include_events_check, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
+        sizer.Add(self._include_events_check, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, SPACE_SM)
 
         # Status label (shown during export)
         self._status_label = wx.StaticText(panel, label="")
         self._status_label.SetForegroundColour(SUBDUED_TEXT)
-        sizer.Add(self._status_label, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
+        sizer.Add(self._status_label, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, SPACE_SM)
 
         # Buttons
         sizer.AddStretchSpacer(1)
@@ -110,14 +109,14 @@ class FeedbackDialog(FeedbackDialogHandlersMixin, FeedbackDialogPropertiesMixin,
         btn_sizer.AddStretchSpacer(1)
 
         close_btn = wx.Button(panel, wx.ID_CANCEL, label="Close")
-        btn_sizer.Add(close_btn, 0, wx.RIGHT, 6)
+        btn_sizer.Add(close_btn, 0, wx.RIGHT, SPACE_SM)
 
         self._export_btn = wx.Button(panel, wx.ID_OK, label="Export to File…")
         self._export_btn.SetDefault()
         self._export_btn.Bind(wx.EVT_BUTTON, self._on_export)
         btn_sizer.Add(self._export_btn, 0)
 
-        sizer.Add(btn_sizer, 0, wx.EXPAND | wx.ALL, 10)
+        sizer.Add(btn_sizer, 0, wx.EXPAND | wx.ALL, SPACE_SM)
 
         panel.SetSizer(sizer)
 

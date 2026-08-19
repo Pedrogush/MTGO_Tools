@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 
 import wx
 
-from utils.constants import PADDING_MD
+from utils.constants import SPACE_SM
 from widgets.panels.deck_research_panel.frame.centered_choice import _CenteredChoice
 from widgets.panels.deck_research_panel.results_filter import PLACEMENT_FIELDS, PLACEMENT_OPERATORS
 from widgets.stylize import (
@@ -43,21 +43,21 @@ class FiltersBuilderMixin(_Base):
         # F2: a full-width saturated bar reads as a section header, not a switch.
         stylize_button(builder_btn, kind="secondary")
         builder_btn.Bind(wx.EVT_BUTTON, lambda _evt: self._on_switch_to_builder())  # type: ignore[misc]
-        sizer.Add(builder_btn, 0, wx.EXPAND | wx.ALL, PADDING_MD)
+        sizer.Add(builder_btn, 0, wx.EXPAND | wx.ALL, SPACE_SM)
 
         info_label = wx.StaticText(
             self,
             label=self._labels.get("info", "Deck research: search MTG decks by property"),
         )
-        stylize_label(info_label, subtle=True)
-        sizer.Add(info_label, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_MD)
+        stylize_label(info_label, subtle=True, level="body")
+        sizer.Add(info_label, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, SPACE_SM)
 
     def _build_format_archetype_row(self, sizer: wx.Sizer) -> None:
         format_arch_row = wx.BoxSizer(wx.HORIZONTAL)
 
         format_col = wx.BoxSizer(wx.VERTICAL)
         format_label = wx.StaticText(self, label=self._labels.get("format", "Format"))
-        stylize_label(format_label, subtle=True)
+        stylize_label(format_label, subtle=True, level="body")
         format_col.Add(format_label, 0)
 
         self.format_choice = wx.Choice(self, choices=self.format_options)
@@ -66,12 +66,12 @@ class FiltersBuilderMixin(_Base):
         if tip := self._labels.get("format_tooltip"):
             self.format_choice.SetToolTip(tip)
         self.format_choice.Bind(wx.EVT_CHOICE, lambda _evt: self._on_format_changed())
-        format_col.Add(self.format_choice, 0, wx.EXPAND | wx.TOP, PADDING_MD)
-        format_arch_row.Add(format_col, 1, wx.EXPAND | wx.RIGHT, PADDING_MD)
+        format_col.Add(self.format_choice, 0, wx.EXPAND | wx.TOP, SPACE_SM)
+        format_arch_row.Add(format_col, 1, wx.EXPAND | wx.RIGHT, SPACE_SM)
 
         archetype_col = wx.BoxSizer(wx.VERTICAL)
         archetype_label = wx.StaticText(self, label=self._labels.get("archetype", "Archetype"))
-        stylize_label(archetype_label, subtle=True)
+        stylize_label(archetype_label, subtle=True, level="body")
         archetype_col.Add(archetype_label, 0)
 
         self.archetype_combo = wx.ComboBox(self, style=wx.CB_READONLY)
@@ -79,10 +79,10 @@ class FiltersBuilderMixin(_Base):
         if tip := self._labels.get("archetypes_tooltip", ""):
             self.archetype_combo.SetToolTip(tip)
         self.archetype_combo.Bind(wx.EVT_COMBOBOX, lambda _evt: self._on_archetype_selected())
-        archetype_col.Add(self.archetype_combo, 0, wx.EXPAND | wx.TOP, PADDING_MD)
+        archetype_col.Add(self.archetype_combo, 0, wx.EXPAND | wx.TOP, SPACE_SM)
 
         format_arch_row.Add(archetype_col, 1, wx.EXPAND)
-        sizer.Add(format_arch_row, 0, wx.EXPAND | wx.ALL, PADDING_MD)
+        sizer.Add(format_arch_row, 0, wx.EXPAND | wx.ALL, SPACE_SM)
 
         self.archetype_list = self.archetype_combo
         self.archetype_dropdown = self.archetype_combo
@@ -91,12 +91,12 @@ class FiltersBuilderMixin(_Base):
     def _build_event_date_row(self, sizer: wx.Sizer) -> None:
         event_date_labels = wx.BoxSizer(wx.HORIZONTAL)
         event_label = wx.StaticText(self, label=self._labels.get("event", "Event"))
-        stylize_label(event_label, subtle=True)
+        stylize_label(event_label, subtle=True, level="body")
         date_label = wx.StaticText(self, label=self._labels.get("date", "Date"))
-        stylize_label(date_label, subtle=True)
-        event_date_labels.Add(event_label, 1, wx.RIGHT, PADDING_MD)
+        stylize_label(date_label, subtle=True, level="body")
+        event_date_labels.Add(event_label, 1, wx.RIGHT, SPACE_SM)
         event_date_labels.Add(date_label, 1)
-        sizer.Add(event_date_labels, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, PADDING_MD)
+        sizer.Add(event_date_labels, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, SPACE_SM)
 
         event_date_row = wx.BoxSizer(wx.HORIZONTAL)
         self.event_type_choice = wx.Choice(
@@ -110,7 +110,7 @@ class FiltersBuilderMixin(_Base):
                 wx.EVT_CHOICE,
                 lambda _evt: self._on_event_type_filter(),  # type: ignore[misc]
             )
-        event_date_row.Add(self.event_type_choice, 1, wx.EXPAND | wx.RIGHT, PADDING_MD)
+        event_date_row.Add(self.event_type_choice, 1, wx.EXPAND | wx.RIGHT, SPACE_SM)
 
         self.date_filter = wx.TextCtrl(self, style=wx.TE_PROCESS_ENTER)
         self.date_filter.SetHint(self._labels.get("date_hint", "YYYY-MM-DD"))
@@ -118,19 +118,19 @@ class FiltersBuilderMixin(_Base):
         if self._on_date_filter is not None:
             self.date_filter.Bind(wx.EVT_TEXT, lambda _evt: self._on_date_filter())  # type: ignore[misc]
         event_date_row.Add(self.date_filter, 1, wx.EXPAND)
-        sizer.Add(event_date_row, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_MD)
+        sizer.Add(event_date_row, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, SPACE_SM)
 
     def _build_placement_player_row(self, sizer: wx.Sizer) -> None:
         row3_labels = wx.BoxSizer(wx.HORIZONTAL)
         placement_label = wx.StaticText(self, label=self._labels.get("placement", "Placement"))
-        stylize_label(placement_label, subtle=True)
+        stylize_label(placement_label, subtle=True, level="body")
         player_name_label = wx.StaticText(
             self, label=self._labels.get("player_name", "Player name")
         )
-        stylize_label(player_name_label, subtle=True)
-        row3_labels.Add(placement_label, 1, wx.RIGHT, PADDING_MD)
+        stylize_label(player_name_label, subtle=True, level="body")
+        row3_labels.Add(placement_label, 1, wx.RIGHT, SPACE_SM)
         row3_labels.Add(player_name_label, 1)
-        sizer.Add(row3_labels, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, PADDING_MD)
+        sizer.Add(row3_labels, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, SPACE_SM)
 
         row3 = wx.BoxSizer(wx.HORIZONTAL)
 
@@ -143,7 +143,7 @@ class FiltersBuilderMixin(_Base):
                 wx.EVT_COMBOBOX,
                 lambda _evt: self._on_placement_filter(),  # type: ignore[misc]
             )
-        placement_row.Add(self.placement_op_choice, 0, wx.EXPAND | wx.RIGHT, PADDING_MD)
+        placement_row.Add(self.placement_op_choice, 0, wx.EXPAND | wx.RIGHT, SPACE_SM)
 
         self.placement_field_choice = _CenteredChoice(self, choices=list(PLACEMENT_FIELDS))
         self.placement_field_choice.SetSelection(0)
@@ -153,7 +153,7 @@ class FiltersBuilderMixin(_Base):
                 wx.EVT_COMBOBOX,
                 lambda _evt: self._on_placement_filter(),  # type: ignore[misc]
             )
-        placement_row.Add(self.placement_field_choice, 0, wx.EXPAND | wx.RIGHT, PADDING_MD)
+        placement_row.Add(self.placement_field_choice, 0, wx.EXPAND | wx.RIGHT, SPACE_SM)
 
         self.placement_value_filter = wx.TextCtrl(self, style=wx.TE_PROCESS_ENTER)
         self.placement_value_filter.SetHint(self._labels.get("placement_hint", "value"))
@@ -165,7 +165,7 @@ class FiltersBuilderMixin(_Base):
             )
         placement_row.Add(self.placement_value_filter, 1, wx.EXPAND)
 
-        row3.Add(placement_row, 1, wx.EXPAND | wx.RIGHT, PADDING_MD)
+        row3.Add(placement_row, 1, wx.EXPAND | wx.RIGHT, SPACE_SM)
 
         self.player_name_filter = wx.TextCtrl(self, style=wx.TE_PROCESS_ENTER)
         self.player_name_filter.SetHint(self._labels.get("player_name_hint", "Player name..."))
@@ -176,4 +176,4 @@ class FiltersBuilderMixin(_Base):
                 lambda _evt: self._on_player_name_filter(),  # type: ignore[misc]
             )
         row3.Add(self.player_name_filter, 1, wx.EXPAND)
-        sizer.Add(row3, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_MD)
+        sizer.Add(row3, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, SPACE_SM)

@@ -10,8 +10,9 @@ from wx.lib.agw import flatnotebook as fnb
 from utils.constants import (
     DARK_PANEL,
     LIGHT_TEXT,
-    PADDING_MD,
-    PADDING_SM,
+    SPACE_MD,
+    SPACE_SM,
+    SPACE_XS,
     SUBDUED_TEXT,
 )
 from utils.perf import timed
@@ -49,7 +50,7 @@ class CenterPanelBuilderMixin(_Base):
         detail_sizer = wx.StaticBoxSizer(detail_box, wx.VERTICAL)
 
         self.deck_tabs = self._create_notebook(detail_box)
-        detail_sizer.Add(self.deck_tabs, 1, wx.EXPAND | wx.ALL, PADDING_MD)
+        detail_sizer.Add(self.deck_tabs, 1, wx.EXPAND | wx.ALL, SPACE_SM)
 
         # Mainboard and Sideboard as top-level tabs
         self._build_deck_tables_tab()
@@ -61,16 +62,14 @@ class CenterPanelBuilderMixin(_Base):
         # recomputes its column count on resize.
         deck_tabs_width = CardTablePanel.grid_width()
         self.deck_tabs.SetMinSize((deck_tabs_width, -1))
-        detail_box.SetMinSize((deck_tabs_width + (PADDING_MD * 2), -1))
+        detail_box.SetMinSize((deck_tabs_width + SPACE_MD, -1))
 
         # Collection status label below the tabs
         self.collection_status_label = wx.StaticText(
             detail_box, label=self._t("app.status.collection_not_loaded")
         )
         self.collection_status_label.SetForegroundColour(SUBDUED_TEXT)
-        detail_sizer.Add(
-            self.collection_status_label, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_SM
-        )
+        detail_sizer.Add(self.collection_status_label, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, SPACE_XS)
 
         # Sideboard Guide and Notes tabs
         self.sideboard_guide_panel = SideboardGuidePanel(

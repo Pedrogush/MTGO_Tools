@@ -9,8 +9,8 @@ import wx
 from utils.constants import (
     BUILDER_MANA_CANVAS_WIDTH,
     BUILDER_NAME_COL_DEFAULT_WIDTH,
-    PADDING_MD,
-    PADDING_SM,
+    SPACE_SM,
+    SPACE_XS,
     SUBDUED_TEXT,
 )
 from widgets.checkbox import DarkCheckBox
@@ -38,7 +38,7 @@ class ResultsPaneBuilderMixin(_Base):
         stylize_button(clear_btn, kind="secondary")
         clear_btn.SetToolTip("Reset all search filters")
         clear_btn.Bind(wx.EVT_BUTTON, lambda _evt: self._on_clear())
-        controls.Add(clear_btn, 0, wx.RIGHT, PADDING_MD)
+        controls.Add(clear_btn, 0, wx.RIGHT, SPACE_SM)
 
         self.format_pool_cb = DarkCheckBox(self, label=self._t("builder.format_pool.use_filter"))
         stylize_checkbox(self.format_pool_cb, surface="panel")
@@ -47,14 +47,14 @@ class ResultsPaneBuilderMixin(_Base):
         )
         self.format_pool_cb.Enable(False)
         self.format_pool_cb.Bind(wx.EVT_CHECKBOX, self._on_filters_changed)
-        controls.Add(self.format_pool_cb, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, PADDING_MD)
+        controls.Add(self.format_pool_cb, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, SPACE_SM)
 
         # Radar toggle checkbox
         self.radar_cb = DarkCheckBox(self, label=self._t("builder.radar.use_filter"))
         stylize_checkbox(self.radar_cb, surface="panel")
         self.radar_cb.SetToolTip("Show only cards that appear in the loaded radar archetype")
         self.radar_cb.Bind(wx.EVT_CHECKBOX, self._on_radar_toggle)
-        controls.Add(self.radar_cb, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, PADDING_MD)
+        controls.Add(self.radar_cb, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, SPACE_SM)
 
         # Radar zone choice
         self.radar_zone_choice = wx.Choice(
@@ -70,10 +70,10 @@ class ResultsPaneBuilderMixin(_Base):
         self.radar_zone_choice.SetToolTip("Limit radar filtering to mainboard, sideboard, or both")
         self.radar_zone_choice.Enable(False)
         self.radar_zone_choice.Bind(wx.EVT_CHOICE, self._on_radar_zone_changed)
-        controls.Add(self.radar_zone_choice, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, PADDING_MD)
+        controls.Add(self.radar_zone_choice, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, SPACE_SM)
 
         controls.AddStretchSpacer(1)
-        parent_sizer.Add(controls, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_MD)
+        parent_sizer.Add(controls, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, SPACE_SM)
 
     def _build_results_list(self, parent_sizer: wx.Sizer) -> None:
         # Results list (virtual ListCtrl for handling large datasets)
@@ -97,7 +97,7 @@ class ResultsPaneBuilderMixin(_Base):
         # The virtual list emits cache hints for each row range it is about to
         # draw — the scroll signal driving image prefetch (issue #951).
         results.Bind(wx.EVT_LIST_CACHE_HINT, self._on_results_cache_hint)
-        parent_sizer.Add(results, 1, wx.EXPAND | wx.LEFT, PADDING_MD)
+        parent_sizer.Add(results, 1, wx.EXPAND | wx.LEFT, SPACE_SM)
         self.results_ctrl = results
 
     def _build_add_zone_buttons(self, parent_sizer: wx.Sizer) -> None:
@@ -111,7 +111,7 @@ class ResultsPaneBuilderMixin(_Base):
         )
         add_main_btn.Enable(False)
         add_main_btn.Bind(wx.EVT_BUTTON, lambda _evt: self._on_add_to_zone("main"))
-        add_btns_row.Add(add_main_btn, 1, wx.RIGHT, PADDING_SM)
+        add_btns_row.Add(add_main_btn, 1, wx.RIGHT, SPACE_XS)
         self._add_main_btn = add_main_btn
 
         add_side_btn = wx.Button(self, label=self._t("builder.add_to_side"))
@@ -125,10 +125,10 @@ class ResultsPaneBuilderMixin(_Base):
         add_btns_row.Add(add_side_btn, 1)
         self._add_side_btn = add_side_btn
 
-        parent_sizer.Add(add_btns_row, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, PADDING_MD)
+        parent_sizer.Add(add_btns_row, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, SPACE_SM)
 
     def _build_status_label(self, parent_sizer: wx.Sizer) -> None:
         status = wx.StaticText(self, label=self._t("builder.status.results"))
         status.SetForegroundColour(SUBDUED_TEXT)
-        parent_sizer.Add(status, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_MD)
+        parent_sizer.Add(status, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, SPACE_SM)
         self.status_label = status

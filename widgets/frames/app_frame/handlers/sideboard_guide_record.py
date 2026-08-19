@@ -20,6 +20,9 @@ from typing import TYPE_CHECKING, Any
 
 import wx
 
+from utils.constants import SPACE_SM
+from widgets.stylize import apply_base_font, apply_type_level
+
 if TYPE_CHECKING:
     from widgets.frames.app_frame import AppFrame
     from widgets.frames.app_frame.protocol import AppFrameProto
@@ -51,18 +54,17 @@ class _GuideRecordBar(wx.MiniFrame):
             title=t("guide.record.bar_title"),
             style=wx.CAPTION | wx.FRAME_FLOAT_ON_PARENT | wx.FRAME_TOOL_WINDOW,
         )
+        apply_base_font(self)
         panel = wx.Panel(self)
         sizer = wx.BoxSizer(wx.VERTICAL)
         panel.SetSizer(sizer)
 
         self.progress_label = wx.StaticText(panel, label="")
-        font = self.progress_label.GetFont()
-        font.MakeBold()
-        self.progress_label.SetFont(font)
-        sizer.Add(self.progress_label, 0, wx.ALL, 8)
+        apply_type_level(self.progress_label, "heading")
+        sizer.Add(self.progress_label, 0, wx.ALL, SPACE_SM)
 
         instructions = wx.StaticText(panel, label=t("guide.record.instructions"))
-        sizer.Add(instructions, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 8)
+        sizer.Add(instructions, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, SPACE_SM)
 
         row = wx.BoxSizer(wx.HORIZONTAL)
         for label, handler in (
@@ -73,8 +75,8 @@ class _GuideRecordBar(wx.MiniFrame):
         ):
             btn = wx.Button(panel, label=t(label))
             btn.Bind(wx.EVT_BUTTON, lambda _evt, h=handler: h())
-            row.Add(btn, 0, wx.RIGHT, 6)
-        sizer.Add(row, 0, wx.ALL, 8)
+            row.Add(btn, 0, wx.RIGHT, SPACE_SM)
+        sizer.Add(row, 0, wx.ALL, SPACE_SM)
 
         panel.Fit()
         self.Fit()

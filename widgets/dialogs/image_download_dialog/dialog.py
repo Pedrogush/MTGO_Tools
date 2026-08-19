@@ -8,9 +8,10 @@ from typing import TYPE_CHECKING, Any
 
 import wx
 
-from utils.constants import DARK_BG, LIGHT_TEXT, SUBDUED_TEXT
+from utils.constants import DARK_BG, LIGHT_TEXT, SPACE_SM, SUBDUED_TEXT
 from widgets.dialogs.image_download_dialog.handlers import ImageDownloadDialogHandlersMixin
 from widgets.dialogs.image_download_dialog.properties import ImageDownloadDialogPropertiesMixin
+from widgets.stylize import apply_base_font, apply_type_level
 
 if TYPE_CHECKING:
     from services.image_service import BulkImageDownloader
@@ -37,6 +38,7 @@ class ImageDownloadDialog(
         on_status_update: Callable[[str], None] | None = None,
     ):
         super().__init__(parent, title="Offline Images Mode", size=(460, 320))
+        apply_base_font(self)
         self.SetBackgroundColour(DARK_BG)
 
         self.image_cache = image_cache
@@ -55,11 +57,8 @@ class ImageDownloadDialog(
         # Title
         title = wx.StaticText(panel, label="Enable Offline Images Mode")
         title.SetForegroundColour(LIGHT_TEXT)
-        title_font = title.GetFont()
-        title_font.PointSize += 2
-        title_font = title_font.Bold()
-        title.SetFont(title_font)
-        sizer.Add(title, 0, wx.ALL, 10)
+        apply_type_level(title, "title")
+        sizer.Add(title, 0, wx.ALL, SPACE_SM)
 
         # What this is for
         purpose_text = wx.StaticText(
@@ -75,7 +74,7 @@ class ImageDownloadDialog(
         )
         purpose_text.SetForegroundColour(LIGHT_TEXT)
         purpose_text.Wrap(430)
-        sizer.Add(purpose_text, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
+        sizer.Add(purpose_text, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, SPACE_SM)
 
         # The tradeoff
         tradeoff_text = wx.StaticText(
@@ -89,20 +88,20 @@ class ImageDownloadDialog(
         )
         tradeoff_text.SetForegroundColour(SUBDUED_TEXT)
         tradeoff_text.Wrap(430)
-        sizer.Add(tradeoff_text, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
+        sizer.Add(tradeoff_text, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, SPACE_SM)
 
         # Buttons
         button_sizer = wx.BoxSizer(wx.HORIZONTAL)
         button_sizer.AddStretchSpacer(1)
 
         cancel_btn = wx.Button(panel, wx.ID_CANCEL, label="Cancel")
-        button_sizer.Add(cancel_btn, 0, wx.RIGHT, 6)
+        button_sizer.Add(cancel_btn, 0, wx.RIGHT, SPACE_SM)
 
         enable_btn = wx.Button(panel, wx.ID_OK, label="Enable Offline Mode")
         enable_btn.SetDefault()
         button_sizer.Add(enable_btn, 0)
 
-        sizer.Add(button_sizer, 0, wx.EXPAND | wx.ALL, 10)
+        sizer.Add(button_sizer, 0, wx.EXPAND | wx.ALL, SPACE_SM)
 
         panel.SetSizerAndFit(sizer)
         self.SetClientSize(panel.GetBestSize())
