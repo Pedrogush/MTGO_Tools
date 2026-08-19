@@ -78,6 +78,7 @@ class AutomationServer(
             "get_status": self._handle_get_status,
             "get_window_info": self._handle_get_window_info,
             "list_widgets": self._handle_list_widgets,
+            "preferences": self._handle_preferences,
             "click": self._handle_click,
             "set_format": self._handle_set_format,
             "get_format": self._handle_get_format,

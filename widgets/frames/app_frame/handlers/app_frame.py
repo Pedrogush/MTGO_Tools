@@ -21,6 +21,7 @@ from widgets.frames.app_frame.handlers.deck_formatting import simple_summary_htm
 from widgets.frames.app_frame.handlers.session_logic import should_show_tutorial
 from widgets.frames.mana_keyboard import open_mana_keyboard
 from widgets.menu_bar import MenuEntry, MenuSpec, separator
+from widgets.preferences import Preference, PreferenceGroup, show_preferences_dialog
 from widgets.wx_layout import set_shown
 
 if TYPE_CHECKING:
@@ -42,27 +43,36 @@ class AppFrameHandlersMixin(_Base):
 
     # ------------------------------------------------------------------ Menu bar ------------------------------------------------------------
     def menu_specs(self) -> list[MenuSpec]:
-        """The main window's four menus, in bar order.
+        """The main window's three menus, in bar order.
 
         Phase 3b replaced six toolbar buttons and one unlabeled gear popup with
-        this. The gear held twelve items mixing three taxonomies — bulk data
+        this bar. The gear held twelve items mixing three taxonomies — bulk data
         *actions*, *navigation/help*, and *preferences* — in one flat list, which
         is why ``Help`` and ``Show Tutorial`` were undiscoverable. One menu per
         taxonomy, plus one for the six companion windows the toolbar used to open:
 
-        ``File``      data the app loads or writes
+        ``File``      data the app loads or writes, plus ``Preferences…``
         ``Tools``     the six companion windows
-        ``Settings``  the four preference groups + the update-check toggle
         ``Help``      documentation, the tutorial, and a pending release
 
-        ``Settings`` is a menu of its own rather than a tail on ``Tools`` because
-        merging them would re-create exactly the mixed list this replaces. Phase 7
-        collapses it into a single ``Preferences…`` item once the dialog exists.
+        Phase 3b shipped a fourth menu, ``Settings``, holding the four radio
+        submenus and the update-check toggle, and said in #968 that it existed
+        "so that phase 7 can collapse it into a single ``Preferences…`` item once
+        the dialog exists". That is what happened: the five settings now live in
+        :mod:`widgets.preferences` and the bar is three menus.
+
+        ``Preferences…`` sits at the tail of ``File`` rather than of ``Tools``.
+        Windows' own convention is ``Tools ▸ Options…``, but this app's ``Tools``
+        menu means "the six companion windows" and nothing else — hanging a
+        settings item off it would re-create precisely the mixed list phase 3b
+        was written to retire, which is the reasoning #968 gave for *not* putting
+        ``Settings`` there in the first place. ``File`` is already the app-level
+        menu (it carries ``Export Diagnostics`` and ``Exit``, neither of which is
+        a file either), so it is where an app without an ``Edit`` menu puts them.
         """
         return [
             MenuSpec(self._t("menu.file"), self._file_menu_entries),
             MenuSpec(self._t("menu.tools"), self._tools_menu_entries),
-            MenuSpec(self._t("menu.settings"), self._settings_menu_entries),
             MenuSpec(self._t("menu.help"), self._help_menu_entries),
         ]
 
@@ -92,6 +102,12 @@ class AppFrameHandlersMixin(_Base):
                 on_activate=self._open_feedback_dialog,
             ),
             separator(),
+            MenuEntry(
+                label=self._t("menu.preferences"),
+                help=self._t("menu.preferences.help"),
+                on_activate=self._open_preferences,
+            ),
+            separator(),
             MenuEntry(label=self._t("menu.exit"), on_activate=lambda: self.Close()),
         ]
 
@@ -115,54 +131,95 @@ class AppFrameHandlersMixin(_Base):
             for key, opener in openers.items()
         ]
 
-    def _settings_menu_entries(self) -> list[MenuEntry]:
+    def preference_groups(self) -> list[PreferenceGroup]:
+        """The five settings, grouped by what they affect.
+
+        Rebuilt on every open so the values are current, and addressable by the
+        automation harness without the dialog existing — see
+        :mod:`widgets.preferences.spec` for why that split is not optional.
+
+        The grouping is by *effect*, not by control type. The old gear listed all
+        four one-of-N settings in a row, which put a language preference one
+        click from a bulk-data action and told the reader nothing about which of
+        them changed what.
+        """
         return [
-            MenuEntry(
-                kind="radio",
-                label=self._t("app.menu.deck_data_source"),
-                options=(
-                    ("both", self._t("app.choice.source.both")),
-                    ("mtggoldfish", self._t("app.choice.source.mtggoldfish")),
-                    ("mtgo", self._t("app.choice.source.mtgo")),
+            PreferenceGroup(
+                title=self._t("app.prefs.group.decks"),
+                items=(
+                    Preference(
+                        key="deck_data_source",
+                        label=self._t("app.menu.deck_data_source"),
+                        help=self._t("app.prefs.help.deck_data_source"),
+                        options=(
+                            ("both", self._t("app.choice.source.both")),
+                            ("mtggoldfish", self._t("app.choice.source.mtggoldfish")),
+                            ("mtgo", self._t("app.choice.source.mtgo")),
+                        ),
+                        current=self.controller.get_deck_data_source(),
+                        on_select=self._apply_deck_source,
+                    ),
                 ),
-                current=self.controller.get_deck_data_source(),
-                on_select=self._apply_deck_source,
             ),
-            MenuEntry(
-                kind="radio",
-                label=self._t("app.menu.language"),
-                options=tuple((locale, LOCALE_LABELS[locale]) for locale in self._language_values),
-                current=self.locale or "",
-                on_select=self._apply_language,
-            ),
-            MenuEntry(
-                kind="radio",
-                label=self._t("app.menu.average_method"),
-                options=(
-                    ("karsten", self._t("app.choice.average_method.karsten")),
-                    ("arithmetic", self._t("app.choice.average_method.arithmetic")),
+            PreferenceGroup(
+                title=self._t("app.prefs.group.averages"),
+                items=(
+                    Preference(
+                        key="average_method",
+                        label=self._t("app.menu.average_method"),
+                        help=self._t("app.prefs.help.average_method"),
+                        options=(
+                            ("karsten", self._t("app.choice.average_method.karsten")),
+                            ("arithmetic", self._t("app.choice.average_method.arithmetic")),
+                        ),
+                        current=self.controller.get_average_method(),
+                        on_select=self._apply_average_method,
+                    ),
+                    Preference(
+                        key="average_hours",
+                        label=self._t("app.menu.average_hours"),
+                        help=self._t("app.prefs.help.average_hours"),
+                        options=tuple(
+                            (str(h), self._t(f"app.choice.average_hours.{h}"))
+                            for h in (12, 24, 36, 48, 60, 72)
+                        ),
+                        current=str(self.controller.get_average_hours()),
+                        on_select=lambda value: self._apply_average_hours(int(value)),
+                    ),
                 ),
-                current=self.controller.get_average_method(),
-                on_select=self._apply_average_method,
             ),
-            MenuEntry(
-                kind="radio",
-                label=self._t("app.menu.average_hours"),
-                options=tuple(
-                    (str(h), self._t(f"app.choice.average_hours.{h}"))
-                    for h in (12, 24, 36, 48, 60, 72)
+            PreferenceGroup(
+                title=self._t("app.prefs.group.application"),
+                items=(
+                    Preference(
+                        key="language",
+                        label=self._t("app.menu.language"),
+                        help=self._t("app.prefs.help.language"),
+                        options=tuple(
+                            (locale, LOCALE_LABELS[locale]) for locale in self._language_values
+                        ),
+                        current=self.locale or "",
+                        on_select=self._apply_language,
+                    ),
+                    Preference(
+                        key="check_for_updates",
+                        kind="toggle",
+                        label=self._t("app.menu.check_for_updates"),
+                        help=self._t("app.prefs.help.check_for_updates"),
+                        checked=self.controller.get_update_check_enabled(),
+                        on_toggle=self._apply_update_check_enabled,
+                    ),
                 ),
-                current=str(self.controller.get_average_hours()),
-                on_select=lambda value: self._apply_average_hours(int(value)),
-            ),
-            separator(),
-            MenuEntry(
-                kind="check",
-                label=self._t("app.menu.check_for_updates"),
-                checked=self.controller.get_update_check_enabled(),
-                on_toggle=self._apply_update_check_enabled,
             ),
         ]
+
+    def _open_preferences(self) -> None:
+        show_preferences_dialog(
+            self,
+            self.preference_groups(),
+            title=self._t("app.prefs.title"),
+            close_label=self._t("app.prefs.close"),
+        )
 
     def _help_menu_entries(self) -> list[MenuEntry]:
         entries = [
@@ -216,8 +273,8 @@ class AppFrameHandlersMixin(_Base):
 
         People open this app to research decks mid-tournament; a modal on launch
         would interrupt exactly the moment they can least afford it. The note
-        sits in the right-hand status field until it is clicked (the settings
-        menu carries the same action), and the app is untouched otherwise.
+        sits in the right-hand status field until it is clicked (the Help menu
+        carries the same action), and the app is untouched otherwise.
         """
         if not self.status_bar:
             return

@@ -75,7 +75,7 @@ class SectionPanel(wx.Panel):
     Children go into :attr:`body` (as their ``parent``) and into :attr:`sizer`
     (as their layout slot)::
 
-        section = SectionPanel(parent, title=self._t("app.label.card_panel"))
+        section = SectionPanel(parent, title=self._t("app.label.card_inspector"))
         self.card_panel = CardPanel(section.body, ...)
         section.sizer.Add(self.card_panel, 1, wx.EXPAND)
 

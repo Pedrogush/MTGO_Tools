@@ -292,6 +292,13 @@ def cmd_menu(client: AutomationClient, args: argparse.Namespace) -> int:
     return 0 if result.get("ok") else 1
 
 
+def cmd_prefs(client: AutomationClient, args: argparse.Namespace) -> int:
+    """List the preferences, or set one."""
+    result = client.preferences(args.key, args.value)
+    print(format_output(result, args.json))
+    return 0 if result.get("ok") else 1
+
+
 def cmd_refresh_collection(client: AutomationClient, args: argparse.Namespace) -> int:
     """Trigger a collection refresh + export from the MTGO bridge."""
     result = client.refresh_collection(force=not args.no_force)
@@ -558,9 +565,17 @@ Notes:
     p.add_argument(
         "path",
         nargs="?",
-        help="Menu path, e.g. 'Tools/Radar' or 'Settings/Language/pt-BR'. "
+        help="Menu path, e.g. 'Tools/Radar' or 'File/Preferences…'. "
         "Omit to list every menu.",
     )
+
+    # prefs
+    p = subparsers.add_parser(
+        "prefs",
+        help="List preferences, or set one ('language pt-BR')",
+    )
+    p.add_argument("key", nargs="?", help="Preference key. Omit to list them all.")
+    p.add_argument("value", nargs="?", help="New value (or on/off/toggle for a boolean)")
 
     # screenshot-window
     p = subparsers.add_parser("screenshot-window", help="Take a screenshot of a secondary window")
@@ -684,6 +699,7 @@ Notes:
         "timer-alert-action": cmd_timer_alert_action,
         "open-widget": cmd_open_widget,
         "menu": cmd_menu,
+        "prefs": cmd_prefs,
         "screenshot-window": cmd_screenshot_window,
         "get-deck-notes": cmd_get_deck_notes,
         "type-into-oracle": cmd_type_into_oracle,

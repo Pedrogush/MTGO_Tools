@@ -12,10 +12,10 @@ import wx
 
 from utils.constants import SPACE_SM
 from widgets.input_frame import create_text_input
+from widgets.mode_switch import ModeSwitch
 from widgets.panels.deck_research_panel.frame.centered_choice import _CenteredChoice
 from widgets.panels.deck_research_panel.results_filter import PLACEMENT_FIELDS, PLACEMENT_OPERATORS
 from widgets.stylize import (
-    stylize_button,
     stylize_choice,
     stylize_combobox,
     stylize_label,
@@ -37,13 +37,26 @@ class FiltersBuilderMixin(_Base):
     """
 
     def _build_switch_button(self, sizer: wx.Sizer) -> None:
+        """F2: the mode switch, showing which mode this is rather than the other one.
+
+        This was a full-width ``wx.Button`` labelled "Deck Builder" — the mode
+        you were *not* in — sitting where a section heading sits. See
+        :mod:`widgets.mode_switch` for what replaced it and why it reuses the
+        deck workspace's segmented-toggle idiom rather than inventing a switch.
+        """
         if self._on_switch_to_builder is None:
             return
-        builder_btn = wx.Button(self, label=self._labels.get("switch_to_builder", "Deck Builder"))
-        # F2: a full-width saturated bar reads as a section header, not a switch.
-        stylize_button(builder_btn, kind="secondary")
-        builder_btn.Bind(wx.EVT_BUTTON, lambda _evt: self._on_switch_to_builder())  # type: ignore[misc]
-        sizer.Add(builder_btn, 0, wx.EXPAND | wx.ALL, SPACE_SM)
+        self.mode_switch = ModeSwitch(
+            self,
+            modes=(
+                ("research", self._labels.get("mode_research", "Research")),
+                ("builder", self._labels.get("mode_builder", "Builder")),
+            ),
+            current="research",
+            on_select=lambda _value: self._on_switch_to_builder(),  # type: ignore[misc]
+            tooltips={"builder": self._labels.get("switch_to_builder_tooltip", "")},
+        )
+        sizer.Add(self.mode_switch, 0, wx.ALL, SPACE_SM)
 
         info_label = wx.StaticText(
             self,
@@ -122,7 +135,12 @@ class FiltersBuilderMixin(_Base):
 
     def _build_placement_player_row(self, sizer: wx.Sizer) -> None:
         row3_labels = wx.BoxSizer(wx.HORIZONTAL)
-        placement_label = wx.StaticText(self, label=self._labels.get("placement", "Placement"))
+        # Found by phase 4: this label read "Placement" while the choice under it
+        # toggles between **Placement** and **Wins**, so the column heading was
+        # wrong half the time and contradicted the control it labelled. The row
+        # filters on a deck's *result*, of which placement and wins are the two
+        # readings; the field choice says which.
+        placement_label = wx.StaticText(self, label=self._labels.get("result", "Result"))
         stylize_label(placement_label, subtle=True, level="body")
         player_name_label = wx.StaticText(
             self, label=self._labels.get("player_name", "Player name")

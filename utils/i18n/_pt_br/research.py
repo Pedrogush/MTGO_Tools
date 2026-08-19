@@ -14,9 +14,10 @@ MESSAGES: dict[str, str] = {
     "research.loading_archetypes": "Carregando...",
     "research.failed_archetypes": "Falha ao carregar arquétipos.",
     "research.no_archetypes": "Nenhum arquétipo encontrado.",
-    "research.switch_to_builder": "Montador de Deck",
     "research.tooltip.format": "Selecione o formato para pesquisar",
     "research.tooltip.search": "Filtre a lista de arquétipos por nome",
     "research.tooltip.archetypes": "Clique em um arquétipo para carregar seus decklists",
     "research.tooltip.reload": "Atualiza os dados de arquétipos do MTGGoldfish",
+    "research.switch_to_builder.tooltip": "Mudar para o modo Montador de Deck",
+    "research.result": "Resultado",
 }

@@ -45,6 +45,21 @@ widget               behaviour
                      ``wx.TE_READONLY`` field and for a disabled one. The border
                      is non-client area and unreachable -- see the ``client
                      edge`` row and :mod:`widgets.input_frame`
+``wx.BoxSizer``      not a widget, but the row-overflow rule belongs with the
+                     other silent failures. When a horizontal row's minimum
+                     widths exceed the client, wxSizer does **not** shrink the
+                     items proportionally and does not clip the row as a whole:
+                     every item keeps its full minimum except the **last**, which
+                     absorbs the entire deficit. Measured on the deck-workspace
+                     header in pt-BR at the window's 1200px floor -- the row
+                     wanted 551px in a 506px panel, the first seven controls
+                     rendered at exactly their minimums, and the printing button
+                     was painted 14px wide against a 59px minimum. So "does this
+                     row fit" cannot be answered by looking at any control except
+                     the last one, and a row of fixed-width controls needs one
+                     deliberately flexible member (proportion 1 plus a floor)
+                     rather than an ``AddStretchSpacer``, which yields nothing
+                     back once the slack is gone
 ``wx.Button``        background + foreground honoured. The border is a **2px
                      light-grey frame** (``#ADADAD`` outside, ``#E1E1E1``
                      inside) drawn by the theme, identical for every background

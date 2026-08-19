@@ -334,11 +334,10 @@ class AppFrame(
         inspector_column = wx.BoxSizer(wx.VERTICAL)
         self.inspector_panel.SetSizer(inspector_column)
 
+        # One section card, not two (§4.6). Proportion 1 so the tabs inside it
+        # grow with the window; the art block above them is fixed.
         inspector_box = self._build_card_inspector(self.inspector_panel)
-        inspector_column.Add(inspector_box, 0, wx.EXPAND)
-
-        card_panel_box = self._build_card_panel(self.inspector_panel)
-        inspector_column.Add(card_panel_box, 1, wx.EXPAND | wx.TOP, SPACE_SM)
+        inspector_column.Add(inspector_box, 1, wx.EXPAND)
 
         content_split.Add(self.inspector_panel, 0, wx.EXPAND)
 

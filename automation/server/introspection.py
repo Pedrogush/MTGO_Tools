@@ -125,19 +125,39 @@ class IntrospectionMixin(_Base):
 
         return {"widgets": widgets}
 
+    @staticmethod
+    def _walk_buttons(parent: wx.Window) -> list[wx.Button]:
+        """Every ``wx.Button`` under ``parent``, nearest first (review §5.7).
+
+        Breadth-first, deliberately: this used to look at ``GetChildren()`` one
+        level deep, so any button the panel wrapped in a sub-panel was
+        unreachable by label — and phase 7 wraps two of them (the mode switch,
+        :mod:`widgets.mode_switch`). Searching nearest-first keeps a direct child
+        winning over a deeper namesake, which is what the old behaviour promised
+        for the cases it did handle.
+        """
+        found: list[wx.Button] = []
+        frontier = [parent]
+        while frontier:
+            nxt: list[wx.Window] = []
+            for window in frontier:
+                for child in window.GetChildren():
+                    if isinstance(child, wx.Button):
+                        found.append(child)
+                    nxt.append(child)
+            frontier = nxt
+        return found
+
     def _get_button_info(self, parent: wx.Window) -> list[dict[str, Any]]:
         """Get info about buttons in a widget."""
-        buttons = []
-        for child in parent.GetChildren():
-            if isinstance(child, wx.Button):
-                buttons.append(
-                    {
-                        "label": child.GetLabel(),
-                        "enabled": child.IsEnabled(),
-                        "id": child.GetId(),
-                    }
-                )
-        return buttons
+        return [
+            {
+                "label": button.GetLabel(),
+                "enabled": button.IsEnabled(),
+                "id": button.GetId(),
+            }
+            for button in self._walk_buttons(parent)
+        ]
 
     def _handle_click(self, widget: str, label: str | None = None) -> dict[str, Any]:
         """Click a button by widget name and optional label."""
@@ -151,16 +171,17 @@ class IntrospectionMixin(_Base):
             target.ProcessEvent(event)
             return {"clicked": True, "widget": widget}
 
-        # Search for button by label within the widget
+        # Search for button by label within the widget, at any depth (§5.7).
         if label:
-            for child in target.GetChildren():
-                if isinstance(child, wx.Button) and child.GetLabel() == label:
+            for child in self._walk_buttons(target):
+                if child.GetLabel() == label:
                     event = wx.CommandEvent(wx.wxEVT_BUTTON, child.GetId())
                     event.SetEventObject(child)
                     child.ProcessEvent(event)
                     return {"clicked": True, "widget": widget, "label": label}
 
         return {"clicked": False, "error": f"Button not found: {label}"}
+
 
     def _find_widget(self, name: str) -> wx.Window | None:
         """Find a widget by name."""
@@ -294,6 +315,32 @@ class IntrospectionMixin(_Base):
         if invoke_entry(menu_bar.entries(title), rest):
             return {"ok": True, "path": parts}
         return {"ok": False, "error": f"Menu item not found: {'/'.join(parts)}"}
+
+    def _handle_preferences(self, key: str | None = None, value: str | None = None) -> dict[str, Any]:
+        """List the preferences, or set one by key.
+
+        Phase 7 collapsed the ``Settings`` menu into a modal dialog, and
+        ``wx.Dialog.ShowModal`` starves this socket exactly the way
+        ``wx.PopupMenu`` does (§5.5) -- so the harness drives the *spec* the
+        dialog renders, never the dialog. ``key`` is the stable name
+        (``deck_data_source``, ``language``, ``average_method``,
+        ``average_hours``, ``check_for_updates``); ``value`` is the option's
+        value or its translated label, or ``on``/``off``/``toggle`` for a
+        boolean.
+        """
+        from widgets.preferences import apply_preference, describe
+
+        build = getattr(self.frame, "preference_groups", None)
+        if build is None:
+            return {"ok": False, "error": "Preferences not available"}
+        groups = build()
+        if key is None:
+            return {"ok": True, "groups": describe(groups)}
+        if value is None:
+            return {"ok": False, "error": f"No value given for preference {key!r}"}
+        if apply_preference(groups, key, value):
+            return {"ok": True, "key": key, "value": value}
+        return {"ok": False, "error": f"Preference not set: {key}={value}"}
 
     def _handle_refresh_collection(self, force: bool = True) -> dict[str, Any]:
         """Trigger a collection refresh + export through the real controller path.

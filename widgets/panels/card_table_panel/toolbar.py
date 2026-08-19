@@ -35,6 +35,13 @@ else:
     _Base = object
 
 
+#: Appended to a button that opens a menu rather than acting immediately (F3).
+#: The two controls it marks -- the pile-sort key and the printing selector --
+#: sat in the run of view-toggle chips looking exactly like them, which is what
+#: made them read as a fourth and fifth view mode.
+MENU_CARET = "\u25be"
+
+
 class CardTablePanelToolbarMixin(_Base):
     """View-mode buttons, pile-sort menu, and printing dropdown for the panel."""
 
@@ -60,8 +67,36 @@ class CardTablePanelToolbarMixin(_Base):
             size_compact_button(btn, pad_x=VIEW_TOGGLE_PADDING_X, height=VIEW_TOGGLE_HEIGHT)
             btn.Refresh()
 
+    def _pile_sort_label(self) -> str:
+        """The pile-sort button's label: the grouping key it will change.
+
+        F3 called this control "mystery meat"; it was labelled ``⋯``. F7 is the
+        same defect one level down -- the grouping key (mana value / colour /
+        type) was reachable only by opening this menu and reading which item was
+        ticked. Naming the current key on the button states it without a click,
+        and the per-pile headings (:mod:`widgets.panels.card_table_panel.pile_view`)
+        state each bucket.
+        """
+        key = {
+            PILE_SORT_MV: "mv",
+            PILE_SORT_COLOR: "color",
+            PILE_SORT_TYPE: "type",
+        }.get(self.pile_sort, "mv")
+        return f"{self._t(f'tabs.view.pile_sort.{key}')} {MENU_CARET}"
+
+    def _refresh_pile_sort_button(self) -> None:
+        self.pile_sort_button.SetLabel(self._pile_sort_label())
+        size_compact_button(
+            self.pile_sort_button, pad_x=VIEW_TOGGLE_PADDING_X, height=VIEW_TOGGLE_HEIGHT
+        )
+
     def _update_pile_sort_button_visibility(self) -> None:
         self.pile_sort_button.Show(self.view_mode == "pile")
+        # The divider marks the boundary of the toggle group; with nothing left
+        # of it visible it would be a rule against the panel edge.
+        self.header_divider.Show(
+            self.view_mode == "pile" or self.printing_button is not None
+        )
         relayout(self)
 
     def _on_view_button(self, mode: str) -> None:

@@ -1,4 +1,4 @@
-"""Right column construction (card inspector, card panel) for :class:`AppFrame`."""
+"""Right column construction (the card inspector) for :class:`AppFrame`."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 
 import wx
 
-from utils.constants import SPACE_XS
+from utils.constants import SPACE_SM, SPACE_XS
 from utils.perf import timed
 from widgets.panels.card_inspector_panel import CardInspectorPanel
 from widgets.panels.card_panel import CardPanel
@@ -21,7 +21,20 @@ else:
 
 
 class RightPanelBuilderMixin(_Base):
-    """Builds the inspector column (card inspector + oracle text).
+    """Builds the inspector column: one card, one card panel (§4.6).
+
+    Until phase 7 this was **two** section cards stacked, ``Card Inspector``
+    (image + printing pager) over ``Card`` (Oracle Text / Stats tabs). They are
+    two views of one object, both write the card's name into themselves, and
+    neither name says which is which — the review's §4.6. They are now one
+    section with an internal hierarchy: the card's own art on top, then the tab
+    strip for everything the art cannot show.
+
+    That also settles a measurement phase 6 left open. Phase 6 (#971) recorded
+    the both-panels-expanded minimum height rising 902 → 918 because *two* real
+    headings replaced two ``wx.StaticBox`` grooves, and said "phase 7 merges
+    those two panels and gets it back". One heading is now gone, along with the
+    second card's border, padding and the gap between the two.
 
     The toolbar that used to sit above this column became the window-wide menu
     bar in phase 3b (see :mod:`widgets.menu_bar`).
@@ -57,18 +70,28 @@ class RightPanelBuilderMixin(_Base):
         self.controller.image_service.set_printings_loaded_callback(
             self.card_inspector_panel.handle_printings_loaded
         )
-        section.sizer.Add(self.card_inspector_panel, 1, wx.EXPAND)
+        # Proportion 0: the art, its pager and the save-art row are a fixed
+        # block (CardInspectorPanel pins its own min/max height), so the tabs
+        # below take every leftover pixel rather than the two fighting for them.
+        section.sizer.Add(self.card_inspector_panel, 0, wx.EXPAND)
 
         # Keep backward compatibility references (delegate to image service via controller)
         self.image_cache = self.controller.image_service.image_cache
         self.image_downloader = self.controller.image_service.image_downloader
 
+        self._build_card_panel(section)
+
         return section
 
     @timed
-    def _build_card_panel(self, parent: wx.Window) -> SectionPanel:
-        section = SectionPanel(parent, title=self._t("app.label.card_panel"), padding=SPACE_XS)
+    def _build_card_panel(self, section: SectionPanel) -> None:
+        """The Oracle Text / Stats tabs, inside the inspector's one section card.
 
+        A second heading here was what §4.6 objected to: "Card" named the same
+        object as "Card Inspector" 400px above it. The tab strip is the label
+        this content needs — the same reasoning phase 6 used when it dropped the
+        deck workspace's "Deck Workspace" heading for the tab strip beneath it.
+        """
         self.card_panel = CardPanel(
             section.body,
             controller=self.controller,
@@ -87,5 +110,4 @@ class RightPanelBuilderMixin(_Base):
             self._on_inspector_printing_selected
         )
 
-        section.sizer.Add(self.card_panel, 1, wx.EXPAND)
-        return section
+        section.sizer.Add(self.card_panel, 1, wx.EXPAND | wx.TOP, SPACE_SM)

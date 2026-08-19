@@ -37,6 +37,8 @@ class CardTablePanelProto(Protocol):
     # toolbar mixin.
     _locale: str | None
     _view_mode_buttons: dict[str, wx.Button]
+    view_label: wx.StaticText
+    header_divider: wx.Window
     pile_sort_button: wx.Button
     printing_button: wx.Button | None
     _on_pile_sort_change: Callable[[str, str], None] | None
@@ -47,6 +49,10 @@ class CardTablePanelProto(Protocol):
     def set_view_mode(self, mode: str, *, persist: bool = ...) -> None: ...
 
     def set_pile_sort(self, sort_mode: str, *, persist: bool = ...) -> None: ...
+
+    def _pile_sort_label(self) -> str: ...
+
+    def _refresh_pile_sort_button(self) -> None: ...
 
     def _switch_content_page(self) -> None: ...
 

@@ -23,6 +23,7 @@ MESSAGES: dict[str, str] = {
     "tabs.empty.main.hint": "Pick a deck from the results list, or load one from a file.",
     "tabs.empty.side": "Sideboard is empty",
     "tabs.empty.out": "No cards out",
+    "tabs.view.label": "View",
     "tabs.view.grid": "Grid",
     "tabs.view.table": "Table",
     "tabs.view.pile": "Pile",

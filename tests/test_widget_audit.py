@@ -105,7 +105,7 @@ EDGE_STRIPPING_CALLS = frozenset(
 #: ``file:line`` sites where a control reaches the styling layer through a path
 #: this file's single-file name resolution cannot see.
 ROUTED_ELSEWHERE: dict[str, str] = {
-    "widgets/panels/card_table_panel/frame.py:130": (
+    "widgets/panels/card_table_panel/frame.py:158": (
         "The Grid/Table/Pile toggles are stashed in ``self._view_mode_buttons`` "
         "and re-stylized on every view change by "
         "``card_table_panel/toolbar.py::_refresh_view_mode_buttons`` -- they "

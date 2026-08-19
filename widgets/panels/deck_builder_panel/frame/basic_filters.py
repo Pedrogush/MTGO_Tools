@@ -14,6 +14,7 @@ from utils.constants import (
 from widgets.buttons.mana_button import create_mana_button
 from widgets.checkbox import DarkCheckBox
 from widgets.input_frame import create_text_input
+from widgets.mode_switch import ModeSwitch
 from widgets.panels.mana_rich_text_ctrl import ManaSymbolRichCtrl
 from widgets.stylize import stylize_button, stylize_checkbox, stylize_label
 
@@ -33,12 +34,24 @@ class BasicFiltersBuilderMixin(_Base):
     """
 
     def _build_header(self, parent_sizer: wx.Sizer) -> None:
-        back_btn = wx.Button(self, label=self._t("builder.back_button"))
-        # F2: a full-width saturated bar reads as a section header, not a switch.
-        stylize_button(back_btn, kind="secondary")
-        back_btn.SetToolTip(self._t("builder.back_button.tooltip"))
-        back_btn.Bind(wx.EVT_BUTTON, lambda _evt: self._on_back_clicked())
-        parent_sizer.Add(back_btn, 0, wx.EXPAND | wx.ALL, SPACE_SM)
+        """F2: the same mode switch the research panel carries, in the same place.
+
+        It was a full-width ``wx.Button`` labelled "Deck Research" — again the
+        mode you were *not* in — so the two panels' switches were two different
+        strings in the same position meaning opposite things. One control, one
+        position, one lit chip.
+        """
+        self.mode_switch = ModeSwitch(
+            self,
+            modes=(
+                ("research", self._t("app.label.left_panel.research")),
+                ("builder", self._t("app.label.left_panel.builder")),
+            ),
+            current="builder",
+            on_select=lambda _value: self._on_back_clicked(),
+            tooltips={"research": self._t("builder.back_button.tooltip")},
+        )
+        parent_sizer.Add(self.mode_switch, 0, wx.ALL, SPACE_SM)
 
         info = wx.StaticText(self, label=self._t("builder.info"))
         stylize_label(info, subtle=True, level="body")
