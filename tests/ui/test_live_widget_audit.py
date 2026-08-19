@@ -25,6 +25,7 @@ from __future__ import annotations
 import wx
 
 from utils.constants.theme import TYPE_STEPS, font_point_size
+from widgets.input_frame import InputFrame
 from widgets.stylize import base_point_size
 
 #: Set on a button by ``stylize_button``; see ``widgets.stylize._BUTTON_KIND_ATTR``.
@@ -123,8 +124,39 @@ def test_every_live_font_size_is_on_the_type_ladder(deck_selector_factory) -> No
                 continue
             if int(font.GetPointSize()) not in allowed:
                 offenders.append(f"{_describe(window)} -> {font.GetPointSize()}pt")
+        assert offenders == [], f"font sizes off the ladder {sorted(allowed)}: {offenders}"
+    finally:
+        frame.Destroy()
+
+
+def test_every_live_text_input_sits_inside_an_input_frame(deck_selector_factory) -> None:
+    """Phase 6c's border, checked where the static guard cannot reach.
+
+    ``tests/test_widget_audit.py`` bans a bare ``wx.TextCtrl(`` in the source.
+    That is the right guard for the construction site and it is blind to two
+    things a tree walk is not: a field built by a library or a helper outside
+    ``widgets/``, and a field whose frame was constructed but never made its
+    parent -- which is exactly the mistake the API invites, because the call
+    site holds a reference to the *control* and hands the *frame* to the sizer.
+    Getting that backwards leaves a field that works perfectly and has no
+    border, and no static check can tell.
+
+    ``wx.SearchCtrl`` subclasses ``wx.TextCtrl``; the app has none today, and if
+    one appears it is a text input and belongs in a frame like the rest.
+    """
+    frame = deck_selector_factory()
+    try:
+        inputs = [w for w in _walk(frame) if isinstance(w, wx.TextCtrl)]
+        # Pinned for the same reason test_the_sweep_actually_sees_the_tree is:
+        # a walk that stops finding text inputs passes silently forever. The
+        # main window carries six (research: date, placement value, player
+        # name; builder: card name, type line, mana value), and only one of the
+        # two panels is built at a time.
+        assert len(inputs) >= 3, f"the walk found only {len(inputs)} text inputs"
+        offenders = [_describe(w) for w in inputs if not isinstance(w.GetParent(), InputFrame)]
         assert offenders == [], (
-            f"font sizes off the ladder {sorted(allowed)}: {offenders}"
+            "these live text inputs are not hosted by an InputFrame, so they "
+            "render as a 1.10:1 fill with no boundary: " + str(offenders)
         )
     finally:
         frame.Destroy()

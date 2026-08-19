@@ -115,6 +115,7 @@ class AutomationServer(
             "add_lorem_mana_card": self._handle_add_lorem_mana_card,
             "get_inspector_oracle_text": self._handle_get_inspector_oracle_text,
             "select_card": self._handle_select_card,
+            "focus_text_input": self._handle_focus_text_input,
             # Mouse-wheel scroll latency instrumentation
             "wheel_scroll_start": self._handle_wheel_scroll_start,
             "get_scroll_perf": self._handle_get_scroll_perf,

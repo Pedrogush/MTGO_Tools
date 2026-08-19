@@ -13,7 +13,8 @@ from utils.constants import (
     TIMER_ALERT_REMOVE_BUTTON_SIZE,
     TIMER_ALERT_THRESHOLD_INPUT_SIZE,
 )
-from widgets.stylize import stylize_button, stylize_textctrl
+from widgets.input_frame import create_text_input
+from widgets.stylize import stylize_button
 
 # Built-in Windows sounds (always available)
 SOUND_OPTIONS = {
@@ -37,11 +38,13 @@ class ThresholdPanel(wx.Panel):
         self.SetSizer(sizer)
 
         # MM:SS input
-        self.time_input = wx.TextCtrl(
-            self, size=TIMER_ALERT_THRESHOLD_INPUT_SIZE, value=TIMER_ALERT_DEFAULT_THRESHOLD_VALUE
+        self._time_field = create_text_input(
+            self,
+            size=TIMER_ALERT_THRESHOLD_INPUT_SIZE,
+            value=TIMER_ALERT_DEFAULT_THRESHOLD_VALUE,
         )
-        stylize_textctrl(self.time_input)
-        sizer.Add(self.time_input, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, SPACE_SM)
+        self.time_input = self._time_field.ctrl
+        sizer.Add(self._time_field, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, SPACE_SM)
 
         # Remove button
         self.remove_btn = wx.Button(self, label="✕", size=TIMER_ALERT_REMOVE_BUTTON_SIZE)
@@ -71,5 +74,13 @@ class ThresholdPanel(wx.Panel):
         return int(minutes) * 60 + int(seconds)
 
     def set_enabled(self, enabled: bool) -> None:
-        self.time_input.Enable(enabled)
+        """Grey the row out while the timer owns it.
+
+        ``EnableInput`` rather than ``time_input.Enable``: phase 6c measured
+        that a disabled ``wx.TextCtrl`` on wxMSW discards its background colour
+        and paints ``#F0F0F0``, with no route back to it -- so every time the
+        timer started, this field became a light block on a dark window. See
+        :mod:`widgets.input_frame`.
+        """
+        self._time_field.EnableInput(enabled)
         self.remove_btn.Enable(enabled)

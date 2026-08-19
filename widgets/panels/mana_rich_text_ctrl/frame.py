@@ -17,7 +17,9 @@ written to delete from every other input in the app. Measured on the
 running builder: two 545x24 rectangles outlined at **15.6:1 against
 SURFACE_PANEL**, on the main window, in the panel with the most use.
 Copying the platform was the bug; the app is not drawn in the platform's
-palette any more.
+palette any more. Phase 6c then folded the frame onto
+:func:`widgets.input_frame.paint_input_border`, so this control and every
+native field in the app draw the same border from the same code.
 
 The placeholder hint is a separate ``wx.StaticText`` overlay rather than
 text written into the rich-text buffer. Writing the hint into the buffer
@@ -44,7 +46,8 @@ import wx
 import wx.richtext
 
 from utils.constants import DARK_ALT, HINT_TEXT, LIGHT_TEXT
-from utils.constants.theme import BORDER_SUBTLE, FOCUS_RING
+from utils.constants.theme import BORDER_STRONG
+from widgets.input_frame import INPUT_BORDER_DIP
 from widgets.panels.mana_rich_text_ctrl.handlers import (
     ManaRichTextInnerHandlersMixin,
     ManaSymbolRichCtrlHandlersMixin,
@@ -59,32 +62,19 @@ if TYPE_CHECKING:
     from widgets.mana_icon_factory import ManaIconFactory
 
 
-# The frame keeps its three-tone composition and its 2-DIP geometry -- a
-# 1-DIP halo wrapping a 1-DIP ring, darker along the bottom -- because the
-# inner RichTextCtrl is laid out inside that inset and changing it reflows
-# four call sites. What changed in phase 6b is where the three colours come
-# from.
+# Phase 6b re-founded this frame on BORDER_SUBTLE as an explicit placeholder:
+# a stripped wx.TextCtrl elsewhere in the app had **no border at all**, so a
+# 3.54:1 ring here would have made these two fields the loud ones in a column
+# of five, and "what marks a text input" was one question with one answer for
+# every field rather than something this control got to decide alone.
 #
-# BORDER_SUBTLE throughout, which is the same call phase 6 made for all ten
-# section cards: a quiet edge. BORDER_STRONG was tried first, on the argument
-# that the ring is the only thing identifying an input -- and measured against
-# the real builder it was wrong, because a stripped ``wx.TextCtrl`` in this app
-# renders with **no border at all**, so a 3.54:1 ring here would have made
-# these two fields the loud ones in a column of five. Whether a text input on
-# SURFACE_PANEL needs a visible boundary at all is a live question (its fill is
-# 1.10:1 on panel), but it is one question with one answer for every field, not
-# something this control gets to decide alone.
-_BORDER_HALO = wx.Colour(*BORDER_SUBTLE)
-_BORDER_RING = wx.Colour(*BORDER_SUBTLE)
-_BORDER_BASE = wx.Colour(*BORDER_SUBTLE)
-#: The focus underline. Was ``wx.SYS_COLOUR_HIGHLIGHT`` -- the *system*
-#: accent, a user setting rather than a token of ours, which phase 2
-#: rejected for exactly this reason when it looked at wx.ToggleButton's
-#: checked ring. FOCUS_RING is 7.43:1 on SURFACE_ALT and is drawn outside
-#: the field, which is where phase 0 said a focus ring has to live.
-_BORDER_FOCUS = wx.Colour(*FOCUS_RING)
-_BORDER_DIP = 2
-_BORDER_OUTER_DIP = 1
+# Phase 6c answered it -- BORDER_STRONG at rest, FOCUS_RING on focus, for every
+# input in the app -- so the colours, the weights and the states now come from
+# :mod:`widgets.input_frame` and this control paints with the same function
+# they do. The 2-DIP geometry survives unchanged: the inner RichTextCtrl is
+# laid out inside that inset, it is what the shared painter expects, and
+# nothing reflows.
+_BORDER_DIP = INPUT_BORDER_DIP
 
 
 class _ManaRichTextInner(
@@ -169,11 +159,9 @@ class ManaSymbolRichCtrl(
     ManaSymbolRichCtrlPropertiesMixin,
     wx.Panel,
 ):
-    """Public wrapper. Custom-paints a 2-DIP frame matching the native Win11
-    dark-mode wx.TextCtrl outline (outer light halo + inner near-white
-    ring, with a darker outer row at the bottom that tints the Windows
-    system accent colour on focus); delegates the TextCtrl API to an
-    inner borderless RichTextCtrl that fills the panel interior.
+    """Public wrapper. Paints the app's input border (see
+    :mod:`widgets.input_frame`) into its own 2-DIP inset and delegates the
+    TextCtrl API to an inner borderless RichTextCtrl that fills the interior.
     """
 
     def __init__(
@@ -190,7 +178,7 @@ class ManaSymbolRichCtrl(
         # Required by wx.AutoBufferedPaintDC: we paint the background
         # ourselves in _on_paint, so suppress the default erase-bg pass.
         self.SetBackgroundStyle(wx.BG_STYLE_PAINT)
-        self.SetBackgroundColour(_BORDER_HALO)
+        self.SetBackgroundColour(wx.Colour(*BORDER_STRONG))
 
         self._inner = _ManaRichTextInner(
             self,

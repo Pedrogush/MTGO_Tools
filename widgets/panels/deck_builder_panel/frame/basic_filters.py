@@ -13,8 +13,9 @@ from utils.constants import (
 )
 from widgets.buttons.mana_button import create_mana_button
 from widgets.checkbox import DarkCheckBox
+from widgets.input_frame import create_text_input
 from widgets.panels.mana_rich_text_ctrl import ManaSymbolRichCtrl
-from widgets.stylize import stylize_button, stylize_checkbox, stylize_label, stylize_textctrl
+from widgets.stylize import stylize_button, stylize_checkbox, stylize_label
 
 if TYPE_CHECKING:
     from widgets.panels.deck_builder_panel.protocol import DeckBuilderPanelProto
@@ -48,8 +49,8 @@ class BasicFiltersBuilderMixin(_Base):
         lbl = wx.StaticText(self, label=self._t("builder.field.card_name"))
         stylize_label(lbl, subtle=True, level="body")
         parent_sizer.Add(lbl, 0, wx.LEFT | wx.RIGHT, SPACE_SM)
-        name_ctrl = wx.TextCtrl(self)
-        stylize_textctrl(name_ctrl)
+        name_field = create_text_input(self)
+        name_ctrl = name_field.ctrl
         name_ctrl.SetHint(self._t("builder.hint.card_name"))
         name_ctrl.SetToolTip("Filter cards by name")
         name_ctrl.Bind(wx.EVT_TEXT, self._on_filters_changed)
@@ -57,7 +58,7 @@ class BasicFiltersBuilderMixin(_Base):
         # A1: LEFT/RIGHT is the form gutter, so the field lines up with its
         # label; the row gap stays SPACE_XS via the spacer, because a sizer
         # item has a single border value for every side it is given.
-        parent_sizer.Add(name_ctrl, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, SPACE_SM)
+        parent_sizer.Add(name_field, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, SPACE_SM)
         parent_sizer.AddSpacer(SPACE_XS)
 
         # --- Mana Cost (always visible) ---

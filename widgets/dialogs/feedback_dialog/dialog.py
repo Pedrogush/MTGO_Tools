@@ -11,12 +11,12 @@ from utils.constants import DARK_BG, LIGHT_TEXT, SPACE_SM, SUBDUED_TEXT
 from widgets.checkbox import DarkCheckBox
 from widgets.dialogs.feedback_dialog.handlers import FeedbackDialogHandlersMixin
 from widgets.dialogs.feedback_dialog.properties import FeedbackDialogPropertiesMixin
+from widgets.input_frame import create_text_input
 from widgets.stylize import (
     apply_type_level,
     init_top_level_window,
     stylize_button,
     stylize_checkbox,
-    stylize_textctrl,
 )
 
 
@@ -73,13 +73,15 @@ class FeedbackDialog(FeedbackDialogHandlersMixin, FeedbackDialogPropertiesMixin,
         notes_label.SetForegroundColour(LIGHT_TEXT)
         sizer.Add(notes_label, 0, wx.LEFT | wx.RIGHT | wx.TOP, SPACE_SM)
 
-        self._notes_ctrl = wx.TextCtrl(
+        notes_field = create_text_input(
             panel,
-            style=wx.TE_MULTILINE | wx.TE_WORDWRAP,
+            level="body",
+            surface="panel",
             size=(-1, 80),
+            style=wx.TE_MULTILINE | wx.TE_WORDWRAP,
         )
-        stylize_textctrl(self._notes_ctrl, level="body", surface="panel")
-        sizer.Add(self._notes_ctrl, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, SPACE_SM)
+        self._notes_ctrl = notes_field.ctrl
+        sizer.Add(notes_field, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, SPACE_SM)
 
         # Opt-in event logging checkbox
         self._event_log_check = DarkCheckBox(

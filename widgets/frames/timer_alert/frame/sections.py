@@ -23,8 +23,9 @@ from utils.constants import (
 )
 from widgets.checkbox import DarkCheckBox
 from widgets.frames.timer_alert.frame.threshold_panel import SOUND_OPTIONS
+from widgets.input_frame import create_text_input
 from widgets.section import SectionPanel
-from widgets.stylize import stylize_scrollable, stylize_textctrl
+from widgets.stylize import stylize_scrollable
 
 
 class SectionsBuilderMixin:
@@ -157,13 +158,14 @@ class SectionsBuilderMixin:
 
     def _build_status_section(self, panel: wx.Panel, sizer: wx.Sizer) -> None:
         # Status display
-        self.status_text = wx.TextCtrl(
+        status_field = create_text_input(
             panel,
+            level="body",
             style=wx.TE_MULTILINE | wx.TE_READONLY | wx.TE_WORDWRAP | wx.BORDER_NONE,
         )
-        self.status_text.SetMinSize((-1, TIMER_ALERT_STATUS_MIN_HEIGHT))
-        stylize_textctrl(self.status_text, level="body")
-        sizer.Add(self.status_text, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, SPACE_MD)
+        status_field.SetMinSize((-1, TIMER_ALERT_STATUS_MIN_HEIGHT))
+        self.status_text = status_field.ctrl
+        sizer.Add(status_field, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, SPACE_MD)
 
         # Challenge timer display
         challenge_section = SectionPanel(

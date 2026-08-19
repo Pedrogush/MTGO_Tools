@@ -31,7 +31,20 @@ not assumed. This table is the constraint every later phase inherits:
 widget               behaviour
 ===================  ==================================================
 ``wx.StaticText``    background + foreground honoured
-``wx.TextCtrl``      background + foreground honoured
+``wx.TextCtrl``      background + foreground honoured **while enabled**. A
+                     **disabled** one discards them: ``Enable(False)`` makes
+                     wxMSW paint the client area ``#F0F0F0`` and nothing gets
+                     it back -- setting the colour after ``Disable()``,
+                     :func:`disable_native_theme` and Windows' own dark mode
+                     were all measured and all leave the same near-white block.
+                     ``SetEditable(False)`` *does* keep the dark fill, which is
+                     what :meth:`widgets.input_frame.InputFrame.EnableInput`
+                     uses to render a disabled field. Read-only is also the one
+                     state wxMSW drops out of **tab order**:
+                     ``CanAcceptFocusFromKeyboard()`` is ``False`` for a
+                     ``wx.TE_READONLY`` field and for a disabled one. The border
+                     is non-client area and unreachable -- see the ``client
+                     edge`` row and :mod:`widgets.input_frame`
 ``wx.Button``        background + foreground honoured. The border is a **2px
                      light-grey frame** (``#ADADAD`` outside, ``#E1E1E1``
                      inside) drawn by the theme, identical for every background
@@ -144,6 +157,22 @@ widget               behaviour
                      together or the strip measures itself with one font and
                      draws with another. Phase 6b did that; see
                      :mod:`widgets.notebook`
+``wx.Panel``         two traps, both found in phase 6c and both silent.
+                     (1) ``wx.Panel``'s default style is ``wxTAB_TRAVERSAL``,
+                     and a ``style=`` argument **replaces** it rather than
+                     adding to it -- so ``wx.Panel(parent,
+                     style=wx.BORDER_NONE)``, an idiom already in the tree, is a
+                     traversal dead end. (2) ``AcceptsFocusFromKeyboard()``
+                     answers "have I any focusable children" from the children's
+                     ``AcceptsFocus``, which is ``True`` for a read-only or
+                     disabled ``wx.TextCtrl`` even though their
+                     ``CanAcceptFocusFromKeyboard`` is ``False``. A panel
+                     wrapping one therefore becomes a **tab stop itself**: focus
+                     lands on a bare panel with no visible indicator. Override
+                     ``AcceptsFocusFromKeyboard`` to delegate to the child;
+                     overriding ``AcceptsFocus`` as well is wrong and was
+                     measured -- traversal then stops descending into the panel
+                     at all and skips the child even when it is focusable
 ``wx.StaticBox``     ``SetForegroundColour`` recolours **only the label**;
                      ``SetBackgroundColour`` fills the interior. The etched
                      groove itself is drawn by the theme at **``#DCDCDC``**
@@ -171,10 +200,13 @@ client edge          ``wx.TextCtrl``, ``wx.ListBox`` and ``wx.dataview``'s
                      leaves **nothing** -- the field renders as ``SURFACE_ALT``
                      straight onto its parent, which on ``SURFACE_PANEL`` is
                      1.10:1. The edge itself is a ``#FFFFFF`` line over
-                     ``#7A7A7A``, i.e. ~21:1, so removing it is still right; but
-                     "what marks a text input afterwards" is an open question
-                     and not one this function answers. See
-                     :func:`strip_native_client_edge`
+                     ``#7A7A7A``, i.e. ~21:1, so removing it is still right.
+                     **Phase 6c answered what replaces it**: an own-drawn
+                     ``BORDER_STRONG`` ring painted by the field's parent, since
+                     the boundary is the sole marker of the control and phase 0
+                     puts that case at >= 3:1. See :mod:`widgets.input_frame`;
+                     every ``wx.TextCtrl`` in the app is built through it and
+                     ``tests/test_widget_audit.py`` fails on one that is not
 ``wx.SplitterWindow``
                      the **sash** is drawn by ``wxRendererNative`` and is
                      unreachable: ``SetBackgroundColour``,
@@ -614,8 +646,15 @@ def stylize_textctrl(
     ``#FFFFFF`` sunken edge and fixed the four sites it was looking at, one call
     site at a time -- which left the styling function itself silent about the
     edge, so the next text field written after it got the white hairline back.
-    A ``wx.TextCtrl`` never wants that edge: what is left behind is wxMSW's
-    dark-mode edit border, which is the boundary that identifies the field.
+    A ``wx.TextCtrl`` never wants that edge, and what is left behind is
+    **nothing** -- phase 6 recorded a dark-mode edit border from an isolated
+    probe and phase 6b measured five real fields that had none.
+
+    This function is therefore no longer the whole of theming a text input.
+    Phase 6c owns the boundary that replaces the stripped edge, and it cannot
+    live on the control: build fields with
+    :func:`widgets.input_frame.create_text_input`, which calls this and then
+    paints a ``BORDER_STRONG`` ring around it from the parent.
     """
     ctrl.SetBackgroundColour(_colour(_SURFACE_COLOURS[surface]))
     ctrl.SetForegroundColour(_colour(TEXT_PRIMARY))
@@ -838,10 +877,10 @@ def strip_native_client_edge(window: wx.Window) -> None:
       from an isolated probe; phase 6b measured the five fields in the running
       deck builder and every one of them renders as bare ``SURFACE_ALT`` on its
       parent afterwards, at 1.10:1 on ``SURFACE_PANEL``. Removing a 21:1
-      hairline is still unambiguously right. What replaces it is a design
-      question the redesign has not answered: an input's boundary is arguably
-      the ``BORDER_STRONG`` case, and wx gives no way to colour a
-      ``wx.TextCtrl``'s border, so answering it means own-drawing;
+      hairline is still unambiguously right, and phase 6c supplied the boundary
+      that replaces it: :mod:`widgets.input_frame` paints a ``BORDER_STRONG``
+      ring from the field's **parent**, because wx gives no way to colour a
+      ``wx.TextCtrl``'s own border;
     * on a composite it has to be applied to the window that owns the edge.
       ``wx.dataview.TreeListCtrl`` wraps a ``DataViewCtrl``; calling this on the
       wrapper alone changes nothing on screen.

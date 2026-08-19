@@ -114,6 +114,28 @@ ROUTED_ELSEWHERE: dict[str, str] = {
     ),
 }
 
+#: The only modules allowed to construct a bare ``wx.TextCtrl``. Every text
+#: input in the app is a fill on ``SURFACE_ALT`` measuring **1.10:1** against
+#: the panel around it once phase 6b took wxMSW's ``#FFFFFF`` client edge off,
+#: and phase 0's rule is that a border which is the *sole marker* of a control
+#: must be ``BORDER_STRONG`` (WCAG 1.4.11). wx cannot colour a ``wx.TextCtrl``'s
+#: border at all, so the border is own-drawn by :mod:`widgets.input_frame` and a
+#: field only gets one by being built through it.
+TEXT_INPUT_FACTORIES: dict[str, str] = {
+    "widgets/input_frame.py": (
+        "The factory itself. ``create_text_input`` is the one place a "
+        "``wx.TextCtrl`` is constructed, which is what makes this guard a "
+        "closed question rather than a name-resolution one."
+    ),
+    "widgets/panels/mana_rich_text_ctrl/frame.py": (
+        "One throwaway ``wx.TextCtrl`` built solely to read "
+        "``GetBestSize().height`` so the mana field can match a real input's "
+        "height, then ``Destroy()``d in the next statement. It is a ruler, not "
+        "a widget, and it is never shown. The mana control's own frame is "
+        "painted by ``widgets.input_frame.paint_input_border``."
+    ),
+}
+
 #: Sites that must NOT go through the styling layer, and why.
 DELIBERATELY_UNSTYLED: dict[str, str] = {
     "widgets/panels/mana_rich_text_ctrl/frame.py": (
@@ -338,8 +360,7 @@ def test_every_native_themed_control_reaches_its_stylizer() -> None:
     offenders = _unrouted(NATIVE_THEMED_CLASSES)
     assert offenders == [], (
         "these controls are painted by a native theme and need their "
-        "stylize_* helper; colour calls alone are a no-op on them:\n  "
-        + "\n  ".join(offenders)
+        "stylize_* helper; colour calls alone are a no-op on them:\n  " + "\n  ".join(offenders)
     )
 
 
@@ -354,6 +375,53 @@ def test_every_client_edge_control_is_handled() -> None:
     assert offenders == [], (
         "these controls keep wxMSW's #FFFFFF sunken client edge; call "
         "strip_native_client_edge (or a stylize_* that does):\n  " + "\n  ".join(offenders)
+    )
+
+
+# ---------------------------------------------------------------------------
+# One text input
+# ---------------------------------------------------------------------------
+
+
+def test_no_bare_text_input_survives_in_the_widget_tree() -> None:
+    """The fifth guard of this shape, after ``wx.StaticBox``, ``wx.Notebook``,
+    ``wx.StaticLine`` and ``wx.SplitterWindow`` -- and the one with the sharpest
+    edge, because the thing it is guarding *cannot be seen* by looking at a
+    ``wx.TextCtrl``.
+
+    A field constructed directly is not "unbordered pending styling": it is a
+    ``SURFACE_ALT`` rectangle at **1.10:1** on ``SURFACE_PANEL`` with nothing
+    marking where it begins, and no call any later phase can add will fix it,
+    because wx exposes no way to colour a ``wx.TextCtrl``'s border. The border
+    has to be painted by a parent, so it has to exist *before* the control does
+    -- which is why this guard is on the construction site rather than on a
+    styling call the way :func:`test_every_client_edge_control_is_handled` is.
+
+    Use :func:`widgets.input_frame.create_text_input`; keep the returned frame's
+    ``.ctrl`` for value, binding and focus calls exactly as before, and hand the
+    frame to the sizer.
+    """
+    offenders = [
+        _rel(path)
+        for path in _modules()
+        if "wx.TextCtrl(" in path.read_text(encoding="utf-8")
+        and _rel(path) not in TEXT_INPUT_FACTORIES
+    ]
+    assert offenders == [], (
+        "a bare wx.TextCtrl has no border wx can colour, so it renders as a "
+        "1.10:1 fill with nothing marking the field; build it with "
+        f"widgets.input_frame.create_text_input. Found in: {offenders}"
+    )
+
+
+@pytest.mark.parametrize("name", sorted(TEXT_INPUT_FACTORIES))
+def test_every_text_input_factory_exception_still_builds_one(name: str) -> None:
+    """An allowlist entry that has outlived its construction silences the guard."""
+    path = WIDGETS.parent / name
+    assert path.exists(), f"{name} no longer exists"
+    assert "wx.TextCtrl(" in path.read_text(encoding="utf-8"), (
+        f"{name} no longer constructs a wx.TextCtrl, so its exception is now "
+        "covering whatever gets written there next"
     )
 
 
@@ -427,7 +495,11 @@ def _is_rgb_tuple(node: ast.AST) -> bool:
 
 
 def _is_colour_literal_call(node: ast.AST) -> bool:
-    if not isinstance(node, ast.Call) or _dotted(node.func) not in {"wx.Colour", "wx.Brush", "wx.Pen"}:
+    if not isinstance(node, ast.Call) or _dotted(node.func) not in {
+        "wx.Colour",
+        "wx.Brush",
+        "wx.Pen",
+    }:
         return False
     if not node.args:
         return False
@@ -497,7 +569,9 @@ def test_no_colour_literal_reaches_a_widget_outside_the_allowlist() -> None:
             ):
                 for arg in node.args:
                     if _is_rgb_tuple(arg):
-                        offenders.append(f"{rel}:{node.lineno} {node.func.attr}({ast.unparse(arg)})")
+                        offenders.append(
+                            f"{rel}:{node.lineno} {node.func.attr}({ast.unparse(arg)})"
+                        )
     assert offenders == [], (
         "every colour in widgets/ comes from utils.constants.theme. If one of "
         "these genuinely should not, add it to COLOUR_LITERAL_EXCEPTIONS with "
