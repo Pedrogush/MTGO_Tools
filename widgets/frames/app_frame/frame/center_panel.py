@@ -9,7 +9,6 @@ from wx.lib.agw import flatnotebook as fnb
 
 from utils.constants import (
     DARK_PANEL,
-    LIGHT_TEXT,
     SPACE_MD,
     SPACE_SM,
     SPACE_XS,
@@ -21,6 +20,7 @@ from widgets.panels.card_table_panel import CardTablePanel
 from widgets.panels.deck_notes_panel import DeckNotesPanel
 from widgets.panels.deck_stats_panel import DeckStatsPanel
 from widgets.panels.sideboard_guide_panel import SideboardGuidePanel
+from widgets.section import SectionPanel
 
 if TYPE_CHECKING:
     from widgets.frames.app_frame.protocol import AppFrameProto
@@ -43,14 +43,20 @@ class CenterPanelBuilderMixin(_Base):
         return make_flat_notebook(parent, agw_style=DEFAULT_AGW_STYLE | fnb.FNB_SMART_TABS)
 
     @timed
-    def _build_deck_workspace(self, parent: wx.Window) -> wx.StaticBoxSizer:
-        detail_box = wx.StaticBox(parent, label=self._t("app.label.deck_workspace"))
-        detail_box.SetForegroundColour(LIGHT_TEXT)
-        detail_box.SetBackgroundColour(DARK_PANEL)
-        detail_sizer = wx.StaticBoxSizer(detail_box, wx.VERTICAL)
+    def _build_deck_workspace(self, parent: wx.Window) -> SectionPanel:
+        # G2: the review found three levels of container chrome stacked on one
+        # content region -- a StaticBox wrapping a FlatNotebook wrapping a panel
+        # that drew its own border. The innermost border went with phase 5's
+        # table rebuild; this drops the heading, because the notebook's own tab
+        # strip already names every region inside it and "Deck Workspace" above
+        # "Deck Tables | Sideboard Guide | Deck Notes | Deck Stats" was a label
+        # for a label. What is left is one card: a flat fill, a 1px border, and
+        # the tabs.
+        section = SectionPanel(parent, title=None, padding=SPACE_SM)
+        detail_box = section.body
 
         self.deck_tabs = self._create_notebook(detail_box)
-        detail_sizer.Add(self.deck_tabs, 1, wx.EXPAND | wx.ALL, SPACE_SM)
+        section.sizer.Add(self.deck_tabs, 1, wx.EXPAND)
 
         # Mainboard and Sideboard as top-level tabs
         self._build_deck_tables_tab()
@@ -69,7 +75,8 @@ class CenterPanelBuilderMixin(_Base):
             detail_box, label=self._t("app.status.collection_not_loaded")
         )
         self.collection_status_label.SetForegroundColour(SUBDUED_TEXT)
-        detail_sizer.Add(self.collection_status_label, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, SPACE_XS)
+        self.collection_status_label.SetBackgroundColour(wx.Colour(*DARK_PANEL))
+        section.sizer.Add(self.collection_status_label, 0, wx.TOP, SPACE_XS)
 
         # Sideboard Guide and Notes tabs
         self.sideboard_guide_panel = SideboardGuidePanel(
@@ -114,7 +121,7 @@ class CenterPanelBuilderMixin(_Base):
         self.deck_stats_panel.SetToolTip(self._t("tabs.tooltip.deck_stats"))
         self.deck_tabs.AddPage(self.deck_stats_panel, self._t("tabs.deck_stats"))
         self.stats_summary = self.deck_stats_panel.summary_label
-        return detail_sizer
+        return section
 
     def _build_deck_tables_tab(self) -> None:
         """Build the mainboard/sideboard zones as a single vertical split page.

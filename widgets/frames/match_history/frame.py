@@ -19,11 +19,13 @@ from utils.constants import SPACE_MD, SPACE_SM, SPACE_XS
 from utils.i18n import translate
 from widgets.frames.match_history.handlers import MatchHistoryHandlersMixin
 from widgets.frames.match_history.properties import MatchHistoryPropertiesMixin
+from widgets.section import SectionPanel
 from widgets.stylize import (
     apply_type_level,
     create_divider,
     create_status_label,
     init_top_level_window,
+    strip_native_client_edge,
     stylize_button,
     stylize_scrollable,
 )
@@ -94,12 +96,12 @@ class MatchHistoryFrame(MatchHistoryHandlersMixin, MatchHistoryPropertiesMixin, 
         self.status_label = create_status_label(panel, self._t("app.status.ready"))
         toolbar.Add(self.status_label, 1, wx.ALIGN_CENTER_VERTICAL | wx.LEFT, SPACE_SM)
 
-        metrics_box = wx.StaticBox(panel, label=self._t("match.metrics.title"))
-        metrics_box.SetForegroundColour(LIGHT_TEXT)
-        metrics_box.SetBackgroundColour(DARK_PANEL)
-        metrics_sizer = wx.StaticBoxSizer(metrics_box, wx.VERTICAL)
-        box_parent = metrics_sizer.GetStaticBox()
-        sizer.Add(metrics_sizer, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, SPACE_SM)
+        metrics_section = SectionPanel(
+            panel, title=self._t("match.metrics.title"), padding=SPACE_SM
+        )
+        metrics_sizer = metrics_section.sizer
+        box_parent = metrics_section.body
+        sizer.Add(metrics_section, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, SPACE_SM)
 
         # Phase 5: the eight metrics were eight plain "Label: value" strings, so
         # every value started at a different x -- the label length decided where
@@ -109,7 +111,7 @@ class MatchHistoryFrame(MatchHistoryHandlersMixin, MatchHistoryPropertiesMixin, 
         metrics_inner = wx.FlexGridSizer(cols=4, gap=(SPACE_MD, SPACE_XS))
         metrics_inner.AddGrowableCol(1, 1)
         metrics_inner.AddGrowableCol(3, 1)
-        metrics_sizer.Add(metrics_inner, 0, wx.EXPAND | wx.ALL, SPACE_SM)
+        metrics_sizer.Add(metrics_inner, 0, wx.EXPAND)
 
         self.match_rate_label = self._add_metric(
             metrics_inner, box_parent, "match.metrics.abs_match_rate"
@@ -131,7 +133,7 @@ class MatchHistoryFrame(MatchHistoryHandlersMixin, MatchHistoryPropertiesMixin, 
         )
 
         metrics_sizer.Add(
-            create_divider(box_parent, vertical=False), 0, wx.EXPAND | wx.LEFT | wx.RIGHT, SPACE_SM
+            create_divider(box_parent, vertical=False), 0, wx.EXPAND | wx.TOP, SPACE_SM
         )
 
         # The opponent pair used to be secondary-coloured with nothing to say
@@ -141,12 +143,12 @@ class MatchHistoryFrame(MatchHistoryHandlersMixin, MatchHistoryPropertiesMixin, 
         self.opp_heading = wx.StaticText(box_parent, label=self._t("match.metrics.opp_none"))
         self.opp_heading.SetForegroundColour(SUBDUED_TEXT)
         apply_type_level(self.opp_heading, "caption")
-        metrics_sizer.Add(self.opp_heading, 0, wx.LEFT | wx.RIGHT | wx.TOP, SPACE_SM)
+        metrics_sizer.Add(self.opp_heading, 0, wx.TOP, SPACE_SM)
 
         opp_grid = wx.FlexGridSizer(cols=4, gap=(SPACE_MD, SPACE_XS))
         opp_grid.AddGrowableCol(1, 1)
         opp_grid.AddGrowableCol(3, 1)
-        metrics_sizer.Add(opp_grid, 0, wx.EXPAND | wx.ALL, SPACE_SM)
+        metrics_sizer.Add(opp_grid, 0, wx.EXPAND | wx.TOP, SPACE_XS)
         self.opp_match_rate_label = self._add_metric(
             opp_grid, box_parent, "match.metrics.opp_match_rate", secondary=True
         )
@@ -155,7 +157,7 @@ class MatchHistoryFrame(MatchHistoryHandlersMixin, MatchHistoryPropertiesMixin, 
         )
 
         filter_row = wx.BoxSizer(wx.HORIZONTAL)
-        metrics_sizer.Add(filter_row, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, SPACE_SM)
+        metrics_sizer.Add(filter_row, 0, wx.EXPAND | wx.TOP, SPACE_SM)
         filter_row.Add(
             wx.StaticText(box_parent, label=self._t("match.filter.start")),
             0,
@@ -165,6 +167,7 @@ class MatchHistoryFrame(MatchHistoryHandlersMixin, MatchHistoryPropertiesMixin, 
         self.start_date_ctrl = wx.TextCtrl(box_parent, size=(120, -1))
         self.start_date_ctrl.SetBackgroundColour(DARK_ALT)
         self.start_date_ctrl.SetForegroundColour(LIGHT_TEXT)
+        strip_native_client_edge(self.start_date_ctrl)
         filter_row.Add(self.start_date_ctrl, 0, wx.RIGHT, SPACE_SM)
         filter_row.Add(
             wx.StaticText(box_parent, label=self._t("match.filter.end")),
@@ -175,6 +178,7 @@ class MatchHistoryFrame(MatchHistoryHandlersMixin, MatchHistoryPropertiesMixin, 
         self.end_date_ctrl = wx.TextCtrl(box_parent, size=(120, -1))
         self.end_date_ctrl.SetBackgroundColour(DARK_ALT)
         self.end_date_ctrl.SetForegroundColour(LIGHT_TEXT)
+        strip_native_client_edge(self.end_date_ctrl)
         filter_row.Add(self.end_date_ctrl, 0, wx.RIGHT, SPACE_SM)
         apply_btn = wx.Button(box_parent, label=self._t("match.filter.apply"))
         apply_btn.Bind(wx.EVT_BUTTON, lambda _evt: self._update_metrics())
@@ -192,6 +196,10 @@ class MatchHistoryFrame(MatchHistoryHandlersMixin, MatchHistoryPropertiesMixin, 
         # the inner control, so both have to be handed over.
         stylize_scrollable(self.tree)
         stylize_scrollable(self.tree.GetDataView())
+        # The sunken edge belongs to the inner DataViewCtrl, not the wrapper --
+        # stripping it from the TreeListCtrl alone changes nothing on screen.
+        strip_native_client_edge(self.tree)
+        strip_native_client_edge(self.tree.GetDataView())
         self.tree.Bind(dv.EVT_TREELIST_ITEM_ACTIVATED, self.on_item_activated)
         self.tree.Bind(dv.EVT_TREELIST_SELECTION_CHANGED, self.on_item_selected)
         sizer.Add(self.tree, 1, wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, SPACE_SM)

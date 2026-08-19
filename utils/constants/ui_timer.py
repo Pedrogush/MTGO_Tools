@@ -6,7 +6,14 @@
 # and the "Active Challenge Timer" box was the first thing to go when the 4px
 # spacing scale added 32px. Sized to the measured best height plus the frame's
 # own chrome rather than to a round number.
-TIMER_ALERT_FRAME_SIZE = (420, 580)
+#
+# 580 -> 588 in phase 6. Replacing the two wx.StaticBoxes with section cards put
+# a real heading above each one, which costs 8px more than the label the
+# StaticBox groove reserved. The threshold list is the only sizer item with a
+# stretch proportion here, so it absorbed all 8: measured, its client height went
+# 34 -> 26 while one ThresholdPanel needs 29, i.e. a single threshold no longer
+# fitted without scrolling. +8 restores the measured 34.
+TIMER_ALERT_FRAME_SIZE = (420, 588)
 TIMER_ALERT_THRESHOLD_INPUT_SIZE = (80, -1)
 TIMER_ALERT_REMOVE_BUTTON_SIZE = (30, -1)
 TIMER_ALERT_STATUS_MIN_HEIGHT = 80
