@@ -26,17 +26,18 @@ from typing import Any
 import wx
 import wx.grid as gridlib
 
-from utils.constants import DARK_ALT, DARK_BG, DARK_PANEL, LIGHT_TEXT, SUBDUED_TEXT
+from utils.constants import DARK_ALT, DARK_BG, DARK_PANEL, LIGHT_TEXT, SPACE_SM, SUBDUED_TEXT
 from widgets.mana_icon_factory import ManaIconFactory
 from widgets.panels.card_table_panel.marquee import MarqueeController
 from widgets.panels.card_table_panel.sorting import (
-    COL_COLOR,
     COL_MANA,
     COL_NAME,
+    COL_QTY,
     COL_TEXT,
     COL_TYPE,
     TABLE_ACTION_ADD,
     TABLE_ACTION_REMOVE,
+    TABLE_ACTION_SLOT_WIDTH,
     TABLE_ACTION_SUB,
     TABLE_COLUMNS,
     action_slot_at,
@@ -62,11 +63,11 @@ from widgets.panels.card_table_panel.table_renderers import (
 _CELL_ICON_SIZE_BONUS = 4
 
 _COLUMN_LABELS: dict[str, str] = {
+    COL_QTY: "Qty",
     COL_MANA: "Mana",
     COL_NAME: "Name",
     COL_TYPE: "Type",
     COL_TEXT: "Text",
-    COL_COLOR: "Color",
 }
 
 # Trailing, non-data "actions" column rendered with the same +/-/x controls the
@@ -141,7 +142,10 @@ class DeckTableView(wx.Panel):
         self.grid.SetDefaultCellTextColour(wx.Colour(*LIGHT_TEXT))
         self.grid.SetLabelBackgroundColour(wx.Colour(*DARK_BG))
         self.grid.SetLabelTextColour(wx.Colour(*SUBDUED_TEXT))
-        self.grid.SetGridLineColour(wx.Colour(*DARK_BG))
+        # Phase 5: no grid lines. A rule between every pair of the six columns
+        # is spreadsheet chrome; the row height and the selection bar already
+        # separate rows, and column alignment separates columns.
+        self.grid.EnableGridLines(False)
         # Selection background matches the cell background so the native row
         # fill is invisible; renderers paint the accent bar themselves. The
         # cell-highlight pen is what would otherwise draw a black focus rect
@@ -158,21 +162,26 @@ class DeckTableView(wx.Panel):
         # the icon so the top pixel row isn't clipped against the grid line.
         self._icon_size = _font_height(self.grid.GetDefaultCellFont())
         self._cell_icon_size = self._icon_size + _CELL_ICON_SIZE_BONUS
-        self.grid.SetDefaultRowSize(self._cell_icon_size + 1)
+        # The row is at least as tall as the +/-/x controls it hosts, so those
+        # clear the comfortable-pointer-target floor vertically as well as
+        # horizontally. It was icon height + 1, i.e. ~22px.
+        self.grid.SetDefaultRowSize(max(TABLE_ACTION_SLOT_WIDTH, self._cell_icon_size + 1))
 
         for idx, col_id in enumerate(TABLE_COLUMNS):
             self.grid.SetColLabelValue(idx, self._label(col_id))
             renderer: gridlib.GridCellRenderer
-            if col_id in (COL_MANA, COL_COLOR):
+            if col_id == COL_MANA:
                 renderer = _ManaIconCellRenderer(icon_factory, self._cell_icon_size)
             elif col_id == COL_TEXT:
                 renderer = _InlineSymbolStringRenderer(icon_factory, self._cell_icon_size)
             else:
-                # Name + Type share the same ellipsis-truncating renderer so
-                # they participate in the selection bar / bold-text styling.
+                # Qty + Name + Type share the same ellipsis-truncating renderer
+                # so they participate in the selection bar / bold-text styling.
                 renderer = _EllipsisStringRenderer()
             attr = gridlib.GridCellAttr()
             attr.SetRenderer(renderer)
+            if col_id == COL_QTY:
+                attr.SetAlignment(wx.ALIGN_RIGHT, wx.ALIGN_CENTRE)
             self.grid.SetColAttr(idx, attr)
 
         # Actions column: fixed width, non-sortable, non-resizable.
@@ -311,12 +320,18 @@ class DeckTableView(wx.Panel):
                 self.grid.SetColSize(idx, w)
         # Reserve room for the fixed actions column so the data columns shrink
         # to fit beside it rather than pushing it off-screen.
-        available = self.grid.GetClientSize().GetWidth() - _ACTIONS_COL_WIDTH
+        # Also reserve the vertical scrollbar: without it the row is computed
+        # to fit a width the grid does not actually have, and the last column
+        # (the +/-/x controls) is pushed out of view behind a horizontal
+        # scrollbar -- which is where it was before phase 5.
+        scrollbar = wx.SystemSettings.GetMetric(wx.SYS_VSCROLL_X)
+        available = self.grid.GetClientSize().GetWidth() - _ACTIONS_COL_WIDTH - scrollbar
         sizes = fit_to_width(
             self._natural_widths,
             available,
             TABLE_COLUMNS.index(COL_TYPE),
             TABLE_COLUMNS.index(COL_TEXT),
+            TABLE_COLUMNS.index(COL_NAME),
         )
         for idx, size in sizes.items():
             self.grid.SetColSize(idx, size)
@@ -370,7 +385,9 @@ class DeckTableView(wx.Panel):
         rect = self.grid.CellToRect(row, col)
         x_logical, _ = self.grid.CalcUnscrolledPosition(pos)
         x_in_cell = x_logical - rect.x
-        action = action_slot_at(x_in_cell, rect.width)
+        action = action_slot_at(x_in_cell, rect.width - SPACE_SM)
+        if action is None:
+            return
         if action == TABLE_ACTION_ADD and self._on_delta:
             self._on_delta(name, 1)
         elif action == TABLE_ACTION_SUB and self._on_delta:

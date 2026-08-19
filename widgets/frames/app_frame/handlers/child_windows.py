@@ -65,9 +65,10 @@ class ChildWindowHandlers(_Base):
         )
 
     def open_metagame_analysis(self: AppFrame) -> None:
-        # Imported lazily: pulling in MetagameAnalysisFrame eagerly drags
-        # matplotlib (a heavy cold-import) onto the startup path. It is only
-        # needed when the user deliberately opens this chart.
+        # Imported lazily, in step with the other five companion windows. It
+        # used to be lazy specifically to keep matplotlib's cold import off the
+        # startup path; phase 5 replaced the pie with the shared HTML chart, so
+        # matplotlib is gone and this is now only about startup work in general.
         from widgets.frames.metagame_analysis import MetagameAnalysisFrame
 
         open_child_window(

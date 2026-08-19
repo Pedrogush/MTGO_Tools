@@ -207,32 +207,31 @@ class MatchHistoryHandlersMixin:
             self._clear_opp_stats()
             return
 
+        self.opp_heading.SetLabel(self._t("match.metrics.opp_selected", opponent=opp_name))
         self.opp_match_rate_label.SetLabel(
-            f"Vs. {opp_name} Match Win Rate: {stats['win_pct']:.1f}%"
-            f" ({stats['wins']}/{stats['total']})"
+            f"{stats['win_pct']:.1f}%  ({stats['wins']}/{stats['total']})"
         )
         self.opp_mull_rate_label.SetLabel(
-            f"Vs. {opp_name} Mull Rate: {stats['mull_rate']:.1f}%"
-            f" ({stats['total_mulligans']}/{stats['games_played']} games)"
+            f"{stats['mull_rate']:.1f}%  ({stats['total_mulligans']}/{stats['games_played']})"
         )
 
     def _clear_opp_stats(self) -> None:
-        self.opp_match_rate_label.SetLabel(f"{self._t('match.metrics.opp_match_rate')}: \u2014")
-        self.opp_mull_rate_label.SetLabel(f"{self._t('match.metrics.opp_mull_rate')}: \u2014")
+        self.opp_heading.SetLabel(self._t("match.metrics.opp_none"))
+        self.opp_match_rate_label.SetLabel("\u2014")
+        self.opp_mull_rate_label.SetLabel("\u2014")
 
     def _update_metrics(self) -> None:
         matches = self._iter_matches(self.history_items)
         if not matches:
-            self.match_rate_label.SetLabel(f"{self._t('match.metrics.abs_match_rate')}: \u2014")
-            self.game_rate_label.SetLabel(f"{self._t('match.metrics.abs_game_rate')}: \u2014")
-            self.filtered_match_rate_label.SetLabel(
-                f"{self._t('match.metrics.filtered_match_rate')}: \u2014"
-            )
-            self.filtered_game_rate_label.SetLabel(
-                f"{self._t('match.metrics.filtered_game_rate')}: \u2014"
-            )
-            self.mulligan_rate_label.SetLabel(f"{self._t('match.metrics.mulligan_rate')}: \u2014")
-            self.avg_mulligans_label.SetLabel(f"{self._t('match.metrics.avg_mulligans')}: \u2014")
+            for label in (
+                self.match_rate_label,
+                self.game_rate_label,
+                self.filtered_match_rate_label,
+                self.filtered_game_rate_label,
+                self.mulligan_rate_label,
+                self.avg_mulligans_label,
+            ):
+                label.SetLabel("\u2014")
             return
 
         start = self._parse_date_input(self.start_date_ctrl.GetValue())
@@ -245,40 +244,30 @@ class MatchHistoryHandlersMixin:
         metrics = compute_history_metrics(matches, filtered)
 
         self.match_rate_label.SetLabel(
-            f"{self._t('match.metrics.abs_match_rate')}: {metrics['match_rate']:.1f}%"
-            f" ({metrics['match_wins']}/{metrics['total_matches']})"
+            f"{metrics['match_rate']:.1f}%  ({metrics['match_wins']}/{metrics['total_matches']})"
         )
         self.game_rate_label.SetLabel(
-            f"{self._t('match.metrics.abs_game_rate')}: {metrics['game_rate']:.1f}%"
-            f" ({metrics['games_won']}/{metrics['games_played'] or 1})"
+            f"{metrics['game_rate']:.1f}%  ({metrics['games_won']}/{metrics['games_played'] or 1})"
         )
         self.mulligan_rate_label.SetLabel(
-            f"{self._t('match.metrics.mulligan_rate')}: {metrics['mulligan_rate']:.1f}%"
-            f" ({metrics['total_mulligans']}/{metrics['games_with_data']} games)"
+            f"{metrics['mulligan_rate']:.1f}%"
+            f"  ({metrics['total_mulligans']}/{metrics['games_with_data']})"
         )
-        self.avg_mulligans_label.SetLabel(
-            f"{self._t('match.metrics.avg_mulligans')}: {metrics['avg_mulligans_per_match']:.2f}"
-        )
+        self.avg_mulligans_label.SetLabel(f"{metrics['avg_mulligans_per_match']:.2f}")
 
         filtered_metrics = metrics["filtered"]
         if filtered_metrics:
             self.filtered_match_rate_label.SetLabel(
-                f"{self._t('match.metrics.filtered_match_rate')}:"
-                f" {filtered_metrics['match_rate']:.1f}%"
-                f" ({filtered_metrics['match_wins']}/{filtered_metrics['match_total']})"
+                f"{filtered_metrics['match_rate']:.1f}%"
+                f"  ({filtered_metrics['match_wins']}/{filtered_metrics['match_total']})"
             )
             self.filtered_game_rate_label.SetLabel(
-                f"{self._t('match.metrics.filtered_game_rate')}:"
-                f" {filtered_metrics['game_rate']:.1f}%"
-                f" ({filtered_metrics['games_won']}/{filtered_metrics['games_total']})"
+                f"{filtered_metrics['game_rate']:.1f}%"
+                f"  ({filtered_metrics['games_won']}/{filtered_metrics['games_total']})"
             )
         else:
-            self.filtered_match_rate_label.SetLabel(
-                f"{self._t('match.metrics.filtered_match_rate')}: \u2014"
-            )
-            self.filtered_game_rate_label.SetLabel(
-                f"{self._t('match.metrics.filtered_game_rate')}: \u2014"
-            )
+            self.filtered_match_rate_label.SetLabel("\u2014")
+            self.filtered_game_rate_label.SetLabel("\u2014")
 
     # ------------------------------------------------------------------ lifecycle
     def on_close(self, event: wx.CloseEvent) -> None:

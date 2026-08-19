@@ -8,7 +8,10 @@ import wx
 import wx.html
 
 from utils.constants import DARK_PANEL, LIGHT_TEXT, SPACE_SM
+from utils.constants.theme import SURFACE_ALT
+from utils.constants.ui_layout import ARCHETYPE_SPARK_WIDTH, ARCHETYPE_SUMMARY_HEIGHT
 from widgets.buttons.deck_action_buttons import DeckActionButtons
+from widgets.charts import SparkBarPanel
 from widgets.lists.deck_results_list import DeckResultsList
 
 if TYPE_CHECKING:
@@ -53,14 +56,25 @@ class ResultsSectionBuilderMixin(_Base):
         summary_box.SetBackgroundColour(DARK_PANEL)
         summary_sizer = wx.StaticBoxSizer(summary_box, wx.VERTICAL)
 
+        summary_row = wx.BoxSizer(wx.HORIZONTAL)
+        summary_sizer.Add(summary_row, 1, wx.EXPAND)
+
         self.summary_text = wx.html.HtmlWindow(
             summary_box,
             style=wx.html.HW_SCROLLBAR_NEVER | wx.NO_BORDER,
         )
-        self.summary_text.SetBackgroundColour(wx.Colour(34, 39, 46))
+        self.summary_text.SetBackgroundColour(wx.Colour(*SURFACE_ALT))
         self.summary_text.SetBorders(-1)
-        self.summary_text.SetMinSize((-1, 62))
-        summary_sizer.Add(self.summary_text, 1, wx.EXPAND)
+        self.summary_text.SetMinSize((-1, ARCHETYPE_SUMMARY_HEIGHT))
+        summary_row.Add(self.summary_text, 1, wx.EXPAND)
+
+        # H4: the seven-day counts used to be rendered as "9/6/0/7/10/4/0" in the
+        # cell to the right of the name -- seven slash-separated integers with no
+        # axis, units or legend, carrying the second-highest visual weight on the
+        # panel. Same numbers, as a bar strip, with the total as the big number.
+        self.summary_spark = SparkBarPanel(summary_box, surface=SURFACE_ALT)
+        self.summary_spark.SetMinSize((ARCHETYPE_SPARK_WIDTH, ARCHETYPE_SUMMARY_HEIGHT))
+        summary_row.Add(self.summary_spark, 0, wx.EXPAND)
         sizer.Add(summary_sizer, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, SPACE_SM)
 
         results_box = wx.StaticBox(self, label=self._labels.get("deck_results", "Deck Results"))

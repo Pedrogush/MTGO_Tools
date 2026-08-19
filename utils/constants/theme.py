@@ -389,3 +389,20 @@ SPACE_MD = 16
 SPACE_LG = 24
 SPACE_XL = 32
 SPACE_GRID = 4  # every spacing value should be a multiple of this
+
+#: CSS reference resolution. Windows reports 96 logical DPI, and a CSS pixel is
+#: defined at 96dpi, so a point size converts to a CSS px by 96/72 = 4/3.
+CSS_PX_PER_POINT_NUM, CSS_PX_PER_POINT_DEN = 4, 3
+
+
+def css_font_size(level: str = "body", base_pt: int = BASE_FONT_POINT_SIZE) -> int:
+    """``level``'s size in CSS pixels, for the HTML-rendered charts.
+
+    The app has two rendering surfaces — wx widgets, sized in points, and the
+    WebView/wxHTML chart pages, sized in CSS pixels. Deriving the px sizes from
+    the same integer point ladder keeps one type scale instead of two: the ratio
+    between adjacent levels survives the conversion because it is applied to
+    every level equally.
+    """
+    points = font_point_size(base_pt, level)
+    return round(points * CSS_PX_PER_POINT_NUM / CSS_PX_PER_POINT_DEN)

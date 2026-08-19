@@ -8,6 +8,7 @@ from utils.constants.theme import SPACE_MD as SPACE_MD
 from utils.constants.theme import SPACE_SM as SPACE_SM
 from utils.constants.theme import SPACE_XL as SPACE_XL
 from utils.constants.theme import SPACE_XS as SPACE_XS
+from utils.constants.theme import css_font_size
 
 # Preferred size on first launch / on displays large enough to host it. On a
 # smaller display the frame auto-maximizes instead (see _apply_window_preferences).
@@ -117,11 +118,60 @@ CARD_VIEW_SCROLL_RATE = 1  # pixels per scroll unit (fine scrollbar granularity)
 CARD_VIEW_WHEEL_LINE_PX = 20  # pixels scrolled per wheel "line"
 CARD_VIEW_WHEEL_LINES_PER_NOTCH = 3  # fallback when the OS lines-per-action is unknown
 
+# Top Cards viewer. Column widths are measured against the widest realistic
+# value and the (now expanded) header, at the 10pt base. "Copies" is the sort
+# key and is deliberately wider than the columns beside it -- the review's
+# "near-uniform column widths, so Copies gets the same weight as SB avg-K".
+TOP_CARDS_FRAME_SIZE = (1400, 740)
+TOP_CARDS_COL_RANK_WIDTH = 44
+TOP_CARDS_COL_CARD_WIDTH = 220
+TOP_CARDS_COL_COPIES_WIDTH = 88
+TOP_CARDS_COL_DECKS_WIDTH = 84
+TOP_CARDS_COL_AVG_WIDTH = 104
+TOP_CARDS_COL_ARCHETYPES_WIDTH = 136
+# Wide enough for the longest comma-joined legality list the data produces
+# ("Legacy, Modern, Pauper, Pioneer, Standard, Vintage"), so it no longer
+# truncates mid-word -- and fixed, so it can no longer autosize past the window
+# edge the way LIST_AUTOSIZE did.
+TOP_CARDS_COL_FORMATS_WIDTH = 264
+
+# Archetype summary strip (H4). The height was an unnamed 62; the sparkline
+# needs room for a value row, seven bars and a day label under each.
+ARCHETYPE_SUMMARY_DAYS = 7
+ARCHETYPE_SUMMARY_HEIGHT = 68
+ARCHETYPE_SPARK_WIDTH = 168
+
+# Own-drawn data grids (widgets/grids/data_grid.py)
+GRID_ROW_HEIGHT = 24  # comfortable scan height at the 10pt base
+GRID_HEADER_HEIGHT = 42  # two lines of caption text plus breathing room
+GRID_CELL_PADDING = 8  # inset between a cell edge and its text, both alignments
+
+# Shared bar-chart geometry (px unless noted). Used by both dialects of
+# widgets/charts/bars.py, so the WebView and wxHTML renderings of the same chart
+# stay proportionally identical.
+CHART_ROW_HEIGHT = 24  # >= the 24px pointer-target floor, and readable at a glance
+CHART_BAR_TRACK_HEIGHT = 14
+CHART_BAR_RADIUS = 3
+CHART_LABEL_COLUMN_PCT = 34  # archetype names; right-aligned against the bars
+CHART_VALUE_COLUMN_PCT = 10  # "12.3%" — right-aligned so the digits line up
+# A row that exists but rounds to a hairline still has to be visible: length is
+# the encoding, and a 0px bar reads as absent rather than small.
+CHART_BAR_MIN_WIDTH_PCT = 1.5
+
 # Deck Stats Panel — font sizes (px)
-STATS_FONT_SIZE_BODY = 12
-STATS_FONT_SIZE_LABEL = 11
-STATS_FONT_SIZE_SMALL = 10
-STATS_FONT_SIZE_VALUE = 15
+# Derived from the same integer point ladder the wx widgets use rather than
+# tabulated. The hand-written values were 12 / 11 / 10 / 15: three of them sat at
+# 1.09-1.10x steps, i.e. the panel had its own copy of root cause 3 (no type
+# scale). The panel was permanently hidden until phase 5, so this is the first
+# time those sizes have been on screen.
+STATS_FONT_SIZE_BODY = css_font_size("body")
+STATS_FONT_SIZE_LABEL = css_font_size("caption")
+#: Same step as LABEL. The old 11/10 pair was a 1.10x difference -- below the
+#: perceptual floor for "these are different levels" -- so it is now one level,
+#: kept as a separate name because the two call sites mean different things
+#: (chart chrome vs. in-bar values) and may diverge again on purpose.
+STATS_FONT_SIZE_SMALL = css_font_size("caption")
+STATS_FONT_SIZE_VALUE = css_font_size("heading")
 
 # Deck Stats Panel — layout
 STATS_CHART_BORDER_RADIUS = 6
@@ -131,6 +181,8 @@ STATS_VBAR_XAXIS_BOTTOM_OFFSET = -22  # matches STATS_VBAR_XAXIS_PADDING_BOTTOM 
 STATS_HBAR_ROW_HEIGHT = 20
 STATS_HBAR_LABEL_WIDTH = 82
 STATS_HBAR_TRACK_HEIGHT = 12
+# The bar is the encoding, so it gets floor priority over the label beside it.
+STATS_HBAR_TRACK_MIN_WIDTH = 40
 STATS_HBAR_COUNT_WIDTH = 28
 STATS_HBAR_ZERO_OPACITY = 0.35
 STATS_TOOLTIP_Z_INDEX = 999

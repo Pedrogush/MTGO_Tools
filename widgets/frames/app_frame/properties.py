@@ -111,6 +111,10 @@ class AppFramePropertiesMixin(_Base):
         return self.research_panel.summary_text
 
     @property
+    def summary_spark(self):  # type: ignore[override]
+        return self.research_panel.summary_spark
+
+    @property
     def deck_action_buttons(self):  # type: ignore[override]
         return self.research_panel.deck_action_buttons
 
