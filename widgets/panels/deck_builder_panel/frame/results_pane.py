@@ -14,6 +14,7 @@ from utils.constants import (
     SUBDUED_TEXT,
 )
 from widgets.checkbox import DarkCheckBox
+from widgets.empty_state import EmptyState
 from widgets.panels.deck_builder_panel.frame.search_results_view import _SearchResultsView
 from widgets.stylize import stylize_button, stylize_checkbox, stylize_choice, stylize_list_ctrl
 
@@ -39,6 +40,11 @@ class ResultsPaneBuilderMixin(_Base):
         clear_btn.SetToolTip("Reset all search filters")
         clear_btn.Bind(wx.EVT_BUTTON, lambda _evt: self._on_clear())
         controls.Add(clear_btn, 0, wx.RIGHT, SPACE_SM)
+        # C5: hidden while the empty state is up, because the empty state's own
+        # CTA *is* Clear Filters. Two identical buttons 20px apart is the same
+        # defect Deck Notes had; the rest of this row stays, since those are the
+        # filters the user needs in order to widen the search by hand.
+        self._clear_filters_btn = clear_btn
 
         self.format_pool_cb = DarkCheckBox(self, label=self._t("builder.format_pool.use_filter"))
         stylize_checkbox(self.format_pool_cb, surface="panel")
@@ -99,6 +105,21 @@ class ResultsPaneBuilderMixin(_Base):
         results.Bind(wx.EVT_LIST_CACHE_HINT, self._on_results_cache_hint)
         parent_sizer.Add(results, 1, wx.EXPAND | wx.LEFT, SPACE_SM)
         self.results_ctrl = results
+
+        # C5: the builder had no empty state at all -- zero matches left a bare
+        # ListCtrl with two column headers over ~200px of nothing, and the only
+        # signal was "Showing 0 cards." in 10pt subdued text below it. The list
+        # and this swap places; see handlers.update_results.
+        self.results_empty_state = EmptyState(
+            self,
+            message=self._t("builder.empty.no_results"),
+            hint=self._t("builder.empty.no_results.hint"),
+            cta_label=self._t("builder.clear_filters"),
+            on_cta=lambda _evt: self.clear_filters(),
+            surface="alt",
+        )
+        self.results_empty_state.Hide()
+        parent_sizer.Add(self.results_empty_state, 1, wx.EXPAND | wx.LEFT, SPACE_SM)
 
     def _build_add_zone_buttons(self, parent_sizer: wx.Sizer) -> None:
         add_btns_row = wx.BoxSizer(wx.HORIZONTAL)

@@ -236,11 +236,16 @@ def _render_face_block(
     """Render a single card face as a self-contained block of rows."""
     return (
         '<table width="100%" cellpadding="0" cellspacing="0" border="0">'
-        f'<tr><td align="left"><b><font size="+1">{name}</font></b></td>'
-        f'<td align="right">{mana_cost_html}</td></tr>'
+        # A6: both cells are valign="top". An HTML table cell defaults to
+        # middle, and the inspector column is narrow enough that a long card
+        # name wraps to three lines there -- which put the mana pips halfway
+        # down the name block instead of on the line they belong to. The same
+        # applies to the type line / edition row beneath it.
+        f'<tr><td align="left" valign="top"><b><font size="+1">{name}</font></b></td>'
+        f'<td align="right" valign="top">{mana_cost_html}</td></tr>'
         '<tr><td colspan="2"><hr></td></tr>'
-        f'<tr><td align="left"><font color="#A8B2BD">{type_line}</font></td>'
-        f'<td align="right"><font color="#A8B2BD">{edition_label}</font></td></tr>'
+        f'<tr><td align="left" valign="top"><font color="#A8B2BD">{type_line}</font></td>'
+        f'<td align="right" valign="top"><font color="#A8B2BD">{edition_label}</font></td></tr>'
         '<tr><td colspan="2"><hr></td></tr>'
         f'<tr><td colspan="2">{oracle_html}{flavor_html}</td></tr>'
         f'<tr><td align="right" colspan="2"><b><font size="+1">{pt}</font></b></td></tr>'

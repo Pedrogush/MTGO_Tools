@@ -36,6 +36,19 @@ DECK_CARD_WIDTH = 160
 DECK_CARD_HEIGHT = 224
 DECK_CARD_CORNER_RADIUS = 10
 DECK_CARD_BADGE_PADDING = 4
+# H1: where the quantity badge is anchored, as a fraction of the card's height.
+#
+# The badge used to be painted at the card's top-left corner, which on every
+# Magic frame is exactly where the *title* sits -- it clipped the first few
+# characters of every card name in the grid ("gatha's Soul Cauldron",
+# "rds of Paradise"). Measured on 160x224 renders of a standard M15 frame and a
+# borderless Special Guest printing, the art box ends and the type line begins
+# at ~0.52 of the card height in both. The badge's *bottom* is anchored there,
+# so it sits on the art box's lower edge: below the title, clear of the
+# top-right mana cost, and above the +/-/x action chips, which are pinned to the
+# bottom margin.
+DECK_CARD_BADGE_ANCHOR_FRACTION = 0.52
+DECK_CARD_BADGE_RADIUS = 4  # matches the +/-/x action chips
 DECK_CARD_BUTTON_MARGIN = 6
 DECK_CARD_ACTION_BUTTON_SIZE = (28, 28)  # min/max size of +/−/× buttons (px)
 DECK_CARD_TEMPLATE_BORDER_WIDTH = 2  # pen width for the template placeholder border

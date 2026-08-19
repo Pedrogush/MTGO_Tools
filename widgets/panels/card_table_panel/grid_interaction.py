@@ -24,6 +24,7 @@ import wx
 
 from utils.constants import (
     DECK_CARD_BADGE_PADDING,
+    DECK_CARD_BADGE_RADIUS,
     LIGHT_TEXT,
     SELECTION_BORDER,
 )
@@ -32,6 +33,7 @@ from widgets.panels.card_table_panel.grid_layout import (
     _CARD_WIDTH,
     _CELL_HEIGHT,
     _CELL_WIDTH,
+    badge_rect,
 )
 from widgets.panels.card_table_panel.marquee import RUBBER_AUTOSCROLL_PX
 from widgets.panels.card_table_panel.scrolling import scroll_by_wheel
@@ -287,13 +289,16 @@ class GridInteractionMixin:
             dc.SetFont(type_font("body", bold=True))
             tw, th = dc.GetTextExtent(badge)
             pad = DECK_CARD_BADGE_PADDING
-            bx = rect.x + rect.width - tw - pad * 3
-            by = rect.y + pad
+            # H1: this sat at the card's top-right, i.e. on the mana cost. It now
+            # shares the quantity badge's art-box anchor line, mirrored to the
+            # right so the two never read as the same thing.
+            _, by, bw, bh = badge_rect(rect, tw, th)
+            bx = rect.x + rect.width - bw - pad
             dc.SetBrush(wx.Brush(wx.Colour(*SELECTION_BORDER)))
             dc.SetPen(wx.TRANSPARENT_PEN)
-            dc.DrawRectangle(bx, by, tw + pad * 2, th + pad)
+            dc.DrawRoundedRectangle(bx, by, bw, bh, DECK_CARD_BADGE_RADIUS)
             dc.SetTextForeground(wx.Colour(*LIGHT_TEXT))
-            dc.DrawText(badge, bx + pad, by + pad // 2)
+            dc.DrawText(badge, bx + pad, by + (bh - th) // 2)
 
     def _draw_drop_indicator(self, dc: wx.DC) -> None:
         """Draw an insertion bar at the gap the drop would land in."""
