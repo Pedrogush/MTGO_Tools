@@ -11,7 +11,7 @@ import wx
 from utils.constants import DARK_BG, LIGHT_TEXT, SPACE_SM, SUBDUED_TEXT
 from widgets.dialogs.image_download_dialog.handlers import ImageDownloadDialogHandlersMixin
 from widgets.dialogs.image_download_dialog.properties import ImageDownloadDialogPropertiesMixin
-from widgets.stylize import apply_type_level, init_top_level_window
+from widgets.stylize import apply_type_level, init_top_level_window, stylize_button
 
 if TYPE_CHECKING:
     from services.image_service import BulkImageDownloader
@@ -95,9 +95,11 @@ class ImageDownloadDialog(
         button_sizer.AddStretchSpacer(1)
 
         cancel_btn = wx.Button(panel, wx.ID_CANCEL, label="Cancel")
+        stylize_button(cancel_btn, kind="secondary", surface="base")
         button_sizer.Add(cancel_btn, 0, wx.RIGHT, SPACE_SM)
 
         enable_btn = wx.Button(panel, wx.ID_OK, label="Enable Offline Mode")
+        stylize_button(enable_btn, kind="primary", surface="base")
         enable_btn.SetDefault()
         button_sizer.Add(enable_btn, 0)
 

@@ -7,11 +7,17 @@ from pathlib import Path
 
 import wx
 
-from utils.constants import DARK_BG, DARK_PANEL, LIGHT_TEXT, SPACE_SM, SUBDUED_TEXT
+from utils.constants import DARK_BG, LIGHT_TEXT, SPACE_SM, SUBDUED_TEXT
 from widgets.checkbox import DarkCheckBox
 from widgets.dialogs.feedback_dialog.handlers import FeedbackDialogHandlersMixin
 from widgets.dialogs.feedback_dialog.properties import FeedbackDialogPropertiesMixin
-from widgets.stylize import apply_type_level, init_top_level_window, stylize_checkbox
+from widgets.stylize import (
+    apply_type_level,
+    init_top_level_window,
+    stylize_button,
+    stylize_checkbox,
+    stylize_textctrl,
+)
 
 
 class FeedbackDialog(FeedbackDialogHandlersMixin, FeedbackDialogPropertiesMixin, wx.Dialog):
@@ -72,8 +78,7 @@ class FeedbackDialog(FeedbackDialogHandlersMixin, FeedbackDialogPropertiesMixin,
             style=wx.TE_MULTILINE | wx.TE_WORDWRAP,
             size=(-1, 80),
         )
-        self._notes_ctrl.SetBackgroundColour(DARK_PANEL)
-        self._notes_ctrl.SetForegroundColour(LIGHT_TEXT)
+        stylize_textctrl(self._notes_ctrl, level="body", surface="panel")
         sizer.Add(self._notes_ctrl, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, SPACE_SM)
 
         # Opt-in event logging checkbox
@@ -109,9 +114,11 @@ class FeedbackDialog(FeedbackDialogHandlersMixin, FeedbackDialogPropertiesMixin,
         btn_sizer.AddStretchSpacer(1)
 
         close_btn = wx.Button(panel, wx.ID_CANCEL, label="Close")
+        stylize_button(close_btn, kind="secondary", surface="panel")
         btn_sizer.Add(close_btn, 0, wx.RIGHT, SPACE_SM)
 
         self._export_btn = wx.Button(panel, wx.ID_OK, label="Export to File…")
+        stylize_button(self._export_btn, kind="primary", surface="panel")
         self._export_btn.SetDefault()
         self._export_btn.Bind(wx.EVT_BUTTON, self._on_export)
         btn_sizer.Add(self._export_btn, 0)

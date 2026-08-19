@@ -21,6 +21,7 @@ from widgets.panels.deck_notes_panel import DeckNotesPanel
 from widgets.panels.deck_stats_panel import DeckStatsPanel
 from widgets.panels.sideboard_guide_panel import SideboardGuidePanel
 from widgets.section import SectionPanel
+from widgets.splitter import DarkSplitter
 
 if TYPE_CHECKING:
     from widgets.frames.app_frame.protocol import AppFrameProto
@@ -131,10 +132,11 @@ class CenterPanelBuilderMixin(_Base):
         cards between them, replacing the old one-zone-at-a-time tabs (#781).
         """
         self.zone_notebook = None
-        self.deck_split = wx.SplitterWindow(
-            self.deck_tabs, style=wx.SP_LIVE_UPDATE | wx.SP_3DSASH | wx.SP_NO_XP_THEME
-        )
-        self.deck_split.SetBackgroundColour(DARK_PANEL)
+        # DarkSplitter, not wx.SplitterWindow: the native sash is a 6px
+        # #F0F0F0/#FFFFFF band the full width of the workspace, and no colour
+        # call reaches it. Same style flags, so the saved sash position and the
+        # 7px metrics are unchanged.
+        self.deck_split = DarkSplitter(self.deck_tabs)
         self.deck_split.SetMinimumPaneSize(80)
         # Mainboard absorbs more of any extra height on resize.
         self.deck_split.SetSashGravity(0.6)

@@ -30,6 +30,7 @@ from widgets.panels.card_table_panel.sorting import (
     TABLE_ACTION_SLOT_WIDTH,
     action_slot_bounds,
 )
+from widgets.stylize import type_font
 
 _MANA_CELL_PADDING = 4
 _CELL_TEXT_PADDING = 4
@@ -349,7 +350,11 @@ class _ActionCellRenderer(gridlib.GridCellRenderer):
         isSelected: bool,
     ) -> None:
         _paint_row_background(grid, dc, rect, col, isSelected)
-        dc.SetFont(grid.GetDefaultCellFont().Bold())
+        # Bold buys legibility for a glyph run over card art -- the case
+        # type_font(bold=True) exists for, and the same call the grid view's
+        # own +/-/x chips use. GetDefaultCellFont().Bold() happened to agree,
+        # but only for as long as nothing moved the grid's font.
+        dc.SetFont(type_font("body", bold=True))
         char_h = dc.GetCharHeight()
         y = rect.y + max(0, (rect.height - char_h) // 2)
         bounds = action_slot_bounds(rect.width - SPACE_SM)

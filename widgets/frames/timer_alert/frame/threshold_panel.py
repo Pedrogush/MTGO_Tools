@@ -7,15 +7,13 @@ import re
 import wx
 
 from utils.constants import (
-    DARK_ALT,
     DARK_BG,
-    LIGHT_TEXT,
     SPACE_SM,
     TIMER_ALERT_DEFAULT_THRESHOLD_VALUE,
     TIMER_ALERT_REMOVE_BUTTON_SIZE,
     TIMER_ALERT_THRESHOLD_INPUT_SIZE,
 )
-from widgets.stylize import stylize_button
+from widgets.stylize import stylize_button, stylize_textctrl
 
 # Built-in Windows sounds (always available)
 SOUND_OPTIONS = {
@@ -42,7 +40,7 @@ class ThresholdPanel(wx.Panel):
         self.time_input = wx.TextCtrl(
             self, size=TIMER_ALERT_THRESHOLD_INPUT_SIZE, value=TIMER_ALERT_DEFAULT_THRESHOLD_VALUE
         )
-        self._stylize_entry(self.time_input)
+        stylize_textctrl(self.time_input)
         sizer.Add(self.time_input, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, SPACE_SM)
 
         # Remove button
@@ -50,10 +48,6 @@ class ThresholdPanel(wx.Panel):
         self._stylize_remove_button(self.remove_btn)
         self.remove_btn.Bind(wx.EVT_BUTTON, self._on_remove)
         sizer.Add(self.remove_btn, 0, wx.ALIGN_CENTER_VERTICAL)
-
-    def _stylize_entry(self, entry: wx.TextCtrl) -> None:
-        entry.SetBackgroundColour(DARK_ALT)
-        entry.SetForegroundColour(LIGHT_TEXT)
 
     def _stylize_remove_button(self, button: wx.Button) -> None:
         """The one button phase 2's sweep missed.

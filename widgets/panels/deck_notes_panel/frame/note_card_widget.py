@@ -8,9 +8,13 @@ from typing import Any
 
 import wx
 
-from utils.constants import DARK_ALT, DARK_BG, LIGHT_TEXT, SPACE_SM, SPACE_XS, SUBDUED_TEXT
+from utils.constants import DARK_BG, LIGHT_TEXT, SPACE_SM, SPACE_XS
 from utils.i18n import translate
-from widgets.stylize import apply_type_level, stylize_choice, stylize_textctrl
+from widgets.stylize import (
+    stylize_button,
+    stylize_choice,
+    stylize_textctrl,
+)
 
 NOTE_TYPES = ["General", "Matchup", "Sideboard Plan", "Custom"]
 
@@ -75,11 +79,9 @@ class _NoteCardWidget(wx.Panel):
         outer.Add(header, 0, wx.EXPAND | wx.ALL, SPACE_SM)
 
         self.title_ctrl = wx.TextCtrl(self, value=card.get("title", ""))
-        self.title_ctrl.SetBackgroundColour(DARK_ALT)
-        self.title_ctrl.SetForegroundColour(LIGHT_TEXT)
         # A note's title really is the note's heading -- one of the few places
         # bold now earns its keep.
-        apply_type_level(self.title_ctrl, "heading")
+        stylize_textctrl(self.title_ctrl, level="heading")
         header.Add(self.title_ctrl, 1, wx.EXPAND | wx.RIGHT, SPACE_SM)
 
         translated_types = [translate(locale, _NOTE_TYPE_I18N_KEYS.get(k, k)) for k in NOTE_TYPES]
@@ -95,10 +97,13 @@ class _NoteCardWidget(wx.Panel):
         up_btn = wx.Button(self, label="↑", size=(28, -1))
         down_btn = wx.Button(self, label="↓", size=(28, -1))
         del_btn = wx.Button(self, label="✕", size=(28, -1))
-        for btn in (up_btn, down_btn, del_btn):
-            btn.SetBackgroundColour(DARK_ALT)
-            btn.SetForegroundColour(SUBDUED_TEXT)
-        del_btn.SetForegroundColour((220, 80, 80))
+        # Colour-only styling left wxMSW's 2px light frame on all three, and
+        # the delete glyph was a raw (220, 80, 80) tuple -- the last off-token
+        # colour literal on a control in the tree. "danger" is the token for
+        # exactly this, and it takes the frame off with it.
+        for btn in (up_btn, down_btn):
+            stylize_button(btn, kind="ghost", surface="panel")
+        stylize_button(del_btn, kind="danger", surface="panel")
         up_btn.Bind(wx.EVT_BUTTON, lambda _: self._on_move_up(self))
         down_btn.Bind(wx.EVT_BUTTON, lambda _: self._on_move_down(self))
         del_btn.Bind(wx.EVT_BUTTON, lambda _: self._on_delete(self))

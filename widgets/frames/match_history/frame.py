@@ -16,6 +16,13 @@ import wx.dataview as dv
 from loguru import logger
 
 from utils.constants import SPACE_MD, SPACE_SM, SPACE_XS
+from utils.constants.theme import (
+    SURFACE_ALT,
+    SURFACE_BASE,
+    SURFACE_PANEL,
+    TEXT_PRIMARY,
+    TEXT_SECONDARY,
+)
 from utils.i18n import translate
 from widgets.frames.match_history.handlers import MatchHistoryHandlersMixin
 from widgets.frames.match_history.properties import MatchHistoryPropertiesMixin
@@ -30,11 +37,16 @@ from widgets.stylize import (
     stylize_scrollable,
 )
 
-DARK_BG = wx.Colour(20, 22, 27)
-DARK_PANEL = wx.Colour(34, 39, 46)
-DARK_ALT = wx.Colour(40, 46, 54)
-LIGHT_TEXT = wx.Colour(236, 236, 236)
-SUBDUED_TEXT = wx.Colour(185, 191, 202)
+# These were five wx.Colour literals holding a byte-for-byte copy of the
+# surface and text scales -- a second palette that happened to agree with
+# theme.py and would have stopped agreeing the first time a token moved.
+# Phase 0's whole point is that there is one source; phase 6b's sweep found
+# this was the only file in widgets/ still carrying its own.
+DARK_BG = wx.Colour(*SURFACE_BASE)
+DARK_PANEL = wx.Colour(*SURFACE_PANEL)
+DARK_ALT = wx.Colour(*SURFACE_ALT)
+LIGHT_TEXT = wx.Colour(*TEXT_PRIMARY)
+SUBDUED_TEXT = wx.Colour(*TEXT_SECONDARY)
 
 
 class MatchHistoryFrame(MatchHistoryHandlersMixin, MatchHistoryPropertiesMixin, wx.Frame):
@@ -181,6 +193,7 @@ class MatchHistoryFrame(MatchHistoryHandlersMixin, MatchHistoryPropertiesMixin, 
         strip_native_client_edge(self.end_date_ctrl)
         filter_row.Add(self.end_date_ctrl, 0, wx.RIGHT, SPACE_SM)
         apply_btn = wx.Button(box_parent, label=self._t("match.filter.apply"))
+        stylize_button(apply_btn, kind="secondary", surface="panel")
         apply_btn.Bind(wx.EVT_BUTTON, lambda _evt: self._update_metrics())
         filter_row.Add(apply_btn, 0)
         filter_row.AddStretchSpacer(1)

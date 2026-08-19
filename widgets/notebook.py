@@ -47,6 +47,7 @@ from utils.constants.theme import (
     TEXT_PRIMARY,
     TEXT_SECONDARY,
 )
+from widgets.stylize import type_font
 
 #: No close button, no navigation arrows, and — importantly — **not**
 #: ``FNB_FANCY_TABS``. Fancy tabs draw the active tab as a light system gradient
@@ -68,12 +69,69 @@ class _ThemedTabRenderer(fnb.FNBRendererDefault):
     nav arrows, focus rectangles and every hit-test still come from
     ``FNBRendererDefault``, so the strip keeps behaving exactly as it did.
 
-    The tab *labels* deliberately still come from ``wx.SYS_DEFAULT_GUI_FONT``
-    (9pt) rather than the app's 10pt base: ``CalcTabWidth`` and ``CalcTabHeight``
-    measure with that font, so moving the label onto the type ladder means moving
-    the strip's own geometry with it. That is typography, not container chrome --
-    noted for whichever phase owns the remaining type audit.
+    Phase 6b finished the job on the tab *labels*, which phase 6 left on
+    ``wx.SYS_DEFAULT_GUI_FONT`` (9pt) because moving them moves the strip's
+    geometry. They were the last widget text in the app off the type ladder --
+    the deck workspace's four tabs and the card panel's two sat a full point
+    below every other label around them, which is exactly the "nothing has a
+    level" symptom phase 3 was fixing.
+
+    ``FNBRendererDefault`` re-fetches the system font in **three** places, and
+    all three have to move together or the strip measures itself with one font
+    and draws with another: ``CalcTabWidth`` (per-tab width, always measured
+    bold so the width does not change on selection), ``CalcTabHeight`` (strip
+    height, cached in ``self._tabHeight``) and ``DrawTabs`` (which sets the DC
+    font before delegating to :meth:`DrawTab`). ``DrawTab`` is overridden here
+    already, so it sets the font itself and the base ``DrawTabs`` is left alone.
     """
+
+    #: The ladder level the tab labels sit at. ``body`` rather than ``heading``:
+    #: a tab is a control's label, not a section title, and the section heading
+    #: above the notebook (where there is one) has to stay a step louder.
+    TAB_LEVEL = "body"
+
+    def _tab_font(self, *, bold: bool) -> wx.Font:
+        return type_font(self.TAB_LEVEL, bold=bold)
+
+    def CalcTabWidth(self, pageContainer, tabIdx, tabHeight):  # noqa: N802
+        """Measure the tab against the app's font instead of the system's.
+
+        Copied structurally from ``FNBRendererDefault`` rather than wrapped:
+        the base method builds its own ``boldFont`` from
+        ``wx.SYS_DEFAULT_GUI_FONT`` inside the method body, so there is nothing
+        to pass in and no attribute to override. Only the font line differs;
+        the padding, the 20px floor, the ``x``-button spacer and the image
+        allowance are the base implementation's arithmetic.
+        """
+        pc = pageContainer
+        dc = wx.MemoryDC()
+        dc.SelectObject(wx.Bitmap(1, 1))
+        dc.SetFont(self._tab_font(bold=True))
+        width, _height = dc.GetTextExtent(pc.GetPageText(tabIdx))
+        width = max(width, 20)
+        tab_width = 2 * pc._pParent.GetPadding() + width
+        if pc.HasAGWFlag(fnb.FNB_X_ON_TAB) and tabIdx == pc.GetSelection():
+            tab_width += pc._pParent.GetPadding() + 9
+        info = pc._pagesInfoVec[tabIdx]
+        if pc._ImageList is not None and info.GetImageIndex() != -1:
+            tab_width += 16 + pc._pParent.GetPadding()
+        return tab_width
+
+    def CalcTabHeight(self, pageContainer):  # noqa: N802
+        """Strip height from the app's font. Cached exactly as the base does.
+
+        ``self._tabHeight`` is the base class's own cache and is read by
+        ``DrawTabs`` and by the strip's size hint, so it has to be the thing
+        that is populated -- returning a different number without setting it
+        would leave the two disagreeing.
+        """
+        if self._tabHeight:
+            return self._tabHeight
+        dc = wx.MemoryDC()
+        dc.SelectObject(wx.Bitmap(1, 1))
+        dc.SetFont(self._tab_font(bold=True))
+        self._tabHeight = dc.GetCharHeight() + fnb.FNB_HEIGHT_SPACER
+        return self._tabHeight
 
     def DrawTabsLine(self, pageContainer, dc, selTabX1=-1, selTabX2=-1):  # noqa: N802
         """One hairline under the strip, instead of a white 2px band and a grey one.
@@ -104,6 +162,12 @@ class _ThemedTabRenderer(fnb.FNBRendererDefault):
         selected = tabIdx == pc.GetSelection()
         top = fnb.VERTICAL_BORDER_PADDING
         height = tabHeight - top
+
+        # DrawTabs set the DC font from wx.SYS_DEFAULT_GUI_FONT before calling
+        # in here; override it per tab. Bold on the active one is the base
+        # renderer's own state marker and CalcTabWidth measures bold either
+        # way, so the row does not jitter as the selection moves.
+        dc.SetFont(self._tab_font(bold=selected))
 
         if selected:
             dc.SetPen(wx.Pen(wx.Colour(*SELECTION_BORDER)))

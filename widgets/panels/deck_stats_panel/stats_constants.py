@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from utils.constants.theme import TEXT_PRIMARY, to_hex
 from utils.constants.ui_images import (
     STATS_MANA_SVG_DISPLAY_SIZE,
     STATS_MANA_SVG_SOURCE_SIZE,
@@ -89,7 +90,7 @@ def _load_mana_svgs() -> dict[str, str]:
                 f'width="{STATS_MANA_SVG_SOURCE_SIZE}" height="{STATS_MANA_SVG_SOURCE_SIZE}"',
                 f'width="{STATS_MANA_SVG_DISPLAY_SIZE}" height="{STATS_MANA_SVG_DISPLAY_SIZE}"',
             )
-            svg = svg.replace('fill="#444"', 'fill="#ECECEC"')
+            svg = svg.replace('fill="#444"', f'fill="{to_hex(TEXT_PRIMARY)}"')
             # Strip the XML comment line to reduce HTML payload
             svg = "\n".join(line for line in svg.splitlines() if not line.startswith("<!--"))
             result[key] = svg.strip()

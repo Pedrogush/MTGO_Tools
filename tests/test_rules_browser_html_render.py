@@ -7,6 +7,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from utils.constants import theme as T
+from utils.constants.theme import to_hex
 from widgets.frames.rules_browser.html_render import render_outline_to_html
 
 
@@ -149,12 +151,20 @@ def test_render_outline_uses_text_color_for_headings() -> None:
     assert out.count('<font color="#ABCDEF">') == 2
 
 
-def test_render_outline_default_colors_emit_dark_theme() -> None:
+def test_render_outline_default_colors_come_from_the_design_tokens() -> None:
+    """The defaults are ``theme.py``'s tokens, not near-matches for them.
+
+    They used to be the literals ``#22272E`` / ``#E6EDF3`` / ``#7AA2F7``: the
+    first happens to equal ``SURFACE_PANEL``, the other two are hand-picked
+    approximations of ``TEXT_PRIMARY`` and ``ACCENT_TEXT`` that no contrast test
+    could see, because the contrast suite checks tokens and these were copies.
+    Asserting on the rendered token rather than on a hex keeps them tied.
+    """
     sections = [_Sec(7, "Additional Rules", [_Sub("700", "General", "")])]
     out = render_outline_to_html(sections)
-    assert 'bgcolor="#22272E"' in out
-    assert 'text="#E6EDF3"' in out
-    assert 'link="#7AA2F7"' in out
+    assert f'bgcolor="{to_hex(T.SURFACE_PANEL)}"' in out
+    assert f'text="{to_hex(T.TEXT_PRIMARY)}"' in out
+    assert f'link="{to_hex(T.ACCENT_TEXT)}"' in out
 
 
 def test_render_outline_paragraph_without_leading_rule_id_is_unanchored() -> None:

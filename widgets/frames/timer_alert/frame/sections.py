@@ -5,7 +5,6 @@ from __future__ import annotations
 import wx
 
 from utils.constants import (
-    DARK_ALT,
     DARK_PANEL,
     LIGHT_TEXT,
     SPACE_MD,
@@ -25,7 +24,7 @@ from utils.constants import (
 from widgets.checkbox import DarkCheckBox
 from widgets.frames.timer_alert.frame.threshold_panel import SOUND_OPTIONS
 from widgets.section import SectionPanel
-from widgets.stylize import stylize_scrollable
+from widgets.stylize import stylize_scrollable, stylize_textctrl
 
 
 class SectionsBuilderMixin:
@@ -163,8 +162,7 @@ class SectionsBuilderMixin:
             style=wx.TE_MULTILINE | wx.TE_READONLY | wx.TE_WORDWRAP | wx.BORDER_NONE,
         )
         self.status_text.SetMinSize((-1, TIMER_ALERT_STATUS_MIN_HEIGHT))
-        self.status_text.SetBackgroundColour(DARK_ALT)
-        self.status_text.SetForegroundColour(LIGHT_TEXT)
+        stylize_textctrl(self.status_text, level="body")
         sizer.Add(self.status_text, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, SPACE_MD)
 
         # Challenge timer display
