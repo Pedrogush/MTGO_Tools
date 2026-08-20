@@ -188,9 +188,9 @@ def test_corners_match_reference(iw, ih, radius):
     diffs = [(i, e, a) for i, (e, a) in enumerate(zip(expected, actual)) if e != a]
 
     # Bound: generous budget for 4 corners, each contributing ~radius/2 pixels
-    assert len(diffs) <= 4 * radius, (
-        f"Too many differing pixels at radius={radius} on {iw}x{ih}: {len(diffs)} > {4 * radius}"
-    )
+    assert (
+        len(diffs) <= 4 * radius
+    ), f"Too many differing pixels at radius={radius} on {iw}x{ih}: {len(diffs)} > {4 * radius}"
 
     for idx, orig_val, pil_val in diffs:
         x = idx % iw
@@ -199,9 +199,9 @@ def test_corners_match_reference(iw, ih, radius):
             f"Pixel diff outside corner region at ({x},{y}) on {iw}x{ih} "
             f"r={radius}: orig={orig_val}, pil={pil_val}"
         )
-        assert pil_val >= orig_val, (
-            f"PIL made pixel more transparent at ({x},{y}): orig={orig_val}, pil={pil_val}"
-        )
+        assert (
+            pil_val >= orig_val
+        ), f"PIL made pixel more transparent at ({x},{y}): orig={orig_val}, pil={pil_val}"
 
     # Strict invariant: every interior pixel that original kept opaque must
     # also be opaque in the production result.  This directly verifies the
@@ -276,9 +276,9 @@ def test_corners_preserves_partial_alpha_in_interior():
 
     result = apply_rounded_corner_alpha_bytes(alpha_in, RW, RH, radius)
     center_idx = interior_y * RW + interior_x
-    assert result[center_idx] == partial_value, (
-        f"Interior partial alpha {partial_value} was changed to {result[center_idx]}"
-    )
+    assert (
+        result[center_idx] == partial_value
+    ), f"Interior partial alpha {partial_value} was changed to {result[center_idx]}"
 
 
 # ── composite-on-background tests (exercise composite_rounded_on_background) ───
@@ -333,9 +333,9 @@ def test_composite_mid_alpha_is_weighted_blend():
     a = 128 / 255.0
     for k in range(3):
         expected = int(card_rgb[k] * a + BG[k] * (1.0 - a))
-        assert abs(out[base + k] - expected) <= 1, (
-            f"channel {k}: expected ~{expected}, got {out[base + k]}"
-        )
+        assert (
+            abs(out[base + k] - expected) <= 1
+        ), f"channel {k}: expected ~{expected}, got {out[base + k]}"
 
 
 def test_composite_output_has_no_alpha_length():
