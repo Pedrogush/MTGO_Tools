@@ -185,11 +185,14 @@ class DeckPileView(wx.ScrolledWindow):
         # cards no longer snap in coarse jumps. The wheel scrolls a larger step
         # (see _on_wheel) since a notch would otherwise move only a few px.
         self.SetScrollRate(CARD_VIEW_SCROLL_RATE, CARD_VIEW_SCROLL_RATE)
-        # No SetDoubleBuffered(True): AutoBufferedPaintDC in _on_paint already
-        # gives flicker-free painting, and a window-level back-buffer would make
-        # MSW repaint the whole client on every scroll instead of blitting the
-        # old pixels and exposing only a thin strip (which is what keeps the
-        # culled paint cheap).
+        # A scroll must repaint every strip, not just the one it exposed (#983):
+        # the edge fade is painted against the viewport, so wx's blit-and-
+        # invalidate-the-gap carries the previous frame's band into the retained
+        # pixels, where no paint handler may reach it. This is what reverses the
+        # "no SetDoubleBuffered(True)" this view used to carry -- that comment
+        # was right about the mechanism and wrong about wanting it. See
+        # ``edge_fade`` for the levers that were tried first and do not work.
+        edge_fade.require_whole_client_repaints(self)
 
         self.Bind(wx.EVT_PAINT, self._on_paint)
         self.Bind(wx.EVT_SIZE, self._on_size)

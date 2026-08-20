@@ -286,28 +286,43 @@ so on a view whose rows are 232px they are effectively dead; they have to be han
 rather than left to wx. (2) A custom-drawn one **takes focus when clicked** on wxMSW
 with no `SetFocus` anywhere in the tree, so wx's keyboard scrolling
 (Page/arrow/Home/End) is live on it whether or not anything asked for it -- verified
-with real Win32 keystrokes. (3) **Physical scrolling does not strand viewport-fixed
-chrome.** wx scrolls by blitting and invalidating only the exposed strip, which should
-leave anything painted relative to the *viewport* (an edge fade) stale outside that
-strip. Measured on both card views at scroll deltas from 3px to 232px: the scroll path
-renders **byte-identical** to a full `Refresh`, so wxMSW is invalidating the whole
-client for these windows. Worth re-measuring rather than assuming for any window that
-gains children. (4) A synthetic `WM_VSCROLL` **cannot drive a thumb drag**: wxMSW reads
+with real Win32 keystrokes. (3) **Physical scrolling strands
+viewport-fixed chrome, and a resize strands it too.** Both were once recorded here the
+other way round -- "the scroll path renders byte-identical to a full `Refresh`, so wxMSW
+is invalidating the whole client for these windows" -- and that is **wrong**; the
+correction is #983's second pass. wx scrolls by blitting and invalidating only the newly
+exposed strip. Logged with `GetUpdateRegion().GetBox()` from the pile view's own paint
+handler over a six-notch wheel burst: `region=(0, 289, 912, 64) client=(912, 353)`, once
+per notch. The previous frame's 24px bottom fade sat at y 329..353, the blit carried it
+to y 265..289, and a `wx.PaintDC` is clipped to the update region by `BeginPaint`, so
+nothing may erase it -- one stale band per notch, 64px apart, unchanged 750ms later. A
+resize does the same without a blit: dragging the sash 15px at a time gives
+`region=(0, 307, 549, 15) client=(549, 322)`, one strip per step for the pane that
+**grows** and **no paint at all** for the pane that **shrinks**. Why the original
+measurement said otherwise is worth knowing, because it is a general trap: it compared
+the settled screen against a forced full re-render *after* the gesture, and an unrelated
+full repaint (a card image arriving) washes the smear out within seconds. A settled-state
+comparison cannot see a mid-gesture artefact; capture frames **during** the gesture.
+(4) A synthetic `WM_VSCROLL` **cannot drive a thumb drag**: wxMSW reads
 the position from `GetScrollInfo`, not from the message's `HIWORD`, so
 `SB_THUMBPOSITION` sent from another process scrolls to wherever the real thumb happens
 to be (0). `SB_LINE*` and `SB_PAGE*` do work. Automating a thumb drag needs real mouse
-input. (5) **A resize is not physical scrolling and does strand it** -- the half of (3)
-that was assumed rather than measured, and #983. Logging `GetUpdateRegion().GetBox()`
-from a card view's own paint handler while the mainboard/sideboard sash was dragged 15px
-at a time gives `region=(0, 307, 549, 15) client=(549, 322)`, then `(0, 322, 549, 15)` of
-`(549, 337)`, and so on: one strip per step for the pane that **grows**, and **no paint
-at all** for the pane that **shrinks**. A `wx.PaintDC` is clipped to that region by
-`BeginPaint`, so anything painted against the viewport (the edge fade) survives at the
-old edge, once per mouse-move of a live drag. Both card views therefore `Refresh()`
-unconditionally from `EVT_SIZE`. Beware measuring this on an **occluded** window: with no
-preserved pixels MSW invalidates the whole client and the bug is invisible, which is why
-`tests/ui/test_card_view_resize_repaint.py` asserts on the repaint the view *asks for*
-rather than on the region wx hands back
+input. (5) **`SetDoubleBuffered(True)` is the only lever that widens the scroll's update
+region.** Measured on a bare `wx.ScrolledWindow` shown on screen, scrolling 64px at a
+time against a 244px client: plain gives `(0, 180, 387, 64)`; `EnableScrolling(False,
+False)`, which wx documents as replacing the blit with a refresh, gives the identical
+`(0, 180, 387, 64)` -- **a silent no-op**, one more for the house rule above; overriding
+`ScrollWindow` in the Python subclass is **never called**, wx scrolls from C++ without
+going back through the Python vtable; `Refresh()` after each of *our* `Scroll()` calls
+does give `(0, 0, 387, 244)`, but only for paths that go through our code -- the same
+window driven by `ScrollLines` (scrollbar arrows, keyboard) still gives `(0, 243, 387,
+1)`. `SetDoubleBuffered(True)` (`WS_EX_COMPOSITED`) gives `(0, 0, 387, 244)` on every
+path including those. Both card views set it and `Refresh()` unconditionally from
+`EVT_SIZE`. Beware measuring any of this on an **occluded** window: with no preserved
+pixels MSW invalidates the whole client and the bug is invisible, which is why
+`tests/ui/test_card_view_viewport_repaint.py` asserts the resize half on the repaint the
+view *asks for*, and guards the scroll half with a control window that has to reproduce
+the partial region before the assertion is allowed to mean anything
 
 ### `wx.Simplebook`
 
