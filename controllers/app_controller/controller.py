@@ -50,6 +50,7 @@ from utils.constants import (
     ensure_base_dirs,
 )
 from utils.diagnostics import EventLogger
+from utils.i18n import set_current_locale
 from utils.perf import timed
 
 if TYPE_CHECKING:
@@ -119,7 +120,9 @@ class AppController(
         )
 
         self.current_format = self.session_manager.get_current_format()
-        self.current_language = self.session_manager.get_language()
+        # Publish before any window is built: the seven top-level windows that
+        # take no locale argument read the ambient one at construction time.
+        self.current_language = set_current_locale(self.session_manager.get_language())
 
         self._deck_data_source = self.session_manager.get_deck_data_source()
         self._average_method = self.session_manager.get_average_method()

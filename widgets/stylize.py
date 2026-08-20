@@ -4,6 +4,24 @@ Every visual decision — which surface a widget sits on, which text level it is
 which button role it plays — is expressed here and nowhere else. The tokens
 themselves live in :mod:`utils.constants.theme`.
 
+What wxMSW actually honours
+---------------------------
+**See** ``docs/WXMSW_BEHAVIOUR.md``. Twenty-eight entries, each one measured on
+wxWidgets 3.2.8 / wxPython 4.2.4 by screenshotting a probe frame and reading the
+pixels, covering which colours, fonts, flags and sizes each wx control on this
+toolchain actually applies and which it silently discards.
+
+That table lived here, in this docstring, from phase 0 of issue #962 until phase
+9, by which point it had reached 404 lines of a 1294-line module -- longer than
+any function in the file and about a different subject. It is reference material
+on the toolkit, not documentation of this module's API, and it is consulted far
+more often by people who are not editing this file. Its rule, which is the rule
+this whole module exists to make easy to follow:
+
+    **Never set a colour, font or flag and assume it applied.**
+
+Eleven documented calls in this app silently did nothing; one of them shipped.
+
 Backwards compatibility
 -----------------------
 All four original entry points keep their original signatures, and every new
@@ -21,109 +39,6 @@ so that phase 0 can land without moving a single pixel:
   selects secondary / ghost / danger / success variants.
 * ``stylize_choice`` now themes the dropdown dark (phase 1, finding C1). See the
   comment there for why that needs more than two colour calls on wxMSW.
-
-What wxMSW actually honours
----------------------------
-Measured on wxWidgets 3.2.8 / wxPython 4.2.4 by screenshotting a probe frame,
-not assumed. This table is the constraint every later phase inherits:
-
-===================  ==================================================
-widget               behaviour
-===================  ==================================================
-``wx.StaticText``    background + foreground honoured
-``wx.TextCtrl``      background + foreground honoured
-``wx.Button``        background + foreground honoured. The border is a **2px
-                     light-grey frame** (``#ADADAD`` outside, ``#E1E1E1``
-                     inside) drawn by the theme, identical for every background
-                     and unreachable from wx — but ``wx.BORDER_NONE`` deletes
-                     it, and the flag can be set *after* construction with
-                     ``SetWindowStyleFlag``. See
-                     :func:`strip_native_button_frame`. A **disabled** button
-                     keeps its background at full saturation; only the label
-                     greys, so a disabled state has to repaint the fill
-``wx.CheckBox``      label + surround honoured; the box **glyph** is drawn
-                     by ``wxRendererNative`` from the light ``BUTTON``
-                     theme class and is not reachable at all.
-                     ``wx.lib.checkbox.GenCheckBox`` is **not** a way out: it
-                     builds its bitmaps from the same
-                     ``wxRendererNative.DrawCheckBox`` and renders the identical
-                     white square. Replaced by the own-drawn
-                     :class:`widgets.checkbox.DarkCheckBox`
-``wx.SpinCtrl``      honoured on the edit field; the arrows are a separate
-                     ``msctls_updown32`` HWND that stays light under every
-                     theme tried, Windows dark mode included
-``wx.Choice``        **both silently ignored** while the control is
-                     visual-styled; dark via Windows' dark mode, or via
-                     :func:`disable_native_theme` as a fallback
-``wx.ComboBox``      same as ``wx.Choice``
-``wx.ListCtrl``      rows honoured; the header is a native ``SysHeader32``
-                     and ignores everything wx can set. ``SetHeaderAttr``
-                     returns ``True`` and applies only the *foreground*,
-                     which makes the white header worse, not better.
-                     Dark only via Windows' own dark mode.
-``wx.Notebook``      both ignored, **and Windows' dark mode does not reach
-                     it either** — migration to ``FlatNotebook`` is the
-                     only fix (see :mod:`widgets.notebook`)
-``wx.StatusBar``     background honoured, **foreground silently ignored**
-                     — hence :mod:`widgets.status_bar`
-``wx.StaticLine``    **neither honoured**, and a ``wx.LI_VERTICAL`` one draws in
-                     the native *etched* colour, which on ``SURFACE_PANEL``
-                     comes out near-white — brighter than any other chrome on
-                     that surface. The two horizontal StaticLines already in the
-                     tree read as dark and made this look safe; a vertical rule
-                     beside text does not get lost the way a horizontal one
-                     does. Use :func:`create_divider` (a 1px ``wx.Panel``,
-                     whose background *is* honoured) for any rule that has to
-                     match the theme
-``wx.StaticText``    background + foreground honoured. Two traps:
-                     ``wx.ST_ELLIPSIZE_*`` is only picked up from the
-                     **constructor**, not from a later ``SetWindowStyleFlag``;
-                     and without ``wx.ST_NO_AUTORESIZE`` a ``SetLabel``
-                     **resizes the control to fit the new text**, which silently
-                     defeats both ``wx.ALIGN_RIGHT`` (the box hugs the string,
-                     so there is nothing to align within) and ellipsization
-                     (a control that resized to its own text always fits). See
-                     :func:`create_status_label`
-``wx.ToggleButton``  background + foreground honoured; the *checked* state adds
-                     a 1px ring in the **system** accent colour, which is a user
-                     setting rather than ours. Unused: the app's toggles are
-                     plain buttons re-stylized on state change
-scrollbars           not reachable from wx at all; dark process-wide via
-                     :func:`widgets.native_dark.enable_app_dark_mode`
-===================  ==================================================
-
-Anything marked "via Windows' own dark mode" goes through
-:mod:`widgets.native_dark`, which is enabled once at startup.
-
-What wxMSW does with **fonts and sizes** (measured in phase 3)
---------------------------------------------------------------
-* A child inherits its parent's font **at construction time only**, at every
-  depth and across every widget class the app uses -- ``StaticText``,
-  ``Button``, ``TextCtrl``, ``Choice``, ``CheckBox``, ``ListCtrl``,
-  ``SpinCtrl``, ``StaticBox``, ``ListBox`` all reported the parent's 10pt.
-* A widget that already exists when its parent's font changes keeps the old
-  size, **and so does a widget created afterwards** if there is an intermediate
-  panel: the panel captured its own font at *its* construction, and new children
-  inherit the panel, not the frame. So the call really does have to be the first
-  thing after ``super().__init__()``, not merely "before the widget you care
-  about".
-* **Top-level windows never inherit.** ``wx.Frame``, ``wx.Dialog`` and
-  ``wx.MiniFrame`` constructed with a 10pt parent all reported the 9pt system
-  default. Hence one :func:`apply_base_font` per top-level window (18 of them).
-* ``wx.BU_EXACTFIT`` is the *only* way past that floor, and it overshoots in
-  the other direction: it sizes a button to its text extent plus roughly 2px, so
-  the deck workspace's ``Grid``/``Table``/``Pile`` toggles measured 30x18. A
-  compact button therefore needs its size stated explicitly on top of the flag;
-  see :func:`size_compact_button`.
-* ``wx.Button.GetBestSize()`` has a **hard floor of 75x23 at 9pt and 75x25 at
-  10pt, whatever the label** -- it is the Win32 default button size, not a
-  text measurement. Any button given an explicit size under that reports a
-  best-size deficit even when its label fits comfortably, so "best size >
-  current size" is necessary but not sufficient evidence of clipping on a
-  button; look at the pixels too. Button chrome around a label measures ~24px
-  horizontally, which is the number to size a labelled button by.
-* Text the app paints itself with ``dc.SetFont()`` is invisible to font
-  inheritance. :func:`type_font` exists for exactly those surfaces.
 """
 
 from __future__ import annotations
@@ -168,6 +83,7 @@ from widgets.native_dark import (
     apply_dark_native_headers,
     apply_dark_theme,
     is_app_dark_mode_enabled,
+    strip_spin_buddy_client_edge,
 )
 
 # Phase 1 flipped this to False: wx.Choice is themed dark everywhere. Kept as a
@@ -349,6 +265,58 @@ def init_top_level_window(window: wx.Window) -> None:
     """
     apply_base_font(window)
     apply_dark_caption(window)
+    clamp_to_display(window)
+
+
+def clamp_to_display(window: wx.Window) -> None:
+    """Shrink *window* to the usable area of the display it is on, if it exceeds it.
+
+    Phase 8. ``AppFrame`` has clamped its own restored size to
+    ``wx.Display.GetClientArea()`` since before this redesign -- and maximizes
+    instead when its preferred size does not fit -- but none of the other
+    seventeen top-level windows did. Their sizes are constructor literals, and
+    ``TOP_CARDS_FRAME_SIZE`` is **1400 x 740**: on the 1366x768 laptop the app
+    says it targets, that window opens 34px wider than the whole screen and
+    ~20px taller than the area the taskbar leaves, with its right-hand columns
+    and its status row off the display and no way to reach them but dragging the
+    window left.
+
+    Called from :func:`init_top_level_window`, i.e. immediately after the
+    constructor has applied its size. A window that sizes itself *later* -- the
+    timer alert, which measures its own content -- calls this again afterwards.
+    It only ever shrinks; a window that already fits is left exactly as it is,
+    and a maximized or full-screen window is skipped, since its size legitimately
+    exceeds the client area by the maximized frame border and resizing it here
+    would silently un-maximize it.
+    """
+    try:
+        if window.IsMaximized() or window.IsFullScreen():
+            return
+    except AttributeError:
+        pass
+    try:
+        index = wx.Display.GetFromWindow(window)
+        if index == wx.NOT_FOUND:
+            index = 0
+        area = wx.Display(index).GetClientArea()
+    except (RuntimeError, AssertionError):
+        return
+    size = window.GetSize()
+    width = min(size.GetWidth(), area.width)
+    height = min(size.GetHeight(), area.height)
+    if width == size.GetWidth() and height == size.GetHeight():
+        return
+    # The floor has to come down with the window, or wx will not honour the new
+    # size at all -- a minimum wider than the display is exactly the state this
+    # function exists to get out of.
+    min_size = window.GetMinSize()
+    window.SetMinSize(
+        wx.Size(
+            min(min_size.GetWidth(), width) if min_size.GetWidth() > 0 else min_size.GetWidth(),
+            min(min_size.GetHeight(), height) if min_size.GetHeight() > 0 else min_size.GetHeight(),
+        )
+    )
+    window.SetSize(wx.Size(width, height))
 
 
 def type_font(
@@ -448,6 +416,7 @@ def stylize_textctrl(
     *,
     placeholder: str | None = None,
     level: str | None = None,
+    surface: str = "alt",
 ) -> None:
     """Theme a text input.
 
@@ -455,11 +424,28 @@ def stylize_textctrl(
         off-ladder step of 1.11x, below the perceptual floor. Superseded by
         ``level=``; kept only so a caller that passes it does not change size.
     :param level: type-scale level for the field's text.
+    :param surface: which surface the field's own fill comes from. ``alt`` is
+        the input well and is what almost every field wants; the feedback
+        dialog's notes box sits on a panel that is already ``alt``'s neighbour.
     :param placeholder: sets the native hint text. The colour token is
         ``TEXT_PLACEHOLDER``; on wxMSW the native hint ignores it, which is why
         ``stylize_placeholder_label`` exists for the drawn-label idiom.
+
+    Phase 6b moved :func:`strip_native_client_edge` in here. Phase 6 found the
+    ``#FFFFFF`` sunken edge and fixed the four sites it was looking at, one call
+    site at a time -- which left the styling function itself silent about the
+    edge, so the next text field written after it got the white hairline back.
+    A ``wx.TextCtrl`` never wants that edge, and what is left behind is
+    **nothing** -- phase 6 recorded a dark-mode edit border from an isolated
+    probe and phase 6b measured five real fields that had none.
+
+    This function is therefore no longer the whole of theming a text input.
+    Phase 6c owns the boundary that replaces the stripped edge, and it cannot
+    live on the control: build fields with
+    :func:`widgets.input_frame.create_text_input`, which calls this and then
+    paints a ``BORDER_STRONG`` ring around it from the parent.
     """
-    ctrl.SetBackgroundColour(_colour(SURFACE_ALT))
+    ctrl.SetBackgroundColour(_colour(_SURFACE_COLOURS[surface]))
     ctrl.SetForegroundColour(_colour(TEXT_PRIMARY))
     if level is not None:
         apply_type_level(ctrl, level)
@@ -470,6 +456,18 @@ def stylize_textctrl(
         ctrl.SetFont(font)
     if placeholder is not None:
         ctrl.SetHint(placeholder)
+    strip_native_client_edge(ctrl)
+    if ctrl.GetWindowStyleFlag() & wx.TE_MULTILINE:
+        # A multiline field owns its own scrollbar, and process-wide dark mode
+        # does not reach it: the timer alert's status box has been showing a
+        # 17x76 ``#F0F0F0`` bar -- 1292 light pixels, more than the six spin
+        # arrows put together -- since it was written. Measured in phase 9b
+        # across five theme classes on a scrolling ``wx.TextCtrl``:
+        # ``DarkMode_Explorer`` and ``Explorer`` render it dark, ``DarkMode_CFD``
+        # (which is what an input otherwise wants) and ``DarkMode`` do not.
+        # Gated on the style flag because a single-line field has no scrollbar
+        # and no reason to leave THEME_INPUT.
+        apply_dark_theme(ctrl, THEME_EXPLORER)
 
 
 def disable_native_theme(window: wx.Window) -> bool:
@@ -576,21 +574,62 @@ def stylize_checkbox(
 
 
 def stylize_spinctrl(ctrl: wx.SpinCtrl, *, surface: str = "alt") -> None:
-    """Theme a spin control's edit field. The **arrow buttons stay light.**
+    """Theme a native spin control's edit field. The **arrow buttons stay light.**
+
+    Not a call site any more -- every spin control in the app is a
+    :class:`widgets.spin_ctrl.DarkSpinCtrl`, and
+    ``tests/test_widget_audit.py`` fails on a bare ``wx.SpinCtrl`` anywhere in
+    ``widgets/`` -- but the entry point must not blow up on one, and the same
+    partial fix is the best that can be done for a ``wx.SpinCtrl`` that arrives
+    from somewhere else. Same shape as :func:`stylize_checkbox`'s native branch.
 
     ``wx.SpinCtrl`` on MSW is two HWNDs: an ``Edit`` and an ``msctls_updown32``,
     with ``GetHandle()`` returning the *up-down*, not the edit. wx forwards the
-    colours to the edit, which is why the field goes dark. The arrows were tried
-    against ``DarkMode_CFD`` under Windows dark mode and against no visual style
-    at all, and render light grey in both — so nothing is set on them here rather
-    than setting something that does nothing.
+    colours to the edit, which is why the field goes dark. **Nothing reaches the
+    arrows** -- eight theme variants were measured in phase 9b and all eight are
+    the same light grey; see ``docs/WXMSW_BEHAVIOUR.md``. That is why the app
+    own-draws the control instead of styling it.
 
-    Still worth doing: unstyled, the whole control is a solid white block. The
-    opponent tracker's calculator had four of them stacked on the darkest panel
-    in the app.
+    Phase 6b added the third call, and had to find a different mechanism for it.
+    The edit field takes the same near-white sunken client edge as
+    ``wx.TextCtrl``, so all six spin controls in the app were a white hairline
+    box around a dark field -- but
+    :func:`strip_native_client_edge` **does nothing here**: wx applies the style
+    flag to ``GetHandle()``, which on a ``wx.SpinCtrl`` is the arrows, not the
+    field. :func:`widgets.native_dark.strip_spin_buddy_client_edge` goes through
+    ``UDM_GETBUDDY`` to the ``Edit`` that actually owns the edge. Verified by
+    screenshot both times -- the first version looked right in the diff and was
+    pixel-identical on screen.
     """
     ctrl.SetBackgroundColour(_colour(_SURFACE_COLOURS[surface]))
     ctrl.SetForegroundColour(_colour(TEXT_PRIMARY))
+    strip_spin_buddy_client_edge(ctrl)
+
+
+def stylize_gauge(gauge: wx.Gauge, *, surface: str = "alt") -> None:
+    """Theme a progress bar. Same mechanism as :func:`stylize_choice`, same reason.
+
+    Measured with a six-variant probe (wxWidgets 3.2.8 / wxPython 4.2.4, process
+    dark mode on): a visual-styled ``wx.Gauge`` renders a **``#E0E0E0`` trough
+    with the Windows green fill** and ignores ``SetBackgroundColour`` and
+    ``SetForegroundColour`` completely. Windows' own dark mode does not reach it
+    either -- unlike ``wx.Choice`` and ``wx.ListCtrl``'s header -- and neither
+    ``DarkMode_Explorer`` nor ``DarkMode_Explorer::PROGRESS`` changes a pixel.
+    ``wx.BORDER_NONE`` changes nothing either.
+
+    :func:`disable_native_theme` is the only route: off the visual-styles path
+    the classic gauge honours both colours, giving a ``SURFACE_ALT`` trough with
+    an ``ACCENT_PRIMARY`` fill. The radar window's gauge was an 866x20 block of
+    near-white -- the loudest single control left in the app once phase 6 had
+    retired the ``StaticBox`` groove.
+
+    Accent, not ``SUCCESS_FILL``: a progress bar is not reporting success, and
+    the accent's second register (see :func:`stylize_button`) is exactly
+    "this is the thing currently happening".
+    """
+    disable_native_theme(gauge)
+    gauge.SetBackgroundColour(_colour(_SURFACE_COLOURS[surface]))
+    gauge.SetForegroundColour(_colour(ACCENT_PRIMARY))
 
 
 def stylize_scrollable(window: wx.Window, *, surface: str | None = None) -> None:
@@ -616,6 +655,44 @@ def stylize_scrollable(window: wx.Window, *, surface: str | None = None) -> None
         window.SetBackgroundColour(_colour(_SURFACE_COLOURS[surface]))
 
 
+def strip_native_client_edge(window: wx.Window) -> None:
+    """Remove the near-white 1px sunken client edge wxMSW gives list and text controls.
+
+    ``wx.ListBox``, ``wx.TextCtrl`` and ``wx.dataview``'s controls default to a
+    sunken border that Windows draws at **#FFFFFF** with a #828790 outer line --
+    13.7:1 on ``SURFACE_ALT``, and untouched by Windows' own dark mode, by
+    ``SetBackgroundColour``, or by ``SetWindowTheme``. Phase 6 measured it on all
+    three: it is the same near-white hairline the ``wx.StaticBox`` groove was, one
+    layer further in, and once a section card puts a 1px ``BORDER_SUBTLE`` edge
+    around one of these controls the result is a double border in which the wrong
+    one dominates.
+
+    ``wx.BORDER_NONE`` removes it, from the constructor **and** post-construction
+    via ``SetWindowStyleFlag`` -- verified by probe on ``DataViewListCtrl``,
+    ``ListBox`` and ``TextCtrl``. Post-construction is what this helper uses, so a
+    call site does not have to thread a style flag through a constructor it may
+    not own.
+
+    Two things it does not do:
+
+    * on a ``wx.TextCtrl`` the white edge is **removed, not replaced**. Phase 6
+      recorded the opposite -- that the dark-mode edit border took its place --
+      from an isolated probe; phase 6b measured the five fields in the running
+      deck builder and every one of them renders as bare ``SURFACE_ALT`` on its
+      parent afterwards, at 1.10:1 on ``SURFACE_PANEL``. Removing a 21:1
+      hairline is still unambiguously right, and phase 6c supplied the boundary
+      that replaces it: :mod:`widgets.input_frame` paints a ``BORDER_STRONG``
+      ring from the field's **parent**, because wx gives no way to colour a
+      ``wx.TextCtrl``'s own border;
+    * on a composite it has to be applied to the window that owns the edge.
+      ``wx.dataview.TreeListCtrl`` wraps a ``DataViewCtrl``; calling this on the
+      wrapper alone changes nothing on screen.
+    """
+    style = window.GetWindowStyleFlag()
+    window.SetWindowStyleFlag((style & ~wx.BORDER_MASK) | wx.BORDER_NONE)
+    window.Refresh()
+
+
 def stylize_list_ctrl(ctrl: wx.ListCtrl, *, surface: str = "alt") -> None:
     """Theme a report-view list.
 
@@ -625,11 +702,20 @@ def stylize_list_ctrl(ctrl: wx.ListCtrl, *, surface: str = "alt") -> None:
     Without OS dark mode the header stays white and there is no wx-level fix;
     ``SetHeaderAttr`` is deliberately *not* used as a consolation prize because it
     applies the foreground only, which is strictly worse than leaving it alone.
+
+    Phase 6b added the client-edge strip here for the same reason it added it to
+    :func:`stylize_textctrl`: the deck builder's results list is constructed with
+    ``style=0`` and was framed in a **pure ``#FFFFFF`` 1px rectangle, 553x555**,
+    on the main window's left panel whenever the builder is open. Phase 6 found
+    the mechanism and fixed the four sites in front of it; the fix belongs in the
+    styling function, not at the call sites, or the next list written gets the
+    hairline back.
     """
     ctrl.SetBackgroundColour(_colour(_SURFACE_COLOURS[surface]))
     ctrl.SetForegroundColour(_colour(TEXT_PRIMARY))
     # Also darkens the list's own scrollbars, since it themes the control itself.
     apply_dark_list_header(ctrl)
+    strip_native_client_edge(ctrl)
 
 
 def native_dark_mode_active() -> bool:
@@ -824,7 +910,7 @@ def create_status_label(parent: wx.Window, text: str = "") -> wx.StaticText:
     return label
 
 
-def create_divider(parent: wx.Window, *, vertical: bool, length: int) -> wx.Window:
+def create_divider(parent: wx.Window, *, vertical: bool, length: int | None = None) -> wx.Window:
     """A 1px themed rule (C4).
 
     ``wx.StaticLine`` is **not** usable here, and this was measured rather than
@@ -838,11 +924,18 @@ def create_divider(parent: wx.Window, *, vertical: bool, length: int) -> wx.Wind
     that the eye loses. A vertical one next to text does not get lost.)
 
     ``wx.Panel`` backgrounds *are* honoured, so the rule is one.
+
+    ``length=None`` leaves the long axis free, for a rule added with
+    ``wx.EXPAND`` that should span whatever its sizer gives it.
     """
-    size = (1, length) if vertical else (length, 1)
+    thin = -1 if length is None else length
+    size = (1, thin) if vertical else (thin, 1)
     rule = wx.Panel(parent, size=size)
     rule.SetMinSize(size)
-    rule.SetMaxSize(size)
+    if length is not None:
+        rule.SetMaxSize(size)
+    else:
+        rule.SetMaxSize((1, -1) if vertical else (-1, 1))
     rule.SetBackgroundColour(_colour(BORDER_SUBTLE))
     return rule
 

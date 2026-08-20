@@ -23,6 +23,7 @@ from widgets.panels.deck_stats_panel.stats_chart_html import _curve_colour
 from widgets.panels.deck_stats_panel.stats_constants import (
     _CARD_TYPES,
     _COLOR_MAP,
+    _FALLBACK_SWATCH,
     _HAND_COLOURS,
     _TYPE_COLOURS,
 )
@@ -128,7 +129,7 @@ class DeckStatsPanelPropertiesMixin(_Base):
 
         items = []
         for color, count in sorted(totals.items(), key=lambda x: x[1], reverse=True):
-            full_name, hex_colour = _COLOR_MAP.get(color, (color, "#828282"))
+            full_name, hex_colour = _COLOR_MAP.get(color, (color, _FALLBACK_SWATCH))
             pct = count / grand_total * 100
             tooltip = f"{full_name}: {pct:.1f}%"
             items.append((color, f"{pct:.0f}%", pct, hex_colour, tooltip))
@@ -159,7 +160,7 @@ class DeckStatsPanelPropertiesMixin(_Base):
         items = []
         for card_type in display_order:
             count = counts[card_type]
-            colour = _TYPE_COLOURS.get(card_type, "#828282")
+            colour = _TYPE_COLOURS.get(card_type, _FALLBACK_SWATCH)
             tooltip = f"{card_type}: {count} card{'s' if count != 1 else ''}"
             items.append((card_type, count, max_count, colour, tooltip))
         return items

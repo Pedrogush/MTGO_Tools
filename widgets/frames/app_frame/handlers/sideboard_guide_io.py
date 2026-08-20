@@ -18,7 +18,12 @@ from widgets.frames.app_frame.handlers.sideboard_guide_csv import (
     export_guide_to_csv,
     import_guide_from_csv,
 )
-from widgets.stylize import init_top_level_window, stylize_checkbox
+from widgets.stylize import (
+    init_top_level_window,
+    stylize_button,
+    stylize_checkbox,
+    surface_colour,
+)
 
 if TYPE_CHECKING:
     from widgets.frames.app_frame import AppFrame
@@ -87,11 +92,12 @@ class SideboardGuideImportExportHandlers(_Base):
 
         options_dlg = wx.Dialog(
             self,
-            title="Import Options",
+            title=self._t("window.title.guide_import_options"),
             size=(GUIDE_IMPORT_OPTIONS_DIALOG_WIDTH, GUIDE_IMPORT_OPTIONS_DIALOG_HEIGHT),
         )
         init_top_level_window(options_dlg)
         panel = wx.Panel(options_dlg)
+        panel.SetBackgroundColour(surface_colour("base"))
         sizer = wx.BoxSizer(wx.VERTICAL)
 
         enable_double_checkbox = DarkCheckBox(panel, label="Enable double entries")
@@ -105,9 +111,11 @@ class SideboardGuideImportExportHandlers(_Base):
         btn_sizer = wx.BoxSizer(wx.HORIZONTAL)
         btn_sizer.AddStretchSpacer()
         ok_btn = wx.Button(panel, label="Import", id=wx.ID_OK)
+        stylize_button(ok_btn, kind="primary")
         ok_btn.SetDefault()
         btn_sizer.Add(ok_btn, 0, wx.RIGHT, SPACE_SM)
         cancel_btn = wx.Button(panel, label="Cancel", id=wx.ID_CANCEL)
+        stylize_button(cancel_btn, kind="secondary")
         btn_sizer.Add(cancel_btn, 0)
         sizer.Add(btn_sizer, 0, wx.EXPAND | wx.ALL, SPACE_SM)
 

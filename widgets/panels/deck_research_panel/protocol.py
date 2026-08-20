@@ -9,7 +9,9 @@ import wx
 import wx.html
 
 from widgets.buttons.deck_action_buttons import DeckActionButtons
+from widgets.charts import SparkBarPanel
 from widgets.lists.deck_results_list import DeckResultsList
+from widgets.mode_switch import ModeSwitch
 from widgets.panels.deck_research_panel.frame.centered_choice import _CenteredChoice
 
 
@@ -23,6 +25,7 @@ class DeckResearchPanelProto(Protocol):
     _on_format_changed: Callable[[], None]
     _on_archetype_selected: Callable[[], None]
     _on_switch_to_builder: Callable[[], None] | None
+    mode_switch: ModeSwitch
     _on_deck_selected: Callable[[], None] | None
     _on_copy: Callable[[], None] | None
     _on_save: Callable[[], None] | None
@@ -45,8 +48,17 @@ class DeckResearchPanelProto(Protocol):
     placement_value_filter: wx.TextCtrl
     player_name_filter: wx.TextCtrl
 
+    # Defined by FiltersBuilderMixin; used by the getter/setter mixins, which
+    # is what makes them cross-mixin surface.
+    def _option_labels(self, values: tuple[str, ...], prefix: str) -> list[str]: ...
+    @staticmethod
+    def _option_value(choice: wx.Choice, values: tuple[str, ...]) -> str: ...
+    @staticmethod
+    def _select_option(choice: wx.Choice, values: tuple[str, ...], value: str) -> None: ...
+
     deck_action_buttons: DeckActionButtons
     summary_text: wx.html.HtmlWindow
+    summary_spark: SparkBarPanel
     deck_list: DeckResultsList
     daily_average_button: wx.Button
     copy_button: wx.Button

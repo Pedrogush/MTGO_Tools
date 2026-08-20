@@ -32,7 +32,8 @@ from utils.constants import (
     DARK_PANEL,
     LIGHT_TEXT,
 )
-from widgets.stylize import apply_type_level, stylize_button, stylize_spinctrl
+from widgets.spin_ctrl import DarkSpinCtrl
+from widgets.stylize import apply_type_level, stylize_button
 
 
 class CalculatorPanelBuilderMixin:
@@ -43,10 +44,10 @@ class CalculatorPanelBuilderMixin:
     """
 
     calc_panel: wx.Panel
-    spin_deck_size: wx.SpinCtrl
-    spin_copies: wx.SpinCtrl
-    spin_drawn: wx.SpinCtrl
-    spin_target: wx.SpinCtrl
+    spin_deck_size: DarkSpinCtrl
+    spin_copies: DarkSpinCtrl
+    spin_drawn: DarkSpinCtrl
+    spin_target: DarkSpinCtrl
     calc_result_label: wx.StaticText
     _left_splitter: wx.SplitterWindow
 
@@ -66,15 +67,19 @@ class CalculatorPanelBuilderMixin:
         self._build_calculator_inputs(calc_sizer)
         self._build_calculator_button_rows(calc_sizer)
 
-        # Bind Enter key on spin controls, and theme them: left alone these are
-        # four solid-white fields on the darkest panel in the app (issue #962).
+        # Enter calculates. The binding predates this redesign and had never
+        # fired: wxMSW only forwards Enter to a wx.SpinCtrl's buddy Edit when the
+        # control carries wx.TE_PROCESS_ENTER, and this site never passed it --
+        # verified live against the native control, where Enter left the result
+        # label empty. DarkSpinCtrl builds its field with the style, so it works.
+        # Theming is no longer a call site's job either: the control is dark by
+        # construction, arrows included (widgets/spin_ctrl.py).
         for spin in [
             self.spin_deck_size,
             self.spin_copies,
             self.spin_drawn,
             self.spin_target,
         ]:
-            stylize_spinctrl(spin)
             spin.Bind(wx.EVT_TEXT_ENTER, self._on_calculate)
 
         # Result display
@@ -89,7 +94,7 @@ class CalculatorPanelBuilderMixin:
         # Deck Size
         lbl_deck = wx.StaticText(self.calc_panel, label="Deck Size")
         lbl_deck.SetForegroundColour(LIGHT_TEXT)
-        self.spin_deck_size = wx.SpinCtrl(
+        self.spin_deck_size = DarkSpinCtrl(
             self.calc_panel,
             min=CALC_DECK_SIZE_MIN,
             max=CALC_DECK_SIZE_MAX,
@@ -103,7 +108,7 @@ class CalculatorPanelBuilderMixin:
         # Copies in Deck
         lbl_copies = wx.StaticText(self.calc_panel, label="Copies in Deck")
         lbl_copies.SetForegroundColour(LIGHT_TEXT)
-        self.spin_copies = wx.SpinCtrl(
+        self.spin_copies = DarkSpinCtrl(
             self.calc_panel,
             min=0,
             max=CALC_COPIES_MAX,
@@ -117,7 +122,7 @@ class CalculatorPanelBuilderMixin:
         # Cards Drawn
         lbl_drawn = wx.StaticText(self.calc_panel, label="Cards Drawn")
         lbl_drawn.SetForegroundColour(LIGHT_TEXT)
-        self.spin_drawn = wx.SpinCtrl(
+        self.spin_drawn = DarkSpinCtrl(
             self.calc_panel,
             min=0,
             max=CALC_COPIES_MAX,
@@ -131,7 +136,7 @@ class CalculatorPanelBuilderMixin:
         # Target Copies
         lbl_target = wx.StaticText(self.calc_panel, label="Target Copies")
         lbl_target.SetForegroundColour(LIGHT_TEXT)
-        self.spin_target = wx.SpinCtrl(
+        self.spin_target = DarkSpinCtrl(
             self.calc_panel,
             min=0,
             max=CALC_COPIES_MAX,

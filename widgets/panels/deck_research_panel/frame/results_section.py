@@ -7,9 +7,13 @@ from typing import TYPE_CHECKING
 import wx
 import wx.html
 
-from utils.constants import DARK_PANEL, LIGHT_TEXT, SPACE_SM
+from utils.constants import SPACE_SM
+from utils.constants.theme import SURFACE_ALT
+from utils.constants.ui_layout import ARCHETYPE_SPARK_WIDTH, ARCHETYPE_SUMMARY_HEIGHT
 from widgets.buttons.deck_action_buttons import DeckActionButtons
+from widgets.charts import SparkBarPanel
 from widgets.lists.deck_results_list import DeckResultsList
+from widgets.section import SectionPanel
 
 if TYPE_CHECKING:
     from widgets.panels.deck_research_panel.protocol import DeckResearchPanelProto
@@ -46,33 +50,51 @@ class ResultsSectionBuilderMixin(_Base):
         )
         sizer.Add(self.deck_action_buttons, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, SPACE_SM)
 
-        summary_box = wx.StaticBox(
-            self, label=self._labels.get("archetype_summary", "Archetype Summary")
+        # The research panel's own surface is SURFACE_PANEL, so these two cards
+        # take no fill of their own: the 1px border and the heading above it do
+        # the grouping, and the wells inside (SURFACE_ALT) provide the contrast.
+        summary_section = SectionPanel(
+            self,
+            title=self._labels.get("archetype_summary", "Archetype Summary"),
+            outer_surface="panel",
+            padding=0,
         )
-        summary_box.SetForegroundColour(LIGHT_TEXT)
-        summary_box.SetBackgroundColour(DARK_PANEL)
-        summary_sizer = wx.StaticBoxSizer(summary_box, wx.VERTICAL)
+        summary_box = summary_section.body
+
+        summary_row = wx.BoxSizer(wx.HORIZONTAL)
+        summary_section.sizer.Add(summary_row, 1, wx.EXPAND)
 
         self.summary_text = wx.html.HtmlWindow(
             summary_box,
             style=wx.html.HW_SCROLLBAR_NEVER | wx.NO_BORDER,
         )
-        self.summary_text.SetBackgroundColour(wx.Colour(34, 39, 46))
+        self.summary_text.SetBackgroundColour(wx.Colour(*SURFACE_ALT))
         self.summary_text.SetBorders(-1)
-        self.summary_text.SetMinSize((-1, 62))
-        summary_sizer.Add(self.summary_text, 1, wx.EXPAND)
-        sizer.Add(summary_sizer, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, SPACE_SM)
+        self.summary_text.SetMinSize((-1, ARCHETYPE_SUMMARY_HEIGHT))
+        summary_row.Add(self.summary_text, 1, wx.EXPAND)
 
-        results_box = wx.StaticBox(self, label=self._labels.get("deck_results", "Deck Results"))
-        results_box.SetForegroundColour(LIGHT_TEXT)
-        results_box.SetBackgroundColour(DARK_PANEL)
-        results_sizer = wx.StaticBoxSizer(results_box, wx.VERTICAL)
+        # H4: the seven-day counts used to be rendered as "9/6/0/7/10/4/0" in the
+        # cell to the right of the name -- seven slash-separated integers with no
+        # axis, units or legend, carrying the second-highest visual weight on the
+        # panel. Same numbers, as a bar strip, with the total as the big number.
+        self.summary_spark = SparkBarPanel(summary_box, surface=SURFACE_ALT)
+        self.summary_spark.SetMinSize((ARCHETYPE_SPARK_WIDTH, ARCHETYPE_SUMMARY_HEIGHT))
+        summary_row.Add(self.summary_spark, 0, wx.EXPAND)
+        sizer.Add(summary_section, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, SPACE_SM)
+
+        results_section = SectionPanel(
+            self,
+            title=self._labels.get("deck_results", "Deck Results"),
+            outer_surface="panel",
+            padding=0,
+        )
+        results_box = results_section.body
 
         self.deck_list = DeckResultsList(results_box)
         if self._on_deck_selected is not None:
             self.deck_list.Bind(wx.EVT_LISTBOX, lambda _evt: self._on_deck_selected())  # type: ignore[misc]
-        results_sizer.Add(self.deck_list, 1, wx.EXPAND | wx.ALL, SPACE_SM)
-        sizer.Add(results_sizer, 1, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, SPACE_SM)
+        results_section.sizer.Add(self.deck_list, 1, wx.EXPAND)
+        sizer.Add(results_section, 1, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, SPACE_SM)
 
         self.daily_average_button = self.deck_action_buttons.daily_average_button
         self.copy_button = self.deck_action_buttons.copy_button

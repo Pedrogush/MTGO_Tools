@@ -14,7 +14,15 @@ from typing import Any
 import wx
 import wx.html
 
-from utils.constants import DARK_PANEL, LIGHT_TEXT, SPACE_LG, SPACE_MD, SPACE_SM, SUBDUED_TEXT
+from utils.constants import (
+    CARD_ORACLE_MIN_HEIGHT,
+    DARK_PANEL,
+    LIGHT_TEXT,
+    SPACE_LG,
+    SPACE_MD,
+    SPACE_SM,
+    SUBDUED_TEXT,
+)
 from widgets.mana_icon_factory import ManaIconFactory
 from widgets.notebook import make_flat_notebook
 from widgets.panels.card_panel.handlers import CardPanelHandlersMixin
@@ -92,7 +100,7 @@ class CardPanel(
         )
         stylize_scrollable(self.oracle_html, surface="panel")
         self.oracle_html.SetBorders(2)
-        self.oracle_html.SetMinSize((-1, 200))
+        self.oracle_html.SetMinSize((-1, CARD_ORACLE_MIN_HEIGHT))
         self.oracle_html.Bind(wx.html.EVT_HTML_LINK_CLICKED, self._on_oracle_link_clicked)
         sizer.Add(self.oracle_html, 1, wx.EXPAND | wx.ALL, SPACE_SM)
 
@@ -105,6 +113,17 @@ class CardPanel(
         sizer = wx.BoxSizer(wx.VERTICAL)
         stats_panel.SetSizer(sizer)
         self.stats_panel = stats_panel
+        # Three of this tab's labels carry variable-length content -- the card
+        # name, the format header and the archetype header -- and a plain
+        # wx.StaticText reports its whole single line as its best width. That
+        # width propagates up through the notebook to the whole inspector
+        # column, which is what made the app's both-panels-expanded minimum
+        # depend on *which card was loaded* (phase 3b measured 267 vs 350, i.e.
+        # a 1393 vs 1433 window floor). They are re-wrapped to the panel instead;
+        # see _rewrap_flowing_labels.
+        self._flowing_label_text: dict[int, str] = {}
+        stats_panel.Bind(wx.EVT_SIZE, self._on_stats_panel_resize)
+        self.Bind(wx.EVT_SIZE, self._on_panel_resize)
 
         # S2. The four levels of this list used to be indented 4 / 6 / 12 px --
         # a 4->6 step is 2px and is simply not seen, so the hierarchy was
@@ -166,6 +185,78 @@ class CardPanel(
             sizer.Add(w, 0, wx.LEFT | wx.RIGHT, SPACE_LG)
 
         self.notebook.AddPage(stats_panel, self._t("card_panel.tab.stats"))
+
+    # ------------------------------------------------------------------
+    # Flowing (re-wrapped) stats labels
+    # ------------------------------------------------------------------
+
+    def set_flowing_label(self, label: wx.StaticText, text: str) -> None:
+        """Set a variable-length Stats label, remembering its unwrapped text.
+
+        ``wx.StaticText.Wrap`` rewrites the label in place, so the original
+        string has to be kept somewhere or the second wrap re-wraps the first
+        wrap's output. Keyed by id() rather than by attribute name so a caller
+        only has to hold the widget.
+        """
+        self._flowing_label_text[id(label)] = text
+        label.SetLabel(text)
+        self._wrap_one(label)
+
+    def _wrap_width(self) -> int:
+        # SPACE_LG is the deepest indent any of these labels sits at; taking the
+        # deepest one for all three keeps the right margin ragged-free without
+        # measuring each label's own border.
+        #
+        # The fallbacks matter. A notebook page that has never been selected is
+        # never sized -- wx leaves it at 20x20 -- so reading the Stats page's own
+        # client width returns a negative wrap width and the labels are set at
+        # their full single-line length. That is not a cosmetic miss: those
+        # lengths are what the notebook reports as its best width, so an unwrapped
+        # hidden page sets the whole inspector column's minimum. Measured in
+        # pt-BR, where "Selecione uma carta para ver estatisticas." is 313px in a
+        # 300px column. Each fallback is the same measure one level out.
+        # The **widest** of the three, not the first plausible one: an unshown
+        # page is not reliably 20x20, it is whatever the last layout left, and
+        # it was measured at a 3px client width here. A page can never
+        # legitimately be wider than the notebook that holds it or the panel
+        # that holds that, so taking the max cannot over-wrap and does not need
+        # a magic "is this width real yet" threshold.
+        width = max(
+            self.stats_panel.GetClientSize().GetWidth(),
+            self.notebook.GetClientSize().GetWidth(),
+            self.GetClientSize().GetWidth(),
+        )
+        return width - (SPACE_LG * 2)
+
+    def _wrap_one(self, label: wx.StaticText) -> None:
+        width = self._wrap_width()
+        if width <= 0:
+            return
+        text = self._flowing_label_text.get(id(label))
+        if text is None:
+            return
+        label.SetLabel(text)
+        label.Wrap(width)
+
+    def _rewrap_flowing_labels(self) -> None:
+        for label in (
+            self.stats_card_label,
+            self.stats_format_header,
+            self.stats_archetype_header,
+        ):
+            self._wrap_one(label)
+
+    def _on_stats_panel_resize(self, event: wx.SizeEvent) -> None:
+        event.Skip()
+        self._rewrap_flowing_labels()
+        self.stats_panel.Layout()
+
+    def _on_panel_resize(self, event: wx.SizeEvent) -> None:
+        # The Stats page only gets EVT_SIZE once it has been selected, so the
+        # panel's own resize is what keeps a never-shown page's labels wrapped
+        # to the column they will appear in.
+        event.Skip()
+        self._rewrap_flowing_labels()
 
     def _make_subheader(self, parent: wx.Window) -> wx.StaticText:
         """L2 of the Stats hierarchy: primary tone, body weight, no bold.

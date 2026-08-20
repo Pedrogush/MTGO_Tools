@@ -48,12 +48,17 @@ class CardTablePanelHandlersMixin(_Base):
                     lands += qty
                 elif "land" in back_type_line:
                     mdfcs += qty
-            label = f"{total} card{'s' if total != 1 else ''}"
+            # Each noun is pluralised by the catalogue, not by an inline
+            # `'s' if n != 1`. " | " and " + " stay in code: they are
+            # punctuation between counted phrases, identical in both locales,
+            # and putting them in the catalogue would invite a translator to
+            # change a separator the layout measures.
+            label = self._t_plural("tabs.count.cards", total)
             parts = []
             if lands:
-                parts.append(f"{lands} land{'s' if lands != 1 else ''}")
+                parts.append(self._t_plural("tabs.count.lands", lands))
             if mdfcs:
-                parts.append(f"{mdfcs} MDFC{'s' if mdfcs != 1 else ''}")
+                parts.append(self._t_plural("tabs.count.mdfcs", mdfcs))
             if parts:
                 label += " | " + " + ".join(parts)
             self.count_label.SetLabel(label)

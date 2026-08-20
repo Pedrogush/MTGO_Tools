@@ -37,6 +37,7 @@ last in the MRO and every attribute the mixins read is declared here in
 from __future__ import annotations
 
 from collections.abc import Callable
+from math import ceil
 from pathlib import Path
 from time import perf_counter
 from typing import Any
@@ -45,10 +46,14 @@ import wx
 
 from utils.constants import CARD_VIEW_SCROLL_RATE, DARK_PANEL
 from widgets.mana_icon_factory import ManaIconFactory
-from widgets.panels.card_table_panel import scroll_perf
+from widgets.panels.card_table_panel import edge_fade, scroll_perf, scroll_snap
 from widgets.panels.card_table_panel.grid_images import GridImagesMixin
 from widgets.panels.card_table_panel.grid_interaction import GridInteractionMixin
-from widgets.panels.card_table_panel.grid_layout import _DEFAULT_COLUMNS, GridLayoutMixin
+from widgets.panels.card_table_panel.grid_layout import (
+    _CELL_HEIGHT,
+    _DEFAULT_COLUMNS,
+    GridLayoutMixin,
+)
 from widgets.panels.card_table_panel.grid_render import GridRenderMixin
 from widgets.panels.card_table_panel.marquee import MarqueeController
 from widgets.panels.card_table_panel.pile_view import _ImageCache
@@ -166,6 +171,9 @@ class DeckGridView(
         self.Bind(wx.EVT_MOUSEWHEEL, self._on_wheel)
         self.Bind(wx.EVT_LEAVE_WINDOW, self._on_leave)
         self.Bind(wx.EVT_MOUSE_CAPTURE_LOST, self._on_capture_lost)
+        # A thumb drag / arrow / page moves the origin without going through the
+        # wheel handler, so it settles onto a row boundary here instead (S5).
+        self.Bind(wx.EVT_SCROLLWIN, self._on_scrollwin)
 
     # ----- public API consumed by CardTablePanel -----
     def set_cards(self, cards: list[dict[str, Any]], preserve_scroll: bool = False) -> None:
@@ -243,6 +251,24 @@ class DeckGridView(
                     self._start_image_load(card["name"])
             self.Refresh()
 
+    # ----- scroll snapping (S5) -----
+    def scroll_snap_step(self) -> tuple[int, int]:
+        """One grid row -- card plus the gap under it -- starting at the top."""
+        return _CELL_HEIGHT, 0
+
+    def scroll_content_height(self) -> int:
+        """The laid-out content height.
+
+        Not ``GetVirtualSize``: wx inflates that to the client size, which would
+        make a one-row deck report content past the bottom edge and draw a fade
+        over nothing.
+        """
+        return ceil(len(self._cards) / max(1, self._cols)) * _CELL_HEIGHT
+
+    def _on_scrollwin(self, event: wx.ScrollWinEvent) -> None:
+        # Shared with the pile view so both settle identically (see scroll_snap).
+        scroll_snap.handle_scrollwin(self, event)
+
     # ----- paint orchestration -----
     def _on_paint(self, _event: wx.PaintEvent) -> None:
         t0 = perf_counter()
@@ -274,6 +300,9 @@ class DeckGridView(
         if self._drag_active:
             self._draw_drop_indicator(dc)
             self._draw_drag_ghost(dc)
+        # S5: dissolve whichever edge has content past it, so the partial row
+        # reads as "there is more" instead of as a clipped render.
+        edge_fade.draw_edge_fades(self, dc, DARK_PANEL)
         # Stamp the origin this paint just rendered (and how long it took) so the
         # wheel-latency harness can tell when the view caught up to the scroll
         # input (no-op unless the perf recorder is enabled).

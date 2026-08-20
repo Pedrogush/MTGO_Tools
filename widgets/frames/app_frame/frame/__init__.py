@@ -56,7 +56,7 @@ from widgets.panels.card_table_panel import CardTablePanel
 from widgets.panels.deck_builder_panel import DeckBuilderPanel
 from widgets.panels.deck_research_panel import DeckResearchPanel
 from widgets.status_bar import ThemedStatusBar
-from widgets.stylize import init_top_level_window
+from widgets.stylize import init_top_level_window, strip_native_button_frame
 
 if TYPE_CHECKING:
     from controllers.app_controller import AppController
@@ -255,6 +255,12 @@ class AppFrame(
         btn.SetMaxSize((COLLAPSE_TOGGLE_WIDTH, -1))
         btn.SetBackgroundColour(DARK_PANEL)
         btn.SetForegroundColour(LIGHT_TEXT)
+        # Phase 2 stripped wxMSW's 2px light-grey native button frame everywhere
+        # it went through stylize_button; these two set their colours by hand and
+        # kept theirs. They are full-height, so what survived was two 14:1
+        # near-white rules running the entire height of the window -- the
+        # brightest chrome left on the main window, and container chrome at that.
+        strip_native_button_frame(btn)
         btn.SetToolTip(tooltip)
         btn.Bind(wx.EVT_BUTTON, lambda _evt: on_click())
         return btn
@@ -328,11 +334,10 @@ class AppFrame(
         inspector_column = wx.BoxSizer(wx.VERTICAL)
         self.inspector_panel.SetSizer(inspector_column)
 
+        # One section card, not two (§4.6). Proportion 1 so the tabs inside it
+        # grow with the window; the art block above them is fixed.
         inspector_box = self._build_card_inspector(self.inspector_panel)
-        inspector_column.Add(inspector_box, 0, wx.EXPAND)
-
-        card_panel_box = self._build_card_panel(self.inspector_panel)
-        inspector_column.Add(card_panel_box, 1, wx.EXPAND | wx.TOP, SPACE_SM)
+        inspector_column.Add(inspector_box, 1, wx.EXPAND)
 
         content_split.Add(self.inspector_panel, 0, wx.EXPAND)
 

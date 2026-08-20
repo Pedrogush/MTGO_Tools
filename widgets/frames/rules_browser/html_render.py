@@ -14,6 +14,8 @@ import re
 from collections.abc import Iterable
 from html import escape
 
+from utils.constants.theme import ACCENT_TEXT, SURFACE_PANEL, TEXT_PRIMARY, to_hex
+
 # Subsection anchor renderer expects a stable ``Section`` / ``Subsection``
 # duck-typed shape — ``rule_id``, ``title``, ``body``, ``subsections``,
 # ``number`` — so the renderer doesn't need a service-layer import.
@@ -21,13 +23,22 @@ from html import escape
 # start of a line. Used to inject per-rule anchors when laying out the body.
 _RULE_HEADER_LINE_RE = re.compile(r"^(\d{3}\.\d+[a-z]?)(?=[\s.])")
 
+# wx.html.HtmlWindow takes its colours as hex strings in the markup, which is
+# why these are strings rather than RGB triples -- but they are the same three
+# tokens every other surface uses. They were #22272E / #E6EDF3 / #7AA2F7:
+# hand-picked near-matches for SURFACE_PANEL, TEXT_PRIMARY and ACCENT_TEXT
+# that would have drifted the first time one of those moved.
+_DEFAULT_BG = to_hex(SURFACE_PANEL)
+_DEFAULT_TEXT = to_hex(TEXT_PRIMARY)
+_DEFAULT_LINK = to_hex(ACCENT_TEXT)
+
 
 def render_outline_to_html(
     sections: Iterable[object],
     *,
-    bg_color: str = "#22272E",
-    text_color: str = "#E6EDF3",
-    link_color: str = "#7AA2F7",
+    bg_color: str = _DEFAULT_BG,
+    text_color: str = _DEFAULT_TEXT,
+    link_color: str = _DEFAULT_LINK,
     cross_ref_linkifier: object | None = None,
 ) -> str:
     """Render the full outline to a single HTML document.

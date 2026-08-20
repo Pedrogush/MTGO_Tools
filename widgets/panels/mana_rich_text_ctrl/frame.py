@@ -4,13 +4,22 @@ Renders ``{W}``, ``{R/G}``, ``{2/W}`` etc. as inline images while keeping the
 brace-notation string as the canonical value returned by ``GetValue()``.
 
 Why this is a wx.Panel, not a wx.richtext.RichTextCtrl: the native
-TextCtrl's blue focus underline is painted by Windows' uxtheme on the
-EDIT control's non-client area, which a custom-drawn RichTextCtrl can't
-receive. To match the look we paint the whole 2-DIP grey frame ourselves
--- replicating the outer/inner two-tone composition sampled from an
-adjacent native wx.TextCtrl -- and tint the whole bottom band to the
-Windows system accent colour on focus. The actual rich-text buffer is
-a borderless child RichTextCtrl that fills the panel interior.
+TextCtrl's focus underline is painted by Windows' uxtheme on the EDIT
+control's non-client area, which a custom-drawn RichTextCtrl can't
+receive. So the whole 2-DIP frame is painted here. The actual rich-text
+buffer is a borderless child RichTextCtrl that fills the panel interior.
+
+Phase 6b re-founded that frame on the design tokens. It was sampled from
+an adjacent *native* wx.TextCtrl and reproduced literally -- ``#ECECEC``
+outer over a ``#FEFEFE`` inner ring -- which is the same near-white
+sunken client edge :func:`widgets.stylize.strip_native_client_edge` was
+written to delete from every other input in the app. Measured on the
+running builder: two 545x24 rectangles outlined at **15.6:1 against
+SURFACE_PANEL**, on the main window, in the panel with the most use.
+Copying the platform was the bug; the app is not drawn in the platform's
+palette any more. Phase 6c then folded the frame onto
+:func:`widgets.input_frame.paint_input_border`, so this control and every
+native field in the app draw the same border from the same code.
 
 The placeholder hint is a separate ``wx.StaticText`` overlay rather than
 text written into the rich-text buffer. Writing the hint into the buffer
@@ -37,6 +46,8 @@ import wx
 import wx.richtext
 
 from utils.constants import DARK_ALT, HINT_TEXT, LIGHT_TEXT
+from utils.constants.theme import BORDER_STRONG
+from widgets.input_frame import INPUT_BORDER_DIP
 from widgets.panels.mana_rich_text_ctrl.handlers import (
     ManaRichTextInnerHandlersMixin,
     ManaSymbolRichCtrlHandlersMixin,
@@ -45,21 +56,25 @@ from widgets.panels.mana_rich_text_ctrl.properties import (
     ManaRichTextInnerPropertiesMixin,
     ManaSymbolRichCtrlPropertiesMixin,
 )
+from widgets.stylize import theme_font
 
 if TYPE_CHECKING:
     from widgets.mana_icon_factory import ManaIconFactory
 
 
-# Three-tone frame matching the native Win11 dark-mode TextCtrl outline,
-# as sampled from an adjacent wx.TextCtrl in the same dialog: a 1-DIP
-# outer halo (lighter on top/left/right, darker on bottom) wrapping a
-# 1-DIP near-white inner ring. Total frame thickness: 2 DIP on every
-# side. On focus the bottom outer row tints the accent colour.
-_BORDER_OUTER_LIGHT = wx.Colour(236, 236, 236)
-_BORDER_INNER = wx.Colour(254, 254, 254)
-_BORDER_OUTER_DARK = wx.Colour(131, 131, 131)
-_BORDER_DIP = 2
-_BORDER_OUTER_DIP = 1
+# Phase 6b re-founded this frame on BORDER_SUBTLE as an explicit placeholder:
+# a stripped wx.TextCtrl elsewhere in the app had **no border at all**, so a
+# 3.54:1 ring here would have made these two fields the loud ones in a column
+# of five, and "what marks a text input" was one question with one answer for
+# every field rather than something this control got to decide alone.
+#
+# Phase 6c answered it -- BORDER_STRONG at rest, FOCUS_RING on focus, for every
+# input in the app -- so the colours, the weights and the states now come from
+# :mod:`widgets.input_frame` and this control paints with the same function
+# they do. The 2-DIP geometry survives unchanged: the inner RichTextCtrl is
+# laid out inside that inset, it is what the shared painter expects, and
+# nothing reflows.
+_BORDER_DIP = INPUT_BORDER_DIP
 
 
 class _ManaRichTextInner(
@@ -100,7 +115,12 @@ class _ManaRichTextInner(
         self._chord_keys: set[str] = set()
         self._mana_mode_active = False
 
-        font = wx.SystemSettings.GetFont(wx.SYS_DEFAULT_GUI_FONT)
+        # theme_font(), not wx.SYS_DEFAULT_GUI_FONT: this control is created
+        # under a parent that already carries the app's 10pt base, and asking
+        # the *system* for a font silently put it back to 9pt. Phase 3 wired
+        # apply_base_font into all 18 top-level windows and this was the one
+        # widget that re-fetched the platform default afterwards.
+        font = theme_font()
         self.SetFont(font)
         self.SetBackgroundColour(wx.Colour(*DARK_ALT))
 
@@ -139,11 +159,9 @@ class ManaSymbolRichCtrl(
     ManaSymbolRichCtrlPropertiesMixin,
     wx.Panel,
 ):
-    """Public wrapper. Custom-paints a 2-DIP frame matching the native Win11
-    dark-mode wx.TextCtrl outline (outer light halo + inner near-white
-    ring, with a darker outer row at the bottom that tints the Windows
-    system accent colour on focus); delegates the TextCtrl API to an
-    inner borderless RichTextCtrl that fills the panel interior.
+    """Public wrapper. Paints the app's input border (see
+    :mod:`widgets.input_frame`) into its own 2-DIP inset and delegates the
+    TextCtrl API to an inner borderless RichTextCtrl that fills the interior.
     """
 
     def __init__(
@@ -160,7 +178,7 @@ class ManaSymbolRichCtrl(
         # Required by wx.AutoBufferedPaintDC: we paint the background
         # ourselves in _on_paint, so suppress the default erase-bg pass.
         self.SetBackgroundStyle(wx.BG_STYLE_PAINT)
-        self.SetBackgroundColour(_BORDER_OUTER_LIGHT)
+        self.SetBackgroundColour(wx.Colour(*BORDER_STRONG))
 
         self._inner = _ManaRichTextInner(
             self,

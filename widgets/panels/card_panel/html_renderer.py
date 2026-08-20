@@ -12,15 +12,29 @@ from html import escape
 from pathlib import Path
 from typing import Any, Protocol
 
+from utils.constants.theme import (
+    ACCENT_TEXT,
+    SURFACE_PANEL,
+    TEXT_PRIMARY,
+    TEXT_SECONDARY,
+    to_hex,
+)
+
 # Match either {SYMBOL} or a bare token previously normalized.
 _MANA_TOKEN_RE = re.compile(r"\{([^{}]+)\}")
 # Reminder text in MTG oracle text is parenthetical and italicized.
 _REMINDER_RE = re.compile(r"\(([^)]+)\)")
 
-# Colour used for keyword hyperlinks in the oracle text — picked to contrast
-# against the dark panel background while staying close to the existing
-# DARK_ACCENT in ``utils.constants.colors``.
-_KEYWORD_LINK_COLOR = "#7AA2F7"
+# wx.html.HtmlWindow takes colours as hex strings in the markup, so these are
+# the tokens rendered to hex rather than RGB triples. They were four hand-picked
+# near-matches -- #7AA2F7, #E6EDF3, #A8B2BD, #22272E -- for tokens that already
+# existed; phase 0's contrast suite covers the tokens and could not see the
+# copies. ACCENT_TEXT rather than ACCENT_PRIMARY because these are links, i.e.
+# accent that has to be *read* as body copy (3.31:1 vs 6.05:1 on this surface).
+_KEYWORD_LINK_COLOR = to_hex(ACCENT_TEXT)
+_PANEL_BG = to_hex(SURFACE_PANEL)
+_BODY_TEXT = to_hex(TEXT_PRIMARY)
+_META_TEXT = to_hex(TEXT_SECONDARY)
 
 PngResolver = Callable[[str], Path | None]
 
@@ -244,8 +258,8 @@ def _render_face_block(
         f'<tr><td align="left" valign="top"><b><font size="+1">{name}</font></b></td>'
         f'<td align="right" valign="top">{mana_cost_html}</td></tr>'
         '<tr><td colspan="2"><hr></td></tr>'
-        f'<tr><td align="left" valign="top"><font color="#A8B2BD">{type_line}</font></td>'
-        f'<td align="right" valign="top"><font color="#A8B2BD">{edition_label}</font></td></tr>'
+        f'<tr><td align="left" valign="top"><font color="{_META_TEXT}">{type_line}</font></td>'
+        f'<td align="right" valign="top"><font color="{_META_TEXT}">{edition_label}</font></td></tr>'
         '<tr><td colspan="2"><hr></td></tr>'
         f'<tr><td colspan="2">{oracle_html}{flavor_html}</td></tr>'
         f'<tr><td align="right" colspan="2"><b><font size="+1">{pt}</font></b></td></tr>'
@@ -272,7 +286,7 @@ def build_card_html(
     """
     if meta is None:
         return (
-            f'<html><body bgcolor="#22272E" text="#E6EDF3">'
+            f'<html><body bgcolor="{_PANEL_BG}" text="{_BODY_TEXT}">'
             f'<p align="center">{escape(empty_text)}</p>'
             f"</body></html>"
         )
@@ -341,15 +355,15 @@ def build_card_html(
     footer = (
         '<table width="100%" cellpadding="0" cellspacing="0" border="0">'
         '<tr><td colspan="2"><hr></td></tr>'
-        f'<tr><td align="left"><font color="#A8B2BD" size="-1">{collector}</font></td>'
-        f'<td align="center"><font color="#A8B2BD" size="-1"><i>{artist}</i></font></td></tr>'
+        f'<tr><td align="left"><font color="{_META_TEXT}" size="-1">{collector}</font></td>'
+        f'<td align="center"><font color="{_META_TEXT}" size="-1"><i>{artist}</i></font></td></tr>'
         "</table>"
     )
 
     # wx.html.HtmlWindow renders HTML 3.2-ish; tables are the most reliable
     # way to align "left half / right half" rows. CSS support is minimal.
     return (
-        '<html><body bgcolor="#22272E" text="#E6EDF3">'
+        f'<html><body bgcolor="{_PANEL_BG}" text="{_BODY_TEXT}">'
         f"{front_block}{back_block}{footer}"
         "</body></html>"
     )

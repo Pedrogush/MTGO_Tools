@@ -4,9 +4,11 @@ from utils.i18n import (
     DEFAULT_LOCALE,
     LOCALE_LABELS,
     MESSAGES,
+    PLURAL_CATEGORIES,
     SUPPORTED_LOCALES,
     normalize_locale,
     translate,
+    translate_plural,
 )
 
 
@@ -87,9 +89,9 @@ def test_all_locales_have_identical_key_sets() -> None:
     reference = set(MESSAGES[DEFAULT_LOCALE])
     for locale in SUPPORTED_LOCALES:
         keys = set(MESSAGES[locale])
-        assert len(keys) == len(reference), (
-            f"{locale} has {len(keys)} keys; {DEFAULT_LOCALE} has {len(reference)}"
-        )
+        assert len(keys) == len(
+            reference
+        ), f"{locale} has {len(keys)} keys; {DEFAULT_LOCALE} has {len(reference)}"
         assert keys == reference, (
             f"{locale} key set diverges from {DEFAULT_LOCALE}: "
             f"missing={reference - keys}, extra={keys - reference}"
@@ -154,3 +156,65 @@ def test_core_ui_translation_keys_exist_in_default_locale() -> None:
         "tutorial.step6.body",
     }
     assert required_keys.issubset(set(MESSAGES[DEFAULT_LOCALE]))
+
+
+# ---------------------------------------------------------------------------
+# Pluralisation (phase 9)
+# ---------------------------------------------------------------------------
+# The deck-count label used to read f"{n} card{'s' if n != 1 else ''}" -- English
+# grammar compiled into a widget, in the one string phase 7 made responsible for
+# ellipsising when the workspace header narrows. These pin the replacement.
+
+
+@pytest.mark.parametrize(
+    "key_base",
+    ["tabs.count.cards", "tabs.count.lands", "tabs.count.mdfcs"],
+)
+@pytest.mark.parametrize("locale", SUPPORTED_LOCALES)
+def test_plural_keys_exist_in_both_forms_for_every_locale(locale, key_base) -> None:
+    for category in PLURAL_CATEGORIES:
+        key = f"{key_base}.{category}"
+        assert key in MESSAGES[locale], f"{locale} is missing {key}"
+        assert "{n}" in MESSAGES[locale][key], f"{key} in {locale} does not place the count"
+
+
+@pytest.mark.parametrize("count,expected", [(0, "0 cards"), (1, "1 card"), (2, "2 cards")])
+def test_translate_plural_picks_the_english_form(count, expected) -> None:
+    assert translate_plural("en-US", "tabs.count.cards", count) == expected
+
+
+@pytest.mark.parametrize(
+    "count,expected", [(0, "0 terrenos"), (1, "1 terreno"), (60, "60 terrenos")]
+)
+def test_translate_plural_picks_the_portuguese_form(count, expected) -> None:
+    assert translate_plural("pt-BR", "tabs.count.lands", count) == expected
+
+
+def test_zero_takes_the_plural_form_in_both_shipped_locales() -> None:
+    # The bug the old code could not have: en-US and pt-BR agree that zero is
+    # plural, but "one" is not "not zero" in every language, and writing the rule
+    # inline is what made it untranslatable in the first place.
+    for locale in SUPPORTED_LOCALES:
+        assert translate_plural(locale, "tabs.count.cards", 0) == translate_plural(
+            locale, "tabs.count.cards", 2
+        ).replace("2", "0")
+
+
+def test_translate_plural_falls_back_to_the_default_locale() -> None:
+    assert translate_plural("es-ES", "tabs.count.cards", 3) == "3 cards"
+
+
+def test_no_catalogue_string_pluralises_by_appending_a_bare_s() -> None:
+    """A catalogue entry ending in '(s)' is programmer pluralisation in disguise.
+
+    The review found one on screen -- the metagame title's
+    ``(Last 1 day(s))`` -- and phase 5 replaced that chart wholesale. This is
+    the guard that stops the idiom coming back through the catalogue.
+    """
+    offenders = {
+        (locale, key): text
+        for locale in SUPPORTED_LOCALES
+        for key, text in MESSAGES[locale].items()
+        if "(s)" in text or "(es)" in text
+    }
+    assert not offenders, offenders

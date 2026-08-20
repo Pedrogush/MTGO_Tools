@@ -11,7 +11,7 @@ from utils.constants import (
     OPPONENT_TRACKER_SECTION_PADDING,
     SUBDUED_TEXT,
 )
-from widgets.stylize import apply_type_level, stylize_button
+from widgets.stylize import apply_type_level, create_divider, stylize_button
 
 
 class HeaderBuilderMixin:
@@ -52,7 +52,7 @@ class HeaderBuilderMixin:
             OPPONENT_TRACKER_SECTION_PADDING,
         )
 
-        divider = wx.StaticLine(panel)
+        divider = create_divider(panel, vertical=False)
         outer_sizer.Add(
             divider, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, OPPONENT_TRACKER_SECTION_PADDING
         )

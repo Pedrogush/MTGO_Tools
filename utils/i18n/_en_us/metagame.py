@@ -2,6 +2,8 @@
 
 MESSAGES: dict[str, str] = {
     "metagame.chart.no_data": "No data available for selected period",
+    "metagame.chart.title": "{format} metagame share",
+    "metagame.chart.other": "Other archetypes",
     "metagame.label.format": "Format",
     "metagame.label.time_window": "Time window",
     "metagame.label.starting_from": "Day",
@@ -9,8 +11,10 @@ MESSAGES: dict[str, str] = {
     "metagame.tooltip.time_window": "Adjust how many days are used to compute metagame share.",
     "metagame.btn.refresh": "Refresh Data",
     "metagame.loaded": "Loaded {count} archetypes",
-    "metagame.period.last_days": "Last {count} day(s)",
-    "metagame.period.days_ago": "{count} day(s) ago",
+    "metagame.period.last_day": "Last day",
+    "metagame.period.last_days": "Last {count} days",
+    "metagame.period.day_ago": "1 day ago",
+    "metagame.period.days_ago": "{count} days ago",
     "metagame.period.range_days_ago": "{start}-{end} days ago",
     "metagame.changes.no_data": "No comparison data available",
     "metagame.changes.previous_missing": "No data from the previous period to compare",

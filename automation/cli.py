@@ -36,6 +36,7 @@ from typing import Any
 
 from automation.client import AutomationClient, AutomationError, ConnectionError
 from automation.server import DEFAULT_PORT
+from utils.console import force_utf8_console
 
 
 def format_output(data: Any, as_json: bool = False) -> str:
@@ -292,6 +293,13 @@ def cmd_menu(client: AutomationClient, args: argparse.Namespace) -> int:
     return 0 if result.get("ok") else 1
 
 
+def cmd_prefs(client: AutomationClient, args: argparse.Namespace) -> int:
+    """List the preferences, or set one."""
+    result = client.preferences(args.key, args.value)
+    print(format_output(result, args.json))
+    return 0 if result.get("ok") else 1
+
+
 def cmd_refresh_collection(client: AutomationClient, args: argparse.Namespace) -> int:
     """Trigger a collection refresh + export from the MTGO bridge."""
     result = client.refresh_collection(force=not args.no_force)
@@ -311,13 +319,6 @@ def cmd_get_deck_notes(client: AutomationClient, args: argparse.Namespace) -> in
     result = client.get_deck_notes()
     print(format_output(result, args.json))
     return 0
-
-
-def cmd_type_into_oracle(client: AutomationClient, args: argparse.Namespace) -> int:
-    """Type characters one at a time into the oracle search box."""
-    result = client.type_into_oracle(args.text, expand_adv=not args.no_expand)
-    print(format_output(result, args.json))
-    return 0 if result.get("typed") else 1
 
 
 def cmd_toggle_adv_filters(client: AutomationClient, args: argparse.Namespace) -> int:
@@ -394,6 +395,12 @@ def cmd_open_app(args: argparse.Namespace) -> int:
 
 
 def main() -> int:
+    # First statement: this CLI's whole job is to print what the running app
+    # says, and the app says things in two locales and several glyphs cp1252
+    # has no code point for. Driven from a WSL shell -- i.e. through a pipe --
+    # stdout is cp1252 and printing one of them raises rather than mangles.
+    # Review finding §5.6; see utils/console.py for the measurement.
+    force_utf8_console()
     parser = argparse.ArgumentParser(
         description="Control the MTGO Tools application from the command line.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -516,6 +523,16 @@ Notes:
     # get-builder-results
     subparsers.add_parser("get-builder-results", help="Get builder search result count")
 
+    # get-builder-top-item
+    # Had a cmd_ function, a client method, a server handler and a dispatch-table
+    # entry, but no subparser -- so argparse rejected it as an invalid choice and
+    # the dispatch entry was unreachable. Found by
+    # tests/test_automation_commands.py, which was written for §5.3's sibling
+    # defect (a client command with no server handler).
+    subparsers.add_parser(
+        "get-builder-top-item", help="Get the first row of the builder results list"
+    )
+
     # refresh-collection
     p = subparsers.add_parser(
         "refresh-collection",
@@ -557,9 +574,16 @@ Notes:
     p.add_argument(
         "path",
         nargs="?",
-        help="Menu path, e.g. 'Tools/Radar' or 'Settings/Language/pt-BR'. "
-        "Omit to list every menu.",
+        help="Menu path, e.g. 'Tools/Radar' or 'File/Preferences…'. " "Omit to list every menu.",
     )
+
+    # prefs
+    p = subparsers.add_parser(
+        "prefs",
+        help="List preferences, or set one ('language pt-BR')",
+    )
+    p.add_argument("key", nargs="?", help="Preference key. Omit to list them all.")
+    p.add_argument("value", nargs="?", help="New value (or on/off/toggle for a boolean)")
 
     # screenshot-window
     p = subparsers.add_parser("screenshot-window", help="Take a screenshot of a secondary window")
@@ -580,18 +604,6 @@ Notes:
 
     # get-deck-notes
     subparsers.add_parser("get-deck-notes", help="Get the current deck notes")
-
-    # type-into-oracle
-    p = subparsers.add_parser(
-        "type-into-oracle",
-        help="Type characters one at a time into the oracle text search box",
-    )
-    p.add_argument("text", help="String to type (e.g. '{W}' or 'deals damage')")
-    p.add_argument(
-        "--no-expand",
-        action="store_true",
-        help="Do not expand the advanced filters panel before typing",
-    )
 
     # start-video
     p = subparsers.add_parser(
@@ -683,9 +695,9 @@ Notes:
         "timer-alert-action": cmd_timer_alert_action,
         "open-widget": cmd_open_widget,
         "menu": cmd_menu,
+        "prefs": cmd_prefs,
         "screenshot-window": cmd_screenshot_window,
         "get-deck-notes": cmd_get_deck_notes,
-        "type-into-oracle": cmd_type_into_oracle,
         "toggle-adv-filters": cmd_toggle_adv_filters,
         "start-video": cmd_start_video,
         "stop-video": cmd_stop_video,

@@ -82,19 +82,39 @@ python -m automation.cli screenshot-window match_history --path screenshots/hist
 
 The six buttons that used to open these windows became a menu bar in phase 3b of
 #962, so `click toolbar --label "Match History"` no longer exists. `menu` replaces
-it, and also reaches the twelve preference items that used to sit behind the gear:
+it:
 
 ```bash
-python -m automation.cli --json menu                       # list every menu
-python -m automation.cli menu "Tools/Radar"                # open a window
-python -m automation.cli menu "Settings/Language/pt-BR"    # pick a radio option
-python -m automation.cli menu "Settings/Check for updates" # flip a checkbox
+python -m automation.cli --json menu                # list every menu
+python -m automation.cli menu "Tools/Radar"         # open a window
+python -m automation.cli menu "Help/Show Tutorial"  # run a plain item
 ```
 
 `menu` runs the item's handler directly rather than popping the menu up: a real
 `wx.PopupMenu` runs a nested modal loop on the main thread, which stops the
 automation socket being serviced for as long as the menu is open (§5.5 of the UI
 review). `list-widgets` reports the bar under `menu_bar`, with its titles.
+
+**Do not `menu "File/Preferences…"` in a script.** It is the one entry that opens
+a modal dialog, and `ShowModal` starves this socket exactly the way `PopupMenu`
+does — the harness will appear dead until someone presses Escape.
+
+### Driving the preferences
+
+Phase 3b's `Settings` menu became a dialog in phase 7, so the five settings are
+reached through `prefs` instead. It reads and writes the same spec the dialog
+renders (`widgets/preferences/spec.py`) and never opens the dialog:
+
+```bash
+python -m automation.cli --json prefs                    # list every setting
+python -m automation.cli prefs language pt-BR            # by value...
+python -m automation.cli prefs language "English"        # ...or by translated label
+python -m automation.cli prefs check_for_updates off     # on / off / toggle
+python -m automation.cli prefs average_hours 48
+```
+
+Keys are `deck_data_source`, `language`, `average_method`, `average_hours` and
+`check_for_updates`. They are stable; the labels beside them are translated.
 
 ## Exercising MTGO bridge features
 

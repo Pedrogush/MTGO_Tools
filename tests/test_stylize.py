@@ -346,7 +346,9 @@ def test_a_native_checkbox_still_gets_the_partial_fix(frame: object) -> None:
     assert _rgb(ctrl.GetBackgroundColour()) == T.SURFACE_PANEL
 
 
-def test_spinctrl_is_themed(frame: object) -> None:
+def test_a_native_spinctrl_still_gets_the_partial_fix(frame: object) -> None:
+    """Not a call site any more -- the app builds ``DarkSpinCtrl``, whose arrows
+    are own-drawn -- but the entry point must not blow up on one."""
     ctrl = wx.SpinCtrl(frame, min=0, max=10, initial=1)
     stylize.stylize_spinctrl(ctrl)
     assert _rgb(ctrl.GetBackgroundColour()) == T.SURFACE_ALT

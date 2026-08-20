@@ -37,16 +37,30 @@ class CardTablePanelProto(Protocol):
     # toolbar mixin.
     _locale: str | None
     _view_mode_buttons: dict[str, wx.Button]
+    view_label: wx.StaticText
+    header_divider: wx.Window
     pile_sort_button: wx.Button
     printing_button: wx.Button | None
     _on_pile_sort_change: Callable[[str, str], None] | None
+    # Header reflow (phase 8): the controls move between _header_top and
+    # _header_bottom depending on whether they fit beside the count label.
+    _header_stack: wx.BoxSizer
+    _header_top: wx.BoxSizer
+    _header_bottom: wx.BoxSizer
+    _header_controls: wx.BoxSizer
+    _header_wrapped: bool
     _on_printing_mode: Callable[[str, str | None], None] | None
 
-    def _t(self, key: str) -> str: ...
+    def _t(self, key: str, **kwargs: object) -> str: ...
+    def _t_plural(self, key_base: str, count: int) -> str: ...
 
     def set_view_mode(self, mode: str, *, persist: bool = ...) -> None: ...
 
     def set_pile_sort(self, sort_mode: str, *, persist: bool = ...) -> None: ...
+
+    def _pile_sort_label(self) -> str: ...
+
+    def _refresh_pile_sort_button(self) -> None: ...
 
     def _switch_content_page(self) -> None: ...
 

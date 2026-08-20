@@ -6,26 +6,28 @@ from typing import TYPE_CHECKING
 
 import wx
 
+from widgets.grids import DataGrid
+
 if TYPE_CHECKING:
     from services.format_card_pool_service import FormatCardPoolService
     from services.radar_service import RadarService
     from services.radar_service.card_stats import CardUsageStats
 
-FORMATS_COLUMN_INDEX = 11
-
-# Visible columns are 1..11; column 0 is a hidden 0-width spacer.
+# Column indices are now 0-based and dense: the old table reserved index 0 for a
+# 0-width spacer because wx.ListCtrl on MSW always left-aligns column 0 whatever
+# format you ask for. The own-drawn grid has no such rule.
 _HEADER_TOOLTIP_KEYS: dict[int, str] = {
-    1: "top_cards.tooltip.rank",
-    2: "top_cards.tooltip.card",
-    3: "top_cards.tooltip.copies",
-    4: "top_cards.tooltip.mb_decks",
-    5: "top_cards.tooltip.mb_avg",
-    6: "top_cards.tooltip.mb_avg_karsten",
-    7: "top_cards.tooltip.sb_decks",
-    8: "top_cards.tooltip.sb_avg",
-    9: "top_cards.tooltip.sb_avg_karsten",
-    10: "top_cards.tooltip.archetypes",
-    11: "top_cards.tooltip.formats",
+    0: "top_cards.tooltip.rank",
+    1: "top_cards.tooltip.card",
+    2: "top_cards.tooltip.copies",
+    3: "top_cards.tooltip.mb_decks",
+    4: "top_cards.tooltip.mb_avg",
+    5: "top_cards.tooltip.mb_avg_karsten",
+    6: "top_cards.tooltip.sb_decks",
+    7: "top_cards.tooltip.sb_avg",
+    8: "top_cards.tooltip.sb_avg_karsten",
+    9: "top_cards.tooltip.archetypes",
+    10: "top_cards.tooltip.formats",
 }
 
 
@@ -56,7 +58,7 @@ class TopCardsHandlersMixin:
     _radar_service: RadarService
     format_choice: wx.Choice
     status_label: wx.StaticText
-    card_list: wx.ListCtrl
+    card_list: DataGrid
 
     def on_format_change(self, _event: wx.CommandEvent) -> None:
         self.current_format = self.format_choice.GetStringSelection().lower()
@@ -67,8 +69,8 @@ class TopCardsHandlersMixin:
         summary = self._service.get_summary(format_name)
         top_cards = self._service.get_top_cards(format_name)
 
-        self.card_list.DeleteAllItems()
         if summary is None or not top_cards:
+            self.card_list.set_rows([])
             self.status_label.SetLabel(
                 self._t("top_cards.status.no_data", format=format_name.title())
             )
@@ -87,13 +89,8 @@ class TopCardsHandlersMixin:
         usage_by_name = self._radar_service.get_card_usage_stats(format_name, card_names)
         legality_by_name = self._radar_service.get_effective_legalities(card_names)
 
+        rows: list[list[str]] = []
         for index, entry in enumerate(top_cards, start=1):
-            # Column 0 is a 0-width spacer so the visible columns can be centered.
-            row = self.card_list.InsertItem(self.card_list.GetItemCount(), "")
-            self.card_list.SetItem(row, 1, str(index))
-            self.card_list.SetItem(row, 2, entry.card_name)
-            self.card_list.SetItem(row, 3, str(entry.copies_played))
-
             stats = usage_by_name.get(
                 entry.card_name,
                 self.controller.CardUsageStats(
@@ -108,65 +105,52 @@ class TopCardsHandlersMixin:
                     sideboard_decks_present=0,
                 ),
             )
-            self.card_list.SetItem(row, 4, str(stats.mainboard_decks_present))
-            self.card_list.SetItem(row, 5, _format_avg(stats.mainboard_avg_arithmetic))
-            self.card_list.SetItem(row, 6, _format_avg(stats.mainboard_avg_karsten))
-            self.card_list.SetItem(row, 7, str(stats.sideboard_decks_present))
-            self.card_list.SetItem(row, 8, _format_avg(stats.sideboard_avg_arithmetic))
-            self.card_list.SetItem(row, 9, _format_avg(stats.sideboard_avg_karsten))
-            self.card_list.SetItem(row, 10, _format_archetypes(stats))
-            self.card_list.SetItem(
-                row, 11, _format_formats(legality_by_name.get(entry.card_name, []))
+            rows.append(
+                [
+                    str(index),
+                    entry.card_name,
+                    str(entry.copies_played),
+                    str(stats.mainboard_decks_present),
+                    _format_avg(stats.mainboard_avg_arithmetic),
+                    _format_avg(stats.mainboard_avg_karsten),
+                    str(stats.sideboard_decks_present),
+                    _format_avg(stats.sideboard_avg_arithmetic),
+                    _format_avg(stats.sideboard_avg_karsten),
+                    _format_archetypes(stats),
+                    _format_formats(legality_by_name.get(entry.card_name, [])),
+                ]
             )
-
-        self._autosize_formats_column()
+        self.card_list.set_rows(rows)
 
     def on_close(self, event: wx.CloseEvent) -> None:
         event.Skip()
 
-    def _autosize_formats_column(self) -> None:
-        """Size the Formats column to whichever of (data, header) is wider.
-
-        Avoids the trailing-ellipsis state when a card is legal in many
-        formats, since the comma-joined list grows wider than the default 160px.
-        """
-        col = FORMATS_COLUMN_INDEX
-        self.card_list.SetColumnWidth(col, wx.LIST_AUTOSIZE)
-        data_width = self.card_list.GetColumnWidth(col)
-        self.card_list.SetColumnWidth(col, wx.LIST_AUTOSIZE_USEHEADER)
-        header_width = self.card_list.GetColumnWidth(col)
-        self.card_list.SetColumnWidth(col, max(data_width, header_width))
-
     def _bind_header_tooltips(self) -> None:
-        self.card_list.Bind(wx.EVT_MOTION, self._on_list_mouse_motion)
-        self.card_list.Bind(wx.EVT_LEAVE_WINDOW, self._on_list_mouse_leave)
+        """Per-column tooltips, on the header where they belong.
 
-    def _on_list_mouse_motion(self, event: wx.MouseEvent) -> None:
-        col = self._column_at_x(event.GetPosition().x)
-        if col is None or col not in _HEADER_TOOLTIP_KEYS:
-            self._set_list_tooltip("")
-        else:
-            self._set_list_tooltip(self._t(_HEADER_TOOLTIP_KEYS[col]))
+        The old binding was ``EVT_MOTION`` on the list body, so hovering an
+        actual column *header* -- a separate ``SysHeader32`` HWND that never
+        forwards mouse events to the list -- showed nothing. The grid's column
+        label window is a real wx window, so the same idea works here. The
+        always-visible legend under the toolbar is the primary explanation; this
+        is the per-column detail.
+        """
+        self.card_list.header.Bind(wx.EVT_MOTION, self._on_header_motion)
+        self.card_list.header.Bind(wx.EVT_LEAVE_WINDOW, self._on_header_leave)
+
+    def _on_header_motion(self, event: wx.MouseEvent) -> None:
+        col = self.card_list.column_at(event.GetPosition().x)
+        key = _HEADER_TOOLTIP_KEYS.get(col) if col is not None else None
+        self._set_header_tooltip(self._t(key) if key else "")
         event.Skip()
 
-    def _on_list_mouse_leave(self, event: wx.MouseEvent) -> None:
-        self._set_list_tooltip("")
+    def _on_header_leave(self, event: wx.MouseEvent) -> None:
+        self._set_header_tooltip("")
         event.Skip()
 
-    def _set_list_tooltip(self, text: str) -> None:
-        current_tip = self.card_list.GetToolTip()
-        current_text = current_tip.GetTip() if current_tip else ""
-        if text == current_text:
+    def _set_header_tooltip(self, text: str) -> None:
+        header = self.card_list.header
+        current = header.GetToolTip()
+        if (current.GetTip() if current else "") == text:
             return
-        self.card_list.SetToolTip(text)
-
-    def _column_at_x(self, x: int) -> int | None:
-        cumulative = 0
-        for i in range(self.card_list.GetColumnCount()):
-            width = self.card_list.GetColumnWidth(i)
-            if width <= 0:
-                continue
-            cumulative += width
-            if x < cumulative:
-                return i
-        return None
+        header.SetToolTip(text)

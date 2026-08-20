@@ -9,6 +9,7 @@ import wx
 
 from utils.app_icon import apply_app_icon
 from utils.constants import DARK_BG, DARK_PANEL, LIGHT_TEXT, SPACE_MD
+from utils.i18n import t
 from widgets.frames.splash_frame.handlers import LoadingFrameHandlersMixin
 from widgets.frames.splash_frame.properties import LoadingFramePropertiesMixin
 from widgets.stylize import apply_type_level, init_top_level_window
@@ -20,7 +21,7 @@ class LoadingFrame(LoadingFrameHandlersMixin, LoadingFramePropertiesMixin, wx.Fr
     def __init__(self, min_duration: float = 0.25, max_duration: float = 1.8) -> None:
         super().__init__(
             None,
-            title="Loading MTGO Tools",
+            title=t("window.title.splash"),
             style=wx.BORDER_NONE | wx.STAY_ON_TOP,
             size=(420, 120),
         )

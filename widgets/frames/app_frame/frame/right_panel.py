@@ -1,4 +1,4 @@
-"""Right column construction (card inspector, card panel) for :class:`AppFrame`."""
+"""Right column construction (the card inspector) for :class:`AppFrame`."""
 
 from __future__ import annotations
 
@@ -6,10 +6,11 @@ from typing import TYPE_CHECKING
 
 import wx
 
-from utils.constants import DARK_PANEL, LIGHT_TEXT, SPACE_XS
+from utils.constants import CARD_PANEL_MIN_HEIGHT, SPACE_SM, SPACE_XS
 from utils.perf import timed
 from widgets.panels.card_inspector_panel import CardInspectorPanel
 from widgets.panels.card_panel import CardPanel
+from widgets.section import SectionPanel
 
 if TYPE_CHECKING:
     from widgets.frames.app_frame.protocol import AppFrameProto
@@ -20,7 +21,20 @@ else:
 
 
 class RightPanelBuilderMixin(_Base):
-    """Builds the inspector column (card inspector + oracle text).
+    """Builds the inspector column: one card, one card panel (§4.6).
+
+    Until phase 7 this was **two** section cards stacked, ``Card Inspector``
+    (image + printing pager) over ``Card`` (Oracle Text / Stats tabs). They are
+    two views of one object, both write the card's name into themselves, and
+    neither name says which is which — the review's §4.6. They are now one
+    section with an internal hierarchy: the card's own art on top, then the tab
+    strip for everything the art cannot show.
+
+    That also settles a measurement phase 6 left open. Phase 6 (#971) recorded
+    the both-panels-expanded minimum height rising 902 → 918 because *two* real
+    headings replaced two ``wx.StaticBox`` grooves, and said "phase 7 merges
+    those two panels and gets it back". One heading is now gone, along with the
+    second card's border, padding and the gap between the two.
 
     The toolbar that used to sit above this column became the window-wide menu
     bar in phase 3b (see :mod:`widgets.menu_bar`).
@@ -30,14 +44,11 @@ class RightPanelBuilderMixin(_Base):
     """
 
     @timed
-    def _build_card_inspector(self, parent: wx.Window) -> wx.StaticBoxSizer:
-        inspector_box = wx.StaticBox(parent, label=self._t("app.label.card_inspector"))
-        inspector_box.SetForegroundColour(LIGHT_TEXT)
-        inspector_box.SetBackgroundColour(DARK_PANEL)
-        inspector_sizer = wx.StaticBoxSizer(inspector_box, wx.VERTICAL)
+    def _build_card_inspector(self, parent: wx.Window) -> SectionPanel:
+        section = SectionPanel(parent, title=self._t("app.label.card_inspector"), padding=SPACE_XS)
 
         self.card_inspector_panel = CardInspectorPanel(
-            inspector_box,
+            section.body,
             controller=self.controller,
             card_manager=self.controller.card_repo.get_card_manager(),
             mana_icons=self.mana_icons,
@@ -59,31 +70,50 @@ class RightPanelBuilderMixin(_Base):
         self.controller.image_service.set_printings_loaded_callback(
             self.card_inspector_panel.handle_printings_loaded
         )
-        inspector_sizer.Add(self.card_inspector_panel, 1, wx.EXPAND)
-        inspector_sizer.Layout()
-        inspector_min_size = inspector_sizer.GetMinSize()
-        inspector_box.SetMinSize(inspector_min_size)
+        # Proportion 0: the art, its pager and the save-art row are a fixed
+        # block (CardInspectorPanel pins its own min/max height), so the tabs
+        # below take every leftover pixel rather than the two fighting for them.
+        section.sizer.Add(self.card_inspector_panel, 0, wx.EXPAND)
 
         # Keep backward compatibility references (delegate to image service via controller)
         self.image_cache = self.controller.image_service.image_cache
         self.image_downloader = self.controller.image_service.image_downloader
 
-        return inspector_sizer
+        self._build_card_panel(section)
+
+        return section
 
     @timed
-    def _build_card_panel(self, parent: wx.Window) -> wx.StaticBoxSizer:
-        card_box = wx.StaticBox(parent, label=self._t("app.label.card_panel"))
-        card_box.SetForegroundColour(LIGHT_TEXT)
-        card_box.SetBackgroundColour(DARK_PANEL)
-        card_sizer = wx.StaticBoxSizer(card_box, wx.VERTICAL)
+    def _build_card_panel(self, section: SectionPanel) -> None:
+        """The Oracle Text / Stats tabs, inside the inspector's one section card.
 
+        A second heading here was what §4.6 objected to: "Card" named the same
+        object as "Card Inspector" 400px above it. The tab strip is the label
+        this content needs — the same reasoning phase 6 used when it dropped the
+        deck workspace's "Deck Workspace" heading for the tab strip beneath it.
+        """
         self.card_panel = CardPanel(
-            card_box,
+            section.body,
             controller=self.controller,
             mana_icons=self.mana_icons,
             t=self._t,
         )
-        self.card_panel.SetMinSize((-1, 240))
+        # Bound the column's minimum width (phase 3b's item for phase 8). The
+        # art block above already pins its width with SetMinSize *and*
+        # SetMaxSize; the tabs did not, so a wx.StaticText inside the Stats tab
+        # reported its full line as a best width and the window's
+        # both-panels-expanded floor moved with whichever card was loaded --
+        # 267 vs 350px measured, i.e. a floor of 1393 or 1433 for the same
+        # layout, pinned to whatever happened to be showing when
+        # _apply_min_size last ran.
+        #
+        # Taking the art block's own pinned width rather than restating it keeps
+        # the two halves of one column from drifting apart, and passing a real
+        # width (not -1) is what stops wx consulting GetBestSize for that axis
+        # at all -- GetEffectiveMinSize only falls back to best size for the
+        # components of the min size left at wxDefaultCoord.
+        inspector_width = self.card_inspector_panel.GetMinSize().GetWidth()
+        self.card_panel.SetMinSize((inspector_width, CARD_PANEL_MIN_HEIGHT))
 
         # Mirror printing changes (caused by prev/next clicks or async loads)
         # from the inspector into the card panel so flavor/artist/edition stay
@@ -95,5 +125,4 @@ class RightPanelBuilderMixin(_Base):
             self._on_inspector_printing_selected
         )
 
-        card_sizer.Add(self.card_panel, 1, wx.EXPAND | wx.ALL, SPACE_XS)
-        return card_sizer
+        section.sizer.Add(self.card_panel, 1, wx.EXPAND | wx.TOP, SPACE_SM)

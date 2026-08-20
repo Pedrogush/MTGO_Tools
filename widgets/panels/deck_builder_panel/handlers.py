@@ -42,6 +42,10 @@ class DeckBuilderPanelHandlersMixin(_Base):
         # Show + repaint via the shared helper so the accent-coloured controls
         # don't leave ghost pixels behind (see widgets.wx_layout).
         set_shown(self._adv_panel, not shown, relayout_from=self)
+        # The column just grew or shrank by the advanced block's full height;
+        # the scroller has to re-derive its virtual size or the new rows are
+        # laid out past the pane's bottom edge with no scrollbar to reach them.
+        self.refit_scroll()
 
     def _on_result_item_selected(self, event: wx.ListEvent) -> None:
         if not self.results_ctrl:

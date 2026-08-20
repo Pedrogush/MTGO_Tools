@@ -13,8 +13,10 @@ from utils.constants import (
 )
 from widgets.buttons.mana_button import create_mana_button
 from widgets.checkbox import DarkCheckBox
+from widgets.input_frame import create_text_input
+from widgets.mode_switch import ModeSwitch
 from widgets.panels.mana_rich_text_ctrl import ManaSymbolRichCtrl
-from widgets.stylize import stylize_button, stylize_checkbox, stylize_label, stylize_textctrl
+from widgets.stylize import stylize_button, stylize_checkbox, stylize_label
 
 if TYPE_CHECKING:
     from widgets.panels.deck_builder_panel.protocol import DeckBuilderPanelProto
@@ -32,12 +34,24 @@ class BasicFiltersBuilderMixin(_Base):
     """
 
     def _build_header(self, parent_sizer: wx.Sizer) -> None:
-        back_btn = wx.Button(self, label=self._t("builder.back_button"))
-        # F2: a full-width saturated bar reads as a section header, not a switch.
-        stylize_button(back_btn, kind="secondary")
-        back_btn.SetToolTip(self._t("builder.back_button.tooltip"))
-        back_btn.Bind(wx.EVT_BUTTON, lambda _evt: self._on_back_clicked())
-        parent_sizer.Add(back_btn, 0, wx.EXPAND | wx.ALL, SPACE_SM)
+        """F2: the same mode switch the research panel carries, in the same place.
+
+        It was a full-width ``wx.Button`` labelled "Deck Research" — again the
+        mode you were *not* in — so the two panels' switches were two different
+        strings in the same position meaning opposite things. One control, one
+        position, one lit chip.
+        """
+        self.mode_switch = ModeSwitch(
+            self,
+            modes=(
+                ("research", self._t("app.label.left_panel.research")),
+                ("builder", self._t("app.label.left_panel.builder")),
+            ),
+            current="builder",
+            on_select=lambda _value: self._on_back_clicked(),
+            tooltips={"research": self._t("builder.back_button.tooltip")},
+        )
+        parent_sizer.Add(self.mode_switch, 0, wx.ALL, SPACE_SM)
 
         info = wx.StaticText(self, label=self._t("builder.info"))
         stylize_label(info, subtle=True, level="body")
@@ -48,8 +62,8 @@ class BasicFiltersBuilderMixin(_Base):
         lbl = wx.StaticText(self, label=self._t("builder.field.card_name"))
         stylize_label(lbl, subtle=True, level="body")
         parent_sizer.Add(lbl, 0, wx.LEFT | wx.RIGHT, SPACE_SM)
-        name_ctrl = wx.TextCtrl(self)
-        stylize_textctrl(name_ctrl)
+        name_field = create_text_input(self)
+        name_ctrl = name_field.ctrl
         name_ctrl.SetHint(self._t("builder.hint.card_name"))
         name_ctrl.SetToolTip("Filter cards by name")
         name_ctrl.Bind(wx.EVT_TEXT, self._on_filters_changed)
@@ -57,7 +71,7 @@ class BasicFiltersBuilderMixin(_Base):
         # A1: LEFT/RIGHT is the form gutter, so the field lines up with its
         # label; the row gap stays SPACE_XS via the spacer, because a sizer
         # item has a single border value for every side it is given.
-        parent_sizer.Add(name_ctrl, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, SPACE_SM)
+        parent_sizer.Add(name_field, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, SPACE_SM)
         parent_sizer.AddSpacer(SPACE_XS)
 
         # --- Mana Cost (always visible) ---

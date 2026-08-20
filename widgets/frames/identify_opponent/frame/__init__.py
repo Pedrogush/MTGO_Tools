@@ -54,6 +54,7 @@ from widgets.frames.identify_opponent.properties import (
 )
 from widgets.panels.compact_radar_panel import CompactRadarPanel
 from widgets.panels.compact_sideboard_panel import CompactSideboardPanel
+from widgets.splitter import DarkSplitter
 from widgets.stylize import init_top_level_window
 
 
@@ -147,8 +148,10 @@ class MTGOpponentDeckSpy(
         )
 
         # Left panel: vertical splitter — Calc (top) / Radar (bottom)
-        self._left_splitter = wx.SplitterWindow(panel, style=wx.SP_3D | wx.SP_LIVE_UPDATE)
-        self._left_splitter.SetBackgroundColour(DARK_BG)
+        # wx.SP_3D adds a light *border* around the whole splitter on top of
+        # the light sash; DarkSplitter's default keeps the 3-D sash metrics
+        # without either paint.
+        self._left_splitter = DarkSplitter(panel)
         main_sizer.Add(
             self._left_splitter, 0, wx.RIGHT | wx.EXPAND, OPPONENT_TRACKER_SECTION_PADDING
         )

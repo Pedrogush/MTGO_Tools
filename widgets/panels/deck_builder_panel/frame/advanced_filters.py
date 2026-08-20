@@ -13,8 +13,9 @@ from utils.constants import (
     SPACE_SM,
     SPACE_XS,
 )
+from widgets.input_frame import create_text_input
 from widgets.panels.mana_rich_text_ctrl import ManaSymbolRichCtrl
-from widgets.stylize import stylize_button, stylize_choice, stylize_label, stylize_textctrl
+from widgets.stylize import stylize_button, stylize_choice, stylize_label
 
 if TYPE_CHECKING:
     from widgets.panels.deck_builder_panel.protocol import DeckBuilderPanelProto
@@ -62,13 +63,13 @@ class AdvancedFiltersBuilderMixin(_Base):
         lbl = wx.StaticText(pwin, label=self._t("builder.field.type_line"))
         stylize_label(lbl, subtle=True, level="body")
         adv_sizer.Add(lbl, 0, wx.LEFT | wx.RIGHT | wx.TOP, SPACE_SM)
-        type_ctrl = wx.TextCtrl(pwin)
-        stylize_textctrl(type_ctrl)
+        type_field = create_text_input(pwin)
+        type_ctrl = type_field.ctrl
         type_ctrl.SetHint(self._t("builder.hint.type_line"))
         type_ctrl.SetToolTip("Filter cards by type line (e.g. Creature, Instant)")
         type_ctrl.Bind(wx.EVT_TEXT, self._on_filters_changed)
         self.inputs["type"] = type_ctrl
-        adv_sizer.Add(type_ctrl, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, SPACE_SM)
+        adv_sizer.Add(type_field, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, SPACE_SM)
         adv_sizer.AddSpacer(SPACE_XS)
 
     def _build_oracle_text_filter(self, pwin: wx.Panel, adv_sizer: wx.Sizer) -> None:
@@ -109,13 +110,13 @@ class AdvancedFiltersBuilderMixin(_Base):
         stylize_label(mv_label, subtle=True, level="body")
         adv_sizer.Add(mv_label, 0, wx.LEFT | wx.RIGHT, SPACE_SM)
         mv_row = wx.BoxSizer(wx.HORIZONTAL)
-        mv_value = wx.TextCtrl(pwin)
-        stylize_textctrl(mv_value)
+        mv_field = create_text_input(pwin)
+        mv_value = mv_field.ctrl
         mv_value.SetHint(self._t("builder.hint.mana_value"))
         mv_value.SetToolTip("Enter a mana value (converted mana cost) to filter by")
         self.mv_value = mv_value
         mv_value.Bind(wx.EVT_TEXT, self._on_filters_changed)
-        mv_row.Add(mv_value, 1, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, SPACE_XS)
+        mv_row.Add(mv_field, 1, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, SPACE_XS)
         mv_choice = wx.Choice(pwin, choices=["-", "<", "≤", "=", "≥", ">"])
         mv_choice.SetSelection(0)
         stylize_choice(mv_choice)
