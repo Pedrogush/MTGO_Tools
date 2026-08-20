@@ -86,3 +86,44 @@ class BuilderMixin(_Base):
         item_h = rect.height if rect.height > 0 else 18
         results_ctrl.ScrollList(0, items * item_h)
         return {"scrolled": True, "items": items, "pixels": items * item_h}
+
+    def _handle_get_builder_list_metrics(self) -> dict[str, Any]:
+        """Report the results list's geometry: client width vs. total column width.
+
+        The numbers that decide whether wxMSW shows a horizontal scrollbar on the
+        native ``SysListView32``: the sum of the column widths against the client
+        width, plus the real ``WS_HSCROLL``/``WS_VSCROLL`` style bits read off the
+        HWND (``wx.Window.HasScrollbar`` answers from the wx style, not the
+        window's actual state).
+        """
+        if not self.frame.builder_panel:
+            return {"error": "Builder panel not available"}
+        results_ctrl = getattr(self.frame.builder_panel, "results_ctrl", None)
+        if results_ctrl is None:
+            return {"error": "results_ctrl not found"}
+
+        columns = [results_ctrl.GetColumnWidth(i) for i in range(results_ctrl.GetColumnCount())]
+        client_w, client_h = results_ctrl.GetClientSize()
+        win_w, win_h = results_ctrl.GetSize()
+
+        style = 0
+        try:
+            import ctypes
+
+            style = ctypes.windll.user32.GetWindowLongW(results_ctrl.GetHandle(), -16)
+        except Exception:  # pragma: no cover - non-Windows / no HWND
+            style = 0
+        ws_hscroll, ws_vscroll = 0x00100000, 0x00200000
+
+        return {
+            "item_count": results_ctrl.GetItemCount(),
+            "columns": columns,
+            "columns_total": sum(columns),
+            "client_width": client_w,
+            "client_height": client_h,
+            "window_width": win_w,
+            "window_height": win_h,
+            "overflow": sum(columns) - client_w,
+            "hscroll": bool(style & ws_hscroll),
+            "vscroll": bool(style & ws_vscroll),
+        }

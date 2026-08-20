@@ -350,6 +350,12 @@ BUILDER_RESULTS_MIN_HEIGHT = 168
 BUILDER_SCROLL_RATE_Y = 12
 
 BUILDER_NAME_COL_MIN_WIDTH = 40  # minimum width of the Name column (px)
+# Width deliberately left unused at the right edge of the results list, so the
+# columns sum to *strictly less* than its client width. wxMSW's native
+# SysListView32 raises its horizontal scrollbar the moment they sum to more, and
+# it will not take that bar down again while they sum to exactly the client
+# width -- only when they sum to less. See _SearchResultsView._fit_name_column.
+BUILDER_NAME_COL_SLACK = 1
 BUILDER_NAME_COL_DEFAULT_WIDTH = 180  # initial width of the Name column (px)
 BUILDER_FORMATS_GRID_COLS = 3  # number of columns in the formats FlexGridSizer
 BUILDER_FORMATS_GRID_HGAP = 8  # horizontal gap between format checkbox cells (px)

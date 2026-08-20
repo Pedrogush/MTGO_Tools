@@ -294,6 +294,10 @@ class AutomationClient:
         """Get the index of the topmost visible item in the builder search results."""
         return self._send_command("get_builder_top_item")
 
+    def get_builder_list_metrics(self) -> dict[str, Any]:
+        """Get the builder results list geometry (column widths vs. client width)."""
+        return self._send_command("get_builder_list_metrics")
+
     def scroll_builder_results(self, items: int = 10) -> dict[str, Any]:
         """Scroll the builder results list by the given number of items."""
         return self._send_command("scroll_builder_results", items=items)
