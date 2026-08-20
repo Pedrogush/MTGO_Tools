@@ -392,3 +392,90 @@ def test_build_index_dfc_without_facenames_derives_back_name_from_canonical():
     assert entry["back_name"] == "Back Half"
     # Both halves of the canonical are exposed as aliases.
     assert set(entry["aliases"]) == {canonical, "Front Half", "Back Half"}
+
+
+def _prepared_and_standalone_payload():
+    """A Prepared card whose B half is a real standalone card, plus that card.
+
+    "Emeritus of Conflict // Lightning Bolt" (Secrets of Strixhaven, ``prepare``
+    layout) prints Lightning Bolt as a box on its own face. MTGJSON gives the
+    combined card a "Lightning Bolt" ``faceName``, and the real Lightning Bolt
+    is a separate entry.
+    """
+    combined = "Emeritus of Conflict // Lightning Bolt"
+    return {
+        combined: [
+            {
+                "name": combined,
+                "faceName": "Emeritus of Conflict",
+                "manaCost": "{1}{R}",
+                "manaValue": 2,
+                "type": "Creature — Human Wizard",
+                "text": "First strike",
+                "power": "2",
+                "toughness": "2",
+                "colors": ["R"],
+                "colorIdentity": ["R"],
+                "legalities": {"modern": "Legal"},
+            },
+            {
+                "name": combined,
+                "faceName": "Lightning Bolt",
+                "manaCost": "{R}",
+                "manaValue": 1,
+                "type": "Instant",
+                "text": "Lightning Bolt deals 3 damage to any target.",
+                "colors": ["R"],
+                "colorIdentity": ["R"],
+                "legalities": {"modern": "Legal"},
+            },
+        ],
+        "Lightning Bolt": [
+            {
+                "name": "Lightning Bolt",
+                "manaCost": "{R}",
+                "manaValue": 1,
+                "type": "Instant",
+                "text": "Lightning Bolt deals 3 damage to any target.",
+                "colors": ["R"],
+                "colorIdentity": ["R"],
+                "legalities": {"modern": "Legal"},
+            }
+        ],
+    }
+
+
+def test_face_alias_never_claims_a_real_card_s_own_name():
+    """A card must always be reachable under its own name.
+
+    ``cards_by_name`` is filled in ``name_lower`` order with ``setdefault``, so
+    "emeritus of conflict // lightning bolt" reached "lightning bolt" first and
+    the genuine Bolt became unreachable — the inspector showed the Prepared
+    card's name, type line and oracle text for Lightning Bolt, and every image
+    request for a Bolt printing went out under the combined name. This is the
+    card-repository twin of the printing-index guard added in 0f07d108 (#792).
+    """
+    index = build_index(_prepared_and_standalone_payload())
+    cards, lookup = index["cards"], index["cards_by_name"]
+
+    assert cards[lookup["lightning bolt"]]["name"] == "Lightning Bolt"
+    assert cards[lookup["lightning bolt"]]["type_line"] == "Instant"
+    # The combined card keeps both of its own keys.
+    combined = "Emeritus of Conflict // Lightning Bolt"
+    assert cards[lookup["emeritus of conflict // lightning bolt"]]["name"] == combined
+    assert cards[lookup["emeritus of conflict"]]["name"] == combined
+    # ...and, crucially, does not carry a "//" alias into the real Bolt's entry,
+    # which is what turned every Bolt image request into an Emeritus request.
+    assert not [a for a in cards[lookup["lightning bolt"]]["aliases"] if "//" in a]
+
+
+def test_face_alias_still_resolves_when_no_real_card_owns_the_name():
+    """The alias is only skipped for names a standalone card actually owns."""
+    index = build_index(_prepared_and_standalone_payload())
+    cards, lookup = index["cards"], index["cards_by_name"]
+
+    # Nothing else is called "Emeritus of Conflict", so the face alias stands.
+    assert cards[lookup["emeritus of conflict"]]["name"].startswith("Emeritus of Conflict //")
+    # And the double-faced case is untouched.
+    dfc = build_index(_sample_atomic_payload())
+    assert dfc["cards"][dfc["cards_by_name"]["jace, telepath unbound"]]["name"].startswith("Jace,")

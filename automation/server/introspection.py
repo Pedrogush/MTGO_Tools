@@ -421,3 +421,51 @@ class IntrospectionMixin(_Base):
             return {"text": "", "error": "Oracle text control not found"}
         value = ctrl.GetValue() if hasattr(ctrl, "GetValue") else ""
         return {"text": value}
+
+    def _handle_get_inspector_printings(self, limit: int = 0, offset: int = 0) -> dict[str, Any]:
+        """Return the inspector's printing list plus the image actually on screen.
+
+        Added for the duplicate-card-art investigation: "the same art appears
+        as several entries" is only answerable by pairing each printing with
+        the *file* the panel resolved for it, which no other command exposes.
+        ``limit``/``offset`` keep the reply inside the transport's single 64 KB
+        ``recv`` for cards with many printings.
+        """
+        inspector = getattr(self.frame, "card_inspector_panel", None)
+        if inspector is None:
+            return {"error": "Card inspector not available", "printings": []}
+        printings = list(getattr(inspector, "inspector_printings", None) or [])
+        display = getattr(inspector, "card_image_display", None)
+        shown = [str(path) for path in (getattr(display, "image_paths", None) or [])]
+        window = printings[offset:] if limit <= 0 else printings[offset : offset + limit]
+        return {
+            "card_name": getattr(inspector, "inspector_current_card_name", None),
+            "count": len(printings),
+            "current": getattr(inspector, "inspector_current_printing", 0),
+            "image_paths": shown,
+            "offset": offset,
+            "printings": [
+                {
+                    "index": offset + i,
+                    "id": entry.get("id"),
+                    "set": entry.get("set"),
+                    "collector_number": entry.get("collector_number"),
+                    "released_at": entry.get("released_at"),
+                    "artist": entry.get("artist"),
+                }
+                for i, entry in enumerate(window)
+            ],
+        }
+
+    def _handle_set_inspector_printing(self, index: int) -> dict[str, Any]:
+        """Jump the inspector to ``index`` through the same path as prev/next."""
+        inspector = getattr(self.frame, "card_inspector_panel", None)
+        if inspector is None:
+            return {"set": False, "error": "Card inspector not available"}
+        printings = getattr(inspector, "inspector_printings", None) or []
+        if not 0 <= index < len(printings):
+            return {"set": False, "error": f"Index out of range: {index}"}
+        inspector.inspector_current_printing = index
+        inspector._emit_printing_changed()
+        inspector._load_current_printing_image()
+        return {"set": True, "index": index, "count": len(printings)}

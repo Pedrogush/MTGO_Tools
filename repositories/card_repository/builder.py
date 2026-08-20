@@ -34,13 +34,32 @@ def build_index(atomic_cards: dict[str, list[dict[str, Any]]]) -> dict[str, Any]
             aliases.update(_collect_name_aliases(canonical_name, printing))
         cards[canonical_name.lower()] = entry
     card_list = sorted(cards.values(), key=lambda c: c["name_lower"])
+    # A card always owns its own name. Without this, a *face* alias of a
+    # combined card can claim a name that belongs to a real standalone card —
+    # ``card_list`` is sorted, so "Emeritus of Conflict // Lightning Bolt"
+    # (a Prepared card whose second half is a real card) reaches
+    # ``setdefault("lightning bolt", …)`` first and the genuine Lightning Bolt
+    # becomes unreachable by its own name, taking its type line, oracle text
+    # and image-request name with it.
+    #
+    # This is the card-repository twin of the guard
+    # ``services.image_service.printing_index.build_printing_index`` grew in
+    # 0f07d108 for the printing list (issue #792). Both indexes key cards by
+    # name and both alias face names, so a change to one needs the same change
+    # in the other.
+    canonical_positions = {card["name_lower"]: position for position, card in enumerate(card_list)}
     for position, card in enumerate(card_list):
         alias_set = card.pop("aliases", set()) or set()
         alias_set.add(card["name"])
         cleaned_aliases = sorted({alias.strip() for alias in alias_set if alias})
         card["aliases"] = cleaned_aliases
         for alias in cleaned_aliases:
-            alias_map.setdefault(alias.lower(), position)
+            alias_key = alias.lower()
+            owner = canonical_positions.get(alias_key)
+            if owner is not None and owner != position:
+                # Some other card *is* this name; only that card may claim it.
+                continue
+            alias_map.setdefault(alias_key, position)
     return {
         "cards": card_list,
         # Map of alias (lowercased) -> index into ``cards``. Storing indices

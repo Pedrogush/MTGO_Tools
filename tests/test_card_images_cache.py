@@ -1731,3 +1731,100 @@ def test_get_image_path_for_printing_does_not_accent_fold(tmp_path):
     assert cache.get_image_path_for_printing("Lórien Revealed", "LTR", "normal") == accent_file
     # ASCII spelling with the same set must NOT accent-fold at the printing layer.
     assert cache.get_image_path_for_printing("Lorien Revealed", "LTR", "normal") is None
+
+
+# ---------------------------------------------------------------------------
+# An uncached printing must read as uncached (never as a sibling's file)
+# ---------------------------------------------------------------------------
+
+
+def _secret_lair_bolt_cache(tmp_path):
+    """A cache holding one of Secret Lair's many Lightning Bolt printings."""
+    cache = card_images.CardImageCache(
+        cache_dir=tmp_path / "cache", db_path=tmp_path / "cache" / "images.db"
+    )
+    cached = cache.cache_dir / "normal" / "uuid-sld-ifiyw7.jpg"
+    cached.parent.mkdir(parents=True, exist_ok=True)
+    cached.write_bytes(b"ifiyw-7")
+    cache.add_image(
+        uuid="uuid-sld-ifiyw7",
+        name="Lightning Bolt",
+        set_code="SLD",
+        collector_number="IFIYW-7",
+        image_size="normal",
+        file_path=cached,
+    )
+    return cache, cached
+
+
+def test_get_image_path_for_printing_will_not_serve_a_sibling_printing(tmp_path):
+    """A set can hold many printings of one card; name+set is not an identity.
+
+    Secret Lair prints Lightning Bolt a dozen times. Answering a request for
+    SLD 1638 with SLD IFIYW-7's file put one art under several pager entries,
+    and made the download queue count 1638 as already cached.
+    """
+    cache, cached = _secret_lair_bolt_cache(tmp_path)
+
+    # The printing that *is* cached still resolves.
+    assert (
+        cache.get_image_path_for_printing(
+            "Lightning Bolt", "SLD", "normal", collector_number="IFIYW-7"
+        )
+        == cached
+    )
+    # A different printing from the same set is a miss, not a sibling's file.
+    assert (
+        cache.get_image_path_for_printing(
+            "Lightning Bolt", "SLD", "normal", collector_number="1638"
+        )
+        is None
+    )
+
+
+def test_resolve_printing_paths_never_substitutes_for_a_uuid(tmp_path):
+    """A uuid names one printing, so a uuid miss must resolve to nothing."""
+    cache, cached = _secret_lair_bolt_cache(tmp_path)
+
+    faces, substitute = cache.resolve_printing_paths(
+        uuid="uuid-sld-ifiyw7",
+        card_name="Lightning Bolt",
+        set_code="SLD",
+        collector_number="IFIYW-7",
+    )
+    assert faces == [cached]
+    assert substitute is None
+
+    # The uncached printing gets nothing at all — no faces, no stand-in — which
+    # is what makes the caller queue a download for this exact printing.
+    faces, substitute = cache.resolve_printing_paths(
+        uuid="uuid-sld-1638",
+        card_name="Lightning Bolt",
+        set_code="SLD",
+        collector_number="1638",
+    )
+    assert faces == []
+    assert substitute is None
+
+
+def test_resolve_printing_paths_allows_a_name_set_stand_in_without_a_uuid(tmp_path):
+    """Only a printing with no uuid may be resolved by name+set+collector."""
+    cache, cached = _secret_lair_bolt_cache(tmp_path)
+
+    faces, substitute = cache.resolve_printing_paths(
+        uuid=None,
+        card_name="Lightning Bolt",
+        set_code="SLD",
+        collector_number="IFIYW-7",
+    )
+    assert faces == []
+    assert substitute == cached
+
+    faces, substitute = cache.resolve_printing_paths(
+        uuid=None,
+        card_name="Lightning Bolt",
+        set_code="SLD",
+        collector_number="1638",
+    )
+    assert faces == []
+    assert substitute is None

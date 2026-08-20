@@ -41,7 +41,7 @@ class CardInspectorPanelProto(Protocol):
     _printings_request_inflight: str | None
     _autosave_printing: bool
     _has_selection: bool
-    _failed_image_requests: set[tuple[str, str]]
+    _failed_image_requests: set[tuple[str, str, str]]
     _image_request_name: str | None
     _image_lookup_gen: int
 
@@ -69,4 +69,4 @@ class CardInspectorPanelProto(Protocol):
         self, card: dict[str, Any], meta: dict[str, Any] | None
     ) -> str | None: ...
     def _request_matches_current(self, request: CardImageRequest) -> bool: ...
-    def _failure_key(self, request: CardImageRequest) -> tuple[str, str]: ...
+    def _failure_key(self, request: CardImageRequest) -> tuple[str, str, str]: ...

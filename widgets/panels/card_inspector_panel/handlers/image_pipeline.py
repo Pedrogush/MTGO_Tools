@@ -127,13 +127,17 @@ class ImagePipelineMixin(_Base):
                     path = self.controller.get_card_image(image_request_name, "normal")
                 wx.CallAfter(self._apply_no_printings_image, gen, card_name, active_request, path)
             else:
-                uuid = active_request.uuid if active_request else None
-                image_paths = image_cache.get_image_paths_by_uuid(uuid, "normal") if uuid else []
-                name_printing_path = None
-                if not image_paths and active_request and active_request.set_code:
-                    name_printing_path = image_cache.get_image_path_for_printing(
-                        active_request.card_name, active_request.set_code, active_request.size
-                    )
+                # The cache decides what may stand in for this printing: a
+                # uuid miss is a miss, so the panel shows its loading state and
+                # the exact printing is queued for download rather than another
+                # printing's art being shown under this one's label.
+                image_paths, name_printing_path = image_cache.resolve_printing_paths(
+                    uuid=active_request.uuid if active_request else None,
+                    card_name=active_request.card_name if active_request else (card_name or ""),
+                    set_code=active_request.set_code if active_request else None,
+                    collector_number=(active_request.collector_number if active_request else None),
+                    size="normal",
+                )
                 wx.CallAfter(
                     self._apply_printings_image,
                     gen,

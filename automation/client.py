@@ -446,6 +446,14 @@ class AutomationClient:
         """Return the plain-text value of the card inspector oracle text control."""
         return self._send_command("get_inspector_oracle_text")
 
+    def get_inspector_printings(self, limit: int = 0, offset: int = 0) -> dict[str, Any]:
+        """Return the inspector's printing list and the image paths on screen."""
+        return self._send_command("get_inspector_printings", limit=limit, offset=offset)
+
+    def set_inspector_printing(self, index: int) -> dict[str, Any]:
+        """Jump the card inspector to the printing at ``index``."""
+        return self._send_command("set_inspector_printing", index=index)
+
 
 def connect(
     host: str = "127.0.0.1", port: int = DEFAULT_PORT, timeout: float = 30.0

@@ -34,7 +34,10 @@ BULK_DATA_CACHE = IMAGE_CACHE_DIR / "bulk_data.json"
 # v5: face-name aliases no longer overwrite a real standalone card's printing
 # list (e.g. "Emeritus of Conflict // Lightning Bolt" must not pollute
 # "Lightning Bolt"); bumping forces a rebuild of the cached index (issue #792).
-PRINTING_INDEX_VERSION = 5
+# v6: finish-only variants of one physical printing (Scryfall lists the foil
+# run under a "\u2605"-suffixed collector number, same illustration and frame)
+# collapse into a single art entry.
+PRINTING_INDEX_VERSION = 6
 PRINTING_INDEX_CACHE = IMAGE_CACHE_DIR / f"printings_v{PRINTING_INDEX_VERSION}.json"
 
 # Image size options (in order of preference for storage)
@@ -94,6 +97,14 @@ class BulkCard(msgspec.Struct, gc=False):
     flavor_text: str | None = None
     artist: str | None = None
     full_art: bool | None = None
+    # Identity of the *artwork* and of the frame treatment printed around it.
+    # build_printing_index needs these to tell a genuinely different printing
+    # from the same printing's foil run, which Scryfall models as a separate
+    # card object with the same illustration.
+    illustration_id: str | None = None
+    frame: str | None = None
+    frame_effects: list[str] | None = None
+    border_color: str | None = None
     card_faces: list[BulkCardFace] | None = None
 
     def get(self, key: str, default: Any = None) -> Any:  # noqa: ANN401

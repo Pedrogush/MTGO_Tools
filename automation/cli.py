@@ -344,6 +344,20 @@ def cmd_stop_video(client: AutomationClient, args: argparse.Namespace) -> int:
     return 0 if "error" not in result else 1
 
 
+def cmd_inspector_printings(client: AutomationClient, args: argparse.Namespace) -> int:
+    """Print the inspector's printing list and the image paths it is showing."""
+    result = client.get_inspector_printings(limit=args.limit, offset=args.offset)
+    print(format_output(result, args.json))
+    return 0 if "error" not in result else 1
+
+
+def cmd_set_inspector_printing(client: AutomationClient, args: argparse.Namespace) -> int:
+    """Jump the inspector to a printing index."""
+    result = client.set_inspector_printing(args.index)
+    print(format_output(result, args.json))
+    return 0 if result.get("set") else 1
+
+
 def cmd_close_app(client: AutomationClient, args: argparse.Namespace) -> int:
     """Close the running application."""
     result = client.close_app()
@@ -644,6 +658,20 @@ Notes:
     subparsers.add_parser("toggle-adv-filters", help="Toggle advanced filters in builder panel")
 
     # close-app
+    # inspector-printings
+    p = subparsers.add_parser(
+        "inspector-printings",
+        help="List the card inspector's printings and the image files it is showing",
+    )
+    p.add_argument("--limit", type=int, default=0, help="Max printings to return (0 = all)")
+    p.add_argument("--offset", type=int, default=0, help="First printing index to return")
+
+    # set-inspector-printing
+    p = subparsers.add_parser(
+        "set-inspector-printing", help="Jump the card inspector to a printing index"
+    )
+    p.add_argument("index", type=int, help="Zero-based printing index")
+
     subparsers.add_parser("close-app", help="Close the running application")
 
     # open-app
@@ -701,6 +729,8 @@ Notes:
         "toggle-adv-filters": cmd_toggle_adv_filters,
         "start-video": cmd_start_video,
         "stop-video": cmd_stop_video,
+        "inspector-printings": cmd_inspector_printings,
+        "set-inspector-printing": cmd_set_inspector_printing,
         "close-app": cmd_close_app,
     }
 

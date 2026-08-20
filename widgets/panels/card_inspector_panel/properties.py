@@ -45,8 +45,18 @@ class CardInspectorPanelPropertiesMixin(_Base):
         return bool(uuid and request.uuid and uuid == request.uuid)
 
     @staticmethod
-    def _failure_key(request: CardImageRequest) -> tuple[str, str]:
+    def _failure_key(request: CardImageRequest) -> tuple[str, str, str]:
+        """Identify the *printing* whose download failed, not the card+set.
+
+        Keyed on name+set alone, one printing that has no image (a digital-only
+        or otherwise imageless record) stopped the panel from ever asking for
+        any of its set-mates again — which matters now that a cache miss is
+        answered by a download rather than by a sibling's file.
+        """
+        if request.uuid:
+            return ("uuid", request.uuid.lower(), request.size or "")
         return (
             (request.card_name or "").lower(),
             (request.set_code or "").lower(),
+            (request.collector_number or "").lower(),
         )
