@@ -24,9 +24,9 @@ def test_builder_add_to_mainboard(client: AutomationClient) -> None:
     client.add_card_to_zone("main", "Lightning Bolt", 1)
 
     after = client.get_zone_cards("main")
-    assert after["total_qty"] == initial_total + 1, (
-        f"Expected mainboard total {initial_total + 1}, got {after['total_qty']}"
-    )
+    assert (
+        after["total_qty"] == initial_total + 1
+    ), f"Expected mainboard total {initial_total + 1}, got {after['total_qty']}"
     bolt = next((c for c in after["cards"] if c["name"] == "Lightning Bolt"), None)
     assert bolt is not None, "Lightning Bolt should be in mainboard"
     assert bolt["qty"] == 5, f"Expected Lightning Bolt qty=5, got {bolt['qty']}"
@@ -44,9 +44,9 @@ def test_builder_add_to_sideboard(client: AutomationClient) -> None:
     client.add_card_to_zone("side", "Rest in Peace", 1)
 
     after = client.get_zone_cards("side")
-    assert after["total_qty"] == initial_total + 1, (
-        f"Expected sideboard total {initial_total + 1}, got {after['total_qty']}"
-    )
+    assert (
+        after["total_qty"] == initial_total + 1
+    ), f"Expected sideboard total {initial_total + 1}, got {after['total_qty']}"
     rip = next((c for c in after["cards"] if c["name"] == "Rest in Peace"), None)
     assert rip is not None, "Rest in Peace should be in sideboard"
     assert rip["qty"] == 5, f"Expected Rest in Peace qty=5, got {rip['qty']}"
@@ -65,9 +65,9 @@ def test_subtract_card_from_mainboard(client: AutomationClient) -> None:
     client.subtract_card_from_zone("main", "Goblin Guide", 1)
 
     after = client.get_zone_cards("main")
-    assert after["total_qty"] == initial_total - 1, (
-        f"Expected mainboard total {initial_total - 1}, got {after['total_qty']}"
-    )
+    assert (
+        after["total_qty"] == initial_total - 1
+    ), f"Expected mainboard total {initial_total - 1}, got {after['total_qty']}"
     guide = next((c for c in after["cards"] if c["name"] == "Goblin Guide"), None)
     assert guide is not None, "Goblin Guide should still be in mainboard"
     assert guide["qty"] == 3, f"Expected Goblin Guide qty=3, got {guide['qty']}"
@@ -82,9 +82,9 @@ def test_subtract_card_from_sideboard(client: AutomationClient) -> None:
     client.subtract_card_from_zone("side", "Smash to Smithereens", 1)
 
     after = client.get_zone_cards("side")
-    assert after["total_qty"] == initial_total - 1, (
-        f"Expected sideboard total {initial_total - 1}, got {after['total_qty']}"
-    )
+    assert (
+        after["total_qty"] == initial_total - 1
+    ), f"Expected sideboard total {initial_total - 1}, got {after['total_qty']}"
     smash = next((c for c in after["cards"] if c["name"] == "Smash to Smithereens"), None)
     assert smash is not None, "Smash to Smithereens should still be in sideboard"
     assert smash["qty"] == 2, f"Expected qty=2, got {smash['qty']}"
