@@ -84,7 +84,12 @@ class DeckGridView(
         on_zone_transfer: Callable[[list[str], wx.Point], bool] | None = None,
         get_printing_image: Callable[[str], Path | None] | None = None,
     ) -> None:
-        super().__init__(parent, style=wx.VSCROLL)
+        # FULL_REPAINT_ON_RESIZE puts this window on wx's CS_HREDRAW|CS_VREDRAW
+        # class, so MSW invalidates the whole client on a resize instead of
+        # keeping the bits it can. Without it a live sash drag resizes the view
+        # faster than it can repaint and every skipped repaint leaves another
+        # edge-fade band behind, which is the solid dark wash of #983.
+        super().__init__(parent, style=wx.VSCROLL | wx.FULL_REPAINT_ON_RESIZE)
         self.zone = zone
         self._get_metadata = get_metadata
         self._get_card_image = get_card_image
@@ -157,12 +162,6 @@ class DeckGridView(
         # single-pixel granularity; the wheel handler then scrolls a larger
         # per-notch step so the wheel still moves a useful distance.
         self.SetScrollRate(CARD_VIEW_SCROLL_RATE, CARD_VIEW_SCROLL_RATE)
-        # No SetDoubleBuffered(True): AutoBufferedPaintDC in _on_paint already
-        # gives flicker-free painting, and a window-level back-buffer would make
-        # MSW repaint the whole client on every scroll instead of blitting the
-        # old pixels and exposing only a thin strip (which is what keeps the
-        # culled paint cheap).
-
         self.Bind(wx.EVT_PAINT, self._on_paint)
         self.Bind(wx.EVT_SIZE, self._on_size)
         self.Bind(wx.EVT_LEFT_DOWN, self._on_left_down)
@@ -265,6 +264,31 @@ class DeckGridView(
         """
         return ceil(len(self._cards) / max(1, self._cols)) * _CELL_HEIGHT
 
+    def Scroll(self, *args: Any) -> None:
+        """Move the origin without wx's scroll blit -- **every** caller (#983).
+
+        Overriding ``Scroll`` rather than asking call sites to use
+        :func:`scroll_snap.scroll_viewport` is deliberate. The blit strands the
+        edge fade, and the callers that move this view's origin are spread wide:
+        the wheel, the scrollbar, drag-reorder and marquee autoscroll,
+        scroll-into-view, the reset in ``set_cards`` -- plus the automation
+        harness, which parks the origin before a measured burst. Every one of
+        them is a way to reintroduce the bug, and a rule that lives at the call
+        site is a rule that the next call site will not know about.
+
+        wx itself still reaches ``wxScrollHelper::DoScroll`` from C++ for a
+        scrollbar thumb drag and for ``ScrollLines``; that path cannot be
+        intercepted from Python (``ScrollWindow`` is not virtual through the
+        wxPython bindings -- measured), and it is what
+        :func:`edge_fade.begin_viewport_paint` is the backstop for.
+        """
+        if len(args) == 1:
+            point = args[0]
+            x, y = point[0], point[1]
+        else:
+            x, y = args
+        scroll_snap.scroll_viewport(self, x, y)
+
     def _on_scrollwin(self, event: wx.ScrollWinEvent) -> None:
         # Shared with the pile view so both settle identically (see scroll_snap).
         scroll_snap.handle_scrollwin(self, event)
@@ -272,6 +296,11 @@ class DeckGridView(
     # ----- paint orchestration -----
     def _on_paint(self, _event: wx.PaintEvent) -> None:
         t0 = perf_counter()
+        # Must run before the PaintDC exists: it is what widens this paint's
+        # clip to the whole client when the viewport has moved under the edge
+        # fade (#983). Its result says the update region can no longer be
+        # trusted to cull with.
+        whole_client = edge_fade.begin_viewport_paint(self)
         dc = wx.AutoBufferedPaintDC(self)
         self.PrepareDC(dc)
         dc.SetBackground(wx.Brush(wx.Colour(*DARK_PANEL)))
@@ -295,7 +324,7 @@ class DeckGridView(
             self._draw_overlays(dc)
         else:
             # Oversized deck: draw directly, culled to the repaint region.
-            for idx in self._visible_card_indices():
+            for idx in self._visible_card_indices(whole_client):
                 self._draw_card(dc, self._card_rect(idx), self._cards[idx])
         if self._drag_active:
             self._draw_drop_indicator(dc)

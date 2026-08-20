@@ -191,16 +191,30 @@ class DeckBuilderPanelHandlersMixin(_Base):
         self.results_cache = results
         if not self.results_ctrl:
             return
-        self.results_ctrl.SetData(results)
         count = len(results)
         # C5: swap the table for the empty state rather than leaving two column
         # headers over a void.
         empty_state = getattr(self, "results_empty_state", None)
         if empty_state is not None and empty_state.IsShown() != (count == 0):
-            self.results_ctrl.Show(count > 0)
-            empty_state.Show(count == 0)
-            self._clear_filters_btn.Show(count > 0)
-            relayout(self)
+            # Frozen because ``relayout`` takes ~150ms here and resizes the list
+            # part-way through it, and wxMSW paints the horizontal scrollbar it
+            # briefly raises during that resize. Measured off a screen-pixel
+            # capture: 6 frames of a full-width scrollbar thumb without the
+            # freeze, 0 with it.
+            self.results_ctrl.Freeze()
+            try:
+                self.results_ctrl.Show(count > 0)
+                empty_state.Show(count == 0)
+                self._clear_filters_btn.Show(count > 0)
+                relayout(self)
+            finally:
+                self.results_ctrl.Thaw()
+        # Fill the list *after* the swap, not before. The swap resizes it, and
+        # wxMSW raises its horizontal scrollbar during that resize over columns
+        # still fitted to the pre-swap width -- a bar it will not take down again
+        # from inside the resize. SetData refits them from outside it, which is
+        # where comctl32 does re-evaluate. See _SearchResultsView._fit_name_column.
+        self.results_ctrl.SetData(results)
         if self.status_label:
             self.status_label.SetLabel(
                 self._t("builder.status.showing").format(

@@ -279,6 +279,13 @@ def cmd_get_builder_top_item(client: AutomationClient, args: argparse.Namespace)
     return 0
 
 
+def cmd_get_builder_list_metrics(client: AutomationClient, args: argparse.Namespace) -> int:
+    """Get the builder results list geometry."""
+    result = client.get_builder_list_metrics()
+    print(format_output(result, args.json))
+    return 0
+
+
 def cmd_open_widget(client: AutomationClient, args: argparse.Namespace) -> int:
     """Open a widget window."""
     result = client.open_widget(args.widget_name)
@@ -342,6 +349,61 @@ def cmd_stop_video(client: AutomationClient, args: argparse.Namespace) -> int:
     result = client.stop_video(out_dir=args.out_dir)
     print(format_output(result, args.json))
     return 0 if "error" not in result else 1
+
+
+def cmd_get_sash(client: AutomationClient, args: argparse.Namespace) -> int:
+    """Report a splitter's sash position and drag range."""
+    result = client.get_sash(splitter=args.splitter)
+    print(format_output(result, args.json))
+    return 0 if "error" not in result else 1
+
+
+def cmd_inspector_printings(client: AutomationClient, args: argparse.Namespace) -> int:
+    """Print the inspector's printing list and the image paths it is showing."""
+    result = client.get_inspector_printings(limit=args.limit, offset=args.offset)
+    print(format_output(result, args.json))
+    return 0 if "error" not in result else 1
+
+
+def cmd_set_sash(client: AutomationClient, args: argparse.Namespace) -> int:
+    """Move a splitter's sash to an absolute position."""
+    result = client.set_sash(position=args.position, splitter=args.splitter)
+    print(format_output(result, args.json))
+    return 0 if "error" not in result else 1
+
+
+def cmd_scroll_lines(client: AutomationClient, args: argparse.Namespace) -> int:
+    """Scroll a card view repeatedly through wx's own WM_VSCROLL path."""
+    result = client.scroll_lines(
+        zone=args.zone,
+        view=args.view,
+        count=args.count,
+        lines=args.lines,
+        interval_ms=args.interval_ms,
+    )
+    print(format_output(result, args.json))
+    return 0 if result.get("started") else 1
+
+
+def cmd_sash_drag(client: AutomationClient, args: argparse.Namespace) -> int:
+    """Sweep a splitter's sash up and down like a live drag."""
+    result = client.sash_drag(
+        splitter=args.splitter,
+        start=args.start,
+        end=args.end,
+        steps=args.steps,
+        cycles=args.cycles,
+        interval_ms=args.interval_ms,
+    )
+    print(format_output(result, args.json))
+    return 0 if result.get("started") else 1
+
+
+def cmd_set_inspector_printing(client: AutomationClient, args: argparse.Namespace) -> int:
+    """Jump the inspector to a printing index."""
+    result = client.set_inspector_printing(args.index)
+    print(format_output(result, args.json))
+    return 0 if result.get("set") else 1
 
 
 def cmd_close_app(client: AutomationClient, args: argparse.Namespace) -> int:
@@ -533,6 +595,12 @@ Notes:
         "get-builder-top-item", help="Get the first row of the builder results list"
     )
 
+    # get-builder-list-metrics
+    subparsers.add_parser(
+        "get-builder-list-metrics",
+        help="Get the builder results list geometry (columns vs. client width)",
+    )
+
     # refresh-collection
     p = subparsers.add_parser(
         "refresh-collection",
@@ -643,7 +711,65 @@ Notes:
     # toggle-adv-filters
     subparsers.add_parser("toggle-adv-filters", help="Toggle advanced filters in builder panel")
 
+    # scroll-lines
+    p = subparsers.add_parser(
+        "scroll-lines", help="Scroll a card view through wx's own WM_VSCROLL path"
+    )
+    p.add_argument("--zone", default="main", help="Deck zone (main/side)")
+    p.add_argument("--view", default="grid", help="Card view (grid/pile)")
+    p.add_argument("--count", type=int, default=10, help="Scrolls to fire (default 10)")
+    p.add_argument("--lines", type=int, default=1, help="Lines per scroll (default 1)")
+    p.add_argument(
+        "--interval-ms",
+        type=float,
+        default=60.0,
+        dest="interval_ms",
+        help="Delay between scrolls in ms (default 60)",
+    )
+
+    # get-sash / set-sash / sash-drag
+    p = subparsers.add_parser("get-sash", help="Report a splitter's sash position and range")
+    p.add_argument(
+        "--splitter", default="deck_split", help="Splitter attribute (default deck_split)"
+    )
+
+    p = subparsers.add_parser("set-sash", help="Move a splitter's sash to an absolute position")
+    p.add_argument("position", type=int, help="Sash position in pixels")
+    p.add_argument(
+        "--splitter", default="deck_split", help="Splitter attribute (default deck_split)"
+    )
+
+    p = subparsers.add_parser("sash-drag", help="Sweep a splitter's sash up and down (live drag)")
+    p.add_argument(
+        "--splitter", default="deck_split", help="Splitter attribute (default deck_split)"
+    )
+    p.add_argument("--start", type=int, default=None, help="Low sash position (default: minimum)")
+    p.add_argument("--end", type=int, default=None, help="High sash position (default: maximum)")
+    p.add_argument("--steps", type=int, default=12, help="Sash moves per sweep leg (default 12)")
+    p.add_argument("--cycles", type=int, default=1, help="Down-and-back sweeps (default 1)")
+    p.add_argument(
+        "--interval-ms",
+        type=float,
+        default=25.0,
+        dest="interval_ms",
+        help="Delay between sash moves in ms (default 25)",
+    )
+
     # close-app
+    # inspector-printings
+    p = subparsers.add_parser(
+        "inspector-printings",
+        help="List the card inspector's printings and the image files it is showing",
+    )
+    p.add_argument("--limit", type=int, default=0, help="Max printings to return (0 = all)")
+    p.add_argument("--offset", type=int, default=0, help="First printing index to return")
+
+    # set-inspector-printing
+    p = subparsers.add_parser(
+        "set-inspector-printing", help="Jump the card inspector to a printing index"
+    )
+    p.add_argument("index", type=int, help="Zero-based printing index")
+
     subparsers.add_parser("close-app", help="Close the running application")
 
     # open-app
@@ -691,6 +817,7 @@ Notes:
         "get-scroll-pos": cmd_get_scroll_pos,
         "get-builder-results": cmd_get_builder_results,
         "get-builder-top-item": cmd_get_builder_top_item,
+        "get-builder-list-metrics": cmd_get_builder_list_metrics,
         "refresh-collection": cmd_refresh_collection,
         "timer-alert-action": cmd_timer_alert_action,
         "open-widget": cmd_open_widget,
@@ -701,6 +828,12 @@ Notes:
         "toggle-adv-filters": cmd_toggle_adv_filters,
         "start-video": cmd_start_video,
         "stop-video": cmd_stop_video,
+        "scroll-lines": cmd_scroll_lines,
+        "get-sash": cmd_get_sash,
+        "set-sash": cmd_set_sash,
+        "sash-drag": cmd_sash_drag,
+        "inspector-printings": cmd_inspector_printings,
+        "set-inspector-printing": cmd_set_inspector_printing,
         "close-app": cmd_close_app,
     }
 

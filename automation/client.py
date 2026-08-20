@@ -111,6 +111,40 @@ class AutomationClient:
             kwargs["out_dir"] = out_dir
         return self._send_command("stop_video", **kwargs)
 
+    def get_sash(self, splitter: str = "deck_split") -> dict[str, Any]:
+        """Read a splitter's sash position and the range it may be dragged in."""
+        return self._send_command("get_sash", splitter=splitter)
+
+    def set_sash(self, position: int, splitter: str = "deck_split") -> dict[str, Any]:
+        """Move a sash to ``position`` and flush the resulting repaint."""
+        return self._send_command("set_sash", splitter=splitter, position=position)
+
+    def sash_drag(
+        self,
+        splitter: str = "deck_split",
+        start: int | None = None,
+        end: int | None = None,
+        steps: int = 12,
+        cycles: int = 1,
+        interval_ms: float = 25.0,
+    ) -> dict[str, Any]:
+        """Sweep a sash up and down like a live drag, from a worker thread.
+
+        Returns as soon as the sweep is scheduled, so the caller can record
+        (:meth:`start_video`) while it runs.
+        """
+        kwargs: dict[str, Any] = {
+            "splitter": splitter,
+            "steps": steps,
+            "cycles": cycles,
+            "interval_ms": interval_ms,
+        }
+        if start is not None:
+            kwargs["start"] = start
+        if end is not None:
+            kwargs["end"] = end
+        return self._send_command("sash_drag", **kwargs)
+
     def get_status(self) -> str:
         """Get the status bar text."""
         result = self._send_command("get_status")
@@ -282,6 +316,28 @@ class AutomationClient:
             interval_ms=interval_ms,
         )
 
+    def scroll_lines(
+        self,
+        zone: str = "main",
+        view: str = "grid",
+        count: int = 10,
+        lines: int = 1,
+        interval_ms: float = 60.0,
+    ) -> dict[str, Any]:
+        """Scroll a card view through wx's own ``WM_VSCROLL`` path, repeatedly.
+
+        The scrollbar/keyboard path, which no application code sits on. Returns
+        as soon as the burst is scheduled so a video grab can record it.
+        """
+        return self._send_command(
+            "scroll_lines",
+            zone=zone,
+            view=view,
+            count=count,
+            lines=lines,
+            interval_ms=interval_ms,
+        )
+
     def get_scroll_perf(self, zone: str = "main", view: str = "grid") -> dict[str, Any]:
         """Read back the recorded wheel-scroll perf trace (input/paint events)."""
         return self._send_command("get_scroll_perf", zone=zone, view=view)
@@ -293,6 +349,10 @@ class AutomationClient:
     def get_builder_top_item(self) -> dict[str, Any]:
         """Get the index of the topmost visible item in the builder search results."""
         return self._send_command("get_builder_top_item")
+
+    def get_builder_list_metrics(self) -> dict[str, Any]:
+        """Get the builder results list geometry (column widths vs. client width)."""
+        return self._send_command("get_builder_list_metrics")
 
     def scroll_builder_results(self, items: int = 10) -> dict[str, Any]:
         """Scroll the builder results list by the given number of items."""
@@ -445,6 +505,14 @@ class AutomationClient:
     def get_inspector_oracle_text(self) -> dict[str, Any]:
         """Return the plain-text value of the card inspector oracle text control."""
         return self._send_command("get_inspector_oracle_text")
+
+    def get_inspector_printings(self, limit: int = 0, offset: int = 0) -> dict[str, Any]:
+        """Return the inspector's printing list and the image paths on screen."""
+        return self._send_command("get_inspector_printings", limit=limit, offset=offset)
+
+    def set_inspector_printing(self, index: int) -> dict[str, Any]:
+        """Jump the card inspector to the printing at ``index``."""
+        return self._send_command("set_inspector_printing", index=index)
 
 
 def connect(

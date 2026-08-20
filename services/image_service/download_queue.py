@@ -398,17 +398,21 @@ class CardImageDownloadQueue:
     def _is_cached(self, request: CardImageRequest) -> bool:
         if not request.card_name:
             return False
-        # A uuid pins the request to one exact printing. Check it first: the
-        # name/set lookups can miss split-layout cards stored under their
-        # combined name. Fall through to the name/set checks on a uuid miss so
-        # a printing satisfied under another identity (e.g. resolved from
-        # stale bulk data) still counts as cached.
-        if request.uuid and self._cache.is_cached(request.uuid, request.size, face_index=0):
-            return True
+        # A uuid pins the request to one exact printing, and it is the whole
+        # answer: a name/set hit only proves that *some* printing of the card
+        # from that set is on disk, which used to make this report a miss as
+        # "cached". The exact printing then never downloaded and the inspector
+        # was left showing a sibling's art under this printing's label. A uuid
+        # miss is a miss.
+        if request.uuid:
+            return self._cache.is_cached(request.uuid, request.size, face_index=0)
         if request.set_code:
             return (
                 self._cache.get_image_path_for_printing(
-                    request.card_name, request.set_code, request.size
+                    request.card_name,
+                    request.set_code,
+                    request.size,
+                    collector_number=request.collector_number,
                 )
                 is not None
             )

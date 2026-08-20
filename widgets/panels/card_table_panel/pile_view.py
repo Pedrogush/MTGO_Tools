@@ -114,7 +114,9 @@ class DeckPileView(wx.ScrolledWindow):
         on_zone_transfer: Callable[[list[str], wx.Point], bool] | None = None,
         get_printing_image: Callable[[str], Path | None] | None = None,
     ) -> None:
-        super().__init__(parent, style=wx.HSCROLL | wx.VSCROLL)
+        # FULL_REPAINT_ON_RESIZE: see DeckGridView -- MSW must not keep bits
+        # across a resize or a live sash drag stacks stale edge fades (#983).
+        super().__init__(parent, style=wx.HSCROLL | wx.VSCROLL | wx.FULL_REPAINT_ON_RESIZE)
         self.zone = zone
         self._get_metadata = get_metadata
         self._get_card_image = get_card_image
@@ -185,13 +187,8 @@ class DeckPileView(wx.ScrolledWindow):
         # cards no longer snap in coarse jumps. The wheel scrolls a larger step
         # (see _on_wheel) since a notch would otherwise move only a few px.
         self.SetScrollRate(CARD_VIEW_SCROLL_RATE, CARD_VIEW_SCROLL_RATE)
-        # No SetDoubleBuffered(True): AutoBufferedPaintDC in _on_paint already
-        # gives flicker-free painting, and a window-level back-buffer would make
-        # MSW repaint the whole client on every scroll instead of blitting the
-        # old pixels and exposing only a thin strip (which is what keeps the
-        # culled paint cheap).
-
         self.Bind(wx.EVT_PAINT, self._on_paint)
+        self.Bind(wx.EVT_SIZE, self._on_size)
         self.Bind(wx.EVT_LEFT_DOWN, self._on_left_down)
         self.Bind(wx.EVT_LEFT_UP, self._on_left_up)
         self.Bind(wx.EVT_RIGHT_DOWN, self._on_right_down)
@@ -218,9 +215,50 @@ class DeckPileView(wx.ScrolledWindow):
         """The true content height -- the virtual size is inflated to the client."""
         return self._content_size.GetHeight()
 
+    def Scroll(self, *args: Any) -> None:
+        """Move the origin without wx's scroll blit -- **every** caller (#983).
+
+        Overriding ``Scroll`` rather than asking call sites to use
+        :func:`scroll_snap.scroll_viewport` is deliberate. The blit strands the
+        edge fade, and the callers that move this view's origin are spread wide:
+        the wheel, the scrollbar, drag-reorder and marquee autoscroll,
+        scroll-into-view, the reset in ``set_cards`` -- plus the automation
+        harness, which parks the origin before a measured burst. Every one of
+        them is a way to reintroduce the bug, and a rule that lives at the call
+        site is a rule that the next call site will not know about.
+
+        wx itself still reaches ``wxScrollHelper::DoScroll`` from C++ for a
+        scrollbar thumb drag and for ``ScrollLines``; that path cannot be
+        intercepted from Python (``ScrollWindow`` is not virtual through the
+        wxPython bindings -- measured), and it is what
+        :func:`edge_fade.begin_viewport_paint` is the backstop for.
+        """
+        if len(args) == 1:
+            point = args[0]
+            x, y = point[0], point[1]
+        else:
+            x, y = args
+        scroll_snap.scroll_viewport(self, x, y)
+
     def _on_scrollwin(self, event: wx.ScrollWinEvent) -> None:
         # Shared with the grid view so both settle identically (see scroll_snap).
         scroll_snap.handle_scrollwin(self, event)
+
+    def _on_size(self, event: wx.SizeEvent) -> None:
+        """Repaint the resize *before* returning from WM_SIZE (#983).
+
+        The pile layout is width-independent, so unlike the grid there is
+        nothing here to recompute -- but the repaint is needed for the same
+        reason. MSW copies the old pixels into the new geometry and invalidates
+        only the strip the copy could not cover, leaving the previous frame's
+        edge fade in the retained pixels; WM_PAINT is the lowest-priority
+        message and during a live sash drag arrives long after that copy is
+        already on screen. Painting synchronously here overwrites the copy in
+        the redirection surface before DWM can composite it.
+        """
+        event.Skip()
+        self.Refresh(False)
+        self.Update()
 
     # ----- public API consumed by CardTablePanel -----
     def set_cards(self, cards: list[dict[str, Any]]) -> None:
@@ -406,6 +444,11 @@ class DeckPileView(wx.ScrolledWindow):
     # ----- paint -----
     def _on_paint(self, _event: wx.PaintEvent) -> None:
         t0 = perf_counter()
+        # Must run before the PaintDC exists: it is what widens this paint's
+        # clip to the whole client when the viewport has moved under the edge
+        # fade (#983). Its result says the update region can no longer be
+        # trusted to cull with.
+        whole_client = edge_fade.begin_viewport_paint(self)
         dc = wx.AutoBufferedPaintDC(self)
         self.PrepareDC(dc)
         dc.SetBackground(wx.Brush(wx.Colour(*DARK_PANEL)))
@@ -430,7 +473,7 @@ class DeckPileView(wx.ScrolledWindow):
             self._draw_overlays(dc)
         else:
             # Oversized pile: draw directly, culled to the repaint region.
-            dirty = self._dirty_logical_rect()
+            dirty = self._dirty_logical_rect(whole_client)
             for pile_idx, (label, members) in enumerate(self._piles):
                 self._draw_pile(dc, pile_idx, label, members, dirty)
             self._draw_overlays(dc, dirty)
@@ -450,12 +493,16 @@ class DeckPileView(wx.ScrolledWindow):
         # input (no-op unless the perf recorder is enabled).
         scroll_perf.record_paint(self, *self.GetViewStart(), dur_ms=(perf_counter() - t0) * 1000.0)
 
-    def _dirty_logical_rect(self) -> wx.Rect | None:
+    def _dirty_logical_rect(self, whole_client: bool = False) -> wx.Rect | None:
         """The region wx asked us to repaint, in logical (scrolled) coords.
 
-        ``None`` means repaint everything (empty update region, e.g. a full
-        ``Refresh``), so nothing is dropped from a non-scroll repaint.
+        ``None`` means repaint everything -- an empty update region (e.g. a full
+        ``Refresh``), or ``whole_client``, which is
+        :func:`edge_fade.begin_viewport_paint` reporting that it widened this
+        paint's clip past what ``GetUpdateRegion`` still remembers (#983).
         """
+        if whole_client:
+            return None
         box = self.GetUpdateRegion().GetBox()
         if box.IsEmpty():
             return None

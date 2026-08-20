@@ -161,6 +161,48 @@ def nearest_stop(window: wx.ScrolledWindow, current: int) -> int | None:
     return min(stops, key=lambda y: (abs(y - current), y))
 
 
+def scroll_viewport(window: wx.ScrolledWindow, x: int, y: int) -> None:
+    """Move ``window``'s origin without letting wx's scroll blit reach the screen.
+
+    ``wxScrollHelper::DoScroll`` -- what ``Scroll()`` goes through -- moves the
+    origin with ``wxWindow::ScrollWindow``, which on MSW is
+    ``::ScrollWindow(hwnd, dx, dy, ...)``: a screen-to-screen copy, followed by a
+    repaint of only the strip the copy could not cover. Everything these views
+    draw scrolls with the content and survives that intact except one thing --
+    the edge fade is painted against the *viewport*, so the copy carries the
+    previous frame's band to a position the repaint has no reason to touch
+    (#983; ``edge_fade`` has the full account).
+
+    ``Freeze()`` is ``WM_SETREDRAW(FALSE)``, under which the copy puts nothing
+    on the window's surface at all; ``Thaw()`` restores drawing and invalidates
+    the whole window, so the next paint renders a whole correct frame. Measured
+    by reading the window's own surface immediately after the move and before
+    any repaint (``tests/ui/test_card_view_viewport_repaint.py`` pins this): a
+    plain ``Scroll`` leaves the band stranded partway down the client, wrapped
+    like this it stays where the viewport puts it.
+
+    There is deliberately **no** ``Update()`` here. Forcing the repaint
+    synchronously was the previous attempt at #983, and it is what made the
+    reporter call the scrolling sluggish: it serialises a paint into every
+    notch and defeats the coalescing that lets a fast flick draw once for
+    several notches. Leaving the paint asynchronous measured 96 paints per 72
+    notches down to 72, and cut wheel-latency p95 from 19.5ms to 6.0ms with the
+    worst case going from 181ms to 8ms.
+
+    ``EnableScrolling(False, False)`` is the documented way to ask for exactly
+    this and does not deliver it -- see :func:`edge_fade.begin_viewport_paint`,
+    which is also the backstop for the scroll paths wx runs from C++ and this
+    function never sees.
+    """
+    window.Freeze()
+    try:
+        # wx.ScrolledWindow.Scroll, not window.Scroll: both views override
+        # Scroll to route here, so calling it back would recurse.
+        wx.ScrolledWindow.Scroll(window, x, y)
+    finally:
+        window.Thaw()
+
+
 def handle_scrollwin(window: wx.ScrolledWindow, event: wx.ScrollWinEvent) -> None:
     """Keep a view's scrollbar on the same lattice its wheel uses.
 
@@ -189,7 +231,7 @@ def handle_scrollwin(window: wx.ScrolledWindow, event: wx.ScrollWinEvent) -> Non
     if etype in (wx.wxEVT_SCROLLWIN_LINEUP, wx.wxEVT_SCROLLWIN_LINEDOWN):
         down = etype == wx.wxEVT_SCROLLWIN_LINEDOWN
         _view_x, view_y = window.GetViewStart()
-        window.Scroll(-1, snapped_target(window, view_y, 1 if down else -1))
+        scroll_viewport(window, -1, snapped_target(window, view_y, 1 if down else -1))
         return
     event.Skip()
     if etype == wx.wxEVT_SCROLLWIN_THUMBTRACK:
@@ -205,4 +247,4 @@ def settle(window: wx.ScrolledWindow) -> None:
     _view_x, view_y = window.GetViewStart()
     target = nearest_stop(window, view_y)
     if target is not None and target != view_y:
-        window.Scroll(-1, target)
+        scroll_viewport(window, -1, target)

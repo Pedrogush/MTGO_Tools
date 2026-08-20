@@ -88,6 +88,11 @@ _WS_EX_CLIENTEDGE = 0x00000200
 _WS_EX_STATICEDGE = 0x00020000
 _WS_EX_WINDOWEDGE = 0x00000100
 _GWL_EXSTYLE = -20
+#: ``GWL_STYLE`` and the window-style bit a native control sets on itself while
+#: it is showing a horizontal scrollbar. The only place that fact is readable --
+#: see ``has_horizontal_scrollbar``.
+_GWL_STYLE = -16
+_WS_HSCROLL = 0x00100000
 #: ``SWP_NOSIZE | SWP_NOMOVE | SWP_NOZORDER | SWP_FRAMECHANGED`` -- the frame has
 #: to be recalculated or the edge stays on screen until something else resizes
 #: the control, which is its own species of "the call ran and nothing happened".
@@ -237,6 +242,36 @@ def strip_spin_buddy_client_edge(spin: wx.SpinCtrl) -> bool:
     return True
 
 
+def has_horizontal_scrollbar(window: wx.Window) -> bool:
+    """Whether the native control is *currently showing* a horizontal scrollbar.
+
+    There is no wx-level answer to this, and both of the calls that look like one
+    were measured against a bar plainly visible in a screenshot of the builder's
+    results list:
+
+    * ``wx.Window.HasScrollbar(wx.HORIZONTAL)`` reads the **wx style** bits, which
+      a native control managing its own scrollbars never sets. It answered
+      ``False`` with the bar up.
+    * ``GetScrollRange(wx.HORIZONTAL)`` answered ``467`` both with the bar up and
+      after it had been taken down -- it reports the content width, not the bar.
+
+    The HWND's ``WS_HSCROLL`` bit is the truth, and this is the only route to it.
+    Always ``False`` off Windows, where the question does not arise.
+    """
+    if os.name != "nt":
+        return False
+    try:
+        handle = window.GetHandle()
+        if not handle:
+            return False
+        style = ctypes.windll.user32.GetWindowLongW(  # type: ignore[attr-defined]
+            ctypes.c_void_p(handle), _GWL_STYLE
+        )
+    except Exception:  # pragma: no cover - depends on the Windows build
+        return False
+    return bool(style & _WS_HSCROLL)
+
+
 def apply_dark_theme(window: wx.Window, theme: str = THEME_EXPLORER) -> bool:
     """Put one control on a dark Windows theme class. No-op unless dark mode is on."""
     if not _app_dark_mode_enabled:
@@ -367,5 +402,6 @@ __all__ = [
     "apply_dark_native_headers",
     "apply_dark_theme",
     "enable_app_dark_mode",
+    "has_horizontal_scrollbar",
     "is_app_dark_mode_enabled",
 ]

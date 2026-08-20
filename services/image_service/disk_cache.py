@@ -218,34 +218,71 @@ class CardImageCache:
         return None
 
     def get_image_path_for_printing(
-        self, card_name: str, set_code: str, size: str = "normal"
+        self,
+        card_name: str,
+        set_code: str,
+        size: str = "normal",
+        collector_number: str | None = None,
     ) -> Path | None:
+        """Return the cached file for one printing, or ``None``.
+
+        ``collector_number`` narrows the match to a single printing. A set can
+        hold many printings of the same card — Secret Lair alone prints
+        Lightning Bolt a dozen times — so a name+set match is *not* proof that
+        this printing is cached, and answering with a sibling's file makes the
+        inspector show another card's art under this printing's label. Callers
+        that know which printing they mean must pass it; a miss then means
+        "not cached", which is what triggers the download.
+        """
         if not set_code:
             return self.get_image_path(card_name, size)
         with sqlite3.connect(self.db_path, timeout=SQLITE_CONNECTION_TIMEOUT_SECONDS) as conn:
-            cursor = conn.execute(
-                """
-                SELECT file_path
-                FROM card_images
-                WHERE LOWER(name) = LOWER(?) AND LOWER(set_code) = LOWER(?) AND image_size = ?
-                ORDER BY face_index
-                LIMIT 1
-                """,
-                (card_name, set_code, size),
-            )
+            collector = (collector_number or "").strip()
+            if collector:
+                cursor = conn.execute(
+                    """
+                    SELECT file_path
+                    FROM card_images
+                    WHERE LOWER(name) = LOWER(?) AND LOWER(set_code) = LOWER(?)
+                      AND LOWER(collector_number) = LOWER(?) AND image_size = ?
+                    ORDER BY face_index
+                    LIMIT 1
+                    """,
+                    (card_name, set_code, collector, size),
+                )
+            else:
+                cursor = conn.execute(
+                    """
+                    SELECT file_path
+                    FROM card_images
+                    WHERE LOWER(name) = LOWER(?) AND LOWER(set_code) = LOWER(?) AND image_size = ?
+                    ORDER BY face_index
+                    LIMIT 1
+                    """,
+                    (card_name, set_code, size),
+                )
             row = cursor.fetchone()
             if row:
                 return self._resolve_path(row[0])
             # Split/adventure/prepare layouts store their single image under the
-            # combined "Front // Back" name, so a face-name + set request (the
-            # shape the card inspector's hover path produces) must fall back to
-            # the combined-name row — mirroring get_image_path's alias fallback.
+            # combined "Front // Back" name, so a face-name request (the shape
+            # the card inspector's hover path produces) must still find the
+            # combined-name row — mirroring get_image_path's alias fallback.
             # Without this the download queue never sees such cards as cached
-            # and re-downloads them on every hover (issue #951).
-            return self._lookup_double_faced_alias_for_printing(conn, card_name, set_code, size)
+            # and re-downloads them on every hover (issue #951). This stays
+            # pinned to the same set *and* collector number, so it can only ever
+            # resolve to the very printing that was asked for.
+            return self._lookup_double_faced_alias_for_printing(
+                conn, card_name, set_code, size, collector
+            )
 
     def _lookup_double_faced_alias_for_printing(
-        self, conn: sqlite3.Connection, card_name: str, set_code: str, size: str
+        self,
+        conn: sqlite3.Connection,
+        card_name: str,
+        set_code: str,
+        size: str,
+        collector_number: str = "",
     ) -> Path | None:
         alias = (card_name or "").strip()
         if not alias or "//" in alias:
@@ -256,17 +293,31 @@ class CardImageCache:
             f"{alias_lower} // %",
             f"% // {alias_lower}",
         )
+        collector = (collector_number or "").strip()
         for pattern in patterns:
-            cursor = conn.execute(
-                """
-                SELECT file_path
-                FROM card_images
-                WHERE LOWER(name) LIKE ? AND LOWER(set_code) = LOWER(?) AND image_size = ?
-                ORDER BY face_index
-                LIMIT 1
-                """,
-                (pattern, set_code, size),
-            )
+            if collector:
+                cursor = conn.execute(
+                    """
+                    SELECT file_path
+                    FROM card_images
+                    WHERE LOWER(name) LIKE ? AND LOWER(set_code) = LOWER(?)
+                      AND LOWER(collector_number) = LOWER(?) AND image_size = ?
+                    ORDER BY face_index
+                    LIMIT 1
+                    """,
+                    (pattern, set_code, collector, size),
+                )
+            else:
+                cursor = conn.execute(
+                    """
+                    SELECT file_path
+                    FROM card_images
+                    WHERE LOWER(name) LIKE ? AND LOWER(set_code) = LOWER(?) AND image_size = ?
+                    ORDER BY face_index
+                    LIMIT 1
+                    """,
+                    (pattern, set_code, size),
+                )
             row = cursor.fetchone()
             if row:
                 path = self._resolve_path(row[0])
@@ -293,6 +344,35 @@ class CardImageCache:
                 if path.exists():
                     return path
         return None
+
+    def resolve_printing_paths(
+        self,
+        *,
+        uuid: str | None,
+        card_name: str,
+        set_code: str | None,
+        collector_number: str | None = None,
+        size: str = "normal",
+    ) -> tuple[list[Path], Path | None]:
+        """Resolve one printing to ``(face paths, substitute path)``.
+
+        The first element is the printing's *own* cached faces (a transform
+        card has two). The second is a stand-in for a printing that has no uuid
+        to be exact about, and is ``None`` whenever a uuid was supplied: the
+        uuid identifies the printing, so if its file is missing the honest
+        answer is "not cached" — which is what makes the caller download it.
+        Answering a uuid miss with a name+set match served a *sibling*
+        printing's art under this printing's label (Secret Lair prints some
+        cards a dozen times) and, because the download queue used the same
+        lookup, the right image was never fetched.
+        """
+        if uuid:
+            return self.get_image_paths_by_uuid(uuid, size), None
+        if not set_code:
+            return [], None
+        return [], self.get_image_path_for_printing(
+            card_name, set_code, size, collector_number=collector_number
+        )
 
     def get_image_paths_by_uuid(self, uuid: str, size: str = "normal") -> list[Path]:
         with sqlite3.connect(self.db_path, timeout=SQLITE_CONNECTION_TIMEOUT_SECONDS) as conn:

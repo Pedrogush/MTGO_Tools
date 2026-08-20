@@ -121,7 +121,7 @@ class _FakeCache:
         # Set of (uuid, size) tuples reported cached by is_cached().
         self._cached_uuids = set(cached_uuids or ())
 
-    def get_image_path_for_printing(self, card_name, set_code, size):
+    def get_image_path_for_printing(self, card_name, set_code, size, collector_number=None):
         if (card_name, set_code, size) in self._cached_keys:
             return "path"
         return None
@@ -420,13 +420,28 @@ def test_image_service_prefetch_delegates_to_prefetcher(image_service_instance):
     ]
 
 
-def test_enqueue_uuid_miss_falls_back_to_name_set_cache_check():
-    """A uuid miss still honours a name+set cache hit (stale-bulk resolution
-    may have stored the printing under a different uuid)."""
+def test_enqueue_uuid_miss_is_a_miss_even_with_a_name_set_hit():
+    """A uuid request is answered by the uuid alone.
+
+    A name+set hit only proves *some* printing of that card from that set is on
+    disk. Treating that as "cached" meant the exact printing never downloaded
+    and the inspector kept showing the sibling's art under this printing's
+    label, so a uuid miss must enqueue.
+    """
     cache = _FakeCache(cached_keys={("Mirrorpool", "aeoe", "normal")})
     queue = _build_queue(cache=cache)
     try:
-        assert queue.enqueue(_request(uuid="u-other")) is False
+        assert queue.enqueue(_request(uuid="u-other")) is True
+    finally:
+        queue.stop()
+
+
+def test_enqueue_uuid_hit_is_cached():
+    """The uuid's own cache entry is what makes a uuid request a no-op."""
+    cache = _FakeCache(cached_uuids={("u-exact", "normal")})
+    queue = _build_queue(cache=cache)
+    try:
+        assert queue.enqueue(_request(uuid="u-exact")) is False
     finally:
         queue.stop()
 

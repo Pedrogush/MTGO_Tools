@@ -11,9 +11,15 @@ from utils.constants import (
     BUILDER_MANA_ICON_GAP,
     BUILDER_MANA_ROW_HEIGHT,
     BUILDER_NAME_COL_MIN_WIDTH,
+    BUILDER_NAME_COL_SLACK,
     DARK_ALT,
 )
 from widgets.mana_icon_factory import ManaIconFactory
+from widgets.native_dark import has_horizontal_scrollbar
+
+# Column 0 is the hidden 0-width dummy that absorbs the IMAGE_LIST_SMALL indent,
+# column 2 the fixed-width Mana Cost column; column 1 is the one that flexes.
+_NAME_COL = 1
 
 
 class _SearchResultsView(wx.ListCtrl):
@@ -25,6 +31,7 @@ class _SearchResultsView(wx.ListCtrl):
         self._mana_icons = mana_icons
         self._mana_img_index: dict[str, int] = {}
         self._mana_img_list: wx.ImageList | None = None
+        self._hscrollbar_check_pending = False
         if mana_icons:
             self._mana_img_list = wx.ImageList(BUILDER_MANA_CANVAS_WIDTH, BUILDER_MANA_ROW_HEIGHT)
             self.AssignImageList(self._mana_img_list, wx.IMAGE_LIST_SMALL)
@@ -33,12 +40,72 @@ class _SearchResultsView(wx.ListCtrl):
     def _on_size(self, event: wx.SizeEvent) -> None:
         event.Skip()
         self._fit_name_column()
+        self._schedule_hscrollbar_check()
 
-    def _fit_name_column(self) -> None:
-        name_w = max(
-            BUILDER_NAME_COL_MIN_WIDTH, self.GetClientSize().width - BUILDER_MANA_CANVAS_WIDTH
+    def _fit_name_column(self, reserve_scrollbar: bool = False) -> None:
+        """Give the Name column whatever the fixed columns leave, minus the slack.
+
+        Three things this cannot do, all three measured on the running builder:
+
+        * It cannot fit the columns to *exactly* the client width. wxMSW's native
+          ``SysListView32`` raises its horizontal scrollbar the moment they sum to
+          more than the client, so an exact fit is one client-width change away
+          from a bar with nothing to scroll. The columns have to sum to strictly
+          less; see ``BUILDER_NAME_COL_SLACK``.
+        * It cannot assume the fixed columns are ``BUILDER_MANA_CANVAS_WIDTH``
+          wide. Reading them back is what keeps this the arithmetic the scrollbar
+          is actually decided by.
+        * It cannot leave the correction until after the client width has already
+          changed. comctl32 re-evaluates the bar when a column width changes, but
+          a change made *from inside* its own scrollbar update -- which is where
+          the ``EVT_SIZE`` for a bar appearing arrives -- does not get that
+          re-evaluation, and the bar stays up. Hence ``reserve_scrollbar``: the
+          caller shrinks first, so the overflow never happens at all.
+
+        ``reserve_scrollbar`` takes the vertical scrollbar's width off the top,
+        for the moment before a row count change that may add one. It is always
+        safe -- the only cost is a transient underfit that the caller's follow-up
+        fit corrects before anything repaints.
+        """
+        fixed = sum(
+            self.GetColumnWidth(col) for col in range(self.GetColumnCount()) if col != _NAME_COL
         )
-        self.SetColumnWidth(1, name_w)
+        available = self.GetClientSize().width - fixed - BUILDER_NAME_COL_SLACK
+        if reserve_scrollbar:
+            available -= wx.SystemSettings.GetMetric(wx.SYS_VSCROLL_X, self)
+        self.SetColumnWidth(_NAME_COL, max(BUILDER_NAME_COL_MIN_WIDTH, available))
+
+    def _schedule_hscrollbar_check(self) -> None:
+        """Queue one deferred check that no spurious horizontal scrollbar is up."""
+        if self._hscrollbar_check_pending:
+            return
+        self._hscrollbar_check_pending = True
+        wx.CallAfter(self._drop_spurious_hscrollbar)
+
+    def _drop_spurious_hscrollbar(self) -> None:
+        """Take down a horizontal scrollbar wxMSW left up over columns that fit.
+
+        comctl32 raises the bar from inside its own resize -- before ``EVT_SIZE``
+        reaches ``_on_size`` and narrows the columns -- and a column width written
+        from *inside* that update does not get re-evaluated, so the bar stays up
+        with nothing to scroll. Measured on the running builder: the identical
+        ``SetColumnWidth`` one message cycle later does take it down. Which is
+        also why this writes a **different** width first: comctl32 re-evaluates on
+        a width *change*, and re-writing the width it already has is not one.
+
+        A bar over a Name column pinned at its minimum is not spurious -- the list
+        is genuinely too narrow for its columns -- and is left alone.
+        """
+        self._hscrollbar_check_pending = False
+        if not self:  # destroyed between the schedule and the call
+            return
+        if not has_horizontal_scrollbar(self):
+            return
+        width = self.GetColumnWidth(_NAME_COL)
+        if width <= BUILDER_NAME_COL_MIN_WIDTH:
+            return
+        self.SetColumnWidth(_NAME_COL, width - 1)
+        self._fit_name_column()
 
     def SetData(self, data: list[dict[str, Any]]) -> None:
         self._data = data
@@ -46,7 +113,18 @@ class _SearchResultsView(wx.ListCtrl):
             self._update_mana_cache()
         if self.GetItemCount() > 0:
             self.EnsureVisible(0)
+        # Shrink, then set the count, then fit. A row count that crosses the
+        # point where the list needs a vertical scrollbar takes that bar's width
+        # off the *client width*, with no EVT_SIZE to announce it -- the bar is
+        # non-client area, so the window itself never resized. Columns fitted to
+        # the old client width then overflow by exactly that much and wxMSW puts
+        # up a horizontal scrollbar over content that fits. Shrinking first means
+        # they are already narrow enough whichever way the count goes; the fit
+        # afterwards gives back whatever the reservation turned out not to need.
+        self._fit_name_column(reserve_scrollbar=True)
         self.SetItemCount(len(data))
+        self._fit_name_column()
+        self._schedule_hscrollbar_check()
         self.Refresh()
 
     def _update_mana_cache(self) -> None:

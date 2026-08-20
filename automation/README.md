@@ -116,6 +116,22 @@ python -m automation.cli prefs average_hours 48
 Keys are `deck_data_source`, `language`, `average_method`, `average_hours` and
 `check_for_updates`. They are stable; the labels beside them are translated.
 
+### Inspecting the card inspector's art pager
+
+`inspector-printings` reports the printing list the Card Inspector is paging
+through *and* the image files it currently has on screen, which is the only way
+to answer "is this entry showing the same art as that one". `set-inspector-printing`
+jumps to an index through the same code path as the prev/next buttons.
+
+```bash
+python -m automation.cli set-inspector-printing 14
+python -m automation.cli --json inspector-printings --limit 5 --offset 12
+```
+
+Select a card first (the panel is populated by a deck-zone selection). Use
+`--limit`/`--offset` on cards with many printings: the transport does a single
+64 KB `recv`.
+
 ## Exercising MTGO bridge features
 
 These commands drive the live MTGO bridge integration end-to-end (they require a
@@ -154,6 +170,44 @@ python -m automation.cli timer-alert-action stop
 > Note: each bridge invocation pays a one-time-per-MTGO-session cold attach
 > (~2-3 min) while MTGOSDK injects its diagnostic server into the MTGO client;
 > subsequent calls in the same MTGO session are fast.
+
+## Scrolling a deck card view
+
+`scroll-lines` drives a card view through **wx's own** `WM_VSCROLL` handling --
+the scrollbar arrows, the scrollbar itself and the keyboard all arrive there,
+and it is the one scroll path no application code sits on, which makes it where
+a viewport-anchored painting bug hides (#983).
+
+```bash
+python -m automation.cli scroll-lines --zone main --view pile --count 12 --lines 60
+```
+
+Like `sash-drag`, it runs the burst on a worker thread and returns as soon as it
+is scheduled, so `start-video` can be recording while it runs. `wheel-scroll-start`
+covers the other half -- the wheel, which the views handle themselves.
+
+## Driving the mainboard/sideboard sash
+
+The deck workspace's split (`widgets/splitter.DarkSplitter`, `SP_LIVE_UPDATE`) is
+the app's one draggable sash, and the only gesture that resizes a deck card view
+vertically without changing anything else -- which makes it the repro for any bug
+in viewport-anchored painting, the edge fade above all (#983).
+
+```bash
+python -m automation.cli --json get-sash          # position + the legal range
+python -m automation.cli set-sash 300             # move it and flush the repaint
+python -m automation.cli sash-drag --start 200 --end 500 --steps 20 --cycles 2
+```
+
+`sash-drag` runs the sweep on a worker thread and returns as soon as it is
+scheduled, so `start-video` can be recording while it runs. `SetSashPosition` is
+the same call `wxSplitterWindow` makes for every mouse-move of a live drag, so
+the resize/repaint path it exercises is the real one.
+
+> A sweep driven by one `python -m automation.cli` call per step measures
+> nothing: each invocation pays ~1.5s of Windows interpreter start-up, which is
+> longer than the whole recording. Drive multi-step timing from a single Python
+> process using `automation.client.AutomationClient` directly.
 
 ## Video capture (recording a transition)
 
