@@ -59,7 +59,18 @@ widget               behaviour
                      the last one, and a row of fixed-width controls needs one
                      deliberately flexible member (proportion 1 plus a floor)
                      rather than an ``AddStretchSpacer``, which yields nothing
-                     back once the slack is gone
+                     back once the slack is gone.
+                     The **vertical** case is worse, and phase 8 measured it on
+                     the deck builder: when the fixed items alone exceed the
+                     client, the proportional item's share goes *negative* and
+                     is clamped to 0 -- so the one item that was meant to absorb
+                     the slack disappears entirely -- and every item after it is
+                     still laid out, below the pane's bottom edge, with no
+                     scrollbar and no clipping to say so. The results list
+                     rendered at exactly 0px and "Showing N cards." was simply
+                     not on screen. There is no BoxSizer expression of "shrink
+                     this one first"; the fix is a ``wxScrolled`` parent, which
+                     lays out to ``max(client, virtual)``
 ``wx.Button``        background + foreground honoured. The border is a **2px
                      light-grey frame** (``#ADADAD`` outside, ``#E1E1E1``
                      inside) drawn by the theme, identical for every background
@@ -128,7 +139,33 @@ widget               behaviour
                      **overriding ``DrawColLabel`` from Python does nothing** --
                      a subclass counting its own calls records zero after a full
                      paint. Per-column header alignment therefore needs an
-                     own-drawn header window
+                     own-drawn header window. ``GetBestSize()`` is the grid's
+                     **entire scrollable content** -- every column's width and
+                     every row's height -- which is not a minimum in any useful
+                     sense for a scrolling control and propagates straight up
+                     through whatever contains it. Measured in phase 8: visiting
+                     the deck workspace's table view once with a 60-card deck
+                     took the *frame's* enforced minimum height from 882 to
+                     **1461px**, after which the window could not be made
+                     smaller again. Pin ``SetMinSize`` on the grid itself
+``wx.Simplebook``    and every other ``wxBookCtrlBase``: its own best size is the
+                     max over **all** its pages, hidden ones included, and it
+                     asks each page for ``GetBestSize()`` -- never for
+                     ``GetEffectiveMinSize()``. So a hidden page sets the book's
+                     minimum, and ``SetMinSize`` **on a page does not bound the
+                     book**; both were measured in phase 8 while chasing the
+                     wx.grid row above. The floor has to go one level further
+                     down, on a child of the page, because a window that owns a
+                     sizer *does* take its best size from that sizer's CalcMin
+                     and CalcMin does consult each item's effective minimum
+``wx.ScrolledWindow``
+                     reports ``1x1`` as its best size when it has no child
+                     window (the deck grid and pile views, which draw
+                     themselves), and its child's best size when it has one --
+                     which is how the table view's grid escaped. With a sizer it
+                     lays out to ``max(client, virtual)`` after ``FitInside``,
+                     which is the one wx idiom that expresses "shrink this
+                     region before the ones around it"
 ``wx.dataview``      ``DataViewListCtrl`` draws its own alternate-row bands from
                      the light theme, so half the rows come back light grey on a
                      dark surface. Not a way out of the ListCtrl selection
@@ -278,6 +315,16 @@ on it and got 47 offenders, every one of them a widget that renders dark. Fonts
 are the opposite: ``GetFont()`` *does* report the inherited value, which is why
 :mod:`tests.ui.test_live_widget_audit` can check the type ladder on a running
 window but not the palette.
+
+What ``SetMinSize`` actually does (measured in phase 8)
+------------------------------------------------------
+``GetEffectiveMinSize()`` consults ``GetBestSize()`` **only for the components
+of the min size left at ``wxDefaultCoord``**, per axis. So ``SetMinSize((-1,
+240))`` pins the height and lets content set the width -- which is how the card
+inspector's minimum width came to depend on which card was loaded -- while
+``SetMinSize((300, 240))`` stops best size being consulted at all. If a widget's
+content must not be allowed to set a dimension, that dimension has to carry a
+real number, not -1.
 
 What wxMSW does with **fonts and sizes** (measured in phase 3)
 --------------------------------------------------------------
@@ -543,6 +590,58 @@ def init_top_level_window(window: wx.Window) -> None:
     """
     apply_base_font(window)
     apply_dark_caption(window)
+    clamp_to_display(window)
+
+
+def clamp_to_display(window: wx.Window) -> None:
+    """Shrink *window* to the usable area of the display it is on, if it exceeds it.
+
+    Phase 8. ``AppFrame`` has clamped its own restored size to
+    ``wx.Display.GetClientArea()`` since before this redesign -- and maximizes
+    instead when its preferred size does not fit -- but none of the other
+    seventeen top-level windows did. Their sizes are constructor literals, and
+    ``TOP_CARDS_FRAME_SIZE`` is **1400 x 740**: on the 1366x768 laptop the app
+    says it targets, that window opens 34px wider than the whole screen and
+    ~20px taller than the area the taskbar leaves, with its right-hand columns
+    and its status row off the display and no way to reach them but dragging the
+    window left.
+
+    Called from :func:`init_top_level_window`, i.e. immediately after the
+    constructor has applied its size. A window that sizes itself *later* -- the
+    timer alert, which measures its own content -- calls this again afterwards.
+    It only ever shrinks; a window that already fits is left exactly as it is,
+    and a maximized or full-screen window is skipped, since its size legitimately
+    exceeds the client area by the maximized frame border and resizing it here
+    would silently un-maximize it.
+    """
+    try:
+        if window.IsMaximized() or window.IsFullScreen():
+            return
+    except AttributeError:
+        pass
+    try:
+        index = wx.Display.GetFromWindow(window)
+        if index == wx.NOT_FOUND:
+            index = 0
+        area = wx.Display(index).GetClientArea()
+    except (RuntimeError, AssertionError):
+        return
+    size = window.GetSize()
+    width = min(size.GetWidth(), area.width)
+    height = min(size.GetHeight(), area.height)
+    if width == size.GetWidth() and height == size.GetHeight():
+        return
+    # The floor has to come down with the window, or wx will not honour the new
+    # size at all -- a minimum wider than the display is exactly the state this
+    # function exists to get out of.
+    min_size = window.GetMinSize()
+    window.SetMinSize(
+        wx.Size(
+            min(min_size.GetWidth(), width) if min_size.GetWidth() > 0 else min_size.GetWidth(),
+            min(min_size.GetHeight(), height) if min_size.GetHeight() > 0 else min_size.GetHeight(),
+        )
+    )
+    window.SetSize(wx.Size(width, height))
 
 
 def type_font(

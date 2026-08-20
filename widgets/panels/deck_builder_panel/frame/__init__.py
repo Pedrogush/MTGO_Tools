@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any
 
 import wx
 
-from utils.constants import DARK_PANEL
+from utils.constants import BUILDER_SCROLL_RATE_Y, DARK_PANEL
 from widgets.checkbox import DarkCheckBox
 from widgets.mana_icon_factory import ManaIconFactory
 from widgets.panels.deck_builder_panel.frame.advanced_filters import AdvancedFiltersBuilderMixin
@@ -22,6 +22,7 @@ from widgets.panels.deck_builder_panel.frame.results_pane import ResultsPaneBuil
 from widgets.panels.deck_builder_panel.frame.search_results_view import _SearchResultsView
 from widgets.panels.deck_builder_panel.handlers import DeckBuilderPanelHandlersMixin
 from widgets.panels.deck_builder_panel.properties import DeckBuilderPanelPropertiesMixin
+from widgets.stylize import stylize_scrollable
 
 if TYPE_CHECKING:
     from services.radar_service import RadarData
@@ -33,9 +34,27 @@ class DeckBuilderPanel(
     BasicFiltersBuilderMixin,
     AdvancedFiltersBuilderMixin,
     ResultsPaneBuilderMixin,
-    wx.Panel,
+    wx.ScrolledWindow,
 ):
-    """Panel for searching and filtering MTG cards by various properties."""
+    """Panel for searching and filtering MTG cards by various properties.
+
+    A ``wx.ScrolledWindow`` rather than a ``wx.Panel`` since phase 8. The panel
+    is one long vertical column -- header, basic filters, the collapsible
+    advanced block, action controls, results list, add buttons, status -- of
+    which only the results list has a stretch proportion. Expanding the advanced
+    filters adds 211px, and at the window's 680px floor that put the fixed items
+    alone over the pane height: wxBoxSizer gave the one proportional item a
+    negative share (clamped to 0, so the results list vanished) and laid the
+    items *after* it out below the pane's bottom edge, so "Showing N cards."
+    was simply not on screen. Nothing about that is visible from any single
+    control -- it is the vertical twin of the silent row overflow phase 7
+    measured.
+
+    Scrolling makes the failure impossible rather than unlikely: a wxScrolled
+    with a sizer lays out to ``max(client, virtual)``, so a tall pane behaves
+    exactly as a plain panel did (no scrollbar, results list expands) and a
+    short one keeps every control reachable.
+    """
 
     def __init__(
         self,
@@ -54,7 +73,11 @@ class DeckBuilderPanel(
         on_prefetch_images: Callable[[list[str]], None] | None = None,
         locale: str | None = None,
     ) -> None:
-        super().__init__(parent)
+        # wx.VSCROLL only -- the column never scrolls sideways. TAB_TRAVERSAL is
+        # restated because passing `style` replaces wxPanel's default rather than
+        # adding to it (phase 6c), and this panel's fields have to stay reachable
+        # by Tab.
+        super().__init__(parent, style=wx.VSCROLL | wx.TAB_TRAVERSAL)
 
         self._locale = locale
         self.controller = controller
@@ -102,9 +125,16 @@ class DeckBuilderPanel(
 
         # Build the UI
         self._build_ui()
+        self.Bind(wx.EVT_SIZE, self._on_panel_resized)
+
+    def _on_panel_resized(self, event: wx.SizeEvent) -> None:
+        event.Skip()
+        self.refit_scroll()
 
     def _build_ui(self) -> None:
         self.SetBackgroundColour(DARK_PANEL)
+        self.SetScrollRate(0, BUILDER_SCROLL_RATE_Y)
+        stylize_scrollable(self, surface="panel")
         sizer = wx.BoxSizer(wx.VERTICAL)
         self.SetSizer(sizer)
 
@@ -115,6 +145,18 @@ class DeckBuilderPanel(
         self._build_results_list(sizer)
         self._build_add_zone_buttons(sizer)
         self._build_status_label(sizer)
+        self.refit_scroll()
+
+    def refit_scroll(self) -> None:
+        """Re-derive the scrolled virtual size from the current layout.
+
+        ``FitInside`` sets the virtual size to ``max(sizer minimum, client)``,
+        which is what makes the scrollbar appear only when the column genuinely
+        does not fit and keeps the results list stretching when it does. It has
+        to be re-run whenever the column's height changes -- on resize and when
+        the advanced filters are shown or hidden.
+        """
+        self.FitInside()
 
 
 __all__ = ["DeckBuilderPanel"]

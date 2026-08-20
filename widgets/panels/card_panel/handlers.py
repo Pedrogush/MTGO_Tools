@@ -134,12 +134,12 @@ class CardPanelHandlersMixin(_Base):
     def _refresh_stats_tab(self) -> None:
         meta = self._current_meta
         if not meta:
-            self.stats_card_label.SetLabel(self._t("card_panel.stats.no_card"))
+            self.set_flowing_label(self.stats_card_label, self._t("card_panel.stats.no_card"))
             self._set_format_stats(None, None)
             self._set_archetype_stats(None)
         else:
             card_name = str(meta.get("name") or "")
-            self.stats_card_label.SetLabel(card_name)
+            self.set_flowing_label(self.stats_card_label, card_name)
             self._set_format_stats(self._current_format, card_name)
             self._set_archetype_stats(card_name)
         self.stats_panel.Layout()
@@ -147,13 +147,14 @@ class CardPanelHandlersMixin(_Base):
 
     def _set_format_stats(self, format_name: str | None, card_name: str | None) -> None:
         if not format_name:
-            self.stats_format_header.SetLabel(self._t("card_panel.stats.no_format"))
+            self.set_flowing_label(self.stats_format_header, self._t("card_panel.stats.no_format"))
             self.stats_format_total.SetLabel("")
             self.stats_format_avg.SetLabel("")
             return
 
-        self.stats_format_header.SetLabel(
-            self._t("card_panel.stats.format_header", format=format_name)
+        self.set_flowing_label(
+            self.stats_format_header,
+            self._t("card_panel.stats.format_header", format=format_name),
         )
 
         if not card_name:
@@ -196,12 +197,15 @@ class CardPanelHandlersMixin(_Base):
     def _set_archetype_stats(self, card_name: str | None) -> None:
         archetype_name = self._archetype_name()
         if not archetype_name:
-            self.stats_archetype_header.SetLabel(self._t("card_panel.stats.no_archetype"))
+            self.set_flowing_label(
+                self.stats_archetype_header, self._t("card_panel.stats.no_archetype")
+            )
             self._clear_main_side_labels()
             return
 
-        self.stats_archetype_header.SetLabel(
-            self._t("card_panel.stats.archetype_header", archetype=archetype_name)
+        self.set_flowing_label(
+            self.stats_archetype_header,
+            self._t("card_panel.stats.archetype_header", archetype=archetype_name),
         )
 
         if not card_name:

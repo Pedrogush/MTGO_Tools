@@ -20,6 +20,7 @@ from utils.constants.theme import (
     TEXT_PLACEHOLDER,
     TEXT_PRIMARY,
     TEXT_SECONDARY,
+    chart_ramp,
     to_hex,
 )
 from utils.constants.ui_images import STATS_MANA_SVG_DISPLAY_SIZE
@@ -50,18 +51,7 @@ from utils.constants.ui_layout import (
     STATS_VBAR_XAXIS_PADDING_BOTTOM,
 )
 from widgets.charts.bars import ChartBar
-from widgets.panels.deck_stats_panel.stats_constants import (
-    _COLOR_SVG_HTML,
-    _CURVE_COLD,
-    _CURVE_WARM,
-)
-
-
-def _lerp_hex(c1: tuple[int, int, int], c2: tuple[int, int, int], t: float) -> str:
-    r = int(c1[0] + (c2[0] - c1[0]) * t)
-    g = int(c1[1] + (c2[1] - c1[1]) * t)
-    b = int(c1[2] + (c2[2] - c1[2]) * t)
-    return f"#{r:02x}{g:02x}{b:02x}"
+from widgets.panels.deck_stats_panel.stats_constants import _COLOR_SVG_HTML
 
 
 def _curve_colour(bucket: str) -> str:
@@ -73,7 +63,7 @@ def _curve_colour(bucket: str) -> str:
         cmc = int(bucket)
     else:
         cmc = 0
-    return _lerp_hex(_CURVE_WARM, _CURVE_COLD, min(cmc / STATS_CURVE_COLOUR_LERP_MAX_CMC, 1.0))
+    return to_hex(chart_ramp(cmc / STATS_CURVE_COLOUR_LERP_MAX_CMC))
 
 
 # ---------------------------------------------------------------------------

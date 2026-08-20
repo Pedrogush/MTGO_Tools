@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 
 import wx
 
-from utils.constants import SPACE_SM
+from utils.constants import RESEARCH_VALUE_FIELD_MIN_WIDTH, SPACE_SM
 from widgets.input_frame import create_text_input
 from widgets.mode_switch import ModeSwitch
 from widgets.panels.deck_research_panel.frame.centered_choice import _CenteredChoice
@@ -173,7 +173,18 @@ class FiltersBuilderMixin(_Base):
             )
         placement_row.Add(self.placement_field_choice, 0, wx.EXPAND | wx.RIGHT, SPACE_SM)
 
-        placement_value_field = create_text_input(self, style=wx.TE_PROCESS_ENTER)
+        # The row's three controls are what set the whole left column's minimum
+        # width (see RESEARCH_VALUE_FIELD_MIN_WIDTH). Without an explicit floor
+        # this field reports wxMSW's 110px wx.TextCtrl best width whatever it
+        # holds, and the row is paired at equal proportion against the
+        # player-name field, so wxBoxSizer doubles it into the panel's minimum.
+        # It still stretches (proportion 1 below); this only says how narrow it
+        # may get.
+        placement_value_field = create_text_input(
+            self,
+            size=(RESEARCH_VALUE_FIELD_MIN_WIDTH, -1),
+            style=wx.TE_PROCESS_ENTER,
+        )
         self.placement_value_filter = placement_value_field.ctrl
         self.placement_value_filter.SetHint(self._labels.get("placement_hint", "value"))
         if self._on_placement_filter is not None:

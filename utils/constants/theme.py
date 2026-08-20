@@ -227,6 +227,36 @@ CHART_OTHER = _hex("#DCE0E6")
 #: Everything the distinctness guarantee covers: the seven hues plus Other.
 CHART_ALL: tuple[RGB, ...] = CHART_CATEGORICAL + (CHART_OTHER,)
 
+# ---------------------------------------------------------------------------
+# Sequential chart ramp
+# ---------------------------------------------------------------------------
+# For the two deck-stats charts whose categories are **ordinal**, not
+# categorical: the mana curve (0, 1, 2, ... mana value) and the opening-hand
+# land distribution (0, 1, 2, ... lands). A categorical palette on an ordered
+# axis says "these are unrelated"; a ramp says "these are the same thing more of
+# it", which is what the axis means.
+#
+# Founded on two members of CHART_CATEGORICAL rather than on two fresh hexes, so
+# it inherits their >= 3:1 guarantee against SURFACE_BASE at both ends and cannot
+# drift away from the palette. Sampled at 0.1 intervals the whole ramp measures
+# 10.31:1 down to 3.49:1 on the chart ground, so no step of it is below the
+# non-text boundary.
+#
+# What it replaces, both measured in phase 8 and both failing:
+#   * the mana curve's hand-picked #93C5FD -> #1E40AF ramp, whose dark end is
+#     **2.07:1** on the chart ground -- the tallest bars in the chart were the
+#     ones that disappeared into it;
+#   * the opening-hand chart's #4A5568 "bad" fill at **2.40:1** -- six of its
+#     eight bars -- paired with
+#     ACCENT_PRIMARY as a "good" fill. That accent use was a *third* colour
+#     register (phase 2 sanctioned exactly two: primary action, and selection),
+#     and it encoded an editorial judgement -- "2-3 lands is good" -- that is
+#     deck-dependent and was nowhere stated in the chart.
+# Neither was covered by the contrast suite because both were private module
+# constants inside the panel rather than tokens.
+CHART_SEQUENTIAL_LOW = CHART_CATEGORICAL[0]
+CHART_SEQUENTIAL_HIGH = CHART_CATEGORICAL[1]
+
 CHART_LABEL_INK = TEXT_ON_FILL
 CHART_LABEL_PAPER = _hex("#FFFFFF")
 #: Minimum CIEDE2000 between any two palette members, under normal vision and
@@ -277,6 +307,23 @@ def chart_palette(count: int) -> list[RGB]:
     if count <= len(palette):
         return palette[:count]
     return [palette[i % len(palette)] for i in range(count)]
+
+
+def chart_ramp(t: float) -> RGB:
+    """Sample the sequential ramp at ``t`` in [0, 1] (0 = low end, 1 = high).
+
+    Linear in sRGB, which is what the two charts already did; the endpoints are
+    close enough in hue that a perceptual interpolation would not be visibly
+    different, and staying in sRGB keeps this reproducible from the two tokens
+    by hand.
+    """
+    t = 0.0 if t < 0.0 else (1.0 if t > 1.0 else t)
+    lo, hi = CHART_SEQUENTIAL_LOW, CHART_SEQUENTIAL_HIGH
+    return (
+        int(lo[0] + (hi[0] - lo[0]) * t),
+        int(lo[1] + (hi[1] - lo[1]) * t),
+        int(lo[2] + (hi[2] - lo[2]) * t),
+    )
 
 
 def to_hex(rgb: RGB) -> str:

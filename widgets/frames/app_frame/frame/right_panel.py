@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 
 import wx
 
-from utils.constants import SPACE_SM, SPACE_XS
+from utils.constants import CARD_PANEL_MIN_HEIGHT, SPACE_SM, SPACE_XS
 from utils.perf import timed
 from widgets.panels.card_inspector_panel import CardInspectorPanel
 from widgets.panels.card_panel import CardPanel
@@ -98,7 +98,22 @@ class RightPanelBuilderMixin(_Base):
             mana_icons=self.mana_icons,
             t=self._t,
         )
-        self.card_panel.SetMinSize((-1, 240))
+        # Bound the column's minimum width (phase 3b's item for phase 8). The
+        # art block above already pins its width with SetMinSize *and*
+        # SetMaxSize; the tabs did not, so a wx.StaticText inside the Stats tab
+        # reported its full line as a best width and the window's
+        # both-panels-expanded floor moved with whichever card was loaded --
+        # 267 vs 350px measured, i.e. a floor of 1393 or 1433 for the same
+        # layout, pinned to whatever happened to be showing when
+        # _apply_min_size last ran.
+        #
+        # Taking the art block's own pinned width rather than restating it keeps
+        # the two halves of one column from drifting apart, and passing a real
+        # width (not -1) is what stops wx consulting GetBestSize for that axis
+        # at all -- GetEffectiveMinSize only falls back to best size for the
+        # components of the min size left at wxDefaultCoord.
+        inspector_width = self.card_inspector_panel.GetMinSize().GetWidth()
+        self.card_panel.SetMinSize((inspector_width, CARD_PANEL_MIN_HEIGHT))
 
         # Mirror printing changes (caused by prev/next clicks or async loads)
         # from the inspector into the card panel so flavor/artist/edition stay

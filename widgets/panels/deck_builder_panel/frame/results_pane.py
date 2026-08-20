@@ -9,6 +9,7 @@ import wx
 from utils.constants import (
     BUILDER_MANA_CANVAS_WIDTH,
     BUILDER_NAME_COL_DEFAULT_WIDTH,
+    BUILDER_RESULTS_MIN_HEIGHT,
     SPACE_SM,
     SPACE_XS,
     SUBDUED_TEXT,
@@ -103,6 +104,12 @@ class ResultsPaneBuilderMixin(_Base):
         # The virtual list emits cache hints for each row range it is about to
         # draw — the scroll signal driving image prefetch (issue #951).
         results.Bind(wx.EVT_LIST_CACHE_HINT, self._on_results_cache_hint)
+        # The floor the panel's scroller reveals rather than swallows: with the
+        # advanced filters open at the window's 680px minimum the column does
+        # not fit, and without a floor here the one proportional item in it is
+        # what wxBoxSizer takes the whole deficit out of -- measured at exactly
+        # 0px before phase 8.
+        results.SetMinSize((-1, BUILDER_RESULTS_MIN_HEIGHT))
         parent_sizer.Add(results, 1, wx.EXPAND | wx.LEFT, SPACE_SM)
         self.results_ctrl = results
 
@@ -118,6 +125,7 @@ class ResultsPaneBuilderMixin(_Base):
             on_cta=lambda _evt: self.clear_filters(),
             surface="alt",
         )
+        self.results_empty_state.SetMinSize((-1, BUILDER_RESULTS_MIN_HEIGHT))
         self.results_empty_state.Hide()
         parent_sizer.Add(self.results_empty_state, 1, wx.EXPAND | wx.LEFT, SPACE_SM)
 

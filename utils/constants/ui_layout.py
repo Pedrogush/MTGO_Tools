@@ -68,6 +68,59 @@ VIEW_TOGGLE_PADDING_X = 10
 # here rather than at its natural ~111px.
 DECK_COUNT_LABEL_MIN_WIDTH = 48
 
+# §4.5. The left column is added to the root sizer with **proportion 0**, so it
+# is always exactly its own minimum width -- at every window size, not only at
+# the floor. Every pixel of that minimum is therefore a pixel the deck workspace
+# never gets, at 1200 and at 2560 alike.
+#
+# Attributed by ablation (phase 3b's lesson: a max() can only be attributed by
+# removing terms, never by summing them): 100% of the research panel's 564px
+# minimum came from the Result row. `-` (45) + `Placement` (95) + a value field
+# whose wx.TextCtrl best-width floor is 110 make 266, and the row pairs that
+# against the player-name field at equal proportion, so wxBoxSizer's
+# proportional CalcMin doubles the wider column: 2 x 266 = 532 of the 564.
+# Ablating the value field alone gave back 102px and handed the binding term to
+# the player-name field's own 110px floor.
+#
+# The field holds a placement (`8`) or a win count (`5`) -- one or two digits.
+# 110 is wxMSW's floor for any wx.TextCtrl regardless of content, the same kind
+# of native floor phase 3 found behind wx.Button's 75x23; it is not a measure of
+# what this field has to show. 64 is four digits at the 10pt base plus the
+# InputFrame's 2 DIP ring on each side, on the 4px grid.
+RESEARCH_VALUE_FIELD_MIN_WIDTH = 64
+
+# Phase 3b left phase 8 an explicit item: **bound the inspector's minimum
+# width**. The both-panels-expanded floor was inspector-*content* dependent --
+# the Card panel's minimum measured 267px with one card loaded and 350px with
+# another, giving a 1393 vs 1433 window floor for the same layout, and the floor
+# that actually got enforced was whichever one happened to be measured at
+# restore time. A snapshot, correct when taken and not continuously true.
+#
+# The art block above the tabs (CardInspectorPanel) pins its own width with
+# SetMinSize *and* SetMaxSize, so it has always been bounded. Only the tabs
+# under it were not: a wx.StaticText reports its full single line as its best
+# width, so the Stats tab's card name / format / archetype headers set the
+# column's width from their content. Two changes bound it:
+#   * those three labels now re-wrap to the panel (card_panel.set_flowing_label),
+#     so nothing inside the tabs reports an unbounded best width, and
+#   * the tab area is given an explicit min size on **both** axes. wxWidgets'
+#     GetEffectiveMinSize consults GetBestSize only for the components of
+#     SetMinSize left at -1, so a min size with a real width in it is the one
+#     API that stops best size leaking through at all.
+# The width is not spelled out here: it is read from the art block's own pinned
+# width at construction, so the two halves of the column cannot drift apart.
+CARD_PANEL_MIN_HEIGHT = 240
+# The Oracle tab's HtmlWindow floor, and it has to be derived from the number
+# above rather than picked. The tab area is CARD_PANEL_MIN_HEIGHT less the
+# panel's own SPACE_SM ring, less the FlatNotebook's ~27px tab strip, less the
+# page's SPACE_SM ring: 240 - 16 - 27 - 16 = 181. The hand-set 200 was 19px over
+# that, so at the inspector column's own floor the notebook was 19px short of
+# what its first page claimed to need -- silently, since a wxBoxSizer with one
+# item just gives it everything there is. Raising CARD_PANEL_MIN_HEIGHT to
+# match would have put those 19px straight onto the window's minimum height,
+# which is the one dimension the inspector column already sets.
+CARD_ORACLE_MIN_HEIGHT = 180
+
 # F2: the Deck Research / Deck Builder mode switch (widgets.mode_switch). Taller
 # than VIEW_TOGGLE_HEIGHT because it is the only control on the left panel that
 # changes what the whole panel is, and it is the first thing on that panel; the
@@ -158,6 +211,50 @@ ARCHETYPE_SUMMARY_DAYS = 7
 ARCHETYPE_SUMMARY_HEIGHT = 68
 ARCHETYPE_SPARK_WIDTH = 168
 
+# Deck workspace table view -- the minimum the *view* reports, not the size it
+# renders at.
+#
+# ``wx.grid.Grid.GetBestSize()`` returns the grid's whole scrollable content:
+# every column's width and every row's height, for all 30-odd rows of a
+# decklist. It is a scrolling control, so that number is not a minimum in any
+# useful sense -- and it propagates. The three views share a wx.Simplebook,
+# whose CalcMin is the max over **all** pages including hidden ones, so once the
+# table view has been populated even once the whole deck workspace reports it,
+# and the workspace's minimum reaches the frame's root sizer.
+#
+# Measured in phase 8 with a 60-card deck loaded: visiting Table view once and
+# then toggling any side panel took the frame's enforced minimum height from
+# **882 to 1461px** -- taller than the display on any laptop the app claims to
+# target, and the window can then never be made smaller again. The view mode is
+# persisted per zone, so leaving the app in Table view reproduced it on the next
+# launch, via the _apply_min_size that _restore_session_state already schedules.
+# The grid and pile views were never affected: neither has a child window, so
+# wx reports 1x1 for them and the panel's own floor governs.
+#
+# Height is the header plus three rows; width is the four unshrinkable columns
+# (_fit_to_width in table_columns.py shrinks Type/Text/Name and drops the oracle
+# text column entirely below _COLLAPSE_TEXT_BELOW, so the table stays usable
+# well under its natural width).
+DECK_TABLE_VIEW_MIN_SIZE = (240, 96)
+
+# The deck workspace's mainboard/sideboard splitter: the smallest either pane
+# may be dragged (or laid out) to.
+#
+# It was a bare 80, and 80 is below what a CardTablePanel's own controls need.
+# Measured at the window's floor: the sideboard pane was 84px of which 30 was
+# its header row, leaving 54px of a 232px card cell -- less than a quarter of one
+# card, which is the "the whole sideboard strip is cut in half by the pane edge"
+# the review recorded as S5. In table view the panel's minimum is 126 and the
+# pane was simply short of it.
+#
+# 148 = a two-row header (the row wraps in pt-BR at this width; see
+# CardTablePanelToolbarMixin._reflow_header) + the 4px gap under it +
+# DECK_TABLE_VIEW_MIN_SIZE's 96px of grid. It is the panel's own content
+# minimum, not a comfortable browsing height: a full card row is 232px and two
+# of those plus the sash do not fit the 680px window floor, so how the *grid*
+# views should treat the leftover strip is a separate question from this one.
+DECK_ZONE_MIN_PANE_HEIGHT = 148
+
 # Own-drawn data grids (widgets/grids/data_grid.py)
 GRID_ROW_HEIGHT = 24  # comfortable scan height at the 10pt base
 GRID_HEADER_HEIGHT = 42  # two lines of caption text plus breathing room
@@ -221,6 +318,25 @@ GUIDE_COL_CARDS_WIDTH = 168  # width of Play/Draw In/Out card-list columns (px)
 GUIDE_COL_NOTES_WIDTH = 180  # width of Notes column (px)
 
 # Deck Builder Panel — search results list layout
+# Phase 4 logged this for phase 8: at 1200x680 with the advanced filters
+# expanded, the builder's results list collapsed to **zero** height and
+# "Showing N cards." fell below the window edge. The panel is one long vertical
+# wx.BoxSizer in which everything except the results list has proportion 0, so
+# when the fixed items alone exceed the client height wxBoxSizer hands the
+# proportional item a negative share, clamps it at 0 -- and *still* lays out the
+# items after it, off the bottom of the pane. It is the vertical twin of the
+# horizontal row overflow phase 7 measured, and just as silent.
+#
+# The panel now scrolls (see DeckBuilderPanel._build_ui). A wxScrolled with a
+# sizer lays out to max(client, virtual): when the pane is tall enough there is
+# no scrollbar and the results list expands exactly as before, and when it is
+# not, the list keeps this floor and the rest is reachable by scrolling instead
+# of being drawn past the edge. Six rows at GRID_ROW_HEIGHT plus the header.
+BUILDER_RESULTS_MIN_HEIGHT = 168
+# Pixels per scroll unit for that scroller. Matches the deck notes panel, the
+# other place in the app where a form-shaped column scrolls.
+BUILDER_SCROLL_RATE_Y = 12
+
 BUILDER_NAME_COL_MIN_WIDTH = 40  # minimum width of the Name column (px)
 BUILDER_NAME_COL_DEFAULT_WIDTH = 180  # initial width of the Name column (px)
 BUILDER_FORMATS_GRID_COLS = 3  # number of columns in the formats FlexGridSizer

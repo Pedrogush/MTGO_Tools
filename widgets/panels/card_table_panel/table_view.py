@@ -26,7 +26,15 @@ from typing import Any
 import wx
 import wx.grid as gridlib
 
-from utils.constants import DARK_ALT, DARK_BG, DARK_PANEL, LIGHT_TEXT, SPACE_SM, SUBDUED_TEXT
+from utils.constants import (
+    DARK_ALT,
+    DARK_BG,
+    DARK_PANEL,
+    DECK_TABLE_VIEW_MIN_SIZE,
+    LIGHT_TEXT,
+    SPACE_SM,
+    SUBDUED_TEXT,
+)
 from widgets.mana_icon_factory import ManaIconFactory
 from widgets.panels.card_table_panel.marquee import MarqueeController
 from widgets.panels.card_table_panel.sorting import (
@@ -193,6 +201,22 @@ class DeckTableView(wx.Panel):
         self.grid.DisableColResize(_ACTIONS_COL)
 
         sizer.Add(self.grid, 1, wx.EXPAND)
+
+        # A wx.grid.Grid reports its *entire* scrollable content as its best
+        # size, and a wx.Simplebook's own best size is the max over all its
+        # pages -- including the hidden ones. So a populated table view set the
+        # deck workspace's minimum to the height of the whole decklist, which
+        # reaches the frame's root sizer: measured at 1461px of enforced minimum
+        # window height after visiting this view once with a 60-card deck.
+        #
+        # The floor goes on the **grid**, not on this view. Pinning it here
+        # instead does nothing, and that is worth knowing: wxBookCtrlBase sizes
+        # itself from each page's ``GetBestSize()``, never its
+        # ``GetEffectiveMinSize()``, so ``SetMinSize`` on a notebook page is not
+        # a bound on the book. It *is* a bound one level down, because a window
+        # with a sizer takes its best size from that sizer's CalcMin, and
+        # CalcMin does consult each item's effective minimum.
+        self.grid.SetMinSize(DECK_TABLE_VIEW_MIN_SIZE)
 
         # Rubber-band selection lives on the grid's inner window (the surface the
         # rows are drawn on and the one that carries the scroll offset).

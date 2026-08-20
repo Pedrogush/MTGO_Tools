@@ -18,7 +18,12 @@ import wx
 
 from services.deck_service.printing import DATE_MODES as PRINTING_DATE_MODES
 from services.deck_service.printing import PRINTING_MODES
-from utils.constants import VIEW_TOGGLE_HEIGHT, VIEW_TOGGLE_PADDING_X
+from utils.constants import (
+    DECK_COUNT_LABEL_MIN_WIDTH,
+    SPACE_SM,
+    VIEW_TOGGLE_HEIGHT,
+    VIEW_TOGGLE_PADDING_X,
+)
 from widgets.panels.card_table_panel.sorting import (
     PILE_SORT_COLOR,
     PILE_SORT_MV,
@@ -44,6 +49,47 @@ MENU_CARET = "\u25be"
 
 class CardTablePanelToolbarMixin(_Base):
     """View-mode buttons, pile-sort menu, and printing dropdown for the panel."""
+
+    def _on_panel_size(self, event: wx.SizeEvent) -> None:
+        event.Skip()
+        self._reflow_header()
+
+    def _reflow_header(self) -> None:
+        """Move the view controls to their own line when the header row is too narrow.
+
+        The row's minimum is view-mode *and* locale dependent -- 310px in en-US
+        grid view, 496 in pt-BR pile view -- and the deck workspace's own floor
+        is 353. Sizing the workspace for the worst case would cost the window
+        ~150px of minimum width for a toolbar that is only that wide in one view
+        and one language, and leaving it alone means wxBoxSizer silently paints
+        whichever control is last at whatever is left (phase 7 measured that at
+        14px against a 59px minimum).
+
+        Hysteresis is not needed: moving the controls down changes the panel's
+        *height*, never its width, so the predicate this reads cannot flip as a
+        result of acting on it. The early return on an unchanged state is what
+        keeps the EVT_SIZE this triggers from recursing.
+        """
+        controls = getattr(self, "_header_controls", None)
+        if controls is None:
+            return
+        needed = (
+            controls.CalcMin().GetWidth() + DECK_COUNT_LABEL_MIN_WIDTH + SPACE_SM + SPACE_SM
+        )
+        wrapped = self.GetClientSize().GetWidth() < needed
+        if wrapped == self._header_wrapped:
+            return
+        self._header_wrapped = wrapped
+        if wrapped:
+            self._header_top.Detach(controls)
+            self._header_bottom.AddStretchSpacer(1)
+            self._header_bottom.Add(controls, 0, wx.ALIGN_CENTER_VERTICAL)
+        else:
+            self._header_bottom.Detach(controls)
+            self._header_bottom.Clear(False)
+            self._header_top.Add(controls, 0, wx.ALIGN_CENTER_VERTICAL)
+        self._header_stack.Layout()
+        self.Layout()
 
     def _column_label(self, col_id: str) -> str:
         return self._t(f"tabs.view.col.{col_id}")
