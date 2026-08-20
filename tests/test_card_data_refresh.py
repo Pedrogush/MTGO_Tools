@@ -196,7 +196,7 @@ def test_index_persists_name_map_as_indices(tmp_path: Path, monkeypatch):
 
     CardDataManager(tmp_path).ensure_latest()
 
-    index_path = tmp_path / "atomic_cards_index_v3.msgpack"
+    index_path = tmp_path / "atomic_cards_index_v4.msgpack"
     raw = msgspec.msgpack.decode(index_path.read_bytes())
     # cards_by_name is persisted as alias -> int index, not duplicated objects.
     assert all(isinstance(v, int) for v in raw["cards_by_name"].values())

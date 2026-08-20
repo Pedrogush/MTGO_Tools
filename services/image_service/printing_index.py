@@ -142,6 +142,12 @@ def build_printing_index(
     "Lightning Bolt" printing list, or the inspector/dropdown would offer that
     adventure card as a Lightning Bolt printing (issue #792).
 
+    ``repositories.card_repository.builder.build_index`` needs the same guard
+    for the *card data* index it builds from MTGJSON — the two indexes are keyed
+    by name and aliased by face name in the same way, so fixing only one leaves
+    the card's name, type line and oracle text pointing at the wrong card while
+    its printing list looks right. Change them together.
+
     Records that differ from another record only by *finish* are dropped: the
     card inspector's pager browses **art**, and Scryfall publishes the foil run
     of e.g. Secret Lair 1638 as a second card object ("1638\u2605") with the

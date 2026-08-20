@@ -126,10 +126,79 @@ def test_total_printings_stat_excludes_collapsed_variants(
 ) -> None:
     by_name, stats = build_printing_index(bulk_cards)
 
-    assert stats["total_printings"] == len(bulk_cards) - 8  # 1 + 6 + 1
-    assert stats["total_printings"] == sum(
-        len(by_name[name]) for name in ("lightning bolt", "arcane signet", "shivan dragon")
-    )
+    # Eight foil-only repeats: 1 Lightning Bolt, 6 Arcane Signet, 1 Shivan Dragon.
+    assert stats["total_printings"] == len(bulk_cards) - 8
+    canonical = {card["name"].lower() for card in bulk_cards}
+    assert stats["total_printings"] == sum(len(by_name[name]) for name in canonical)
+
+
+# ---------------------------------------------------------------------------
+# Face-name aliasing: no art may bleed between a combined card and a real card
+# ---------------------------------------------------------------------------
+
+
+def test_combined_name_shapes_in_the_bulk_data(
+    bulk_cards: list[dict[str, Any]], records_by_id: dict[str, dict[str, Any]]
+) -> None:
+    """Pin the four "A // B" shapes, because they are not all the same card.
+
+    ``split``, ``adventure`` and ``prepare`` are ONE printed face with one
+    illustration — the B half is a box drawn on the A card, so it is never a
+    separate art. ``transform`` is two printed faces, each with its own
+    illustration and its own image, which is why a transform printing resolves
+    to a *list* of image paths.
+    """
+    by_name = {card["name"]: card for card in bulk_cards}
+
+    for name, layout in (
+        ("Wear // Tear", "split"),
+        ("Brazen Borrower // Petty Theft", "adventure"),
+        ("Emeritus of Conflict // Lightning Bolt", "prepare"),
+    ):
+        card = by_name[name]
+        assert card["layout"] == layout
+        assert card["illustration_id"], f"{name} should carry one top-level art"
+        faces = card["card_faces"]
+        assert faces[0]["illustration_id"] == card["illustration_id"]
+        assert faces[1]["illustration_id"] is None, f"{name}'s B half is not its own art"
+
+    dfc = by_name["Delver of Secrets // Insectile Aberration"]
+    assert dfc["layout"] == "transform"
+    assert dfc.get("illustration_id") is None
+    front, back = dfc["card_faces"]
+    assert front["illustration_id"] and back["illustration_id"]
+    assert front["illustration_id"] != back["illustration_id"]
+
+
+def test_no_art_bleeds_between_a_prepared_card_and_the_real_card(
+    bulk_cards: list[dict[str, Any]], records_by_id: dict[str, dict[str, Any]]
+) -> None:
+    """ "Emeritus of Conflict // Lightning Bolt" and Lightning Bolt stay apart.
+
+    The real-data twin of ``test_face_alias_does_not_pollute_a_real_standalone_card``:
+    the finish dedup and the total-ordering sort must not merge or re-key these
+    two names (issue #792's guard still standing).
+    """
+    by_name, _stats = build_printing_index(bulk_cards)
+
+    emeritus_ids = {
+        card["id"]
+        for card in bulk_cards
+        if card["name"] == "Emeritus of Conflict // Lightning Bolt"
+    }
+    bolt_ids = {card["id"] for card in bulk_cards if card["name"] == "Lightning Bolt"}
+
+    # Lightning Bolt's list is pure Bolt...
+    assert set(_ids(by_name, "lightning bolt")) <= bolt_ids
+    assert not set(_ids(by_name, "lightning bolt")) & emeritus_ids
+    # ...and the Prepared card's list is pure Emeritus, under either of its
+    # non-colliding keys.
+    for key in ("emeritus of conflict", "emeritus of conflict // lightning bolt"):
+        assert set(_ids(by_name, key)) == emeritus_ids
+
+    # A face name that is nobody else's card is still aliased.
+    for alias in ("wear", "tear", "petty theft", "delver of secrets", "insectile aberration"):
+        assert by_name[alias], f"{alias} should resolve to its combined card"
 
 
 def test_art_order_is_stable_regardless_of_bulk_order(bulk_cards: list[dict[str, Any]]) -> None:

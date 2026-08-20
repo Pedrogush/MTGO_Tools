@@ -32,7 +32,7 @@ def test_resolve_paths_uses_msgpack_extension(tmp_path: Path) -> None:
     base, index_path, meta_path = storage.resolve_paths(tmp_path / "data")
     assert base == tmp_path / "data"
     assert base.is_dir()  # resolve_paths must create the directory.
-    assert index_path.name == "atomic_cards_index_v3.msgpack"
+    assert index_path.name == "atomic_cards_index_v4.msgpack"
     assert meta_path.name == "atomic_cards_meta.json"
 
 
