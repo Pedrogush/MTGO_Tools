@@ -18,6 +18,7 @@ from services.comp_rules_service import (
     find_latest_rules_url,
     get_comp_rules_service,
     linkify_cross_refs,
+    parse_card_types,
     parse_keywords,
     parse_outline,
     reset_comp_rules_service,
@@ -636,3 +637,47 @@ def test_reset_comp_rules_service_clears_singleton() -> None:
         assert first is not second
     finally:
         reset_comp_rules_service()
+
+
+# ===================== card types (rule 205.2a) =====================
+
+# The real line, verbatim from the cached rules -- the smart quotes and the
+# trailing cross-reference are exactly what the parser has to survive.
+_CARD_TYPES_TXT = (
+    "205.2a The card types are artifact, battle, conspiracy, creature, dungeon, "
+    "enchantment, instant, kindred, land, phenomenon, plane, planeswalker, scheme, "
+    "sorcery, and vanguard. See section 3, \u201cCard Types.\u201d\n"
+)
+
+
+def test_parse_card_types_reads_the_normative_list() -> None:
+    """Rule 205.2a is the only enumeration of card types in the document."""
+    assert parse_card_types(_CARD_TYPES_TXT) == (
+        "Artifact",
+        "Battle",
+        "Conspiracy",
+        "Creature",
+        "Dungeon",
+        "Enchantment",
+        "Instant",
+        "Kindred",
+        "Land",
+        "Phenomenon",
+        "Plane",
+        "Planeswalker",
+        "Scheme",
+        "Sorcery",
+        "Vanguard",
+    )
+
+
+def test_parse_card_types_survives_a_bom_and_crlf() -> None:
+    """The published .txt is CRLF with a BOM; the shared _normalize handles both."""
+    assert parse_card_types("\ufeff" + _CARD_TYPES_TXT.replace("\n", "\r\n")) == parse_card_types(
+        _CARD_TYPES_TXT
+    )
+
+
+def test_parse_card_types_returns_nothing_when_the_rule_is_absent() -> None:
+    """A truncated or missing cache must degrade to "no answer", not a wrong one."""
+    assert parse_card_types("205.2b Some objects have more than one card type.") == ()

@@ -228,6 +228,31 @@ def parse_keywords(text: str) -> dict[str, KeywordEntry]:
     return entries
 
 
+# Rule 205.2a is the normative list of card types: one sentence, comma
+# separated, an Oxford "and" before the last item, closing with a cross-reference
+# to section 3. Nothing else in the file enumerates them, so this is the only
+# line worth parsing for it.
+_CARD_TYPES_RULE_RE = re.compile(r"^205\.2a The card types are ([^.]+)\.", re.MULTILINE)
+
+
+def parse_card_types(text: str) -> tuple[str, ...]:
+    """Card types named by rule 205.2a, in the rules' own (alphabetical) order.
+
+    Returned Title Cased, which is how a type line prints them and therefore how
+    the UI labels them. Returns an empty tuple if the rule is not found, so a
+    truncated or missing cache degrades to "no answer" rather than a wrong one.
+    """
+    match = _CARD_TYPES_RULE_RE.search(_normalize(text))
+    if not match:
+        return ()
+    types = []
+    for part in match.group(1).split(","):
+        word = part.strip().removeprefix("and ").strip()
+        if word:
+            types.append(word.title())
+    return tuple(types)
+
+
 def _normalize(text: str) -> str:
     """Strip BOM + normalize line endings to LF — common pre-processing."""
     return text.lstrip("﻿").replace("\r\n", "\n").replace("\r", "\n")
@@ -468,6 +493,7 @@ __all__ = [
     "find_latest_rules_url",
     "get_comp_rules_service",
     "linkify_cross_refs",
+    "parse_card_types",
     "parse_keywords",
     "parse_outline",
     "reset_comp_rules_service",

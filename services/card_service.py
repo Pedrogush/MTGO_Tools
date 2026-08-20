@@ -43,6 +43,10 @@ class CardService:
         """Hand the freshly-loaded :class:`CardDataManager` to the repository."""
         self.card_repo.set_card_manager(manager)
 
+    def get_card_manager(self) -> CardDataManager | None:
+        """Return the loaded :class:`CardDataManager`, or ``None`` before it lands."""
+        return self.card_repo.get_card_manager()
+
     def ensure_card_data_loaded(self, force: bool = False) -> CardDataManager:
         """Force-load (or return the existing) :class:`CardDataManager`."""
         return self.card_repo.ensure_card_data_loaded(force=force)

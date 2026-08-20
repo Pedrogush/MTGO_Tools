@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import threading
+from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 from controllers.app_controller.archetypes import ArchetypesMixin
@@ -157,6 +158,11 @@ class AppController(
         self._ui_callbacks: UICallbacks | None = None
 
         self._worker = BackgroundWorker()
+        # Callbacks handed to ensure_card_data_loaded while the one-shot card
+        # index load is still in flight. Appended and drained on the UI thread
+        # (BackgroundWorker marshals its callbacks through wx.CallAfter), so it
+        # needs no lock of its own.
+        self._card_data_waiters: list[tuple[Callable[..., None], Callable[..., None]]] = []
         self.frame: AppFrame | None = None
         self._bulk_check_worker_active = False
         self._cache_warmer: CacheWarmer | None = None

@@ -21,11 +21,13 @@ from utils.constants.deck_rules import (
 from utils.math_utils import hypergeometric_exactly
 from widgets.panels.deck_stats_panel.stats_chart_html import _curve_colour
 from widgets.panels.deck_stats_panel.stats_constants import (
-    _CARD_TYPES,
     _COLOR_MAP,
     _FALLBACK_SWATCH,
     _HAND_COLOURS,
     _TYPE_COLOURS,
+    DECK_CARD_TYPES,
+    OCCASIONAL_CARD_TYPES,
+    card_types_in,
 )
 
 if TYPE_CHECKING:
@@ -135,27 +137,28 @@ class DeckStatsPanelPropertiesMixin(_Base):
             items.append((color, f"{pct:.0f}%", pct, hex_colour, tooltip))
         return items
 
+    def _card_type_line(self, name: str) -> str:
+        if not self._card_data_available():
+            return ""
+        meta = self.card_manager.get_card(name)
+        return (meta.get("type_line") or "") if meta else ""
+
     def _type_items(self) -> list[tuple[str, int, int, str, str]]:
+        """One row per card type the deck can hold, plus any rarer type present.
+
+        Every count comes from rule 205.2a's list of card types (see
+        :data:`~widgets.panels.deck_stats_panel.stats_constants.CARD_TYPES`).
+        There is deliberately no catch-all row: a card this cannot classify has
+        no card data behind it, which is a fact about the *database*, not a card
+        type, and is reported as such next to the summary rather than drawn as a
+        bar labelled "Other" among the real types.
+        """
         counts: Counter[str] = Counter()
         for entry in self.zone_cards.get("main", []):
-            type_line = ""
-            if self._card_data_available():
-                meta = self.card_manager.get_card(entry["name"])
-                type_line = (meta.get("type_line") or "") if meta else ""
+            for card_type in card_types_in(self._card_type_line(entry["name"])):
+                counts[card_type] += entry["qty"]
 
-            matched = False
-            for card_type in _CARD_TYPES:
-                if card_type.lower() in type_line.lower():
-                    counts[card_type] += entry["qty"]
-                    matched = True
-            if not matched:
-                counts["Other"] += entry["qty"]
-
-        display_order = _CARD_TYPES + ["Other"]
-        # Only include "Other" if something actually fell into it
-        if not counts.get("Other"):
-            display_order = _CARD_TYPES
-
+        display_order = list(DECK_CARD_TYPES) + [t for t in OCCASIONAL_CARD_TYPES if counts[t]]
         max_count = max((counts[t] for t in display_order), default=1) or 1
         items = []
         for card_type in display_order:
@@ -164,6 +167,19 @@ class DeckStatsPanelPropertiesMixin(_Base):
             tooltip = f"{card_type}: {count} card{'s' if count != 1 else ''}"
             items.append((card_type, count, max_count, colour, tooltip))
         return items
+
+    def _unclassified_count(self) -> int:
+        """Mainboard cards whose type line the card database could not supply.
+
+        Zero whenever the card data is loaded and the names resolve, which is
+        the normal case; non-zero means the charts are drawn from less than the
+        whole deck, and the panel says so instead of inventing a category.
+        """
+        return sum(
+            entry["qty"]
+            for entry in self.zone_cards.get("main", [])
+            if not card_types_in(self._card_type_line(entry["name"]))
+        )
 
     def _hand_items(
         self, deck_size: int | float, land_count: int | float

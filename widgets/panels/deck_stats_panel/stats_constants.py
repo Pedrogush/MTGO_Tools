@@ -5,6 +5,7 @@ Pure module-level constants and asset loading with no panel dependency.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from utils.constants.theme import (
@@ -19,7 +20,40 @@ from utils.constants.ui_images import (
     STATS_MANA_SVG_SOURCE_SIZE,
 )
 
-_CARD_TYPES = [
+# The card types, rule 205.2a of the Comprehensive Rules:
+#
+#   "The card types are artifact, battle, conspiracy, creature, dungeon,
+#    enchantment, instant, kindred, land, phenomenon, plane, planeswalker,
+#    scheme, sorcery, and vanguard."
+#
+# The list is normative and closed -- there is no such type as "Other", which is
+# what this chart used to show any card it failed to classify. Verified against
+# the copy of the rules the app already ships (services.comp_rules_service's
+# cache) by tests/test_deck_stats_types.py, so it cannot drift from them
+# silently the way a hand-kept list does.
+CARD_TYPES: tuple[str, ...] = (
+    "Artifact",
+    "Battle",
+    "Conspiracy",
+    "Creature",
+    "Dungeon",
+    "Enchantment",
+    "Instant",
+    "Kindred",
+    "Land",
+    "Phenomenon",
+    "Plane",
+    "Planeswalker",
+    "Scheme",
+    "Sorcery",
+    "Vanguard",
+)
+
+#: The types a deck can be built out of, in the order the chart lists them:
+#: mana first, then the spell types by how often a decklist holds them. Every
+#: one of these gets a row even at zero, because "this deck runs no creatures"
+#: is itself worth reading off the chart.
+DECK_CARD_TYPES: tuple[str, ...] = (
     "Land",
     "Creature",
     "Instant",
@@ -29,7 +63,40 @@ _CARD_TYPES = [
     "Planeswalker",
     "Battle",
     "Kindred",
-]
+)
+
+#: The remaining rules types -- the non-traditional ones (rule 205.2b's
+#: Conspiracy, Dungeon, Phenomenon, Plane, Scheme, Vanguard). They are real card
+#: types and a card carrying one is classified, but no constructed decklist
+#: holds them, so they earn a row only when one actually turns up.
+OCCASIONAL_CARD_TYPES: tuple[str, ...] = tuple(t for t in CARD_TYPES if t not in DECK_CARD_TYPES)
+
+#: Matching order: the chart's own order first, so ``_TYPE_COLOURS`` lines up
+#: with the rows a deck actually produces.
+_CARD_TYPES: tuple[str, ...] = DECK_CARD_TYPES + OCCASIONAL_CARD_TYPES
+
+#: A type line is ``supertypes card-types — subtypes``, one such group per face.
+#: Only the head of each face names card types; the tail names subtypes, and
+#: those collide (there are creatures with the subtype "Dungeon", and "Plane" is
+#: a prefix of "Planeswalker"), which is why this splits into words rather than
+#: asking whether the type name appears anywhere in the string.
+_TYPE_LINE_FACE_SPLIT = "//"
+_TYPE_LINE_SUBTYPE_SPLIT_RE = re.compile(r"[\u2014\u2013-]")
+_TYPE_LINE_WORD_RE = re.compile(r"[^A-Za-z]+")
+
+
+def card_types_in(type_line: str | None) -> set[str]:
+    """The rule 205.2a card types named on ``type_line``.
+
+    A split card prints both halves in one line ("Instant // Sorcery") and is
+    both, so every face is read.
+    """
+    words: set[str] = set()
+    for face in (type_line or "").split(_TYPE_LINE_FACE_SPLIT):
+        head = _TYPE_LINE_SUBTYPE_SPLIT_RE.split(face, maxsplit=1)[0]
+        words.update(word for word in _TYPE_LINE_WORD_RE.split(head.lower()) if word)
+    return {card_type for card_type in CARD_TYPES if card_type.lower() in words}
+
 
 # MTG color identity → (full display label, hex bar colour)
 _COLOR_MAP: dict[str, tuple[str, str]] = {
@@ -44,22 +111,17 @@ _COLOR_MAP: dict[str, tuple[str, str]] = {
 
 # Card-type bar colours. Ten off-palette hues until phase 8, none of them from
 # phase 0's CVD-checked set and none of them measured against the chart ground.
-# Now sliced from that set in the chart's own display order, with the aggregate
-# "Other" bucket taking the palette's neutral -- the swatch that exists to read
-# as "not a category".
+# Now sliced from that set in the chart's own display order.
 #
-# Ten categories against a palette of seven hues means the tail wraps, which
-# phase 0 documented as the point past which "colour alone no longer identifies
-# a category -- pair it with labels, ordering or a second channel". This chart
+# More categories than the palette has hues means the tail wraps, which phase 0
+# documented as the point past which "colour alone no longer identifies a
+# category -- pair it with labels, ordering or a second channel". This chart
 # does: every bar carries its type name and its count, and the order is fixed
-# (_CARD_TYPES), so the two wrapped hues land on Battle and Kindred, the two
-# types a Modern/Legacy decklist almost never contains at all.
+# (_CARD_TYPES), so the wrapped hues land on the types a decklist almost never
+# contains at all.
 _TYPE_COLOURS: dict[str, str] = {
-    **{
-        card_type: to_hex(colour)
-        for card_type, colour in zip(_CARD_TYPES, chart_palette(len(_CARD_TYPES)), strict=True)
-    },
-    "Other": to_hex(CHART_OTHER),
+    card_type: to_hex(colour)
+    for card_type, colour in zip(_CARD_TYPES, chart_palette(len(_CARD_TYPES)), strict=True)
 }
 
 # Opening-hand land-count bars (0..7 lands in the opener).
@@ -78,10 +140,10 @@ _TYPE_COLOURS: dict[str, str] = {
 # that is true independent of the deck.
 _HAND_COLOURS = [to_hex(chart_ramp(k / 7)) for k in range(8)]
 
-#: Swatch for a colour or card type the data produced that neither table names.
-#: The palette's neutral, i.e. the same swatch the aggregate "Other" bucket
-#: takes -- an unrecognised value *is* the aggregate bucket. Was a bare #828282
-#: at two call sites in properties.py, measuring 2.94:1 on the chart ground.
+#: Swatch for a colour the data produced that ``_COLOR_MAP`` does not name. The
+#: palette's neutral -- the swatch that exists to read as "not one of the
+#: categories". Was a bare #828282 in properties.py, measuring 2.94:1 on the
+#: chart ground.
 _FALLBACK_SWATCH = to_hex(CHART_OTHER)
 
 # Color key → mana SVG filename stem
