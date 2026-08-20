@@ -431,8 +431,7 @@ class CacheWarmer:
             self._dl_ok += 1
             if self._dl_ok % self._progress_interval == 0:
                 logger.info(
-                    f"Cache warm-up: {self._dl_ok} decklists hydrated "
-                    f"({self._dl_failed} failed)"
+                    f"Cache warm-up: {self._dl_ok} decklists hydrated ({self._dl_failed} failed)"
                 )
         else:
             self._dl_failed += 1

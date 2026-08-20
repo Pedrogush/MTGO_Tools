@@ -69,7 +69,6 @@ class AppController(
     UpdateCheckMixin,
     LifecycleMixin,
 ):
-
     @timed
     def __init__(
         self,
