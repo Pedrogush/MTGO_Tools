@@ -76,6 +76,22 @@ _FORCE_DARK = 2
 
 _WM_THEMECHANGED = 0x031A
 _LVM_GETHEADER = 0x1000 + 31
+#: ``UDM_GETBUDDY``. A wxMSW ``wx.SpinCtrl`` is **two** HWNDs: the control wx
+#: hands back from ``GetHandle()`` is the ``msctls_updown32`` arrows, and the
+#: text field is a separate ``Edit`` attached to it as its *buddy*. The white
+#: client edge belongs to the buddy, which is why ``wx.BORDER_NONE`` on the
+#: wx object is a silent no-op -- it lands on the arrows, which never had one.
+_UDM_GETBUDDY = 0x0400 + 106
+
+#: ``WS_EX_*`` bits that make Windows draw a sunken/raised non-client frame.
+_WS_EX_CLIENTEDGE = 0x00000200
+_WS_EX_STATICEDGE = 0x00020000
+_WS_EX_WINDOWEDGE = 0x00000100
+_GWL_EXSTYLE = -20
+#: ``SWP_NOSIZE | SWP_NOMOVE | SWP_NOZORDER | SWP_FRAMECHANGED`` -- the frame has
+#: to be recalculated or the edge stays on screen until something else resizes
+#: the control, which is its own species of "the call ran and nothing happened".
+_SWP_FRAMECHANGED = 0x0001 | 0x0002 | 0x0004 | 0x0020
 
 #: ``DWMWA_USE_IMMERSIVE_DARK_MODE``. Microsoft moved it: it is attribute **20**
 #: on Windows 10 build 18985+ (1903 and later, including every Windows 11) and
@@ -174,6 +190,48 @@ def _apply_theme_to_handle(handle: int, theme: str) -> bool:
         ctypes.windll.user32.SendMessageW(  # type: ignore[attr-defined]
             ctypes.c_void_p(handle), _WM_THEMECHANGED, 0, 0
         )
+    except Exception:  # pragma: no cover - depends on the Windows build
+        return False
+    return True
+
+
+def strip_spin_buddy_client_edge(spin: wx.SpinCtrl) -> bool:
+    """Remove the ``#FFFFFF`` sunken edge from a ``wx.SpinCtrl``'s text field.
+
+    Measured, after shipping the obvious fix and finding it changed nothing:
+    ``strip_native_client_edge`` on a ``wx.SpinCtrl`` is a **silent no-op**. wx
+    applies the style flag to ``GetHandle()``, and on wxMSW that returns the
+    ``msctls_updown32`` arrows -- ``ex=0x00000000``, no edge to remove. The
+    ``Edit`` carrying ``WS_EX_CLIENTEDGE`` is a sibling HWND reachable only
+    through ``UDM_GETBUDDY``. Probed on the tracker's four calculator fields:
+    the white hairline is still there afterwards, pixel for pixel.
+
+    This is the tenth documented instance of this codebase's signature failure
+    and the second one this phase produced -- which is the argument for
+    screenshotting a fix rather than reading it.
+
+    Returns whether the buddy was found and its frame recalculated. The arrows
+    themselves stay light: phase 1 measured them against ``DarkMode_CFD``, under
+    Windows dark mode, and with visual styles disabled entirely, and they are
+    light grey in all three.
+    """
+    if os.name != "nt":
+        return False
+    try:
+        handle = spin.GetHandle()
+        if not handle:
+            return False
+        user32 = ctypes.windll.user32  # type: ignore[attr-defined]
+        buddy = user32.SendMessageW(ctypes.c_void_p(handle), _UDM_GETBUDDY, 0, 0)
+        if not buddy:
+            return False
+        style = user32.GetWindowLongW(ctypes.c_void_p(buddy), _GWL_EXSTYLE)
+        user32.SetWindowLongW(
+            ctypes.c_void_p(buddy),
+            _GWL_EXSTYLE,
+            style & ~_WS_EX_CLIENTEDGE & ~_WS_EX_STATICEDGE & ~_WS_EX_WINDOWEDGE,
+        )
+        user32.SetWindowPos(ctypes.c_void_p(buddy), 0, 0, 0, 0, 0, _SWP_FRAMECHANGED)
     except Exception:  # pragma: no cover - depends on the Windows build
         return False
     return True
@@ -300,6 +358,7 @@ def apply_dark_list_header(list_ctrl: wx.ListCtrl) -> bool:
 
 
 __all__ = [
+    "strip_spin_buddy_client_edge",
     "THEME_EXPLORER",
     "THEME_INPUT",
     "THEME_LIST_HEADER",

@@ -15,7 +15,12 @@ from utils.constants import (
 )
 from utils.i18n import DEFAULT_LOCALE, translate
 from widgets.dialogs.tutorial_dialog.handlers import TutorialDialogHandlersMixin
-from widgets.stylize import apply_type_level, init_top_level_window
+from widgets.stylize import (
+    apply_type_level,
+    create_divider,
+    init_top_level_window,
+    stylize_button,
+)
 from widgets.wx_layout import relayout
 
 _STEP_KEYS: list[tuple[str, str]] = [
@@ -73,7 +78,7 @@ class TutorialDialog(TutorialDialogHandlersMixin, wx.Dialog):
         outer.Add(header, 0, wx.EXPAND)
 
         # ---- divider ----
-        line = wx.StaticLine(self)
+        line = create_divider(self, vertical=False)
         outer.Add(line, 0, wx.EXPAND)
 
         # ---- body ----
@@ -86,7 +91,7 @@ class TutorialDialog(TutorialDialogHandlersMixin, wx.Dialog):
         outer.Add(self._body_label, 1, wx.EXPAND | wx.ALL, SPACE_LG)
 
         # ---- bottom bar ----
-        bottom_line = wx.StaticLine(self)
+        bottom_line = create_divider(self, vertical=False)
         outer.Add(bottom_line, 0, wx.EXPAND)
 
         btn_bar = wx.Panel(self)
@@ -95,17 +100,19 @@ class TutorialDialog(TutorialDialogHandlersMixin, wx.Dialog):
         btn_bar.SetSizer(btn_sizer)
 
         self._skip_btn = wx.Button(btn_bar, label=self._t("tutorial.btn.skip"))
-        self._skip_btn.SetForegroundColour(SUBDUED_TEXT)
+        stylize_button(self._skip_btn, kind="ghost", surface="panel")
         self._skip_btn.Bind(wx.EVT_BUTTON, self._on_skip)
         btn_sizer.Add(self._skip_btn, 0, wx.ALL, SPACE_SM)
 
         btn_sizer.AddStretchSpacer(1)
 
         self._back_btn = wx.Button(btn_bar, wx.ID_BACKWARD, label=self._t("tutorial.btn.back"))
+        stylize_button(self._back_btn, kind="secondary", surface="panel")
         self._back_btn.Bind(wx.EVT_BUTTON, self._on_back)
         btn_sizer.Add(self._back_btn, 0, wx.TOP | wx.BOTTOM | wx.RIGHT, SPACE_SM)
 
         self._next_btn = wx.Button(btn_bar, wx.ID_FORWARD, label=self._t("tutorial.btn.next"))
+        stylize_button(self._next_btn, kind="primary", surface="panel")
         self._next_btn.SetDefault()
         self._next_btn.Bind(wx.EVT_BUTTON, self._on_next)
         btn_sizer.Add(self._next_btn, 0, wx.TOP | wx.BOTTOM | wx.RIGHT, SPACE_SM)

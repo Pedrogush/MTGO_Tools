@@ -32,6 +32,7 @@ class CompactRadarHandlersMixin(_Base):
         self.current_radar = radar
         self.header_label.SetLabel(f"Radar: {radar.archetype_name}")
         self.view_toggle_btn.Show()
+        self._show_list()
         self._populate_card_list()
         self.Show()
         relayout(self.GetParent())
@@ -40,10 +41,31 @@ class CompactRadarHandlersMixin(_Base):
     def clear(self) -> None:
         self.current_radar = None
         self.header_label.SetLabel("Radar: —")
-        self.status_label.SetLabel("Waiting for opponent\u2026")
         self.card_list.Clear()
         self.view_toggle_btn.Hide()
+        self._show_empty(
+            "Waiting for opponent\u2026",
+            "The archetype radar fills in as soon as a match is detected.",
+        )
         relayout(self.GetParent())
+
+    # ---- S4: an empty pane says what it is waiting for, in the middle of the
+    # space it is waiting in, instead of a caption above an empty bordered box.
+    def _show_empty(self, message: str, hint: str | None = None) -> None:
+        self.status_label.SetLabel("")
+        self.status_label.Hide()
+        self.card_list.Hide()
+        self.empty_state.set_message(message, hint)
+        self.empty_state.Show()
+        # relayout, not a bare Layout: a runtime Show/Hide with only Layout()
+        # leaves ghost pixels from the native controls that just vanished.
+        relayout(self)
+
+    def _show_list(self) -> None:
+        self.empty_state.Hide()
+        self.status_label.Show()
+        self.card_list.Show()
+        relayout(self)
 
     def set_loading(self, message: str = "Loading radar data...") -> None:
         self.header_label.SetLabel("Radar: Loading...")

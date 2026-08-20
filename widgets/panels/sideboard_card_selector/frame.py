@@ -13,7 +13,7 @@ from widgets.panels.sideboard_card_selector.handlers import SideboardCardSelecto
 from widgets.panels.sideboard_card_selector.properties import (
     SideboardCardSelectorPropertiesMixin,
 )
-from widgets.stylize import stylize_scrollable
+from widgets.stylize import apply_type_level, stylize_button, stylize_scrollable
 
 
 class SideboardCardSelector(
@@ -44,7 +44,7 @@ class SideboardCardSelector(
 
         title_label = wx.StaticText(self, label=title)
         title_label.SetForegroundColour(LIGHT_TEXT)
-        title_label.SetFont(title_label.GetFont().Bold())
+        apply_type_level(title_label, "heading")
         sizer.Add(title_label, 0, wx.ALL, SPACE_XS)
 
         self.count_label = wx.StaticText(
@@ -87,7 +87,15 @@ class SideboardCardSelector(
             btn_sizer = wx.BoxSizer(wx.HORIZONTAL)
             btn_panel.SetSizer(btn_sizer)
 
+            # Four buttons per card row, none of which had ever reached the
+            # button system: a wx.Button with no colour set renders in the
+            # *light* system face even under process dark mode (phase 2), so a
+            # 30-card sideboard drew 120 light chips on a dark panel. The
+            # quantity controls are chrome around the row's real content --
+            # the card name -- so they are ghost, and the destructive
+            # set-to-zero is the one that is not.
             inc_btn = wx.Button(btn_panel, label="+", size=(28, 28))
+            stylize_button(inc_btn, kind="ghost", surface="alt")
             inc_btn.Bind(
                 wx.EVT_BUTTON,
                 lambda evt, name=card_name, max_q=max_qty: self._increment(name, max_q),
@@ -95,15 +103,18 @@ class SideboardCardSelector(
             btn_sizer.Add(inc_btn, 0)
 
             dec_btn = wx.Button(btn_panel, label="−", size=(28, 28))
+            stylize_button(dec_btn, kind="ghost", surface="alt")
             dec_btn.Bind(wx.EVT_BUTTON, lambda evt, name=card_name: self._decrement(name))
             btn_sizer.Add(dec_btn, 0, wx.LEFT, SPACE_XS)
 
             zero_btn = wx.Button(btn_panel, label="↓", size=(28, 28))
+            stylize_button(zero_btn, kind="ghost", surface="alt")
             zero_btn.SetToolTip("Set to 0")
             zero_btn.Bind(wx.EVT_BUTTON, lambda evt, name=card_name: self._set_zero(name))
             btn_sizer.Add(zero_btn, 0, wx.LEFT, SPACE_XS)
 
             max_btn = wx.Button(btn_panel, label="↑", size=(28, 28))
+            stylize_button(max_btn, kind="ghost", surface="alt")
             max_btn.SetToolTip(f"Set to max ({max_qty})")
             max_btn.Bind(
                 wx.EVT_BUTTON, lambda evt, name=card_name, max_q=max_qty: self._set_max(name, max_q)

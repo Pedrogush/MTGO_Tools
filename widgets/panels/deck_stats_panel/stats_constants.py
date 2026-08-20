@@ -7,6 +7,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from utils.constants.theme import (
+    CHART_OTHER,
+    TEXT_PRIMARY,
+    chart_palette,
+    chart_ramp,
+    to_hex,
+)
 from utils.constants.ui_images import (
     STATS_MANA_SVG_DISPLAY_SIZE,
     STATS_MANA_SVG_SOURCE_SIZE,
@@ -35,35 +42,47 @@ _COLOR_MAP: dict[str, tuple[str, str]] = {
     "Colorless": ("Colorless", "#A0968A"),
 }
 
+# Card-type bar colours. Ten off-palette hues until phase 8, none of them from
+# phase 0's CVD-checked set and none of them measured against the chart ground.
+# Now sliced from that set in the chart's own display order, with the aggregate
+# "Other" bucket taking the palette's neutral -- the swatch that exists to read
+# as "not a category".
+#
+# Ten categories against a palette of seven hues means the tail wraps, which
+# phase 0 documented as the point past which "colour alone no longer identifies
+# a category -- pair it with labels, ordering or a second channel". This chart
+# does: every bar carries its type name and its count, and the order is fixed
+# (_CARD_TYPES), so the two wrapped hues land on Battle and Kindred, the two
+# types a Modern/Legacy decklist almost never contains at all.
 _TYPE_COLOURS: dict[str, str] = {
-    "Land": "#917D5F",
-    "Creature": "#5A87B9",
-    "Instant": "#50A591",
-    "Sorcery": "#7864AF",
-    "Enchantment": "#A56E96",
-    "Artifact": "#9B9BA5",
-    "Planeswalker": "#5FA0B9",
-    "Battle": "#AF735A",
-    "Kindred": "#7A9E6A",
-    "Other": "#828282",
+    **{
+        card_type: to_hex(colour)
+        for card_type, colour in zip(_CARD_TYPES, chart_palette(len(_CARD_TYPES)), strict=True)
+    },
+    "Other": to_hex(CHART_OTHER),
 }
 
-# Opening-hand land count bar colours (0-7 lands)
-# Accent blue for "good" outcomes (2-3 lands), muted gray-blue for bad outcomes.
-_HAND_COLOURS = [
-    "#4A5568",  # 0 – bad (muted gray-blue)
-    "#4A5568",  # 1 – bad
-    "#3B82F6",  # 2 – good (accent blue)
-    "#3B82F6",  # 3 – good
-    "#4A5568",  # 4 – bad
-    "#4A5568",  # 5 – bad
-    "#4A5568",  # 6 – bad
-    "#4A5568",  # 7 – bad
-]
+# Opening-hand land-count bars (0..7 lands in the opener).
+#
+# This was ACCENT_PRIMARY for k in (2, 3) and #4A5568 for everything else --
+# "good" vs "bad". Two things wrong with that, both fixed here:
+#   * the accent as a good/bad categorical is a **third** colour register. Phase
+#     2 shipped exactly two and named them: saturated fill = the one primary
+#     action on a surface, 16% tint / 2px stroke = selected-or-current. A bar in
+#     a probability chart is neither.
+#   * "2-3 lands is good" is an editorial claim the chart never states and that
+#     is false for a large part of the format -- a 17-land aggro deck and a
+#     26-land control deck do not want the same opener.
+# The axis is *ordinal* (0, 1, 2, ... lands), so it takes the sequential ramp.
+# Colour now says where on the axis a bar sits, which is the one thing about it
+# that is true independent of the deck.
+_HAND_COLOURS = [to_hex(chart_ramp(k / 7)) for k in range(8)]
 
-# Mana curve gradient: light sky-blue (low CMC) → deep accent blue (high CMC).
-_CURVE_WARM = (147, 197, 253)
-_CURVE_COLD = (30, 64, 175)
+#: Swatch for a colour or card type the data produced that neither table names.
+#: The palette's neutral, i.e. the same swatch the aggregate "Other" bucket
+#: takes -- an unrecognised value *is* the aggregate bucket. Was a bare #828282
+#: at two call sites in properties.py, measuring 2.94:1 on the chart ground.
+_FALLBACK_SWATCH = to_hex(CHART_OTHER)
 
 # Color key → mana SVG filename stem
 _COLOR_SVG_FILENAMES: dict[str, str] = {
@@ -89,7 +108,7 @@ def _load_mana_svgs() -> dict[str, str]:
                 f'width="{STATS_MANA_SVG_SOURCE_SIZE}" height="{STATS_MANA_SVG_SOURCE_SIZE}"',
                 f'width="{STATS_MANA_SVG_DISPLAY_SIZE}" height="{STATS_MANA_SVG_DISPLAY_SIZE}"',
             )
-            svg = svg.replace('fill="#444"', 'fill="#ECECEC"')
+            svg = svg.replace('fill="#444"', f'fill="{to_hex(TEXT_PRIMARY)}"')
             # Strip the XML comment line to reduce HTML payload
             svg = "\n".join(line for line in svg.splitlines() if not line.startswith("<!--"))
             result[key] = svg.strip()

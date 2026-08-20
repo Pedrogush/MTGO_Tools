@@ -10,6 +10,25 @@ from utils.constants import (
     CARD_IMAGE_FLIP_ICON_TEXT_SCALE,
     CARD_IMAGE_PLACEHOLDER_INSET,
 )
+from utils.constants.theme import (
+    BORDER_SUBTLE,
+    SURFACE_ALT,
+    SURFACE_PANEL,
+    TEXT_PLACEHOLDER,
+)
+from widgets.stylize import type_font
+
+#: The mat a card image is composited onto, and the hairline around it. These
+#: were wx.Colour(40, 40, 40) and wx.Colour(60, 60, 60) -- a private two-step
+#: grey scale sitting one pixel away from the surface scale it was imitating.
+_CARD_MAT = wx.Colour(*SURFACE_PANEL)
+_CARD_EDGE = wx.Colour(*BORDER_SUBTLE)
+#: The "no image yet" plate. Its text was (150, 150, 150) on (50, 50, 50) --
+#: 3.6:1, under AA for body copy, and the one placeholder in the app that phase
+#: 4's placeholder-token pass did not reach because it is painted, not set.
+_PLACEHOLDER_FILL = wx.Colour(*SURFACE_ALT)
+_PLACEHOLDER_EDGE = wx.Colour(*BORDER_SUBTLE)
+_PLACEHOLDER_TEXT = wx.Colour(*TEXT_PLACEHOLDER)
 
 if TYPE_CHECKING:
     from widgets.panels.card_image_display.protocol import CardImageDisplayProto
@@ -40,8 +59,8 @@ class _BitmapRendererMixin(_Base):
         dc.Clear()
 
         # Draw dark background rounded rectangle
-        dc.SetPen(wx.Pen(wx.Colour(40, 40, 40), 1))
-        dc.SetBrush(wx.Brush(wx.Colour(40, 40, 40)))
+        dc.SetPen(wx.Pen(_CARD_MAT, 1))
+        dc.SetBrush(wx.Brush(_CARD_MAT))
         dc.DrawRoundedRectangle(0, 0, self.image_width, self.image_height, self.corner_radius)
 
         # Center the image
@@ -56,7 +75,7 @@ class _BitmapRendererMixin(_Base):
         # Draw border using GraphicsContext for smooth anti-aliased edges
         gc = wx.GraphicsContext.Create(dc)
         if gc:
-            gc.SetPen(wx.Pen(wx.Colour(60, 60, 60), 1))
+            gc.SetPen(wx.Pen(_CARD_EDGE, 1))
             gc.SetBrush(wx.TRANSPARENT_BRUSH)
             path = gc.CreatePath()
             path.AddRoundedRectangle(
@@ -69,7 +88,7 @@ class _BitmapRendererMixin(_Base):
                 self._draw_flip_icon_on_gc(gc)
         else:
             # Fallback border without antialiasing
-            dc.SetPen(wx.Pen(wx.Colour(60, 60, 60), 1))
+            dc.SetPen(wx.Pen(_CARD_EDGE, 1))
             dc.SetBrush(wx.TRANSPARENT_BRUSH)
             dc.DrawRoundedRectangle(0, 0, self.image_width, self.image_height, self.corner_radius)
 
@@ -133,8 +152,8 @@ class _BitmapRendererMixin(_Base):
         dc.Clear()
 
         # Draw rounded rectangle
-        dc.SetPen(wx.Pen(wx.Colour(80, 80, 80), 2))
-        dc.SetBrush(wx.Brush(wx.Colour(50, 50, 50)))
+        dc.SetPen(wx.Pen(_PLACEHOLDER_EDGE, 2))
+        dc.SetBrush(wx.Brush(_PLACEHOLDER_FILL))
         dc.DrawRoundedRectangle(
             CARD_IMAGE_PLACEHOLDER_INSET,
             CARD_IMAGE_PLACEHOLDER_INSET,
@@ -144,9 +163,11 @@ class _BitmapRendererMixin(_Base):
         )
 
         # Draw text
-        dc.SetTextForeground(wx.Colour(150, 150, 150))
-        font = wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL)
-        dc.SetFont(font)
+        dc.SetTextForeground(_PLACEHOLDER_TEXT)
+        # Was a hard-coded 12pt wx.Font -- off the ladder entirely, and 20%
+        # larger than the app's `body`. dc.SetFont() text is unreachable by
+        # font inheritance, which is exactly what type_font() is for.
+        dc.SetFont(type_font("body"))
 
         text_width, text_height = dc.GetTextExtent(text)
         text_x = (self.image_width - text_width) // 2

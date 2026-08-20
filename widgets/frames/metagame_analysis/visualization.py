@@ -1,4 +1,9 @@
-"""Pie-chart and changes-panel rendering for the metagame analysis viewer."""
+"""Share-chart and changes-panel rendering for the metagame analysis viewer.
+
+The share chart was a matplotlib pie until phase 5. It is now a sorted horizontal
+bar chart drawn by :mod:`widgets.charts`, the same renderer the deck stats panel
+uses, so the app has one charting stack instead of two.
+"""
 
 from __future__ import annotations
 
@@ -7,9 +12,8 @@ from typing import Any
 
 import wx.html
 from loguru import logger
-from matplotlib.axes import Axes
-from matplotlib.backends.backend_wxagg import FigureCanvasWxAgg as FigureCanvas
-from matplotlib.figure import Figure
+
+from widgets.charts import ChartView, build_bars
 
 
 class MetagameVisualizationMixin:
@@ -21,9 +25,7 @@ class MetagameVisualizationMixin:
     current_data: dict[str, int]
     previous_data: dict[str, int]
     stats_data: dict[str, Any]
-    figure: Figure
-    canvas: FigureCanvas
-    ax: Axes
+    chart: ChartView
     changes_html: wx.html.HtmlWindow
 
     def update_visualization(self) -> None:
@@ -47,80 +49,51 @@ class MetagameVisualizationMixin:
             f"total decks: {sum(self.previous_data.values())}"
         )
 
-        self._draw_pie_chart()
+        self._draw_share_chart()
         self._update_changes_display()
 
-    def _draw_pie_chart(self) -> None:
-        self.ax.clear()
+    def _draw_share_chart(self) -> None:
+        """Render the archetype share as a sorted horizontal bar chart.
 
-        if not self.current_data or sum(self.current_data.values()) == 0:
-            self.ax.axis("off")
-            self.ax.text(
-                0.5,
-                0.5,
-                self._t("metagame.chart.no_data"),
-                ha="center",
-                va="center",
-                color="#b9bfca",
-                fontsize=14,
-            )
-            self.canvas.draw()
-            return
-
+        Everything the pie encoded twice is now encoded once: the share is the bar
+        length, and the number beside it is the exact value. The pie printed the
+        percentage inside the wedge *and* repeated it in the leader label, drew
+        both in a light grey that measured 1.10:1 against the pastel fills, and
+        gave a zero-share archetype a zero-angle wedge with a full leader label —
+        which is why every capture of it has a pile of overlapping "(0.0%)"
+        strings stacked at one o'clock.
+        """
         percentages = self._calculate_percentages(self.current_data)
-        sorted_archetypes = sorted(percentages.items(), key=lambda x: x[1], reverse=True)
-
-        top_archetypes = sorted_archetypes[:10]
-        other_pct = sum(pct for _, pct in sorted_archetypes[10:])
-
-        labels = [f"{arch} ({pct:.1f}%)" for arch, pct in top_archetypes]
-        sizes = [pct for _, pct in top_archetypes]
-
-        if other_pct > 0:
-            labels.append(f"Other ({other_pct:.1f}%)")
-            sizes.append(other_pct)
-
-        colors = [
-            "#FF6B6B",
-            "#4ECDC4",
-            "#45B7D1",
-            "#FFA07A",
-            "#98D8C8",
-            "#F7DC6F",
-            "#BB8FCE",
-            "#85C1E2",
-            "#F8B88B",
-            "#ABEBC6",
-            "#D5DBDB",
-        ]
-
-        self.ax.pie(
-            sizes,
-            labels=labels,
-            colors=colors[: len(sizes)],
-            startangle=90,
-            autopct="%1.1f%%",
-            pctdistance=0.72,
-            labeldistance=1.02,
-            textprops={"color": "#ecececec", "fontsize": 7},
+        bars = build_bars(
+            list(percentages.items()),
+            other_label=self._t("metagame.chart.other"),
+        )
+        self.chart.set_chart(
+            title=self._t("metagame.chart.title", format=self.current_format.title()),
+            subtitle=self._period_description(),
+            bars=bars,
+            empty_text=self._t("metagame.chart.no_data"),
         )
 
-        self.ax.axis("equal")
-        if self.base_day_offset == 0:
-            period_desc = self._t("metagame.period.last_days", count=self.current_days)
-        else:
-            end_day = self.base_day_offset
-            start_day = self.base_day_offset + self.current_days - 1
-            if start_day == end_day:
-                period_desc = self._t("metagame.period.days_ago", count=end_day)
-            else:
-                period_desc = self._t(
-                    "metagame.period.range_days_ago", start=start_day, end=end_day
-                )
-        title = f"{self.current_format.title()} Metagame ({period_desc})"
-        self.ax.set_title(title, color="#ecececec", fontsize=12, pad=20)
+    def _period_description(self) -> str:
+        """The human-readable window this chart covers.
 
-        self.canvas.draw()
+        Split out of the title because the title named the format and the period
+        in one string, which made "Modern Metagame (Last 1 day(s))" — the
+        programmer plural leaking to the user — impossible to fix without also
+        re-composing the format name.
+        """
+        if self.base_day_offset == 0:
+            if self.current_days == 1:
+                return self._t("metagame.period.last_day")
+            return self._t("metagame.period.last_days", count=self.current_days)
+        end_day = self.base_day_offset
+        start_day = self.base_day_offset + self.current_days - 1
+        if start_day == end_day:
+            if end_day == 1:
+                return self._t("metagame.period.day_ago")
+            return self._t("metagame.period.days_ago", count=end_day)
+        return self._t("metagame.period.range_days_ago", start=start_day, end=end_day)
 
     def _update_changes_display(self) -> None:
         if not self.current_data or not self.previous_data:
@@ -160,10 +133,12 @@ class MetagameVisualizationMixin:
 
         prev_start = self.base_day_offset + self.current_days
         prev_end = self.base_day_offset + self.current_days * 2 - 1
-        if prev_start == prev_end:
-            prev_desc = self._t("metagame.period.days_ago", count=prev_start)
-        else:
+        if prev_start != prev_end:
             prev_desc = self._t("metagame.period.range_days_ago", start=prev_end, end=prev_start)
+        elif prev_start == 1:
+            prev_desc = self._t("metagame.period.day_ago")
+        else:
+            prev_desc = self._t("metagame.period.days_ago", count=prev_start)
 
         cards: list[str] = []
         for archetype, change in sorted_changes[:15]:

@@ -7,14 +7,13 @@ import re
 import wx
 
 from utils.constants import (
-    DARK_ALT,
     DARK_BG,
-    LIGHT_TEXT,
     SPACE_SM,
     TIMER_ALERT_DEFAULT_THRESHOLD_VALUE,
     TIMER_ALERT_REMOVE_BUTTON_SIZE,
     TIMER_ALERT_THRESHOLD_INPUT_SIZE,
 )
+from widgets.input_frame import create_text_input
 from widgets.stylize import stylize_button
 
 # Built-in Windows sounds (always available)
@@ -39,21 +38,19 @@ class ThresholdPanel(wx.Panel):
         self.SetSizer(sizer)
 
         # MM:SS input
-        self.time_input = wx.TextCtrl(
-            self, size=TIMER_ALERT_THRESHOLD_INPUT_SIZE, value=TIMER_ALERT_DEFAULT_THRESHOLD_VALUE
+        self._time_field = create_text_input(
+            self,
+            size=TIMER_ALERT_THRESHOLD_INPUT_SIZE,
+            value=TIMER_ALERT_DEFAULT_THRESHOLD_VALUE,
         )
-        self._stylize_entry(self.time_input)
-        sizer.Add(self.time_input, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, SPACE_SM)
+        self.time_input = self._time_field.ctrl
+        sizer.Add(self._time_field, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, SPACE_SM)
 
         # Remove button
         self.remove_btn = wx.Button(self, label="✕", size=TIMER_ALERT_REMOVE_BUTTON_SIZE)
         self._stylize_remove_button(self.remove_btn)
         self.remove_btn.Bind(wx.EVT_BUTTON, self._on_remove)
         sizer.Add(self.remove_btn, 0, wx.ALIGN_CENTER_VERTICAL)
-
-    def _stylize_entry(self, entry: wx.TextCtrl) -> None:
-        entry.SetBackgroundColour(DARK_ALT)
-        entry.SetForegroundColour(LIGHT_TEXT)
 
     def _stylize_remove_button(self, button: wx.Button) -> None:
         """The one button phase 2's sweep missed.
@@ -77,5 +74,13 @@ class ThresholdPanel(wx.Panel):
         return int(minutes) * 60 + int(seconds)
 
     def set_enabled(self, enabled: bool) -> None:
-        self.time_input.Enable(enabled)
+        """Grey the row out while the timer owns it.
+
+        ``EnableInput`` rather than ``time_input.Enable``: phase 6c measured
+        that a disabled ``wx.TextCtrl`` on wxMSW discards its background colour
+        and paints ``#F0F0F0``, with no route back to it -- so every time the
+        timer started, this field became a light block on a dark window. See
+        :mod:`widgets.input_frame`.
+        """
+        self._time_field.EnableInput(enabled)
         self.remove_btn.Enable(enabled)

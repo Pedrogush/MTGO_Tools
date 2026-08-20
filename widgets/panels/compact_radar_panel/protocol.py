@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Protocol
 
 import wx
 
+from widgets.empty_state import EmptyState
 from widgets.panels.compact_radar_panel.properties import RadarViewMode
 
 if TYPE_CHECKING:
@@ -21,3 +22,4 @@ class CompactRadarPanelProto(Protocol):
     view_toggle_btn: wx.Button
     status_label: wx.StaticText
     card_list: wx.ListBox
+    empty_state: EmptyState

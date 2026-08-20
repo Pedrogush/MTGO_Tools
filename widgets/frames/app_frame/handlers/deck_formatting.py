@@ -9,6 +9,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from utils.constants.theme import SURFACE_PANEL, TEXT_PRIMARY, to_hex
 from widgets.panels.deck_research_panel.results_filter import (
     _classify_event_type,
     _normalize_date,
@@ -68,7 +69,7 @@ def simple_summary_html(text: str) -> str:
     escaped = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
     escaped = escaped.replace("\n", "<br>")
     return (
-        '<html><body bgcolor="#22272E" text="#ECECEC">'
+        f'<html><body bgcolor="{to_hex(SURFACE_PANEL)}" text="{to_hex(TEXT_PRIMARY)}">'
         f'<font size="2">{escaped}</font>'
         "</body></html>"
     )

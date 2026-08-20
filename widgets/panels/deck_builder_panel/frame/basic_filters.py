@@ -13,8 +13,10 @@ from utils.constants import (
 )
 from widgets.buttons.mana_button import create_mana_button
 from widgets.checkbox import DarkCheckBox
+from widgets.input_frame import create_text_input
+from widgets.mode_switch import ModeSwitch
 from widgets.panels.mana_rich_text_ctrl import ManaSymbolRichCtrl
-from widgets.stylize import stylize_button, stylize_checkbox, stylize_label, stylize_textctrl
+from widgets.stylize import stylize_button, stylize_checkbox, stylize_label
 
 if TYPE_CHECKING:
     from widgets.panels.deck_builder_panel.protocol import DeckBuilderPanelProto
@@ -32,12 +34,24 @@ class BasicFiltersBuilderMixin(_Base):
     """
 
     def _build_header(self, parent_sizer: wx.Sizer) -> None:
-        back_btn = wx.Button(self, label=self._t("builder.back_button"))
-        # F2: a full-width saturated bar reads as a section header, not a switch.
-        stylize_button(back_btn, kind="secondary")
-        back_btn.SetToolTip(self._t("builder.back_button.tooltip"))
-        back_btn.Bind(wx.EVT_BUTTON, lambda _evt: self._on_back_clicked())
-        parent_sizer.Add(back_btn, 0, wx.EXPAND | wx.ALL, SPACE_SM)
+        """F2: the same mode switch the research panel carries, in the same place.
+
+        It was a full-width ``wx.Button`` labelled "Deck Research" — again the
+        mode you were *not* in — so the two panels' switches were two different
+        strings in the same position meaning opposite things. One control, one
+        position, one lit chip.
+        """
+        self.mode_switch = ModeSwitch(
+            self,
+            modes=(
+                ("research", self._t("app.label.left_panel.research")),
+                ("builder", self._t("app.label.left_panel.builder")),
+            ),
+            current="builder",
+            on_select=lambda _value: self._on_back_clicked(),
+            tooltips={"research": self._t("builder.back_button.tooltip")},
+        )
+        parent_sizer.Add(self.mode_switch, 0, wx.ALL, SPACE_SM)
 
         info = wx.StaticText(self, label=self._t("builder.info"))
         stylize_label(info, subtle=True, level="body")
@@ -48,13 +62,17 @@ class BasicFiltersBuilderMixin(_Base):
         lbl = wx.StaticText(self, label=self._t("builder.field.card_name"))
         stylize_label(lbl, subtle=True, level="body")
         parent_sizer.Add(lbl, 0, wx.LEFT | wx.RIGHT, SPACE_SM)
-        name_ctrl = wx.TextCtrl(self)
-        stylize_textctrl(name_ctrl)
+        name_field = create_text_input(self)
+        name_ctrl = name_field.ctrl
         name_ctrl.SetHint(self._t("builder.hint.card_name"))
         name_ctrl.SetToolTip("Filter cards by name")
         name_ctrl.Bind(wx.EVT_TEXT, self._on_filters_changed)
         self.inputs["name"] = name_ctrl
-        parent_sizer.Add(name_ctrl, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, SPACE_XS)
+        # A1: LEFT/RIGHT is the form gutter, so the field lines up with its
+        # label; the row gap stays SPACE_XS via the spacer, because a sizer
+        # item has a single border value for every side it is given.
+        parent_sizer.Add(name_field, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, SPACE_SM)
+        parent_sizer.AddSpacer(SPACE_XS)
 
         # --- Mana Cost (always visible) ---
         lbl = wx.StaticText(self, label=self._t("builder.field.mana_cost"))
@@ -75,25 +93,34 @@ class BasicFiltersBuilderMixin(_Base):
         )
         mana_ctrl.Bind(wx.EVT_TEXT, self._on_filters_changed)
         self.inputs["mana"] = mana_ctrl
-        parent_sizer.Add(mana_ctrl, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, SPACE_XS)
+        # A1: LEFT/RIGHT is the form gutter, so the field lines up with its
+        # label; the row gap stays SPACE_XS via the spacer, because a sizer
+        # item has a single border value for every side it is given.
+        parent_sizer.Add(mana_ctrl, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, SPACE_SM)
+        parent_sizer.AddSpacer(SPACE_XS)
 
-        # Exact match checkbox
-        match_row = wx.BoxSizer(wx.HORIZONTAL)
-        match_label = wx.StaticText(self, label=self._t("builder.label.match"))
-        stylize_label(match_label, subtle=True, level="body")
-        match_row.Add(match_label, 0, wx.RIGHT, SPACE_SM)
+        # Exact match checkbox.
+        #
+        # G3: a bare "Match" StaticText used to sit to the left of this checkbox.
+        # The plan read it as labelling the *mana keyboard row below it*; it
+        # actually read as a second label for a control that already carries one
+        # ("Match" + "Exact symbols" for one checkbox). Either way it named
+        # nothing the reader could point at, so the word moved into the
+        # checkbox's own label and the orphan is gone.
         exact_cb = DarkCheckBox(self, label=self._t("builder.check.exact_symbols"))
         stylize_checkbox(exact_cb, surface="panel")
         exact_cb.SetToolTip("When checked, match the exact mana symbols (no extras allowed)")
-        match_row.Add(exact_cb, 0)
         self.mana_exact_cb = exact_cb
         exact_cb.Bind(wx.EVT_CHECKBOX, self._on_filters_changed)
-        match_row.AddStretchSpacer(1)
-        parent_sizer.Add(match_row, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, SPACE_XS)
+        parent_sizer.Add(exact_cb, 0, wx.LEFT | wx.RIGHT, SPACE_SM)
+        parent_sizer.AddSpacer(SPACE_XS)
 
         # Mana symbol keyboard
+        # A4: this row and the "+ Advanced Filters" button below it were the only
+        # two centred rows in an otherwise left-aligned column -- three
+        # consecutive rows, three alignments. Both are left-aligned now, on the
+        # same form gutter as every label and field.
         keyboard_row = wx.BoxSizer(wx.HORIZONTAL)
-        keyboard_row.AddStretchSpacer(1)
         mana_btn_height = 0
         for token in ["W", "U", "B", "R", "G", "C", "X"]:
             btn = create_mana_button(self, token, self._append_mana_symbol, self.mana_icons)
@@ -112,9 +139,6 @@ class BasicFiltersBuilderMixin(_Base):
         all_btn.Bind(wx.EVT_BUTTON, lambda _evt: self._open_mana_keyboard())
         keyboard_row.Add(all_btn, 0, wx.ALL, SPACE_XS)
         keyboard_row.AddStretchSpacer(1)
-        parent_sizer.Add(
-            keyboard_row,
-            0,
-            wx.ALIGN_CENTER_HORIZONTAL | wx.LEFT | wx.RIGHT | wx.BOTTOM,
-            SPACE_XS,
-        )
+        # The buttons carry their own SPACE_XS margin, so SPACE_XS here puts the
+        # first glyph's left edge on the SPACE_SM form gutter.
+        parent_sizer.Add(keyboard_row, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, SPACE_XS)

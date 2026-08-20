@@ -2,8 +2,11 @@
 
 The widget-level helpers delegate to :mod:`widgets.stylize` so the timer window
 picks up the phase-1 native-control theming (dark dropdowns, dark checkbox
-glyphs, dark spin arrows) instead of quietly re-implementing an older subset of
-it. The button helpers are now thin wrappers over ``stylize_button`` as well; they
+glyphs) instead of quietly re-implementing an older subset of it. The spin
+controls no longer need a helper at all: ``widgets.spin_ctrl.DarkSpinCtrl``
+owns its own rendering, arrows included.
+
+The button helpers are now thin wrappers over ``stylize_button`` as well; they
 stay as methods only because the section builders call them through ``self``.
 """
 
@@ -17,7 +20,6 @@ from widgets.stylize import (
     stylize_button,
     stylize_checkbox,
     stylize_choice,
-    stylize_spinctrl,
 )
 
 
@@ -36,9 +38,6 @@ class StylingMixin:
 
     def _stylize_choice(self, choice: wx.Choice) -> None:
         stylize_choice(choice)
-
-    def _stylize_spin(self, ctrl: wx.SpinCtrl) -> None:
-        stylize_spinctrl(ctrl)
 
     def _stylize_checkbox(self, ctrl: DarkCheckBox) -> None:
         stylize_checkbox(ctrl)

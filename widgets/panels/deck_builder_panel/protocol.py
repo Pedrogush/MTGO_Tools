@@ -9,6 +9,7 @@ import wx
 
 from widgets.checkbox import DarkCheckBox
 from widgets.mana_icon_factory import ManaIconFactory
+from widgets.mode_switch import ModeSwitch
 
 if TYPE_CHECKING:
     from services.radar_service import RadarData
@@ -22,6 +23,7 @@ class DeckBuilderPanelProto(Protocol):
     mana_icons: ManaIconFactory
 
     _on_switch_to_research: Callable[[], None]
+    mode_switch: ModeSwitch
     _on_ensure_card_data: Callable[[], None]
     _open_mana_keyboard: Callable[[], None]
     _on_search_callback: Callable[[], None]
@@ -41,6 +43,8 @@ class DeckBuilderPanelProto(Protocol):
     color_mode_choice: wx.Choice | None
     text_mode_choice: wx.Choice | None
     results_ctrl: Any
+    results_empty_state: Any
+    _clear_filters_btn: wx.Button
     status_label: wx.StaticText | None
     _add_main_btn: wx.Button | None
     _add_side_btn: wx.Button | None
@@ -58,6 +62,7 @@ class DeckBuilderPanelProto(Protocol):
     radar_zone_choice: wx.Choice
 
     def _t(self, key: str, **kwargs: object) -> str: ...
+    def refit_scroll(self) -> None: ...
     def get_filters(self) -> dict[str, Any]: ...
     def get_result_at_index(self, idx: int) -> dict[str, Any] | None: ...
     def get_selected_result(self) -> dict[str, Any] | None: ...

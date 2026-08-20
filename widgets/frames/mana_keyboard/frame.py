@@ -7,6 +7,7 @@ from collections.abc import Callable
 import wx
 
 from utils.constants import DARK_BG, FULL_MANA_SYMBOLS, LIGHT_TEXT, SPACE_SM, SPACE_XS
+from utils.i18n import t
 from widgets.mana_icon_factory import ManaIconFactory, type_global_mana_symbol
 from widgets.stylize import init_top_level_window
 
@@ -20,7 +21,7 @@ class ManaKeyboardFrame(wx.Frame):
     ) -> None:
         super().__init__(
             parent,
-            title="Mana Keyboard",
+            title=t("window.title.mana_keyboard"),
             size=(620, 330),
             style=wx.CAPTION | wx.CLOSE_BOX | wx.FRAME_TOOL_WINDOW | wx.STAY_ON_TOP,
         )

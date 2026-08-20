@@ -17,7 +17,13 @@ from utils.constants import theme as T
 
 wx = pytest.importorskip("wx")
 
-from widgets.notebook import DEFAULT_AGW_STYLE, make_flat_notebook  # noqa: E402
+import wx.lib.agw.flatnotebook as fnb  # noqa: E402
+
+from widgets.notebook import (  # noqa: E402
+    DEFAULT_AGW_STYLE,
+    _ThemedTabRenderer,
+    make_flat_notebook,
+)
 
 
 @pytest.fixture(scope="module")
@@ -65,8 +71,6 @@ def test_pages_can_be_added(frame: object) -> None:
 
 def test_a_caller_can_add_to_the_default_style(frame: object) -> None:
     """The deck workspace wants FNB_SMART_TABS; nothing else does."""
-    import wx.lib.agw.flatnotebook as fnb
-
     notebook = make_flat_notebook(frame, agw_style=DEFAULT_AGW_STYLE | fnb.FNB_SMART_TABS)
     assert notebook.GetAGWWindowStyleFlag() & fnb.FNB_SMART_TABS
 
@@ -83,3 +87,37 @@ def test_no_native_notebook_survives_in_the_widget_tree() -> None:
         "wx.Notebook renders a light tab strip that no colour call can reach; "
         f"use widgets.notebook.make_flat_notebook instead. Found in: {offenders}"
     )
+
+
+def test_the_themed_renderer_is_the_one_the_strip_actually_uses(frame: object) -> None:
+    """Phase 6: the three colours FlatNotebook exposes no setter for.
+
+    ``GetRenderer`` resolves the style to an entry in a per-notebook
+    ``FNBRendererMgr``, so installing on ``-1`` is only correct as long as the
+    app's style bits do not select one of the named renderers.
+    """
+    notebook = make_flat_notebook(frame, agw_style=DEFAULT_AGW_STYLE | fnb.FNB_SMART_TABS)
+    renderer = notebook._pages._mgr.GetRenderer(notebook.GetAGWWindowStyleFlag())
+    assert isinstance(renderer, _ThemedTabRenderer)
+
+
+def test_the_strip_border_the_library_would_have_drawn_is_white(frame: object) -> None:
+    """The reason :class:`_ThemedTabRenderer` exists, pinned as an assertion.
+
+    ``PageContainer.GetSingleLineBorderColour`` returns a hard-coded ``wx.WHITE``
+    for every style except ``FNB_FANCY_TABS`` (which phase 1 removed), and
+    ``DrawTabsLine`` fills two full-width rectangles with it. If a future wxPython
+    ever makes this settable, this test fails and the override can be simplified.
+    """
+    notebook = make_flat_notebook(frame)
+    assert _rgb(notebook._pages.GetSingleLineBorderColour()) == (255, 255, 255)
+
+
+def test_the_tab_container_background_is_dark(frame: object) -> None:
+    """``DrawTabs`` strokes the strip's outline in the *container's* background.
+
+    Left at the wx default that is #F0F0F0, which is how a fully "themed"
+    notebook still came framed in a near-white hairline.
+    """
+    notebook = make_flat_notebook(frame)
+    assert _rgb(notebook._pages.GetBackgroundColour()) == T.SURFACE_PANEL

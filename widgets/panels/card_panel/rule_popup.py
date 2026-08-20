@@ -14,6 +14,8 @@ import wx
 import wx.html
 
 from utils.constants import DARK_PANEL, SPACE_XS
+from utils.i18n import t
+from widgets.panels.card_panel.html_renderer import _BODY_TEXT, _PANEL_BG
 from widgets.stylize import init_top_level_window
 
 
@@ -23,7 +25,7 @@ class RulePopupFrame(wx.Frame):
     def __init__(self, parent: wx.Window | None = None) -> None:
         super().__init__(
             parent,
-            title="Comprehensive Rules",
+            title=t("window.title.rules_browser"),
             size=(520, 360),
             style=wx.DEFAULT_FRAME_STYLE | wx.FRAME_FLOAT_ON_PARENT,
         )
@@ -64,8 +66,8 @@ def _render_rule_html(*, title: str, rule_id: str, body: str) -> str:
     """Render the rule body as HTML 3.2 — wx.html doesn't grok modern CSS."""
     safe_body = escape(body).replace("\n", "<br>")
     return (
-        '<html><body bgcolor="#22272E" text="#E6EDF3">'
-        f'<h3><font color="#E6EDF3">{escape(rule_id)}. {escape(title)}</font></h3>'
+        f'<html><body bgcolor="{_PANEL_BG}" text="{_BODY_TEXT}">'
+        f'<h3><font color="{_BODY_TEXT}">{escape(rule_id)}. {escape(title)}</font></h3>'
         f"<hr>"
         f'<font size="-1">{safe_body}</font>'
         "</body></html>"

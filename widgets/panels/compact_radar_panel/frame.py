@@ -12,11 +12,13 @@ import wx
 
 from utils.constants import DARK_BG, DARK_PANEL, LIGHT_TEXT, SPACE_XS, SUBDUED_TEXT
 from utils.constants.ui_layout import COMPACT_RADAR_TOGGLE_BTN_SIZE
+from widgets.empty_state import EmptyState
 from widgets.panels.compact_radar_panel.handlers import CompactRadarHandlersMixin
 from widgets.panels.compact_radar_panel.properties import (
     CompactRadarPropertiesMixin,
     RadarViewMode,
 )
+from widgets.stylize import apply_type_level, strip_native_client_edge, stylize_button
 
 if TYPE_CHECKING:
     from services.radar_service import RadarData
@@ -45,16 +47,21 @@ class CompactRadarPanel(CompactRadarHandlersMixin, CompactRadarPropertiesMixin, 
 
         self.header_label = wx.StaticText(self, label="Radar: Loading...")
         self.header_label.SetForegroundColour(LIGHT_TEXT)
-        font = self.header_label.GetFont()
-        font = font.Bold()
-        self.header_label.SetFont(font)
+        # It names the pane below it, so it is a heading -- which is what the
+        # ladder's "heading" level is. Hand-rolled ``font.Bold()`` left it at
+        # the base size, so the tracker's two panes were captioned a full step
+        # smaller than "Hypergeometric Calculator" beside them.
+        apply_type_level(self.header_label, "heading")
         header_sizer.Add(self.header_label, 1, wx.ALIGN_CENTER_VERTICAL)
 
         self.view_toggle_btn = wx.Button(
             self, label="Full Decklist", size=COMPACT_RADAR_TOGGLE_BTN_SIZE
         )
-        self.view_toggle_btn.SetBackgroundColour(DARK_BG)
-        self.view_toggle_btn.SetForegroundColour(LIGHT_TEXT)
+        # Was a hand-set DARK_BG fill on a DARK_PANEL surface -- a chip
+        # *darker* than its own background -- inside wxMSW's 2px #ADADAD/#E1E1E1
+        # frame, which is what actually read. ``ghost`` on ``panel`` steps the
+        # neutral up instead of down; the frame goes with stylize_button.
+        stylize_button(self.view_toggle_btn, kind="ghost", surface="panel")
         self.view_toggle_btn.Bind(wx.EVT_BUTTON, self._on_toggle_view)
         self.view_toggle_btn.Hide()
         header_sizer.Add(self.view_toggle_btn, 0, wx.LEFT, SPACE_XS)
@@ -68,4 +75,19 @@ class CompactRadarPanel(CompactRadarHandlersMixin, CompactRadarPropertiesMixin, 
         self.card_list = wx.ListBox(self, style=wx.LB_SINGLE)
         self.card_list.SetBackgroundColour(DARK_BG)
         self.card_list.SetForegroundColour(LIGHT_TEXT)
+        strip_native_client_edge(self.card_list)
         sizer.Add(self.card_list, 1, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, SPACE_XS)
+
+        # S4: with no opponent detected this pane was ~325px of empty white-
+        # bordered ListBox under a one-line status label -- half of the tracker's
+        # height given to a rectangle that said nothing. The list is hidden while
+        # it is empty and the app's one empty-state block takes its place, so the
+        # message sits in the middle of the space it is explaining.
+        self.empty_state = EmptyState(
+            self,
+            message="Waiting for opponent\u2026",
+            hint="The archetype radar fills in as soon as a match is detected.",
+            surface="panel",
+        )
+        sizer.Add(self.empty_state, 1, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, SPACE_XS)
+        self.empty_state.Hide()

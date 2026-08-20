@@ -11,6 +11,5 @@ pillow==12.1.0
 pytesseract==0.3.13
 pynput==1.8.1
 pythonnet==3.0.5
-matplotlib==3.10.8
 numpy>=1.26
 lxml==6.0.2

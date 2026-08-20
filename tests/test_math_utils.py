@@ -236,9 +236,9 @@ class TestProbabilityBounds:
         ]
         for pop, k, n, min_x in test_cases:
             prob = hypergeometric_at_least(pop, k, n, min_x)
-            assert 0.0 <= prob <= 1.0, (
-                f"At-least probability out of bounds for ({pop}, {k}, {n}, {min_x})"
-            )
+            assert (
+                0.0 <= prob <= 1.0
+            ), f"At-least probability out of bounds for ({pop}, {k}, {n}, {min_x})"
 
     def test_sum_of_all_probabilities_equals_one(self) -> None:
         """Sum of P(X=k) for all valid k should equal 1.0."""

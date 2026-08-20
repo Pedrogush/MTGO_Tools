@@ -21,7 +21,13 @@ from typing import TYPE_CHECKING, Any
 import wx
 
 from utils.constants import SPACE_SM
-from widgets.stylize import apply_type_level, init_top_level_window
+from widgets.stylize import (
+    apply_type_level,
+    init_top_level_window,
+    stylize_button,
+    stylize_label,
+    surface_colour,
+)
 
 if TYPE_CHECKING:
     from widgets.frames.app_frame import AppFrame
@@ -56,6 +62,7 @@ class _GuideRecordBar(wx.MiniFrame):
         )
         init_top_level_window(self)
         panel = wx.Panel(self)
+        panel.SetBackgroundColour(surface_colour("base"))
         sizer = wx.BoxSizer(wx.VERTICAL)
         panel.SetSizer(sizer)
 
@@ -64,6 +71,7 @@ class _GuideRecordBar(wx.MiniFrame):
         sizer.Add(self.progress_label, 0, wx.ALL, SPACE_SM)
 
         instructions = wx.StaticText(panel, label=t("guide.record.instructions"))
+        stylize_label(instructions, level="body", tone="secondary")
         sizer.Add(instructions, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, SPACE_SM)
 
         row = wx.BoxSizer(wx.HORIZONTAL)
@@ -74,6 +82,8 @@ class _GuideRecordBar(wx.MiniFrame):
             ("guide.record.cancel", on_cancel),
         ):
             btn = wx.Button(panel, label=t(label))
+            # "Next" is the walk's one forward action; the rest are exits.
+            stylize_button(btn, kind="primary" if label.endswith("next") else "secondary")
             btn.Bind(wx.EVT_BUTTON, lambda _evt, h=handler: h())
             row.Add(btn, 0, wx.RIGHT, SPACE_SM)
         sizer.Add(row, 0, wx.ALL, SPACE_SM)

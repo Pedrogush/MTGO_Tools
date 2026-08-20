@@ -25,7 +25,9 @@ from utils.constants import (
     SPACE_XS,
     SUBDUED_TEXT,
 )
+from utils.i18n import translate as _i18n_translate
 from widgets.checkbox import DarkCheckBox
+from widgets.empty_state import EmptyState
 from widgets.mana_icon_factory import ManaIconFactory
 from widgets.panels.card_image_display import CardImageDisplay
 from widgets.panels.card_inspector_panel.handlers import CardInspectorPanelHandlersMixin
@@ -51,10 +53,12 @@ class CardInspectorPanel(
         controller: Any,
         card_manager: CardDataManager | None = None,
         mana_icons: ManaIconFactory | None = None,
+        locale: str | None = None,
     ):
         super().__init__(parent)
         self.SetBackgroundColour(DARK_PANEL)
 
+        self._locale = locale
         self.controller = controller
         self.card_manager = card_manager
         self.mana_icons = mana_icons or ManaIconFactory()
@@ -90,9 +94,22 @@ class CardInspectorPanel(
         self._build_ui()
         self.reset()
 
+    def _t(self, key: str) -> str:
+        return _i18n_translate(self._locale, key)
+
     def _build_ui(self) -> None:
         sizer = wx.BoxSizer(wx.VERTICAL)
         self.SetSizer(sizer)
+
+        # C5: with nothing selected this panel used to show "Select a card to
+        # inspect." flush top-left inside a card-sized bordered text field --
+        # i.e. as if it were the card's oracle text -- while the Card panel
+        # immediately below rendered the same sentence centred. Same string, two
+        # alignments, two boxes, side by side. The sentence is an empty state, so
+        # it is the empty state component now, and the placeholder field is
+        # reserved for its real job: a *selected* card whose art is missing.
+        self.empty_state = EmptyState(self, message=self._t("card_panel.empty"), surface="panel")
+        sizer.Add(self.empty_state, 1, wx.EXPAND | wx.ALL, SPACE_SM)
 
         content = wx.BoxSizer(wx.HORIZONTAL)
         sizer.Add(content, 1, wx.EXPAND | wx.ALL, SPACE_SM)
@@ -102,7 +119,17 @@ class CardInspectorPanel(
         self.image_column_panel.SetBackgroundColour(DARK_PANEL)
         image_column = wx.BoxSizer(wx.VERTICAL)
         self.image_column_panel.SetSizer(image_column)
-        content.Add(self.image_column_panel, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, SPACE_MD)
+        # No right border here, and the details panel beside it carries the gap
+        # instead (wx.LEFT below). The gap only exists to separate the art from
+        # the details fallback -- which is hidden in every normal state, since it
+        # is what shows when a card has no image -- so putting it on the image
+        # column reserved 16px against nothing, permanently. Phase 8 measured
+        # the cost: this sizer wanted 300px inside the 284 that
+        # _apply_fixed_sizing pins the column at, and a wxBoxSizer border is not
+        # negotiable, so the *image* gave up the 16 and the card art was clipped
+        # by that much whenever a card was selected. A hidden item's border is
+        # skipped with the item, so the same gap on the other side is free.
+        content.Add(self.image_column_panel, 0, wx.ALIGN_CENTER_VERTICAL)
 
         # Card image display
         self.card_image_display = CardImageDisplay(
@@ -189,7 +216,15 @@ class CardInspectorPanel(
         save_sizer.Add(self.autosave_checkbox, 0, wx.ALIGN_CENTER_VERTICAL)
 
         self.save_art_btn = wx.Button(self.save_panel, label="Save art", style=wx.BU_EXACTFIT)
-        stylize_button(self.save_art_btn, kind="secondary")
+        # F6: the review read this as "a permanent focus ring". It was not a
+        # focus ring -- in `05_deck_tables_loaded.png` the button is a solid
+        # DARK_ACCENT fill inside wxMSW's 2px light frame, which is what every
+        # button looked like before phase 2. Phase 2 already retired both. What
+        # was still wrong is the missing `surface`: this button sits on
+        # DARK_PANEL, and stylize_button's neutral ladder steps the fill off the
+        # surface it is told about, so declaring "base" put it one rung away
+        # from where it sits.
+        stylize_button(self.save_art_btn, kind="secondary", surface="panel")
         self.save_art_btn.SetToolTip("Save the current printing as this card's art")
         self.save_art_btn.Bind(wx.EVT_BUTTON, self._on_save_printing)
         save_sizer.Add(self.save_art_btn, 0, wx.LEFT | wx.ALIGN_CENTER_VERTICAL, SPACE_SM)
@@ -202,7 +237,7 @@ class CardInspectorPanel(
         self.details_panel.SetBackgroundColour(DARK_PANEL)
         details = wx.BoxSizer(wx.VERTICAL)
         self.details_panel.SetSizer(details)
-        content.Add(self.details_panel, 1, wx.EXPAND)
+        content.Add(self.details_panel, 1, wx.EXPAND | wx.LEFT, SPACE_MD)
 
         # Card name
         self.name_label = wx.StaticText(self.details_panel, label="Select a card to inspect.")

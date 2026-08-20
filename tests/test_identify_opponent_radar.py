@@ -410,20 +410,58 @@ class TestClearRadarDisplay:
 class _FakeLabel:
     def __init__(self) -> None:
         self.label = ""
+        self.shown = True
 
     def SetLabel(self, text: str) -> None:
         self.label = text
+
+    def Show(self) -> None:
+        self.shown = True
+
+    def Hide(self) -> None:
+        self.shown = False
 
 
 class _FakeList:
     def __init__(self) -> None:
         self.lines: list[str] = []
+        self.shown = True
 
     def Append(self, line: str) -> None:
         self.lines.append(line)
 
     def Clear(self) -> None:
         self.lines = []
+
+    def Show(self) -> None:
+        self.shown = True
+
+    def Hide(self) -> None:
+        self.shown = False
+
+
+class _FakeEmptyState:
+    """Stands in for :class:`widgets.empty_state.EmptyState` (phase 6, S4).
+
+    An empty compact pane used to be a white-bordered ListBox with a caption
+    above it; it is now the app's one empty-state block, shown in the list's
+    place.
+    """
+
+    def __init__(self) -> None:
+        self.message = ""
+        self.hint: str | None = None
+        self.shown = False
+
+    def set_message(self, message: str, hint: str | None = None) -> None:
+        self.message = message
+        self.hint = hint
+
+    def Show(self) -> None:
+        self.shown = True
+
+    def Hide(self) -> None:
+        self.shown = False
 
 
 class _FakeButton:
@@ -456,12 +494,17 @@ class _FakePanelHost(CompactRadarHandlersMixin):
         self.status_label = _FakeLabel()
         self.card_list = _FakeList()
         self.view_toggle_btn = _FakeButton()
+        self.empty_state = _FakeEmptyState()
         self._view_mode = view_mode
         self._parent = _FakeParent()
         self.shown = False
+        self.layout_calls = 0
 
     def Show(self) -> None:
         self.shown = True
+
+    def Layout(self) -> None:
+        self.layout_calls += 1
 
     def GetParent(self) -> _FakeParent:
         return self._parent
@@ -485,7 +528,12 @@ class TestCompactRadarSetters:
 
         assert panel.current_radar is None
         assert panel.header_label.label == "Radar: —"
-        assert "Waiting for opponent" in panel.status_label.label
+        # Phase 6 (S4): the "waiting" copy moved off a caption above an empty
+        # bordered list and into the empty-state block that replaces the list.
+        assert "Waiting for opponent" in panel.empty_state.message
+        assert panel.empty_state.shown is True
+        assert panel.card_list.shown is False
+        assert panel.status_label.label == ""
         assert panel.card_list.lines == []
         assert panel.view_toggle_btn.shown is False
         assert panel._parent.layout_calls == 1
@@ -588,6 +636,8 @@ class TestCompactRadarFormatting:
         assert panel.header_label.label == "Radar: UR Murktide"
         assert panel.view_toggle_btn.shown is True
         assert panel.shown is True
+        assert panel.card_list.shown is True
+        assert panel.empty_state.shown is False
         assert any("Murktide Regent" in line for line in panel.card_list.lines)
 
     def test_display_radar_in_full_decklist_mode_uses_full_populator(self):

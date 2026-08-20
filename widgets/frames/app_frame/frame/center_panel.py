@@ -9,10 +9,11 @@ from wx.lib.agw import flatnotebook as fnb
 
 from utils.constants import (
     DARK_PANEL,
-    LIGHT_TEXT,
+    DECK_ZONE_MIN_PANE_HEIGHT,
     SPACE_MD,
     SPACE_SM,
     SPACE_XS,
+    STATUS_LABEL_MIN_WIDTH,
     SUBDUED_TEXT,
 )
 from utils.perf import timed
@@ -21,6 +22,8 @@ from widgets.panels.card_table_panel import CardTablePanel
 from widgets.panels.deck_notes_panel import DeckNotesPanel
 from widgets.panels.deck_stats_panel import DeckStatsPanel
 from widgets.panels.sideboard_guide_panel import SideboardGuidePanel
+from widgets.section import SectionPanel
+from widgets.splitter import DarkSplitter
 
 if TYPE_CHECKING:
     from widgets.frames.app_frame.protocol import AppFrameProto
@@ -43,14 +46,20 @@ class CenterPanelBuilderMixin(_Base):
         return make_flat_notebook(parent, agw_style=DEFAULT_AGW_STYLE | fnb.FNB_SMART_TABS)
 
     @timed
-    def _build_deck_workspace(self, parent: wx.Window) -> wx.StaticBoxSizer:
-        detail_box = wx.StaticBox(parent, label=self._t("app.label.deck_workspace"))
-        detail_box.SetForegroundColour(LIGHT_TEXT)
-        detail_box.SetBackgroundColour(DARK_PANEL)
-        detail_sizer = wx.StaticBoxSizer(detail_box, wx.VERTICAL)
+    def _build_deck_workspace(self, parent: wx.Window) -> SectionPanel:
+        # G2: the review found three levels of container chrome stacked on one
+        # content region -- a StaticBox wrapping a FlatNotebook wrapping a panel
+        # that drew its own border. The innermost border went with phase 5's
+        # table rebuild; this drops the heading, because the notebook's own tab
+        # strip already names every region inside it and "Deck Workspace" above
+        # "Deck Tables | Sideboard Guide | Deck Notes | Deck Stats" was a label
+        # for a label. What is left is one card: a flat fill, a 1px border, and
+        # the tabs.
+        section = SectionPanel(parent, title=None, padding=SPACE_SM)
+        detail_box = section.body
 
         self.deck_tabs = self._create_notebook(detail_box)
-        detail_sizer.Add(self.deck_tabs, 1, wx.EXPAND | wx.ALL, SPACE_SM)
+        section.sizer.Add(self.deck_tabs, 1, wx.EXPAND)
 
         # Mainboard and Sideboard as top-level tabs
         self._build_deck_tables_tab()
@@ -64,12 +73,26 @@ class CenterPanelBuilderMixin(_Base):
         self.deck_tabs.SetMinSize((deck_tabs_width, -1))
         detail_box.SetMinSize((deck_tabs_width + SPACE_MD, -1))
 
-        # Collection status label below the tabs
+        # Collection status label below the tabs.
+        #
+        # F8 ellipsised the same defect in three other windows in phase 4 and
+        # missed this one. Measured at the deck workspace's own floor: the
+        # en-US string wants 389px and the pt-BR one 491px in a 353px panel, so
+        # it has been running off the right edge mid-word ("...to fetch from")
+        # in both locales at every window width below ~1400. All three
+        # ingredients are needed together and none works alone -- the ellipsize
+        # style is only read from the **constructor**, ST_NO_AUTORESIZE stops
+        # SetLabel resizing the control back to its own text, and wx.EXPAND is
+        # what gives it a box narrower than that text to ellipsise into.
         self.collection_status_label = wx.StaticText(
-            detail_box, label=self._t("app.status.collection_not_loaded")
+            detail_box,
+            label=self._t("app.status.collection_not_loaded"),
+            style=wx.ST_ELLIPSIZE_END | wx.ST_NO_AUTORESIZE,
         )
+        self.collection_status_label.SetMinSize((STATUS_LABEL_MIN_WIDTH, -1))
         self.collection_status_label.SetForegroundColour(SUBDUED_TEXT)
-        detail_sizer.Add(self.collection_status_label, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, SPACE_XS)
+        self.collection_status_label.SetBackgroundColour(wx.Colour(*DARK_PANEL))
+        section.sizer.Add(self.collection_status_label, 0, wx.EXPAND | wx.TOP, SPACE_XS)
 
         # Sideboard Guide and Notes tabs
         self.sideboard_guide_panel = SideboardGuidePanel(
@@ -100,17 +123,21 @@ class CenterPanelBuilderMixin(_Base):
         self.deck_notes_panel.SetToolTip(self._t("tabs.tooltip.deck_notes"))
         self.deck_tabs.AddPage(self.deck_notes_panel, self._t("tabs.deck_notes"))
 
-        # Stats panel kept hidden; avoid starting WebView2 just to maintain
-        # the compatibility summary label.
+        # Phase 5: the stats panel is a real tab. It was constructed with
+        # create_webview=False and immediately Hide()n, so a whole package
+        # rendered nothing and the only surviving artefact was summary_label.
+        # DeckStatsPanel picks its own backend (WebView2, else wxHTML), so this
+        # site does not have to know whether the runtime is present.
         self.deck_stats_panel = DeckStatsPanel(
-            detail_box,
+            self.deck_tabs,
             controller=self.controller,
             card_manager=self.controller.card_repo.get_card_manager(),
-            create_webview=False,
+            locale=self.locale,
         )
-        self.deck_stats_panel.Hide()
+        self.deck_stats_panel.SetToolTip(self._t("tabs.tooltip.deck_stats"))
+        self.deck_tabs.AddPage(self.deck_stats_panel, self._t("tabs.deck_stats"))
         self.stats_summary = self.deck_stats_panel.summary_label
-        return detail_sizer
+        return section
 
     def _build_deck_tables_tab(self) -> None:
         """Build the mainboard/sideboard zones as a single vertical split page.
@@ -120,11 +147,12 @@ class CenterPanelBuilderMixin(_Base):
         cards between them, replacing the old one-zone-at-a-time tabs (#781).
         """
         self.zone_notebook = None
-        self.deck_split = wx.SplitterWindow(
-            self.deck_tabs, style=wx.SP_LIVE_UPDATE | wx.SP_3DSASH | wx.SP_NO_XP_THEME
-        )
-        self.deck_split.SetBackgroundColour(DARK_PANEL)
-        self.deck_split.SetMinimumPaneSize(80)
+        # DarkSplitter, not wx.SplitterWindow: the native sash is a 6px
+        # #F0F0F0/#FFFFFF band the full width of the workspace, and no colour
+        # call reaches it. Same style flags, so the saved sash position and the
+        # 7px metrics are unchanged.
+        self.deck_split = DarkSplitter(self.deck_tabs)
+        self.deck_split.SetMinimumPaneSize(DECK_ZONE_MIN_PANE_HEIGHT)
         # Mainboard absorbs more of any extra height on resize.
         self.deck_split.SetSashGravity(0.6)
 

@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any
 import wx
 from loguru import logger
 
-from widgets.panels.card_panel.html_renderer import build_card_html
+from widgets.panels.card_panel.html_renderer import _BODY_TEXT, _PANEL_BG, build_card_html
 from widgets.panels.card_panel.properties import _stats_lookup_names
 from widgets.panels.card_panel.rule_popup import RulePopupFrame
 
@@ -85,7 +85,10 @@ class CardPanelHandlersMixin(_Base):
             )
         except Exception as exc:
             logger.exception(f"Failed to build card HTML: {exc}")
-            html = f'<html><body bgcolor="#22272E" text="#E6EDF3"><p>{empty_text}</p></body></html>'
+            html = (
+                f'<html><body bgcolor="{_PANEL_BG}" text="{_BODY_TEXT}">'
+                f"<p>{empty_text}</p></body></html>"
+            )
         self.oracle_html.SetPage(html)
 
     def _fetch_keyword_lookup(self) -> dict[str, Any]:
@@ -131,12 +134,12 @@ class CardPanelHandlersMixin(_Base):
     def _refresh_stats_tab(self) -> None:
         meta = self._current_meta
         if not meta:
-            self.stats_card_label.SetLabel(self._t("card_panel.stats.no_card"))
+            self.set_flowing_label(self.stats_card_label, self._t("card_panel.stats.no_card"))
             self._set_format_stats(None, None)
             self._set_archetype_stats(None)
         else:
             card_name = str(meta.get("name") or "")
-            self.stats_card_label.SetLabel(card_name)
+            self.set_flowing_label(self.stats_card_label, card_name)
             self._set_format_stats(self._current_format, card_name)
             self._set_archetype_stats(card_name)
         self.stats_panel.Layout()
@@ -144,13 +147,14 @@ class CardPanelHandlersMixin(_Base):
 
     def _set_format_stats(self, format_name: str | None, card_name: str | None) -> None:
         if not format_name:
-            self.stats_format_header.SetLabel(self._t("card_panel.stats.no_format"))
+            self.set_flowing_label(self.stats_format_header, self._t("card_panel.stats.no_format"))
             self.stats_format_total.SetLabel("")
             self.stats_format_avg.SetLabel("")
             return
 
-        self.stats_format_header.SetLabel(
-            self._t("card_panel.stats.format_header", format=format_name)
+        self.set_flowing_label(
+            self.stats_format_header,
+            self._t("card_panel.stats.format_header", format=format_name),
         )
 
         if not card_name:
@@ -193,12 +197,15 @@ class CardPanelHandlersMixin(_Base):
     def _set_archetype_stats(self, card_name: str | None) -> None:
         archetype_name = self._archetype_name()
         if not archetype_name:
-            self.stats_archetype_header.SetLabel(self._t("card_panel.stats.no_archetype"))
+            self.set_flowing_label(
+                self.stats_archetype_header, self._t("card_panel.stats.no_archetype")
+            )
             self._clear_main_side_labels()
             return
 
-        self.stats_archetype_header.SetLabel(
-            self._t("card_panel.stats.archetype_header", archetype=archetype_name)
+        self.set_flowing_label(
+            self.stats_archetype_header,
+            self._t("card_panel.stats.archetype_header", archetype=archetype_name),
         )
 
         if not card_name:

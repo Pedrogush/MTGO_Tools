@@ -15,14 +15,18 @@ if str(_project_root) not in sys.path:
 import wx
 import wx.dataview as dv
 
-from utils.constants import DARK_ALT, DARK_PANEL, LIGHT_TEXT, SPACE_SM
+from utils.constants import DARK_ALT, DARK_BG, LIGHT_TEXT, SPACE_SM
 from utils.i18n import translate
 from widgets.frames.radar.handlers import RadarFrameHandlersMixin, RadarPanelHandlersMixin
 from widgets.frames.radar.properties import RadarFramePropertiesMixin, RadarPanelPropertiesMixin
+from widgets.section import SectionPanel
 from widgets.stylize import (
     apply_type_level,
     init_top_level_window,
+    strip_native_client_edge,
+    stylize_button,
     stylize_choice,
+    stylize_gauge,
     stylize_scrollable,
 )
 
@@ -42,7 +46,11 @@ class RadarPanel(RadarPanelHandlersMixin, RadarPanelPropertiesMixin, wx.Panel):
         locale: str | None = None,
     ):
         super().__init__(parent)
-        self.SetBackgroundColour(DARK_PANEL)
+        # SURFACE_BASE, not SURFACE_PANEL: this window was the only one in the
+        # app whose own surface was the same tone as the cards sitting on it, so
+        # a card had nothing to sit *on*. Now it matches Match History, Timer
+        # Alert and the tracker.
+        self.SetBackgroundColour(DARK_BG)
         self._locale = locale
 
         self.controller = controller
@@ -52,6 +60,27 @@ class RadarPanel(RadarPanelHandlersMixin, RadarPanelPropertiesMixin, wx.Panel):
         self.current_radar: RadarData | None = None
 
         self._build_ui()
+
+    #: ``(key, width, align)`` for both radar lists. Four of the five columns
+    #: hold numbers -- an inclusion percentage, an expected copy count, an
+    #: average and a maximum -- and all five were appended at
+    #: ``DataViewListCtrl``'s left-aligned default, so a column of "12.5" over
+    #: "7.5" over "100.0" could not be compared by digit position. Phase 5
+    #: right-aligned the numeric columns in Top Cards and the deck table view
+    #: and did not reach this window; phase 9 finished it. The header takes the
+    #: same alignment as the data: a right-aligned number under a left-aligned
+    #: heading reads as two columns.
+    RADAR_COLUMNS = (
+        ("radar.col.card", 200, wx.ALIGN_LEFT),
+        ("radar.col.inclusion", 90, wx.ALIGN_RIGHT),
+        ("radar.col.expected", 120, wx.ALIGN_RIGHT),
+        ("radar.col.avg", 90, wx.ALIGN_RIGHT),
+        ("radar.col.max", 60, wx.ALIGN_RIGHT),
+    )
+
+    def _append_radar_columns(self, listing: dv.DataViewListCtrl) -> None:
+        for key, width, align in self.RADAR_COLUMNS:
+            listing.AppendTextColumn(self._t(key), width=width, align=align)
 
     def _build_ui(self) -> None:
         sizer = wx.BoxSizer(wx.VERTICAL)
@@ -66,11 +95,13 @@ class RadarPanel(RadarPanelHandlersMixin, RadarPanelPropertiesMixin, wx.Panel):
         header_sizer.Add(self.archetype_label, 1, wx.ALIGN_CENTER_VERTICAL)
 
         self.export_btn = wx.Button(self, label=self._t("radar.btn.export"))
+        stylize_button(self.export_btn, kind="secondary")
         self.export_btn.Enable(False)
         self.export_btn.Bind(wx.EVT_BUTTON, self._on_export_clicked)
         header_sizer.Add(self.export_btn, 0, wx.LEFT, SPACE_SM)
 
         self.use_search_btn = wx.Button(self, label=self._t("radar.btn.use_search"))
+        stylize_button(self.use_search_btn, kind="secondary")
         self.use_search_btn.Enable(False)
         self.use_search_btn.Bind(wx.EVT_BUTTON, self._on_use_search_clicked)
         header_sizer.Add(self.use_search_btn, 0, wx.LEFT, SPACE_SM)
@@ -82,41 +113,35 @@ class RadarPanel(RadarPanelHandlersMixin, RadarPanelPropertiesMixin, wx.Panel):
         split_sizer = wx.BoxSizer(wx.HORIZONTAL)
         sizer.Add(split_sizer, 1, wx.EXPAND | wx.ALL, SPACE_SM)
 
-        mainboard_box = wx.StaticBox(self, label=self._t("radar.box.mainboard"))
-        mainboard_box.SetForegroundColour(LIGHT_TEXT)
-        mainboard_box_sizer = wx.StaticBoxSizer(mainboard_box, wx.VERTICAL)
-        split_sizer.Add(mainboard_box_sizer, 1, wx.EXPAND | wx.RIGHT, SPACE_SM)
+        mainboard_section = SectionPanel(
+            self, title=self._t("radar.box.mainboard"), outer_surface="base", padding=0
+        )
+        split_sizer.Add(mainboard_section, 1, wx.EXPAND | wx.RIGHT, SPACE_SM)
 
-        self.mainboard_list = dv.DataViewListCtrl(self)
-        self.mainboard_list.AppendTextColumn(self._t("radar.col.card"), width=200)
-        self.mainboard_list.AppendTextColumn(self._t("radar.col.inclusion"), width=90)
-        self.mainboard_list.AppendTextColumn(self._t("radar.col.expected"), width=120)
-        self.mainboard_list.AppendTextColumn(self._t("radar.col.avg"), width=90)
-        self.mainboard_list.AppendTextColumn(self._t("radar.col.max"), width=60)
+        self.mainboard_list = dv.DataViewListCtrl(mainboard_section.body)
+        self._append_radar_columns(self.mainboard_list)
         self.mainboard_list.SetBackgroundColour(DARK_ALT)
         self.mainboard_list.SetForegroundColour(LIGHT_TEXT)
         # After the columns, so the native header child exists to be themed.
         stylize_scrollable(self.mainboard_list)
+        strip_native_client_edge(self.mainboard_list)
         self._bind_tooltip_handlers(self.mainboard_list)
-        mainboard_box_sizer.Add(self.mainboard_list, 1, wx.EXPAND | wx.ALL, SPACE_SM)
+        mainboard_section.sizer.Add(self.mainboard_list, 1, wx.EXPAND)
 
-        sideboard_box = wx.StaticBox(self, label=self._t("radar.box.sideboard"))
-        sideboard_box.SetForegroundColour(LIGHT_TEXT)
-        sideboard_box_sizer = wx.StaticBoxSizer(sideboard_box, wx.VERTICAL)
-        split_sizer.Add(sideboard_box_sizer, 1, wx.EXPAND)
+        sideboard_section = SectionPanel(
+            self, title=self._t("radar.box.sideboard"), outer_surface="base", padding=0
+        )
+        split_sizer.Add(sideboard_section, 1, wx.EXPAND)
 
-        self.sideboard_list = dv.DataViewListCtrl(self)
-        self.sideboard_list.AppendTextColumn(self._t("radar.col.card"), width=200)
-        self.sideboard_list.AppendTextColumn(self._t("radar.col.inclusion"), width=90)
-        self.sideboard_list.AppendTextColumn(self._t("radar.col.expected"), width=120)
-        self.sideboard_list.AppendTextColumn(self._t("radar.col.avg"), width=90)
-        self.sideboard_list.AppendTextColumn(self._t("radar.col.max"), width=60)
+        self.sideboard_list = dv.DataViewListCtrl(sideboard_section.body)
+        self._append_radar_columns(self.sideboard_list)
         self.sideboard_list.SetBackgroundColour(DARK_ALT)
         self.sideboard_list.SetForegroundColour(LIGHT_TEXT)
         # After the columns, so the native header child exists to be themed.
         stylize_scrollable(self.sideboard_list)
+        strip_native_client_edge(self.sideboard_list)
         self._bind_tooltip_handlers(self.sideboard_list)
-        sideboard_box_sizer.Add(self.sideboard_list, 1, wx.EXPAND | wx.ALL, SPACE_SM)
+        sideboard_section.sizer.Add(self.sideboard_list, 1, wx.EXPAND)
 
 
 class RadarFrame(RadarFrameHandlersMixin, RadarFramePropertiesMixin, wx.Frame):
@@ -139,7 +164,7 @@ class RadarFrame(RadarFrameHandlersMixin, RadarFramePropertiesMixin, wx.Frame):
             style=style,
         )
         init_top_level_window(self)
-        self.SetBackgroundColour(DARK_PANEL)
+        self.SetBackgroundColour(DARK_BG)
         self._locale = locale
 
         self.controller = controller
@@ -158,7 +183,7 @@ class RadarFrame(RadarFrameHandlersMixin, RadarFramePropertiesMixin, wx.Frame):
 
     def _build_ui(self) -> None:
         panel = wx.Panel(self)
-        panel.SetBackgroundColour(DARK_PANEL)
+        panel.SetBackgroundColour(DARK_BG)
         sizer = wx.BoxSizer(wx.VERTICAL)
         panel.SetSizer(sizer)
 
@@ -174,15 +199,20 @@ class RadarFrame(RadarFrameHandlersMixin, RadarFramePropertiesMixin, wx.Frame):
         selection_sizer.Add(self.archetype_choice, 1, wx.RIGHT, SPACE_SM)
 
         self.generate_btn = wx.Button(panel, label=self._t("radar.dialog.generate"))
+        # The one primary on this surface: generating the radar is what the
+        # window is for, and every other button here is a follow-up to it.
+        stylize_button(self.generate_btn, kind="primary")
         self.generate_btn.Bind(wx.EVT_BUTTON, self._on_generate_clicked)
         selection_sizer.Add(self.generate_btn, 0, wx.RIGHT, SPACE_SM)
 
         self.cancel_btn = wx.Button(panel, label=self._t("radar.btn.cancel"))
+        stylize_button(self.cancel_btn, kind="secondary")
         self.cancel_btn.Bind(wx.EVT_BUTTON, self._on_cancel_clicked)
         self.cancel_btn.Enable(False)
         selection_sizer.Add(self.cancel_btn, 0)
 
         self.progress = wx.Gauge(panel, range=100)
+        stylize_gauge(self.progress)
         sizer.Add(self.progress, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, SPACE_SM)
 
         self.progress_label = wx.StaticText(panel, label="")

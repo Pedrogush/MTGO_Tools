@@ -8,6 +8,7 @@ from html import escape
 from typing import Any
 
 from utils.constants import BORDER_SUBTLE, DARK_ALT, DARK_PANEL, LIGHT_TEXT, SUBDUED_TEXT
+from utils.constants.theme import DANGER_TEXT, SUCCESS_TEXT
 from utils.i18n import translate
 
 
@@ -67,7 +68,9 @@ class MetagameAnalysisPropertiesMixin:
             arrow = "\u25bc"
             direction_class = "down"
 
-        arrow_color = "#43d17b" if direction_class == "up" else "#ff6464"
+        # Was #43d17b / #ff6464 -- two bespoke hues doing the job the
+        # semantic tokens exist for, and neither was ever contrast-checked.
+        arrow_color = self._rgb_to_hex(SUCCESS_TEXT if direction_class == "up" else DANGER_TEXT)
         dark_panel = self._rgb_to_hex(DARK_PANEL)
         # A 1px rule around a metric card is ornament, not emphasis; it was the
         # accent purely because the accent was the only non-neutral in the app.

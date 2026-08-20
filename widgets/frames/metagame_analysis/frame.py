@@ -12,8 +12,6 @@ if str(_project_root) not in sys.path:
 import wx
 import wx.html
 from loguru import logger
-from matplotlib.backends.backend_wxagg import FigureCanvasWxAgg as FigureCanvas
-from matplotlib.figure import Figure
 
 from utils.constants import (
     DARK_ALT,
@@ -26,9 +24,16 @@ from utils.constants import (
     SUBDUED_TEXT,
 )
 from utils.i18n import translate
+from widgets.charts import ChartView
 from widgets.frames.metagame_analysis.handlers import MetagameAnalysisHandlersMixin
 from widgets.frames.metagame_analysis.properties import MetagameAnalysisPropertiesMixin
-from widgets.stylize import apply_type_level, init_top_level_window, stylize_button, stylize_choice
+from widgets.stylize import (
+    apply_type_level,
+    create_status_label,
+    init_top_level_window,
+    stylize_button,
+    stylize_choice,
+)
 
 
 class MetagameAnalysisFrame(
@@ -145,22 +150,19 @@ class MetagameAnalysisFrame(
         self.refresh_button.Bind(wx.EVT_BUTTON, lambda _evt: self.refresh_data())
         toolbar.Add(self.refresh_button, 0, wx.RIGHT, SPACE_SM)
 
-        toolbar.AddStretchSpacer(1)
-
-        self.status_label = wx.StaticText(panel, label=self._t("app.status.ready"))
-        self.status_label.SetForegroundColour(SUBDUED_TEXT)
-        toolbar.Add(self.status_label, 0, wx.ALIGN_CENTER_VERTICAL)
+        # F8: see create_status_label -- proportion 1 in place of the spacer.
+        self.status_label = create_status_label(panel, self._t("app.status.ready"))
+        toolbar.Add(self.status_label, 1, wx.ALIGN_CENTER_VERTICAL | wx.LEFT, SPACE_SM)
 
         content_sizer = wx.BoxSizer(wx.HORIZONTAL)
         main_sizer.Add(content_sizer, 1, wx.ALL | wx.EXPAND, SPACE_SM)
 
-        self.figure = Figure(figsize=(6, 5), facecolor="#14161b")
-        self.canvas = FigureCanvas(panel, -1, self.figure)
-        self.canvas.SetBackgroundColour(DARK_PANEL)
-        content_sizer.Add(self.canvas, 1, wx.EXPAND | wx.RIGHT, SPACE_SM)
-
-        self.ax = self.figure.add_subplot(111)
-        self.ax.set_facecolor("#14161b")
+        # Phase 5: a matplotlib pie became a sorted horizontal bar chart on the
+        # shared renderer. ChartView picks its own backend -- WebView2 when the
+        # runtime is present, wxHTML when it is not -- so this site never has to
+        # know which one it got.
+        self.chart = ChartView(panel)
+        content_sizer.Add(self.chart, 1, wx.EXPAND | wx.RIGHT, SPACE_SM)
 
         right_panel = wx.Panel(panel)
         right_panel.SetBackgroundColour(DARK_PANEL)

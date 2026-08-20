@@ -125,19 +125,39 @@ class IntrospectionMixin(_Base):
 
         return {"widgets": widgets}
 
+    @staticmethod
+    def _walk_buttons(parent: wx.Window) -> list[wx.Button]:
+        """Every ``wx.Button`` under ``parent``, nearest first (review §5.7).
+
+        Breadth-first, deliberately: this used to look at ``GetChildren()`` one
+        level deep, so any button the panel wrapped in a sub-panel was
+        unreachable by label — and phase 7 wraps two of them (the mode switch,
+        :mod:`widgets.mode_switch`). Searching nearest-first keeps a direct child
+        winning over a deeper namesake, which is what the old behaviour promised
+        for the cases it did handle.
+        """
+        found: list[wx.Button] = []
+        frontier = [parent]
+        while frontier:
+            nxt: list[wx.Window] = []
+            for window in frontier:
+                for child in window.GetChildren():
+                    if isinstance(child, wx.Button):
+                        found.append(child)
+                    nxt.append(child)
+            frontier = nxt
+        return found
+
     def _get_button_info(self, parent: wx.Window) -> list[dict[str, Any]]:
         """Get info about buttons in a widget."""
-        buttons = []
-        for child in parent.GetChildren():
-            if isinstance(child, wx.Button):
-                buttons.append(
-                    {
-                        "label": child.GetLabel(),
-                        "enabled": child.IsEnabled(),
-                        "id": child.GetId(),
-                    }
-                )
-        return buttons
+        return [
+            {
+                "label": button.GetLabel(),
+                "enabled": button.IsEnabled(),
+                "id": button.GetId(),
+            }
+            for button in self._walk_buttons(parent)
+        ]
 
     def _handle_click(self, widget: str, label: str | None = None) -> dict[str, Any]:
         """Click a button by widget name and optional label."""
@@ -151,10 +171,10 @@ class IntrospectionMixin(_Base):
             target.ProcessEvent(event)
             return {"clicked": True, "widget": widget}
 
-        # Search for button by label within the widget
+        # Search for button by label within the widget, at any depth (§5.7).
         if label:
-            for child in target.GetChildren():
-                if isinstance(child, wx.Button) and child.GetLabel() == label:
+            for child in self._walk_buttons(target):
+                if child.GetLabel() == label:
                     event = wx.CommandEvent(wx.wxEVT_BUTTON, child.GetId())
                     event.SetEventObject(child)
                     child.ProcessEvent(event)
@@ -179,7 +199,66 @@ class IntrospectionMixin(_Base):
             "left_toggle": getattr(self.frame, "left_toggle_btn", None),
             "inspector_toggle": getattr(self.frame, "inspector_toggle_btn", None),
         }
-        return widget_map.get(name)
+        if name in widget_map:
+            return widget_map[name]
+        # The six companion windows, by the same names ``open_widget`` and
+        # ``screenshot_window`` already use. Phase 7 made the label search walk
+        # to any depth (§5.7) and phase 9 found the other half of that gap: the
+        # search had no way to start at a window that is not the main frame, so
+        # ``click radar --label "Generate Radar"`` answered "Widget not found:
+        # radar" and every companion window's buttons were unreachable by label.
+        return self._resolve_secondary_window(name)
+
+    def _handle_focus_text_input(self, window: str | None = None, index: int = 0) -> dict[str, Any]:
+        """Focus the ``index``-th text input of a top-level window.
+
+        Added in phase 6c for the same reason phase 4 added ``select_card``: the
+        state could not be reached from the harness at all. A text field's
+        border now changes on focus (``BORDER_STRONG`` -> ``FOCUS_RING``, 1 DIP
+        -> 2 DIP), and "does it look different focused" is a question only a
+        capture of the running app answers -- the phase this replaces recorded a
+        border from an isolated probe that the real app did not have.
+
+        Returns every input it found, in traversal order, so a caller can pick
+        one by description rather than by guessing an index.
+        """
+        target = self.frame
+        if window is not None:
+            resolved = self._resolve_secondary_window(window)
+            if resolved is None:
+                return {"focused": False, "error": f"Window {window!r} not found or not open"}
+            target = resolved
+
+        inputs: list[wx.TextCtrl] = []
+
+        def walk(win: wx.Window) -> None:
+            for child in win.GetChildren():
+                if isinstance(child, wx.TextCtrl):
+                    inputs.append(child)
+                walk(child)
+
+        walk(target)
+        described = [
+            {
+                "index": i,
+                "value": c.GetValue()[:40],
+                "editable": c.IsEditable(),
+                "enabled": c.IsEnabled(),
+                "parent": type(c.GetParent()).__name__,
+            }
+            for i, c in enumerate(inputs)
+        ]
+        if not inputs:
+            return {"focused": False, "error": "no text inputs in this window", "inputs": []}
+        if not 0 <= index < len(inputs):
+            return {
+                "focused": False,
+                "error": f"index {index} of {len(inputs)}",
+                "inputs": described,
+            }
+        target.Raise()
+        inputs[index].SetFocus()
+        return {"focused": True, "index": index, "inputs": described}
 
     def _handle_wait(self, ms: int = 1000) -> dict[str, Any]:
         """Wait for a specified number of milliseconds."""
@@ -244,6 +323,34 @@ class IntrospectionMixin(_Base):
             return {"ok": True, "path": parts}
         return {"ok": False, "error": f"Menu item not found: {'/'.join(parts)}"}
 
+    def _handle_preferences(
+        self, key: str | None = None, value: str | None = None
+    ) -> dict[str, Any]:
+        """List the preferences, or set one by key.
+
+        Phase 7 collapsed the ``Settings`` menu into a modal dialog, and
+        ``wx.Dialog.ShowModal`` starves this socket exactly the way
+        ``wx.PopupMenu`` does (§5.5) -- so the harness drives the *spec* the
+        dialog renders, never the dialog. ``key`` is the stable name
+        (``deck_data_source``, ``language``, ``average_method``,
+        ``average_hours``, ``check_for_updates``); ``value`` is the option's
+        value or its translated label, or ``on``/``off``/``toggle`` for a
+        boolean.
+        """
+        from widgets.preferences import apply_preference, describe
+
+        build = getattr(self.frame, "preference_groups", None)
+        if build is None:
+            return {"ok": False, "error": "Preferences not available"}
+        groups = build()
+        if key is None:
+            return {"ok": True, "groups": describe(groups)}
+        if value is None:
+            return {"ok": False, "error": f"No value given for preference {key!r}"}
+        if apply_preference(groups, key, value):
+            return {"ok": True, "key": key, "value": value}
+        return {"ok": False, "error": f"Preference not set: {key}={value}"}
+
     def _handle_refresh_collection(self, force: bool = True) -> dict[str, Any]:
         """Trigger a collection refresh + export through the real controller path.
 
@@ -286,6 +393,24 @@ class IntrospectionMixin(_Base):
         wx.CallAfter(self.frame.Close, True)
         return {"closed": True}
 
+    def _handle_select_card(self, card_name: str, zone: str = "main") -> dict[str, Any]:
+        """Select a card by name in a deck zone, populating the Card Inspector.
+
+        Added in phase 4: the inspector's card-selected state (the printing
+        pager, "Save art", the wrapped-title + mana-pip row) was unreachable
+        from the harness, so F6 and A6 could not be verified on screen without
+        a real mouse click. ``focus_card`` is the panel's own selection entry
+        point, so this drives exactly the path a click drives.
+        """
+        panel = getattr(self.frame, "main_table" if zone == "main" else "side_table", None)
+        if panel is None:
+            return {"selected": False, "error": f"Zone not available: {zone}"}
+        focus = getattr(panel, "focus_card", None)
+        if not callable(focus):
+            return {"selected": False, "error": "Panel has no focus_card"}
+        ok = bool(focus(card_name))
+        return {"selected": ok, "card_name": card_name, "zone": zone}
+
     def _handle_get_inspector_oracle_text(self) -> dict[str, Any]:
         """Return the plain-text value of the card inspector's oracle text control."""
         inspector = getattr(self.frame, "card_inspector_panel", None)
@@ -296,4 +421,3 @@ class IntrospectionMixin(_Base):
             return {"text": "", "error": "Oracle text control not found"}
         value = ctrl.GetValue() if hasattr(ctrl, "GetValue") else ""
         return {"text": value}
-

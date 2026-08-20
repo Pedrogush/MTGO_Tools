@@ -15,10 +15,11 @@ from widgets.panels.card_table_panel.sorting import (
     PILE_SORT_COLOR,
     PILE_SORT_MV,
     PILE_SORT_TYPE,
-    TABLE_ACTION_ADD,
-    TABLE_ACTION_REMOVE,
-    TABLE_ACTION_SUB,
+    TABLE_ACTION_COUNT,
+    TABLE_ACTION_DESTRUCTIVE_GAP,
+    TABLE_ACTION_SLOT_WIDTH,
     action_slot_at,
+    action_slot_bounds,
     card_colors,
     card_mana_value,
     color_sort_key,
@@ -407,19 +408,44 @@ def test_sort_table_rows_handles_lookup_returning_none():
     assert names == ["Apparition", "Ghost Card"]  # tie on MV 0 → name order
 
 
-def test_action_slot_at_maps_thirds_to_add_sub_remove():
-    width = 60  # three 20px slots
-    # First third -> add, middle -> subtract, last -> remove.
-    assert action_slot_at(0, width) == TABLE_ACTION_ADD
-    assert action_slot_at(19, width) == TABLE_ACTION_ADD
-    assert action_slot_at(20, width) == TABLE_ACTION_SUB
-    assert action_slot_at(39, width) == TABLE_ACTION_SUB
-    assert action_slot_at(40, width) == TABLE_ACTION_REMOVE
-    assert action_slot_at(59, width) == TABLE_ACTION_REMOVE
+def test_action_slot_at_maps_each_glyph_to_its_own_target():
+    """Each control gets its own fixed-width target, not a third of the cell.
+
+    Phase 5 replaced the equal-thirds split: the drawn glyphs measured ~14x14
+    with ~2px between them, well under a comfortable pointer target, and the
+    destructive ``x`` sat immediately beside the ``-`` that decrements the row.
+    """
+    width = TABLE_ACTION_SLOT_WIDTH * TABLE_ACTION_COUNT + TABLE_ACTION_DESTRUCTIVE_GAP
+    bounds = action_slot_bounds(width)
+    assert len(bounds) == TABLE_ACTION_COUNT
+    for start, end in bounds:
+        assert end - start == TABLE_ACTION_SLOT_WIDTH >= 24
+
+    for index, (start, end) in enumerate(bounds):
+        assert action_slot_at(start, width) == index
+        assert action_slot_at(end - 1, width) == index
 
 
-def test_action_slot_at_clamps_out_of_range_and_zero_width():
-    # Past the right edge clamps to the last slot; a degenerate width is safe.
-    assert action_slot_at(1000, 60) == TABLE_ACTION_REMOVE
-    assert action_slot_at(-5, 60) == TABLE_ACTION_ADD
-    assert action_slot_at(10, 0) == TABLE_ACTION_ADD
+def test_action_slot_at_leaves_the_destructive_gap_dead():
+    """A click in the gap in front of ``x`` does nothing.
+
+    The gap only separates the controls visually if it also refuses the click:
+    snapping to the nearest slot would make the pixels beside ``x`` delete the
+    row, which is the failure the separation exists to prevent.
+    """
+    width = TABLE_ACTION_SLOT_WIDTH * TABLE_ACTION_COUNT + TABLE_ACTION_DESTRUCTIVE_GAP
+    gap_start = TABLE_ACTION_SLOT_WIDTH * 2
+    for x in range(gap_start, gap_start + TABLE_ACTION_DESTRUCTIVE_GAP):
+        assert action_slot_at(x, width) is None
+
+
+def test_action_slot_at_is_right_aligned_and_safe_at_the_edges():
+    width = 400
+    bounds = action_slot_bounds(width)
+    # The group hugs the trailing edge whatever the column width.
+    assert bounds[-1][1] == width
+    # Left of the group, past the right edge, and a degenerate width all decline.
+    assert action_slot_at(0, width) is None
+    assert action_slot_at(1000, width) is None
+    assert action_slot_at(-5, width) is None
+    assert action_slot_at(10, 0) is None

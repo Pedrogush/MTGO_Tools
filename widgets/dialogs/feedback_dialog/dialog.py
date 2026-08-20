@@ -7,11 +7,18 @@ from pathlib import Path
 
 import wx
 
-from utils.constants import DARK_BG, DARK_PANEL, LIGHT_TEXT, SPACE_SM, SUBDUED_TEXT
+from utils.constants import DARK_BG, LIGHT_TEXT, SPACE_SM, SUBDUED_TEXT
+from utils.i18n import t
 from widgets.checkbox import DarkCheckBox
 from widgets.dialogs.feedback_dialog.handlers import FeedbackDialogHandlersMixin
 from widgets.dialogs.feedback_dialog.properties import FeedbackDialogPropertiesMixin
-from widgets.stylize import apply_type_level, init_top_level_window, stylize_checkbox
+from widgets.input_frame import create_text_input
+from widgets.stylize import (
+    apply_type_level,
+    init_top_level_window,
+    stylize_button,
+    stylize_checkbox,
+)
 
 
 class FeedbackDialog(FeedbackDialogHandlersMixin, FeedbackDialogPropertiesMixin, wx.Dialog):
@@ -27,7 +34,7 @@ class FeedbackDialog(FeedbackDialogHandlersMixin, FeedbackDialogPropertiesMixin,
         *,
         event_logging_enabled: bool = False,
     ) -> None:
-        super().__init__(parent, title="Export Diagnostics / Send Feedback", size=(480, 380))
+        super().__init__(parent, title=t("window.title.diagnostics"), size=(480, 380))
         init_top_level_window(self)
         self.SetBackgroundColour(DARK_BG)
 
@@ -63,18 +70,19 @@ class FeedbackDialog(FeedbackDialogHandlersMixin, FeedbackDialogPropertiesMixin,
         sizer.Add(desc, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, SPACE_SM)
 
         # Notes area
-        notes_label = wx.StaticText(panel, label="Notes (optional):")
+        notes_label = wx.StaticText(panel, label="Notes (Optional)")
         notes_label.SetForegroundColour(LIGHT_TEXT)
         sizer.Add(notes_label, 0, wx.LEFT | wx.RIGHT | wx.TOP, SPACE_SM)
 
-        self._notes_ctrl = wx.TextCtrl(
+        notes_field = create_text_input(
             panel,
-            style=wx.TE_MULTILINE | wx.TE_WORDWRAP,
+            level="body",
+            surface="panel",
             size=(-1, 80),
+            style=wx.TE_MULTILINE | wx.TE_WORDWRAP,
         )
-        self._notes_ctrl.SetBackgroundColour(DARK_PANEL)
-        self._notes_ctrl.SetForegroundColour(LIGHT_TEXT)
-        sizer.Add(self._notes_ctrl, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, SPACE_SM)
+        self._notes_ctrl = notes_field.ctrl
+        sizer.Add(notes_field, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, SPACE_SM)
 
         # Opt-in event logging checkbox
         self._event_log_check = DarkCheckBox(
@@ -109,9 +117,11 @@ class FeedbackDialog(FeedbackDialogHandlersMixin, FeedbackDialogPropertiesMixin,
         btn_sizer.AddStretchSpacer(1)
 
         close_btn = wx.Button(panel, wx.ID_CANCEL, label="Close")
+        stylize_button(close_btn, kind="secondary", surface="panel")
         btn_sizer.Add(close_btn, 0, wx.RIGHT, SPACE_SM)
 
         self._export_btn = wx.Button(panel, wx.ID_OK, label="Export to File…")
+        stylize_button(self._export_btn, kind="primary", surface="panel")
         self._export_btn.SetDefault()
         self._export_btn.Bind(wx.EVT_BUTTON, self._on_export)
         btn_sizer.Add(self._export_btn, 0)

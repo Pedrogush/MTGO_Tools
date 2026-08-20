@@ -64,10 +64,16 @@ def test_menu_bar_lists_and_activates(client: AutomationClient) -> None:
     listing = client.menu()
     assert listing.get("ok"), f"menu listing failed: {listing}"
     menus = listing["menus"]
-    assert len(menus) == 4, f"Expected four menus, got {list(menus)}"
-    tools = next(iter(m for name, m in menus.items() if any(
-        e["label"].lower().startswith("radar") for e in m
-    )), None)
+    # Three since phase 7: ``Settings`` collapsed into ``File/Preferences…``,
+    # which is why ``prefs`` exists (below) -- the dialog is modal and would
+    # starve this socket exactly the way ``wx.PopupMenu`` does.
+    assert len(menus) == 3, f"Expected three menus, got {list(menus)}"
+    tools = next(
+        iter(
+            m for name, m in menus.items() if any(e["label"].lower().startswith("radar") for e in m)
+        ),
+        None,
+    )
     assert tools is not None, f"No menu offers Radar: {list(menus)}"
 
     tools_title = next(name for name, m in menus.items() if m is tools)
@@ -75,6 +81,44 @@ def test_menu_bar_lists_and_activates(client: AutomationClient) -> None:
     assert opened.get("ok"), f"Activating a menu item failed: {opened}"
 
     assert not client.menu(f"{tools_title}/No Such Item").get("ok")
+
+
+def test_preferences_are_readable_and_settable_without_the_dialog(
+    client: AutomationClient,
+) -> None:
+    """Phase 7's ``Settings`` menu became a modal dialog; ``prefs`` replaces it.
+
+    Deliberately never opens the dialog: ``ShowModal`` runs a nested loop on the
+    main thread and would stop this socket being serviced (§5.5), which is the
+    same reason ``menu`` invokes entries rather than popping menus up.
+    """
+    listing = client.preferences()
+    assert listing.get("ok"), f"prefs listing failed: {listing}"
+    keys = {item["key"] for group in listing["groups"] for item in group["items"]}
+    assert {
+        "deck_data_source",
+        "language",
+        "average_method",
+        "average_hours",
+        "check_for_updates",
+    } <= keys, keys
+
+    def current(key: str) -> object:
+        for group in client.preferences()["groups"]:
+            for item in group["items"]:
+                if item["key"] == key:
+                    return item.get("current", item.get("checked"))
+        raise AssertionError(f"no preference {key}")
+
+    before = current("average_hours")
+    target = "48" if before != "48" else "36"
+    assert client.preferences("average_hours", target).get("ok")
+    assert current("average_hours") == target
+    assert client.preferences("average_hours", str(before)).get("ok")
+    assert current("average_hours") == before
+
+    assert not client.preferences("average_hours", "999").get("ok")
+    assert not client.preferences("no_such_setting", "on").get("ok")
 
 
 # ---------------------------------------------------------------------------
@@ -86,4 +130,9 @@ ALL_TESTS: list[tuple[str, str, Callable[[AutomationClient], None]]] = [
     ("widgets", "Open Match History widget", test_widgets_open_match_history),
     ("widgets", "Every companion window opens by name", test_widgets_open_every_companion_window),
     ("widgets", "Menu bar lists and activates items", test_menu_bar_lists_and_activates),
+    (
+        "widgets",
+        "Preferences read/write without the dialog",
+        test_preferences_are_readable_and_settable_without_the_dialog,
+    ),
 ]

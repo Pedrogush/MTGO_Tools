@@ -18,12 +18,18 @@ import wx
 
 from services.deck_service.printing import DATE_MODES as PRINTING_DATE_MODES
 from services.deck_service.printing import PRINTING_MODES
+from utils.constants import (
+    DECK_COUNT_LABEL_MIN_WIDTH,
+    SPACE_SM,
+    VIEW_TOGGLE_HEIGHT,
+    VIEW_TOGGLE_PADDING_X,
+)
 from widgets.panels.card_table_panel.sorting import (
     PILE_SORT_COLOR,
     PILE_SORT_MV,
     PILE_SORT_TYPE,
 )
-from widgets.stylize import stylize_button
+from widgets.stylize import size_compact_button, stylize_button
 from widgets.wx_layout import relayout
 
 if TYPE_CHECKING:
@@ -34,8 +40,54 @@ else:
     _Base = object
 
 
+#: Appended to a button that opens a menu rather than acting immediately (F3).
+#: The two controls it marks -- the pile-sort key and the printing selector --
+#: sat in the run of view-toggle chips looking exactly like them, which is what
+#: made them read as a fourth and fifth view mode.
+MENU_CARET = "\u25be"
+
+
 class CardTablePanelToolbarMixin(_Base):
     """View-mode buttons, pile-sort menu, and printing dropdown for the panel."""
+
+    def _on_panel_size(self, event: wx.SizeEvent) -> None:
+        event.Skip()
+        self._reflow_header()
+
+    def _reflow_header(self) -> None:
+        """Move the view controls to their own line when the header row is too narrow.
+
+        The row's minimum is view-mode *and* locale dependent -- 310px in en-US
+        grid view, 496 in pt-BR pile view -- and the deck workspace's own floor
+        is 353. Sizing the workspace for the worst case would cost the window
+        ~150px of minimum width for a toolbar that is only that wide in one view
+        and one language, and leaving it alone means wxBoxSizer silently paints
+        whichever control is last at whatever is left (phase 7 measured that at
+        14px against a 59px minimum).
+
+        Hysteresis is not needed: moving the controls down changes the panel's
+        *height*, never its width, so the predicate this reads cannot flip as a
+        result of acting on it. The early return on an unchanged state is what
+        keeps the EVT_SIZE this triggers from recursing.
+        """
+        controls = getattr(self, "_header_controls", None)
+        if controls is None:
+            return
+        needed = controls.CalcMin().GetWidth() + DECK_COUNT_LABEL_MIN_WIDTH + SPACE_SM + SPACE_SM
+        wrapped = self.GetClientSize().GetWidth() < needed
+        if wrapped == self._header_wrapped:
+            return
+        self._header_wrapped = wrapped
+        if wrapped:
+            self._header_top.Detach(controls)
+            self._header_bottom.AddStretchSpacer(1)
+            self._header_bottom.Add(controls, 0, wx.ALIGN_CENTER_VERTICAL)
+        else:
+            self._header_bottom.Detach(controls)
+            self._header_bottom.Clear(False)
+            self._header_top.Add(controls, 0, wx.ALIGN_CENTER_VERTICAL)
+        self._header_stack.Layout()
+        self.Layout()
 
     def _column_label(self, col_id: str) -> str:
         return self._t(f"tabs.view.col.{col_id}")
@@ -52,10 +104,41 @@ class CardTablePanelToolbarMixin(_Base):
                 selected=mode == self.view_mode,
                 surface="panel",
             )
+            # F4: BU_EXACTFIT sized these to the text extent plus ~2px (30x18
+            # measured). size_compact_button measures the bold face whatever the
+            # current weight, so re-running it on every selection change is a
+            # no-op for layout -- the chip keeps one width as selection moves.
+            size_compact_button(btn, pad_x=VIEW_TOGGLE_PADDING_X, height=VIEW_TOGGLE_HEIGHT)
             btn.Refresh()
+
+    def _pile_sort_label(self) -> str:
+        """The pile-sort button's label: the grouping key it will change.
+
+        F3 called this control "mystery meat"; it was labelled ``⋯``. F7 is the
+        same defect one level down -- the grouping key (mana value / colour /
+        type) was reachable only by opening this menu and reading which item was
+        ticked. Naming the current key on the button states it without a click,
+        and the per-pile headings (:mod:`widgets.panels.card_table_panel.pile_view`)
+        state each bucket.
+        """
+        key = {
+            PILE_SORT_MV: "mv",
+            PILE_SORT_COLOR: "color",
+            PILE_SORT_TYPE: "type",
+        }.get(self.pile_sort, "mv")
+        return f"{self._t(f'tabs.view.pile_sort.{key}')} {MENU_CARET}"
+
+    def _refresh_pile_sort_button(self) -> None:
+        self.pile_sort_button.SetLabel(self._pile_sort_label())
+        size_compact_button(
+            self.pile_sort_button, pad_x=VIEW_TOGGLE_PADDING_X, height=VIEW_TOGGLE_HEIGHT
+        )
 
     def _update_pile_sort_button_visibility(self) -> None:
         self.pile_sort_button.Show(self.view_mode == "pile")
+        # The divider marks the boundary of the toggle group; with nothing left
+        # of it visible it would be a rule against the panel edge.
+        self.header_divider.Show(self.view_mode == "pile" or self.printing_button is not None)
         relayout(self)
 
     def _on_view_button(self, mode: str) -> None:

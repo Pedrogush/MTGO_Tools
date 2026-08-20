@@ -311,13 +311,33 @@ class AutomationClient:
         """List the menu bar, or activate one item.
 
         Args:
-            path: 'Tools/Radar', or 'Settings/Language/pt-BR' for a radio option.
+            path: 'Tools/Radar', or 'File/Preferences…' for a plain item.
                 Omit to get the whole tree back instead.
 
         The item's handler runs directly; the menu is never popped up, because
         ``wx.PopupMenu`` blocks the thread that services this socket (§5.5).
         """
         return self._send_command("menu", **({"path": path} if path is not None else {}))
+
+    def preferences(self, key: str | None = None, value: str | None = None) -> dict[str, Any]:
+        """List the preferences, or set one.
+
+        Args:
+            key: 'deck_data_source', 'language', 'average_method',
+                'average_hours' or 'check_for_updates'. Omit to list everything.
+            value: the option's value or its translated label; 'on'/'off'/'toggle'
+                for a boolean.
+
+        The dialog is never opened: ``ShowModal`` blocks the thread that services
+        this socket, so the harness drives the preference *spec* directly, the
+        same way ``menu`` drives the menu spec (§5.5).
+        """
+        payload: dict[str, Any] = {}
+        if key is not None:
+            payload["key"] = key
+        if value is not None:
+            payload["value"] = value
+        return self._send_command("preferences", **payload)
 
     def refresh_collection(self, force: bool = True) -> dict[str, Any]:
         """Trigger a collection refresh + export from the MTGO bridge.
@@ -410,22 +430,17 @@ class AutomationClient:
             kwargs["path"] = path
         return self._send_command("screenshot_window", **kwargs)
 
-    def type_into_oracle(self, text: str, expand_adv: bool = True) -> dict[str, Any]:
-        """Type characters one at a time into the oracle search box.
-
-        Unlike set_oracle_search (which bypasses keyboard events), each character
-        goes through the oracle symbol-detection pipeline so {W}, {R/G}, etc. are
-        rendered as inline images exactly as when the user types them.
-
-        Args:
-            text: String to type, e.g. '{W}' or 'deals damage'
-            expand_adv: If True, expand advanced filters so the oracle input is visible.
-        """
-        return self._send_command("type_into_oracle", text=text, expand_adv=expand_adv)
-
     def add_lorem_mana_card(self) -> dict[str, Any]:
         """Insert a dummy card with LOREM_MANA oracle text into the card manager."""
         return self._send_command("add_lorem_mana_card")
+
+    def focus_text_input(self, window: str | None = None, index: int = 0) -> dict[str, Any]:
+        """Focus a text input so its focused border can be captured (phase 6c)."""
+        return self._send_command("focus_text_input", window=window, index=index)
+
+    def select_card(self, card_name: str, zone: str = "main") -> dict[str, Any]:
+        """Select ``card_name`` in a deck zone, populating the Card Inspector."""
+        return self._send_command("select_card", card_name=card_name, zone=zone)
 
     def get_inspector_oracle_text(self) -> dict[str, Any]:
         """Return the plain-text value of the card inspector oracle text control."""
