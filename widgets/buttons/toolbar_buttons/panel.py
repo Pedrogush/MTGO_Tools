@@ -67,7 +67,7 @@ class ToolbarButtons(wx.Panel):
         self._button_row.AddStretchSpacer(1)
         self._add_divider(gap=10)
         self.settings_button = wx.Button(self, label=labels.get("settings", "\u2699"))
-        stylize_button(self.settings_button)
+        stylize_button(self.settings_button, kind="ghost")
         self.settings_button.SetToolTip(labels.get("settings_tooltip", "Settings"))
         if on_open_settings_menu:
             self.settings_button.Bind(
@@ -89,7 +89,10 @@ class ToolbarButtons(wx.Panel):
         tooltip: str = "",
     ) -> wx.Button:
         button = wx.Button(self, label=label)
-        stylize_button(button)
+        # H5: these open *secondary* companion windows. Six saturated-accent fills
+        # in the top-left corner were the loudest thing on the main window and the
+        # single biggest contributor to the accent budget.
+        stylize_button(button, kind="ghost")
         if tooltip:
             button.SetToolTip(tooltip)
         if handler:

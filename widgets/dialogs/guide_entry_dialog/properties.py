@@ -6,6 +6,7 @@ from typing import Any
 
 import wx
 
+from widgets.checkbox import DarkCheckBox
 from widgets.panels.sideboard_card_selector import SideboardCardSelector
 
 
@@ -18,7 +19,7 @@ class GuideEntryDialogPropertiesMixin:
     draw_out_selector: SideboardCardSelector
     draw_in_selector: SideboardCardSelector
     notes_ctrl: wx.TextCtrl
-    enable_double_checkbox: wx.CheckBox
+    enable_double_checkbox: DarkCheckBox
 
     def _load_data(self, data: dict[str, Any]) -> None:
         # Load play out/in

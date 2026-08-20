@@ -13,11 +13,11 @@ from typing import TYPE_CHECKING
 
 import wx
 
-from utils.constants import DARK_BG, DARK_PANEL, FORMAT_OPTIONS, LIGHT_TEXT, SUBDUED_TEXT
+from utils.constants import DARK_BG, FORMAT_OPTIONS, LIGHT_TEXT, SUBDUED_TEXT
 from utils.i18n import translate
 from widgets.frames.top_cards.handlers import TopCardsHandlersMixin
 from widgets.frames.top_cards.properties import TopCardsPropertiesMixin
-from widgets.stylize import stylize_choice, stylize_list_ctrl
+from widgets.stylize import stylize_button, stylize_choice, stylize_list_ctrl
 
 if TYPE_CHECKING:
     from services.format_card_pool_service import FormatCardPoolService
@@ -114,8 +114,4 @@ class TopCardsFrame(TopCardsHandlersMixin, TopCardsPropertiesMixin, wx.Frame):
         self._bind_header_tooltips()
 
     def _stylize_button(self, button: wx.Button) -> None:
-        button.SetBackgroundColour(DARK_PANEL)
-        button.SetForegroundColour(LIGHT_TEXT)
-        font = button.GetFont()
-        font.MakeBold()
-        button.SetFont(font)
+        stylize_button(button, kind="secondary")

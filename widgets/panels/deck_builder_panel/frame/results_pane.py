@@ -13,6 +13,7 @@ from utils.constants import (
     PADDING_SM,
     SUBDUED_TEXT,
 )
+from widgets.checkbox import DarkCheckBox
 from widgets.panels.deck_builder_panel.frame.search_results_view import _SearchResultsView
 from widgets.stylize import stylize_button, stylize_checkbox, stylize_choice, stylize_list_ctrl
 
@@ -34,12 +35,12 @@ class ResultsPaneBuilderMixin(_Base):
     def _build_action_controls(self, parent_sizer: wx.Sizer) -> None:
         controls = wx.BoxSizer(wx.HORIZONTAL)
         clear_btn = wx.Button(self, label=self._t("builder.clear_filters"))
-        stylize_button(clear_btn)
+        stylize_button(clear_btn, kind="secondary")
         clear_btn.SetToolTip("Reset all search filters")
         clear_btn.Bind(wx.EVT_BUTTON, lambda _evt: self._on_clear())
         controls.Add(clear_btn, 0, wx.RIGHT, PADDING_MD)
 
-        self.format_pool_cb = wx.CheckBox(self, label=self._t("builder.format_pool.use_filter"))
+        self.format_pool_cb = DarkCheckBox(self, label=self._t("builder.format_pool.use_filter"))
         stylize_checkbox(self.format_pool_cb, surface="panel")
         self.format_pool_cb.SetToolTip(
             "Show only cards that appear in the selected format's local card pool"
@@ -49,7 +50,7 @@ class ResultsPaneBuilderMixin(_Base):
         controls.Add(self.format_pool_cb, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, PADDING_MD)
 
         # Radar toggle checkbox
-        self.radar_cb = wx.CheckBox(self, label=self._t("builder.radar.use_filter"))
+        self.radar_cb = DarkCheckBox(self, label=self._t("builder.radar.use_filter"))
         stylize_checkbox(self.radar_cb, surface="panel")
         self.radar_cb.SetToolTip("Show only cards that appear in the loaded radar archetype")
         self.radar_cb.Bind(wx.EVT_CHECKBOX, self._on_radar_toggle)
@@ -102,7 +103,8 @@ class ResultsPaneBuilderMixin(_Base):
     def _build_add_zone_buttons(self, parent_sizer: wx.Sizer) -> None:
         add_btns_row = wx.BoxSizer(wx.HORIZONTAL)
         add_main_btn = wx.Button(self, label=self._t("builder.add_to_main"))
-        stylize_button(add_main_btn)
+        # The builder's reason to exist: the one primary action on this surface.
+        stylize_button(add_main_btn, kind="primary")
         add_main_btn.SetToolTip(
             "Add the selected card to the mainboard "
             "(shortcut: press 1-4 in the results list to add that many copies)"
@@ -113,7 +115,7 @@ class ResultsPaneBuilderMixin(_Base):
         self._add_main_btn = add_main_btn
 
         add_side_btn = wx.Button(self, label=self._t("builder.add_to_side"))
-        stylize_button(add_side_btn)
+        stylize_button(add_side_btn, kind="secondary")
         add_side_btn.SetToolTip(
             "Add the selected card to the sideboard "
             "(shortcut: press Shift+1-4 in the results list to add that many copies)"

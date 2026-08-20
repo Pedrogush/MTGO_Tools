@@ -19,7 +19,7 @@ from utils.constants import DARK_ALT, DARK_BG, DARK_PANEL, LIGHT_TEXT, SUBDUED_T
 from utils.i18n import translate
 from widgets.frames.metagame_analysis.handlers import MetagameAnalysisHandlersMixin
 from widgets.frames.metagame_analysis.properties import MetagameAnalysisPropertiesMixin
-from widgets.stylize import stylize_choice
+from widgets.stylize import stylize_button, stylize_choice
 
 
 class MetagameAnalysisFrame(
@@ -95,7 +95,7 @@ class MetagameAnalysisFrame(
         toolbar.Add(time_window_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 5)
 
         self.days_prev_button = wx.Button(panel, label="\u2190", size=(28, 26))
-        self._stylize_button(self.days_prev_button)
+        self._stylize_button(self.days_prev_button, kind="ghost")
         self.days_prev_button.Bind(wx.EVT_BUTTON, self.on_days_decrease)
         self.days_prev_button.SetToolTip(time_window_tooltip)
         toolbar.Add(self.days_prev_button, 0, wx.RIGHT, 3)
@@ -106,7 +106,7 @@ class MetagameAnalysisFrame(
         toolbar.Add(self.days_value_box, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 3)
 
         self.days_next_button = wx.Button(panel, label="\u2192", size=(28, 26))
-        self._stylize_button(self.days_next_button)
+        self._stylize_button(self.days_next_button, kind="ghost")
         self.days_next_button.Bind(wx.EVT_BUTTON, self.on_days_increase)
         self.days_next_button.SetToolTip(time_window_tooltip)
         toolbar.Add(self.days_next_button, 0, wx.RIGHT, 12)
@@ -116,7 +116,7 @@ class MetagameAnalysisFrame(
         toolbar.Add(day_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 5)
 
         self.offset_prev_button = wx.Button(panel, label="\u2190", size=(28, 26))
-        self._stylize_button(self.offset_prev_button)
+        self._stylize_button(self.offset_prev_button, kind="ghost")
         self.offset_prev_button.Bind(wx.EVT_BUTTON, self.on_offset_decrease)
         toolbar.Add(self.offset_prev_button, 0, wx.RIGHT, 3)
 
@@ -126,7 +126,7 @@ class MetagameAnalysisFrame(
         toolbar.Add(self.offset_value_box, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 3)
 
         self.offset_next_button = wx.Button(panel, label="\u2192", size=(28, 26))
-        self._stylize_button(self.offset_next_button)
+        self._stylize_button(self.offset_next_button, kind="ghost")
         self.offset_next_button.Bind(wx.EVT_BUTTON, self.on_offset_increase)
         toolbar.Add(self.offset_next_button, 0, wx.RIGHT, 12)
 
@@ -173,12 +173,8 @@ class MetagameAnalysisFrame(
 
         self._sync_navigation_controls()
 
-    def _stylize_button(self, button: wx.Button) -> None:
-        button.SetBackgroundColour(DARK_PANEL)
-        button.SetForegroundColour(LIGHT_TEXT)
-        font = button.GetFont()
-        font.MakeBold()
-        button.SetFont(font)
+    def _stylize_button(self, button: wx.Button, kind: str = "secondary") -> None:
+        stylize_button(button, kind=kind)
 
     def _create_value_badge(
         self, parent: wx.Window, value: str, *, tooltip: str | None = None

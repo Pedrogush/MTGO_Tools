@@ -20,7 +20,7 @@ from __future__ import annotations
 import wx
 import wx.grid as gridlib
 
-from utils.constants import DARK_ACCENT
+from utils.constants import SELECTION_BORDER
 from widgets.mana_icon_factory import ManaIconFactory, tokenize_mana_symbols
 
 _MANA_CELL_PADDING = 4
@@ -125,7 +125,7 @@ def _paint_row_background(
     dc.SetPen(wx.TRANSPARENT_PEN)
     dc.DrawRectangle(rect)
     if is_selected and grid.GetColPos(col) == 0:
-        dc.SetBrush(wx.Brush(wx.Colour(*DARK_ACCENT)))
+        dc.SetBrush(wx.Brush(wx.Colour(*SELECTION_BORDER)))
         dc.DrawRectangle(rect.x, rect.y, _SELECTION_BAR_WIDTH, rect.height)
 
 

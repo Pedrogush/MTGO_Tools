@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any, Protocol
 
 import wx
 
+from widgets.checkbox import DarkCheckBox
 from widgets.mana_icon_factory import ManaIconFactory
 
 if TYPE_CHECKING:
@@ -32,7 +33,7 @@ class DeckBuilderPanelProto(Protocol):
     _on_prefetch_images: Callable[[list[str]], None] | None
 
     inputs: dict[str, wx.TextCtrl]
-    mana_exact_cb: wx.CheckBox | None
+    mana_exact_cb: DarkCheckBox | None
     mv_comparator: wx.Choice | None
     mv_value: wx.TextCtrl | None
     format_choice: wx.Choice | None
@@ -52,8 +53,8 @@ class DeckBuilderPanelProto(Protocol):
     active_radar: RadarData | None
     radar_enabled: bool
     radar_zone: str
-    format_pool_cb: wx.CheckBox | None
-    radar_cb: wx.CheckBox
+    format_pool_cb: DarkCheckBox | None
+    radar_cb: DarkCheckBox
     radar_zone_choice: wx.Choice
 
     def _t(self, key: str, **kwargs: object) -> str: ...

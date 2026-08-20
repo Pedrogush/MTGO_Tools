@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Any
 import wx
 
 from utils.constants import DARK_PANEL
+from widgets.checkbox import DarkCheckBox
 from widgets.mana_icon_factory import ManaIconFactory
 from widgets.panels.deck_builder_panel.frame.advanced_filters import AdvancedFiltersBuilderMixin
 from widgets.panels.deck_builder_panel.frame.basic_filters import BasicFiltersBuilderMixin
@@ -73,7 +74,7 @@ class DeckBuilderPanel(
 
         # State variables
         self.inputs: dict[str, wx.TextCtrl] = {}
-        self.mana_exact_cb: wx.CheckBox | None = None
+        self.mana_exact_cb: DarkCheckBox | None = None
         self.mv_comparator: wx.Choice | None = None
         self.mv_value: wx.TextCtrl | None = None
         self.format_choice: wx.Choice | None = None
@@ -97,7 +98,7 @@ class DeckBuilderPanel(
         self.active_radar: RadarData | None = None
         self.radar_enabled: bool = False
         self.radar_zone: str = "both"  # "mainboard", "sideboard", or "both"
-        self.format_pool_cb: wx.CheckBox | None = None
+        self.format_pool_cb: DarkCheckBox | None = None
 
         # Build the UI
         self._build_ui()

@@ -8,6 +8,7 @@ from pathlib import Path
 import wx
 
 from utils.constants import DARK_BG, DARK_PANEL, LIGHT_TEXT, SUBDUED_TEXT
+from widgets.checkbox import DarkCheckBox
 from widgets.dialogs.feedback_dialog.handlers import FeedbackDialogHandlersMixin
 from widgets.dialogs.feedback_dialog.properties import FeedbackDialogPropertiesMixin
 from widgets.stylize import stylize_checkbox
@@ -77,7 +78,7 @@ class FeedbackDialog(FeedbackDialogHandlersMixin, FeedbackDialogPropertiesMixin,
         sizer.Add(self._notes_ctrl, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
 
         # Opt-in event logging checkbox
-        self._event_log_check = wx.CheckBox(
+        self._event_log_check = DarkCheckBox(
             panel, label="Enable opt-in event logging (stored locally only)"
         )
         stylize_checkbox(self._event_log_check, surface="panel")
@@ -93,7 +94,7 @@ class FeedbackDialog(FeedbackDialogHandlersMixin, FeedbackDialogPropertiesMixin,
         sizer.Add(event_log_desc, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
 
         # Include events in export checkbox
-        self._include_events_check = wx.CheckBox(panel, label="Include event log in export")
+        self._include_events_check = DarkCheckBox(panel, label="Include event log in export")
         stylize_checkbox(self._include_events_check, surface="panel")
         self._include_events_check.SetValue(True)
         sizer.Add(self._include_events_check, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)

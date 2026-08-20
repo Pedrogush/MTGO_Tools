@@ -4,7 +4,14 @@ from __future__ import annotations
 
 import wx
 
-from utils.constants import DARK_ACCENT, DARK_PANEL, LIGHT_TEXT, SUBDUED_TEXT
+from utils.constants import (
+    DARK_PANEL,
+    LIGHT_TEXT,
+    SELECTION_BORDER,
+    SELECTION_BORDER_WIDTH,
+    SELECTION_FILL_ON_PANEL,
+    SUBDUED_TEXT,
+)
 from widgets.lists.deck_results_list.handlers import DeckResultsListHandlersMixin
 from widgets.lists.deck_results_list.properties import DeckResultsListPropertiesMixin
 from widgets.stylize import stylize_scrollable
@@ -26,8 +33,15 @@ class DeckResultsList(DeckResultsListHandlersMixin, DeckResultsListPropertiesMix
         self._line_one_color = wx.Colour(*LIGHT_TEXT)
         self._line_two_color = wx.Colour(*SUBDUED_TEXT)
         self._card_bg = wx.Colour(*DARK_PANEL)
-        self._card_border = wx.Colour(*DARK_ACCENT)
-        self._selection_fg = wx.Colour(15, 17, 22)
+        # C9/G1. Before phase 2 every row was outlined in the full-chroma accent
+        # and the selected one was *filled* with it, so a 43-row list read as a
+        # ladder of blue rectangles and selection read as fill-versus-stroke.
+        # Now an unselected row has no border at all and the selected one is the
+        # app's single selection idiom: a 16% accent tint plus a 2px accent edge,
+        # i.e. presence-versus-absence.
+        self._selection_bg = wx.Colour(*SELECTION_FILL_ON_PANEL)
+        self._selection_border = wx.Colour(*SELECTION_BORDER)
+        self._selection_border_width = SELECTION_BORDER_WIDTH
         stylize_scrollable(self, surface="alt")
         self.SetForegroundColour(wx.Colour(*LIGHT_TEXT))
         self.SetItemCount(0)

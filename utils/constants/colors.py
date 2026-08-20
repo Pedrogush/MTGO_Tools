@@ -10,7 +10,6 @@ Import ``utils.constants.theme`` directly in new code.
 
 from utils.constants.theme import (
     ACCENT_PRIMARY,
-    SUCCESS_FILL,
     SUCCESS_SURFACE,
     SURFACE_ALT,
     SURFACE_BASE,
@@ -41,25 +40,17 @@ HINT_TEXT = TEXT_PLACEHOLDER  # -> TEXT_PLACEHOLDER
 DECK_CARD_ACTION_BUTTON_FG = TEXT_ON_FILL  # -> TEXT_ON_FILL (same value)
 DECK_CARD_IMAGE_BG = (0, 0, 0)  # black fill used when centering card images; not a theme token
 
-# Opponent Tracker — calculator button accent color.
-# NOT aliased to SUCCESS_FILL: its only call site
-# (identify_opponent/frame/calculator_panel.py:188-189) pairs it with LIGHT_TEXT,
-# which measures 6.49:1 on this deep green but only 2.66:1 on SUCCESS_FILL. The
-# semantic fills in theme.py are light fills carrying TEXT_ON_FILL, matching the
-# app's primary-button idiom. Phase 2 should convert that button to
-# stylize_button(kind="success") and delete this constant; remapping it here would
-# break the contrast the call site currently has.
-CALC_BUTTON_GREEN = "#2a6b2a"
-
-# Sideboard Guide Panel — button and label colors.
-# PIN_BUTTON_COLOR is left alone: "pin for tracker" is not success/warning/danger,
-# and the design system has no purple. Phase 2 should make it a secondary button
-# rather than give it a bespoke hue.
-PIN_BUTTON_COLOR = (140, 90, 210)  # purple accent for the "Pin for Tracker" button
+# Sideboard Guide Panel — inline warning label.
 WARNING_LABEL_COLOR = WARNING_TEXT  # -> WARNING_TEXT (was (255, 165, 0); 8.35:1 on panel)
-# FLEX_SLOT_BUTTON_COLOR was (60, 130, 80). Its call site
-# (sideboard_guide_panel/frame.py:162-163) calls stylize_button() first, so the
-# foreground is TEXT_ON_FILL: that measured 4.14:1 on the old green and measures
-# 7.25:1 on SUCCESS_FILL. Aliasing both fixes the contrast and removes a hue.
-FLEX_SLOT_BUTTON_COLOR = SUCCESS_FILL  # -> SUCCESS_FILL
-FLEX_SLOT_HIGHLIGHT_COLOR = SUCCESS_SURFACE  # -> SUCCESS_SURFACE (was (55, 70, 45))
+# FLEX_SLOT_HIGHLIGHT_COLOR was (55, 70, 45); the flex-slot rows in the sideboard
+# card selector are the only remaining call site.
+FLEX_SLOT_HIGHLIGHT_COLOR = SUCCESS_SURFACE  # -> SUCCESS_SURFACE
+#
+# Phase 2 deleted three constants that used to live here:
+#   CALC_BUTTON_GREEN     -> stylize_button(kind="success")   (5.49:1 -> 7.25:1)
+#   PIN_BUTTON_COLOR      -> stylize_button(kind="secondary") (was the contrast
+#                            suite's one documented xfail, 4.15:1)
+#   FLEX_SLOT_BUTTON_COLOR-> stylize_button(kind="success")
+# Every one of them was a bespoke hue on exactly one button. The button system is
+# where a button's colour is decided now, so a hex here would have no way to be
+# right.

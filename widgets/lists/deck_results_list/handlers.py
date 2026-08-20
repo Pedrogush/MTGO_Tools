@@ -18,8 +18,29 @@ class DeckResultsListHandlersMixin:
     _line_one_color: wx.Colour
     _line_two_color: wx.Colour
     _card_bg: wx.Colour
-    _card_border: wx.Colour
-    _selection_fg: wx.Colour
+    _selection_bg: wx.Colour
+    _selection_border: wx.Colour
+    _selection_border_width: int
+
+    # ------------------------------------------------------------------
+    # Selection painting
+    # ------------------------------------------------------------------
+
+    def _paint_card(self, dc: wx.DC, card_rect: wx.Rect, is_selected: bool) -> None:
+        """Fill and outline one row's card, selected or not.
+
+        The whole of C9/G1 for this widget lives here: an unselected row is a
+        plain panel-coloured card with no outline, a selected one is the app's
+        selection token (16% accent tint + a 2px accent edge). Text colours do
+        not change with selection any more — the old code inverted them to
+        near-black because the selected row was a solid accent fill.
+        """
+        dc.SetBrush(wx.Brush(self._selection_bg if is_selected else self._card_bg))
+        if is_selected:
+            dc.SetPen(wx.Pen(self._selection_border, self._selection_border_width))
+        else:
+            dc.SetPen(wx.Pen(self._card_bg))
+        dc.DrawRoundedRectangle(card_rect, self._CARD_RADIUS)
 
     # ------------------------------------------------------------------
     # Public API
@@ -118,18 +139,14 @@ class DeckResultsListHandlersMixin:
 
     def _draw_plain_item(self, dc: wx.DC, rect: wx.Rect, n: int, data: tuple) -> None:
         emoji_prefix, line_one, line_two = data
-        is_selected = self.IsSelected(n)
-        card_bg = self._card_border if is_selected else self._card_bg
-        card_fg = self._selection_fg if is_selected else self._line_one_color
-        sub_fg = self._selection_fg if is_selected else self._line_two_color
+        card_fg = self._line_one_color
+        sub_fg = self._line_two_color
 
         card_rect = wx.Rect(rect)
         card_rect.Deflate(self._ITEM_MARGIN, self._ITEM_MARGIN)
         max_text_width = max(card_rect.width - (self._CARD_PADDING * 2), 0)
 
-        dc.SetBrush(wx.Brush(card_bg))
-        dc.SetPen(wx.Pen(self._card_border))
-        dc.DrawRoundedRectangle(card_rect, self._CARD_RADIUS)
+        self._paint_card(dc, card_rect, self.IsSelected(n))
 
         font = self.GetFont()
         font.SetWeight(wx.FONTWEIGHT_BOLD)
@@ -180,17 +197,13 @@ class DeckResultsListHandlersMixin:
         Right column: date (bold, right-aligned), result (small/subdued, right-aligned)
         """
         emoji, player, archetype, event, result, date = data
-        is_selected = self.IsSelected(n)
-        card_bg = self._card_border if is_selected else self._card_bg
-        primary_fg = self._selection_fg if is_selected else self._line_one_color
-        secondary_fg = self._selection_fg if is_selected else self._line_two_color
+        primary_fg = self._line_one_color
+        secondary_fg = self._line_two_color
 
         card_rect = wx.Rect(rect)
         card_rect.Deflate(self._ITEM_MARGIN, self._ITEM_MARGIN)
 
-        dc.SetBrush(wx.Brush(card_bg))
-        dc.SetPen(wx.Pen(self._card_border))
-        dc.DrawRoundedRectangle(card_rect, self._CARD_RADIUS)
+        self._paint_card(dc, card_rect, self.IsSelected(n))
 
         # Column boundaries — split the inner content area 70/30
         inner_w = card_rect.width - (self._CARD_PADDING * 2)

@@ -26,6 +26,7 @@ from utils.constants import (
     PADDING_XL,
     SUBDUED_TEXT,
 )
+from widgets.checkbox import DarkCheckBox
 from widgets.mana_icon_factory import ManaIconFactory
 from widgets.panels.card_image_display import CardImageDisplay
 from widgets.panels.card_inspector_panel.handlers import CardInspectorPanelHandlersMixin
@@ -145,7 +146,10 @@ class CardInspectorPanel(
         self.nav_panel.SetMaxSize((image_width, -1))
 
         self.prev_btn = wx.Button(self.nav_panel, label="◀", size=nav_btn_size)
-        stylize_button(self.prev_btn)
+        # Pager arrows are navigation chrome sitting directly under the card art.
+        # They are also the app's most-disabled buttons (most cards have one
+        # printing), and a disabled accent fill was C-b in issue #962.
+        stylize_button(self.prev_btn, kind="ghost", surface="panel")
         self.prev_btn.Bind(wx.EVT_BUTTON, self._on_prev_printing)
         nav_sizer.Add(self.prev_btn, 0, wx.RIGHT, PADDING_SM)
 
@@ -165,7 +169,7 @@ class CardInspectorPanel(
         self.loading_label.Hide()
 
         self.next_btn = wx.Button(self.nav_panel, label="▶", size=nav_btn_size)
-        stylize_button(self.next_btn)
+        stylize_button(self.next_btn, kind="ghost", surface="panel")
         self.next_btn.Bind(wx.EVT_BUTTON, self._on_next_printing)
         nav_sizer.Add(self.next_btn, 0, wx.LEFT, PADDING_SM)
 
@@ -181,14 +185,14 @@ class CardInspectorPanel(
         save_sizer = wx.BoxSizer(wx.HORIZONTAL)
         self.save_panel.SetSizer(save_sizer)
 
-        self.autosave_checkbox = wx.CheckBox(self.save_panel, label="Auto-save art")
+        self.autosave_checkbox = DarkCheckBox(self.save_panel, label="Auto-save art")
         stylize_checkbox(self.autosave_checkbox, surface="panel", tone="secondary")
         self.autosave_checkbox.SetToolTip("Persist each printing you scroll to for this card")
         self.autosave_checkbox.Bind(wx.EVT_CHECKBOX, self._on_autosave_toggle)
         save_sizer.Add(self.autosave_checkbox, 0, wx.ALIGN_CENTER_VERTICAL)
 
         self.save_art_btn = wx.Button(self.save_panel, label="Save art", style=wx.BU_EXACTFIT)
-        stylize_button(self.save_art_btn)
+        stylize_button(self.save_art_btn, kind="secondary")
         self.save_art_btn.SetToolTip("Save the current printing as this card's art")
         self.save_art_btn.Bind(wx.EVT_BUTTON, self._on_save_printing)
         save_sizer.Add(self.save_art_btn, 0, wx.LEFT | wx.ALIGN_CENTER_VERTICAL, PADDING_MD)

@@ -13,6 +13,7 @@ from utils.constants import (
     PADDING_XS,
 )
 from widgets.buttons.mana_button import create_mana_button
+from widgets.checkbox import DarkCheckBox
 from widgets.panels.mana_rich_text_ctrl import ManaSymbolRichCtrl
 from widgets.stylize import stylize_button, stylize_checkbox, stylize_label, stylize_textctrl
 
@@ -33,7 +34,8 @@ class BasicFiltersBuilderMixin(_Base):
 
     def _build_header(self, parent_sizer: wx.Sizer) -> None:
         back_btn = wx.Button(self, label=self._t("builder.back_button"))
-        stylize_button(back_btn)
+        # F2: a full-width saturated bar reads as a section header, not a switch.
+        stylize_button(back_btn, kind="secondary")
         back_btn.SetToolTip(self._t("builder.back_button.tooltip"))
         back_btn.Bind(wx.EVT_BUTTON, lambda _evt: self._on_back_clicked())
         parent_sizer.Add(back_btn, 0, wx.EXPAND | wx.ALL, PADDING_MD)
@@ -81,7 +83,7 @@ class BasicFiltersBuilderMixin(_Base):
         match_label = wx.StaticText(self, label=self._t("builder.label.match"))
         stylize_label(match_label, True)
         match_row.Add(match_label, 0, wx.RIGHT, PADDING_MD)
-        exact_cb = wx.CheckBox(self, label=self._t("builder.check.exact_symbols"))
+        exact_cb = DarkCheckBox(self, label=self._t("builder.check.exact_symbols"))
         stylize_checkbox(exact_cb, surface="panel")
         exact_cb.SetToolTip("When checked, match the exact mana symbols (no extras allowed)")
         match_row.Add(exact_cb, 0)
@@ -93,11 +95,20 @@ class BasicFiltersBuilderMixin(_Base):
         # Mana symbol keyboard
         keyboard_row = wx.BoxSizer(wx.HORIZONTAL)
         keyboard_row.AddStretchSpacer(1)
+        mana_btn_height = 0
         for token in ["W", "U", "B", "R", "G", "C", "X"]:
             btn = create_mana_button(self, token, self._append_mana_symbol, self.mana_icons)
+            mana_btn_height = max(mana_btn_height, btn.GetSize().GetHeight())
             keyboard_row.Add(btn, 0, wx.ALL, PADDING_XS)
+        # G4: "All" opens the rest of this same keyboard, so it gets the same face
+        # and the same height as the seven buttons beside it. It keeps its own
+        # width because it carries a word rather than a glyph. The height is taken
+        # from a real mana button rather than hard-coded, since that one depends on
+        # the loaded icon size.
         all_btn = wx.Button(self, label="All", size=BUILDER_MANA_ALL_BTN_SIZE)
-        stylize_button(all_btn)
+        if mana_btn_height:
+            all_btn.SetMinSize((BUILDER_MANA_ALL_BTN_SIZE[0], mana_btn_height))
+        stylize_button(all_btn, kind="ghost")
         all_btn.SetToolTip("Open the full mana symbol keyboard")
         all_btn.Bind(wx.EVT_BUTTON, lambda _evt: self._open_mana_keyboard())
         keyboard_row.Add(all_btn, 0, wx.ALL, PADDING_XS)

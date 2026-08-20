@@ -29,11 +29,23 @@ widget               behaviour
 ===================  ==================================================
 ``wx.StaticText``    background + foreground honoured
 ``wx.TextCtrl``      background + foreground honoured
-``wx.Button``        background + foreground honoured, border is not
+``wx.Button``        background + foreground honoured. The border is a **2px
+                     light-grey frame** (``#ADADAD`` outside, ``#E1E1E1``
+                     inside) drawn by the theme, identical for every background
+                     and unreachable from wx — but ``wx.BORDER_NONE`` deletes
+                     it, and the flag can be set *after* construction with
+                     ``SetWindowStyleFlag``. See
+                     :func:`strip_native_button_frame`. A **disabled** button
+                     keeps its background at full saturation; only the label
+                     greys, so a disabled state has to repaint the fill
 ``wx.CheckBox``      label + surround honoured; the box **glyph** is drawn
                      by ``wxRendererNative`` from the light ``BUTTON``
-                     theme class and is not reachable at all — see
-                     :func:`stylize_checkbox`
+                     theme class and is not reachable at all.
+                     ``wx.lib.checkbox.GenCheckBox`` is **not** a way out: it
+                     builds its bitmaps from the same
+                     ``wxRendererNative.DrawCheckBox`` and renders the identical
+                     white square. Replaced by the own-drawn
+                     :class:`widgets.checkbox.DarkCheckBox`
 ``wx.SpinCtrl``      honoured on the edit field; the arrows are a separate
                      ``msctls_updown32`` HWND that stays light under every
                      theme tried, Windows dark mode included
@@ -51,6 +63,10 @@ widget               behaviour
                      only fix (see :mod:`widgets.notebook`)
 ``wx.StatusBar``     background honoured, **foreground silently ignored**
                      — hence :mod:`widgets.status_bar`
+``wx.ToggleButton``  background + foreground honoured; the *checked* state adds
+                     a 1px ring in the **system** accent colour, which is a user
+                     setting rather than ours. Unused: the app's toggles are
+                     plain buttons re-stylized on state change
 scrollbars           not reachable from wx at all; dark process-wide via
                      :func:`widgets.native_dark.enable_app_dark_mode`
 ===================  ==================================================
@@ -70,11 +86,12 @@ from utils.constants.theme import (
     ACCENT_ON_PRIMARY,
     ACCENT_PRIMARY,
     BASE_FONT_POINT_SIZE,
-    BORDER_STRONG,
     DANGER_FILL,
     DANGER_ON_FILL,
     DISABLED_FILL,
     DISABLED_ON_FILL,
+    SELECTION_FILLS,
+    SELECTION_TEXT,
     SUCCESS_FILL,
     SUCCESS_ON_FILL,
     SURFACE_ALT,
@@ -86,8 +103,10 @@ from utils.constants.theme import (
     TEXT_PRIMARY,
     TEXT_SECONDARY,
     TYPE_BOLD_LEVELS,
+    contrast_ratio,
     font_point_size,
 )
+from widgets.checkbox import DarkCheckBox
 from widgets.native_dark import (
     THEME_EXPLORER,
     THEME_INPUT,
@@ -123,27 +142,81 @@ _TEXT_COLOURS = {
     "disabled": TEXT_DISABLED,
 }
 
-# kind -> (background, foreground, bold, border)
+# kind -> (background, foreground, bold)
 #
-# The border token is carried but not applied: wx.Button on MSW draws its own
-# frame and exposes no border colour. Phase 2 moves the outline kinds onto an
-# own-drawn button and reads this column then; keeping it here means the palette
-# decision lives with the rest of the button definition rather than in a panel.
+# There is no border column. wxMSW gives a coloured wx.Button a **2px light-grey
+# double frame** (#ADADAD outside, #E1E1E1 inside) drawn by the theme, identical
+# whatever background is set, and no wx call changes its colour. The only control
+# available is removing it, with wx.BORDER_NONE — which
+# :func:`stylize_button` applies to every kind. See the module docstring.
+#
+# Every fill is therefore load-bearing: with no outline, the fill is the whole
+# affordance. The neutrals step down base -> ghost -> secondary so that "how light
+# is this chip" is the hierarchy.
 _RGB = tuple[int, int, int]
-_ButtonSpec = tuple[_RGB | None, _RGB, bool, _RGB | None]
+_ButtonSpec = tuple[_RGB, _RGB, bool]
 _BUTTON_KINDS: dict[str, _ButtonSpec] = {
-    # The one loud button. Reserved for the single most important action on a
-    # surface; phase 2 drops the rest of the app off it.
-    "primary": (ACCENT_PRIMARY, ACCENT_ON_PRIMARY, True, None),
+    # The one loud button: saturated accent. At most one per surface. Everything
+    # phase 2 took *off* primary is here because it was primary by default, not
+    # by decision.
+    "primary": (ACCENT_PRIMARY, ACCENT_ON_PRIMARY, True),
     # The default for everything that is not the primary action.
-    "secondary": (SURFACE_PANEL, TEXT_PRIMARY, False, BORDER_STRONG),
-    # Chrome that must not compete with content: toolbars, view toggles.
-    "ghost": (SURFACE_BASE, TEXT_SECONDARY, False, None),
-    "danger": (DANGER_FILL, DANGER_ON_FILL, False, None),
-    "success": (SUCCESS_FILL, SUCCESS_ON_FILL, False, None),
-    # Applied by stylize_button(..., enabled=False); loses chroma, not just contrast.
-    "disabled": (DISABLED_FILL, DISABLED_ON_FILL, False, None),
+    "secondary": (SURFACE_RAISED, TEXT_PRIMARY, False),
+    # Chrome that must not compete with content: the toolbar, view toggles, the
+    # inspector pager, the settings button.
+    "ghost": (SURFACE_ALT, TEXT_SECONDARY, False),
+    "danger": (DANGER_FILL, DANGER_ON_FILL, False),
+    "success": (SUCCESS_FILL, SUCCESS_ON_FILL, False),
+    # A button that carries an on/off state (the Grid/Table/Pile toggles). The
+    # unselected face is deliberately identical to ``ghost``: an unselected toggle
+    # *is* a quiet chrome button. ``selected=True`` swaps it for the selection
+    # idiom, which is the same token the deck rows, the card views and the active
+    # notebook tab use.
+    "toggle": (SURFACE_ALT, TEXT_SECONDARY, False),
+    # Applied by stylize_button(..., enabled=False); loses chroma, not just
+    # contrast. wxMSW greys a disabled button's *label* and leaves the background
+    # it was given at full saturation, so a disabled primary stays bright blue
+    # unless the background is repainted here (issue #962, C-b).
+    "disabled": (DISABLED_FILL, DISABLED_ON_FILL, False),
 }
+
+#: The label and weight a control wears while it is the selected one; the fill
+#: comes from ``SELECTION_FILLS`` for whichever surface it sits on. Fill + label
+#: rather than fill + 2px border, because wx.Button cannot draw a border — so the
+#: accent label is what carries the >= 4.5:1 the border would have.
+_SELECTED_FG = SELECTION_TEXT
+_SELECTED_BOLD = True
+
+#: Neutral fills, darkest to lightest.
+_NEUTRAL_LADDER: tuple[_RGB, ...] = (SURFACE_BASE, SURFACE_PANEL, SURFACE_ALT, SURFACE_RAISED)
+
+#: How much lighter than its background a neutral chip has to be before it reads
+#: as a button at all. Measured off the surface scale: SURFACE_ALT on
+#: SURFACE_PANEL is 1.10:1 and disappears; on SURFACE_BASE it is 1.32:1 and
+#: reads. 1.15 is the line between those two, and it is what makes the Grid /
+#: Table / Pile toggles visible on the card-table panel while leaving the toolbar
+#: (which sits on SURFACE_BASE) exactly as designed.
+#:
+#: This is not a WCAG threshold. A button whose *only* identifier is its fill
+#: would need 3:1, which no pair of adjacent dark surfaces can reach; these
+#: buttons are identified by their label, and the fill only has to say "this is a
+#: control". Where a fill *is* the only signal — the checkbox box — the token is
+#: BORDER_STRONG at 3.54:1.
+_MIN_CHIP_CONTRAST = 1.15
+
+
+def _neutral_fill(preferred: _RGB, surface: str) -> _RGB:
+    """Step ``preferred`` up the neutral ladder until it is visible on ``surface``."""
+    if preferred not in _NEUTRAL_LADDER:
+        return preferred
+    background = _SURFACE_COLOURS[surface]
+    index = _NEUTRAL_LADDER.index(preferred)
+    while (
+        index < len(_NEUTRAL_LADDER) - 1
+        and contrast_ratio(_NEUTRAL_LADDER[index], background) < _MIN_CHIP_CONTRAST
+    ):
+        index += 1
+    return _NEUTRAL_LADDER[index]
 
 
 def _colour(rgb: _RGB) -> wx.Colour:
@@ -359,32 +432,29 @@ def stylize_combobox(ctrl: wx.ComboBox, *, surface: str = "alt") -> None:
 
 
 def stylize_checkbox(
-    ctrl: wx.CheckBox,
+    ctrl: wx.CheckBox | DarkCheckBox,
     *,
     surface: str = "base",
     tone: str = "primary",
 ) -> None:
-    """Theme a checkbox's label and surround. The **box glyph stays white.**
+    """Theme a checkbox.
 
-    This is a partial fix and says so out loud rather than pretending otherwise.
-    Measured: setting a colour on a ``wx.CheckBox`` makes wxMSW owner-draw it and
-    hand the glyph to ``wxRendererNative``, which opens the standard light
-    ``BUTTON`` theme class. Seven theme classes were tried against a checkbox with
-    Windows dark mode active — ``DarkMode_Explorer``, ``DarkMode_CFD``,
-    ``DarkMode``, ``DarkMode_Explorer::Button``, ``Explorer::Button``,
-    ``DarkMode_ItemsView``, ``ItemsView`` — and the box is a solid white square in
-    every one of them, checked and unchecked. Dropping the control out of visual
-    styles does not help either: the classic checkbox fills its box with
-    ``COLOR_WINDOW``, which is also white.
+    For a :class:`widgets.checkbox.DarkCheckBox` — which is what every call site
+    in the app now builds — this sets the surface and label tone and the control
+    paints itself, box glyph included.
 
-    So no ``apply_dark_theme`` call here: it would be exactly the kind of colour
-    setting that silently does nothing. A dark checkbox needs an own-drawn
-    control; that is a new component, not a styling call, and belongs with the
-    phase-2 button system.
-
-    What this *does* fix is the label, which was often unset and rendered in the
-    system's near-black on the dark surface.
+    A plain ``wx.CheckBox`` is still accepted so that third-party or dialog code
+    keeps working, but it gets the phase-1 partial fix only: **the box glyph stays
+    white.** wxMSW hands the glyph to ``wxRendererNative``, which opens the light
+    ``BUTTON`` theme class; seven theme classes and the no-visual-style path were
+    measured and every one of them is a solid white square. That is why
+    ``DarkCheckBox`` exists — see its module docstring for the full list of what
+    was ruled out, including ``wx.lib.checkbox.GenCheckBox``, which draws the same
+    renderer's bitmaps.
     """
+    if isinstance(ctrl, DarkCheckBox):
+        ctrl.apply_theme(surface=surface, tone=tone)
+        return
     ctrl.SetForegroundColour(_colour(_TEXT_COLOURS[tone]))
     ctrl.SetBackgroundColour(_colour(_SURFACE_COLOURS[surface]))
 
@@ -451,33 +521,121 @@ def native_dark_mode_active() -> bool:
     return is_app_dark_mode_enabled()
 
 
+#: Attributes stashed on a button so a later ``Enable``/``Disable`` can repaint it
+#: in the kind it was originally given. Instance attributes rather than a registry
+#: so they die with the widget.
+_BUTTON_KIND_ATTR = "_mtgo_button_kind"
+_BUTTON_STATE_ATTR = "_mtgo_button_enabled"
+_BUTTON_WATCHED_ATTR = "_mtgo_button_watched"
+
+
+def _watch_enabled_state(button: wx.Button) -> None:
+    """Repaint ``button`` when something calls ``Enable``/``Disable`` on it.
+
+    wxMSW greys a disabled button's *label* and leaves the background exactly as
+    saturated as it was, so a disabled primary stays bright blue (issue #962,
+    C-b). ``Enable``/``Disable`` are C++ methods with no event and no Python hook,
+    and the app calls them from ~20 places on buttons it does not own, so the
+    repaint has to be driven from the button itself.
+
+    ``EVT_UPDATE_UI`` is wx's own mechanism for exactly this — it already fires on
+    every window each idle cycle whether or not a handler is bound, so this adds
+    an attribute comparison and no new events.
+    """
+    if getattr(button, _BUTTON_WATCHED_ATTR, False):
+        return
+    setattr(button, _BUTTON_WATCHED_ATTR, True)
+
+    def on_update(event: wx.UpdateUIEvent) -> None:
+        event.Skip()
+        current = bool(button.IsThisEnabled())
+        if current == getattr(button, _BUTTON_STATE_ATTR, None):
+            return
+        kind, selected, surface, level = getattr(
+            button, _BUTTON_KIND_ATTR, ("secondary", False, "base", None)
+        )
+        stylize_button(
+            button, kind, enabled=current, selected=selected, surface=surface, level=level
+        )
+
+    button.Bind(wx.EVT_UPDATE_UI, on_update)
+
+
+def strip_native_button_frame(button: wx.Button) -> None:
+    """Remove wxMSW's light-grey 2px frame from a button.
+
+    Measured (wxWidgets 3.2.8 / wxPython 4.2.4, Windows dark mode on): a
+    ``wx.Button`` that has had ``SetBackgroundColour`` called on it is drawn with
+    a two-pixel light frame — ``#ADADAD`` outside, ``#E1E1E1`` inside — whatever
+    the background is. It is the same frame on ``SURFACE_BASE``, on
+    ``SURFACE_RAISED`` and on ``ACCENT_PRIMARY``, so it is not derived from the
+    face colour, and nothing wx exposes changes it. Against ``SURFACE_BASE`` it
+    measures ~14:1, which made it the brightest chrome in the app: the toolbar's
+    six buttons were a blue fill *inside a white outline*.
+
+    ``wx.BORDER_NONE`` removes it, and — verified rather than assumed —
+    ``SetWindowStyleFlag`` applies it **after construction**, so this is a
+    styling call and not a change to 26 constructor sites.
+    """
+    style = button.GetWindowStyleFlag()
+    if style & wx.BORDER_NONE:
+        return
+    button.SetWindowStyleFlag(style | wx.BORDER_NONE)
+    button.Refresh()
+
+
 def stylize_button(
     button: wx.Button,
     kind: str = "primary",
     *,
     enabled: bool = True,
+    selected: bool = False,
+    surface: str = "base",
     level: str | None = None,
 ) -> None:
     """Theme a button by the role it plays.
 
-    :param kind: ``primary`` (the default, and today's only style: accent fill,
-        near-black bold label), ``secondary``, ``ghost``, ``danger`` or ``success``.
+    :param kind: ``primary`` (accent fill, near-black bold label — at most one per
+        surface), ``secondary`` (the default for everything else), ``ghost``
+        (chrome that must not compete: toolbar, view toggles, pager),
+        ``toggle`` (a button carrying an on/off state), ``danger`` or ``success``.
     :param enabled: ``False`` paints the disabled tokens, which drop chroma rather
-        than merely dimming the fill.
+        than merely dimming the fill. Pass it whenever the call site also calls
+        ``Disable()`` — wxMSW greys the *label* by itself and leaves the
+        background exactly as saturated as it was.
+    :param selected: for ``kind="toggle"``, whether this is the chosen one. Paints
+        the app's single selection idiom (accent tint + accent label).
+    :param surface: which surface the button sits on. Neutral fills are relative,
+        not absolute: a ghost chip is "one visible step above my background", so
+        the same kind that reads on ``SURFACE_BASE`` does not vanish on a panel.
+        Selection tints are pre-composited per surface for the same reason.
     :param level: optional type-scale level for the label.
     """
     if kind not in _BUTTON_KINDS:
         raise ValueError(f"unknown button kind {kind!r}; expected one of {sorted(_BUTTON_KINDS)}")
-    background, foreground, bold, _border = _BUTTON_KINDS["disabled" if not enabled else kind]
+    # A call site may Disable() before *or* after styling; honour both.
+    enabled = enabled and bool(button.IsThisEnabled())
+    setattr(button, _BUTTON_KIND_ATTR, (kind, selected, surface, level))
+    setattr(button, _BUTTON_STATE_ATTR, enabled)
+    _watch_enabled_state(button)
+    if not enabled:
+        background, foreground, bold = _BUTTON_KINDS["disabled"]
+    elif selected:
+        background, foreground, bold = SELECTION_FILLS[surface], _SELECTED_FG, _SELECTED_BOLD
+    else:
+        background, foreground, bold = _BUTTON_KINDS[kind]
+        background = _neutral_fill(background, surface)
 
-    if background is not None:
-        button.SetBackgroundColour(_colour(background))
+    strip_native_button_frame(button)
+    button.SetBackgroundColour(_colour(background))
     button.SetForegroundColour(_colour(foreground))
 
     if level is None:
         font = button.GetFont()
-        if bold:
-            font.MakeBold()
+        # Restyling a button must be able to take bold *off* again — the view-mode
+        # toggles are re-stylized on every switch, so a one-way MakeBold() would
+        # leave every button that had ever been selected permanently bold.
+        font.SetWeight(wx.FONTWEIGHT_BOLD if bold else wx.FONTWEIGHT_NORMAL)
         button.SetFont(font)
     else:
         apply_type_level(button, level)

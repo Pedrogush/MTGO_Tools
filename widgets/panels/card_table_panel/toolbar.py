@@ -18,12 +18,12 @@ import wx
 
 from services.deck_service.printing import DATE_MODES as PRINTING_DATE_MODES
 from services.deck_service.printing import PRINTING_MODES
-from utils.constants import DARK_ACCENT, DARK_ALT, LIGHT_TEXT
 from widgets.panels.card_table_panel.sorting import (
     PILE_SORT_COLOR,
     PILE_SORT_MV,
     PILE_SORT_TYPE,
 )
+from widgets.stylize import stylize_button
 from widgets.wx_layout import relayout
 
 if TYPE_CHECKING:
@@ -41,10 +41,17 @@ class CardTablePanelToolbarMixin(_Base):
         return self._t(f"tabs.view.col.{col_id}")
 
     def _refresh_view_mode_buttons(self) -> None:
+        # C9/G1: the active view is a *selection*, so it wears the app's one
+        # selection idiom rather than a saturated fill of its own. The old pairing
+        # was also LIGHT_TEXT on ACCENT_PRIMARY, which measures 3.11:1 and failed
+        # AA — nothing in the review or the plan had caught that.
         for mode, btn in self._view_mode_buttons.items():
-            active = mode == self.view_mode
-            btn.SetBackgroundColour(wx.Colour(*(DARK_ACCENT if active else DARK_ALT)))
-            btn.SetForegroundColour(wx.Colour(*LIGHT_TEXT))
+            stylize_button(
+                btn,
+                kind="toggle",
+                selected=mode == self.view_mode,
+                surface="panel",
+            )
             btn.Refresh()
 
     def _update_pile_sort_button_visibility(self) -> None:

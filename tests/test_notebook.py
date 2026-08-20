@@ -39,9 +39,20 @@ def _rgb(colour: object) -> tuple[int, int, int]:
 def test_factory_applies_the_tokens(frame: object) -> None:
     notebook = make_flat_notebook(frame)
     assert _rgb(notebook.GetTabAreaColour()) == T.SURFACE_PANEL
-    assert _rgb(notebook.GetActiveTabColour()) == T.ACCENT_PRIMARY
+    assert _rgb(notebook.GetActiveTabColour()) == T.SELECTION_FILL_ON_PANEL
     assert _rgb(notebook.GetNonActiveTabTextColour()) == T.TEXT_SECONDARY
-    assert _rgb(notebook.GetActiveTabTextColour()) == T.ACCENT_ON_PRIMARY
+    assert _rgb(notebook.GetActiveTabTextColour()) == T.SELECTION_TEXT
+
+
+def test_active_tab_is_the_selection_token_not_a_saturated_fill(frame: object) -> None:
+    """Phase 2 owns the accent budget and spent none of it on the tab strip.
+
+    An active tab is a selected item among peers, which is what the selection
+    token is for. Two accent-filled tab blocks sat directly above the card art.
+    """
+    notebook = make_flat_notebook(frame)
+    assert _rgb(notebook.GetActiveTabColour()) != T.ACCENT_PRIMARY
+    assert _rgb(notebook.GetActiveTabColour()) in set(T.SELECTION_FILLS.values())
 
 
 def test_pages_can_be_added(frame: object) -> None:

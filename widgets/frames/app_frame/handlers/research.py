@@ -131,11 +131,7 @@ class DeckResearchHandlers(_Base):
         show_source = self.controller.get_deck_data_source() == "both"
         rows = [
             (
-                (
-                    ("🐠" if deck.get("source") == "mtggoldfish" else "🧙🏾‍♂️")
-                    if show_source
-                    else ""
-                ),
+                (("🐠" if deck.get("source") == "mtggoldfish" else "🧙🏾‍♂️") if show_source else ""),
                 deck.get("player", "Unknown"),
                 slug_to_name.get(deck.get("name", ""), deck.get("name", "")),
                 strip_extra_dates(deck.get("event", "")),
@@ -280,9 +276,14 @@ class DeckResearchHandlers(_Base):
         if archetype_name == "Any":
             right_cell = ""
         else:
+            # The metric was ~20px bold #3B82F6 — the app's largest patch of
+            # accent-as-text, and 3.72:1 on this surface, i.e. below AA. It is a
+            # value, not an action and not a selection, so it is plain primary
+            # text now (11.59:1). Phase 5 (H4) replaces the seven slash-separated
+            # integers with a sparkline; this is a colour fix, not that.
             right_cell = (
                 '<td align="right" valign="middle">'
-                f'<font size="3" color="#3B82F6"><b>{per_day_str}</b></font><br>'
+                f'<font size="3" color="#ECECEC"><b>{per_day_str}</b></font><br>'
                 '<font size="2" color="#B9BFCA">last 7 days</font>'
                 "</td>"
             )
