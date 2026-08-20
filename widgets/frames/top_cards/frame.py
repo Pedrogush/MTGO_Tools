@@ -13,10 +13,11 @@ from typing import TYPE_CHECKING
 
 import wx
 
-from utils.constants import DARK_ALT, DARK_BG, DARK_PANEL, FORMAT_OPTIONS, LIGHT_TEXT, SUBDUED_TEXT
+from utils.constants import DARK_BG, DARK_PANEL, FORMAT_OPTIONS, LIGHT_TEXT, SUBDUED_TEXT
 from utils.i18n import translate
 from widgets.frames.top_cards.handlers import TopCardsHandlersMixin
 from widgets.frames.top_cards.properties import TopCardsPropertiesMixin
+from widgets.stylize import stylize_choice, stylize_list_ctrl
 
 if TYPE_CHECKING:
     from services.format_card_pool_service import FormatCardPoolService
@@ -70,8 +71,7 @@ class TopCardsFrame(TopCardsHandlersMixin, TopCardsPropertiesMixin, wx.Frame):
 
         self.format_choice = wx.Choice(panel, choices=TOP_CARDS_FORMAT_OPTIONS)
         self.format_choice.SetSelection(TOP_CARDS_FORMAT_OPTIONS.index("Modern"))
-        self.format_choice.SetBackgroundColour(DARK_ALT)
-        self.format_choice.SetForegroundColour(LIGHT_TEXT)
+        stylize_choice(self.format_choice)
         self.format_choice.Bind(wx.EVT_CHOICE, self.on_format_change)
         toolbar.Add(self.format_choice, 0, wx.RIGHT, 15)
 
@@ -109,8 +109,7 @@ class TopCardsFrame(TopCardsHandlersMixin, TopCardsPropertiesMixin, wx.Frame):
             10, self._t("top_cards.col.archetypes"), format=center, width=95
         )
         self.card_list.InsertColumn(11, self._t("top_cards.col.formats"), format=center, width=160)
-        self.card_list.SetBackgroundColour(DARK_PANEL)
-        self.card_list.SetForegroundColour(LIGHT_TEXT)
+        stylize_list_ctrl(self.card_list, surface="panel")
         main_sizer.Add(self.card_list, 1, wx.ALL | wx.EXPAND, 10)
         self._bind_header_tooltips()
 

@@ -52,6 +52,7 @@ from widgets.panels.card_table_panel.grid_layout import _DEFAULT_COLUMNS, GridLa
 from widgets.panels.card_table_panel.grid_render import GridRenderMixin
 from widgets.panels.card_table_panel.marquee import MarqueeController
 from widgets.panels.card_table_panel.pile_view import _ImageCache
+from widgets.stylize import stylize_scrollable
 
 
 class DeckGridView(
@@ -143,6 +144,7 @@ class DeckGridView(
         self._canvas: wx.Bitmap | None = None
 
         self.SetBackgroundColour(DARK_PANEL)
+        stylize_scrollable(self)
         # AutoBufferedPaintDC requires BG_STYLE_PAINT so wx skips its own
         # erase-background draw and _on_paint owns the whole client area.
         self.SetBackgroundStyle(wx.BG_STYLE_PAINT)

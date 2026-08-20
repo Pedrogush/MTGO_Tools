@@ -8,15 +8,13 @@ import wx
 
 from utils.constants import (
     BUILDER_MANA_ALL_BTN_SIZE,
-    DARK_PANEL,
-    LIGHT_TEXT,
     PADDING_MD,
     PADDING_SM,
     PADDING_XS,
 )
 from widgets.buttons.mana_button import create_mana_button
 from widgets.panels.mana_rich_text_ctrl import ManaSymbolRichCtrl
-from widgets.stylize import stylize_button, stylize_label, stylize_textctrl
+from widgets.stylize import stylize_button, stylize_checkbox, stylize_label, stylize_textctrl
 
 if TYPE_CHECKING:
     from widgets.panels.deck_builder_panel.protocol import DeckBuilderPanelProto
@@ -84,8 +82,7 @@ class BasicFiltersBuilderMixin(_Base):
         stylize_label(match_label, True)
         match_row.Add(match_label, 0, wx.RIGHT, PADDING_MD)
         exact_cb = wx.CheckBox(self, label=self._t("builder.check.exact_symbols"))
-        exact_cb.SetForegroundColour(LIGHT_TEXT)
-        exact_cb.SetBackgroundColour(DARK_PANEL)
+        stylize_checkbox(exact_cb, surface="panel")
         exact_cb.SetToolTip("When checked, match the exact mana symbols (no extras allowed)")
         match_row.Add(exact_cb, 0)
         self.mana_exact_cb = exact_cb

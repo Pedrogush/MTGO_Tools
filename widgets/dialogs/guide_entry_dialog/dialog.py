@@ -11,6 +11,7 @@ from utils.i18n import translate
 from widgets.dialogs.guide_entry_dialog.handlers import GuideEntryDialogHandlersMixin
 from widgets.dialogs.guide_entry_dialog.properties import GuideEntryDialogPropertiesMixin
 from widgets.panels.sideboard_card_selector import SideboardCardSelector
+from widgets.stylize import stylize_checkbox, stylize_combobox
 
 
 class GuideEntryDialog(GuideEntryDialogHandlersMixin, GuideEntryDialogPropertiesMixin, wx.Dialog):
@@ -45,6 +46,7 @@ class GuideEntryDialog(GuideEntryDialogHandlersMixin, GuideEntryDialogProperties
 
         initial_choices = sorted({name for name in archetype_names if name})
         self.archetype_ctrl = wx.ComboBox(panel, choices=initial_choices, style=wx.CB_DROPDOWN)
+        stylize_combobox(self.archetype_ctrl)
         self.archetype_ctrl.SetBackgroundColour(DARK_ALT)
         self.archetype_ctrl.SetForegroundColour(LIGHT_TEXT)
         if data and data.get("archetype"):
@@ -123,7 +125,7 @@ class GuideEntryDialog(GuideEntryDialogHandlersMixin, GuideEntryDialogProperties
         self.enable_double_checkbox = wx.CheckBox(
             panel, label=self._t("guide.dialog.double_entries")
         )
-        self.enable_double_checkbox.SetForegroundColour(LIGHT_TEXT)
+        stylize_checkbox(self.enable_double_checkbox)
         self.enable_double_checkbox.SetToolTip(
             "If unchecked, will overwrite existing entries for this archetype. "
             "If checked, will add new entry even if archetype already exists."

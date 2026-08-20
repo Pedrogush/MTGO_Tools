@@ -7,6 +7,7 @@ from typing import Any, Protocol
 
 import wx
 import wx.html
+import wx.lib.agw.flatnotebook as fnb
 
 from widgets.mana_icon_factory import ManaIconFactory
 from widgets.panels.card_panel.rule_popup import RulePopupFrame
@@ -35,7 +36,7 @@ class CardPanelProto(Protocol):
     _current_radar: Any | None
 
     # UI widgets
-    notebook: wx.Notebook
+    notebook: fnb.FlatNotebook
     oracle_html: wx.html.HtmlWindow
     stats_panel: wx.ScrolledWindow
     stats_card_label: wx.StaticText

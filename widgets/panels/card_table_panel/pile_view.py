@@ -53,6 +53,7 @@ from widgets.panels.card_table_panel.sorting import (
     PILE_SORT_MV,
     group_into_piles,
 )
+from widgets.stylize import stylize_scrollable
 
 # Match the grid view's card size and inter-card gap so the two views feel
 # visually consistent.
@@ -167,6 +168,7 @@ class DeckPileView(wx.ScrolledWindow):
         self._content_size: wx.Size = wx.Size(0, 0)
 
         self.SetBackgroundColour(DARK_PANEL)
+        stylize_scrollable(self)
         # AutoBufferedPaintDC requires the window to use BG_STYLE_PAINT so
         # wx skips its own erase-background draw and the custom _on_paint owns
         # the whole client area.

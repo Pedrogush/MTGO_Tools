@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import wx
 
-from utils.constants import DARK_ACCENT, DARK_ALT, DARK_PANEL, LIGHT_TEXT, SUBDUED_TEXT
+from utils.constants import DARK_ACCENT, DARK_PANEL, LIGHT_TEXT, SUBDUED_TEXT
 from widgets.lists.deck_results_list.handlers import DeckResultsListHandlersMixin
 from widgets.lists.deck_results_list.properties import DeckResultsListPropertiesMixin
+from widgets.stylize import stylize_scrollable
 
 
 class DeckResultsList(DeckResultsListHandlersMixin, DeckResultsListPropertiesMixin, wx.VListBox):
@@ -27,6 +28,6 @@ class DeckResultsList(DeckResultsListHandlersMixin, DeckResultsListPropertiesMix
         self._card_bg = wx.Colour(*DARK_PANEL)
         self._card_border = wx.Colour(*DARK_ACCENT)
         self._selection_fg = wx.Colour(15, 17, 22)
-        self.SetBackgroundColour(DARK_ALT)
+        stylize_scrollable(self, surface="alt")
         self.SetForegroundColour(wx.Colour(*LIGHT_TEXT))
         self.SetItemCount(0)

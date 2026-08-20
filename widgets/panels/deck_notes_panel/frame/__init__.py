@@ -27,7 +27,7 @@ from widgets.panels.deck_notes_panel.frame.note_card_widget import (
 )
 from widgets.panels.deck_notes_panel.handlers import DeckNotesPanelHandlersMixin
 from widgets.panels.deck_notes_panel.properties import DeckNotesPanelPropertiesMixin
-from widgets.stylize import stylize_button
+from widgets.stylize import stylize_button, stylize_scrollable
 
 if TYPE_CHECKING:
     from repositories.deck_repository import DeckRepository
@@ -89,7 +89,7 @@ class DeckNotesPanel(
         # ── Scrollable cards area ────────────────────────────────────────────
         self.scroll_win = wx.ScrolledWindow(self, style=wx.VSCROLL)
         self.scroll_win.SetScrollRate(0, 12)
-        self.scroll_win.SetBackgroundColour(DARK_PANEL)
+        stylize_scrollable(self.scroll_win, surface="panel")
         outer.Add(self.scroll_win, 1, wx.EXPAND)
 
         self.cards_sizer = wx.BoxSizer(wx.VERTICAL)

@@ -35,6 +35,7 @@ from utils.constants import (
     DARK_PANEL,
     LIGHT_TEXT,
 )
+from widgets.stylize import stylize_spinctrl
 
 
 class CalculatorPanelBuilderMixin:
@@ -70,13 +71,15 @@ class CalculatorPanelBuilderMixin:
         self._build_calculator_inputs(calc_sizer)
         self._build_calculator_button_rows(calc_sizer)
 
-        # Bind Enter key on spin controls
+        # Bind Enter key on spin controls, and theme them: left alone these are
+        # four solid-white fields on the darkest panel in the app (issue #962).
         for spin in [
             self.spin_deck_size,
             self.spin_copies,
             self.spin_drawn,
             self.spin_target,
         ]:
+            stylize_spinctrl(spin)
             spin.Bind(wx.EVT_TEXT_ENTER, self._on_calculate)
 
         # Result display

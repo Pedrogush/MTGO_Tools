@@ -167,6 +167,21 @@ DISABLED_TEXT = TEXT_DISABLED
 DISABLED_BORDER = _hex("#414B58")
 
 # ---------------------------------------------------------------------------
+# Status bar
+# ---------------------------------------------------------------------------
+# The app's primary feedback channel ("Loaded 976 decks…", "Deck ready…").
+# wxMSW's wxStatusBar honours SetBackgroundColour and silently ignores
+# SetForegroundColour, so the frame's LIGHT_TEXT call never landed and the strip
+# measured 1.40:1 — the worst ratio in the app. widgets.status_bar owns an
+# own-drawn replacement; these are the colours it paints with.
+#
+# TEXT_SECONDARY rather than TEXT_PRIMARY because a status strip is ambient
+# information that should not compete with the content above it; at 8.13:1 it
+# clears AA with room to spare either way.
+STATUS_BAR_BG = SURFACE_PANEL
+STATUS_BAR_FG = TEXT_SECONDARY
+
+# ---------------------------------------------------------------------------
 # Categorical chart palette
 # ---------------------------------------------------------------------------
 # Constraints every member satisfies (all machine-checked in the contrast test):

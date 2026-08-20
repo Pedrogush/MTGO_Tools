@@ -16,9 +16,11 @@ import wx.html
 
 from utils.constants import DARK_PANEL, LIGHT_TEXT, PADDING_MD, PADDING_SM, SUBDUED_TEXT
 from widgets.mana_icon_factory import ManaIconFactory
+from widgets.notebook import make_flat_notebook
 from widgets.panels.card_panel.handlers import CardPanelHandlersMixin
 from widgets.panels.card_panel.properties import CardPanelPropertiesMixin
 from widgets.panels.card_panel.rule_popup import RulePopupFrame
+from widgets.stylize import stylize_scrollable
 
 
 def _default_t(key: str, **fmt: Any) -> str:
@@ -68,8 +70,11 @@ class CardPanel(
         sizer = wx.BoxSizer(wx.VERTICAL)
         self.SetSizer(sizer)
 
-        self.notebook = wx.Notebook(self)
-        self.notebook.SetBackgroundColour(DARK_PANEL)
+        # FlatNotebook, not wx.Notebook: the native MSW tab control ignores both
+        # SetBackgroundColour and SetForegroundColour, so this rendered a white tab
+        # strip with black text about 400px from the deck workspace's dark
+        # FlatNotebook (issue #962, C3). Migration is the only fix there is.
+        self.notebook = make_flat_notebook(self)
         sizer.Add(self.notebook, 1, wx.EXPAND | wx.ALL, PADDING_SM)
 
         self._build_oracle_tab()
@@ -85,7 +90,7 @@ class CardPanel(
             oracle_panel,
             style=wx.html.HW_SCROLLBAR_AUTO | wx.NO_BORDER,
         )
-        self.oracle_html.SetBackgroundColour(DARK_PANEL)
+        stylize_scrollable(self.oracle_html, surface="panel")
         self.oracle_html.SetBorders(2)
         self.oracle_html.SetMinSize((-1, 200))
         self.oracle_html.Bind(wx.html.EVT_HTML_LINK_CLICKED, self._on_oracle_link_clicked)
@@ -95,7 +100,7 @@ class CardPanel(
 
     def _build_stats_tab(self) -> None:
         stats_panel = wx.ScrolledWindow(self.notebook, style=wx.VSCROLL)
-        stats_panel.SetBackgroundColour(DARK_PANEL)
+        stylize_scrollable(stats_panel, surface="panel")
         stats_panel.SetScrollRate(0, 10)
         sizer = wx.BoxSizer(wx.VERTICAL)
         stats_panel.SetSizer(sizer)

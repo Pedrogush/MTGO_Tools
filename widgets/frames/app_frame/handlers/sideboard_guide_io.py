@@ -17,6 +17,7 @@ from widgets.frames.app_frame.handlers.sideboard_guide_csv import (
     export_guide_to_csv,
     import_guide_from_csv,
 )
+from widgets.stylize import stylize_checkbox
 
 if TYPE_CHECKING:
     from widgets.frames.app_frame import AppFrame
@@ -92,6 +93,7 @@ class SideboardGuideImportExportHandlers(_Base):
         sizer = wx.BoxSizer(wx.VERTICAL)
 
         enable_double_checkbox = wx.CheckBox(panel, label="Enable double entries")
+        stylize_checkbox(enable_double_checkbox)
         enable_double_checkbox.SetToolTip(
             "If unchecked, will overwrite existing entries for matching archetypes. "
             "If checked, will add entries even if archetypes already exist."

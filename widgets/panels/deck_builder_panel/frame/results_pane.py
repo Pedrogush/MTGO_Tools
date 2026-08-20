@@ -9,15 +9,12 @@ import wx
 from utils.constants import (
     BUILDER_MANA_CANVAS_WIDTH,
     BUILDER_NAME_COL_DEFAULT_WIDTH,
-    DARK_ALT,
-    DARK_PANEL,
-    LIGHT_TEXT,
     PADDING_MD,
     PADDING_SM,
     SUBDUED_TEXT,
 )
 from widgets.panels.deck_builder_panel.frame.search_results_view import _SearchResultsView
-from widgets.stylize import stylize_button, stylize_choice
+from widgets.stylize import stylize_button, stylize_checkbox, stylize_choice, stylize_list_ctrl
 
 if TYPE_CHECKING:
     from widgets.panels.deck_builder_panel.protocol import DeckBuilderPanelProto
@@ -43,8 +40,7 @@ class ResultsPaneBuilderMixin(_Base):
         controls.Add(clear_btn, 0, wx.RIGHT, PADDING_MD)
 
         self.format_pool_cb = wx.CheckBox(self, label=self._t("builder.format_pool.use_filter"))
-        self.format_pool_cb.SetForegroundColour(LIGHT_TEXT)
-        self.format_pool_cb.SetBackgroundColour(DARK_PANEL)
+        stylize_checkbox(self.format_pool_cb, surface="panel")
         self.format_pool_cb.SetToolTip(
             "Show only cards that appear in the selected format's local card pool"
         )
@@ -54,8 +50,7 @@ class ResultsPaneBuilderMixin(_Base):
 
         # Radar toggle checkbox
         self.radar_cb = wx.CheckBox(self, label=self._t("builder.radar.use_filter"))
-        self.radar_cb.SetForegroundColour(LIGHT_TEXT)
-        self.radar_cb.SetBackgroundColour(DARK_PANEL)
+        stylize_checkbox(self.radar_cb, surface="panel")
         self.radar_cb.SetToolTip("Show only cards that appear in the loaded radar archetype")
         self.radar_cb.Bind(wx.EVT_CHECKBOX, self._on_radar_toggle)
         controls.Add(self.radar_cb, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, PADDING_MD)
@@ -93,8 +88,7 @@ class ResultsPaneBuilderMixin(_Base):
             width=BUILDER_NAME_COL_DEFAULT_WIDTH,
         )
         results.InsertColumn(2, self._t("builder.col.mana_cost"), width=BUILDER_MANA_CANVAS_WIDTH)
-        results.SetBackgroundColour(DARK_ALT)
-        results.SetForegroundColour(LIGHT_TEXT)
+        stylize_list_ctrl(results)
         results.Bind(wx.EVT_LIST_ITEM_SELECTED, self._on_result_item_selected)
         results.Bind(wx.EVT_LEFT_DOWN, self._on_results_left_down)
         results.Bind(wx.EVT_LIST_ITEM_ACTIVATED, self._on_result_activated)

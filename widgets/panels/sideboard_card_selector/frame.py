@@ -13,6 +13,7 @@ from widgets.panels.sideboard_card_selector.handlers import SideboardCardSelecto
 from widgets.panels.sideboard_card_selector.properties import (
     SideboardCardSelectorPropertiesMixin,
 )
+from widgets.stylize import stylize_scrollable
 
 
 class SideboardCardSelector(
@@ -53,7 +54,7 @@ class SideboardCardSelector(
         sizer.Add(self.count_label, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 4)
 
         self.scroll_panel = scrolled.ScrolledPanel(self, style=wx.VSCROLL)
-        self.scroll_panel.SetBackgroundColour(DARK_ALT)
+        stylize_scrollable(self.scroll_panel, surface="alt")
         self.scroll_panel.SetupScrolling(scroll_x=False, scroll_y=True)
 
         self.card_sizer = wx.BoxSizer(wx.VERTICAL)

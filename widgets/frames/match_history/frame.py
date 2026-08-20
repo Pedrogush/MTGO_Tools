@@ -18,6 +18,7 @@ from loguru import logger
 from utils.i18n import translate
 from widgets.frames.match_history.handlers import MatchHistoryHandlersMixin
 from widgets.frames.match_history.properties import MatchHistoryPropertiesMixin
+from widgets.stylize import stylize_scrollable
 
 DARK_BG = wx.Colour(20, 22, 27)
 DARK_PANEL = wx.Colour(34, 39, 46)
@@ -182,6 +183,11 @@ class MatchHistoryFrame(MatchHistoryHandlersMixin, MatchHistoryPropertiesMixin, 
         self.tree.AppendColumn(self._t("match.col.result"), width=100)
         self.tree.AppendColumn(self._t("match.col.mulligans"), width=90)
         self.tree.AppendColumn(self._t("match.col.date"), width=140)
+        # After the columns exist, so the native header child is there to theme. A
+        # TreeListCtrl wraps a DataViewCtrl and the header and scrollbars belong to
+        # the inner control, so both have to be handed over.
+        stylize_scrollable(self.tree)
+        stylize_scrollable(self.tree.GetDataView())
         self.tree.Bind(dv.EVT_TREELIST_ITEM_ACTIVATED, self.on_item_activated)
         self.tree.Bind(dv.EVT_TREELIST_SELECTION_CHANGED, self.on_item_selected)
         sizer.Add(self.tree, 1, wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, 10)

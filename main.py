@@ -15,6 +15,7 @@ from utils.logging_config import configure_logging
 from utils.runtime_flags import set_automation_enabled
 from widgets.frames.app_frame import make_app_frame
 from widgets.frames.splash_frame import LoadingFrame
+from widgets.native_dark import enable_app_dark_mode
 from widgets.panels.card_table_panel.marquee import is_background_window
 
 # Global flag for automation mode
@@ -52,6 +53,11 @@ class MetagameWxApp(wx.App):
 
     def OnInit(self) -> bool:  # noqa: N802 - wx override
         logger.info("Starting MTGO Tools (wx)")
+        # Before the first window: controls read the process's preferred app mode
+        # when their HWND is created, so this must precede LoadingFrame. It is
+        # what makes wx.Choice, checkbox glyphs, list headers and every scrollbar
+        # dark — none of which wx can colour itself. No-op off Windows.
+        enable_app_dark_mode()
         if _automation_enabled:
             logger.info(f"Automation server will start on port {_automation_port}")
         self.loading_frame = LoadingFrame()

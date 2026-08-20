@@ -13,7 +13,13 @@ import wx
 from utils.constants import PADDING_MD
 from widgets.panels.deck_research_panel.frame.centered_choice import _CenteredChoice
 from widgets.panels.deck_research_panel.results_filter import PLACEMENT_FIELDS, PLACEMENT_OPERATORS
-from widgets.stylize import stylize_button, stylize_choice, stylize_label, stylize_textctrl
+from widgets.stylize import (
+    stylize_button,
+    stylize_choice,
+    stylize_combobox,
+    stylize_label,
+    stylize_textctrl,
+)
 
 if TYPE_CHECKING:
     from widgets.panels.deck_research_panel.protocol import DeckResearchPanelProto
@@ -68,6 +74,7 @@ class FiltersBuilderMixin(_Base):
         archetype_col.Add(archetype_label, 0)
 
         self.archetype_combo = wx.ComboBox(self, style=wx.CB_READONLY)
+        stylize_combobox(self.archetype_combo)
         if tip := self._labels.get("archetypes_tooltip", ""):
             self.archetype_combo.SetToolTip(tip)
         self.archetype_combo.Bind(wx.EVT_COMBOBOX, lambda _evt: self._on_archetype_selected())

@@ -6,7 +6,6 @@ import wx
 
 from utils.constants import (
     DARK_ALT,
-    DARK_BG,
     DARK_PANEL,
     LIGHT_TEXT,
     PADDING_BASE,
@@ -25,6 +24,7 @@ from utils.constants import (
     TIMER_ALERT_STATUS_MIN_HEIGHT,
 )
 from widgets.frames.timer_alert.frame.threshold_panel import SOUND_OPTIONS
+from widgets.stylize import stylize_scrollable
 
 
 class SectionsBuilderMixin:
@@ -59,7 +59,7 @@ class SectionsBuilderMixin:
 
         # Scrollable threshold container
         self.threshold_container = wx.ScrolledWindow(box_parent, style=wx.VSCROLL)
-        self.threshold_container.SetBackgroundColour(DARK_BG)
+        stylize_scrollable(self.threshold_container, surface="base")
         self.threshold_container.SetScrollRate(0, TIMER_ALERT_SCROLL_RATE_Y)
         self.threshold_container_sizer = wx.BoxSizer(wx.VERTICAL)
         self.threshold_container.SetSizer(self.threshold_container_sizer)
@@ -119,14 +119,12 @@ class SectionsBuilderMixin:
         # Checkboxes
         self.start_alert_checkbox = wx.CheckBox(panel, label=self._t("timer.check.start_alert"))
         self.start_alert_checkbox.SetValue(True)
-        self.start_alert_checkbox.SetForegroundColour(LIGHT_TEXT)
-        self.start_alert_checkbox.SetBackgroundColour(DARK_BG)
+        self._stylize_checkbox(self.start_alert_checkbox)
         sizer.Add(self.start_alert_checkbox, 0, wx.LEFT | wx.RIGHT | wx.TOP, PADDING_XL)
 
         self.repeat_alarm_checkbox = wx.CheckBox(panel, label=self._t("timer.check.repeat_alarm"))
         self.repeat_alarm_checkbox.SetValue(False)
-        self.repeat_alarm_checkbox.SetForegroundColour(LIGHT_TEXT)
-        self.repeat_alarm_checkbox.SetBackgroundColour(DARK_BG)
+        self._stylize_checkbox(self.repeat_alarm_checkbox)
         sizer.Add(self.repeat_alarm_checkbox, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_XL)
 
         # Control buttons

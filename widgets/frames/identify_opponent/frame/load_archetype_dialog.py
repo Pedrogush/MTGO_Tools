@@ -8,6 +8,7 @@ import wx
 from loguru import logger
 
 from utils.constants import DARK_BG, FORMAT_OPTIONS, LIGHT_TEXT
+from widgets.stylize import stylize_choice
 
 if TYPE_CHECKING:
     from services.metagame_service import MetagameService
@@ -40,12 +41,14 @@ class _LoadArchetypeDialog(wx.Dialog):
         lbl_fmt = wx.StaticText(self, label=format_label)
         lbl_fmt.SetForegroundColour(LIGHT_TEXT)
         self._format_choice = wx.Choice(self, choices=FORMAT_OPTIONS)
+        stylize_choice(self._format_choice)
         self._format_choice.SetSelection(0)
         self._format_choice.Bind(wx.EVT_CHOICE, self._on_format_changed)
 
         lbl_arch = wx.StaticText(self, label=archetype_label)
         lbl_arch.SetForegroundColour(LIGHT_TEXT)
         self._archetype_choice = wx.Choice(self, choices=[], size=(260, -1))
+        stylize_choice(self._archetype_choice)
 
         grid.Add(lbl_fmt, 0, wx.ALIGN_CENTER_VERTICAL)
         grid.Add(self._format_choice, 1, wx.EXPAND)

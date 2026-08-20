@@ -15,6 +15,7 @@ from widgets.panels.card_table_panel import CardTablePanel
 from widgets.panels.deck_notes_panel import DeckNotesPanel
 from widgets.panels.deck_stats_panel import DeckStatsPanel
 from widgets.panels.sideboard_guide_panel import SideboardGuidePanel
+from widgets.status_bar import ThemedStatusBar
 
 if TYPE_CHECKING:
     from controllers.app_controller import AppController
@@ -28,7 +29,7 @@ class AppFrameProto(Protocol):
     controller: AppController
     card_data_dialogs_disabled: bool
     locale: str | None
-    status_bar: wx.StatusBar | None
+    status_bar: ThemedStatusBar | None
     root_panel: wx.Panel | None
     mana_icons: ManaIconFactory
 
