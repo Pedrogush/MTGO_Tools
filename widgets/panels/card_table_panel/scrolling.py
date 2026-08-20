@@ -76,15 +76,18 @@ def _apply_wheel(
     offset = notches * lines * CARD_VIEW_WHEEL_LINE_PX
 
     view_x, view_y = window.GetViewStart()
+    # scroll_viewport, not Scroll: the wheel is a gesture, and wx's scroll blit
+    # strands the edge fade one band per notch if it reaches the screen (#983).
     if horizontal:
-        window.Scroll(max(0, view_x - offset), view_y)
+        scroll_snap.scroll_viewport(window, max(0, view_x - offset), view_y)
     else:
         # Vertically the views snap to row boundaries, so a notch moves a whole
         # number of rows rather than a fixed pixel count -- see scroll_snap for
         # why the notch is derived from the row and not corrected after the
         # fact. snapped_target falls back to plain pixel scrolling wherever
         # snapping is off (a pane too short to hold one whole row).
-        window.Scroll(
+        scroll_snap.scroll_viewport(
+            window,
             view_x,
             scroll_snap.snapped_target(
                 window, view_y, -offset, unit=lines * CARD_VIEW_WHEEL_LINE_PX

@@ -53,11 +53,35 @@ class GridInteractionMixin:
 
     # ----- event handlers -----
     def _on_size(self, event: wx.SizeEvent) -> None:
+        """Relayout only if the width moved, then repaint *before* returning.
+
+        Two separate things, both of which a live sash drag gets wrong (#983).
+
+        **Don't rebuild the canvas for a height-only resize.** The column count
+        and the virtual size both follow the width alone, so a sash drag -- which
+        only ever changes the height -- recomputes an identical layout. That
+        would be merely wasteful if ``_recompute_layout`` did not end by
+        dropping the cached full-content bitmap: the next paint then redraws
+        every card in the deck, measured at ~180-210ms against a ~3ms ordinary
+        paint. At one mouse-move per 8ms a live drag asks for that ~25 times
+        faster than it can be delivered, so the view stops repainting for the
+        whole gesture and the screen keeps showing stale pixels -- which is why
+        the sash drag read as a solid dark wash rather than as separate stripes.
+
+        **Repaint synchronously.** MSW copies the old pixels into the new
+        geometry and invalidates only what the copy could not cover, so the
+        previous frame's edge fade stays sitting in the retained pixels. WM_PAINT
+        is the lowest-priority message there is, so during a drag it is
+        dispatched long after the copy is already on screen. Painting here, from
+        inside WM_SIZE, puts the correct frame into the redirection surface
+        before DWM composites anything -- the stale copy is overwritten before it
+        can ever be presented.
+        """
         event.Skip()
-        old_cols = self._cols
-        self._recompute_layout()
-        if self._cols != old_cols:
-            self.Refresh()
+        if self.GetClientSize().GetWidth() != getattr(self, "_layout_width", -1):
+            self._recompute_layout()
+        self.Refresh(False)
+        self.Update()
 
     def _on_left_down(self, event: wx.MouseEvent) -> None:
         point = self._to_logical(event.GetPosition())

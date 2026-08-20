@@ -17,6 +17,7 @@ Split by responsibility into internal modules mirroring
 - ``deck_research``: format/archetype/deck-list/tab handlers (``DeckResearchMixin``)
 - ``zone_editing``: mainboard/sideboard/out zone editing (``ZoneEditingMixin``)
 - ``builder``: deck-builder search/filters/scrolling (``BuilderMixin``)
+- ``sash``: splitter sash reads + scripted live drags (``SashMixin``)
 - ``mana_rendering``: mana/oracle search inputs + LOREM_MANA card
   (``ManaRenderingMixin``)
 
@@ -33,6 +34,7 @@ from automation.server.builder import BuilderMixin
 from automation.server.deck_research import DeckResearchMixin
 from automation.server.introspection import IntrospectionMixin
 from automation.server.mana_rendering import ManaRenderingMixin
+from automation.server.sash import SashMixin
 from automation.server.screenshot import ScreenshotMixin
 from automation.server.scroll_perf import ScrollPerfMixin
 from automation.server.transport import BUFFER_SIZE, TransportMixin
@@ -57,6 +59,7 @@ class AutomationServer(
     BuilderMixin,
     ManaRenderingMixin,
     ScrollPerfMixin,
+    SashMixin,
     VideoMixin,
 ):
     """Socket server for receiving automation commands."""
@@ -122,7 +125,12 @@ class AutomationServer(
             "focus_text_input": self._handle_focus_text_input,
             # Mouse-wheel scroll latency instrumentation
             "wheel_scroll_start": self._handle_wheel_scroll_start,
+            "scroll_lines": self._handle_scroll_lines,
             "get_scroll_perf": self._handle_get_scroll_perf,
+            # Splitter sash (the mainboard/sideboard split)
+            "get_sash": self._handle_get_sash,
+            "set_sash": self._handle_set_sash,
+            "sash_drag": self._handle_sash_drag,
             # Background-thread frame recording (transition capture)
             "start_video": self._handle_start_video,
             "stop_video": self._handle_stop_video,

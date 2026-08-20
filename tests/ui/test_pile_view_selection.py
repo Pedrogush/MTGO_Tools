@@ -253,8 +253,8 @@ def test_hover_reports_card_with_multi_selection():
         frame.Destroy()
 
 
-def _wheel_view(frame: wx.Frame, start: tuple[int, int]):
-    """A pile view whose Scroll calls are captured and view origin is fixed.
+def _wheel_view(frame: wx.Frame, start: tuple[int, int], monkeypatch):
+    """A pile view whose origin moves are captured and view origin is fixed.
 
     The view is never laid out, so its pane is far shorter than one name strip
     and phase 8's row snapping is off for it -- which is what lets these tests
@@ -271,16 +271,20 @@ def _wheel_view(frame: wx.Frame, start: tuple[int, int]):
     )
     calls: list[tuple[int, int]] = []
     view.GetViewStart = lambda: start  # type: ignore[assignment]
-    view.Scroll = lambda x, y: calls.append((x, y))  # type: ignore[assignment]
+    # Capture at scroll_snap.scroll_viewport, not at view.Scroll: the view's own
+    # Scroll override routes *into* scroll_viewport, and scroll_viewport calls
+    # wx.ScrolledWindow.Scroll explicitly so that it cannot recurse (#983). That
+    # makes scroll_viewport the one place every origin move is observable.
+    monkeypatch.setattr(scroll_snap, "scroll_viewport", lambda _window, x, y: calls.append((x, y)))
     return view, calls
 
 
 @pytest.mark.usefixtures("wx_app")
-def test_wheel_scrolls_vertical_by_lines_per_notch():
+def test_wheel_scrolls_vertical_by_lines_per_notch(monkeypatch):
     """One notch moves lines_per_action * line_px, not the few px the 1px rate gives."""
     frame = wx.Frame(None)
     try:
-        view, calls = _wheel_view(frame, (0, 200))
+        view, calls = _wheel_view(frame, (0, 200), monkeypatch)
         view._on_wheel(_FakeWheelEvent(120))  # one notch up
         assert calls == [(0, 200 - _NOTCH_PX)]
 
@@ -292,11 +296,11 @@ def test_wheel_scrolls_vertical_by_lines_per_notch():
 
 
 @pytest.mark.usefixtures("wx_app")
-def test_wheel_honors_os_lines_per_action():
+def test_wheel_honors_os_lines_per_action(monkeypatch):
     """A larger OS lines-per-action scrolls proportionally further per notch."""
     frame = wx.Frame(None)
     try:
-        view, calls = _wheel_view(frame, (0, 500))
+        view, calls = _wheel_view(frame, (0, 500), monkeypatch)
         view._on_wheel(_FakeWheelEvent(120, lines=5))
         assert calls == [(0, 500 - 5 * CARD_VIEW_WHEEL_LINE_PX)]
     finally:
@@ -304,7 +308,7 @@ def test_wheel_honors_os_lines_per_action():
 
 
 @pytest.mark.usefixtures("wx_app")
-def test_sub_notch_rotation_accumulates_until_a_full_notch():
+def test_sub_notch_rotation_accumulates_until_a_full_notch(monkeypatch):
     """High-res wheels: partial rotations are carried, not fired one repaint each.
 
     This is the responsiveness fix — without accumulation every micro-event
@@ -312,7 +316,7 @@ def test_sub_notch_rotation_accumulates_until_a_full_notch():
     """
     frame = wx.Frame(None)
     try:
-        view, calls = _wheel_view(frame, (0, 200))
+        view, calls = _wheel_view(frame, (0, 200), monkeypatch)
         view._on_wheel(_FakeWheelEvent(60))  # half a notch — no scroll yet
         assert calls == []
         view._on_wheel(_FakeWheelEvent(60))  # completes the notch — scrolls once
@@ -322,10 +326,10 @@ def test_sub_notch_rotation_accumulates_until_a_full_notch():
 
 
 @pytest.mark.usefixtures("wx_app")
-def test_wheel_clamps_at_top():
+def test_wheel_clamps_at_top(monkeypatch):
     frame = wx.Frame(None)
     try:
-        view, calls = _wheel_view(frame, (0, _NOTCH_PX // 2))
+        view, calls = _wheel_view(frame, (0, _NOTCH_PX // 2), monkeypatch)
         view._on_wheel(_FakeWheelEvent(120))  # scroll up past the top
         assert calls == [(0, 0)]
     finally:
@@ -333,10 +337,10 @@ def test_wheel_clamps_at_top():
 
 
 @pytest.mark.usefixtures("wx_app")
-def test_shift_wheel_scrolls_horizontal():
+def test_shift_wheel_scrolls_horizontal(monkeypatch):
     frame = wx.Frame(None)
     try:
-        view, calls = _wheel_view(frame, (200, 50))
+        view, calls = _wheel_view(frame, (200, 50), monkeypatch)
         view._on_wheel(_FakeWheelEvent(120, shift=True))
         assert calls == [(200 - _NOTCH_PX, 50)]
     finally:

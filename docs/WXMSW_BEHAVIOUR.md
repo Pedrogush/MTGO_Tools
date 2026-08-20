@@ -312,17 +312,42 @@ so on a view whose rows are 232px they are effectively dead; they have to be han
 rather than left to wx. (2) A custom-drawn one **takes focus when clicked** on wxMSW
 with no `SetFocus` anywhere in the tree, so wx's keyboard scrolling
 (Page/arrow/Home/End) is live on it whether or not anything asked for it -- verified
-with real Win32 keystrokes. (3) **Physical scrolling does not strand viewport-fixed
-chrome.** wx scrolls by blitting and invalidating only the exposed strip, which should
-leave anything painted relative to the *viewport* (an edge fade) stale outside that
-strip. Measured on both card views at scroll deltas from 3px to 232px: the scroll path
-renders **byte-identical** to a full `Refresh`, so wxMSW is invalidating the whole
-client for these windows. Worth re-measuring rather than assuming for any window that
-gains children. (4) A synthetic `WM_VSCROLL` **cannot drive a thumb drag**: wxMSW reads
-the position from `GetScrollInfo`, not from the message's `HIWORD`, so
-`SB_THUMBPOSITION` sent from another process scrolls to wherever the real thumb happens
-to be (0). `SB_LINE*` and `SB_PAGE*` do work. Automating a thumb drag needs real mouse
-input
+with real Win32 keystrokes. (3) **Physical scrolling strands viewport-fixed chrome, and
+so does a resize.** This entry has now been wrong twice, so it carries its own history.
+It first read "the scroll path renders byte-identical to a full `Refresh`, so wxMSW is
+invalidating the whole client for these windows"; that measurement compared the
+**settled** screen against a forced full re-render *after* the gesture, and an unrelated
+repaint (a card image arriving) washes a smear out within seconds. A settled-state
+comparison cannot see a mid-gesture artefact -- capture frames **while the gesture is
+running**, off the screen surface, or you are measuring the state that self-heals.
+What actually happens: wx scrolls by blitting (`::ScrollWindow`, via
+`wxScrollHelper::DoScroll`) and invalidates only the newly exposed strip, and
+`BeginPaint` clips every `wx.PaintDC` to that region, so anything painted against the
+*viewport* survives at whatever position the blit carried it to. Counted off the screen
+during a twelve-notch wheel burst on the pile view, with the edge fade temporarily
+rendered opaque: four stranded bands at exactly the 64px notch spacing, still there when
+the capture ended 500ms after the gesture. A resize does it without a blit -- MSW keeps
+the bits it can -- and a live sash drag resizes a pane faster than it repaints, so the
+bands stack: 90px deep in the same measurement. (4) A synthetic `WM_VSCROLL` **cannot
+drive a thumb drag**: wxMSW reads the position from `GetScrollInfo`, not from the
+message's `HIWORD`, so `SB_THUMBPOSITION` sent from another process scrolls to wherever
+the real thumb happens to be (0). `SB_LINE*` and `SB_PAGE*` do work. Automating a thumb
+drag needs real mouse input. (5) **Levers for keeping viewport-anchored chrome from
+smearing**, measured on wxMSW 4.2 -- three that look right and are not, three that hold:
+
+| lever | result |
+|---|---|
+| `EnableScrolling(False, False)` | **No effect on `Scroll()` or the wheel.** Documented as replacing the blit with a refresh, and `wxScrollHelper::DoScroll` -- what `Scroll()` calls -- never consults the flag; only `HandleOnScroll` and `AdjustScrollbars` do (wx 3.2 `src/generic/scrlwing.cpp`). Recorded here once as a silent no-op, which was the symptom, not the cause. |
+| overriding `ScrollWindow` in the Python subclass | **Never called.** wx scrolls from C++ without going back through the Python vtable. |
+| `SetDoubleBuffered(True)` (`WS_EX_COMPOSITED`) | **Do not build on it.** It measured clean here -- a whole-client region on every scroll path -- and the reporter of #983 still saw the bands with it shipped. It is documented as unsupported for top-level windows since Windows 8 and is observed to be ignored depending on DWM state, driver and window hierarchy. |
+| `Refresh()` from inside `EVT_PAINT`, **before** the `PaintDC` is constructed | **Widens the paint that is starting.** `Refresh()` is `RDW_INVALIDATE`, which only adds to the pending update region, and `BeginPaint` then takes that region as the DC's clip. Read off the `PaintDC`'s own HDC with `GetClipBox` (not `wx.DC.GetClippingBox`, which reports the application's region and nothing sets that): scrolling 64px against a 264px client gives `clip=(0, 200, 185, 64)` plain and `clip=(0, 0, 185, 264)` widened. It cannot recurse -- `BeginPaint` validates the whole region it took. Note that `GetUpdateRegion()` still reports the *narrow* strip afterwards: `wxWindowMSW` snapshots `m_updateRegion` before dispatching the event, so any culling that reads it has to be told to stand down. |
+| `Freeze()` / `Thaw()` around `Scroll()` | **Keeps the blit off the screen entirely.** `Freeze()` is `WM_SETREDRAW(FALSE)`, under which `::ScrollWindow` paints nothing; `Thaw()` restores drawing and invalidates the whole window. Sampled mid-gesture over a twelve-notch burst: 27% of frames held a stranded band with the blit reaching the screen, none did with it wrapped. The scrollbar thumb still tracks. |
+| `wx.FULL_REPAINT_ON_RESIZE` | **Stops MSW preserving bits across a resize.** It puts the window on wx's `CS_HREDRAW | CS_VREDRAW` class. This is the one that matters for a live sash drag, where the pane is resized faster than it can repaint. |
+
+Beware measuring any of this on an **occluded** window: with no preserved pixels MSW
+invalidates the whole client and the bug is invisible, which is why the control window in
+`tests/ui/test_card_view_viewport_repaint.py` has to reproduce the narrow clip before the
+assertion beside it is allowed to mean anything.
 
 ### `wx.Simplebook`
 

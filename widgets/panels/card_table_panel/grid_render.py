@@ -41,18 +41,20 @@ from widgets.stylize import type_font
 class GridRenderMixin:
     """Cohesive cached canvas + per-card drawing for the grid view."""
 
-    def _visible_card_indices(self) -> range:
+    def _visible_card_indices(self, whole_client: bool = False) -> range:
         """Indices of the cards overlapping the current repaint region.
 
         Used only by the oversized-deck fallback. Falls back to every card when
-        the update region is empty (e.g. a full ``Refresh``).
+        the update region is empty (e.g. a full ``Refresh``), or when
+        ``whole_client`` says :func:`edge_fade.begin_viewport_paint` widened
+        this paint's clip past what ``GetUpdateRegion`` still remembers (#983).
         """
         n = len(self._cards)
         if n == 0:
             return range(0)
         cols = max(1, self._cols)
         box = self.GetUpdateRegion().GetBox()
-        if box.IsEmpty():
+        if whole_client or box.IsEmpty():
             top, bottom = 0, self.GetClientSize().GetHeight()
         else:
             top, bottom = box.GetTop(), box.GetBottom()

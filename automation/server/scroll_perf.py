@@ -110,6 +110,42 @@ class ScrollPerfMixin(_Base):
             "interval_ms": interval_ms,
         }
 
+    def _handle_scroll_lines(
+        self,
+        zone: str = "main",
+        view: str = "grid",
+        count: int = 10,
+        lines: int = 1,
+        interval_ms: float = 60.0,
+    ) -> dict[str, Any]:
+        """Drive ``count`` scrolls through **wx's own** scroll handling.
+
+        ``ScrollLines``/``ScrollPages`` send ``WM_VSCROLL`` to the window, so
+        wx moves the origin from C++ without going through the wheel handler or
+        any ``Scroll()`` call of ours. That is the one scroll path the app
+        cannot wrap, which makes it the path a viewport-anchored painting bug
+        hides in (#983) -- the scrollbar arrows, the scrollbar itself and the
+        keyboard all arrive here. Runs from a worker thread like
+        ``wheel_scroll_start`` so a video grab can record while it happens.
+        """
+        window = self._scroll_view_window(zone, view)
+        if window is None:
+            return {"started": False, "error": f"No {view} view for zone: {zone}"}
+        try:
+            if self.frame.IsIconized():
+                self.frame.Iconize(False)
+            self.frame.Raise()
+        except Exception:
+            pass
+
+        def burst() -> None:
+            for _ in range(max(1, int(count))):
+                wx.CallAfter(window.ScrollLines, int(lines))
+                time.sleep(max(0.0, interval_ms / 1000.0))
+
+        threading.Thread(target=burst, daemon=True).start()
+        return {"started": True, "zone": zone, "view": view, "count": count, "lines": lines}
+
     def _handle_get_scroll_perf(self, zone: str = "main", view: str = "grid") -> dict[str, Any]:
         """Return the recorded wheel-scroll perf trace for ``zone``/``view``."""
         window = self._scroll_view_window(zone, view)
