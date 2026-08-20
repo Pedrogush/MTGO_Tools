@@ -350,6 +350,10 @@ class AutomationClient:
         """Get the index of the topmost visible item in the builder search results."""
         return self._send_command("get_builder_top_item")
 
+    def get_builder_list_metrics(self) -> dict[str, Any]:
+        """Get the builder results list geometry (column widths vs. client width)."""
+        return self._send_command("get_builder_list_metrics")
+
     def scroll_builder_results(self, items: int = 10) -> dict[str, Any]:
         """Scroll the builder results list by the given number of items."""
         return self._send_command("scroll_builder_results", items=items)
@@ -501,6 +505,14 @@ class AutomationClient:
     def get_inspector_oracle_text(self) -> dict[str, Any]:
         """Return the plain-text value of the card inspector oracle text control."""
         return self._send_command("get_inspector_oracle_text")
+
+    def get_inspector_printings(self, limit: int = 0, offset: int = 0) -> dict[str, Any]:
+        """Return the inspector's printing list and the image paths on screen."""
+        return self._send_command("get_inspector_printings", limit=limit, offset=offset)
+
+    def set_inspector_printing(self, index: int) -> dict[str, Any]:
+        """Jump the card inspector to the printing at ``index``."""
+        return self._send_command("set_inspector_printing", index=index)
 
 
 def connect(

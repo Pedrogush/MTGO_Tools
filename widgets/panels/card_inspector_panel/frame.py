@@ -87,7 +87,7 @@ class CardInspectorPanel(
         self._autosave_printing: bool = False
         self._printings_request_inflight: str | None = None
         self._has_selection = False
-        self._failed_image_requests: set[tuple[str, str]] = set()
+        self._failed_image_requests: set[tuple[str, str, str]] = set()
         self._image_request_name: str | None = None
         self._image_lookup_gen: int = 0
 

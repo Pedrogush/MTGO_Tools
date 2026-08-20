@@ -116,6 +116,22 @@ python -m automation.cli prefs average_hours 48
 Keys are `deck_data_source`, `language`, `average_method`, `average_hours` and
 `check_for_updates`. They are stable; the labels beside them are translated.
 
+### Inspecting the card inspector's art pager
+
+`inspector-printings` reports the printing list the Card Inspector is paging
+through *and* the image files it currently has on screen, which is the only way
+to answer "is this entry showing the same art as that one". `set-inspector-printing`
+jumps to an index through the same code path as the prev/next buttons.
+
+```bash
+python -m automation.cli set-inspector-printing 14
+python -m automation.cli --json inspector-printings --limit 5 --offset 12
+```
+
+Select a card first (the panel is populated by a deck-zone selection). Use
+`--limit`/`--offset` on cards with many printings: the transport does a single
+64 KB `recv`.
+
 ## Exercising MTGO bridge features
 
 These commands drive the live MTGO bridge integration end-to-end (they require a

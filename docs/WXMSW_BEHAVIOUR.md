@@ -129,6 +129,32 @@ scrolling `wx.TextCtrl`: `DarkMode_Explorer` and `Explorer` render it dark;
 `stylize_textctrl` now applies `DarkMode_Explorer` when the field carries
 `wx.TE_MULTILINE`, which reaches all four multiline fields in the tree.
 
+**Whether a native control is showing one is not readable from wx**, which
+matters because a control can be left showing a scrollbar it has nothing to
+scroll. Measured against a bar plainly visible in a screen-pixel capture of the
+builder's results list: `HasScrollbar(wx.HORIZONTAL)` answered **`False`** -- it
+reads the *wx* style bits, which a native control managing its own bars never
+sets -- and `GetScrollRange(wx.HORIZONTAL)` answered **467 both with the bar up
+and after it had been taken down**, because it reports the content width. The
+HWND's `WS_HSCROLL` bit is the only truth; see
+`widgets.native_dark.has_horizontal_scrollbar`.
+
+**comctl32 decides a `wx.ListCtrl`'s horizontal scrollbar on a column-width
+*change*, not on a width**, and a change written from *inside* its own resize
+does not count. Measured on the builder's results list, whose Name column is
+fitted to `client width - the fixed columns` from `EVT_SIZE`: when the client
+narrows -- a vertical scrollbar appearing on `SetItemCount` (non-client area, so
+**no `EVT_SIZE` at all**), or the empty-state swap resizing the list -- the
+columns overflow, the bar goes up, and the `SetColumnWidth` that `EVT_SIZE` then
+makes is **not** re-evaluated. The bar stays up over content that fits, eating
+17px of list height, until something changes a column width at a quiet moment;
+re-writing the width it already has is not such a change. So a control like this
+needs its columns to sum to **strictly less** than the client (equality is one
+change away from the trap), needs re-fitting on row-count changes and not only on
+size events, and wants a `Freeze()`/`Thaw()` around any relayout that resizes it.
+See `widgets.panels.deck_builder_panel.frame.search_results_view` and
+`tests/ui/test_builder_results_hscrollbar.py`.
+
 ### `wx.Bitmap` alpha
 
 a bitmap carrying an alpha channel (built via `wx.Image.SetAlpha`) is alpha-blended

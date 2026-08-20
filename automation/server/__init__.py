@@ -101,6 +101,7 @@ class AutomationServer(
             "get_scroll_pos": self._handle_get_scroll_pos,
             "get_builder_result_count": self._handle_get_builder_result_count,
             "get_builder_top_item": self._handle_get_builder_top_item,
+            "get_builder_list_metrics": self._handle_get_builder_list_metrics,
             "scroll_builder_results": self._handle_scroll_builder_results,
             "open_widget": self._handle_open_widget,
             "menu": self._handle_menu,
@@ -118,6 +119,8 @@ class AutomationServer(
             "screenshot_window": self._handle_screenshot_window,
             "add_lorem_mana_card": self._handle_add_lorem_mana_card,
             "get_inspector_oracle_text": self._handle_get_inspector_oracle_text,
+            "get_inspector_printings": self._handle_get_inspector_printings,
+            "set_inspector_printing": self._handle_set_inspector_printing,
             "select_card": self._handle_select_card,
             "focus_text_input": self._handle_focus_text_input,
             # Mouse-wheel scroll latency instrumentation
