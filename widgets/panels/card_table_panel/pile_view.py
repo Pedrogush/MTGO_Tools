@@ -188,6 +188,7 @@ class DeckPileView(wx.ScrolledWindow):
         # (see _on_wheel) since a notch would otherwise move only a few px.
         self.SetScrollRate(CARD_VIEW_SCROLL_RATE, CARD_VIEW_SCROLL_RATE)
         self.Bind(wx.EVT_PAINT, self._on_paint)
+        self.Bind(wx.EVT_SIZE, self._on_size)
         self.Bind(wx.EVT_LEFT_DOWN, self._on_left_down)
         self.Bind(wx.EVT_LEFT_UP, self._on_left_up)
         self.Bind(wx.EVT_RIGHT_DOWN, self._on_right_down)
@@ -214,9 +215,50 @@ class DeckPileView(wx.ScrolledWindow):
         """The true content height -- the virtual size is inflated to the client."""
         return self._content_size.GetHeight()
 
+    def Scroll(self, *args: Any) -> None:
+        """Move the origin without wx's scroll blit -- **every** caller (#983).
+
+        Overriding ``Scroll`` rather than asking call sites to use
+        :func:`scroll_snap.scroll_viewport` is deliberate. The blit strands the
+        edge fade, and the callers that move this view's origin are spread wide:
+        the wheel, the scrollbar, drag-reorder and marquee autoscroll,
+        scroll-into-view, the reset in ``set_cards`` -- plus the automation
+        harness, which parks the origin before a measured burst. Every one of
+        them is a way to reintroduce the bug, and a rule that lives at the call
+        site is a rule that the next call site will not know about.
+
+        wx itself still reaches ``wxScrollHelper::DoScroll`` from C++ for a
+        scrollbar thumb drag and for ``ScrollLines``; that path cannot be
+        intercepted from Python (``ScrollWindow`` is not virtual through the
+        wxPython bindings -- measured), and it is what
+        :func:`edge_fade.begin_viewport_paint` is the backstop for.
+        """
+        if len(args) == 1:
+            point = args[0]
+            x, y = point[0], point[1]
+        else:
+            x, y = args
+        scroll_snap.scroll_viewport(self, x, y)
+
     def _on_scrollwin(self, event: wx.ScrollWinEvent) -> None:
         # Shared with the grid view so both settle identically (see scroll_snap).
         scroll_snap.handle_scrollwin(self, event)
+
+    def _on_size(self, event: wx.SizeEvent) -> None:
+        """Repaint the resize *before* returning from WM_SIZE (#983).
+
+        The pile layout is width-independent, so unlike the grid there is
+        nothing here to recompute -- but the repaint is needed for the same
+        reason. MSW copies the old pixels into the new geometry and invalidates
+        only the strip the copy could not cover, leaving the previous frame's
+        edge fade in the retained pixels; WM_PAINT is the lowest-priority
+        message and during a live sash drag arrives long after that copy is
+        already on screen. Painting synchronously here overwrites the copy in
+        the redirection surface before DWM can composite it.
+        """
+        event.Skip()
+        self.Refresh(False)
+        self.Update()
 
     # ----- public API consumed by CardTablePanel -----
     def set_cards(self, cards: list[dict[str, Any]]) -> None:

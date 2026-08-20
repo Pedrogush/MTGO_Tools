@@ -71,6 +71,9 @@ class GridLayoutMixin:
     def _recompute_layout(self) -> None:
         client_w = self.GetClientSize().GetWidth()
         cols = max(1, client_w // _CELL_WIDTH) if client_w > 0 else self._cols
+        # Everything below follows the *width*; ``_on_size`` reads this back so
+        # a height-only resize can skip the whole recompute (#983).
+        self._layout_width = client_w
         self._cols = cols
         n = len(self._cards)
         rows = ceil(n / cols) if n else 0

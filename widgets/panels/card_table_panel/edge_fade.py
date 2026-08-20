@@ -47,17 +47,30 @@ changed how the band was composited did not fix it:
    hand a paint handler, the handler cannot repair a band outside it, because
    ``BeginPaint`` clips the ``wx.PaintDC`` before the handler runs. Answered by
    :func:`begin_viewport_paint`.
-3. **MSW preserving bits across a resize.** A pane being dragged by the sash is
-   resized faster than it can repaint, and each skipped repaint leaves another
-   band behind, which is why a sash drag reads as a solid wash rather than as
-   stripes. Answered by ``wx.FULL_REPAINT_ON_RESIZE`` on both views.
+3. **MSW preserving bits across a resize.** MSW copies the old pixels into the
+   new geometry and invalidates only what the copy could not cover, and
+   ``WM_PAINT`` is the lowest-priority message there is -- so during a live sash
+   drag the copy is on screen long before the repaint is dispatched. Answered by
+   ``wx.FULL_REPAINT_ON_RESIZE`` plus a **synchronous** repaint from each view's
+   ``EVT_SIZE`` handler, which puts the correct frame into the redirection
+   surface before DWM can composite the copy.
+
+   That only works if the repaint is affordable, and for the grid it was not:
+   ``_recompute_layout`` dropped the cached full-content canvas on every resize,
+   so each mouse-move of a drag asked for a ~180-210ms rebuild of every card
+   against a ~3ms ordinary paint. The view could not keep up and simply stopped
+   repainting for the gesture, which is the real reason the drag showed a solid
+   dark wash rather than separate stripes. The grid now recomputes only when the
+   **width** changes, which is the only thing its layout depends on.
 
 Measured mid-gesture against the screen's own pixels, with the band temporarily
-rendered opaque so a stranded one could be counted: before, a twelve-notch wheel
-burst left four stranded bands at exactly the 64px notch spacing, still there
-when the capture ended 500ms after the gesture, and a sash sweep stacked them
-90px deep. After, every frame of both gestures holds exactly the bands the
-current viewport calls for.
+rendered opaque and colour-coded per zone and edge so a stranded one could be
+counted: before, the combined gesture the reporter describes -- scrolling up and
+down *while* dragging the sash -- stranded bands in 20% of frames, three deep at
+exactly the 60px notch spacing, and they were still there seven frames (~380ms)
+after the gesture ended. After, 835 frames across wheel-only, sash-only and
+combined gestures, in both views and both panes, hold exactly the bands the
+current viewport calls for and no others.
 """
 
 from __future__ import annotations

@@ -173,14 +173,21 @@ def scroll_viewport(window: wx.ScrolledWindow, x: int, y: int) -> None:
     previous frame's band to a position the repaint has no reason to touch
     (#983; ``edge_fade`` has the full account).
 
-    ``Freeze()`` is ``WM_SETREDRAW(FALSE)``, under which ``::ScrollWindow()``
-    puts nothing on screen at all; ``Thaw()`` restores drawing and invalidates
-    the whole window, and ``Update()`` renders that before this event returns.
-    The screen therefore steps from one whole correct frame to the next, instead
-    of showing the copy's result for however long the repaint takes. Sampled
-    mid-gesture over a twelve-notch wheel burst against the screen's own pixels:
-    27% of frames held a stranded band with the copy reaching the screen, none
-    did with it wrapped like this.
+    ``Freeze()`` is ``WM_SETREDRAW(FALSE)``, under which the copy puts nothing
+    on the window's surface at all; ``Thaw()`` restores drawing and invalidates
+    the whole window, so the next paint renders a whole correct frame. Measured
+    by reading the window's own surface immediately after the move and before
+    any repaint (``tests/ui/test_card_view_viewport_repaint.py`` pins this): a
+    plain ``Scroll`` leaves the band stranded partway down the client, wrapped
+    like this it stays where the viewport puts it.
+
+    There is deliberately **no** ``Update()`` here. Forcing the repaint
+    synchronously was the previous attempt at #983, and it is what made the
+    reporter call the scrolling sluggish: it serialises a paint into every
+    notch and defeats the coalescing that lets a fast flick draw once for
+    several notches. Leaving the paint asynchronous measured 96 paints per 72
+    notches down to 72, and cut wheel-latency p95 from 19.5ms to 6.0ms with the
+    worst case going from 181ms to 8ms.
 
     ``EnableScrolling(False, False)`` is the documented way to ask for exactly
     this and does not deliver it -- see :func:`edge_fade.begin_viewport_paint`,
@@ -189,10 +196,11 @@ def scroll_viewport(window: wx.ScrolledWindow, x: int, y: int) -> None:
     """
     window.Freeze()
     try:
-        window.Scroll(x, y)
+        # wx.ScrolledWindow.Scroll, not window.Scroll: both views override
+        # Scroll to route here, so calling it back would recurse.
+        wx.ScrolledWindow.Scroll(window, x, y)
     finally:
         window.Thaw()
-    window.Update()
 
 
 def handle_scrollwin(window: wx.ScrolledWindow, event: wx.ScrollWinEvent) -> None:
