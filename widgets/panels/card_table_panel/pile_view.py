@@ -568,9 +568,7 @@ class DeckPileView(wx.ScrolledWindow):
                     dc.DestroyClippingRegion()
 
     def _pile_header_rect(self, pile_index: int) -> wx.Rect:
-        return wx.Rect(
-            self._pile_x(pile_index), _PILE_PAD, _CARD_WIDTH, _PILE_HEADER_HEIGHT
-        )
+        return wx.Rect(self._pile_x(pile_index), _PILE_PAD, _CARD_WIDTH, _PILE_HEADER_HEIGHT)
 
     def _draw_pile_header(self, dc: wx.DC, pile_idx: int, label: str, count: int) -> None:
         """The column heading: bucket name on the left, copy count on the right.

@@ -457,6 +457,17 @@ def stylize_textctrl(
     if placeholder is not None:
         ctrl.SetHint(placeholder)
     strip_native_client_edge(ctrl)
+    if ctrl.GetWindowStyleFlag() & wx.TE_MULTILINE:
+        # A multiline field owns its own scrollbar, and process-wide dark mode
+        # does not reach it: the timer alert's status box has been showing a
+        # 17x76 ``#F0F0F0`` bar -- 1292 light pixels, more than the six spin
+        # arrows put together -- since it was written. Measured in phase 9b
+        # across five theme classes on a scrolling ``wx.TextCtrl``:
+        # ``DarkMode_Explorer`` and ``Explorer`` render it dark, ``DarkMode_CFD``
+        # (which is what an input otherwise wants) and ``DarkMode`` do not.
+        # Gated on the style flag because a single-line field has no scrollbar
+        # and no reason to leave THEME_INPUT.
+        apply_dark_theme(ctrl, THEME_EXPLORER)
 
 
 def disable_native_theme(window: wx.Window) -> bool:
@@ -563,18 +574,21 @@ def stylize_checkbox(
 
 
 def stylize_spinctrl(ctrl: wx.SpinCtrl, *, surface: str = "alt") -> None:
-    """Theme a spin control's edit field. The **arrow buttons stay light.**
+    """Theme a native spin control's edit field. The **arrow buttons stay light.**
+
+    Not a call site any more -- every spin control in the app is a
+    :class:`widgets.spin_ctrl.DarkSpinCtrl`, and
+    ``tests/test_widget_audit.py`` fails on a bare ``wx.SpinCtrl`` anywhere in
+    ``widgets/`` -- but the entry point must not blow up on one, and the same
+    partial fix is the best that can be done for a ``wx.SpinCtrl`` that arrives
+    from somewhere else. Same shape as :func:`stylize_checkbox`'s native branch.
 
     ``wx.SpinCtrl`` on MSW is two HWNDs: an ``Edit`` and an ``msctls_updown32``,
     with ``GetHandle()`` returning the *up-down*, not the edit. wx forwards the
-    colours to the edit, which is why the field goes dark. The arrows were tried
-    against ``DarkMode_CFD`` under Windows dark mode and against no visual style
-    at all, and render light grey in both — so nothing is set on them here rather
-    than setting something that does nothing.
-
-    Still worth doing: unstyled, the whole control is a solid white block. The
-    opponent tracker's calculator had four of them stacked on the darkest panel
-    in the app.
+    colours to the edit, which is why the field goes dark. **Nothing reaches the
+    arrows** -- eight theme variants were measured in phase 9b and all eight are
+    the same light grey; see ``docs/WXMSW_BEHAVIOUR.md``. That is why the app
+    own-draws the control instead of styling it.
 
     Phase 6b added the third call, and had to find a different mechanism for it.
     The edit field takes the same near-white sunken client edge as

@@ -118,7 +118,16 @@ the strip has painted at least once -- an offscreen frame that has been
 ### scrollbars
 
 not reachable from wx at all; dark process-wide via
-`widgets.native_dark.enable_app_dark_mode()`
+`widgets.native_dark.enable_app_dark_mode()` -- **except a control that owns its
+own scrollbar rather than being scrolled by a `wxScrolled` parent**, which also
+needs a per-window theme class. Found in phase 9b while censusing the timer
+alert: the status box's vertical bar is a `17x76` `#F0F0F0` block, **1292 light
+pixels -- more than all six spin-control arrow pairs put together** -- and it had
+been there since the box was written. Measured across five classes on a
+scrolling `wx.TextCtrl`: `DarkMode_Explorer` and `Explorer` render it dark;
+`DarkMode_CFD` (which is what an input otherwise wants) and `DarkMode` do not.
+`stylize_textctrl` now applies `DarkMode_Explorer` when the field carries
+`wx.TE_MULTILINE`, which reaches all four multiline fields in the tree.
 
 ### `wx.Bitmap` alpha
 
@@ -307,15 +316,61 @@ back the wrong one**: `GetHandle()` returns the up-down, so `wx.BORDER_NONE` and
 `strip_native_client_edge()` land on the arrows -- which never had a client edge -- and
 the `#FFFFFF` hairline around the *field* survives, unchanged, pixel for pixel. The
 field is the up-down's **buddy**, reachable only via `UDM_GETBUDDY`; see
-`widgets.native_dark.strip_spin_buddy_client_edge()`
+`widgets.native_dark.strip_spin_buddy_client_edge()`, which is what
+`stylize_spinctrl` still does for any `wx.SpinCtrl` that is not the app's own
 
 Phase 9 put numbers on what that costs, off the captures: the arrow pair renders
-`#EBEBEB` (**12.6:1** on `SURFACE_PANEL`) in the opponent tracker and `#F0F0F0`
-(**13.2:1**) in the timer alert, six controls across two windows. It is the
-brightest chrome left in the app and the one part of "no light native widget on a
-dark surface" that is still open. Nothing wx offers reaches it; the way out is
-the one phase 6c took for the text-input border -- stop using the native control
-and own-draw it (a `wx.TextCtrl` plus two themed buttons).
+`#ECECEC` (**12.6:1** on `SURFACE_PANEL`) in the opponent tracker and `#F0F0F0`
+(**13.2:1**) in the timer alert, six controls across two windows. (Phase 9 read
+that first colour as `#EBEBEB`; it is `#ECECEC`, i.e. `TEXT_PRIMARY`'s value.)
+It was the brightest chrome left in the app and the last open half of "no light
+native widget on a dark surface".
+
+**Phase 9b closed it, and re-measured the "unreachable" claim first.** An
+eight-variant probe on the up-down HWND itself -- untouched, `DarkMode_CFD`,
+`DarkMode_Explorer`, `DarkMode_Explorer::SPIN`, `DarkMode::SPIN`,
+`DarkMode_CFD::SPIN`, `ItemsView` and no visual style at all, each preceded by
+`AllowDarkModeForWindow` and followed by `WM_THEMECHANGED` -- renders
+**pixel-identical light arrows in all eight**. In the same probe the `Edit` half
+*does* pick up dark mode, which is what makes the split easy to miss. So the
+route out is the one phase 6c took for the text-input border: own-draw. See
+`widgets.spin_ctrl.DarkSpinCtrl` -- an `InputFrame` hosting a real `wx.TextCtrl`
+plus one own-drawn arrow window -- and `tests/test_widget_audit.py`, which now
+fails on any `wx.SpinCtrl`, `wx.SpinCtrlDouble` or `wx.SpinButton` in `widgets/`.
+`wx.SpinButton` is not a way out and neither is `wx.lib.agw.floatspin`: both are
+the same `msctls_updown32`.
+
+What replacing it costs, measured against the live native control with real
+Win32 input before it was removed (`mouse_event`/`keybd_event` against the
+HWNDs, values read back with `WM_GETTEXT`) -- these are the behaviours an
+own-drawn spin has to reproduce, and the ones a rewrite loses silently:
+
+| behaviour | native, measured |
+|---|---|
+| click an arrow | +/-1 |
+| press and hold | +1 at once, first repeat at **576ms**, then a tick every **79-200ms** (mean ~120) |
+| hold acceleration | step 1, **5 from t=2.33s**, 20 from t=5s -- comctl32's default `UDACCEL` |
+| Up / Down | +/-1 |
+| PageUp / PageDown | **nothing** |
+| mouse wheel over the field | +/-1 per notch |
+| typing | digits only, letters rejected at the keystroke |
+| out-of-range typed value | shown as typed, clamped on kill-focus (`999` -> `250`) |
+| emptied field | clamps to `min` on kill-focus |
+| tab order | the field is a tab stop, the arrows are not |
+
+A ``wx.TextCtrl``'s best **height** carries its border reserve on wxMSW: 25px
+with a border, **17px** with `wx.BORDER_NONE`. A native `wx.SpinCtrl` is 25.
+So a replacement built on `InputFrame` must *not* pass `BORDER_NONE` to its
+field -- the `#FFFFFF` client edge comes off at the Win32 level
+(`WS_EX_CLIENTEDGE`), which does not touch the wx style bits the best size is
+computed from, and the control then lands on 25 with no magic number.
+
+One dead binding surfaced while measuring: **wxMSW does not deliver
+`wx.EVT_TEXT_ENTER` from a `wx.SpinCtrl` unless the control was constructed with
+`wx.TE_PROCESS_ENTER`**, and none of the six sites passed it. The opponent
+tracker has bound Enter on all four calculator fields since before this
+redesign; pressing Enter left the result label empty while `Calculate` filled
+it. The own-drawn control passes the style, so the binding now works.
 
 ### `wx.SplitterWindow`
 
@@ -383,6 +438,21 @@ Anything marked "via Windows' own dark mode" goes through `widgets.native_dark`,
 which is enabled once at startup.
 
 ---
+
+## Verifying with real Win32 input
+
+Several phases verify behaviour with `keybd_event`/`mouse_event` rather than
+synthesised wx events, because wx events cannot prove a native control still
+works. One trap, found in phase 9b and costly because it looks exactly like a
+regression: **`keybd_event(VK_UP)` without `KEYEVENTF_EXTENDEDKEY` arrives in wx
+as `WXK_NUMPAD_UP` (377), not `WXK_UP` (315)** -- it is the numeric keypad's
+scancode. A handler that binds only `WXK_UP` therefore does nothing under such a
+harness while working perfectly for a real keyboard, and a harness that omits
+the flag is testing the numpad. Send the flag for the arrow/navigation block
+(`VK_LEFT`/`UP`/`RIGHT`/`DOWN`, `VK_PRIOR`/`NEXT`/`END`/`HOME`,
+`VK_INSERT`/`DELETE`), and handle both key codes: the native controls answer
+both, so a replacement that answers only one *is* a regression -- with NumLock
+off, the keypad's 8 and 2 send the non-extended form.
 
 ## What wx will **not** tell you
 

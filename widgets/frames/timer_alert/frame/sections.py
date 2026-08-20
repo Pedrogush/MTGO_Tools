@@ -25,6 +25,7 @@ from widgets.checkbox import DarkCheckBox
 from widgets.frames.timer_alert.frame.threshold_panel import SOUND_OPTIONS
 from widgets.input_frame import create_text_input
 from widgets.section import SectionPanel
+from widgets.spin_ctrl import DarkSpinCtrl
 from widgets.stylize import stylize_scrollable
 
 
@@ -38,8 +39,8 @@ class SectionsBuilderMixin:
     threshold_container: wx.ScrolledWindow
     threshold_container_sizer: wx.BoxSizer
     sound_choice: wx.Choice
-    poll_interval_ctrl: wx.SpinCtrl
-    repeat_interval_ctrl: wx.SpinCtrl
+    poll_interval_ctrl: DarkSpinCtrl
+    repeat_interval_ctrl: DarkSpinCtrl
     start_alert_checkbox: DarkCheckBox
     repeat_alarm_checkbox: DarkCheckBox
     status_text: wx.TextCtrl
@@ -95,13 +96,12 @@ class SectionsBuilderMixin:
             0,
             wx.ALIGN_CENTER_VERTICAL,
         )
-        self.poll_interval_ctrl = wx.SpinCtrl(
+        self.poll_interval_ctrl = DarkSpinCtrl(
             panel,
             min=TIMER_ALERT_POLL_INTERVAL_MIN_MS,
             max=TIMER_ALERT_POLL_INTERVAL_MAX_MS,
             initial=TIMER_ALERT_POLL_INTERVAL_MS,
         )
-        self._stylize_spin(self.poll_interval_ctrl)
         options_grid.Add(self.poll_interval_ctrl, 0, wx.EXPAND)
 
         options_grid.Add(
@@ -109,13 +109,12 @@ class SectionsBuilderMixin:
             0,
             wx.ALIGN_CENTER_VERTICAL,
         )
-        self.repeat_interval_ctrl = wx.SpinCtrl(
+        self.repeat_interval_ctrl = DarkSpinCtrl(
             panel,
             min=TIMER_ALERT_REPEAT_INTERVAL_MIN_SECONDS,
             max=TIMER_ALERT_REPEAT_INTERVAL_MAX_SECONDS,
             initial=TIMER_ALERT_REPEAT_INTERVAL_DEFAULT_SECONDS,
         )
-        self._stylize_spin(self.repeat_interval_ctrl)
         options_grid.Add(self.repeat_interval_ctrl, 0, wx.EXPAND)
 
         sizer.Add(options_grid, 0, wx.LEFT | wx.RIGHT | wx.EXPAND, SPACE_MD)

@@ -91,9 +91,9 @@ def test_records_split_across_chunks_are_rejoined():
     for size in (1, 2, 3, 7, 16, 64, len(payload)):
         chunks = [payload[i : i + size] for i in range(0, len(payload), size)]
         out = b"".join(jsonl_to_json_array(chunks))
-        assert json.loads(out) == json.loads(b"".join(jsonl_to_json_array([payload]))), (
-            f"chunk size {size}"
-        )
+        assert json.loads(out) == json.loads(
+            b"".join(jsonl_to_json_array([payload]))
+        ), f"chunk size {size}"
 
 
 def test_trailing_newline_does_not_add_an_empty_record():

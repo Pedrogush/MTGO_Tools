@@ -15,6 +15,7 @@ import wx
 
 from widgets.panels.compact_radar_panel import CompactRadarPanel
 from widgets.panels.compact_sideboard_panel import CompactSideboardPanel
+from widgets.spin_ctrl import DarkSpinCtrl
 
 if TYPE_CHECKING:
     from services.metagame_service import MetagameService
@@ -52,10 +53,10 @@ class MTGOpponentDeckSpyProto(Protocol):
     status_label: wx.StaticText
     load_arch_btn: wx.Button
     calc_result_label: wx.StaticText
-    spin_deck_size: wx.SpinCtrl
-    spin_copies: wx.SpinCtrl
-    spin_drawn: wx.SpinCtrl
-    spin_target: wx.SpinCtrl
+    spin_deck_size: DarkSpinCtrl
+    spin_copies: DarkSpinCtrl
+    spin_drawn: DarkSpinCtrl
+    spin_target: DarkSpinCtrl
     radar_panel: CompactRadarPanel
     sideboard_panel: CompactSideboardPanel
 

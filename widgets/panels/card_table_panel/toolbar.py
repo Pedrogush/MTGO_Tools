@@ -73,9 +73,7 @@ class CardTablePanelToolbarMixin(_Base):
         controls = getattr(self, "_header_controls", None)
         if controls is None:
             return
-        needed = (
-            controls.CalcMin().GetWidth() + DECK_COUNT_LABEL_MIN_WIDTH + SPACE_SM + SPACE_SM
-        )
+        needed = controls.CalcMin().GetWidth() + DECK_COUNT_LABEL_MIN_WIDTH + SPACE_SM + SPACE_SM
         wrapped = self.GetClientSize().GetWidth() < needed
         if wrapped == self._header_wrapped:
             return
@@ -140,9 +138,7 @@ class CardTablePanelToolbarMixin(_Base):
         self.pile_sort_button.Show(self.view_mode == "pile")
         # The divider marks the boundary of the toggle group; with nothing left
         # of it visible it would be a rule against the panel edge.
-        self.header_divider.Show(
-            self.view_mode == "pile" or self.printing_button is not None
-        )
+        self.header_divider.Show(self.view_mode == "pile" or self.printing_button is not None)
         relayout(self)
 
     def _on_view_button(self, mode: str) -> None:

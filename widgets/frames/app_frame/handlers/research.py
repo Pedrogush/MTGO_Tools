@@ -139,7 +139,11 @@ class DeckResearchHandlers(_Base):
         show_source = self.controller.get_deck_data_source() == "both"
         rows = [
             (
-                (("🐠" if deck.get("source") == "mtggoldfish" else "🧙🏾‍♂️") if show_source else ""),
+                (
+                    ("🐠" if deck.get("source") == "mtggoldfish" else "🧙🏾‍♂️")
+                    if show_source
+                    else ""
+                ),
                 deck.get("player", "Unknown"),
                 slug_to_name.get(deck.get("name", ""), deck.get("name", "")),
                 strip_extra_dates(deck.get("event", "")),

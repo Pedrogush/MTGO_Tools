@@ -73,8 +73,10 @@ NATIVE_THEMED_CLASSES = frozenset(
 
 #: Controls that take the near-white sunken client edge Windows draws at
 #: ``#FFFFFF`` and that no colour call reaches (phase 6). ``wx.SpinCtrl`` is not
-#: here because :func:`widgets.stylize.stylize_spinctrl` now strips it for every
-#: site, which is the better place for a control that never wants the edge.
+#: here because there is no longer one in the tree at all -- see
+#: :func:`test_no_bare_spin_control_survives_in_the_widget_tree`. Its field is a
+#: ``wx.TextCtrl`` inside a :class:`widgets.spin_ctrl.DarkSpinCtrl`, so it is
+#: covered by the ``wx.TextCtrl`` row above.
 CLIENT_EDGE_CLASSES = frozenset({"wx.TextCtrl", "wx.ListBox", "wx.ListCtrl"})
 
 #: Any callable that hands a widget to the styling layer. Local ``_stylize_*``
@@ -473,6 +475,50 @@ def test_no_bare_splitter_survives_in_the_widget_tree() -> None:
         "wx.SplitterWindow draws a near-white 3-D sash that SetBackgroundColour, "
         "disable_native_theme and every SP_* flag combination leave alone; use "
         f"widgets.splitter.DarkSplitter. Found in: {offenders}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# One spin control
+# ---------------------------------------------------------------------------
+
+#: Every class that is, or wraps, a Win32 ``msctls_updown32``. ``wx.SpinButton``
+#: is the bare arrows; ``wx.SpinCtrl`` and ``wx.SpinCtrlDouble`` pair one with an
+#: ``Edit``. All three render the same light arrow blocks.
+SPIN_CLASSES = ("wx.SpinCtrl(", "wx.SpinCtrlDouble(", "wx.SpinButton(")
+
+
+def test_no_bare_spin_control_survives_in_the_widget_tree() -> None:
+    """The sixth guard of this shape, and the one where the fix is *not* styling.
+
+    A wxMSW ``wx.SpinCtrl`` is two HWNDs. The colours wx forwards reach the
+    ``Edit``; the ``msctls_updown32`` arrows beside it are a separate window
+    that stays light under **every** route wx or uxtheme offers -- measured
+    twice, once in phase 1 and once as an eight-variant probe in phase 9b
+    (``DarkMode_CFD``, ``DarkMode_Explorer``, ``DarkMode_Explorer::SPIN``,
+    ``DarkMode::SPIN``, ``DarkMode_CFD::SPIN``, ``ItemsView``, no visual style,
+    untouched), all with ``AllowDarkModeForWindow`` and ``WM_THEMECHANGED``.
+    Pixel-identical light arrows in all eight.
+
+    So, unlike :func:`test_every_native_themed_control_reaches_its_stylizer`,
+    there is no ``stylize_*`` call that fixes this one and no allowlist entry
+    that could be right: the control has to be
+    :class:`widgets.spin_ctrl.DarkSpinCtrl`. Note the shape of the failure this
+    guards against -- ``strip_native_client_edge`` on a ``wx.SpinCtrl`` was a
+    **silent no-op** for a whole phase because ``GetHandle()`` hands back the
+    arrows rather than the field.
+    """
+    offenders = [
+        f"{_rel(path)} ({cls.rstrip('(')})"
+        for path in _modules()
+        for cls in SPIN_CLASSES
+        if cls in path.read_text(encoding="utf-8") and _rel(path) != "widgets/spin_ctrl.py"
+    ]
+    assert offenders == [], (
+        "a wx.SpinCtrl's arrows are a separate msctls_updown32 HWND that no "
+        "colour, theme class or style flag reaches -- they render #ECECEC on "
+        "every dark surface. Use widgets.spin_ctrl.DarkSpinCtrl. "
+        f"Found in: {offenders}"
     )
 
 
