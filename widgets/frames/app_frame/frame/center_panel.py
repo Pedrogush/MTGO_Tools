@@ -100,15 +100,19 @@ class CenterPanelBuilderMixin(_Base):
         self.deck_notes_panel.SetToolTip(self._t("tabs.tooltip.deck_notes"))
         self.deck_tabs.AddPage(self.deck_notes_panel, self._t("tabs.deck_notes"))
 
-        # Stats panel kept hidden; avoid starting WebView2 just to maintain
-        # the compatibility summary label.
+        # Phase 5: the stats panel is a real tab. It was constructed with
+        # create_webview=False and immediately Hide()n, so a whole package
+        # rendered nothing and the only surviving artefact was summary_label.
+        # DeckStatsPanel picks its own backend (WebView2, else wxHTML), so this
+        # site does not have to know whether the runtime is present.
         self.deck_stats_panel = DeckStatsPanel(
-            detail_box,
+            self.deck_tabs,
             controller=self.controller,
             card_manager=self.controller.card_repo.get_card_manager(),
-            create_webview=False,
+            locale=self.locale,
         )
-        self.deck_stats_panel.Hide()
+        self.deck_stats_panel.SetToolTip(self._t("tabs.tooltip.deck_stats"))
+        self.deck_tabs.AddPage(self.deck_stats_panel, self._t("tabs.deck_stats"))
         self.stats_summary = self.deck_stats_panel.summary_label
         return detail_sizer
 

@@ -12,8 +12,6 @@ if str(_project_root) not in sys.path:
 import wx
 import wx.html
 from loguru import logger
-from matplotlib.backends.backend_wxagg import FigureCanvasWxAgg as FigureCanvas
-from matplotlib.figure import Figure
 
 from utils.constants import (
     DARK_ALT,
@@ -26,6 +24,7 @@ from utils.constants import (
     SUBDUED_TEXT,
 )
 from utils.i18n import translate
+from widgets.charts import ChartView
 from widgets.frames.metagame_analysis.handlers import MetagameAnalysisHandlersMixin
 from widgets.frames.metagame_analysis.properties import MetagameAnalysisPropertiesMixin
 from widgets.stylize import (
@@ -158,13 +157,12 @@ class MetagameAnalysisFrame(
         content_sizer = wx.BoxSizer(wx.HORIZONTAL)
         main_sizer.Add(content_sizer, 1, wx.ALL | wx.EXPAND, SPACE_SM)
 
-        self.figure = Figure(figsize=(6, 5), facecolor="#14161b")
-        self.canvas = FigureCanvas(panel, -1, self.figure)
-        self.canvas.SetBackgroundColour(DARK_PANEL)
-        content_sizer.Add(self.canvas, 1, wx.EXPAND | wx.RIGHT, SPACE_SM)
-
-        self.ax = self.figure.add_subplot(111)
-        self.ax.set_facecolor("#14161b")
+        # Phase 5: a matplotlib pie became a sorted horizontal bar chart on the
+        # shared renderer. ChartView picks its own backend -- WebView2 when the
+        # runtime is present, wxHTML when it is not -- so this site never has to
+        # know which one it got.
+        self.chart = ChartView(panel)
+        content_sizer.Add(self.chart, 1, wx.EXPAND | wx.RIGHT, SPACE_SM)
 
         right_panel = wx.Panel(panel)
         right_panel.SetBackgroundColour(DARK_PANEL)

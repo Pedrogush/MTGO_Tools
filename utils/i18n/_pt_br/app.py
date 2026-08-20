@@ -1,6 +1,15 @@
 """Application-level UI strings (status, menus, labels). (Portuguese (Brazil))"""
 
 MESSAGES: dict[str, str] = {
+    "app.weekday.0": "S",
+    "app.weekday.1": "T",
+    "app.weekday.2": "Q",
+    "app.weekday.3": "Q",
+    "app.weekday.4": "S",
+    "app.weekday.5": "S",
+    "app.weekday.6": "D",
+    "app.summary.deck_count": "{count} decks",
+    "app.summary.last_days": "últimos {count} dias",
     "app.status.ready": "Pronto",
     "app.status.language_changed": "Idioma alterado. Reinicie o app para aplicar por completo.",
     "app.status.selected_language": "Idioma selecionado: {language}",

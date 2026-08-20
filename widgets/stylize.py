@@ -60,7 +60,47 @@ widget               behaviour
                      and ignores everything wx can set. ``SetHeaderAttr``
                      returns ``True`` and applies only the *foreground*,
                      which makes the white header worse, not better.
-                     Dark only via Windows' own dark mode.
+                     Dark only via Windows' own dark mode. The **selected row**
+                     is OS-owned and ``SetItemBackgroundColour`` on it is
+                     overpainted in every state: with focus it is the system
+                     accent (``#0078D7``, 3.34:1 on ``SURFACE_PANEL``), without
+                     focus it is ``#F0F0F0`` -- a near-white band, 13.2:1. Both
+                     are measured under Windows dark mode; the review's
+                     "~1.1:1 tint" was the pre-dark-mode rendering and no longer
+                     describes it. Neither is reachable, so a list that needs
+                     the app's selection token needs a different control -- see
+                     :mod:`widgets.grids.data_grid`
+``wx.grid.Grid``     cell and label colours honoured. The **selection** is only
+                     half ours: with focus wxGrid fills with
+                     ``SetSelectionBackground``, without focus it draws
+                     ``COLOR_BTNSHADOW`` (``#A0A0A0``) and ignores the colour
+                     entirely. A cell renderer that paints its own background
+                     wins in both states, because wxGrid hands the whole cell
+                     to the renderer -- that is how the deck table view has
+                     always got a dark selection, and what
+                     :mod:`widgets.grids.data_grid` generalises.
+                     ``SetColLabelAlignment`` is **grid-wide** (so it cannot
+                     right-align a numeric column's header alone) and
+                     **overriding ``DrawColLabel`` from Python does nothing** --
+                     a subclass counting its own calls records zero after a full
+                     paint. Per-column header alignment therefore needs an
+                     own-drawn header window
+``wx.dataview``      ``DataViewListCtrl`` draws its own alternate-row bands from
+                     the light theme, so half the rows come back light grey on a
+                     dark surface. Not a way out of the ListCtrl selection
+                     problem
+``wx.html.HtmlWindow``
+                     renders roughly HTML 3.2 and is **not** a viable chart
+                     fallback: it ignores ``bgcolor`` on a ``<table>``,
+                     collapses a cell with no text in it, and ignores ``height``
+                     on ``<td>``. A bar chart emitted into it draws every label
+                     and **no bars at all** -- verified by screenshot, which is
+                     the only way this shows up. Own-draw instead (see
+                     :mod:`widgets.charts.painter`)
+``wx.html2.WebView`` needs the Edge WebView2 runtime; ``WebView.New`` raises (or
+                     returns ``None``) without it, so every construction site
+                     needs a fallback. It also takes a light 1px client edge
+                     unless constructed with ``wx.BORDER_NONE``
 ``wx.Notebook``      both ignored, **and Windows' dark mode does not reach
                      it either** — migration to ``FlatNotebook`` is the
                      only fix (see :mod:`widgets.notebook`)
@@ -124,6 +164,15 @@ What wxMSW does with **fonts and sizes** (measured in phase 3)
   horizontally, which is the number to size a labelled button by.
 * Text the app paints itself with ``dc.SetFont()`` is invisible to font
   inheritance. :func:`type_font` exists for exactly those surfaces.
+
+Own-drawn surfaces
+------------------
+Any window that paints itself with ``wx.BufferedPaintDC`` /
+``wx.AutoBufferedPaintDC`` must also call
+``SetBackgroundStyle(wx.BG_STYLE_PAINT)``. Without it wxMSW leaves the backing
+store alone, so a panel that draws nothing shows whatever was last blitted into
+that screen region -- observed in phase 5 as a deck-list row appearing inside the
+archetype summary box.
 """
 
 from __future__ import annotations
@@ -824,7 +873,7 @@ def create_status_label(parent: wx.Window, text: str = "") -> wx.StaticText:
     return label
 
 
-def create_divider(parent: wx.Window, *, vertical: bool, length: int) -> wx.Window:
+def create_divider(parent: wx.Window, *, vertical: bool, length: int | None = None) -> wx.Window:
     """A 1px themed rule (C4).
 
     ``wx.StaticLine`` is **not** usable here, and this was measured rather than
@@ -838,11 +887,18 @@ def create_divider(parent: wx.Window, *, vertical: bool, length: int) -> wx.Wind
     that the eye loses. A vertical one next to text does not get lost.)
 
     ``wx.Panel`` backgrounds *are* honoured, so the rule is one.
+
+    ``length=None`` leaves the long axis free, for a rule added with
+    ``wx.EXPAND`` that should span whatever its sizer gives it.
     """
-    size = (1, length) if vertical else (length, 1)
+    thin = -1 if length is None else length
+    size = (1, thin) if vertical else (thin, 1)
     rule = wx.Panel(parent, size=size)
     rule.SetMinSize(size)
-    rule.SetMaxSize(size)
+    if length is not None:
+        rule.SetMaxSize(size)
+    else:
+        rule.SetMaxSize((1, -1) if vertical else (-1, 1))
     rule.SetBackgroundColour(_colour(BORDER_SUBTLE))
     return rule
 

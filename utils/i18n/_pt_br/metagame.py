@@ -2,6 +2,8 @@
 
 MESSAGES: dict[str, str] = {
     "metagame.chart.no_data": "Sem dados disponíveis para o período selecionado",
+    "metagame.chart.title": "Participação no metagame de {format}",
+    "metagame.chart.other": "Outros arquétipos",
     "metagame.label.format": "Formato",
     "metagame.label.time_window": "Janela de Tempo (dias)",
     "metagame.label.starting_from": "A partir do dia",
@@ -9,8 +11,10 @@ MESSAGES: dict[str, str] = {
     "metagame.tooltip.time_window": "Ajusta quantos dias são usados para calcular a participação no metagame.",
     "metagame.btn.refresh": "Atualizar Dados",
     "metagame.loaded": "Carregados {count} arquétipos",
-    "metagame.period.last_days": "Últimos {count} dia(s)",
-    "metagame.period.days_ago": "há {count} dia(s)",
+    "metagame.period.last_day": "Último dia",
+    "metagame.period.last_days": "Últimos {count} dias",
+    "metagame.period.day_ago": "há 1 dia",
+    "metagame.period.days_ago": "há {count} dias",
     "metagame.period.range_days_ago": "há {start}-{end} dias",
     "metagame.changes.no_data": "Sem dados de comparação disponíveis",
     "metagame.changes.previous_missing": "Sem dados do período anterior para comparar",

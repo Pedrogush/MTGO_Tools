@@ -20,8 +20,16 @@ from __future__ import annotations
 import wx
 import wx.grid as gridlib
 
-from utils.constants import SELECTION_BORDER
+from utils.constants import SELECTION_BORDER, SPACE_SM
+from utils.constants.theme import DANGER_TEXT
 from widgets.mana_icon_factory import ManaIconFactory, tokenize_mana_symbols
+from widgets.panels.card_table_panel.sorting import (
+    TABLE_ACTION_COUNT,
+    TABLE_ACTION_DESTRUCTIVE_GAP,
+    TABLE_ACTION_REMOVE,
+    TABLE_ACTION_SLOT_WIDTH,
+    action_slot_bounds,
+)
 
 _MANA_CELL_PADDING = 4
 _CELL_TEXT_PADDING = 4
@@ -40,7 +48,11 @@ _MANA_ICON_GAP = 0
 # Trailing, non-data "actions" column glyphs and width, rendered with the same
 # +/-/x controls the grid view shows on a selected card.
 _ACTION_GLYPHS = ("+", "−", "×")
-_ACTIONS_COL_WIDTH = 66
+# Three 28px targets plus a 16px separation before the destructive one, plus
+# a trailing inset so the group does not sit flush against the row edge.
+_ACTIONS_COL_WIDTH = (
+    TABLE_ACTION_SLOT_WIDTH * TABLE_ACTION_COUNT + TABLE_ACTION_DESTRUCTIVE_GAP + SPACE_SM
+)
 
 # Cache of (token, target-size) → wx.Bitmap shared across all renderer
 # instances. Bitmap creation + scaling is expensive; oracle text repeats
@@ -338,14 +350,21 @@ class _ActionCellRenderer(gridlib.GridCellRenderer):
     ) -> None:
         _paint_row_background(grid, dc, rect, col, isSelected)
         dc.SetFont(grid.GetDefaultCellFont().Bold())
-        dc.SetTextForeground(grid.GetDefaultCellTextColour())
-        slot_w = rect.width / len(_ACTION_GLYPHS)
         char_h = dc.GetCharHeight()
         y = rect.y + max(0, (rect.height - char_h) // 2)
+        bounds = action_slot_bounds(rect.width - SPACE_SM)
         for idx, glyph in enumerate(_ACTION_GLYPHS):
+            start, end = bounds[idx]
+            # The destructive control is the only one that is not reversible, so
+            # it is the only one that carries the danger colour. The gap in front
+            # of it is in action_slot_bounds.
+            dc.SetTextForeground(
+                wx.Colour(*DANGER_TEXT)
+                if idx == TABLE_ACTION_REMOVE
+                else grid.GetDefaultCellTextColour()
+            )
             tw = dc.GetTextExtent(glyph)[0]
-            x = rect.x + int(slot_w * idx + (slot_w - tw) / 2)
-            dc.DrawText(glyph, x, y)
+            dc.DrawText(glyph, rect.x + start + (end - start - tw) // 2, y)
 
     def GetBestSize(
         self,

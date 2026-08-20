@@ -15,11 +15,13 @@ import wx
 import wx.dataview as dv
 from loguru import logger
 
-from utils.constants import SPACE_SM, SPACE_XS
+from utils.constants import SPACE_MD, SPACE_SM, SPACE_XS
 from utils.i18n import translate
 from widgets.frames.match_history.handlers import MatchHistoryHandlersMixin
 from widgets.frames.match_history.properties import MatchHistoryPropertiesMixin
 from widgets.stylize import (
+    apply_type_level,
+    create_divider,
     create_status_label,
     init_top_level_window,
     stylize_button,
@@ -99,62 +101,58 @@ class MatchHistoryFrame(MatchHistoryHandlersMixin, MatchHistoryPropertiesMixin, 
         box_parent = metrics_sizer.GetStaticBox()
         sizer.Add(metrics_sizer, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, SPACE_SM)
 
-        metrics_inner = wx.BoxSizer(wx.VERTICAL)
+        # Phase 5: the eight metrics were eight plain "Label: value" strings, so
+        # every value started at a different x -- the label length decided where
+        # the number went, and comparing two rates meant reading rather than
+        # scanning. They are now a key/value grid: two pairs per row, labels
+        # left, values on a shared right edge per column.
+        metrics_inner = wx.FlexGridSizer(cols=4, gap=(SPACE_MD, SPACE_XS))
+        metrics_inner.AddGrowableCol(1, 1)
+        metrics_inner.AddGrowableCol(3, 1)
         metrics_sizer.Add(metrics_inner, 0, wx.EXPAND | wx.ALL, SPACE_SM)
 
-        row1 = wx.BoxSizer(wx.HORIZONTAL)
-        self.match_rate_label = wx.StaticText(
-            box_parent, label=f"{self._t('match.metrics.abs_match_rate')}: \u2014"
+        self.match_rate_label = self._add_metric(
+            metrics_inner, box_parent, "match.metrics.abs_match_rate"
         )
-        self.match_rate_label.SetForegroundColour(LIGHT_TEXT)
-        row1.Add(self.match_rate_label, 1, wx.ALIGN_CENTER_VERTICAL)
-        self.game_rate_label = wx.StaticText(
-            box_parent, label=f"{self._t('match.metrics.abs_game_rate')}: \u2014"
+        self.game_rate_label = self._add_metric(
+            metrics_inner, box_parent, "match.metrics.abs_game_rate"
         )
-        self.game_rate_label.SetForegroundColour(LIGHT_TEXT)
-        row1.Add(self.game_rate_label, 1, wx.ALIGN_CENTER_VERTICAL)
-        metrics_inner.Add(row1, 0, wx.EXPAND | wx.BOTTOM, SPACE_XS)
+        self.filtered_match_rate_label = self._add_metric(
+            metrics_inner, box_parent, "match.metrics.filtered_match_rate"
+        )
+        self.filtered_game_rate_label = self._add_metric(
+            metrics_inner, box_parent, "match.metrics.filtered_game_rate"
+        )
+        self.mulligan_rate_label = self._add_metric(
+            metrics_inner, box_parent, "match.metrics.mulligan_rate"
+        )
+        self.avg_mulligans_label = self._add_metric(
+            metrics_inner, box_parent, "match.metrics.avg_mulligans"
+        )
 
-        row2 = wx.BoxSizer(wx.HORIZONTAL)
-        self.filtered_match_rate_label = wx.StaticText(
-            box_parent, label=f"{self._t('match.metrics.filtered_match_rate')}: \u2014"
+        metrics_sizer.Add(
+            create_divider(box_parent, vertical=False), 0, wx.EXPAND | wx.LEFT | wx.RIGHT, SPACE_SM
         )
-        self.filtered_match_rate_label.SetForegroundColour(LIGHT_TEXT)
-        row2.Add(self.filtered_match_rate_label, 1, wx.ALIGN_CENTER_VERTICAL)
-        self.filtered_game_rate_label = wx.StaticText(
-            box_parent, label=f"{self._t('match.metrics.filtered_game_rate')}: \u2014"
-        )
-        self.filtered_game_rate_label.SetForegroundColour(LIGHT_TEXT)
-        row2.Add(self.filtered_game_rate_label, 1, wx.ALIGN_CENTER_VERTICAL)
-        metrics_inner.Add(row2, 0, wx.EXPAND | wx.BOTTOM, SPACE_XS)
 
-        row3 = wx.BoxSizer(wx.HORIZONTAL)
-        self.mulligan_rate_label = wx.StaticText(
-            box_parent, label=f"{self._t('match.metrics.mulligan_rate')}: \u2014"
-        )
-        self.mulligan_rate_label.SetForegroundColour(LIGHT_TEXT)
-        row3.Add(self.mulligan_rate_label, 1, wx.ALIGN_CENTER_VERTICAL)
-        self.avg_mulligans_label = wx.StaticText(
-            box_parent, label=f"{self._t('match.metrics.avg_mulligans')}: \u2014"
-        )
-        self.avg_mulligans_label.SetForegroundColour(LIGHT_TEXT)
-        row3.Add(self.avg_mulligans_label, 1, wx.ALIGN_CENTER_VERTICAL)
-        metrics_inner.Add(row3, 0, wx.EXPAND)
+        # The opponent pair used to be secondary-coloured with nothing to say
+        # why. They are scoped to whichever match is selected rather than to the
+        # whole history, so they now sit under a heading that says so and the
+        # colour has a stated meaning.
+        self.opp_heading = wx.StaticText(box_parent, label=self._t("match.metrics.opp_none"))
+        self.opp_heading.SetForegroundColour(SUBDUED_TEXT)
+        apply_type_level(self.opp_heading, "caption")
+        metrics_sizer.Add(self.opp_heading, 0, wx.LEFT | wx.RIGHT | wx.TOP, SPACE_SM)
 
-        metrics_inner.Add(wx.StaticLine(box_parent), 0, wx.EXPAND | wx.TOP | wx.BOTTOM, SPACE_SM)
-
-        row_opp = wx.BoxSizer(wx.HORIZONTAL)
-        self.opp_match_rate_label = wx.StaticText(
-            box_parent, label=f"{self._t('match.metrics.opp_match_rate')}: \u2014"
+        opp_grid = wx.FlexGridSizer(cols=4, gap=(SPACE_MD, SPACE_XS))
+        opp_grid.AddGrowableCol(1, 1)
+        opp_grid.AddGrowableCol(3, 1)
+        metrics_sizer.Add(opp_grid, 0, wx.EXPAND | wx.ALL, SPACE_SM)
+        self.opp_match_rate_label = self._add_metric(
+            opp_grid, box_parent, "match.metrics.opp_match_rate", secondary=True
         )
-        self.opp_match_rate_label.SetForegroundColour(SUBDUED_TEXT)
-        row_opp.Add(self.opp_match_rate_label, 1, wx.ALIGN_CENTER_VERTICAL)
-        self.opp_mull_rate_label = wx.StaticText(
-            box_parent, label=f"{self._t('match.metrics.opp_mull_rate')}: \u2014"
+        self.opp_mull_rate_label = self._add_metric(
+            opp_grid, box_parent, "match.metrics.opp_mull_rate", secondary=True
         )
-        self.opp_mull_rate_label.SetForegroundColour(SUBDUED_TEXT)
-        row_opp.Add(self.opp_mull_rate_label, 1, wx.ALIGN_CENTER_VERTICAL)
-        metrics_inner.Add(row_opp, 0, wx.EXPAND)
 
         filter_row = wx.BoxSizer(wx.HORIZONTAL)
         metrics_sizer.Add(filter_row, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, SPACE_SM)
@@ -214,6 +212,36 @@ class MatchHistoryFrame(MatchHistoryHandlersMixin, MatchHistoryPropertiesMixin, 
         col0_w = tree_w - expander_w - sum(self._COL_WIDTHS) - scrollbar_w
         if col0_w > 80:
             dv_ctrl.GetColumn(1).SetWidth(col0_w)
+
+    def _add_metric(
+        self,
+        sizer: wx.FlexGridSizer,
+        parent: wx.Window,
+        key: str,
+        *,
+        secondary: bool = False,
+    ) -> wx.StaticText:
+        """Add one label/value pair to a key/value grid, returning the value.
+
+        The value control is right-aligned inside a growable column, which is
+        what puts every number in the column on one edge. It needs
+        ``wx.ST_NO_AUTORESIZE`` to stay that way: without it ``SetLabel``
+        resizes the control to the new string and the alignment has nothing to
+        align within (phase 4's finding, applied here).
+        """
+        colour = SUBDUED_TEXT if secondary else LIGHT_TEXT
+        label = wx.StaticText(parent, label=self._t(key))
+        label.SetForegroundColour(colour)
+        sizer.Add(label, 0, wx.ALIGN_CENTER_VERTICAL)
+
+        value = wx.StaticText(
+            parent,
+            label="\u2014",
+            style=wx.ALIGN_RIGHT | wx.ST_NO_AUTORESIZE,
+        )
+        value.SetForegroundColour(colour)
+        sizer.Add(value, 1, wx.EXPAND | wx.ALIGN_CENTER_VERTICAL)
+        return value
 
     def _stylize_button(self, button: wx.Button) -> None:
         stylize_button(button, kind="secondary")

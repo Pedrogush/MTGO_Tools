@@ -317,6 +317,87 @@ CONTRAST_PAIRS += [
     ),
 ]
 
+# Phase 5: the chart surfaces. The deck stats panel had been permanently hidden,
+# so its hand-picked CSS colours had never been on screen and never been checked;
+# two of them failed. #8B929E on the chart card measured 4.26:1 (chart titles,
+# x-axis labels, bar counts) and #555 measured 1.79:1 (the "no data" text). Both
+# are theme tokens now, and the metagame chart's own labels -- which the review
+# measured at 1.10:1 on the old pastel wedges -- are on the same rows.
+CONTRAST_PAIRS += [
+    (
+        "TEXT_PRIMARY on SURFACE_ALT (chart card body)",
+        T.TEXT_PRIMARY,
+        T.SURFACE_ALT,
+        BODY_TEXT,
+        "bar values and hbar labels inside a deck stats chart card",
+    ),
+    (
+        "TEXT_SECONDARY on SURFACE_ALT (chart chrome)",
+        T.TEXT_SECONDARY,
+        T.SURFACE_ALT,
+        BODY_TEXT,
+        "chart titles, x-axis labels and counts; was #8B929E at 4.26:1",
+    ),
+    (
+        "TEXT_PLACEHOLDER on SURFACE_ALT (chart empty state)",
+        T.TEXT_PLACEHOLDER,
+        T.SURFACE_ALT,
+        BODY_TEXT,
+        "a chart with no data; was #555 at 1.79:1",
+    ),
+    (
+        "TEXT_PRIMARY on SURFACE_BASE (bar chart labels)",
+        T.TEXT_PRIMARY,
+        T.SURFACE_BASE,
+        BODY_TEXT,
+        "metagame bar chart: archetype names and percentages, on the page ground "
+        "rather than on a wedge -- the fix for the review's 1.10:1 pie labels",
+    ),
+    (
+        "TEXT_SECONDARY on SURFACE_BASE (bar chart subtitle)",
+        T.TEXT_SECONDARY,
+        T.SURFACE_BASE,
+        BODY_TEXT,
+        "the period line under the metagame chart title",
+    ),
+    (
+        "TEXT_SECONDARY on SURFACE_ALT (data grid header)",
+        T.TEXT_SECONDARY,
+        T.SURFACE_ALT,
+        BODY_TEXT,
+        "Top Cards column labels, drawn by widgets/grids/data_grid.py",
+    ),
+    (
+        "TEXT_PRIMARY on SELECTION_FILL_ON_PANEL (selected grid row)",
+        T.TEXT_PRIMARY,
+        T.SELECTION_FILL_ON_PANEL,
+        BODY_TEXT,
+        "a selected Top Cards row; the native ListCtrl highlight this replaces "
+        "was the system accent when focused and ~1.1:1 when not",
+    ),
+    (
+        "DANGER_TEXT on SURFACE_ALT (destructive row control)",
+        T.DANGER_TEXT,
+        T.SURFACE_ALT,
+        BODY_TEXT,
+        "the x that deletes a row in the deck table view",
+    ),
+]
+
+# Every categorical chart colour has to carry a bar against the chart ground, and
+# the bar is a non-text boundary. The palette's own >= 3:1 guarantee is asserted
+# in the palette tests; this pins the two grounds a bar is actually drawn on.
+CONTRAST_PAIRS += [
+    (
+        f"CHART_ALL[{index}] on SURFACE_BASE",
+        colour,
+        T.SURFACE_BASE,
+        NON_TEXT,
+        "a metagame bar against the chart page ground",
+    )
+    for index, colour in enumerate(T.CHART_ALL)
+]
+
 #: Pairs that cannot be fixed inside the current phase because the fix is a design
 #: decision belonging to a later one. id -> reason. Never widen a threshold instead
 #: of adding a row here.

@@ -9,6 +9,7 @@ import wx
 import wx.html
 
 from widgets.buttons.deck_action_buttons import DeckActionButtons
+from widgets.charts import SparkBarPanel
 from widgets.lists.deck_results_list import DeckResultsList
 from widgets.panels.deck_research_panel.frame.centered_choice import _CenteredChoice
 
@@ -47,6 +48,7 @@ class DeckResearchPanelProto(Protocol):
 
     deck_action_buttons: DeckActionButtons
     summary_text: wx.html.HtmlWindow
+    summary_spark: SparkBarPanel
     deck_list: DeckResultsList
     daily_average_button: wx.Button
     copy_button: wx.Button

@@ -15,13 +15,21 @@ from collections.abc import Callable, Iterable
 from typing import Any
 
 # Public column identifiers for the table view.
+COL_QTY = "qty"
 COL_MANA = "mana"
 COL_NAME = "name"
 COL_TYPE = "type"
 COL_TEXT = "text"
+#: Still a valid *sort* key (and the pile view's colour grouping uses the same
+#: helpers), but no longer a displayed column: phase 5 dropped it because for
+#: every non-land it is a strict function of the Mana column beside it, and for a
+#: land it is the same colourless diamond on every row.
 COL_COLOR = "color"
 
-TABLE_COLUMNS: tuple[str, ...] = (COL_MANA, COL_NAME, COL_TYPE, COL_TEXT, COL_COLOR)
+#: Displayed columns, in order. Quantity leads, as it does on a written
+#: decklist, and is a right-aligned numeric column of its own rather than a
+#: "2x " prefix buried inside the left-aligned card name.
+TABLE_COLUMNS: tuple[str, ...] = (COL_QTY, COL_MANA, COL_NAME, COL_TYPE, COL_TEXT)
 
 # WUBRG canonical order for color sorting.
 _WUBRG = ("W", "U", "B", "R", "G")
@@ -32,22 +40,53 @@ PILE_SORT_MV = "mv"
 PILE_SORT_COLOR = "color"
 PILE_SORT_TYPE = "type"
 
-# Table-view row controls. The trailing actions cell is split into this many
-# equal-width slots, one glyph each (add / subtract / remove).
+# Table-view row controls: add / subtract / remove.
 TABLE_ACTION_COUNT = 3
 TABLE_ACTION_ADD, TABLE_ACTION_SUB, TABLE_ACTION_REMOVE = range(TABLE_ACTION_COUNT)
 
+#: Each glyph's hit target, square. The review measured the drawn glyphs at
+#: ~14x14 with ~2px between them; 24 is the usual comfortable-pointer-target
+#: floor and is what the row height is now sized against too.
+TABLE_ACTION_SLOT_WIDTH = 28
+#: Gap between the subtract and remove glyphs. ``x`` deletes the row outright
+#: while ``-`` decrements it, and they sat adjacent with a ~2px gap, so a
+#: mis-aimed decrement destroyed the row. This is a deliberate separation, not
+#: padding.
+TABLE_ACTION_DESTRUCTIVE_GAP = 16
 
-def action_slot_at(x_in_cell: int, cell_width: int) -> int:
+
+def action_slot_bounds(cell_width: int) -> list[tuple[int, int]]:
+    """``(x0, x1)`` for each action slot, right-aligned inside ``cell_width``.
+
+    Right-aligned so the controls stay pinned to the row's trailing edge however
+    wide the column ends up.
+    """
+    widths = [TABLE_ACTION_SLOT_WIDTH] * TABLE_ACTION_COUNT
+    gaps = [0, 0, TABLE_ACTION_DESTRUCTIVE_GAP]
+    total = sum(widths) + sum(gaps)
+    x = max(0, cell_width - total)
+    bounds = []
+    for width, gap in zip(widths, gaps, strict=True):
+        x += gap
+        bounds.append((x, x + width))
+        x += width
+    return bounds
+
+
+def action_slot_at(x_in_cell: int, cell_width: int) -> int | None:
     """Map an x offset inside the actions cell to an action slot index.
 
-    The cell is split into ``TABLE_ACTION_COUNT`` equal slots. Out-of-range x
-    is clamped so an edge click still resolves to the nearest slot.
+    Returns ``None`` for the gap in front of the destructive ``x`` and for the
+    dead space to the left of the group, so a click that lands between controls
+    does nothing instead of firing the nearest one. That is the point of the
+    gap: an unclaimed click beside ``x`` must not delete the row.
     """
     if cell_width <= 0:
-        return TABLE_ACTION_ADD
-    slot = int(x_in_cell // (cell_width / TABLE_ACTION_COUNT))
-    return max(0, min(TABLE_ACTION_COUNT - 1, slot))
+        return None
+    for index, (start, end) in enumerate(action_slot_bounds(cell_width)):
+        if start <= x_in_cell < end:
+            return index
+    return None
 
 
 def _meta(get_metadata: Callable[[str], Any], name: str) -> dict[str, Any]:
@@ -131,12 +170,14 @@ _TYPE_BUCKET_ORDER = {
 }
 
 
-def table_sort_key(column: str, meta: Any, name: str) -> tuple[Any, ...]:
+def table_sort_key(column: str, meta: Any, name: str, qty: int = 0) -> tuple[Any, ...]:
     """Sort key for a single card row in the table view.
 
     Lands are grouped at the bottom of the mana-cost sort because their
     nominal mana value of 0 would otherwise put them at the top.
     """
+    if column == COL_QTY:
+        return (-qty, name.lower())
     if column == COL_MANA:
         return (1 if is_land(meta) else 0, card_mana_value(meta), name.lower())
     if column == COL_NAME:
@@ -163,7 +204,9 @@ def sort_table_rows(
     """Return ``cards`` sorted by the chosen ``column``."""
     return sorted(
         cards,
-        key=lambda c: table_sort_key(column, _meta(get_metadata, c["name"]), c["name"]),
+        key=lambda c: table_sort_key(
+            column, _meta(get_metadata, c["name"]), c["name"], int(c.get("qty", 0) or 0)
+        ),
         reverse=descending,
     )
 

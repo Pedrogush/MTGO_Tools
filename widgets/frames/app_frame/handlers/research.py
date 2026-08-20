@@ -10,7 +10,15 @@ import wx
 from loguru import logger
 
 from services.image_service.priorities import PRIORITY_RESEARCH_VISIBLE
+from utils.constants.theme import (
+    ACCENT_TEXT,
+    SURFACE_ALT,
+    TEXT_PRIMARY,
+    TEXT_SECONDARY,
+    to_hex,
+)
 from utils.constants.timing import RESEARCH_PREFETCH_DECK_COUNT
+from utils.constants.ui_layout import ARCHETYPE_SUMMARY_DAYS
 from widgets.frames.app_frame.handlers.deck_formatting import (
     normalize_date,
     simple_summary_html,
@@ -240,6 +248,7 @@ class DeckResearchHandlers(_Base):
             self.deck_list.Append(self._t("deck_results.no_decks"))
             self.deck_list.Disable()
             self._set_status("deck_results.no_decks_for", archetype=archetype_name)
+            self.summary_spark.clear()
             self.summary_text.SetPage(
                 simple_summary_html(f"{archetype_name}\n\nNo deck data available.")
             )
@@ -262,42 +271,44 @@ class DeckResearchHandlers(_Base):
     def _present_archetype_summary(
         self: AppFrame, archetype_name: str, decks: list[dict[str, Any]]
     ) -> None:
+        """Name, deck count, and the last seven days as a bar strip.
+
+        The seven-day counts used to be joined with slashes and drawn at ~20px
+        bold -- ``9/6/0/7/10/4/0``, the second-heaviest thing on the panel, with
+        no axis, units or legend, so there was nothing to read them against.
+        They are now bar lengths, the total is the big number, and each bar is
+        labelled with its weekday initial.
+        """
         total = len(decks)
         today = date.today()
-        day_counts = []
-        for days_ago in range(6, -1, -1):
-            target = (today - timedelta(days=days_ago)).strftime("%Y-%m-%d")
-            count = sum(1 for d in decks if d.get("date", "")[:10] == target)
-            day_counts.append(str(count))
-        per_day_str = "/".join(day_counts)
+        day_counts: list[int] = []
+        day_labels: list[str] = []
+        for days_ago in range(ARCHETYPE_SUMMARY_DAYS - 1, -1, -1):
+            day = today - timedelta(days=days_ago)
+            target = day.strftime("%Y-%m-%d")
+            day_counts.append(sum(1 for d in decks if d.get("date", "")[:10] == target))
+            day_labels.append(self._t(f"app.weekday.{day.weekday()}"))
         name_escaped = (
             archetype_name.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
         )
         if archetype_name == "Any":
-            right_cell = ""
+            self.summary_spark.clear()
         else:
-            # The metric was ~20px bold #3B82F6 — the app's largest patch of
-            # accent-as-text, and 3.72:1 on this surface, i.e. below AA. It is a
-            # value, not an action and not a selection, so it is plain primary
-            # text now (11.59:1). Phase 5 (H4) replaces the seven slash-separated
-            # integers with a sparkline; this is a colour fix, not that.
-            right_cell = (
-                '<td align="right" valign="middle">'
-                f'<font size="3" color="#ECECEC"><b>{per_day_str}</b></font><br>'
-                '<font size="2" color="#B9BFCA">last 7 days</font>'
-                "</td>"
+            self.summary_spark.set_series(
+                day_counts,
+                day_labels,
+                str(sum(day_counts)),
+                self._t("app.summary.last_days", count=ARCHETYPE_SUMMARY_DAYS),
+                ACCENT_TEXT,
             )
         html = (
-            '<html><body bgcolor="#22272E" text="#ECECEC">'
-            '<table width="100%" cellpadding="5" cellspacing="0" bgcolor="#282E36">'
-            "<tr>"
-            "<td valign=middle>"
+            f'<html><body bgcolor="{to_hex(SURFACE_ALT)}" text="{to_hex(TEXT_PRIMARY)}">'
+            f'<table width="100%" cellpadding="5" cellspacing="0">'
+            "<tr><td valign=middle>"
             f'<font size="4"><b>{name_escaped}</b></font><br>'
-            f'<font size="2" color="#B9BFCA">{total} decks</font>'
-            "</td>"
-            f"{right_cell}"
-            "</tr>"
-            "</table>"
+            f'<font size="2" color="{to_hex(TEXT_SECONDARY)}">'
+            f"{self._t('app.summary.deck_count', count=total)}</font>"
+            "</td></tr></table>"
             "</body></html>"
         )
         self.summary_text.SetPage(html)
@@ -339,6 +350,7 @@ class DeckResearchHandlers(_Base):
         self.deck_list.Clear()
         self.deck_list.Append("Loading…")
         self.deck_list.Disable()
+        self.summary_spark.clear()
         self.summary_text.SetPage(simple_summary_html(f"{name}\n\nFetching deck results…"))
 
         self.controller.load_decks(

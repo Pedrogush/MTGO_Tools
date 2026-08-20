@@ -29,6 +29,7 @@ from widgets.panels.card_table_panel.sorting import (
     COL_COLOR,
     COL_MANA,
     COL_NAME,
+    COL_QTY,
     COL_TEXT,
     COL_TYPE,
     PILE_SORT_COLOR,
@@ -351,6 +352,7 @@ __all__ = [
     "COL_COLOR",
     "COL_MANA",
     "COL_NAME",
+    "COL_QTY",
     "COL_TEXT",
     "COL_TYPE",
 ]
