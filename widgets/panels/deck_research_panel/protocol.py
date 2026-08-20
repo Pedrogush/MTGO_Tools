@@ -11,6 +11,7 @@ import wx.html
 from widgets.buttons.deck_action_buttons import DeckActionButtons
 from widgets.charts import SparkBarPanel
 from widgets.lists.deck_results_list import DeckResultsList
+from widgets.mode_switch import ModeSwitch
 from widgets.panels.deck_research_panel.frame.centered_choice import _CenteredChoice
 
 
@@ -24,6 +25,7 @@ class DeckResearchPanelProto(Protocol):
     _on_format_changed: Callable[[], None]
     _on_archetype_selected: Callable[[], None]
     _on_switch_to_builder: Callable[[], None] | None
+    mode_switch: ModeSwitch
     _on_deck_selected: Callable[[], None] | None
     _on_copy: Callable[[], None] | None
     _on_save: Callable[[], None] | None

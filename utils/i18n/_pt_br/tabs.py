@@ -23,6 +23,7 @@ MESSAGES: dict[str, str] = {
     "tabs.empty.main.hint": "Escolha um deck na lista de resultados ou carregue um arquivo.",
     "tabs.empty.side": "Sideboard vazio",
     "tabs.empty.out": "Nenhuma carta fora",
+    "tabs.view.label": "Exibição",
     "tabs.view.grid": "Grade",
     "tabs.view.table": "Tabela",
     "tabs.view.pile": "Pilhas",

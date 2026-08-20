@@ -44,6 +44,7 @@ from utils.constants import (
     LIGHT_TEXT,
     SELECTION_BORDER,
     SELECTION_BORDER_WIDTH,
+    SPACE_SM,
     SUBDUED_TEXT,
 )
 from utils.image_effects import apply_rounded_corner_alpha
@@ -63,7 +64,13 @@ _CARD_HEIGHT = DECK_CARD_HEIGHT
 _NAME_STRIP_HEIGHT = 32  # visible portion of stacked-above cards
 _PILE_GAP = 8  # gap between piles (matches grid view's GRID_GAP)
 _PILE_PAD = 6  # padding inside a pile column
-_PILE_TOP = _PILE_PAD  # top inset for the first card in a pile
+# F7: each pile carries a heading naming its bucket ("3", "Lands", "White",
+# "Creature") and how many copies are in it. ``group_into_piles`` has always
+# returned that label -- every caller in this file destructured it as ``_label``
+# and threw it away, so the review's "five stacks with no headings" was a
+# rendering omission, not missing data.
+_PILE_HEADER_HEIGHT = 22
+_PILE_TOP = _PILE_PAD + _PILE_HEADER_HEIGHT  # top inset for the first card in a pile
 
 # Above this virtual width/height (px) we skip the cached full-content bitmap
 # and draw directly (culled), so a pathological pile can't allocate a huge
@@ -402,8 +409,8 @@ class DeckPileView(wx.ScrolledWindow):
         else:
             # Oversized pile: draw directly, culled to the repaint region.
             dirty = self._dirty_logical_rect()
-            for pile_idx, (_label, members) in enumerate(self._piles):
-                self._draw_pile(dc, pile_idx, members, dirty)
+            for pile_idx, (label, members) in enumerate(self._piles):
+                self._draw_pile(dc, pile_idx, label, members, dirty)
             self._draw_overlays(dc, dirty)
 
         # The rubber-band outline is rendered by the app-level MarqueeOverlay
@@ -452,8 +459,8 @@ class DeckPileView(wx.ScrolledWindow):
         mem = wx.MemoryDC(canvas)
         mem.SetBackground(wx.Brush(wx.Colour(*DARK_PANEL)))
         mem.Clear()
-        for pile_idx, (_label, members) in enumerate(self._piles):
-            self._draw_pile(mem, pile_idx, members, None)
+        for pile_idx, (label, members) in enumerate(self._piles):
+            self._draw_pile(mem, pile_idx, label, members, None)
         mem.SelectObject(wx.NullBitmap)
         self._canvas = canvas
         return canvas
@@ -534,14 +541,47 @@ class DeckPileView(wx.ScrolledWindow):
                     dc.DrawRoundedRectangle(rect, DECK_CARD_CORNER_RADIUS)
                     dc.DestroyClippingRegion()
 
+    def _pile_header_rect(self, pile_index: int) -> wx.Rect:
+        return wx.Rect(
+            self._pile_x(pile_index), _PILE_PAD, _CARD_WIDTH, _PILE_HEADER_HEIGHT
+        )
+
+    def _draw_pile_header(self, dc: wx.DC, pile_idx: int, label: str, count: int) -> None:
+        """The column heading: bucket name on the left, copy count on the right.
+
+        Drawn into the cached canvas along with the cards, because it changes
+        only when the piles are rebuilt -- the same reason the card art is baked
+        in and only the selection outline is painted live.
+        """
+        rect = self._pile_header_rect(pile_idx)
+        count_text = str(count)
+        dc.SetFont(type_font("caption", bold=False))
+        count_w, count_h = dc.GetTextExtent(count_text)
+        dc.SetTextForeground(wx.Colour(*SUBDUED_TEXT))
+        dc.DrawText(
+            count_text,
+            rect.GetRight() - count_w + 1,
+            rect.y + (rect.height - count_h) // 2,
+        )
+
+        dc.SetFont(type_font("caption", bold=True))
+        label_text = self._fit_text(dc, label, rect.width - count_w - SPACE_SM)
+        _label_w, label_h = dc.GetTextExtent(label_text)
+        dc.SetTextForeground(wx.Colour(*LIGHT_TEXT))
+        dc.DrawText(label_text, rect.x, rect.y + (rect.height - label_h) // 2)
+
     def _draw_pile(
         self,
         dc: wx.DC,
         pile_idx: int,
+        label: str,
         members: list[dict[str, Any]],
         dirty: wx.Rect | None = None,
     ) -> None:
         total = len(members)
+        header = self._pile_header_rect(pile_idx)
+        if dirty is None or dirty.Intersects(header):
+            self._draw_pile_header(dc, pile_idx, label, total)
         for member_idx, entry in enumerate(members):
             rect = self._card_rect(pile_idx, member_idx, total)
             if dirty is not None and not dirty.Intersects(rect):

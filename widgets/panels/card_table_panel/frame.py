@@ -9,6 +9,7 @@ import wx
 
 from utils.constants import (
     DARK_PANEL,
+    DECK_COUNT_LABEL_MIN_WIDTH,
     SPACE_SM,
     SPACE_XS,
     SUBDUED_TEXT,
@@ -37,8 +38,13 @@ from widgets.panels.card_table_panel.sorting import (
     PILE_SORT_TYPE,
 )
 from widgets.panels.card_table_panel.table_view import DeckTableView
-from widgets.panels.card_table_panel.toolbar import CardTablePanelToolbarMixin
-from widgets.stylize import create_divider, size_compact_button, stylize_button
+from widgets.panels.card_table_panel.toolbar import MENU_CARET, CardTablePanelToolbarMixin
+from widgets.stylize import (
+    create_divider,
+    size_compact_button,
+    stylize_button,
+    stylize_label,
+)
 
 # Simplebook page indices (alphabetical-by-mode after the bookend states).
 _PAGE_EMPTY = 0
@@ -120,10 +126,32 @@ class CardTablePanel(
         self.SetSizer(outer)
 
         header = wx.BoxSizer(wx.HORIZONTAL)
-        self.count_label = wx.StaticText(self, label="0 cards")
+        # The count takes the row's slack instead of a stretch spacer, and
+        # ellipsises rather than pushing the controls off the panel. F3/F7 widened
+        # everything to its right by ~100px and in pt-BR at the 1200px minimum the
+        # row wanted 551px in a 506px panel, clipping the printing button to 14px.
+        # All three ingredients are required together and none works alone --
+        # ``wx.ST_ELLIPSIZE_END`` only from the constructor, proportion 1 so the
+        # sizer hands it a bounded box, and ``wx.ST_NO_AUTORESIZE`` because
+        # ``SetLabel`` otherwise resizes the control to its own text and it always
+        # "fits". See :func:`widgets.stylize.create_status_label`, which is the
+        # right-aligned version of the same three lines.
+        self.count_label = wx.StaticText(
+            self,
+            label="0 cards",
+            style=wx.ST_ELLIPSIZE_END | wx.ST_NO_AUTORESIZE,
+        )
         self.count_label.SetForegroundColour(SUBDUED_TEXT)
-        header.Add(self.count_label, 0, wx.ALIGN_CENTER_VERTICAL)
-        header.AddStretchSpacer(1)
+        self.count_label.SetMinSize((DECK_COUNT_LABEL_MIN_WIDTH, -1))
+        header.Add(self.count_label, 1, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, SPACE_SM)
+
+        # F3: the three view toggles are a *group*, and until phase 7 nothing
+        # said so — which is why the two menu buttons beside them read as a
+        # fourth and fifth view. One caption names the group; everything after
+        # the divider is explicitly not in it.
+        self.view_label = wx.StaticText(self, label=self._t("tabs.view.label"))
+        stylize_label(self.view_label, level="caption", surface="panel", tone="secondary")
+        header.Add(self.view_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, SPACE_XS)
 
         self._view_mode_buttons: dict[str, wx.Button] = {}
         for mode in VIEW_MODES:
@@ -133,34 +161,44 @@ class CardTablePanel(
             self._view_mode_buttons[mode] = btn
             header.Add(btn, 0, wx.LEFT, SPACE_XS)
 
-        self.pile_sort_button = wx.Button(self, label="⋯", style=wx.BU_EXACTFIT)
-        # F3: this and the printing button below rendered in the system's light
-        # button face — the only two unthemed buttons left on the main window.
+        # C4: this separator was a literal ``wx.StaticText(label="|")``. A rule
+        # is chrome and a glyph is content, and the glyph inherited the label
+        # type ramp, so it grew with the base font while the rule it imitates
+        # would not have. The plan's cited precedent
+        # (``toolbar_buttons/panel.py``, a ``wx.StaticLine``) no longer exists --
+        # phase 3b deleted the toolbar -- and a vertical StaticLine turned out to
+        # draw near-white here anyway; see
+        # :func:`widgets.stylize.create_divider`.
+        #
+        # F3 moves it in front of the pile-sort button as well as the printing
+        # one: both open menus, neither is a view, and both used to sit inside
+        # the toggle group's run of chips.
+        self.header_divider = create_divider(self, vertical=True, length=VIEW_TOGGLE_HEIGHT)
+        header.Add(self.header_divider, 0, wx.ALIGN_CENTER_VERTICAL | wx.LEFT, SPACE_SM)
+
+        # F3: this was labelled "⋯". It named neither what it does nor what it is
+        # currently doing, and it is the only route to the pile grouping key. Its
+        # label is now that key -- "Mana value" / "Color" / "Type" -- so the
+        # control states the mode it will change, the way a dropdown does.
+        self.pile_sort_button = wx.Button(
+            self, label=self._pile_sort_label(), style=wx.BU_EXACTFIT
+        )
         stylize_button(self.pile_sort_button, kind="ghost", surface="panel")
         size_compact_button(
             self.pile_sort_button, pad_x=VIEW_TOGGLE_PADDING_X, height=VIEW_TOGGLE_HEIGHT
         )
         self.pile_sort_button.SetToolTip(self._t("tabs.view.pile_sort"))
         self.pile_sort_button.Bind(wx.EVT_BUTTON, self._open_pile_sort_menu)
-        header.Add(self.pile_sort_button, 0, wx.LEFT, SPACE_XS)
+        header.Add(self.pile_sort_button, 0, wx.LEFT, SPACE_SM)
 
         # Printing-selection dropdown (issue #792, part 3): re-pick the art/edition
-        # used for every card in the deck. Separated from the view buttons by a
-        # ``|`` divider. Only shown when a handler is wired (the mainboard zone).
+        # used for every card in the deck. Only shown when a handler is wired
+        # (the mainboard zone). Phase 4 established there is no "art view" --
+        # this is the printing selector, and the caret is what says so.
         self.printing_button: wx.Button | None = None
         if self._on_printing_mode is not None:
-            # C4: this separator was a literal ``wx.StaticText(label="|")``. A
-            # rule is chrome and a glyph is content, and the glyph inherited the
-            # label type ramp, so it grew with the base font while the rule it
-            # imitates would not have. The plan's cited precedent
-            # (``toolbar_buttons/panel.py``, a ``wx.StaticLine``) no longer
-            # exists -- phase 3b deleted the toolbar -- and a vertical
-            # StaticLine turned out to draw near-white here anyway; see
-            # :func:`widgets.stylize.create_divider`.
-            divider = create_divider(self, vertical=True, length=VIEW_TOGGLE_HEIGHT)
-            header.Add(divider, 0, wx.ALIGN_CENTER_VERTICAL | wx.LEFT, SPACE_SM)
             self.printing_button = wx.Button(
-                self, label=self._t("tabs.view.printing"), style=wx.BU_EXACTFIT
+                self, label=f"{self._t('tabs.view.printing')} {MENU_CARET}", style=wx.BU_EXACTFIT
             )
             stylize_button(self.printing_button, kind="ghost", surface="panel")
             size_compact_button(
@@ -288,6 +326,9 @@ class CardTablePanel(
         if sort_mode not in (PILE_SORT_MV, PILE_SORT_COLOR, PILE_SORT_TYPE):
             return
         self.pile_sort = sort_mode
+        # F3/F7: the button's label *is* the current grouping key, so it has to
+        # be re-read here rather than only at construction.
+        self._refresh_pile_sort_button()
         if persist and self._on_pile_sort_change:
             self._on_pile_sort_change(self.zone, sort_mode)
         if self.view_mode == "pile":

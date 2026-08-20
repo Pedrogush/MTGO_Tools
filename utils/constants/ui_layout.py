@@ -58,6 +58,23 @@ STATUS_LABEL_MIN_WIDTH = 120
 VIEW_TOGGLE_HEIGHT = 26
 VIEW_TOGGLE_PADDING_X = 10
 
+# F3/F7 made the deck-workspace header row wider: it gained a "View" caption, a
+# pile-sort button labelled with the current grouping key rather than "...", and
+# a caret on the printing button. Measured in pt-BR at the window's 1200px
+# minimum with the inspector collapsed, the row then wanted 551px in a 506px
+# panel and clipped the printing button to 14px. The count label is the one item
+# in the row that degrades gracefully -- its leading number survives an ellipsis,
+# and a control that gets cut off does not -- so it is the flexible one, floored
+# here rather than at its natural ~111px.
+DECK_COUNT_LABEL_MIN_WIDTH = 48
+
+# F2: the Deck Research / Deck Builder mode switch (widgets.mode_switch). Taller
+# than VIEW_TOGGLE_HEIGHT because it is the only control on the left panel that
+# changes what the whole panel is, and it is the first thing on that panel; the
+# view toggles are chrome inside a region the mode switch selects.
+MODE_SWITCH_HEIGHT = 30
+MODE_SWITCH_PADDING_X = 14
+
 # Width (px) of the status bar's right-hand field, which holds the "update
 # available" note (issue #142) and is empty the rest of the time. Fixed rather
 # than proportional so the status message on the left keeps all remaining width.
