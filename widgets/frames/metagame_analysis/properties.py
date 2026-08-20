@@ -89,7 +89,7 @@ class MetagameAnalysisPropertiesMixin:
               <tr>
                 <td colspan='3'>
                   <font color='{subdued_text}' size='2'>
-                    {escape(self._t('metagame.changes.now'))} {current_val:.1f}% | {escape(self._t('metagame.changes.previous'))} {previous_val:.1f}%
+                    {escape(self._t("metagame.changes.now"))} {current_val:.1f}% | {escape(self._t("metagame.changes.previous"))} {previous_val:.1f}%
                   </font>
                 </td>
               </tr>
