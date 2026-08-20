@@ -86,7 +86,7 @@ class AnalysisMixin(_Base):
                         done, pending = wait(pending, return_when=FIRST_COMPLETED)
                         for future in done:
                             i, deck = future_to_deck[future]
-                            deck_name = deck.get("name", f"Deck {i+1}")
+                            deck_name = deck.get("name", f"Deck {i + 1}")
                             completed += 1
 
                             # May raise InterruptedError to cancel generation.
