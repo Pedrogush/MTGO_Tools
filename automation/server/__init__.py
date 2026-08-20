@@ -98,6 +98,7 @@ class AutomationServer(
             "get_scroll_pos": self._handle_get_scroll_pos,
             "get_builder_result_count": self._handle_get_builder_result_count,
             "get_builder_top_item": self._handle_get_builder_top_item,
+            "get_builder_list_metrics": self._handle_get_builder_list_metrics,
             "scroll_builder_results": self._handle_scroll_builder_results,
             "open_widget": self._handle_open_widget,
             "menu": self._handle_menu,

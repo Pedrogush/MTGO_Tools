@@ -279,6 +279,13 @@ def cmd_get_builder_top_item(client: AutomationClient, args: argparse.Namespace)
     return 0
 
 
+def cmd_get_builder_list_metrics(client: AutomationClient, args: argparse.Namespace) -> int:
+    """Get the builder results list geometry."""
+    result = client.get_builder_list_metrics()
+    print(format_output(result, args.json))
+    return 0
+
+
 def cmd_open_widget(client: AutomationClient, args: argparse.Namespace) -> int:
     """Open a widget window."""
     result = client.open_widget(args.widget_name)
@@ -533,6 +540,12 @@ Notes:
         "get-builder-top-item", help="Get the first row of the builder results list"
     )
 
+    # get-builder-list-metrics
+    subparsers.add_parser(
+        "get-builder-list-metrics",
+        help="Get the builder results list geometry (columns vs. client width)",
+    )
+
     # refresh-collection
     p = subparsers.add_parser(
         "refresh-collection",
@@ -691,6 +704,7 @@ Notes:
         "get-scroll-pos": cmd_get_scroll_pos,
         "get-builder-results": cmd_get_builder_results,
         "get-builder-top-item": cmd_get_builder_top_item,
+        "get-builder-list-metrics": cmd_get_builder_list_metrics,
         "refresh-collection": cmd_refresh_collection,
         "timer-alert-action": cmd_timer_alert_action,
         "open-widget": cmd_open_widget,
