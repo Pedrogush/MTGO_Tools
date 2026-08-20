@@ -192,6 +192,7 @@ class DeckPileView(wx.ScrolledWindow):
         # culled paint cheap).
 
         self.Bind(wx.EVT_PAINT, self._on_paint)
+        self.Bind(wx.EVT_SIZE, self._on_size)
         self.Bind(wx.EVT_LEFT_DOWN, self._on_left_down)
         self.Bind(wx.EVT_LEFT_UP, self._on_left_up)
         self.Bind(wx.EVT_RIGHT_DOWN, self._on_right_down)
@@ -221,6 +222,19 @@ class DeckPileView(wx.ScrolledWindow):
     def _on_scrollwin(self, event: wx.ScrollWinEvent) -> None:
         # Shared with the grid view so both settle identically (see scroll_snap).
         scroll_snap.handle_scrollwin(self, event)
+
+    def _on_size(self, event: wx.SizeEvent) -> None:
+        """Repaint the *whole* client, not just the strip wx exposed (#983).
+
+        The pile layout is width-independent so nothing here needs recomputing;
+        the repaint is for the edge fade alone. wxMSW invalidates only the newly
+        exposed strip of a resized window, which leaves the fade painted against
+        the *previous* viewport edge sitting un-erased in the middle of the
+        retained pixels -- once per mouse-move of a live sash drag. See the
+        module docstring of ``edge_fade``.
+        """
+        event.Skip()
+        self.Refresh()
 
     # ----- public API consumed by CardTablePanel -----
     def set_cards(self, cards: list[dict[str, Any]]) -> None:

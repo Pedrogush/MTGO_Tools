@@ -155,6 +155,29 @@ python -m automation.cli timer-alert-action stop
 > (~2-3 min) while MTGOSDK injects its diagnostic server into the MTGO client;
 > subsequent calls in the same MTGO session are fast.
 
+## Driving the mainboard/sideboard sash
+
+The deck workspace's split (`widgets/splitter.DarkSplitter`, `SP_LIVE_UPDATE`) is
+the app's one draggable sash, and the only gesture that resizes a deck card view
+vertically without changing anything else -- which makes it the repro for any bug
+in viewport-anchored painting, the edge fade above all (#983).
+
+```bash
+python -m automation.cli --json get-sash          # position + the legal range
+python -m automation.cli set-sash 300             # move it and flush the repaint
+python -m automation.cli sash-drag --start 200 --end 500 --steps 20 --cycles 2
+```
+
+`sash-drag` runs the sweep on a worker thread and returns as soon as it is
+scheduled, so `start-video` can be recording while it runs. `SetSashPosition` is
+the same call `wxSplitterWindow` makes for every mouse-move of a live drag, so
+the resize/repaint path it exercises is the real one.
+
+> A sweep driven by one `python -m automation.cli` call per step measures
+> nothing: each invocation pays ~1.5s of Windows interpreter start-up, which is
+> longer than the whole recording. Drive multi-step timing from a single Python
+> process using `automation.client.AutomationClient` directly.
+
 ## Video capture (recording a transition)
 
 `start-video` / `stop-video` record the main window on a **background thread**,

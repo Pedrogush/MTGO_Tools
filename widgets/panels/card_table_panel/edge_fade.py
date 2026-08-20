@@ -25,6 +25,26 @@ nothing.
 (phase 5): without it wxMSW's own erase-background pass owns the client area and
 the buffered DC's contents are discarded. Both views already set it -- if either
 ever stops, this fade is the first thing that silently vanishes.
+
+Why a resize must invalidate the **whole** client (#983)
+--------------------------------------------------------
+The fade is the one thing these views paint against the *viewport* rather than
+against the content, so it is the one thing that goes stale when the viewport
+moves under it. wxMSW invalidates only the **newly exposed** strip of a resized
+window (no ``wxFULL_REPAINT_ON_RESIZE``, and a `wx.PaintDC` is clipped to the
+update region by ``BeginPaint``), so a pane that grows repaints the new strip --
+drawing the fade against the new bottom edge -- and leaves the previous paint's
+fade sitting in the middle of the retained pixels, un-erased. Dragging the
+mainboard/sideboard sash live does that once per mouse-move, so the band the
+bottom edge sweeps past accumulates one 24px fade per step and the card rows
+come out smeared with dark stripes.
+
+Scrolling does not have this problem -- measured, see the ``wx.ScrolledWindow``
+entry in ``docs/WXMSW_BEHAVIOUR.md``: wxMSW invalidates the whole client for
+these windows on a scroll, so the scroll path is byte-identical to a full
+``Refresh``. A **resize** is not, which is why both views call ``Refresh()``
+unconditionally from their ``EVT_SIZE`` handler. If either ever stops, this
+fade is the first thing that smears.
 """
 
 from __future__ import annotations

@@ -296,7 +296,18 @@ gains children. (4) A synthetic `WM_VSCROLL` **cannot drive a thumb drag**: wxMS
 the position from `GetScrollInfo`, not from the message's `HIWORD`, so
 `SB_THUMBPOSITION` sent from another process scrolls to wherever the real thumb happens
 to be (0). `SB_LINE*` and `SB_PAGE*` do work. Automating a thumb drag needs real mouse
-input
+input. (5) **A resize is not physical scrolling and does strand it** -- the half of (3)
+that was assumed rather than measured, and #983. Logging `GetUpdateRegion().GetBox()`
+from a card view's own paint handler while the mainboard/sideboard sash was dragged 15px
+at a time gives `region=(0, 307, 549, 15) client=(549, 322)`, then `(0, 322, 549, 15)` of
+`(549, 337)`, and so on: one strip per step for the pane that **grows**, and **no paint
+at all** for the pane that **shrinks**. A `wx.PaintDC` is clipped to that region by
+`BeginPaint`, so anything painted against the viewport (the edge fade) survives at the
+old edge, once per mouse-move of a live drag. Both card views therefore `Refresh()`
+unconditionally from `EVT_SIZE`. Beware measuring this on an **occluded** window: with no
+preserved pixels MSW invalidates the whole client and the bug is invisible, which is why
+`tests/ui/test_card_view_resize_repaint.py` asserts on the repaint the view *asks for*
+rather than on the region wx hands back
 
 ### `wx.Simplebook`
 

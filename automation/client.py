@@ -111,6 +111,40 @@ class AutomationClient:
             kwargs["out_dir"] = out_dir
         return self._send_command("stop_video", **kwargs)
 
+    def get_sash(self, splitter: str = "deck_split") -> dict[str, Any]:
+        """Read a splitter's sash position and the range it may be dragged in."""
+        return self._send_command("get_sash", splitter=splitter)
+
+    def set_sash(self, position: int, splitter: str = "deck_split") -> dict[str, Any]:
+        """Move a sash to ``position`` and flush the resulting repaint."""
+        return self._send_command("set_sash", splitter=splitter, position=position)
+
+    def sash_drag(
+        self,
+        splitter: str = "deck_split",
+        start: int | None = None,
+        end: int | None = None,
+        steps: int = 12,
+        cycles: int = 1,
+        interval_ms: float = 25.0,
+    ) -> dict[str, Any]:
+        """Sweep a sash up and down like a live drag, from a worker thread.
+
+        Returns as soon as the sweep is scheduled, so the caller can record
+        (:meth:`start_video`) while it runs.
+        """
+        kwargs: dict[str, Any] = {
+            "splitter": splitter,
+            "steps": steps,
+            "cycles": cycles,
+            "interval_ms": interval_ms,
+        }
+        if start is not None:
+            kwargs["start"] = start
+        if end is not None:
+            kwargs["end"] = end
+        return self._send_command("sash_drag", **kwargs)
+
     def get_status(self) -> str:
         """Get the status bar text."""
         result = self._send_command("get_status")

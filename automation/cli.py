@@ -344,6 +344,34 @@ def cmd_stop_video(client: AutomationClient, args: argparse.Namespace) -> int:
     return 0 if "error" not in result else 1
 
 
+def cmd_get_sash(client: AutomationClient, args: argparse.Namespace) -> int:
+    """Report a splitter's sash position and drag range."""
+    result = client.get_sash(splitter=args.splitter)
+    print(format_output(result, args.json))
+    return 0 if "error" not in result else 1
+
+
+def cmd_set_sash(client: AutomationClient, args: argparse.Namespace) -> int:
+    """Move a splitter's sash to an absolute position."""
+    result = client.set_sash(position=args.position, splitter=args.splitter)
+    print(format_output(result, args.json))
+    return 0 if "error" not in result else 1
+
+
+def cmd_sash_drag(client: AutomationClient, args: argparse.Namespace) -> int:
+    """Sweep a splitter's sash up and down like a live drag."""
+    result = client.sash_drag(
+        splitter=args.splitter,
+        start=args.start,
+        end=args.end,
+        steps=args.steps,
+        cycles=args.cycles,
+        interval_ms=args.interval_ms,
+    )
+    print(format_output(result, args.json))
+    return 0 if result.get("started") else 1
+
+
 def cmd_close_app(client: AutomationClient, args: argparse.Namespace) -> int:
     """Close the running application."""
     result = client.close_app()
@@ -643,6 +671,34 @@ Notes:
     # toggle-adv-filters
     subparsers.add_parser("toggle-adv-filters", help="Toggle advanced filters in builder panel")
 
+    # get-sash / set-sash / sash-drag
+    p = subparsers.add_parser("get-sash", help="Report a splitter's sash position and range")
+    p.add_argument(
+        "--splitter", default="deck_split", help="Splitter attribute (default deck_split)"
+    )
+
+    p = subparsers.add_parser("set-sash", help="Move a splitter's sash to an absolute position")
+    p.add_argument("position", type=int, help="Sash position in pixels")
+    p.add_argument(
+        "--splitter", default="deck_split", help="Splitter attribute (default deck_split)"
+    )
+
+    p = subparsers.add_parser("sash-drag", help="Sweep a splitter's sash up and down (live drag)")
+    p.add_argument(
+        "--splitter", default="deck_split", help="Splitter attribute (default deck_split)"
+    )
+    p.add_argument("--start", type=int, default=None, help="Low sash position (default: minimum)")
+    p.add_argument("--end", type=int, default=None, help="High sash position (default: maximum)")
+    p.add_argument("--steps", type=int, default=12, help="Sash moves per sweep leg (default 12)")
+    p.add_argument("--cycles", type=int, default=1, help="Down-and-back sweeps (default 1)")
+    p.add_argument(
+        "--interval-ms",
+        type=float,
+        default=25.0,
+        dest="interval_ms",
+        help="Delay between sash moves in ms (default 25)",
+    )
+
     # close-app
     subparsers.add_parser("close-app", help="Close the running application")
 
@@ -701,6 +757,9 @@ Notes:
         "toggle-adv-filters": cmd_toggle_adv_filters,
         "start-video": cmd_start_video,
         "stop-video": cmd_stop_video,
+        "get-sash": cmd_get_sash,
+        "set-sash": cmd_set_sash,
+        "sash-drag": cmd_sash_drag,
         "close-app": cmd_close_app,
     }
 
