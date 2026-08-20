@@ -181,6 +181,57 @@ class IntrospectionMixin(_Base):
         }
         return widget_map.get(name)
 
+    def _handle_focus_text_input(self, window: str | None = None, index: int = 0) -> dict[str, Any]:
+        """Focus the ``index``-th text input of a top-level window.
+
+        Added in phase 6c for the same reason phase 4 added ``select_card``: the
+        state could not be reached from the harness at all. A text field's
+        border now changes on focus (``BORDER_STRONG`` -> ``FOCUS_RING``, 1 DIP
+        -> 2 DIP), and "does it look different focused" is a question only a
+        capture of the running app answers -- the phase this replaces recorded a
+        border from an isolated probe that the real app did not have.
+
+        Returns every input it found, in traversal order, so a caller can pick
+        one by description rather than by guessing an index.
+        """
+        target = self.frame
+        if window is not None:
+            resolved = self._resolve_secondary_window(window)
+            if resolved is None:
+                return {"focused": False, "error": f"Window {window!r} not found or not open"}
+            target = resolved
+
+        inputs: list[wx.TextCtrl] = []
+
+        def walk(win: wx.Window) -> None:
+            for child in win.GetChildren():
+                if isinstance(child, wx.TextCtrl):
+                    inputs.append(child)
+                walk(child)
+
+        walk(target)
+        described = [
+            {
+                "index": i,
+                "value": c.GetValue()[:40],
+                "editable": c.IsEditable(),
+                "enabled": c.IsEnabled(),
+                "parent": type(c.GetParent()).__name__,
+            }
+            for i, c in enumerate(inputs)
+        ]
+        if not inputs:
+            return {"focused": False, "error": "no text inputs in this window", "inputs": []}
+        if not 0 <= index < len(inputs):
+            return {
+                "focused": False,
+                "error": f"index {index} of {len(inputs)}",
+                "inputs": described,
+            }
+        target.Raise()
+        inputs[index].SetFocus()
+        return {"focused": True, "index": index, "inputs": described}
+
     def _handle_wait(self, ms: int = 1000) -> dict[str, Any]:
         """Wait for a specified number of milliseconds."""
         time.sleep(ms / 1000.0)

@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 import wx
 
 from utils.constants import SPACE_SM
+from widgets.input_frame import create_text_input
 from widgets.panels.deck_research_panel.frame.centered_choice import _CenteredChoice
 from widgets.panels.deck_research_panel.results_filter import PLACEMENT_FIELDS, PLACEMENT_OPERATORS
 from widgets.stylize import (
@@ -18,7 +19,6 @@ from widgets.stylize import (
     stylize_choice,
     stylize_combobox,
     stylize_label,
-    stylize_textctrl,
 )
 
 if TYPE_CHECKING:
@@ -112,12 +112,12 @@ class FiltersBuilderMixin(_Base):
             )
         event_date_row.Add(self.event_type_choice, 1, wx.EXPAND | wx.RIGHT, SPACE_SM)
 
-        self.date_filter = wx.TextCtrl(self, style=wx.TE_PROCESS_ENTER)
+        date_field = create_text_input(self, style=wx.TE_PROCESS_ENTER)
+        self.date_filter = date_field.ctrl
         self.date_filter.SetHint(self._labels.get("date_hint", "YYYY-MM-DD"))
-        stylize_textctrl(self.date_filter)
         if self._on_date_filter is not None:
             self.date_filter.Bind(wx.EVT_TEXT, lambda _evt: self._on_date_filter())  # type: ignore[misc]
-        event_date_row.Add(self.date_filter, 1, wx.EXPAND)
+        event_date_row.Add(date_field, 1, wx.EXPAND)
         sizer.Add(event_date_row, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, SPACE_SM)
 
     def _build_placement_player_row(self, sizer: wx.Sizer) -> None:
@@ -155,25 +155,25 @@ class FiltersBuilderMixin(_Base):
             )
         placement_row.Add(self.placement_field_choice, 0, wx.EXPAND | wx.RIGHT, SPACE_SM)
 
-        self.placement_value_filter = wx.TextCtrl(self, style=wx.TE_PROCESS_ENTER)
+        placement_value_field = create_text_input(self, style=wx.TE_PROCESS_ENTER)
+        self.placement_value_filter = placement_value_field.ctrl
         self.placement_value_filter.SetHint(self._labels.get("placement_hint", "value"))
-        stylize_textctrl(self.placement_value_filter)
         if self._on_placement_filter is not None:
             self.placement_value_filter.Bind(
                 wx.EVT_TEXT,
                 lambda _evt: self._on_placement_filter(),  # type: ignore[misc]
             )
-        placement_row.Add(self.placement_value_filter, 1, wx.EXPAND)
+        placement_row.Add(placement_value_field, 1, wx.EXPAND)
 
         row3.Add(placement_row, 1, wx.EXPAND | wx.RIGHT, SPACE_SM)
 
-        self.player_name_filter = wx.TextCtrl(self, style=wx.TE_PROCESS_ENTER)
+        player_name_field = create_text_input(self, style=wx.TE_PROCESS_ENTER)
+        self.player_name_filter = player_name_field.ctrl
         self.player_name_filter.SetHint(self._labels.get("player_name_hint", "Player name..."))
-        stylize_textctrl(self.player_name_filter)
         if self._on_player_name_filter is not None:
             self.player_name_filter.Bind(
                 wx.EVT_TEXT,
                 lambda _evt: self._on_player_name_filter(),  # type: ignore[misc]
             )
-        row3.Add(self.player_name_filter, 1, wx.EXPAND)
+        row3.Add(player_name_field, 1, wx.EXPAND)
         sizer.Add(row3, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, SPACE_SM)

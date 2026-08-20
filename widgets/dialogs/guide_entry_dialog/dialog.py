@@ -11,6 +11,7 @@ from utils.i18n import translate
 from widgets.checkbox import DarkCheckBox
 from widgets.dialogs.guide_entry_dialog.handlers import GuideEntryDialogHandlersMixin
 from widgets.dialogs.guide_entry_dialog.properties import GuideEntryDialogPropertiesMixin
+from widgets.input_frame import create_text_input
 from widgets.panels.sideboard_card_selector import SideboardCardSelector
 from widgets.stylize import (
     apply_type_level,
@@ -18,7 +19,6 @@ from widgets.stylize import (
     stylize_button,
     stylize_checkbox,
     stylize_combobox,
-    stylize_textctrl,
 )
 
 
@@ -122,13 +122,16 @@ class GuideEntryDialog(GuideEntryDialogHandlersMixin, GuideEntryDialogProperties
         notes_label.SetForegroundColour(LIGHT_TEXT)
         panel_sizer.Add(notes_label, 0, wx.TOP | wx.LEFT, SPACE_SM)
 
-        self.notes_ctrl = wx.TextCtrl(
-            panel, value=(data or {}).get("notes", ""), style=wx.TE_MULTILINE, size=(-1, 80)
+        notes_field = create_text_input(
+            panel,
+            level="body",
+            placeholder=self._t("guide.dialog.notes_hint"),
+            size=(-1, 80),
+            value=(data or {}).get("notes", ""),
+            style=wx.TE_MULTILINE,
         )
-        stylize_textctrl(
-            self.notes_ctrl, level="body", placeholder=self._t("guide.dialog.notes_hint")
-        )
-        panel_sizer.Add(self.notes_ctrl, 0, wx.EXPAND | wx.ALL, SPACE_XS)
+        self.notes_ctrl = notes_field.ctrl
+        panel_sizer.Add(notes_field, 0, wx.EXPAND | wx.ALL, SPACE_XS)
 
         # Enable double entries checkbox
         self.enable_double_checkbox = DarkCheckBox(

@@ -427,6 +427,10 @@ class AutomationClient:
         """Insert a dummy card with LOREM_MANA oracle text into the card manager."""
         return self._send_command("add_lorem_mana_card")
 
+    def focus_text_input(self, window: str | None = None, index: int = 0) -> dict[str, Any]:
+        """Focus a text input so its focused border can be captured (phase 6c)."""
+        return self._send_command("focus_text_input", window=window, index=index)
+
     def select_card(self, card_name: str, zone: str = "main") -> dict[str, Any]:
         """Select ``card_name`` in a deck zone, populating the Card Inspector."""
         return self._send_command("select_card", card_name=card_name, zone=zone)

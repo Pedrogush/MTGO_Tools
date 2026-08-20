@@ -266,44 +266,28 @@ class ManaSymbolRichCtrlHandlersMixin:
         self.Refresh()
 
     def _on_paint(self, _evt: wx.PaintEvent) -> None:
-        from widgets.panels.mana_rich_text_ctrl.frame import (
-            _BORDER_BASE,
-            _BORDER_FOCUS,
-            _BORDER_HALO,
-            _BORDER_OUTER_DIP,
-            _BORDER_RING,
-        )
+        """Paint the frame with the app's one input border.
+
+        Phase 6b founded this frame on ``BORDER_SUBTLE`` as an explicit
+        placeholder, on the argument that a single control should not decide
+        what marks a text input for the whole app while every native
+        ``wx.TextCtrl`` beside it had no border at all. Phase 6c answered that
+        question -- ``BORDER_STRONG`` at rest, ``FOCUS_RING`` on focus -- so
+        this control now calls the same painter every other field does rather
+        than keeping a second, quieter idiom of its own. The 2-DIP geometry it
+        already had is exactly what that painter expects, so nothing reflows.
+        """
+        from widgets.input_frame import paint_input_border
 
         dc = wx.AutoBufferedPaintDC(self)
-        size = self.GetClientSize()
-        outer = self.FromDIP(_BORDER_OUTER_DIP)
-
-        dc.SetPen(wx.TRANSPARENT_PEN)
-        # Outer halo covers the whole rectangle; the inner ring and the
-        # bottom outer row are painted over it. The inner RTC occupies
-        # the centre.
-        dc.SetBrush(wx.Brush(_BORDER_HALO))
-        dc.DrawRectangle(0, 0, size.width, size.height)
-
-        # The ring that identifies the field, inset by the halo.
-        dc.SetBrush(wx.Brush(_BORDER_RING))
-        dc.DrawRectangle(
-            outer,
-            outer,
-            max(0, size.width - 2 * outer),
-            max(0, size.height - 2 * outer),
+        paint_input_border(
+            self,
+            dc,
+            enabled=self._inner.IsEnabled(),
+            focused=self._inner.HasFocus(),
+            editable=self._inner.IsEditable(),
+            fill=self._inner.GetBackgroundColour(),
         )
-
-        # Bottom band: unfocused, the outer row drops back to the halo so the
-        # ring reads as one even rectangle. On focus the whole 2-DIP band
-        # becomes FOCUS_RING, so the underline is the app's focus token
-        # rather than the user's Windows accent colour.
-        if self._inner.HasFocus():
-            dc.SetBrush(wx.Brush(_BORDER_FOCUS))
-            dc.DrawRectangle(0, size.height - 2 * outer, size.width, 2 * outer)
-        else:
-            dc.SetBrush(wx.Brush(_BORDER_BASE))
-            dc.DrawRectangle(0, size.height - outer, size.width, outer)
 
     def _on_inner_focus_change(self, evt: wx.FocusEvent) -> None:
         evt.Skip()

@@ -26,6 +26,7 @@ from utils.constants.theme import (
 from utils.i18n import translate
 from widgets.frames.match_history.handlers import MatchHistoryHandlersMixin
 from widgets.frames.match_history.properties import MatchHistoryPropertiesMixin
+from widgets.input_frame import create_text_input
 from widgets.section import SectionPanel
 from widgets.stylize import (
     apply_type_level,
@@ -176,22 +177,18 @@ class MatchHistoryFrame(MatchHistoryHandlersMixin, MatchHistoryPropertiesMixin, 
             wx.ALIGN_CENTER_VERTICAL | wx.RIGHT,
             SPACE_XS,
         )
-        self.start_date_ctrl = wx.TextCtrl(box_parent, size=(120, -1))
-        self.start_date_ctrl.SetBackgroundColour(DARK_ALT)
-        self.start_date_ctrl.SetForegroundColour(LIGHT_TEXT)
-        strip_native_client_edge(self.start_date_ctrl)
-        filter_row.Add(self.start_date_ctrl, 0, wx.RIGHT, SPACE_SM)
+        start_field = create_text_input(box_parent, size=(120, -1))
+        self.start_date_ctrl = start_field.ctrl
+        filter_row.Add(start_field, 0, wx.RIGHT, SPACE_SM)
         filter_row.Add(
             wx.StaticText(box_parent, label=self._t("match.filter.end")),
             0,
             wx.ALIGN_CENTER_VERTICAL | wx.RIGHT,
             SPACE_XS,
         )
-        self.end_date_ctrl = wx.TextCtrl(box_parent, size=(120, -1))
-        self.end_date_ctrl.SetBackgroundColour(DARK_ALT)
-        self.end_date_ctrl.SetForegroundColour(LIGHT_TEXT)
-        strip_native_client_edge(self.end_date_ctrl)
-        filter_row.Add(self.end_date_ctrl, 0, wx.RIGHT, SPACE_SM)
+        end_field = create_text_input(box_parent, size=(120, -1))
+        self.end_date_ctrl = end_field.ctrl
+        filter_row.Add(end_field, 0, wx.RIGHT, SPACE_SM)
         apply_btn = wx.Button(box_parent, label=self._t("match.filter.apply"))
         stylize_button(apply_btn, kind="secondary", surface="panel")
         apply_btn.Bind(wx.EVT_BUTTON, lambda _evt: self._update_metrics())
