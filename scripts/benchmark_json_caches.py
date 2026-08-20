@@ -96,9 +96,9 @@ def _benchmark(path: Path, iterations: int, label: str) -> None:
 
 def _benchmark_decoded(path: Path, *, original_path: Path, iterations: int, label: str) -> None:
     size_mb = path.stat().st_size / (1024 * 1024)
-    logger.info(f"\n{'='*60}")
+    logger.info(f"\n{'=' * 60}")
     logger.info(f"{label} ({size_mb:.1f} MB)  —  {iterations} iteration(s)")
-    logger.info(f"{'='*60}")
+    logger.info(f"{'=' * 60}")
 
     # stdlib json
     logger.info("--- stdlib json ---")
