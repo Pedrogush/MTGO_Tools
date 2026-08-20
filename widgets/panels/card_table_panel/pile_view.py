@@ -48,7 +48,7 @@ from utils.constants import (
     SUBDUED_TEXT,
 )
 from utils.image_effects import apply_rounded_corner_alpha
-from widgets.panels.card_table_panel import scroll_perf
+from widgets.panels.card_table_panel import edge_fade, scroll_perf, scroll_snap
 from widgets.panels.card_table_panel.marquee import RUBBER_AUTOSCROLL_PX, MarqueeController
 from widgets.panels.card_table_panel.scrolling import scroll_by_wheel
 from widgets.panels.card_table_panel.sorting import (
@@ -199,6 +199,28 @@ class DeckPileView(wx.ScrolledWindow):
         self.Bind(wx.EVT_MOUSEWHEEL, self._on_wheel)
         self.Bind(wx.EVT_LEAVE_WINDOW, self._on_leave)
         self.Bind(wx.EVT_MOUSE_CAPTURE_LOST, self._on_capture_lost)
+        # A thumb drag / arrow / page moves the origin without going through the
+        # wheel handler, so it settles onto a strip boundary here instead (S5).
+        self.Bind(wx.EVT_SCROLLWIN, self._on_scrollwin)
+
+    # ----- scroll snapping (S5) -----
+    def scroll_snap_step(self) -> tuple[int, int]:
+        """One stacked name strip, on the lattice every pile's cards sit on.
+
+        A pile is bottom-aligned, but ``_card_rect`` places its topmost card at
+        ``_PILE_TOP`` whatever its member count -- ``_pile_height`` and the
+        bottom-up stagger cancel -- so every card top in every pile is at
+        ``_PILE_TOP + 32k`` and one lattice serves all six columns at once.
+        """
+        return _NAME_STRIP_HEIGHT, _PILE_TOP
+
+    def scroll_content_height(self) -> int:
+        """The true content height -- the virtual size is inflated to the client."""
+        return self._content_size.GetHeight()
+
+    def _on_scrollwin(self, event: wx.ScrollWinEvent) -> None:
+        # Shared with the grid view so both settle identically (see scroll_snap).
+        scroll_snap.handle_scrollwin(self, event)
 
     # ----- public API consumed by CardTablePanel -----
     def set_cards(self, cards: list[dict[str, Any]]) -> None:
@@ -418,6 +440,10 @@ class DeckPileView(wx.ScrolledWindow):
 
         if self._drag_active and self._drag_pos:
             self._draw_drag_ghost(dc)
+
+        # S5: dissolve whichever edge has content past it, so the partial row
+        # reads as "there is more" instead of as a clipped render.
+        edge_fade.draw_edge_fades(self, dc, DARK_PANEL)
 
         # Stamp the origin this paint just rendered (and how long it took) so the
         # wheel-latency harness can tell when the view caught up to the scroll

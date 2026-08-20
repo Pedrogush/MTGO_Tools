@@ -19,6 +19,7 @@ import pytest
 import wx
 
 from utils.constants import CARD_VIEW_WHEEL_LINE_PX
+from widgets.panels.card_table_panel import scroll_snap
 from widgets.panels.card_table_panel.pile_view import _NAME_STRIP_HEIGHT, DeckPileView
 
 # A standard mouse reports 3 lines per notch; one notch scrolls this many px.
@@ -253,9 +254,21 @@ def test_hover_reports_card_with_multi_selection():
 
 
 def _wheel_view(frame: wx.Frame, start: tuple[int, int]):
-    """A pile view whose Scroll calls are captured and view origin is fixed."""
+    """A pile view whose Scroll calls are captured and view origin is fixed.
+
+    The view is never laid out, so its pane is far shorter than one name strip
+    and phase 8's row snapping is off for it -- which is what lets these tests
+    measure the raw per-notch distance. Asserted rather than assumed: once the
+    pane is tall enough to snap, a notch moves a whole number of strips and
+    these numbers stop meaning what they say. The snapped path is pinned in
+    tests/ui/test_card_view_scroll_snap.py, at the window's own floor.
+    """
     view = _make_view(frame, lambda _card: None)
     view.set_cards([{"name": "Grizzly Bears", "qty": 4}])
+    assert scroll_snap.snap_stops(view) is None, (
+        "this pile view is now tall enough to snap, so the wheel no longer moves "
+        "a fixed pixel step and these assertions are measuring the wrong path"
+    )
     calls: list[tuple[int, int]] = []
     view.GetViewStart = lambda: start  # type: ignore[assignment]
     view.Scroll = lambda x, y: calls.append((x, y))  # type: ignore[assignment]

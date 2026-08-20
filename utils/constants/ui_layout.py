@@ -188,6 +188,18 @@ CARD_VIEW_SCROLL_RATE = 1  # pixels per scroll unit (fine scrollbar granularity)
 CARD_VIEW_WHEEL_LINE_PX = 20  # pixels scrolled per wheel "line"
 CARD_VIEW_WHEEL_LINES_PER_NOTCH = 3  # fallback when the OS lines-per-action is unknown
 
+# S5. The two defects the review filed as "the last row is sliced in half by the
+# pane edge with no fade, no partial-row suppression and no scroll affordance"
+# are answered here, and *not* by quantising the pane (measured in phase 8: at
+# the 1200x680 floor the mainboard grid's viewport is 285px against a 232px row,
+# so rounding it down would spend up to 231px of the primary content region, and
+# the 118px sideboard pane would round to an empty pane).
+#
+# CARD_VIEW_EDGE_FADE_PX: how tall the fade at a clipped edge is. It is drawn
+# only on an edge that actually has content past it, so it doubles as the
+# "there is more this way" affordance the review asked for.
+CARD_VIEW_EDGE_FADE_PX = 24
+
 # Top Cards viewer. Column widths are measured against the widest realistic
 # value and the (now expanded) header, at the 10pt base. "Copies" is the sort
 # key and is deliberately wider than the columns beside it -- the review's

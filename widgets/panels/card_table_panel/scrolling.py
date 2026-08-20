@@ -14,6 +14,12 @@ reproduces the built-in behaviour explicitly and identically for both views:
   ``lines_per_action`` follows the OS "lines to scroll per notch" setting. At
   the default of 3 lines this is 60px/notch — the same distance the views moved
   under the old 20px scroll rate.
+
+Vertically that distance is then rounded to a whole number of row boundaries by
+:mod:`scroll_snap`, so the **top** row of the viewport is never sliced. The
+rounding happens to the *step*, not to the landing position: correcting a
+60px notch onto a 232px grid row after the fact either moves a whole row anyway
+or moves nothing, and "nothing" is a wheel that feels broken. See that module.
 """
 
 from __future__ import annotations
@@ -21,7 +27,7 @@ from __future__ import annotations
 import wx
 
 from utils.constants import CARD_VIEW_WHEEL_LINE_PX, CARD_VIEW_WHEEL_LINES_PER_NOTCH
-from widgets.panels.card_table_panel import scroll_perf
+from widgets.panels.card_table_panel import scroll_perf, scroll_snap
 
 # wx reports 120 per physical notch; guard against a 0 from odd drivers.
 _DEFAULT_WHEEL_DELTA = 120
@@ -73,7 +79,17 @@ def _apply_wheel(
     if horizontal:
         window.Scroll(max(0, view_x - offset), view_y)
     else:
-        window.Scroll(view_x, max(0, view_y - offset))
+        # Vertically the views snap to row boundaries, so a notch moves a whole
+        # number of rows rather than a fixed pixel count -- see scroll_snap for
+        # why the notch is derived from the row and not corrected after the
+        # fact. snapped_target falls back to plain pixel scrolling wherever
+        # snapping is off (a pane too short to hold one whole row).
+        window.Scroll(
+            view_x,
+            scroll_snap.snapped_target(
+                window, view_y, -offset, unit=lines * CARD_VIEW_WHEEL_LINE_PX
+            ),
+        )
     # Record where the scroll origin actually landed (Scroll clamps to the
     # virtual bounds), so the perf harness can match paints against it.
     actual_x, actual_y = window.GetViewStart()

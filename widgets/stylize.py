@@ -165,7 +165,45 @@ widget               behaviour
                      which is how the table view's grid escaped. With a sizer it
                      lays out to ``max(client, virtual)`` after ``FitInside``,
                      which is the one wx idiom that expresses "shrink this
-                     region before the ones around it"
+                     region before the ones around it".
+                     Four more, all measured in phase 8 while snapping the card
+                     views to row boundaries. (1) At a **1px scroll rate** the
+                     scrollbar's *arrow buttons* move one pixel, so on a view
+                     whose rows are 232px they are effectively dead; they have
+                     to be handled rather than left to wx. (2) A custom-drawn
+                     one **takes focus when clicked** on wxMSW with no
+                     ``SetFocus`` anywhere in the tree, so wx's keyboard
+                     scrolling (Page/arrow/Home/End) is live on it whether or
+                     not anything asked for it -- verified with real Win32
+                     keystrokes. (3) **Physical scrolling does not strand
+                     viewport-fixed chrome.** wx scrolls by blitting and
+                     invalidating only the exposed strip, which should leave
+                     anything painted relative to the *viewport* (an edge fade)
+                     stale outside that strip. Measured on both card views at
+                     scroll deltas from 3px to 232px: the scroll path renders
+                     **byte-identical** to a full ``Refresh``, so wxMSW is
+                     invalidating the whole client for these windows. Worth
+                     re-measuring rather than assuming for any window that gains
+                     children. (4) A synthetic ``WM_VSCROLL`` **cannot drive a
+                     thumb drag**: wxMSW reads the position from
+                     ``GetScrollInfo``, not from the message's ``HIWORD``, so
+                     ``SB_THUMBPOSITION`` sent from another process scrolls to
+                     wherever the real thumb happens to be (0). ``SB_LINE*`` and
+                     ``SB_PAGE*`` do work. Automating a thumb drag needs real
+                     mouse input
+``wx.Bitmap`` alpha  a bitmap carrying an alpha channel (built via
+                     ``wx.Image.SetAlpha``) is alpha-blended correctly by
+                     ``wx.DC.DrawBitmap(bmp, x, y, True)`` **onto an
+                     ``AutoBufferedPaintDC``** -- the working route for an
+                     overlay gradient. ``wx.GraphicsContext.Create(dc)`` also
+                     works but inherits whatever transform ``PrepareDC`` left on
+                     the DC, so "draw this at the bottom of the client" becomes
+                     a transform question rather than a measurement; the bitmap
+                     needs no such reasoning and caches. Either way
+                     ``SetBackgroundStyle(wx.BG_STYLE_PAINT)`` is the
+                     precondition (see the ``wx.*BufferedPaintDC`` note): without
+                     it wxMSW's erase-background pass owns the client and
+                     everything drawn into the buffer is silently discarded
 ``wx.dataview``      ``DataViewListCtrl`` draws its own alternate-row bands from
                      the light theme, so half the rows come back light grey on a
                      dark surface. Not a way out of the ListCtrl selection
