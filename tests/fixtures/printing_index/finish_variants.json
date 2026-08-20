@@ -1,0 +1,3731 @@
+[
+ {
+  "id": "0277c0b1-da97-49c1-a539-7fbaa1f77419",
+  "name": "Lightning Bolt",
+  "set": "sld",
+  "set_name": "Secret Lair Drop",
+  "collector_number": "901",
+  "released_at": "2023-12-01",
+  "artist": "Christopher Rush",
+  "full_art": true,
+  "illustration_id": "2cb6200c-d05b-419c-bd10-8b9c146e2339",
+  "frame": "2015",
+  "frame_effects": [
+   "inverted"
+  ],
+  "border_color": "black",
+  "finishes": [
+   "foil"
+  ]
+ },
+ {
+  "id": "02e20655-321c-4194-ab72-b4a5473238d1",
+  "name": "Lightning Bolt",
+  "set": "ptc",
+  "set_name": "Pro Tour Collector Set",
+  "collector_number": "et208",
+  "released_at": "1996-05-01",
+  "artist": "Christopher Rush",
+  "full_art": false,
+  "illustration_id": "2cb6200c-d05b-419c-bd10-8b9c146e2339",
+  "frame": "1993",
+  "border_color": "gold",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "074d2360-3ded-412d-90b5-2b8ab209fe47",
+  "name": "Lightning Bolt",
+  "set": "slp",
+  "set_name": "Secret Lair Promo",
+  "collector_number": "21",
+  "released_at": "2024-08-01",
+  "artist": "Toru Terada",
+  "full_art": false,
+  "illustration_id": "166b3064-d81b-4764-8f73-534404a49610",
+  "frame": "2015",
+  "frame_effects": [
+   "inverted"
+  ],
+  "border_color": "black",
+  "finishes": [
+   "foil"
+  ]
+ },
+ {
+  "id": "07883c5d-1732-4322-8c67-b6dcc74bb629",
+  "name": "Lightning Bolt",
+  "set": "prm",
+  "set_name": "Magic Online Promos",
+  "collector_number": "72886",
+  "released_at": "2019-06-30",
+  "artist": "Kekai Kotaki",
+  "full_art": true,
+  "illustration_id": "64e4a81f-06d1-4c69-9fd6-d585c445c5ad",
+  "frame": "2003",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil",
+   "foil"
+  ]
+ },
+ {
+  "id": "0f29ea1f-a226-4ec4-8297-109e2f2b5c69",
+  "name": "Lightning Bolt",
+  "set": "plst",
+  "set_name": "The List",
+  "collector_number": "PF19-1",
+  "released_at": "2020-09-01",
+  "artist": "Kekai Kotaki",
+  "full_art": true,
+  "illustration_id": "64e4a81f-06d1-4c69-9fd6-d585c445c5ad",
+  "frame": "2015",
+  "frame_effects": [
+   "inverted"
+  ],
+  "border_color": "black",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "1ddc5922-f62a-4f91-809e-f959edfcfc6a",
+  "name": "Lightning Bolt",
+  "set": "ced",
+  "set_name": "Collectors' Edition",
+  "collector_number": "162",
+  "released_at": "1993-12-10",
+  "artist": "Christopher Rush",
+  "full_art": false,
+  "illustration_id": "2cb6200c-d05b-419c-bd10-8b9c146e2339",
+  "frame": "1993",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "24484578-7885-4125-b95f-e677d970a5a1",
+  "name": "Lightning Bolt",
+  "set": "sld",
+  "set_name": "Secret Lair Drop",
+  "collector_number": "1743",
+  "released_at": "2024-11-04",
+  "flavor_text": "\"The elements marshal their infinite might at my beckoning! Power seethes in the roiling clouds! Now, at my command-STRIKE!\"",
+  "artist": "Francisco Miyara",
+  "full_art": true,
+  "illustration_id": "5ad2bf57-824a-47ae-96b1-db631907fbe9",
+  "frame": "2015",
+  "frame_effects": [
+   "inverted"
+  ],
+  "border_color": "borderless",
+  "finishes": [
+   "nonfoil",
+   "foil"
+  ]
+ },
+ {
+  "id": "27740ea5-79c8-420f-bc49-6d5eac58dac5",
+  "name": "Lightning Bolt",
+  "set": "sld",
+  "set_name": "Secret Lair Drop",
+  "collector_number": "675",
+  "released_at": "2022-02-18",
+  "artist": "Jason Rainville",
+  "full_art": true,
+  "illustration_id": "85c6f286-0e79-46ae-a576-96f28a461c0b",
+  "frame": "2015",
+  "frame_effects": [
+   "inverted"
+  ],
+  "border_color": "borderless",
+  "finishes": [
+   "nonfoil",
+   "foil"
+  ]
+ },
+ {
+  "id": "28708c8c-4336-4d04-b43a-59a31471a9f6",
+  "name": "Lightning Bolt",
+  "set": "p10",
+  "set_name": "Magic Player Rewards 2010",
+  "collector_number": "1",
+  "released_at": "2010-01-01",
+  "artist": "Véronique Meignaud",
+  "full_art": true,
+  "illustration_id": "8b6a845f-00a7-416b-a421-6527fff0873d",
+  "frame": "2003",
+  "border_color": "black",
+  "finishes": [
+   "foil"
+  ]
+ },
+ {
+  "id": "310de1ef-f1b6-4b61-9d6c-6b70382a7f95",
+  "name": "Lightning Bolt",
+  "set": "4bb",
+  "set_name": "Fourth Edition Foreign Black Border",
+  "collector_number": "208",
+  "released_at": "1995-04-01",
+  "artist": "Christopher Rush",
+  "full_art": false,
+  "illustration_id": "2cb6200c-d05b-419c-bd10-8b9c146e2339",
+  "frame": "1993",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "32a180dd-9641-4546-8940-9b21084f0c71",
+  "name": "Lightning Bolt",
+  "set": "plst",
+  "set_name": "The List",
+  "collector_number": "E01-54",
+  "released_at": "2019-11-07",
+  "flavor_text": "The sparkmage shrieked, calling on the rage of the storms of his youth. To his surprise, the sky responded with a fierce energy he'd never thought to see again.",
+  "artist": "Christopher Moeller",
+  "full_art": false,
+  "illustration_id": "013e7eda-ef8e-44cd-9832-4033d9de1c34",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "3c738171-d0dc-4cc2-8af8-1d306143db37",
+  "name": "Lightning Bolt",
+  "set": "sld",
+  "set_name": "Secret Lair Drop",
+  "collector_number": "2289",
+  "released_at": "2025-11-17",
+  "flavor_text": "\"Now I realize that banishment is far too merciful a penalty for treason. Your penalty will be far steeper.\"\n—Ozai, to Zuko",
+  "artist": "Nathaniel Himawan",
+  "full_art": true,
+  "illustration_id": "951abd3c-8484-4269-a06a-a503f3157b40",
+  "frame": "2015",
+  "frame_effects": [
+   "inverted"
+  ],
+  "border_color": "borderless",
+  "finishes": [
+   "nonfoil",
+   "foil"
+  ]
+ },
+ {
+  "id": "404a819c-8b9a-4527-a312-5e0df9c27be0",
+  "name": "Lightning Bolt",
+  "set": "prm",
+  "set_name": "Magic Online Promos",
+  "collector_number": "36224",
+  "released_at": "2017-06-17",
+  "artist": "Véronique Meignaud",
+  "full_art": true,
+  "illustration_id": "8b6a845f-00a7-416b-a421-6527fff0873d",
+  "frame": "2003",
+  "border_color": "black",
+  "finishes": [
+   "foil"
+  ]
+ },
+ {
+  "id": "435589bb-27c6-4a6d-9d63-394d5092b9d8",
+  "name": "Lightning Bolt",
+  "set": "m10",
+  "set_name": "Magic 2010",
+  "collector_number": "146",
+  "released_at": "2009-07-17",
+  "flavor_text": "The sparkmage shrieked, calling on the rage of the storms of his youth. To his surprise, the sky responded with a fierce energy he'd never thought to see again.",
+  "artist": "Christopher Moeller",
+  "full_art": false,
+  "illustration_id": "013e7eda-ef8e-44cd-9832-4033d9de1c34",
+  "frame": "2003",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil",
+   "foil"
+  ]
+ },
+ {
+  "id": "45184cd7-b037-4a85-a063-e622ca928d17",
+  "name": "Lightning Bolt",
+  "set": "sld",
+  "set_name": "Secret Lair Drop",
+  "collector_number": "83",
+  "released_at": "2020-06-04",
+  "artist": "Noah Bradley",
+  "full_art": true,
+  "illustration_id": "928b4c38-1997-4a49-8ce4-d5e0b7d98f4e",
+  "frame": "2015",
+  "frame_effects": [
+   "inverted"
+  ],
+  "border_color": "black",
+  "finishes": [
+   "foil"
+  ]
+ },
+ {
+  "id": "4bdf13fe-4b7a-4972-8163-fbf8bd359d30",
+  "name": "Lightning Bolt",
+  "set": "hbg",
+  "set_name": "Alchemy Horizons: Baldur's Gate",
+  "collector_number": "926",
+  "released_at": "2022-07-07",
+  "artist": "Irina Nordsol",
+  "full_art": false,
+  "illustration_id": "73196e32-eb76-45b3-a1f9-e4cbc08cd779",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "4dbd1cd7-521d-4a59-af53-e5cae451712f",
+  "name": "Lightning Bolt",
+  "set": "me1",
+  "set_name": "Masters Edition",
+  "collector_number": "102",
+  "released_at": "2007-09-10",
+  "artist": "Christopher Rush",
+  "full_art": false,
+  "illustration_id": "2cb6200c-d05b-419c-bd10-8b9c146e2339",
+  "frame": "1997",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil",
+   "foil"
+  ]
+ },
+ {
+  "id": "4eaac4fd-95f5-4f38-b593-0101e79a20f9",
+  "name": "Lightning Bolt",
+  "set": "sta",
+  "set_name": "Strixhaven Mystical Archive",
+  "collector_number": "42",
+  "released_at": "2021-04-23",
+  "flavor_text": "\"The first mages witnessed the fury of the raging storm and wished to answer back.\"\n—*The Stormwright Texts*",
+  "artist": "Anato Finnstark",
+  "full_art": false,
+  "illustration_id": "66a2d4ec-56b4-4106-909a-dfc88136c49e",
+  "frame": "2015",
+  "frame_effects": [
+   "showcase"
+  ],
+  "border_color": "borderless",
+  "finishes": [
+   "nonfoil",
+   "foil",
+   "etched"
+  ]
+ },
+ {
+  "id": "4f43c378-9e6a-4ece-9c24-5dc08c977746",
+  "name": "Lightning Bolt",
+  "set": "sld",
+  "set_name": "Secret Lair Drop",
+  "collector_number": "1638",
+  "released_at": "2024-04-08",
+  "flavor_text": "L is for Luck. A measure of your general good fortune. It affects the recharge rate of critical hits.",
+  "artist": "Desmuncubic",
+  "full_art": true,
+  "illustration_id": "c43c490f-ef7e-4d06-ae86-fa186f6cc902",
+  "frame": "2015",
+  "frame_effects": [
+   "inverted"
+  ],
+  "border_color": "borderless",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "52f85017-c88b-4302-96f2-e27b23fd702f",
+  "name": "Lightning Bolt",
+  "set": "ath",
+  "set_name": "Anthologies",
+  "collector_number": "43",
+  "released_at": "1998-11-01",
+  "artist": "Christopher Rush",
+  "full_art": false,
+  "illustration_id": "2cb6200c-d05b-419c-bd10-8b9c146e2339",
+  "frame": "1997",
+  "border_color": "white",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "54199d7c-02f8-4ff0-9e43-e7bf66ef9715",
+  "name": "Lightning Bolt",
+  "set": "sld",
+  "set_name": "Secret Lair Drop",
+  "collector_number": "1638★",
+  "released_at": "2024-04-08",
+  "flavor_text": "L is for Luck. A measure of your general good fortune. It affects the recharge rate of critical hits.",
+  "artist": "Desmuncubic",
+  "full_art": true,
+  "illustration_id": "c43c490f-ef7e-4d06-ae86-fa186f6cc902",
+  "frame": "2015",
+  "frame_effects": [
+   "inverted"
+  ],
+  "border_color": "borderless",
+  "finishes": [
+   "foil"
+  ]
+ },
+ {
+  "id": "54be73dd-cb3b-411b-8f48-d12ca5183dee",
+  "name": "Lightning Bolt",
+  "set": "30a",
+  "set_name": "30th Anniversary Edition",
+  "collector_number": "157",
+  "released_at": "2022-11-28",
+  "artist": "Christopher Rush",
+  "full_art": false,
+  "illustration_id": "2cb6200c-d05b-419c-bd10-8b9c146e2339",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "5a763474-5ce9-48cc-aaf8-8ca363df4430",
+  "name": "Lightning Bolt",
+  "set": "sld",
+  "set_name": "Secret Lair Drop",
+  "collector_number": "1871",
+  "released_at": "2025-06-09",
+  "flavor_text": "\"To keep doing what you set your heart on... it's a very hard thing to do.\"",
+  "artist": "Evyn Fong",
+  "full_art": true,
+  "illustration_id": "a80d574e-edd9-48d4-8ffa-17cb9ce416e9",
+  "frame": "2015",
+  "frame_effects": [
+   "inverted"
+  ],
+  "border_color": "borderless",
+  "finishes": [
+   "nonfoil",
+   "foil"
+  ]
+ },
+ {
+  "id": "5fbb6751-1072-4fc0-8b54-836d05950914",
+  "name": "Lightning Bolt",
+  "set": "sld",
+  "set_name": "Secret Lair Drop",
+  "collector_number": "1822",
+  "released_at": "2024-10-14",
+  "artist": "Mike Burns",
+  "full_art": true,
+  "illustration_id": "616820b8-9cb5-4953-b785-48e6055ebd36",
+  "frame": "2015",
+  "border_color": "borderless",
+  "finishes": [
+   "nonfoil",
+   "foil"
+  ]
+ },
+ {
+  "id": "6580f4f9-870b-4258-8dce-48c606b90a6c",
+  "name": "Lightning Bolt",
+  "set": "pf25",
+  "set_name": "MagicFest 2025",
+  "collector_number": "13",
+  "released_at": "2025-08-18",
+  "artist": "Christopher Moeller",
+  "full_art": false,
+  "illustration_id": "013e7eda-ef8e-44cd-9832-4033d9de1c34",
+  "frame": "future",
+  "border_color": "black",
+  "finishes": [
+   "foil"
+  ]
+ },
+ {
+  "id": "6773a3cf-707f-4bc0-b64d-2a96b70f7975",
+  "name": "Lightning Bolt",
+  "set": "pd2",
+  "set_name": "Premium Deck Series: Fire and Lightning",
+  "collector_number": "17",
+  "released_at": "2010-11-19",
+  "artist": "Christopher Moeller",
+  "full_art": false,
+  "illustration_id": "013e7eda-ef8e-44cd-9832-4033d9de1c34",
+  "frame": "2003",
+  "border_color": "black",
+  "finishes": [
+   "foil"
+  ]
+ },
+ {
+  "id": "677da834-7f4a-4f60-9151-de7ddcf29622",
+  "name": "Lightning Bolt",
+  "set": "mm2",
+  "set_name": "Modern Masters 2015",
+  "collector_number": "122",
+  "released_at": "2015-05-22",
+  "flavor_text": "The sparkmage shrieked, calling on the rage of the storms of his youth. To his surprise, the sky responded with a fierce energy he'd never thought to see again.",
+  "artist": "Christopher Moeller",
+  "full_art": false,
+  "illustration_id": "013e7eda-ef8e-44cd-9832-4033d9de1c34",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil",
+   "foil"
+  ]
+ },
+ {
+  "id": "6881d7c8-5bb7-4f8c-9f03-50fb1309d9c8",
+  "name": "Lightning Bolt",
+  "set": "tle",
+  "set_name": "Avatar: The Last Airbender Eternal",
+  "collector_number": "32",
+  "released_at": "2025-11-21",
+  "artist": "Viacom",
+  "full_art": true,
+  "illustration_id": "4fdf93e7-094e-478c-a4e1-e004c83f682e",
+  "frame": "2015",
+  "frame_effects": [
+   "inverted"
+  ],
+  "border_color": "borderless",
+  "finishes": [
+   "nonfoil",
+   "foil"
+  ]
+ },
+ {
+  "id": "6ab06973-6440-4b12-8947-8c412500fa41",
+  "name": "Lightning Bolt",
+  "set": "sld",
+  "set_name": "Secret Lair Drop",
+  "collector_number": "85",
+  "released_at": "2020-06-04",
+  "artist": "Robbie Trevino",
+  "full_art": true,
+  "illustration_id": "71072321-4655-4565-b37f-698c8031869f",
+  "frame": "2015",
+  "frame_effects": [
+   "inverted"
+  ],
+  "border_color": "black",
+  "finishes": [
+   "foil"
+  ]
+ },
+ {
+  "id": "6e8b2951-3c66-4042-add9-b2615951ba52",
+  "name": "Lightning Bolt",
+  "set": "jgp",
+  "set_name": "Judge Gift Cards 1998",
+  "collector_number": "1",
+  "released_at": "1998-01-01",
+  "artist": "Christopher Rush",
+  "full_art": false,
+  "illustration_id": "2cb6200c-d05b-419c-bd10-8b9c146e2339",
+  "frame": "1997",
+  "border_color": "black",
+  "finishes": [
+   "foil"
+  ]
+ },
+ {
+  "id": "6fb94c1b-8002-4d79-add0-c4dfef9019ee",
+  "name": "Lightning Bolt",
+  "set": "sld",
+  "set_name": "Secret Lair Drop",
+  "collector_number": "84",
+  "released_at": "2020-06-04",
+  "artist": "Brigitte Roka",
+  "full_art": true,
+  "illustration_id": "533f83fb-50e3-4711-b496-9ff377ed9a99",
+  "frame": "2015",
+  "frame_effects": [
+   "inverted"
+  ],
+  "border_color": "black",
+  "finishes": [
+   "foil"
+  ]
+ },
+ {
+  "id": "719d571c-0740-4212-86c2-e9ef38516f6c",
+  "name": "Lightning Bolt",
+  "set": "sld",
+  "set_name": "Secret Lair Drop",
+  "collector_number": "1879",
+  "released_at": "2025-02-10",
+  "artist": "Mitsuhiro Arita",
+  "full_art": true,
+  "illustration_id": "c7221c7a-6b0c-4f6b-bd9e-24ed1564dc5d",
+  "frame": "2015",
+  "frame_effects": [
+   "inverted"
+  ],
+  "border_color": "borderless",
+  "finishes": [
+   "nonfoil",
+   "foil"
+  ]
+ },
+ {
+  "id": "7673784e-db4b-43a1-8d55-1bb9fc1e284f",
+  "name": "Lightning Bolt",
+  "set": "msc",
+  "set_name": "Marvel Super Heroes Commander",
+  "collector_number": "806",
+  "released_at": "2026-06-26",
+  "flavor_text": "\"I am the god of thunder, the lord of the savage lightning, and the very skies must tremble when speaks The Mighty Thor!\"",
+  "artist": "Milivoj Ćeran",
+  "full_art": false,
+  "illustration_id": "58884d99-ed2d-4efd-b192-b1eb6f87c39f",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil",
+   "foil"
+  ]
+ },
+ {
+  "id": "77c6fa74-5543-42ac-9ead-0e890b188e99",
+  "name": "Lightning Bolt",
+  "set": "clu",
+  "set_name": "Ravnica: Clue Edition",
+  "collector_number": "141",
+  "released_at": "2024-02-23",
+  "flavor_text": "The sparkmage shrieked, calling on the rage of the storms of his youth. To his surprise, the sky responded with a fierce energy he'd never thought to see again.",
+  "artist": "Christopher Moeller",
+  "full_art": false,
+  "illustration_id": "013e7eda-ef8e-44cd-9832-4033d9de1c34",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "8abac1f3-bdf5-42e2-b881-8023588978a0",
+  "name": "Lightning Bolt",
+  "set": "prm",
+  "set_name": "Magic Online Promos",
+  "collector_number": "102261",
+  "released_at": "2022-11-27",
+  "flavor_text": "\"My, how shocking.\"\n—Barrin, Tolarian archmage",
+  "artist": "Chuck Lukacs",
+  "full_art": false,
+  "illustration_id": "d959788a-fb4e-4e8c-b87b-8703179e4c53",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil",
+   "foil"
+  ]
+ },
+ {
+  "id": "9521375e-0bc1-45ef-b513-6d332a25f9d2",
+  "name": "Lightning Bolt",
+  "set": "4ed",
+  "set_name": "Fourth Edition",
+  "collector_number": "208",
+  "released_at": "1995-04-01",
+  "artist": "Christopher Rush",
+  "full_art": false,
+  "illustration_id": "2cb6200c-d05b-419c-bd10-8b9c146e2339",
+  "frame": "1993",
+  "border_color": "white",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "9809473d-f793-476f-ae7e-e535b6725d65",
+  "name": "Lightning Bolt",
+  "set": "ptc",
+  "set_name": "Pro Tour Collector Set",
+  "collector_number": "mj208",
+  "released_at": "1996-05-01",
+  "artist": "Christopher Rush",
+  "full_art": false,
+  "illustration_id": "2cb6200c-d05b-419c-bd10-8b9c146e2339",
+  "frame": "1993",
+  "border_color": "gold",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "9874de35-e062-48f4-ad45-75df3e2e12b2",
+  "name": "Lightning Bolt",
+  "set": "prm",
+  "set_name": "Magic Online Promos",
+  "collector_number": "35932",
+  "released_at": "2013-01-11",
+  "artist": "Christopher Rush",
+  "full_art": false,
+  "illustration_id": "2cb6200c-d05b-419c-bd10-8b9c146e2339",
+  "frame": "1997",
+  "border_color": "black",
+  "finishes": [
+   "foil"
+  ]
+ },
+ {
+  "id": "988cd919-146e-4212-b0e4-146b87f806bd",
+  "name": "Lightning Bolt",
+  "set": "j21",
+  "set_name": "Jumpstart: Historic Horizons",
+  "collector_number": "787",
+  "released_at": "2021-08-26",
+  "artist": "Christopher Moeller",
+  "full_art": false,
+  "illustration_id": "013e7eda-ef8e-44cd-9832-4033d9de1c34",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "996a81ae-0c2d-4e74-b018-5f0ec0fcfbd3",
+  "name": "Lightning Bolt",
+  "set": "30a",
+  "set_name": "30th Anniversary Edition",
+  "collector_number": "454",
+  "released_at": "2022-11-28",
+  "artist": "Christopher Rush",
+  "full_art": false,
+  "illustration_id": "2cb6200c-d05b-419c-bd10-8b9c146e2339",
+  "frame": "1997",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "a6de74d2-0668-49c6-a385-bf706bfed8f7",
+  "name": "Lightning Bolt",
+  "set": "gn3",
+  "set_name": "Game Night: Free-for-All",
+  "collector_number": "83",
+  "released_at": "2022-10-14",
+  "flavor_text": "The sparkmage shrieked, calling on the rage of the storms of his youth. To his surprise, the sky responded with a fierce energy he'd never thought to see again.",
+  "artist": "Christopher Moeller",
+  "full_art": false,
+  "illustration_id": "013e7eda-ef8e-44cd-9832-4033d9de1c34",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "a9f447d7-bd08-4f35-bc09-ed335b09a0f8",
+  "name": "Lightning Bolt",
+  "set": "btd",
+  "set_name": "Beatdown Box Set",
+  "collector_number": "41",
+  "released_at": "2000-10-01",
+  "artist": "Christopher Rush",
+  "full_art": false,
+  "illustration_id": "2cb6200c-d05b-419c-bd10-8b9c146e2339",
+  "frame": "1997",
+  "border_color": "white",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "ae5f9fb1-5a55-4db3-98a1-2628e3598c18",
+  "name": "Lightning Bolt",
+  "set": "clb",
+  "set_name": "Commander Legends: Battle for Baldur's Gate",
+  "collector_number": "187",
+  "released_at": "2022-06-10",
+  "flavor_text": "\"Hasn't she heard of knocking?!\"\n—Snerd, Flaming Fist guard",
+  "artist": "Irina Nordsol",
+  "full_art": false,
+  "illustration_id": "73196e32-eb76-45b3-a1f9-e4cbc08cd779",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil",
+   "foil"
+  ]
+ },
+ {
+  "id": "b14fae63-2e82-49c1-8e62-d84a65f27479",
+  "name": "Lightning Bolt",
+  "set": "sta",
+  "set_name": "Strixhaven Mystical Archive",
+  "collector_number": "105",
+  "released_at": "2021-04-23",
+  "flavor_text": "「最初の魔術師は荒れ狂う嵐の怒りを目撃し、それに応えようとした。」\n—-嵐大工の文書",
+  "artist": "Ezoi",
+  "full_art": true,
+  "illustration_id": "b1698749-41b9-41fc-80f4-f54a7038b454",
+  "frame": "2015",
+  "border_color": "borderless",
+  "finishes": [
+   "nonfoil",
+   "foil",
+   "etched"
+  ]
+ },
+ {
+  "id": "b539a9de-037a-4b7a-80a5-0514680af095",
+  "name": "Lightning Bolt",
+  "set": "p09",
+  "set_name": "Magic Player Rewards 2009",
+  "collector_number": "146",
+  "released_at": "2009-07-17",
+  "flavor_text": "The sparkmage shrieked, calling on the rage of the storms of his youth. To his surprise, the sky responded with a fierce energy he'd never thought to see again.",
+  "artist": "Christopher Moeller",
+  "full_art": false,
+  "illustration_id": "013e7eda-ef8e-44cd-9832-4033d9de1c34",
+  "frame": "2003",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "b5d3dcab-2260-479d-9ef6-dfb92d4f6061",
+  "name": "Lightning Bolt",
+  "set": "leb",
+  "set_name": "Limited Edition Beta",
+  "collector_number": "162",
+  "released_at": "1993-10-04",
+  "artist": "Christopher Rush",
+  "full_art": false,
+  "illustration_id": "2cb6200c-d05b-419c-bd10-8b9c146e2339",
+  "frame": "1993",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "b6bc6ff3-f466-4cb0-8b4e-a20d8ed129c8",
+  "name": "Lightning Bolt",
+  "set": "pw26",
+  "set_name": "Wizards Play Network 2026",
+  "collector_number": "5",
+  "released_at": "2026-01-01",
+  "artist": "Fahmi Fauzi",
+  "full_art": false,
+  "illustration_id": "d6a96e90-165e-4c31-bb4f-9ca665e4b437",
+  "frame": "2015",
+  "frame_effects": [
+   "inverted"
+  ],
+  "border_color": "borderless",
+  "finishes": [
+   "nonfoil",
+   "foil"
+  ]
+ },
+ {
+  "id": "b9399b98-a545-47b2-99bb-6d8251d9ae76",
+  "name": "Lightning Bolt",
+  "set": "slp",
+  "set_name": "Secret Lair Promo",
+  "collector_number": "37",
+  "released_at": "2025-02-21",
+  "artist": "Peach Momoko",
+  "full_art": true,
+  "illustration_id": "cf92ef88-6e16-4dc6-b100-8fc46b97e5a8",
+  "frame": "2015",
+  "frame_effects": [
+   "inverted"
+  ],
+  "border_color": "black",
+  "finishes": [
+   "nonfoil",
+   "foil"
+  ]
+ },
+ {
+  "id": "bde26955-6de3-4212-9e1a-5e11f73ebf44",
+  "name": "Lightning Bolt",
+  "set": "sld",
+  "set_name": "Secret Lair Drop",
+  "collector_number": "IFIYW-7",
+  "released_at": "2026-04-01",
+  "flavor_text": "To wield lightning is to tame chaos.",
+  "artist": "Justine Cruz & Adam Paquette",
+  "full_art": false,
+  "illustration_id": "4bec8dcd-1ae8-4aed-ad43-b99bcfaee39e",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "foil"
+  ]
+ },
+ {
+  "id": "c3eb3895-b64c-46ab-b704-3c46963920ba",
+  "name": "Lightning Bolt",
+  "set": "sld",
+  "set_name": "Secret Lair Drop",
+  "collector_number": "86",
+  "released_at": "2020-06-04",
+  "artist": "Alexis Ziritt",
+  "full_art": true,
+  "illustration_id": "e046c605-7f9f-4f48-be65-a3a7785cfb18",
+  "frame": "2015",
+  "frame_effects": [
+   "inverted"
+  ],
+  "border_color": "black",
+  "finishes": [
+   "foil"
+  ]
+ },
+ {
+  "id": "c69f668b-cf28-495a-bbe1-24e9d0089fa1",
+  "name": "Lightning Bolt",
+  "set": "clb",
+  "set_name": "Commander Legends: Battle for Baldur's Gate",
+  "collector_number": "401",
+  "released_at": "2022-06-10",
+  "artist": "Phil Stone",
+  "full_art": false,
+  "illustration_id": "35fe16cb-3436-4ed7-9773-b42b67469db9",
+  "frame": "2015",
+  "frame_effects": [
+   "showcase"
+  ],
+  "border_color": "black",
+  "finishes": [
+   "nonfoil",
+   "foil"
+  ]
+ },
+ {
+  "id": "c8c8390f-4072-454f-8dc4-174919187a47",
+  "name": "Lightning Bolt",
+  "set": "2x2",
+  "set_name": "Double Masters 2022",
+  "collector_number": "361",
+  "released_at": "2022-07-08",
+  "flavor_text": "\"My, how shocking.\"\n—Barrin, Tolarian archmage",
+  "artist": "Chuck Lukacs",
+  "full_art": true,
+  "illustration_id": "d959788a-fb4e-4e8c-b87b-8703179e4c53",
+  "frame": "2015",
+  "frame_effects": [
+   "inverted"
+  ],
+  "border_color": "borderless",
+  "finishes": [
+   "nonfoil",
+   "foil"
+  ]
+ },
+ {
+  "id": "cb9b9a9d-ae4c-4e04-bf9d-cae48f01292c",
+  "name": "Lightning Bolt",
+  "set": "3ed",
+  "set_name": "Revised Edition",
+  "collector_number": "162",
+  "released_at": "1994-04-11",
+  "artist": "Christopher Rush",
+  "full_art": false,
+  "illustration_id": "2cb6200c-d05b-419c-bd10-8b9c146e2339",
+  "frame": "1993",
+  "border_color": "white",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "ccee0b4c-0cb0-4c0f-8ddc-bc74b8b97273",
+  "name": "Lightning Bolt",
+  "set": "e01",
+  "set_name": "Archenemy: Nicol Bolas",
+  "collector_number": "54",
+  "released_at": "2017-06-16",
+  "flavor_text": "The sparkmage shrieked, calling on the rage of the storms of his youth. To his surprise, the sky responded with a fierce energy he'd never thought to see again.",
+  "artist": "Christopher Moeller",
+  "full_art": false,
+  "illustration_id": "013e7eda-ef8e-44cd-9832-4033d9de1c34",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "ce711943-c1a1-43a0-8b89-8d169cfb8e06",
+  "name": "Lightning Bolt",
+  "set": "jmp",
+  "set_name": "Jumpstart",
+  "collector_number": "342",
+  "released_at": "2020-07-17",
+  "flavor_text": "The sparkmage shrieked, calling on the rage of the storms of his youth. To his surprise, the sky responded with a fierce energy he'd never thought to see again.",
+  "artist": "Christopher Moeller",
+  "full_art": false,
+  "illustration_id": "013e7eda-ef8e-44cd-9832-4033d9de1c34",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "d573ef03-4730-45aa-93dd-e45ac1dbaf4a",
+  "name": "Lightning Bolt",
+  "set": "lea",
+  "set_name": "Limited Edition Alpha",
+  "collector_number": "161",
+  "released_at": "1993-08-05",
+  "artist": "Christopher Rush",
+  "full_art": false,
+  "illustration_id": "2cb6200c-d05b-419c-bd10-8b9c146e2339",
+  "frame": "1993",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "d7dbd871-dc5e-4bda-9670-9e734a79b065",
+  "name": "Lightning Bolt",
+  "set": "td0",
+  "set_name": "Magic Online Theme Decks",
+  "collector_number": "B21",
+  "released_at": "2010-11-08",
+  "artist": "Christopher Moeller",
+  "full_art": false,
+  "illustration_id": "013e7eda-ef8e-44cd-9832-4033d9de1c34",
+  "frame": "2003",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "dabcac3f-59e9-42e0-8c29-fbfb059a506e",
+  "name": "Lightning Bolt",
+  "set": "td0",
+  "set_name": "Magic Online Theme Decks",
+  "collector_number": "A60",
+  "released_at": "2010-11-08",
+  "artist": "Christopher Rush",
+  "full_art": false,
+  "illustration_id": "2cb6200c-d05b-419c-bd10-8b9c146e2339",
+  "frame": "1997",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "dc12105d-7536-429b-9510-4f56bfc0c497",
+  "name": "Lightning Bolt",
+  "set": "sld",
+  "set_name": "Secret Lair Drop",
+  "collector_number": "IFIYW-2",
+  "released_at": "2026-04-01",
+  "flavor_text": "To wield lightning is to tame chaos.",
+  "artist": "Justine Cruz & Adam Paquette",
+  "full_art": false,
+  "illustration_id": "392029ce-54a4-45d6-9550-ba05194709e6",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil",
+   "foil"
+  ]
+ },
+ {
+  "id": "ddaa110c-ee6e-4df5-a6c8-3fdf4b89293f",
+  "name": "Lightning Bolt",
+  "set": "olgc",
+  "set_name": "Legacy Championship",
+  "collector_number": "2023",
+  "released_at": "2023-12-08",
+  "flavor_text": "2023 North American Legacy Championship",
+  "artist": "rk post",
+  "full_art": false,
+  "illustration_id": "2cc6e21a-45e3-4094-9926-c0fec21e7eb1",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "df77bf7d-546a-416b-a2fe-8038a4125af5",
+  "name": "Lightning Bolt",
+  "set": "plst",
+  "set_name": "The List",
+  "collector_number": "A25-141",
+  "released_at": "2021-06-19",
+  "flavor_text": "The sparkmage shrieked, calling on the rage of the storms of his youth. To his surprise, the sky responded with a fierce energy he'd never thought to see again.",
+  "artist": "Christopher Moeller",
+  "full_art": false,
+  "illustration_id": "013e7eda-ef8e-44cd-9832-4033d9de1c34",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "e3285e6b-3e79-4d7c-bf96-d920f973b122",
+  "name": "Lightning Bolt",
+  "set": "a25",
+  "set_name": "Masters 25",
+  "collector_number": "141",
+  "released_at": "2018-03-16",
+  "flavor_text": "The sparkmage shrieked, calling on the rage of the storms of his youth. To his surprise, the sky responded with a fierce energy he'd never thought to see again.",
+  "artist": "Christopher Moeller",
+  "full_art": false,
+  "illustration_id": "013e7eda-ef8e-44cd-9832-4033d9de1c34",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil",
+   "foil"
+  ]
+ },
+ {
+  "id": "e768c957-3a1f-42f5-853a-96942f645df5",
+  "name": "Lightning Bolt",
+  "set": "m11",
+  "set_name": "Magic 2011",
+  "collector_number": "149",
+  "released_at": "2010-07-16",
+  "artist": "Christopher Moeller",
+  "full_art": false,
+  "illustration_id": "013e7eda-ef8e-44cd-9832-4033d9de1c34",
+  "frame": "2003",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil",
+   "foil"
+  ]
+ },
+ {
+  "id": "e89794ab-6070-4916-936f-2b42fe41d31b",
+  "name": "Lightning Bolt",
+  "set": "fca",
+  "set_name": "Final Fantasy: Through the Ages",
+  "collector_number": "40",
+  "released_at": "2025-06-13",
+  "artist": "Toshitaka Matsuda",
+  "full_art": true,
+  "illustration_id": "9cb53296-5187-4b97-a873-7838194cd914",
+  "frame": "2015",
+  "frame_effects": [
+   "inverted"
+  ],
+  "border_color": "borderless",
+  "finishes": [
+   "nonfoil",
+   "foil"
+  ]
+ },
+ {
+  "id": "edd88c4f-58bd-4920-b41f-037462b54915",
+  "name": "Lightning Bolt",
+  "set": "ptc",
+  "set_name": "Pro Tour Collector Set",
+  "collector_number": "gb208",
+  "released_at": "1996-05-01",
+  "artist": "Christopher Rush",
+  "full_art": false,
+  "illustration_id": "2cb6200c-d05b-419c-bd10-8b9c146e2339",
+  "frame": "1993",
+  "border_color": "gold",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "ef9047f6-5e5d-49bf-a183-4d1490b291fb",
+  "name": "Lightning Bolt",
+  "set": "cei",
+  "set_name": "Intl. Collectors' Edition",
+  "collector_number": "162",
+  "released_at": "1993-12-10",
+  "artist": "Christopher Rush",
+  "full_art": false,
+  "illustration_id": "2cb6200c-d05b-419c-bd10-8b9c146e2339",
+  "frame": "1993",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "f29ba16f-c8fb-42fe-aabf-87089cb214a7",
+  "name": "Lightning Bolt",
+  "set": "2x2",
+  "set_name": "Double Masters 2022",
+  "collector_number": "117",
+  "released_at": "2022-07-08",
+  "flavor_text": "The sparkmage shrieked, calling on the rage of the storms of his youth. To his surprise, the sky responded with a fierce energy he'd never thought to see again.",
+  "artist": "Christopher Moeller",
+  "full_art": false,
+  "illustration_id": "013e7eda-ef8e-44cd-9832-4033d9de1c34",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil",
+   "foil"
+  ]
+ },
+ {
+  "id": "fc8f431d-b7eb-4848-99dd-a5f896248145",
+  "name": "Lightning Bolt",
+  "set": "sum",
+  "set_name": "Summer Magic / Edgar",
+  "collector_number": "162",
+  "released_at": "1994-06-21",
+  "artist": "Christopher Rush",
+  "full_art": false,
+  "illustration_id": "2cb6200c-d05b-419c-bd10-8b9c146e2339",
+  "frame": "1993",
+  "border_color": "white",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "fcf2ea50-44af-46d7-80c9-36fc18606748",
+  "name": "Lightning Bolt",
+  "set": "fbb",
+  "set_name": "Foreign Black Border",
+  "collector_number": "162",
+  "released_at": "1994-04-11",
+  "artist": "Christopher Rush",
+  "full_art": false,
+  "illustration_id": "2cb6200c-d05b-419c-bd10-8b9c146e2339",
+  "frame": "1993",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "ff1b8fc5-604a-4449-a73d-861e53642a70",
+  "name": "Lightning Bolt",
+  "set": "2ed",
+  "set_name": "Unlimited Edition",
+  "collector_number": "162",
+  "released_at": "1993-12-01",
+  "artist": "Christopher Rush",
+  "full_art": false,
+  "illustration_id": "2cb6200c-d05b-419c-bd10-8b9c146e2339",
+  "frame": "1993",
+  "border_color": "white",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "ff204024-20a5-4bb9-82b6-f6b4337efd60",
+  "name": "Lightning Bolt",
+  "set": "pf19",
+  "set_name": "MagicFest 2019",
+  "collector_number": "1",
+  "released_at": "2019-01-01",
+  "artist": "Kekai Kotaki",
+  "full_art": true,
+  "illustration_id": "64e4a81f-06d1-4c69-9fd6-d585c445c5ad",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil",
+   "foil"
+  ]
+ },
+ {
+  "id": "01b186af-8825-4257-80fd-9c1ecdb21414",
+  "name": "Arcane Signet",
+  "set": "c21",
+  "set_name": "Commander 2021",
+  "collector_number": "234",
+  "released_at": "2021-04-23",
+  "flavor_text": "It started as a mere drop of water. The Magic Mirror crystallized it into much more.",
+  "artist": "Dan Murayama Scott",
+  "full_art": false,
+  "illustration_id": "06d7b990-021a-4b1f-9333-4fc82adf0ea4",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "02cb9420-fbfb-4123-a830-a992ff470db6",
+  "name": "Arcane Signet",
+  "set": "scd",
+  "set_name": "Starter Commander Decks",
+  "collector_number": "257",
+  "released_at": "2022-12-02",
+  "flavor_text": "It started as a mere drop of water. The Magic Mirror crystallized it into much more.",
+  "artist": "Dan Murayama Scott",
+  "full_art": false,
+  "illustration_id": "06d7b990-021a-4b1f-9333-4fc82adf0ea4",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "0422cfdd-0a7c-4097-8655-b074cd8fd713",
+  "name": "Arcane Signet",
+  "set": "drc",
+  "set_name": "Aetherdrift Commander",
+  "collector_number": "52",
+  "released_at": "2025-02-14",
+  "flavor_text": "Avishkar's power comes from its joyful innovation, in the marvels that people can build when they work together for the common good.",
+  "artist": "Ernanda Souza",
+  "full_art": false,
+  "illustration_id": "e8193b48-d25a-4634-b975-18a816d0a86e",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "049ca0ff-0ca4-44f7-b144-731cf453afa9",
+  "name": "Arcane Signet",
+  "set": "tmc",
+  "set_name": "Teenage Mutant Ninja Turtles Eternal",
+  "collector_number": "57",
+  "released_at": "2026-03-06",
+  "flavor_text": "The power to draw on the wisdom of your allies at any time, from any place . . . or trade cat pics!",
+  "artist": "Jo Cordisco",
+  "full_art": false,
+  "illustration_id": "ebec8816-3112-4e3d-817d-2c50a1df4dd8",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil",
+   "foil"
+  ]
+ },
+ {
+  "id": "0539b83c-4459-41b5-a001-d15a1c9ddf23",
+  "name": "Arcane Signet",
+  "set": "cmm",
+  "set_name": "Commander Masters",
+  "collector_number": "367",
+  "released_at": "2023-08-04",
+  "flavor_text": "It started as a mere drop of water. The Magic Mirror crystallized it into much more.",
+  "artist": "Dan Murayama Scott",
+  "full_art": false,
+  "illustration_id": "06d7b990-021a-4b1f-9333-4fc82adf0ea4",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil",
+   "foil"
+  ]
+ },
+ {
+  "id": "09cb4254-b88c-4231-b604-a144a20187a2",
+  "name": "Arcane Signet",
+  "set": "msc",
+  "set_name": "Marvel Super Heroes Commander",
+  "collector_number": "193",
+  "released_at": "2026-06-26",
+  "flavor_text": "\"We are everywhere. We are HYDRA.\"\n—[Name redacted]",
+  "artist": "Ioannis Fiore",
+  "full_art": false,
+  "illustration_id": "f88432c2-f91a-40c6-946f-530831922de7",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil",
+   "foil"
+  ]
+ },
+ {
+  "id": "0cc0a61c-3d60-4d9d-b15a-b8c52f77f310",
+  "name": "Arcane Signet",
+  "set": "sld",
+  "set_name": "Secret Lair Drop",
+  "collector_number": "7065",
+  "released_at": "2025-10-13",
+  "flavor_text": "One cannot wear the tiara without cracking a few crowns.",
+  "artist": "Nereida",
+  "full_art": true,
+  "illustration_id": "f495206b-fe47-4f37-920b-6700db4ae692",
+  "frame": "2015",
+  "frame_effects": [
+   "inverted"
+  ],
+  "border_color": "borderless",
+  "finishes": [
+   "nonfoil",
+   "foil"
+  ]
+ },
+ {
+  "id": "13ce3ecf-5dd6-4ab3-8e79-d3cd33f00ad5",
+  "name": "Arcane Signet",
+  "set": "p30m",
+  "set_name": "30th Anniversary Misc Promos",
+  "collector_number": "1P",
+  "released_at": "2023-06-15",
+  "artist": "Gaboleps",
+  "full_art": false,
+  "illustration_id": "941f324d-5b4d-479f-8db7-c98813ce4c3e",
+  "frame": "1997",
+  "border_color": "black",
+  "finishes": [
+   "foil"
+  ]
+ },
+ {
+  "id": "1486170d-4ad3-4318-bf72-f948617d567f",
+  "name": "Arcane Signet",
+  "set": "c20",
+  "set_name": "Commander 2020",
+  "collector_number": "237",
+  "released_at": "2020-04-17",
+  "flavor_text": "It started as a mere drop of water. The Magic Mirror crystallized it into much more.",
+  "artist": "Dan Murayama Scott",
+  "full_art": false,
+  "illustration_id": "06d7b990-021a-4b1f-9333-4fc82adf0ea4",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "156a1ca1-e4b1-4e0c-a786-fd80fe189896",
+  "name": "Arcane Signet",
+  "set": "m3c",
+  "set_name": "Modern Horizons 3 Commander",
+  "collector_number": "283",
+  "released_at": "2024-06-14",
+  "flavor_text": "It started as a mere drop of water. The Magic Mirror crystallized it into much more.",
+  "artist": "Dan Murayama Scott",
+  "full_art": false,
+  "illustration_id": "06d7b990-021a-4b1f-9333-4fc82adf0ea4",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil",
+   "foil"
+  ]
+ },
+ {
+  "id": "1836b8a6-c616-4793-933b-b38296d70e72",
+  "name": "Arcane Signet",
+  "set": "cmm",
+  "set_name": "Commander Masters",
+  "collector_number": "653",
+  "released_at": "2023-08-04",
+  "flavor_text": "Matic had only taken the ring to appease his grandmother when she'd pressed it insistently into his palm. As the rats scurried away from its light, he understood her urgency.",
+  "artist": "Drew Tucker",
+  "full_art": true,
+  "illustration_id": "bddd1edc-7bd3-4e12-afa7-adf3901f39ee",
+  "frame": "2015",
+  "frame_effects": [
+   "inverted"
+  ],
+  "border_color": "borderless",
+  "finishes": [
+   "nonfoil",
+   "foil"
+  ]
+ },
+ {
+  "id": "18c14a74-dbf6-4224-8bd0-22cf75295924",
+  "name": "Arcane Signet",
+  "set": "woc",
+  "set_name": "Wilds of Eldraine Commander",
+  "collector_number": "145",
+  "released_at": "2023-09-08",
+  "flavor_text": "It started as a mere drop of water. The Magic Mirror crystallized it into much more.",
+  "artist": "Dan Murayama Scott",
+  "full_art": false,
+  "illustration_id": "06d7b990-021a-4b1f-9333-4fc82adf0ea4",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "1bbc3ce9-f3df-41b4-b238-37319546c595",
+  "name": "Arcane Signet",
+  "set": "msc",
+  "set_name": "Marvel Super Heroes Commander",
+  "collector_number": "192",
+  "released_at": "2026-06-26",
+  "flavor_text": "\"Thing Rings, do your thing.\"\n—Ms. Thing, Darla Deering",
+  "artist": "Vilhelmas Banys",
+  "full_art": false,
+  "illustration_id": "8f2f9c16-4f4a-4e49-9383-2a46eb747535",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil",
+   "foil"
+  ]
+ },
+ {
+  "id": "1bf50ef8-e7e8-4099-ba91-0d7c31b04541",
+  "name": "Arcane Signet",
+  "set": "dmc",
+  "set_name": "Dominaria United Commander",
+  "collector_number": "177",
+  "released_at": "2022-09-09",
+  "flavor_text": "It started as a mere drop of water. The Magic Mirror crystallized it into much more.",
+  "artist": "Dan Murayama Scott",
+  "full_art": false,
+  "illustration_id": "06d7b990-021a-4b1f-9333-4fc82adf0ea4",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "1cad1bd2-7c56-4ce0-99a6-b2a49c1288dd",
+  "name": "Arcane Signet",
+  "set": "msc",
+  "set_name": "Marvel Super Heroes Commander",
+  "collector_number": "191",
+  "released_at": "2026-06-26",
+  "flavor_text": "\"The new ID cards are amazing! Instant communication with any Avenger worldwide, top level security clearance in over a hundred countries, and ten percent off at the cafe downstairs!\" -She-Hulk, Jennifer Walters",
+  "artist": "Jason Smith",
+  "full_art": false,
+  "illustration_id": "b47dc6bb-f7f2-4726-b30a-cf11da375c3f",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil",
+   "foil"
+  ]
+ },
+ {
+  "id": "1f152529-8aa7-4f5a-87e9-09c1e521520b",
+  "name": "Arcane Signet",
+  "set": "sld",
+  "set_name": "Secret Lair Drop",
+  "collector_number": "1919",
+  "released_at": "2025-03-17",
+  "flavor_text": "A symbol of power, grace, and unfathomable preciousness.",
+  "artist": "Trashkittyart",
+  "full_art": true,
+  "illustration_id": "9df0be8c-63a8-4b9f-b05d-52c9a320c884",
+  "frame": "2015",
+  "frame_effects": [
+   "inverted"
+  ],
+  "border_color": "borderless",
+  "finishes": [
+   "nonfoil",
+   "foil"
+  ]
+ },
+ {
+  "id": "1fc6b109-4657-4e9e-82f3-53ddd56aef1c",
+  "name": "Arcane Signet",
+  "set": "sld",
+  "set_name": "Secret Lair Drop",
+  "collector_number": "1492",
+  "released_at": "2023-12-06",
+  "flavor_text": "Preliminary tests showed that the skeleton was as old as the known universe—and that the ring was older still.",
+  "artist": "Dani Pendergast",
+  "full_art": true,
+  "illustration_id": "522de750-8b3c-4f49-ad46-629bf920ad9d",
+  "frame": "2015",
+  "frame_effects": [
+   "inverted"
+  ],
+  "border_color": "borderless",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "211a1d86-7257-4621-ae05-c2b235c063f0",
+  "name": "Arcane Signet",
+  "set": "dsc",
+  "set_name": "Duskmourn: House of Horror Commander",
+  "collector_number": "92",
+  "released_at": "2024-09-27",
+  "flavor_text": "Sometimes safety is a place. Sometimes it's a person. Sometimes it's a tangible reminder that even in darkness, hope persists.",
+  "artist": "David Astruga",
+  "full_art": false,
+  "illustration_id": "4f298e8e-40c6-4931-9832-26faee675b0d",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "28180667-cc1e-4f64-9a69-00425ef85ba0",
+  "name": "Arcane Signet",
+  "set": "blc",
+  "set_name": "Bloomburrow Commander",
+  "collector_number": "127",
+  "released_at": "2024-08-02",
+  "flavor_text": "The dark nights of Valley hold no horrors for batfolk clerics and warriors.",
+  "artist": "Ioannis Fiore",
+  "full_art": false,
+  "illustration_id": "a49d890b-4354-4e7e-9e4e-0e3d4539e0f0",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "2ac9fdee-ad50-486a-9fde-4aba6848a6c6",
+  "name": "Arcane Signet",
+  "set": "sld",
+  "set_name": "Secret Lair Drop",
+  "collector_number": "589",
+  "released_at": "2021-06-21",
+  "artist": "Dan Frazier",
+  "full_art": false,
+  "illustration_id": "db5e2991-49a6-45b1-bfd3-53ce1c9fb979",
+  "frame": "1997",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil",
+   "foil",
+   "etched"
+  ]
+ },
+ {
+  "id": "2bfeb9dc-0bf7-4f19-9714-b14114e4627f",
+  "name": "Arcane Signet",
+  "set": "otc",
+  "set_name": "Outlaws of Thunder Junction Commander",
+  "collector_number": "252",
+  "released_at": "2024-04-19",
+  "flavor_text": "It started as a mere drop of water. The Magic Mirror crystallized it into much more.",
+  "artist": "Dan Murayama Scott",
+  "full_art": false,
+  "illustration_id": "06d7b990-021a-4b1f-9333-4fc82adf0ea4",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "36333600-7c9c-4dc2-ba5a-dacd039716ea",
+  "name": "Arcane Signet",
+  "set": "sld",
+  "set_name": "Secret Lair Drop",
+  "collector_number": "1641★",
+  "released_at": "2024-04-08",
+  "artist": "Rovina Cai",
+  "full_art": true,
+  "illustration_id": "b4aec8bb-666c-4458-ab17-e5f1d2f82ea7",
+  "frame": "2015",
+  "border_color": "borderless",
+  "finishes": [
+   "foil"
+  ]
+ },
+ {
+  "id": "3722c7e8-bba3-4db0-a157-577cf37f53b4",
+  "name": "Arcane Signet",
+  "set": "sld",
+  "set_name": "Secret Lair Drop",
+  "collector_number": "820★",
+  "released_at": "2024-04-08",
+  "artist": "Rovina Cai",
+  "full_art": true,
+  "illustration_id": "d8213794-1813-4516-a49d-acf6679a1a61",
+  "frame": "2015",
+  "border_color": "borderless",
+  "finishes": [
+   "foil"
+  ]
+ },
+ {
+  "id": "3d994115-378d-4685-a5dc-e448831da434",
+  "name": "Arcane Signet",
+  "set": "eoc",
+  "set_name": "Edge of Eternities Commander",
+  "collector_number": "53",
+  "released_at": "2025-08-01",
+  "flavor_text": "\"An ordered Sothera is a peaceful Sothera. Join the Strategic Corps today and proudly turn the gears of progress!\"\n—Pinnacle recruitment ad",
+  "artist": "Constantin Marin",
+  "full_art": false,
+  "illustration_id": "5a0982fa-6009-487a-8585-bb6474cdd88c",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "40924da3-c974-4b37-ad35-e7d8e4cd3d4a",
+  "name": "Arcane Signet",
+  "set": "cmr",
+  "set_name": "Commander Legends",
+  "collector_number": "689",
+  "released_at": "2020-11-20",
+  "artist": "Dan Murayama Scott",
+  "full_art": false,
+  "illustration_id": "06d7b990-021a-4b1f-9333-4fc82adf0ea4",
+  "frame": "2015",
+  "frame_effects": [
+   "extendedart"
+  ],
+  "border_color": "black",
+  "finishes": [
+   "nonfoil",
+   "foil"
+  ]
+ },
+ {
+  "id": "44168620-bbfb-4180-851d-1bdb7b098749",
+  "name": "Arcane Signet",
+  "set": "psvc",
+  "set_name": "Summer Vacation Promos 2022",
+  "collector_number": "3",
+  "released_at": "2022-08-01",
+  "artist": "Dan Murayama Scott",
+  "full_art": false,
+  "illustration_id": "06d7b990-021a-4b1f-9333-4fc82adf0ea4",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "foil"
+  ]
+ },
+ {
+  "id": "44ff370e-b72d-4a6c-b6dd-8434820559cc",
+  "name": "Arcane Signet",
+  "set": "40k",
+  "set_name": "Warhammer 40,000 Commander",
+  "collector_number": "227",
+  "released_at": "2022-10-07",
+  "flavor_text": "Countless xenos cults dwell unseen within the Imperium, lurking just beneath the surface.",
+  "artist": "David Astruga",
+  "full_art": false,
+  "illustration_id": "292c3699-48e7-4925-bc76-22edf8599fe6",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "46f17b66-2484-49f4-80db-408bfda95aa9",
+  "name": "Arcane Signet",
+  "set": "voc",
+  "set_name": "Crimson Vow Commander",
+  "collector_number": "159",
+  "released_at": "2021-11-19",
+  "flavor_text": "It started as a mere drop of water. The Magic Mirror crystallized it into much more.",
+  "artist": "Dan Murayama Scott",
+  "full_art": false,
+  "illustration_id": "06d7b990-021a-4b1f-9333-4fc82adf0ea4",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "49175b73-d09a-43cb-bc89-fba82b5ccc1b",
+  "name": "Arcane Signet",
+  "set": "plst",
+  "set_name": "The List",
+  "collector_number": "MKC-223",
+  "released_at": "2024-12-02",
+  "flavor_text": "It started as a mere drop of water. The Magic Mirror crystallized it into much more.",
+  "artist": "Dan Murayama Scott",
+  "full_art": false,
+  "illustration_id": "06d7b990-021a-4b1f-9333-4fc82adf0ea4",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "49f6e91b-5ea2-4e0e-8dcf-1f99ecaa7bc6",
+  "name": "Arcane Signet",
+  "set": "pip",
+  "set_name": "Fallout",
+  "collector_number": "752",
+  "released_at": "2024-03-08",
+  "flavor_text": "Something to love, honor, and cherish— and a reminder of someone who once did that for you.",
+  "artist": "Eddie Mendoza",
+  "full_art": false,
+  "illustration_id": "4f4b9ece-395e-46ca-938d-bd01fe830099",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "foil"
+  ]
+ },
+ {
+  "id": "4c861c4c-0520-46d9-b281-63a1188417dc",
+  "name": "Arcane Signet",
+  "set": "fic",
+  "set_name": "Final Fantasy Commander",
+  "collector_number": "335",
+  "released_at": "2025-06-13",
+  "flavor_text": "\"I preside over the forces of stasis, tranquility, peace. I will weave this selfsame power into the crystal, granting thee mastery over matter, to give form to the formless.\"\n—Hydaelyn",
+  "artist": "Madeline Boni",
+  "full_art": false,
+  "illustration_id": "2e1f9f0b-df4a-4029-85e4-580d39150849",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil",
+   "foil"
+  ]
+ },
+ {
+  "id": "4e92354d-c203-41e1-822d-8263fadd9eb3",
+  "name": "Arcane Signet",
+  "set": "ltc",
+  "set_name": "Tales of Middle-earth Commander",
+  "collector_number": "273",
+  "released_at": "2023-06-23",
+  "flavor_text": "\"Magic rings are, well, magical; and they are rare and curious.\"\n—Gandalf",
+  "artist": "Randy Gallegos",
+  "full_art": false,
+  "illustration_id": "8455245e-295a-44ce-8b07-54693f8f3dfa",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "527c262d-3315-4f7b-9f31-907f6656461c",
+  "name": "Arcane Signet",
+  "set": "pf25",
+  "set_name": "MagicFest 2025",
+  "collector_number": "10",
+  "released_at": "2025-08-16",
+  "artist": "David Astruga",
+  "full_art": false,
+  "illustration_id": "ead51f02-e4c2-474a-adac-dbfb7686c7a3",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil",
+   "foil"
+  ]
+ },
+ {
+  "id": "552be01e-cd54-46ba-b38a-96883a48d985",
+  "name": "Arcane Signet",
+  "set": "afc",
+  "set_name": "Forgotten Realms Commander",
+  "collector_number": "197",
+  "released_at": "2021-07-23",
+  "flavor_text": "It started as a mere drop of water. The Magic Mirror crystallized it into much more.",
+  "artist": "Dan Murayama Scott",
+  "full_art": false,
+  "illustration_id": "06d7b990-021a-4b1f-9333-4fc82adf0ea4",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "5b245a5b-5a99-4d22-99ef-3f5bf49c3262",
+  "name": "Arcane Signet",
+  "set": "clb",
+  "set_name": "Commander Legends: Battle for Baldur's Gate",
+  "collector_number": "298",
+  "released_at": "2022-06-10",
+  "flavor_text": "\"To feel no constraint but the four points of a compass, to tread a path that only you can find . . . these are the flavors of power I've learned to savor.\"\n—Keon, horizon walker",
+  "artist": "Sam White",
+  "full_art": false,
+  "illustration_id": "76f266e9-504b-4032-9bc4-338132a6833c",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil",
+   "foil"
+  ]
+ },
+ {
+  "id": "6002d99a-c7b4-4845-aca9-b55dabb62d9f",
+  "name": "Arcane Signet",
+  "set": "sld",
+  "set_name": "Secret Lair Drop",
+  "collector_number": "820",
+  "released_at": "2024-04-08",
+  "artist": "Rovina Cai",
+  "full_art": true,
+  "illustration_id": "d8213794-1813-4516-a49d-acf6679a1a61",
+  "frame": "2015",
+  "border_color": "borderless",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "659624f1-2aab-4dea-ae3c-855b8d923b58",
+  "name": "Arcane Signet",
+  "set": "40k",
+  "set_name": "Warhammer 40,000 Commander",
+  "collector_number": "229★",
+  "released_at": "2022-10-07",
+  "flavor_text": "As part of their indoctrination and training, a psyker learns to focus their mental strength through a psycho-reactive staff.",
+  "artist": "Kim Sokol",
+  "full_art": false,
+  "illustration_id": "32d80745-70dc-42ee-a1a8-b71e6de77c27",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "foil"
+  ]
+ },
+ {
+  "id": "698fc2ff-8815-4d14-837b-6356637a9554",
+  "name": "Arcane Signet",
+  "set": "prm",
+  "set_name": "Magic Online Promos",
+  "collector_number": "86152",
+  "released_at": "2020-12-15",
+  "artist": "Dan Murayama Scott",
+  "full_art": false,
+  "illustration_id": "06d7b990-021a-4b1f-9333-4fc82adf0ea4",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil",
+   "foil"
+  ]
+ },
+ {
+  "id": "6b22cf7c-a1d1-4304-a209-b6709221d5c9",
+  "name": "Arcane Signet",
+  "set": "sld",
+  "set_name": "Secret Lair Drop",
+  "collector_number": "7068",
+  "released_at": "2025-10-13",
+  "flavor_text": "One cannot wear the tiara without cracking a few crowns.",
+  "artist": "Nereida",
+  "full_art": true,
+  "illustration_id": "f495206b-fe47-4f37-920b-6700db4ae692",
+  "frame": "2015",
+  "frame_effects": [
+   "inverted"
+  ],
+  "border_color": "borderless",
+  "finishes": [
+   "foil"
+  ]
+ },
+ {
+  "id": "6b3f3fbb-0188-4eec-90c0-81c801d3a996",
+  "name": "Arcane Signet",
+  "set": "40k",
+  "set_name": "Warhammer 40,000 Commander",
+  "collector_number": "228",
+  "released_at": "2022-10-07",
+  "flavor_text": "All Necrons bear the mark of the Triarch, a brand upon their living-metal skin that binds them to their dynasty.",
+  "artist": "Andrey Nyarl",
+  "full_art": false,
+  "illustration_id": "2b7b8932-24d5-4496-9be5-cf1344c77a8a",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "6fc44891-b291-4234-8e11-a3d86ec26c83",
+  "name": "Arcane Signet",
+  "set": "moc",
+  "set_name": "March of the Machine Commander",
+  "collector_number": "348",
+  "released_at": "2023-04-21",
+  "flavor_text": "It started as a mere drop of water. The Magic Mirror crystallized it into much more.",
+  "artist": "Dan Murayama Scott",
+  "full_art": false,
+  "illustration_id": "06d7b990-021a-4b1f-9333-4fc82adf0ea4",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "741218da-de09-4603-8409-b4b646909ffa",
+  "name": "Arcane Signet",
+  "set": "lcc",
+  "set_name": "The Lost Caverns of Ixalan Commander",
+  "collector_number": "104",
+  "released_at": "2023-11-17",
+  "flavor_text": "\"Markings on the hilt are faded, but resemble Komon Winaq familial glyphs. Relic recovered for further study.\"\n—Oltec archaeological survey",
+  "artist": "J.P. Targete",
+  "full_art": true,
+  "illustration_id": "6630a86e-8f38-46de-9ef4-3c6efd66532e",
+  "frame": "2015",
+  "frame_effects": [
+   "inverted"
+  ],
+  "border_color": "borderless",
+  "finishes": [
+   "nonfoil",
+   "foil"
+  ]
+ },
+ {
+  "id": "7811dd72-61b9-4067-ac20-cea153e625d2",
+  "name": "Arcane Signet",
+  "set": "soc",
+  "set_name": "Secrets of Strixhaven Commander",
+  "collector_number": "127",
+  "released_at": "2026-04-24",
+  "flavor_text": "Each Strixhaven graduate receives a class ring bearing the university's motto: \"Through study, know the world; through magic, know yourself.\"",
+  "artist": "Joe Slucher",
+  "full_art": false,
+  "illustration_id": "c0a8e760-82a5-48dd-b585-896e603e5d3e",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "7910ce6c-5cde-436e-8d28-62723f0fd592",
+  "name": "Arcane Signet",
+  "set": "p30m",
+  "set_name": "30th Anniversary Misc Promos",
+  "collector_number": "1F★",
+  "released_at": "2022-10-28",
+  "artist": "Gaboleps",
+  "full_art": false,
+  "illustration_id": "941f324d-5b4d-479f-8db7-c98813ce4c3e",
+  "frame": "2015",
+  "frame_effects": [
+   "inverted",
+   "etched"
+  ],
+  "border_color": "black",
+  "finishes": [
+   "etched"
+  ]
+ },
+ {
+  "id": "7a30b502-569b-49fc-9a9e-96fdeaab6ad6",
+  "name": "Arcane Signet",
+  "set": "pip",
+  "set_name": "Fallout",
+  "collector_number": "356",
+  "released_at": "2024-03-08",
+  "artist": "AKQA",
+  "full_art": true,
+  "illustration_id": "81cbbeab-3910-479d-8c15-fd7ab12a74e6",
+  "frame": "2015",
+  "frame_effects": [
+   "inverted"
+  ],
+  "border_color": "borderless",
+  "finishes": [
+   "nonfoil",
+   "foil"
+  ]
+ },
+ {
+  "id": "7b4b3e1c-1dc4-46d9-9234-f9d1d2ebb8f8",
+  "name": "Arcane Signet",
+  "set": "fdc",
+  "set_name": "Foundations Commander",
+  "collector_number": "1",
+  "released_at": "2024-11-15",
+  "flavor_text": "It started as a mere drop of water. The Magic Mirror crystallized it into much more.",
+  "artist": "Dan Murayama Scott",
+  "full_art": false,
+  "illustration_id": "06d7b990-021a-4b1f-9333-4fc82adf0ea4",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "foil"
+  ]
+ },
+ {
+  "id": "7bdf4615-7a08-40fe-9e04-cdbe10a62e06",
+  "name": "Arcane Signet",
+  "set": "nec",
+  "set_name": "Neon Dynasty Commander",
+  "collector_number": "144",
+  "released_at": "2022-02-18",
+  "flavor_text": "It started as a mere drop of water. The Magic Mirror crystallized it into much more.",
+  "artist": "Dan Murayama Scott",
+  "full_art": false,
+  "illustration_id": "06d7b990-021a-4b1f-9333-4fc82adf0ea4",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "8191befc-dcf7-4cb8-89ca-3461d55e4682",
+  "name": "Arcane Signet",
+  "set": "40k",
+  "set_name": "Warhammer 40,000 Commander",
+  "collector_number": "229",
+  "released_at": "2022-10-07",
+  "flavor_text": "As part of their indoctrination and training, a psyker learns to focus their mental strength through a psycho-reactive staff.",
+  "artist": "Kim Sokol",
+  "full_art": false,
+  "illustration_id": "32d80745-70dc-42ee-a1a8-b71e6de77c27",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "8380b6c9-b4fd-41fa-8eca-d48e00edef30",
+  "name": "Arcane Signet",
+  "set": "drc",
+  "set_name": "Aetherdrift Commander",
+  "collector_number": "51",
+  "released_at": "2025-02-14",
+  "flavor_text": "Dozens of empires lie dead and buried in the Broken Lands. But on Amonkhet, dead does not mean gone.",
+  "artist": "Michael Phillippi",
+  "full_art": false,
+  "illustration_id": "199f9b62-d7d4-42b9-b61c-4d209e892b55",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "84128e98-87d6-4c2f-909b-9435a7833e63",
+  "name": "Arcane Signet",
+  "set": "eld",
+  "set_name": "Throne of Eldraine",
+  "collector_number": "331",
+  "released_at": "2019-10-04",
+  "flavor_text": "It started as a mere drop of water. The Magic Mirror crystallized it into much more.",
+  "artist": "Dan Murayama Scott",
+  "full_art": false,
+  "illustration_id": "06d7b990-021a-4b1f-9333-4fc82adf0ea4",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "847c19ee-c4f9-49e7-842f-a07033bc604b",
+  "name": "Arcane Signet",
+  "set": "pip",
+  "set_name": "Fallout",
+  "collector_number": "884",
+  "released_at": "2024-03-08",
+  "artist": "AKQA",
+  "full_art": true,
+  "illustration_id": "81cbbeab-3910-479d-8c15-fd7ab12a74e6",
+  "frame": "2015",
+  "frame_effects": [
+   "inverted"
+  ],
+  "border_color": "borderless",
+  "finishes": [
+   "foil"
+  ]
+ },
+ {
+  "id": "89ac0b50-8c64-46b0-b670-cd2321153502",
+  "name": "Arcane Signet",
+  "set": "tle",
+  "set_name": "Avatar: The Last Airbender Eternal",
+  "collector_number": "315",
+  "released_at": "2025-11-21",
+  "flavor_text": "\"You chose them from among thousands of toys, Aang. The toys you picked were the four Avatar relics. These items belonged to Avatars past. Your own past lives.\"\n—Monk Tashi",
+  "artist": "Shane Beresford",
+  "full_art": false,
+  "illustration_id": "4374a66b-71cb-401b-8fd2-9181927d6b86",
+  "frame": "2015",
+  "frame_effects": [
+   "showcase"
+  ],
+  "border_color": "borderless",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "89ed88b1-c2b8-4c6e-87a6-168035b2f8c8",
+  "name": "Arcane Signet",
+  "set": "znc",
+  "set_name": "Zendikar Rising Commander",
+  "collector_number": "106",
+  "released_at": "2020-09-25",
+  "flavor_text": "It started as a mere drop of water. The Magic Mirror crystallized it into much more.",
+  "artist": "Dan Murayama Scott",
+  "full_art": false,
+  "illustration_id": "06d7b990-021a-4b1f-9333-4fc82adf0ea4",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "8bafeaa8-5e77-4303-b30a-23fd137b7c35",
+  "name": "Arcane Signet",
+  "set": "pip",
+  "set_name": "Fallout",
+  "collector_number": "224",
+  "released_at": "2024-03-08",
+  "flavor_text": "Something to love, honor, and cherish—and a reminder of someone who once did that for you.",
+  "artist": "Eddie Mendoza",
+  "full_art": false,
+  "illustration_id": "4f4b9ece-395e-46ca-938d-bd01fe830099",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil",
+   "foil"
+  ]
+ },
+ {
+  "id": "8d4ed44c-7b95-4153-afde-cfa2fef4e146",
+  "name": "Arcane Signet",
+  "set": "sld",
+  "set_name": "Secret Lair Drop",
+  "collector_number": "908",
+  "released_at": "2024-11-04",
+  "flavor_text": "... for Earth's Mightiest Heroes.",
+  "artist": "Alexander Forssberg",
+  "full_art": true,
+  "illustration_id": "2a303432-af6f-4399-88ba-ee35db6ba19c",
+  "frame": "2015",
+  "frame_effects": [
+   "inverted"
+  ],
+  "border_color": "borderless",
+  "finishes": [
+   "foil"
+  ]
+ },
+ {
+  "id": "8dae6f88-cfc1-4f5b-afc7-b8c88e28bf24",
+  "name": "Arcane Signet",
+  "set": "mb2",
+  "set_name": "Mystery Booster 2",
+  "collector_number": "254",
+  "released_at": "2024-08-02",
+  "flavor_text": "It started as a mere drop of water. The Magic Mirror crystallized it into much more.",
+  "artist": "Dan Murayama Scott",
+  "full_art": false,
+  "illustration_id": "06d7b990-021a-4b1f-9333-4fc82adf0ea4",
+  "frame": "future",
+  "border_color": "black",
+  "finishes": [
+   "foil"
+  ]
+ },
+ {
+  "id": "935644d4-a140-4f24-b8ab-d5e79a682a9b",
+  "name": "Arcane Signet",
+  "set": "tdc",
+  "set_name": "Tarkir: Dragonstorm Commander",
+  "collector_number": "105",
+  "released_at": "2025-04-11",
+  "flavor_text": "Sometimes restoring the lost archives of the Jeskai can be as simple as the quiet ruffle of pages and the smell of fresh ink.",
+  "artist": "Racrufi",
+  "full_art": false,
+  "illustration_id": "0a7bfcd7-f676-42b2-be0c-07f003371083",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "993dfead-1c44-47a7-bd37-f57e47bc1203",
+  "name": "Arcane Signet",
+  "set": "mic",
+  "set_name": "Midnight Hunt Commander",
+  "collector_number": "157",
+  "released_at": "2021-09-24",
+  "flavor_text": "It started as a mere drop of water. The Magic Mirror crystallized it into much more.",
+  "artist": "Dan Murayama Scott",
+  "full_art": false,
+  "illustration_id": "06d7b990-021a-4b1f-9333-4fc82adf0ea4",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "9ce66ebc-b39f-4b40-9d95-981629a5dd06",
+  "name": "Arcane Signet",
+  "set": "fic",
+  "set_name": "Final Fantasy Commander",
+  "collector_number": "332",
+  "released_at": "2025-06-13",
+  "flavor_text": "\"Lord Kefka's treasure . . . Return the treasure . . .\"\n—Kefka's cultists",
+  "artist": "Grace Zhu",
+  "full_art": false,
+  "illustration_id": "c7535589-3734-4a2a-af57-a77caf363326",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil",
+   "foil"
+  ]
+ },
+ {
+  "id": "9df4b5a2-95bf-4268-9d75-6065176651d1",
+  "name": "Arcane Signet",
+  "set": "fic",
+  "set_name": "Final Fantasy Commander",
+  "collector_number": "334",
+  "released_at": "2025-06-13",
+  "flavor_text": "\"I'm a blitzball player. Star player of the Zanarkand Abes!\"\n—Tidus",
+  "artist": "Russell Lu",
+  "full_art": false,
+  "illustration_id": "22374ca5-d2eb-4df0-8873-51025f37ac05",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil",
+   "foil"
+  ]
+ },
+ {
+  "id": "a5dc8c3f-c8a3-4bea-9874-4bf9b221408b",
+  "name": "Arcane Signet",
+  "set": "ecc",
+  "set_name": "Lorwyn Eclipsed Commander",
+  "collector_number": "56",
+  "released_at": "2026-01-23",
+  "flavor_text": "Isilu's adherents invoke its blessings with contemplation at sites marked by standing stones. Where there is quiet, there is the moon's inspiration.",
+  "artist": "Alessandra Pisano",
+  "full_art": false,
+  "illustration_id": "1422f352-5064-47d8-aaa7-2ad7731160d2",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "a660543c-4d8d-4c4a-8135-3a3edbabcb47",
+  "name": "Arcane Signet",
+  "set": "plst",
+  "set_name": "The List",
+  "collector_number": "OTC-252",
+  "released_at": "2025-05-12",
+  "flavor_text": "It started as a mere drop of water. The Magic Mirror crystallized it into much more.",
+  "artist": "Dan Murayama Scott",
+  "full_art": false,
+  "illustration_id": "06d7b990-021a-4b1f-9333-4fc82adf0ea4",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "aa9e7f3c-e752-4cee-9e9d-fae38ba27dc9",
+  "name": "Arcane Signet",
+  "set": "ecc",
+  "set_name": "Lorwyn Eclipsed Commander",
+  "collector_number": "55",
+  "released_at": "2026-01-23",
+  "flavor_text": "Eirdu's adherents invoke its blessings with jingling bells and dancing feet. Where there is joy, there is the warmth of the sun.",
+  "artist": "Raymond Bonilla",
+  "full_art": false,
+  "illustration_id": "e0e90f07-6b2e-4723-8c69-eb078c62528b",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "b6d1bcf8-1919-442a-b697-213406f35307",
+  "name": "Arcane Signet",
+  "set": "sld",
+  "set_name": "Secret Lair Drop",
+  "collector_number": "2816",
+  "released_at": "2026-07-27",
+  "flavor_text": "\"Stand between the pillars three\nWith gift as precious as the sky:\nA rainbow forged from land, not sea\nThen galaxies will heed your cry.\"",
+  "artist": "Nathaniel Himawan",
+  "full_art": false,
+  "illustration_id": "0451c915-3837-4523-b8f7-340c3434bf95",
+  "frame": "2015",
+  "frame_effects": [
+   "inverted"
+  ],
+  "border_color": "borderless",
+  "finishes": [
+   "nonfoil",
+   "foil"
+  ]
+ },
+ {
+  "id": "bd4485e0-cf88-4aac-889a-e7d299c11e1c",
+  "name": "Arcane Signet",
+  "set": "40k",
+  "set_name": "Warhammer 40,000 Commander",
+  "collector_number": "227★",
+  "released_at": "2022-10-07",
+  "flavor_text": "Countless xenos cults dwell unseen within the Imperium, lurking just beneath the surface.",
+  "artist": "David Astruga",
+  "full_art": false,
+  "illustration_id": "292c3699-48e7-4925-bc76-22edf8599fe6",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "foil"
+  ]
+ },
+ {
+  "id": "c385447a-f56d-4b65-a090-bae48b0313c0",
+  "name": "Arcane Signet",
+  "set": "sld",
+  "set_name": "Secret Lair Drop",
+  "collector_number": "201",
+  "released_at": "2020-11-30",
+  "flavor_text": "After using the signet to finish the miniaturization spell, the novice wizard realized they'd have big shoes to fill.",
+  "artist": "Dani Pendergast",
+  "full_art": false,
+  "illustration_id": "94e25334-d521-43ed-948f-e24aceb24505",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil",
+   "foil"
+  ]
+ },
+ {
+  "id": "cf977357-e13d-4c67-ae53-397adf55131e",
+  "name": "Arcane Signet",
+  "set": "sld",
+  "set_name": "Secret Lair Drop",
+  "collector_number": "1492★",
+  "released_at": "2023-12-06",
+  "flavor_text": "Preliminary tests showed that the skeleton was as old as the known universe—and that the ring was older still.",
+  "artist": "Dani Pendergast",
+  "full_art": true,
+  "illustration_id": "522de750-8b3c-4f49-ad46-629bf920ad9d",
+  "frame": "2015",
+  "frame_effects": [
+   "inverted"
+  ],
+  "border_color": "borderless",
+  "finishes": [
+   "foil"
+  ]
+ },
+ {
+  "id": "d5a30a51-3afb-45e9-aab6-40fec44ec55a",
+  "name": "Arcane Signet",
+  "set": "brc",
+  "set_name": "The Brothers' War Commander",
+  "collector_number": "132",
+  "released_at": "2022-11-18",
+  "flavor_text": "It started as a mere drop of water. The Magic Mirror crystallized it into much more.",
+  "artist": "Dan Murayama Scott",
+  "full_art": false,
+  "illustration_id": "06d7b990-021a-4b1f-9333-4fc82adf0ea4",
+  "frame": "1997",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "d7ae86b7-d324-4c89-a5e1-8752a65a7816",
+  "name": "Arcane Signet",
+  "set": "40k",
+  "set_name": "Warhammer 40,000 Commander",
+  "collector_number": "228★",
+  "released_at": "2022-10-07",
+  "flavor_text": "All Necrons bear the mark of the Triarch, a brand upon their living-metal skin that binds them to their dynasty.",
+  "artist": "Andrey Nyarl",
+  "full_art": false,
+  "illustration_id": "2b7b8932-24d5-4496-9be5-cf1344c77a8a",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "foil"
+  ]
+ },
+ {
+  "id": "d87d58eb-b95a-48d9-a174-e2d72a29c167",
+  "name": "Arcane Signet",
+  "set": "who",
+  "set_name": "Doctor Who",
+  "collector_number": "239",
+  "released_at": "2023-10-13",
+  "flavor_text": "\"Seal of the High Council of Gallifrey. Nicked it off the Master in the Death Zone.\"\n—The Eleventh Doctor",
+  "artist": "L J Koh",
+  "full_art": false,
+  "illustration_id": "0a49f0b2-bb9f-4a90-a3d4-4efbbc6cb1cc",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil",
+   "foil"
+  ]
+ },
+ {
+  "id": "db6cdee9-dc3a-450c-a5a6-b34f021939ca",
+  "name": "Arcane Signet",
+  "set": "plst",
+  "set_name": "The List",
+  "collector_number": "ELD-331",
+  "released_at": "2023-05-08",
+  "flavor_text": "It started as a mere drop of water. The Magic Mirror crystallized it into much more.",
+  "artist": "Dan Murayama Scott",
+  "full_art": false,
+  "illustration_id": "06d7b990-021a-4b1f-9333-4fc82adf0ea4",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "dc04f5a7-94cf-417d-a09b-972a1ca97ec8",
+  "name": "Arcane Signet",
+  "set": "sld",
+  "set_name": "Secret Lair Drop",
+  "collector_number": "2538",
+  "released_at": "2026-04-27",
+  "flavor_text": "\"The Tree of Harmony's magic maintained balance throughout Equestria, protecting us from chaos and darkness.\"\n—Princess Luna",
+  "artist": "Rudy Siswanto",
+  "full_art": false,
+  "illustration_id": "32f2b244-1fe6-4d4d-a57a-a047e44c70c8",
+  "frame": "2015",
+  "frame_effects": [
+   "inverted"
+  ],
+  "border_color": "borderless",
+  "finishes": [
+   "nonfoil",
+   "foil"
+  ]
+ },
+ {
+  "id": "e12857ca-54af-453a-a2ad-b5622e7c9b0c",
+  "name": "Arcane Signet",
+  "set": "sld",
+  "set_name": "Secret Lair Drop",
+  "collector_number": "2464",
+  "released_at": "2026-01-26",
+  "flavor_text": "The Brotherhood of Steel seek the dog tags of their fallen brethren, that their deeds may never be forgotten.",
+  "artist": "Borja Pindado",
+  "full_art": true,
+  "illustration_id": "3337aa52-e5bd-4411-8922-0a6c2d535682",
+  "frame": "2015",
+  "frame_effects": [
+   "inverted"
+  ],
+  "border_color": "borderless",
+  "finishes": [
+   "nonfoil",
+   "foil"
+  ]
+ },
+ {
+  "id": "e209610d-bd1f-4f81-9a88-a6d8a43fe1c7",
+  "name": "Arcane Signet",
+  "set": "hoc",
+  "set_name": "The Hobbit Commander",
+  "collector_number": "95",
+  "released_at": "2026-08-14",
+  "artist": "Anastasia Balakchina",
+  "full_art": false,
+  "illustration_id": "b04e56aa-d1ba-4e75-8381-5e3553559f8e",
+  "frame": "2015",
+  "frame_effects": [
+   "inverted"
+  ],
+  "border_color": "borderless",
+  "finishes": [
+   "nonfoil",
+   "foil"
+  ]
+ },
+ {
+  "id": "e593bb16-e709-4d92-bf6f-239f6a11f7db",
+  "name": "Arcane Signet",
+  "set": "mkc",
+  "set_name": "Murders at Karlov Manor Commander",
+  "collector_number": "223",
+  "released_at": "2024-02-09",
+  "flavor_text": "It started as a mere drop of water. The Magic Mirror crystallized it into much more.",
+  "artist": "Dan Murayama Scott",
+  "full_art": false,
+  "illustration_id": "06d7b990-021a-4b1f-9333-4fc82adf0ea4",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "e96d398f-7393-4b8e-9972-2d7c394d23ad",
+  "name": "Arcane Signet",
+  "set": "p30m",
+  "set_name": "30th Anniversary Misc Promos",
+  "collector_number": "1F",
+  "released_at": "2023-01-13",
+  "artist": "Gaboleps",
+  "full_art": false,
+  "illustration_id": "941f324d-5b4d-479f-8db7-c98813ce4c3e",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil",
+   "foil"
+  ]
+ },
+ {
+  "id": "eae6e393-315b-4f70-9da2-c58003e2813d",
+  "name": "Arcane Signet",
+  "set": "anb",
+  "set_name": "Arena Beginner Set",
+  "collector_number": "117",
+  "released_at": "2020-08-13",
+  "artist": "Dan Murayama Scott",
+  "full_art": false,
+  "illustration_id": "06d7b990-021a-4b1f-9333-4fc82adf0ea4",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "ebc52210-9de3-4392-9a11-87a67f56b92a",
+  "name": "Arcane Signet",
+  "set": "who",
+  "set_name": "Doctor Who",
+  "collector_number": "830",
+  "released_at": "2023-10-13",
+  "flavor_text": "\"Seal of the High Council of Gallifrey. Nicked it off the Master in the Death Zone.\"\n—The Eleventh Doctor",
+  "artist": "L J Koh",
+  "full_art": false,
+  "illustration_id": "0a49f0b2-bb9f-4a90-a3d4-4efbbc6cb1cc",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "foil"
+  ]
+ },
+ {
+  "id": "ec924d56-d1d9-4226-9e73-cfcc5ab4f708",
+  "name": "Arcane Signet",
+  "set": "msc",
+  "set_name": "Marvel Super Heroes Commander",
+  "collector_number": "194",
+  "released_at": "2026-06-26",
+  "flavor_text": "\"This royal ring is a small thing, but it is everything. My birthright, the symbol of my home.\"\n—T'Challa, the Black Panther",
+  "artist": "Rafater",
+  "full_art": false,
+  "illustration_id": "cecdd08a-2c6e-4bc7-851f-99ed74cfdaa4",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil",
+   "foil"
+  ]
+ },
+ {
+  "id": "ecedbcca-4d71-46ac-a8e5-a1cf8109f4b7",
+  "name": "Arcane Signet",
+  "set": "onc",
+  "set_name": "Phyrexia: All Will Be One Commander",
+  "collector_number": "125",
+  "released_at": "2023-02-10",
+  "flavor_text": "It started as a mere drop of water. The Magic Mirror crystallized it into much more.",
+  "artist": "Dan Murayama Scott",
+  "full_art": false,
+  "illustration_id": "06d7b990-021a-4b1f-9333-4fc82adf0ea4",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "ed972e99-c563-4da7-a60a-895949d5f032",
+  "name": "Arcane Signet",
+  "set": "sld",
+  "set_name": "Secret Lair Drop",
+  "collector_number": "1641",
+  "released_at": "2024-04-08",
+  "artist": "Rovina Cai",
+  "full_art": true,
+  "illustration_id": "b4aec8bb-666c-4458-ab17-e5f1d2f82ea7",
+  "frame": "2015",
+  "border_color": "borderless",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "ee40458c-7f3a-4fa6-976f-be1f7a336fdc",
+  "name": "Arcane Signet",
+  "set": "cmr",
+  "set_name": "Commander Legends",
+  "collector_number": "297",
+  "released_at": "2020-11-20",
+  "flavor_text": "It started as a mere drop of water. The Magic Mirror crystallized it into much more.",
+  "artist": "Dan Murayama Scott",
+  "full_art": false,
+  "illustration_id": "06d7b990-021a-4b1f-9333-4fc82adf0ea4",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil",
+   "foil"
+  ]
+ },
+ {
+  "id": "f0b666de-5a89-417d-a946-00aafd1f1979",
+  "name": "Arcane Signet",
+  "set": "khc",
+  "set_name": "Kaldheim Commander",
+  "collector_number": "96",
+  "released_at": "2021-02-05",
+  "flavor_text": "It started as a mere drop of water. The Magic Mirror crystallized it into much more.",
+  "artist": "Dan Murayama Scott",
+  "full_art": false,
+  "illustration_id": "06d7b990-021a-4b1f-9333-4fc82adf0ea4",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "f3081c9f-39de-4b88-b01a-df8227934e9b",
+  "name": "Arcane Signet",
+  "set": "sld",
+  "set_name": "Secret Lair Drop",
+  "collector_number": "1924",
+  "released_at": "2025-03-17",
+  "flavor_text": "An official seal authenticating her identity as a very good girl.",
+  "artist": "Nana Qi",
+  "full_art": true,
+  "illustration_id": "383eb4df-60ba-4bb5-a5cd-eee1f9baae05",
+  "frame": "2015",
+  "frame_effects": [
+   "inverted"
+  ],
+  "border_color": "borderless",
+  "finishes": [
+   "nonfoil",
+   "foil"
+  ]
+ },
+ {
+  "id": "f3ee9829-f4c0-44a0-8252-4097402e2f8d",
+  "name": "Arcane Signet",
+  "set": "ncc",
+  "set_name": "New Capenna Commander",
+  "collector_number": "360",
+  "released_at": "2022-04-29",
+  "flavor_text": "It started as a mere drop of water. The Magic Mirror crystallized it into much more.",
+  "artist": "Dan Murayama Scott",
+  "full_art": false,
+  "illustration_id": "06d7b990-021a-4b1f-9333-4fc82adf0ea4",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "f4cf38b4-941a-4eee-95e0-105b3eb7e506",
+  "name": "Arcane Signet",
+  "set": "plst",
+  "set_name": "The List",
+  "collector_number": "MIC-157",
+  "released_at": "2024-01-25",
+  "flavor_text": "It started as a mere drop of water. The Magic Mirror crystallized it into much more.",
+  "artist": "Dan Murayama Scott",
+  "full_art": false,
+  "illustration_id": "06d7b990-021a-4b1f-9333-4fc82adf0ea4",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "f4f7cc5b-a52a-470b-8970-260b61c91ad5",
+  "name": "Arcane Signet",
+  "set": "fic",
+  "set_name": "Final Fantasy Commander",
+  "collector_number": "333",
+  "released_at": "2025-06-13",
+  "flavor_text": "\"To put it simply, the knowledge of the Ancients is sealed within each orb. That knowledge not only connects us to the planet... it allows us to tap into her power.\"\n—Sephiroth",
+  "artist": "Randy Gallegos",
+  "full_art": false,
+  "illustration_id": "1af01f88-daa3-4c73-a376-b83d626651c5",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil",
+   "foil"
+  ]
+ },
+ {
+  "id": "fc6c69a0-ac24-4486-8893-a6303d08fc6e",
+  "name": "Arcane Signet",
+  "set": "lcc",
+  "set_name": "The Lost Caverns of Ixalan Commander",
+  "collector_number": "299",
+  "released_at": "2023-11-17",
+  "flavor_text": "It started as a mere drop of water. The Magic Mirror crystallized it into much more.",
+  "artist": "Dan Murayama Scott",
+  "full_art": false,
+  "illustration_id": "06d7b990-021a-4b1f-9333-4fc82adf0ea4",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "fd061dd3-3cf1-4102-a9a2-dd89500171a7",
+  "name": "Arcane Signet",
+  "set": "plst",
+  "set_name": "The List",
+  "collector_number": "C21-234",
+  "released_at": "2021-11-29",
+  "flavor_text": "It started as a mere drop of water. The Magic Mirror crystallized it into much more.",
+  "artist": "Dan Murayama Scott",
+  "full_art": false,
+  "illustration_id": "06d7b990-021a-4b1f-9333-4fc82adf0ea4",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "03355ba4-2d93-4dcc-951d-34a4c823e40e",
+  "name": "Shivan Dragon",
+  "set": "o90p",
+  "set_name": "Oversized 90's Promos",
+  "collector_number": "5",
+  "released_at": "1998-01-01",
+  "flavor_text": "While it's true most dragons are cruel, the Shivan dragon seems to take particular glee in the misery of others, often tormenting its victims much like a cat plays with a mouse before delivering the final blow.",
+  "artist": "Melissa A. Benson",
+  "full_art": false,
+  "illustration_id": "d326c884-fed0-4b92-bd88-fd4989597c20",
+  "frame": "1997",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "05082d18-ad43-43e0-8d90-973b7959aa6b",
+  "name": "Shivan Dragon",
+  "set": "ced",
+  "set_name": "Collectors' Edition",
+  "collector_number": "175",
+  "released_at": "1993-12-10",
+  "flavor_text": "While it's true most Dragons are cruel, the Shivan Dragon seems to take particular glee in the misery of others, often tormenting its victims much like a cat plays with a mouse before delivering the final blow.",
+  "artist": "Melissa A. Benson",
+  "full_art": false,
+  "illustration_id": "d326c884-fed0-4b92-bd88-fd4989597c20",
+  "frame": "1993",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "0bda24b2-a9ab-4aca-8bbf-1bfb0990f68f",
+  "name": "Shivan Dragon",
+  "set": "sld",
+  "set_name": "Secret Lair Drop",
+  "collector_number": "1709",
+  "released_at": "2024-06-24",
+  "flavor_text": "If you feel the mountains of Shiv rumble, pray the volcanos are awakening—and not the dragons.",
+  "artist": "Julie Bell",
+  "full_art": true,
+  "illustration_id": "be19094b-0d91-44ba-bb03-8dbf120ad05e",
+  "frame": "2015",
+  "frame_effects": [
+   "inverted"
+  ],
+  "border_color": "borderless",
+  "finishes": [
+   "nonfoil",
+   "foil"
+  ]
+ },
+ {
+  "id": "0dcdd2db-1a4b-48dd-94cf-bd719ff40da9",
+  "name": "Shivan Dragon",
+  "set": "10e",
+  "set_name": "Tenth Edition",
+  "collector_number": "230",
+  "released_at": "2007-07-13",
+  "flavor_text": "The undisputed master of the mountains of Shiv.",
+  "artist": "Donato Giancola",
+  "full_art": false,
+  "illustration_id": "2f2cebbc-9458-47b8-b3d4-b2ddb06ad6a6",
+  "frame": "2003",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "175fbbe6-5cf5-48d1-a610-564c295dad8d",
+  "name": "Shivan Dragon",
+  "set": "prm",
+  "set_name": "Magic Online Promos",
+  "collector_number": "36232",
+  "released_at": "2014-10-17",
+  "flavor_text": "The undisputed master of the mountains of Shiv.",
+  "artist": "Donato Giancola",
+  "full_art": false,
+  "illustration_id": "2f2cebbc-9458-47b8-b3d4-b2ddb06ad6a6",
+  "frame": "2003",
+  "border_color": "black",
+  "finishes": [
+   "foil"
+  ]
+ },
+ {
+  "id": "18927987-aeea-4af3-a1ea-90949772e56a",
+  "name": "Shivan Dragon",
+  "set": "p30t",
+  "set_name": "30th Anniversary Celebration Tokyo",
+  "collector_number": "2",
+  "released_at": "2023-09-01",
+  "artist": "Kota Nakatsubo",
+  "full_art": false,
+  "illustration_id": "792e45d9-c864-4f5e-92d6-d6e621e84386",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "foil"
+  ]
+ },
+ {
+  "id": "1fcff1e0-2745-448d-a27b-e31719e222e9",
+  "name": "Shivan Dragon",
+  "set": "fdn",
+  "set_name": "Foundations",
+  "collector_number": "206",
+  "released_at": "2024-11-15",
+  "flavor_text": "The undisputed master of the mountains of Shiv.",
+  "artist": "Donato Giancola",
+  "full_art": false,
+  "illustration_id": "2f2cebbc-9458-47b8-b3d4-b2ddb06ad6a6",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil",
+   "foil"
+  ]
+ },
+ {
+  "id": "2160284c-2ece-43ba-ab67-5c184f81fe0e",
+  "name": "Shivan Dragon",
+  "set": "w17",
+  "set_name": "Welcome Deck 2017",
+  "collector_number": "22",
+  "released_at": "2017-04-15",
+  "flavor_text": "The undisputed master of the mountains of Shiv.",
+  "artist": "Donato Giancola",
+  "full_art": false,
+  "illustration_id": "2f2cebbc-9458-47b8-b3d4-b2ddb06ad6a6",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "227cf1b5-f85b-41fe-be98-66e383652039",
+  "name": "Shivan Dragon",
+  "set": "m20",
+  "set_name": "Core Set 2020",
+  "collector_number": "335",
+  "released_at": "2019-07-12",
+  "flavor_text": "\"It's just playing with us, Marsden.\"\n—Dafynne the Radiant, last words",
+  "artist": "Donato Giancola",
+  "full_art": false,
+  "illustration_id": "2f2cebbc-9458-47b8-b3d4-b2ddb06ad6a6",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "3815cf4a-b694-432b-b618-0893f8f3dc1b",
+  "name": "Shivan Dragon",
+  "set": "m14",
+  "set_name": "Magic 2014",
+  "collector_number": "154",
+  "released_at": "2013-07-19",
+  "flavor_text": "The undisputed master of the mountains of Shiv.",
+  "artist": "Donato Giancola",
+  "full_art": false,
+  "illustration_id": "2f2cebbc-9458-47b8-b3d4-b2ddb06ad6a6",
+  "frame": "2003",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil",
+   "foil"
+  ]
+ },
+ {
+  "id": "3dbbfb7f-0e50-454b-a9a1-b4813a95112e",
+  "name": "Shivan Dragon",
+  "set": "p30h",
+  "set_name": "30th Anniversary History Promos",
+  "collector_number": "4★",
+  "released_at": "2023-03-21",
+  "artist": "Satoru Senda",
+  "full_art": false,
+  "illustration_id": "3e36e37d-342c-4c48-abd9-ad30a310e0d3",
+  "frame": "1997",
+  "border_color": "black",
+  "finishes": [
+   "foil"
+  ]
+ },
+ {
+  "id": "3f22dd2f-41c1-403b-a3bc-617d15922602",
+  "name": "Shivan Dragon",
+  "set": "fbb",
+  "set_name": "Foreign Black Border",
+  "collector_number": "177",
+  "released_at": "1994-04-11",
+  "artist": "Melissa A. Benson",
+  "full_art": false,
+  "illustration_id": "d326c884-fed0-4b92-bd88-fd4989597c20",
+  "frame": "1993",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "40f32503-8400-4572-aa5c-43cd5c2eeab5",
+  "name": "Shivan Dragon",
+  "set": "me4",
+  "set_name": "Masters Edition IV",
+  "collector_number": "136",
+  "released_at": "2011-01-10",
+  "flavor_text": "While it's true most Dragons are cruel, the Shivan Dragon seems to take particular glee in the misery of others, often tormenting its victims much like a cat plays with a mouse before delivering the final blow.",
+  "artist": "Melissa A. Benson",
+  "full_art": false,
+  "illustration_id": "d326c884-fed0-4b92-bd88-fd4989597c20",
+  "frame": "1997",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil",
+   "foil"
+  ]
+ },
+ {
+  "id": "4310cc73-79bc-4d06-b71a-679c9c6cca5c",
+  "name": "Shivan Dragon",
+  "set": "cei",
+  "set_name": "Intl. Collectors' Edition",
+  "collector_number": "175",
+  "released_at": "1993-12-10",
+  "flavor_text": "While it's true most Dragons are cruel, the Shivan Dragon seems to take particular glee in the misery of others, often tormenting its victims much like a cat plays with a mouse before delivering the final blow.",
+  "artist": "Melissa A. Benson",
+  "full_art": false,
+  "illustration_id": "d326c884-fed0-4b92-bd88-fd4989597c20",
+  "frame": "1993",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "475e27c5-bc2a-4907-9c18-5c8ba82d116f",
+  "name": "Shivan Dragon",
+  "set": "btd",
+  "set_name": "Beatdown Box Set",
+  "collector_number": "44",
+  "released_at": "2000-10-01",
+  "artist": "Melissa A. Benson",
+  "full_art": false,
+  "illustration_id": "d326c884-fed0-4b92-bd88-fd4989597c20",
+  "frame": "1997",
+  "border_color": "white",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "4bbcec3a-2747-4fa3-b8cd-d4a0b1dda042",
+  "name": "Shivan Dragon",
+  "set": "30a",
+  "set_name": "30th Anniversary Edition",
+  "collector_number": "467",
+  "released_at": "2022-11-28",
+  "flavor_text": "While it's true most Dragons are cruel, the Shivan Dragon seems to take particular glee in the misery of others, often tormenting its victims much like a cat plays with a mouse before delivering the final blow.",
+  "artist": "Melissa A. Benson",
+  "full_art": false,
+  "illustration_id": "d326c884-fed0-4b92-bd88-fd4989597c20",
+  "frame": "1997",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "5cbf9dde-e396-43dc-8288-b39e63a23164",
+  "name": "Shivan Dragon",
+  "set": "9ed",
+  "set_name": "Ninth Edition",
+  "collector_number": "219",
+  "released_at": "2005-07-29",
+  "flavor_text": "The undisputed master of the mountains of Shiv.",
+  "artist": "Donato Giancola",
+  "full_art": false,
+  "illustration_id": "2f2cebbc-9458-47b8-b3d4-b2ddb06ad6a6",
+  "frame": "2003",
+  "border_color": "white",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "5e64822a-6817-4e1e-8155-3e95f8e3763f",
+  "name": "Shivan Dragon",
+  "set": "leb",
+  "set_name": "Limited Edition Beta",
+  "collector_number": "175",
+  "released_at": "1993-10-04",
+  "flavor_text": "While it's true most Dragons are cruel, the Shivan Dragon seems to take particular glee in the misery of others, often tormenting its victims much like a cat plays with a mouse before delivering the final blow.",
+  "artist": "Melissa A. Benson",
+  "full_art": false,
+  "illustration_id": "d326c884-fed0-4b92-bd88-fd4989597c20",
+  "frame": "1993",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "60bfdf43-8d4c-4415-bf19-34aa481cd91c",
+  "name": "Shivan Dragon",
+  "set": "10e",
+  "set_name": "Tenth Edition",
+  "collector_number": "230★",
+  "released_at": "2007-07-13",
+  "flavor_text": "The undisputed master of the mountains of Shiv.",
+  "artist": "Donato Giancola",
+  "full_art": false,
+  "illustration_id": "2f2cebbc-9458-47b8-b3d4-b2ddb06ad6a6",
+  "frame": "2003",
+  "border_color": "black",
+  "finishes": [
+   "foil"
+  ]
+ },
+ {
+  "id": "64b05edd-4128-4150-9457-8aff895bd0b7",
+  "name": "Shivan Dragon",
+  "set": "5ed",
+  "set_name": "Fifth Edition",
+  "collector_number": "267",
+  "released_at": "1997-03-24",
+  "flavor_text": "While it's true most dragons are cruel, the Shivan dragon seems to take particular glee in the misery of others, often tormenting its victims much like a cat plays with a mouse before delivering the final blow.",
+  "artist": "Melissa A. Benson",
+  "full_art": false,
+  "illustration_id": "d326c884-fed0-4b92-bd88-fd4989597c20",
+  "frame": "1997",
+  "border_color": "white",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "65126d80-97c1-4890-944c-0dd4496ae746",
+  "name": "Shivan Dragon",
+  "set": "drb",
+  "set_name": "From the Vault: Dragons",
+  "collector_number": "13",
+  "released_at": "2008-08-29",
+  "flavor_text": "The undisputed master of the mountains of Shiv.",
+  "artist": "Justin Sweet",
+  "full_art": false,
+  "illustration_id": "6c344170-a6cb-4ffa-9ed1-fe10c90aa62c",
+  "frame": "2003",
+  "border_color": "black",
+  "finishes": [
+   "foil"
+  ]
+ },
+ {
+  "id": "69199dd2-dbac-4039-b4da-eb2b0671645f",
+  "name": "Shivan Dragon",
+  "set": "3ed",
+  "set_name": "Revised Edition",
+  "collector_number": "177",
+  "released_at": "1994-04-11",
+  "flavor_text": "While it's true most Dragons are cruel, the Shivan Dragon seems to take particular glee in the misery of others, often tormenting its victims much like a cat plays with a mouse before delivering the final blow.",
+  "artist": "Melissa A. Benson",
+  "full_art": false,
+  "illustration_id": "d326c884-fed0-4b92-bd88-fd4989597c20",
+  "frame": "1993",
+  "border_color": "white",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "6d8330b7-7fae-45ef-b254-12f720b85fba",
+  "name": "Shivan Dragon",
+  "set": "dpa",
+  "set_name": "Duels of the Planeswalkers",
+  "collector_number": "53",
+  "released_at": "2010-06-04",
+  "flavor_text": "The undisputed master of the mountains of Shiv.",
+  "artist": "Donato Giancola",
+  "full_art": false,
+  "illustration_id": "2f2cebbc-9458-47b8-b3d4-b2ddb06ad6a6",
+  "frame": "2003",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "702c4781-670b-49ae-b511-90ed119841b0",
+  "name": "Shivan Dragon",
+  "set": "fdn",
+  "set_name": "Foundations",
+  "collector_number": "763",
+  "released_at": "2026-04-24",
+  "flavor_text": "The undisputed master of the mountains of Shiv.",
+  "artist": "Donato Giancola",
+  "full_art": false,
+  "illustration_id": "2f2cebbc-9458-47b8-b3d4-b2ddb06ad6a6",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "70846483-9c23-42c4-9f9f-1fc5cda17c77",
+  "name": "Shivan Dragon",
+  "set": "4ed",
+  "set_name": "Fourth Edition",
+  "collector_number": "220",
+  "released_at": "1995-04-01",
+  "flavor_text": "While it's true most Dragons are cruel, the Shivan Dragon seems to take particular glee in the misery of others, often tormenting its victims much like a cat plays with a mouse before delivering the final blow.",
+  "artist": "Melissa A. Benson",
+  "full_art": false,
+  "illustration_id": "d326c884-fed0-4b92-bd88-fd4989597c20",
+  "frame": "1993",
+  "border_color": "white",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "7b78eb49-bd68-47e6-90a3-83ec2eeb4312",
+  "name": "Shivan Dragon",
+  "set": "dmr",
+  "set_name": "Dominaria Remastered",
+  "collector_number": "135",
+  "released_at": "2023-01-13",
+  "flavor_text": "The undisputed master of the mountains of Shiv.",
+  "artist": "Donato Giancola",
+  "full_art": false,
+  "illustration_id": "8a054bfc-3c1f-4238-b944-81599a7603d6",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil",
+   "foil"
+  ]
+ },
+ {
+  "id": "7fec2b71-8fa9-4818-9c4f-5d2dcd2af495",
+  "name": "Shivan Dragon",
+  "set": "7ed",
+  "set_name": "Seventh Edition",
+  "collector_number": "218",
+  "released_at": "2001-04-11",
+  "flavor_text": "The undisputed master of the mountains of Shiv.",
+  "artist": "Donato Giancola",
+  "full_art": false,
+  "illustration_id": "2f2cebbc-9458-47b8-b3d4-b2ddb06ad6a6",
+  "frame": "1997",
+  "border_color": "white",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "8b5f8025-95ff-431a-a33c-4e2e7366633f",
+  "name": "Shivan Dragon",
+  "set": "dmr",
+  "set_name": "Dominaria Remastered",
+  "collector_number": "329",
+  "released_at": "2023-01-13",
+  "flavor_text": "The undisputed master of the mountains of Shiv.",
+  "artist": "Donato Giancola",
+  "full_art": false,
+  "illustration_id": "8a054bfc-3c1f-4238-b944-81599a7603d6",
+  "frame": "1997",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil",
+   "foil"
+  ]
+ },
+ {
+  "id": "8beb06f5-05e1-461e-927f-906d38d9448c",
+  "name": "Shivan Dragon",
+  "set": "gn3",
+  "set_name": "Game Night: Free-for-All",
+  "collector_number": "87",
+  "released_at": "2022-10-14",
+  "flavor_text": "\"It's just playing with us, Marsden.\"\n—Dafynne the Radiant, last words",
+  "artist": "Donato Giancola",
+  "full_art": false,
+  "illustration_id": "2f2cebbc-9458-47b8-b3d4-b2ddb06ad6a6",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "8f87a412-5f29-4e34-988c-682ef7ba533a",
+  "name": "Shivan Dragon",
+  "set": "j21",
+  "set_name": "Jumpstart: Historic Horizons",
+  "collector_number": "788",
+  "released_at": "2021-08-26",
+  "artist": "Donato Giancola",
+  "full_art": false,
+  "illustration_id": "2f2cebbc-9458-47b8-b3d4-b2ddb06ad6a6",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "9130912c-5729-4fc6-8d68-1d94dd6ba009",
+  "name": "Shivan Dragon",
+  "set": "prm",
+  "set_name": "Magic Online Promos",
+  "collector_number": "62535",
+  "released_at": "2017-06-17",
+  "artist": "Donato Giancola",
+  "full_art": false,
+  "illustration_id": "8a054bfc-3c1f-4238-b944-81599a7603d6",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "foil"
+  ]
+ },
+ {
+  "id": "9a5ddd65-b731-4805-827c-a25350531d74",
+  "name": "Shivan Dragon",
+  "set": "30a",
+  "set_name": "30th Anniversary Edition",
+  "collector_number": "170",
+  "released_at": "2022-11-28",
+  "flavor_text": "While it's true most Dragons are cruel, the Shivan Dragon seems to take particular glee in the misery of others, often tormenting its victims much like a cat plays with a mouse before delivering the final blow.",
+  "artist": "Melissa A. Benson",
+  "full_art": false,
+  "illustration_id": "d326c884-fed0-4b92-bd88-fd4989597c20",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "a7a52f20-4567-4a69-9d27-73dbb71bf3d9",
+  "name": "Shivan Dragon",
+  "set": "p9ed",
+  "set_name": "Ninth Edition Promos",
+  "collector_number": "219",
+  "released_at": "2005-09-24",
+  "flavor_text": "Неоспоримый хозяин Шиванских гор.",
+  "artist": "Donato Giancola",
+  "full_art": false,
+  "illustration_id": "2f2cebbc-9458-47b8-b3d4-b2ddb06ad6a6",
+  "frame": "2003",
+  "border_color": "black",
+  "finishes": [
+   "foil"
+  ]
+ },
+ {
+  "id": "a9b7d372-9324-4e7d-b09f-0e0f4c70ae65",
+  "name": "Shivan Dragon",
+  "set": "4bb",
+  "set_name": "Fourth Edition Foreign Black Border",
+  "collector_number": "220",
+  "released_at": "1995-04-01",
+  "artist": "Melissa A. Benson",
+  "full_art": false,
+  "illustration_id": "d326c884-fed0-4b92-bd88-fd4989597c20",
+  "frame": "1993",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "b0a04baf-5301-4e47-ac8f-243d2a73f18e",
+  "name": "Shivan Dragon",
+  "set": "sld",
+  "set_name": "Secret Lair Drop",
+  "collector_number": "716",
+  "released_at": "2023-02-21",
+  "flavor_text": "While it's true most Dragons are cruel, the Shivan Dragon seems to take particular glee in the misery of others, often tormenting its victims much like a cat plays with a mouse before delivering the final blow.",
+  "artist": "Martin Ontiveros",
+  "full_art": true,
+  "illustration_id": "f1b62e7f-8f2a-4a7a-a3e8-5ab0265f8d3d",
+  "frame": "2015",
+  "frame_effects": [
+   "inverted"
+  ],
+  "border_color": "borderless",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "b0c76430-c5c9-46a4-9a3b-9bbf259e4b38",
+  "name": "Shivan Dragon",
+  "set": "m15",
+  "set_name": "Magic 2015",
+  "collector_number": "281",
+  "released_at": "2014-07-18",
+  "flavor_text": "The undisputed master of the mountains of Shiv.",
+  "artist": "Donato Giancola",
+  "full_art": false,
+  "illustration_id": "2f2cebbc-9458-47b8-b3d4-b2ddb06ad6a6",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "b35b0fb6-2596-4da3-820e-df28172f209b",
+  "name": "Shivan Dragon",
+  "set": "sum",
+  "set_name": "Summer Magic / Edgar",
+  "collector_number": "177",
+  "released_at": "1994-06-21",
+  "flavor_text": "While it's true most Dragons are cruel, the Shivan Dragon seems to take particular glee in the misery of others, often tormenting its victims much like a cat plays with a mouse before delivering the final blow.",
+  "artist": "Melissa A. Benson",
+  "full_art": false,
+  "illustration_id": "d326c884-fed0-4b92-bd88-fd4989597c20",
+  "frame": "1993",
+  "border_color": "white",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "b6fd9b74-8e5b-4c57-bb4f-4a7222183c44",
+  "name": "Shivan Dragon",
+  "set": "ori",
+  "set_name": "Magic Origins",
+  "collector_number": "285",
+  "released_at": "2015-07-17",
+  "flavor_text": "The undisputed master of the mountains of Shiv.",
+  "artist": "Donato Giancola",
+  "full_art": false,
+  "illustration_id": "2f2cebbc-9458-47b8-b3d4-b2ddb06ad6a6",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "b97e7318-f916-4556-9f89-dda7914359c1",
+  "name": "Shivan Dragon",
+  "set": "5ed",
+  "set_name": "Fifth Edition",
+  "collector_number": "267†",
+  "released_at": "1997-03-24",
+  "flavor_text": "While it's true most dragons are cruel, the Shivan dragon seems to take particular glee in the misery of others, often tormenting its victims much like a cat plays with a mouse before delivering the final blow.",
+  "artist": "Melissa A. Benson",
+  "full_art": false,
+  "illustration_id": "d326c884-fed0-4b92-bd88-fd4989597c20",
+  "frame": "1997",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "ba6ef10a-4bbc-40ce-883d-f4aa471052fc",
+  "name": "Shivan Dragon",
+  "set": "9ed",
+  "set_name": "Ninth Edition",
+  "collector_number": "219★",
+  "released_at": "2005-07-29",
+  "flavor_text": "The undisputed master of the mountains of Shiv.",
+  "artist": "Donato Giancola",
+  "full_art": false,
+  "illustration_id": "2f2cebbc-9458-47b8-b3d4-b2ddb06ad6a6",
+  "frame": "2003",
+  "border_color": "black",
+  "finishes": [
+   "foil"
+  ]
+ },
+ {
+  "id": "c535f7f8-a57e-4ef1-91b4-5e3281bd4407",
+  "name": "Shivan Dragon",
+  "set": "slc",
+  "set_name": "Secret Lair Countdown",
+  "collector_number": "1993",
+  "released_at": "2022-11-01",
+  "flavor_text": "While it's true most Dragons are cruel, the Shivan Dragon seems to take particular glee in the misery of others, often tormenting its victims much like a cat plays with a mouse before delivering the final blow.",
+  "artist": "Justine Jones",
+  "full_art": true,
+  "illustration_id": "926c5cf0-25f9-4a34-bf64-bf56ae3e7666",
+  "frame": "2015",
+  "frame_effects": [
+   "inverted"
+  ],
+  "border_color": "borderless",
+  "finishes": [
+   "nonfoil",
+   "foil"
+  ]
+ },
+ {
+  "id": "c5efc94a-b644-4cc4-9598-2ce16fe68420",
+  "name": "Shivan Dragon",
+  "set": "m10",
+  "set_name": "Magic 2010",
+  "collector_number": "156",
+  "released_at": "2009-07-17",
+  "flavor_text": "The undisputed master of the mountains of Shiv.",
+  "artist": "Donato Giancola",
+  "full_art": false,
+  "illustration_id": "2f2cebbc-9458-47b8-b3d4-b2ddb06ad6a6",
+  "frame": "2003",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil",
+   "foil"
+  ]
+ },
+ {
+  "id": "ca25d8fe-93b3-4d2c-96df-ca6e4f528543",
+  "name": "Shivan Dragon",
+  "set": "w16",
+  "set_name": "Welcome Deck 2016",
+  "collector_number": "13",
+  "released_at": "2016-04-08",
+  "flavor_text": "The undisputed master of the mountains of Shiv.",
+  "artist": "Donato Giancola",
+  "full_art": false,
+  "illustration_id": "2f2cebbc-9458-47b8-b3d4-b2ddb06ad6a6",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "d08a0542-f72a-422d-a8cf-3d37fdb5d375",
+  "name": "Shivan Dragon",
+  "set": "8ed",
+  "set_name": "Eighth Edition",
+  "collector_number": "221★",
+  "released_at": "2003-07-28",
+  "flavor_text": "The undisputed master of the mountains of Shiv.",
+  "artist": "Donato Giancola",
+  "full_art": false,
+  "illustration_id": "2f2cebbc-9458-47b8-b3d4-b2ddb06ad6a6",
+  "frame": "2003",
+  "border_color": "black",
+  "finishes": [
+   "foil"
+  ]
+ },
+ {
+  "id": "d389b8db-5866-4146-a379-f24b6463622b",
+  "name": "Shivan Dragon",
+  "set": "m19",
+  "set_name": "Core Set 2019",
+  "collector_number": "300",
+  "released_at": "2018-07-13",
+  "flavor_text": "The undisputed master of the mountains of Shiv.",
+  "artist": "Donato Giancola",
+  "full_art": false,
+  "illustration_id": "2f2cebbc-9458-47b8-b3d4-b2ddb06ad6a6",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "de98d9ad-d011-43de-92c8-f97037b42803",
+  "name": "Shivan Dragon",
+  "set": "7ed",
+  "set_name": "Seventh Edition",
+  "collector_number": "218★",
+  "released_at": "2001-04-11",
+  "flavor_text": "The undisputed master of the mountains of Shiv.",
+  "artist": "Donato Giancola",
+  "full_art": false,
+  "illustration_id": "2f2cebbc-9458-47b8-b3d4-b2ddb06ad6a6",
+  "frame": "1997",
+  "border_color": "black",
+  "finishes": [
+   "foil"
+  ]
+ },
+ {
+  "id": "e3d7b4a1-732c-4b4d-bfb1-45a43b54ebea",
+  "name": "Shivan Dragon",
+  "set": "ps11",
+  "set_name": "Salvat 2011",
+  "collector_number": "120",
+  "released_at": "2011-01-01",
+  "flavor_text": "Es el señor indisputable de las montañas de Shiv.",
+  "artist": "Donato Giancola",
+  "full_art": false,
+  "illustration_id": "2f2cebbc-9458-47b8-b3d4-b2ddb06ad6a6",
+  "frame": "2003",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "e70868a4-3971-431d-a614-604aca110fe4",
+  "name": "Shivan Dragon",
+  "set": "pmei",
+  "set_name": "Media and Collaboration Promos",
+  "collector_number": "2001-2",
+  "released_at": "2001-09-15",
+  "flavor_text": "The undisputed master of the mountains of Shiv.",
+  "artist": "Donato Giancola",
+  "full_art": false,
+  "illustration_id": "2f2cebbc-9458-47b8-b3d4-b2ddb06ad6a6",
+  "frame": "1997",
+  "border_color": "white",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "e9ac007d-1616-449c-92d5-1d321235e733",
+  "name": "Shivan Dragon",
+  "set": "8ed",
+  "set_name": "Eighth Edition",
+  "collector_number": "221",
+  "released_at": "2003-07-28",
+  "flavor_text": "The undisputed master of the mountains of Shiv.",
+  "artist": "Donato Giancola",
+  "full_art": false,
+  "illustration_id": "2f2cebbc-9458-47b8-b3d4-b2ddb06ad6a6",
+  "frame": "2003",
+  "border_color": "white",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "f76d1d4f-4911-46cd-8adb-af4b5eba48bb",
+  "name": "Shivan Dragon",
+  "set": "p30h",
+  "set_name": "30th Anniversary History Promos",
+  "collector_number": "4",
+  "released_at": "2023-03-21",
+  "artist": "Satoru Senda",
+  "full_art": false,
+  "illustration_id": "3e36e37d-342c-4c48-abd9-ad30a310e0d3",
+  "frame": "2015",
+  "border_color": "black",
+  "finishes": [
+   "foil"
+  ]
+ },
+ {
+  "id": "fd4f6e34-3f66-4e10-8170-56039c5f6fcc",
+  "name": "Shivan Dragon",
+  "set": "2ed",
+  "set_name": "Unlimited Edition",
+  "collector_number": "175",
+  "released_at": "1993-12-01",
+  "flavor_text": "While it's true most Dragons are cruel, the Shivan Dragon seems to take particular glee in the misery of others, often tormenting its victims much like a cat plays with a mouse before delivering the final blow.",
+  "artist": "Melissa A. Benson",
+  "full_art": false,
+  "illustration_id": "d326c884-fed0-4b92-bd88-fd4989597c20",
+  "frame": "1993",
+  "border_color": "white",
+  "finishes": [
+   "nonfoil"
+  ]
+ },
+ {
+  "id": "fefbf149-f988-4f8b-9f53-56f5878116a6",
+  "name": "Shivan Dragon",
+  "set": "lea",
+  "set_name": "Limited Edition Alpha",
+  "collector_number": "174",
+  "released_at": "1993-08-05",
+  "flavor_text": "While it's true most Dragons are cruel, the Shivan Dragon seems to take particular glee in the misery of others, often tormenting its victims much like a cat plays with a mouse before delivering the final blow.",
+  "artist": "Melissa A. Benson",
+  "full_art": false,
+  "illustration_id": "d326c884-fed0-4b92-bd88-fd4989597c20",
+  "frame": "1993",
+  "border_color": "black",
+  "finishes": [
+   "nonfoil"
+  ]
+ }
+]
