@@ -21,7 +21,6 @@ from utils.constants import (
     DARK_ALT,
     DARK_PANEL,
     DECK_CARD_BADGE_PADDING,
-    DECK_CARD_BADGE_RADIUS,
     DECK_CARD_CORNER_RADIUS,
     SELECTION_BORDER,
     SELECTION_BORDER_WIDTH,
@@ -33,7 +32,6 @@ from widgets.panels.card_table_panel.grid_layout import (
     _ACTION_GLYPHS,
     _CELL_HEIGHT,
     _MAX_CANVAS_PX,
-    badge_rect,
 )
 from widgets.stylize import type_font
 
@@ -184,10 +182,9 @@ class GridRenderMixin:
         badge_bg = SURFACE_RAISED if is_selected else DARK_ALT
         dc.SetBrush(wx.Brush(wx.Colour(*badge_bg)))
         dc.SetPen(wx.TRANSPARENT_PEN)
-        bx, by, bw, bh = badge_rect(rect, tw, th)
-        dc.DrawRoundedRectangle(bx, by, bw, bh, DECK_CARD_BADGE_RADIUS)
+        dc.DrawRectangle(rect.x + pad, rect.y + pad, tw + pad * 2, th + pad)
         dc.SetTextForeground(wx.Colour(*owned_rgb))
-        dc.DrawText(text, bx + pad, by + (bh - th) // 2)
+        dc.DrawText(text, rect.x + pad * 2, rect.y + pad + (th + pad) // 2 - th // 2)
 
     def _draw_actions(self, dc: wx.DC, rect: wx.Rect, name: str) -> None:
         # bold=True is buying glyph legibility at body size on top of card art,

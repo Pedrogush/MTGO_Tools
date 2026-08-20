@@ -66,24 +66,6 @@ widget               behaviour
                      only fix (see :mod:`widgets.notebook`)
 ``wx.StatusBar``     background honoured, **foreground silently ignored**
                      — hence :mod:`widgets.status_bar`
-``wx.StaticLine``    **neither honoured**, and a ``wx.LI_VERTICAL`` one draws in
-                     the native *etched* colour, which on ``SURFACE_PANEL``
-                     comes out near-white — brighter than any other chrome on
-                     that surface. The two horizontal StaticLines already in the
-                     tree read as dark and made this look safe; a vertical rule
-                     beside text does not get lost the way a horizontal one
-                     does. Use :func:`create_divider` (a 1px ``wx.Panel``,
-                     whose background *is* honoured) for any rule that has to
-                     match the theme
-``wx.StaticText``    background + foreground honoured. Two traps:
-                     ``wx.ST_ELLIPSIZE_*`` is only picked up from the
-                     **constructor**, not from a later ``SetWindowStyleFlag``;
-                     and without ``wx.ST_NO_AUTORESIZE`` a ``SetLabel``
-                     **resizes the control to fit the new text**, which silently
-                     defeats both ``wx.ALIGN_RIGHT`` (the box hugs the string,
-                     so there is nothing to align within) and ellipsization
-                     (a control that resized to its own text always fits). See
-                     :func:`create_status_label`
 ``wx.ToggleButton``  background + foreground honoured; the *checked* state adds
                      a 1px ring in the **system** accent colour, which is a user
                      setting rather than ours. Unused: the app's toggles are
@@ -110,11 +92,6 @@ What wxMSW does with **fonts and sizes** (measured in phase 3)
 * **Top-level windows never inherit.** ``wx.Frame``, ``wx.Dialog`` and
   ``wx.MiniFrame`` constructed with a 10pt parent all reported the 9pt system
   default. Hence one :func:`apply_base_font` per top-level window (18 of them).
-* ``wx.BU_EXACTFIT`` is the *only* way past that floor, and it overshoots in
-  the other direction: it sizes a button to its text extent plus roughly 2px, so
-  the deck workspace's ``Grid``/``Table``/``Pile`` toggles measured 30x18. A
-  compact button therefore needs its size stated explicitly on top of the flag;
-  see :func:`size_compact_button`.
 * ``wx.Button.GetBestSize()`` has a **hard floor of 75x23 at 9pt and 75x25 at
   10pt, whatever the label** -- it is the Win32 default button size, not a
   text measurement. Any button given an explicit size under that reports a
@@ -137,7 +114,6 @@ from utils.constants.theme import (
     ACCENT_ON_PRIMARY,
     ACCENT_PRIMARY,
     BASE_FONT_POINT_SIZE,
-    BORDER_SUBTLE,
     DANGER_FILL,
     DANGER_ON_FILL,
     DISABLED_FILL,
@@ -158,7 +134,6 @@ from utils.constants.theme import (
     contrast_ratio,
     font_point_size,
 )
-from utils.constants.ui_layout import STATUS_LABEL_MIN_WIDTH
 from widgets.checkbox import DarkCheckBox
 from widgets.native_dark import (
     THEME_EXPLORER,
@@ -757,96 +732,3 @@ def stylize_button(
         button.SetFont(font)
     else:
         apply_type_level(button, level)
-
-
-def size_compact_button(button: wx.Button, *, pad_x: int, height: int) -> None:
-    """Give a ``wx.BU_EXACTFIT`` button a real hit target (F4).
-
-    ``wx.Button.GetBestSize()`` floors at 75x23 / 75x25 whatever the label (see
-    the module docstring), and ``wx.BU_EXACTFIT`` is the only way past that --
-    but it hands back the *opposite* problem, because it sizes to the text
-    extent plus ~2px. The deck workspace's ``Grid``/``Table``/``Pile`` toggles
-    measured 30x18 that way, under every pointer-target guideline there is.
-
-    Dropping ``BU_EXACTFIT`` is not the fix: four 75px chips plus ``Art`` would
-    not fit the deck workspace header at the window's minimum width. So the size
-    is stated explicitly instead -- the label's own extent plus ``pad_x`` either
-    side, at ``height``. ``SetMinSize`` is enough: with ``BU_EXACTFIT`` the best
-    size is the smaller of the two, so the minimum is what the sizer honours.
-
-    The extent is measured against the **bold** face whatever the button's
-    current weight, so a toggle that bolds on selection keeps one width and the
-    row never jitters as the selection moves.
-    """
-    font = button.GetFont()
-    if font.GetWeight() != wx.FONTWEIGHT_BOLD:
-        font = font.Bold()
-    dc = wx.ScreenDC()
-    dc.SetFont(font)
-    text_w, _text_h = dc.GetTextExtent(button.GetLabel())
-    button.SetMinSize((text_w + pad_x * 2, height))
-
-
-def create_status_label(parent: wx.Window, text: str = "") -> wx.StaticText:
-    """A toolbar's right-hand status label, built so it cannot clip (F8).
-
-    Match History, Metagame Analysis and Top Cards each had the same bug: a
-    right-hand ``wx.StaticText`` added at proportion 0 after an
-    ``AddStretchSpacer(1)``. The spacer absorbed the slack, the label then asked
-    for its full natural width on top of it, and anything longer than the leftover
-    ran off the window edge mid-word -- "Failed to", "Loade", "To".
-
-    Three things fix it together, and none of them works alone:
-
-    * ``wx.ST_ELLIPSIZE_END`` has to be passed to the **constructor** -- wxMSW
-      does not pick it up from a later ``SetWindowStyleFlag``.
-    * the label has to be added at **proportion 1**, in place of the stretch
-      spacer, so the sizer hands it a bounded box to ellipsise inside. At
-      proportion 0 it keeps asking for its best size and nothing ever tells it
-      that it does not fit.
-    * ``wx.ST_NO_AUTORESIZE`` is required for ``wx.ALIGN_RIGHT`` to be visible at
-      all, and this one was measured after the first attempt shipped
-      left-aligned. Without it, ``SetLabel`` **resizes the control to the new
-      text** -- so the box hugs the string, the alignment inside that box has
-      nothing to align against, and the label renders flush left at whatever x
-      the last layout left it. A probe frame right-aligned correctly while the
-      real toolbars did not, and the difference was entirely that the real ones
-      call ``SetLabel`` afterwards. It also means ellipsization never fires,
-      because an auto-resized control always fits its own text.
-    """
-    label = wx.StaticText(
-        parent,
-        label=text,
-        style=wx.ST_ELLIPSIZE_END | wx.ALIGN_RIGHT | wx.ST_NO_AUTORESIZE,
-    )
-    label.SetForegroundColour(_colour(TEXT_SECONDARY))
-    label.SetMinSize((STATUS_LABEL_MIN_WIDTH, -1))
-    return label
-
-
-def create_divider(parent: wx.Window, *, vertical: bool, length: int) -> wx.Window:
-    """A 1px themed rule (C4).
-
-    ``wx.StaticLine`` is **not** usable here, and this was measured rather than
-    assumed: a ``wx.LI_VERTICAL`` StaticLine on ``SURFACE_PANEL`` draws in the
-    native etched colour and ignores both ``SetBackgroundColour`` and
-    ``SetForegroundColour``, so it came out as a near-white 1px bar -- brighter
-    than any other chrome in the deck workspace header, and a clear regression on
-    the ``wx.StaticText(label="|")`` it replaced. (The two *horizontal*
-    StaticLines already in the tree read as dark, which is what made the trap
-    convincing; they sit on a darker surface and are 1px of a low-contrast etch
-    that the eye loses. A vertical one next to text does not get lost.)
-
-    ``wx.Panel`` backgrounds *are* honoured, so the rule is one.
-    """
-    size = (1, length) if vertical else (length, 1)
-    rule = wx.Panel(parent, size=size)
-    rule.SetMinSize(size)
-    rule.SetMaxSize(size)
-    rule.SetBackgroundColour(_colour(BORDER_SUBTLE))
-    return rule
-
-
-def surface_colour(surface: str) -> wx.Colour:
-    """The background colour of a named surface (``base``/``panel``/``alt``/``raised``)."""
-    return _colour(_SURFACE_COLOURS[surface])

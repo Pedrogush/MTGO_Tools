@@ -427,10 +427,6 @@ class AutomationClient:
         """Insert a dummy card with LOREM_MANA oracle text into the card manager."""
         return self._send_command("add_lorem_mana_card")
 
-    def select_card(self, card_name: str, zone: str = "main") -> dict[str, Any]:
-        """Select ``card_name`` in a deck zone, populating the Card Inspector."""
-        return self._send_command("select_card", card_name=card_name, zone=zone)
-
     def get_inspector_oracle_text(self) -> dict[str, Any]:
         """Return the plain-text value of the card inspector oracle text control."""
         return self._send_command("get_inspector_oracle_text")

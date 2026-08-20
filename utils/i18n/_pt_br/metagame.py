@@ -2,9 +2,9 @@
 
 MESSAGES: dict[str, str] = {
     "metagame.chart.no_data": "Sem dados disponíveis para o período selecionado",
-    "metagame.label.format": "Formato",
-    "metagame.label.time_window": "Janela de Tempo (dias)",
-    "metagame.label.starting_from": "A partir do dia",
+    "metagame.label.format": "Formato:",
+    "metagame.label.time_window": "Janela de Tempo (dias):",
+    "metagame.label.starting_from": "A partir do dia:",
     "metagame.label.changes": "Mudanças de Metagame",
     "metagame.tooltip.time_window": "Ajusta quantos dias são usados para calcular a participação no metagame.",
     "metagame.btn.refresh": "Atualizar Dados",

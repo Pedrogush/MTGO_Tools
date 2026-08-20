@@ -3,8 +3,7 @@
 MESSAGES: dict[str, str] = {
     "notes.btn.add": "+ Adicionar Nota",
     "notes.btn.save": "Salvar Notas",
-    "notes.empty": "Nenhuma nota de deck ainda.",
-    "notes.empty.hint": "As notas são salvas com este deck e o acompanham.",
+    "notes.empty": "Nenhuma nota de deck ainda, clique em “Adicionar” para criar uma nota.",
     "notes.saved": "Notas de deck salvas.",
     "notes.type.general": "Geral",
     "notes.type.matchup": "Matchup",

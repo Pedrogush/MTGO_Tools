@@ -32,16 +32,11 @@ class ContentMixin(_Base):
 
     def reset(self) -> None:
         self.active_zone = None
-        # C5: this used to write "Select a card to inspect." into three separate
-        # controls, so one panel held three copies of the same sentence and a
-        # fourth was rendered centred by the Card panel beside it. The sentence
-        # lives in ``self.empty_state`` alone now; these are the *card's* fields
-        # and read as content, so with no card they are empty.
-        self.name_label.SetLabel("")
+        self.name_label.SetLabel("Select a card to inspect.")
         self.type_label.SetLabel("")
         self.stats_label.SetLabel("")
-        self.text_ctrl.ChangeValue("")
-        self.image_text_ctrl.ChangeValue("")
+        self.text_ctrl.ChangeValue("Select a card to inspect.")
+        self.image_text_ctrl.ChangeValue("Select a card to inspect.")
         self._render_mana_cost("")
         self.card_image_display.show_placeholder("Select a card")
         self.nav_panel.Hide()

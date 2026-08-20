@@ -235,10 +235,7 @@ class ImagePipelineMixin(_Base):
         self._image_available = image_available
         if show_image_column is None:
             show_image_column = image_available or bool(self.inspector_printings)
-        # C5: with no selection the whole panel is an empty state, not a card
-        # layout with placeholder text in it.
-        self.empty_state.Show(not self._has_selection)
-        self.image_column_panel.Show(show_image_column and self._has_selection)
+        self.image_column_panel.Show(show_image_column)
         self.card_image_display.Show(image_available)
         self.image_text_panel.Show(not image_available)
         if self._loading_printing:

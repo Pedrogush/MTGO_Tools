@@ -41,7 +41,6 @@ class RightPanelBuilderMixin(_Base):
             controller=self.controller,
             card_manager=self.controller.card_repo.get_card_manager(),
             mana_icons=self.mana_icons,
-            locale=self.locale,
         )
         self.card_inspector_panel.set_image_request_handlers(
             on_request=lambda request: self.controller.image_service.queue_card_image_download(

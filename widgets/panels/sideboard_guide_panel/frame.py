@@ -19,7 +19,6 @@ from utils.constants.ui_layout import (
     GUIDE_COL_NOTES_WIDTH,
     SPACE_SM,
 )
-from widgets.empty_state import EmptyState
 from widgets.panels.sideboard_guide_panel.handlers import SideboardGuidePanelHandlersMixin
 from widgets.panels.sideboard_guide_panel.properties import SideboardGuidePanelPropertiesMixin
 from widgets.stylize import stylize_button, stylize_scrollable
@@ -86,24 +85,33 @@ class SideboardGuidePanel(
         stylize_scrollable(self.guide_view)
         sizer.Add(self.guide_view, 1, wx.EXPAND | wx.ALL, SPACE_SM)
 
-        # C5/C6: this was the app's best empty state and still had the copy bug --
-        # it said `click "Add"` while its own CTA read "Add your first matchup".
-        # Now the shared component, with copy that names no button at all.
-        self.empty_state_panel = EmptyState(
-            self,
-            message=self._t("guide.empty"),
-            hint=self._t("guide.empty.hint"),
-            cta_label=self._t("guide.btn.cta"),
-            on_cta=self._on_add_clicked,
-            secondary_label=self._t("guide.btn.record"),
-            on_secondary=self._on_record_clicked,
-            surface="alt",
+        # Empty state panel (shown when there are no entries)
+        self.empty_state_panel = wx.Panel(self)
+        self.empty_state_panel.SetBackgroundColour(DARK_ALT)
+        empty_sizer = wx.BoxSizer(wx.VERTICAL)
+        self.empty_state_panel.SetSizer(empty_sizer)
+        empty_sizer.AddStretchSpacer(1)
+        empty_label = wx.StaticText(
+            self.empty_state_panel,
+            label=self._t("guide.empty"),
+            style=wx.ALIGN_CENTRE_HORIZONTAL,
         )
-        self.empty_cta_btn = self.empty_state_panel.cta_button
-        self.empty_record_btn = self.empty_state_panel.secondary_button
+        empty_label.SetForegroundColour(SUBDUED_TEXT)
+        empty_sizer.Add(empty_label, 0, wx.ALIGN_CENTER | wx.ALL, SPACE_SM)
+        self.empty_cta_btn = wx.Button(self.empty_state_panel, label=self._t("guide.btn.cta"))
+        stylize_button(self.empty_cta_btn, kind="primary")
+        self.empty_cta_btn.Bind(wx.EVT_BUTTON, self._on_add_clicked)
+        empty_sizer.Add(self.empty_cta_btn, 0, wx.ALIGN_CENTER | wx.ALL, SPACE_SM)
+        # Recording is most useful when starting from an empty guide, so surface
+        # it in the empty state too (the button row is hidden there).
+        self.empty_record_btn = wx.Button(self.empty_state_panel, label=self._t("guide.btn.record"))
+        stylize_button(self.empty_record_btn, kind="secondary")
         self.empty_record_btn.SetToolTip(self._t("guide.tooltip.record"))
+        self.empty_record_btn.Bind(wx.EVT_BUTTON, self._on_record_clicked)
+        empty_sizer.Add(self.empty_record_btn, 0, wx.ALIGN_CENTER | wx.ALL, SPACE_SM)
         if self.on_record_guide is None:
             self.empty_record_btn.Disable()
+        empty_sizer.AddStretchSpacer(1)
         self.empty_state_panel.Hide()
         sizer.Add(self.empty_state_panel, 1, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, SPACE_SM)
 

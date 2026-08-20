@@ -19,8 +19,6 @@ import wx
 
 from utils.constants import (
     DECK_CARD_ACTION_BUTTON_SIZE,
-    DECK_CARD_BADGE_ANCHOR_FRACTION,
-    DECK_CARD_BADGE_PADDING,
     DECK_CARD_BUTTON_MARGIN,
     DECK_CARD_HEIGHT,
     DECK_CARD_WIDTH,
@@ -45,23 +43,6 @@ _DEFAULT_COLUMNS = 4
 # and fall back to direct culled drawing, so a pathologically large deck can't
 # allocate a multi-hundred-MB canvas. Comfortably clears any real deck zone.
 _MAX_CANVAS_PX = 20000
-
-
-def badge_rect(card_rect: wx.Rect, text_w: int, text_h: int) -> tuple[int, int, int, int]:
-    """Where a badge of ``text_w`` x ``text_h`` goes on a card at ``card_rect``.
-
-    H1: this used to be the card's top-left corner -- which is where the *title*
-    sits on every Magic frame, so the badge clipped the first characters of every
-    name in the grid. The badge is now anchored with its **bottom** on the art
-    box's lower edge (``DECK_CARD_BADGE_ANCHOR_FRACTION`` of the card height),
-    which is below the title, clear of the top-right mana cost, and above the
-    ``+``/``-``/``x`` chips pinned to the bottom margin.
-    """
-    pad = DECK_CARD_BADGE_PADDING
-    width = text_w + pad * 2
-    height = text_h + pad
-    anchor_y = card_rect.y + int(card_rect.height * DECK_CARD_BADGE_ANCHOR_FRACTION)
-    return card_rect.x + pad, anchor_y - height - pad, width, height
 
 
 class GridLayoutMixin:

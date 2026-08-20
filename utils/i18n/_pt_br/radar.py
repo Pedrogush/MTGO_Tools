@@ -11,7 +11,7 @@ MESSAGES: dict[str, str] = {
     "radar.col.expected": "Cópias Esperadas",
     "radar.col.avg": "Cópias Médias",
     "radar.col.max": "Máx",
-    "radar.dialog.select_archetype": "Selecionar Arquétipo",
+    "radar.dialog.select_archetype": "Selecionar Arquétipo:",
     "radar.dialog.generate": "Gerar Radar",
     "radar.btn.cancel": "Cancelar",
     "radar.btn.close": "Fechar",

@@ -3,9 +3,9 @@
 MESSAGES: dict[str, str] = {
     "timer.section.thresholds": "Limites de Alerta",
     "timer.section.challenge": "Cronômetro de Desafio Ativo",
-    "timer.label.sound": "Som do Alerta",
-    "timer.label.check_interval": "Intervalo de verificação (ms)",
-    "timer.label.repeat_interval": "Intervalo de repetição (segundos)",
+    "timer.label.sound": "Som do Alerta:",
+    "timer.label.check_interval": "Intervalo de verificação (ms):",
+    "timer.label.repeat_interval": "Intervalo de repetição (segundos):",
     "timer.check.start_alert": "Alertar quando o cronômetro iniciar contagem regressiva",
     "timer.check.repeat_alarm": "Repetir alarme no intervalo",
     "timer.btn.start": "Iniciar Monitoramento",

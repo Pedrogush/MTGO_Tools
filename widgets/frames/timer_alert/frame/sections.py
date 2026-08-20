@@ -127,30 +127,24 @@ class SectionsBuilderMixin:
         self._stylize_checkbox(self.repeat_alarm_checkbox)
         sizer.Add(self.repeat_alarm_checkbox, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, SPACE_MD)
 
-        # Control buttons.
-        #
-        # A2: three buttons at their three natural label widths, packed left with
-        # 8px between them, gave a row that ended nowhere in particular. A
-        # wx.GridSizer with wx.EXPAND makes the three cells identical by
-        # construction and lands the row's right edge on the same margin as the
-        # option fields above it.
-        button_row = wx.GridSizer(1, 3, 0, SPACE_SM)
+        # Control buttons
+        button_row = wx.BoxSizer(wx.HORIZONTAL)
         sizer.Add(button_row, 0, wx.ALL | wx.EXPAND, SPACE_MD)
 
         start_btn = wx.Button(panel, label=self._t("timer.btn.start"))
         self._stylize_primary_button(start_btn)
         start_btn.Bind(wx.EVT_BUTTON, lambda _evt: self.start_monitoring())
-        button_row.Add(start_btn, 0, wx.EXPAND)
+        button_row.Add(start_btn, 0, wx.RIGHT, SPACE_SM)
 
         stop_btn = wx.Button(panel, label=self._t("timer.btn.stop"))
         self._stylize_secondary_button(stop_btn)
         stop_btn.Bind(wx.EVT_BUTTON, lambda _evt: self.stop_monitoring())
-        button_row.Add(stop_btn, 0, wx.EXPAND)
+        button_row.Add(stop_btn, 0, wx.RIGHT, SPACE_SM)
 
         test_btn = wx.Button(panel, label=self._t("timer.btn.test"))
         self._stylize_secondary_button(test_btn)
         test_btn.Bind(wx.EVT_BUTTON, lambda _evt: self.test_alert())
-        button_row.Add(test_btn, 0, wx.EXPAND)
+        button_row.Add(test_btn, 0)
 
     def _build_status_section(self, panel: wx.Panel, sizer: wx.Sizer) -> None:
         # Status display

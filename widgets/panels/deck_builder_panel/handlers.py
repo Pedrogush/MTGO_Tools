@@ -13,7 +13,7 @@ from utils.constants.timing import (
     SEARCH_PREFETCH_LOOKAHEAD_CARDS,
     SEARCH_PREFETCH_MIN_CARDS,
 )
-from widgets.wx_layout import relayout, set_shown
+from widgets.wx_layout import set_shown
 
 if TYPE_CHECKING:
     from services.radar_service import RadarData
@@ -154,7 +154,7 @@ class DeckBuilderPanelHandlersMixin(_Base):
             self.results_ctrl.SetData([])
 
         if self.status_label:
-            self.status_label.SetLabel(self._t("builder.status.cleared"))
+            self.status_label.SetLabel("Filters cleared.")
         if self.mana_exact_cb:
             self.mana_exact_cb.SetValue(False)
         if self.text_mode_choice:
@@ -188,22 +188,9 @@ class DeckBuilderPanelHandlersMixin(_Base):
         if not self.results_ctrl:
             return
         self.results_ctrl.SetData(results)
-        count = len(results)
-        # C5: swap the table for the empty state rather than leaving two column
-        # headers over a void.
-        empty_state = getattr(self, "results_empty_state", None)
-        if empty_state is not None and empty_state.IsShown() != (count == 0):
-            self.results_ctrl.Show(count > 0)
-            empty_state.Show(count == 0)
-            self._clear_filters_btn.Show(count > 0)
-            relayout(self)
         if self.status_label:
-            self.status_label.SetLabel(
-                self._t("builder.status.showing").format(
-                    count=count,
-                    cards=self._t("builder.status.card" if count == 1 else "builder.status.cards"),
-                )
-            )
+            count = len(results)
+            self.status_label.SetLabel(f"Showing {count} card{'s' if count != 1 else ''}.")
         self._schedule_results_prefetch()
 
     # ============= Image prefetch (issue #951) =============

@@ -41,8 +41,6 @@ class DeckBuilderPanelProto(Protocol):
     color_mode_choice: wx.Choice | None
     text_mode_choice: wx.Choice | None
     results_ctrl: Any
-    results_empty_state: Any
-    _clear_filters_btn: wx.Button
     status_label: wx.StaticText | None
     _add_main_btn: wx.Button | None
     _add_side_btn: wx.Button | None

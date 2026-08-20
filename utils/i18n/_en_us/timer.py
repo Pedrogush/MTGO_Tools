@@ -3,9 +3,9 @@
 MESSAGES: dict[str, str] = {
     "timer.section.thresholds": "Alert Thresholds",
     "timer.section.challenge": "Active Challenge Timer",
-    "timer.label.sound": "Alert Sound",
-    "timer.label.check_interval": "Check interval (ms)",
-    "timer.label.repeat_interval": "Repeat interval (seconds)",
+    "timer.label.sound": "Alert Sound:",
+    "timer.label.check_interval": "Check interval (ms):",
+    "timer.label.repeat_interval": "Repeat interval (seconds):",
     "timer.check.start_alert": "Alert when timer starts counting down",
     "timer.check.repeat_alarm": "Repeat alarm at interval",
     "timer.btn.start": "Start Monitoring",

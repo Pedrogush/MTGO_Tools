@@ -18,13 +18,12 @@ import wx
 
 from services.deck_service.printing import DATE_MODES as PRINTING_DATE_MODES
 from services.deck_service.printing import PRINTING_MODES
-from utils.constants import VIEW_TOGGLE_HEIGHT, VIEW_TOGGLE_PADDING_X
 from widgets.panels.card_table_panel.sorting import (
     PILE_SORT_COLOR,
     PILE_SORT_MV,
     PILE_SORT_TYPE,
 )
-from widgets.stylize import size_compact_button, stylize_button
+from widgets.stylize import stylize_button
 from widgets.wx_layout import relayout
 
 if TYPE_CHECKING:
@@ -53,11 +52,6 @@ class CardTablePanelToolbarMixin(_Base):
                 selected=mode == self.view_mode,
                 surface="panel",
             )
-            # F4: BU_EXACTFIT sized these to the text extent plus ~2px (30x18
-            # measured). size_compact_button measures the bold face whatever the
-            # current weight, so re-running it on every selection change is a
-            # no-op for layout -- the chip keeps one width as selection moves.
-            size_compact_button(btn, pad_x=VIEW_TOGGLE_PADDING_X, height=VIEW_TOGGLE_HEIGHT)
             btn.Refresh()
 
     def _update_pile_sort_button_visibility(self) -> None:
