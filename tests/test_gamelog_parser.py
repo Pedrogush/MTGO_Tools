@@ -240,7 +240,7 @@ class TestExtractCardsPlayed:
         # The "casts X targeting Y" pattern must attribute only the cast spell to
         # the acting player; the targeted (opponent's) permanent is not captured.
         content = (
-            f"@PAlice casts {_card_ref('Lightning Bolt')} " f"targeting {_card_ref('Goblin Guide')}"
+            f"@PAlice casts {_card_ref('Lightning Bolt')} targeting {_card_ref('Goblin Guide')}"
         )
         assert extract_cards_played(content, "Alice") == ["Lightning Bolt"]
 
@@ -275,7 +275,7 @@ class TestParseGameResults:
 
     def test_only_first_result_per_game_is_kept(self):
         # Two "wins the game" lines in the same game must collapse to one record.
-        content = "@PAlice chooses to play first\n" "@PAlice wins the game\n" "@PBob wins the game"
+        content = "@PAlice chooses to play first\n@PAlice wins the game\n@PBob wins the game"
         results = parse_game_results(content)
         assert len(results) == 1
         assert results[0]["winner"] == "Alice"

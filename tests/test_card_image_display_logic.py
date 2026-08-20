@@ -188,10 +188,9 @@ def test_corners_match_reference(iw, ih, radius):
     diffs = [(i, e, a) for i, (e, a) in enumerate(zip(expected, actual)) if e != a]
 
     # Bound: generous budget for 4 corners, each contributing ~radius/2 pixels
-    assert len(diffs) <= 4 * radius, (
-        f"Too many differing pixels at radius={radius} on {iw}x{ih}: "
-        f"{len(diffs)} > {4 * radius}"
-    )
+    assert (
+        len(diffs) <= 4 * radius
+    ), f"Too many differing pixels at radius={radius} on {iw}x{ih}: {len(diffs)} > {4 * radius}"
 
     for idx, orig_val, pil_val in diffs:
         x = idx % iw

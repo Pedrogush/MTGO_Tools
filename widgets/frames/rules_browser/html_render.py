@@ -107,4 +107,4 @@ def _anchor_first_rule_id(escaped_paragraph: str) -> str:
     if match is None:
         return escaped_paragraph
     rule_id = match.group(1)
-    return f'<a name="{rule_id}">{rule_id}</a>{escaped_paragraph[len(rule_id):]}'
+    return f'<a name="{rule_id}">{rule_id}</a>{escaped_paragraph[len(rule_id) :]}'

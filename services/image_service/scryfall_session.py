@@ -115,7 +115,7 @@ class ScryfallSession(requests.Session):
                 wait = _retry_after_seconds(response)
                 attempts += 1
                 logger.warning(
-                    "Scryfall rate limited (429) for {}; backing off {:.2f}s " "(retry {}/{}).",
+                    "Scryfall rate limited (429) for {}; backing off {:.2f}s (retry {}/{}).",
                     url,
                     wait,
                     attempts,
