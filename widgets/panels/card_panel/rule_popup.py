@@ -14,6 +14,7 @@ import wx
 import wx.html
 
 from utils.constants import DARK_PANEL, SPACE_XS
+from utils.i18n import t
 from widgets.panels.card_panel.html_renderer import _BODY_TEXT, _PANEL_BG
 from widgets.stylize import init_top_level_window
 
@@ -24,7 +25,7 @@ class RulePopupFrame(wx.Frame):
     def __init__(self, parent: wx.Window | None = None) -> None:
         super().__init__(
             parent,
-            title="Comprehensive Rules",
+            title=t("window.title.rules_browser"),
             size=(520, 360),
             style=wx.DEFAULT_FRAME_STYLE | wx.FRAME_FLOAT_ON_PARENT,
         )

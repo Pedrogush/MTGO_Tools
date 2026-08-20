@@ -68,9 +68,12 @@ def test_menu_bar_lists_and_activates(client: AutomationClient) -> None:
     # which is why ``prefs`` exists (below) -- the dialog is modal and would
     # starve this socket exactly the way ``wx.PopupMenu`` does.
     assert len(menus) == 3, f"Expected three menus, got {list(menus)}"
-    tools = next(iter(m for name, m in menus.items() if any(
-        e["label"].lower().startswith("radar") for e in m
-    )), None)
+    tools = next(
+        iter(
+            m for name, m in menus.items() if any(e["label"].lower().startswith("radar") for e in m)
+        ),
+        None,
+    )
     assert tools is not None, f"No menu offers Radar: {list(menus)}"
 
     tools_title = next(name for name, m in menus.items() if m is tools)

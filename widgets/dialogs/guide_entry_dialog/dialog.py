@@ -36,7 +36,7 @@ class GuideEntryDialog(GuideEntryDialogHandlersMixin, GuideEntryDialogProperties
         locale: str | None = None,
     ) -> None:
         self._locale = locale
-        super().__init__(parent, title="Sideboard Guide Entry", size=(1100, 750))
+        super().__init__(parent, title=self._t("window.title.guide_entry"), size=(1100, 750))
         init_top_level_window(self)
 
         main_sizer = wx.BoxSizer(wx.VERTICAL)

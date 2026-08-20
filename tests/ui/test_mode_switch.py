@@ -39,9 +39,7 @@ def _buttons(switch: ModeSwitch) -> dict[str, wx.Button]:
 
 def test_both_modes_are_named_and_the_current_one_is_the_selected_chip(switch_frame) -> None:
     chosen: list[str] = []
-    switch = ModeSwitch(
-        switch_frame, modes=MODES, current="research", on_select=chosen.append
-    )
+    switch = ModeSwitch(switch_frame, modes=MODES, current="research", on_select=chosen.append)
     labels = _buttons(switch)
     assert set(labels) == {"Research", "Builder"}
     # The selection idiom is a *bold* label (stylize_button's toggle+selected
@@ -54,9 +52,7 @@ def test_both_modes_are_named_and_the_current_one_is_the_selected_chip(switch_fr
 
 def test_clicking_the_other_chip_selects_it(switch_frame) -> None:
     chosen: list[str] = []
-    switch = ModeSwitch(
-        switch_frame, modes=MODES, current="research", on_select=chosen.append
-    )
+    switch = ModeSwitch(switch_frame, modes=MODES, current="research", on_select=chosen.append)
     _click(_buttons(switch)["Builder"])
     assert chosen == ["builder"]
 
@@ -66,18 +62,14 @@ def test_clicking_the_current_chip_does_nothing(switch_frame) -> None:
     # switched modes on every press, which is why its label had to name the
     # destination in the first place.
     chosen: list[str] = []
-    switch = ModeSwitch(
-        switch_frame, modes=MODES, current="builder", on_select=chosen.append
-    )
+    switch = ModeSwitch(switch_frame, modes=MODES, current="builder", on_select=chosen.append)
     _click(_buttons(switch)["Builder"])
     assert chosen == []
 
 
 def test_set_current_moves_the_selection_without_firing(switch_frame) -> None:
     chosen: list[str] = []
-    switch = ModeSwitch(
-        switch_frame, modes=MODES, current="research", on_select=chosen.append
-    )
+    switch = ModeSwitch(switch_frame, modes=MODES, current="research", on_select=chosen.append)
     switch.set_current("builder")
     labels = _buttons(switch)
     assert switch.current == "builder"
@@ -89,9 +81,7 @@ def test_set_current_moves_the_selection_without_firing(switch_frame) -> None:
 def test_the_chips_keep_one_width_as_the_selection_moves(switch_frame) -> None:
     # size_compact_button measures the bold face whatever the current weight, so
     # a row of chips must not reflow when the bold one changes.
-    switch = ModeSwitch(
-        switch_frame, modes=MODES, current="research", on_select=lambda _v: None
-    )
+    switch = ModeSwitch(switch_frame, modes=MODES, current="research", on_select=lambda _v: None)
     before = {label: b.GetMinSize().GetWidth() for label, b in _buttons(switch).items()}
     switch.set_current("builder")
     after = {label: b.GetMinSize().GetWidth() for label, b in _buttons(switch).items()}

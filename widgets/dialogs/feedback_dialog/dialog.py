@@ -8,6 +8,7 @@ from pathlib import Path
 import wx
 
 from utils.constants import DARK_BG, LIGHT_TEXT, SPACE_SM, SUBDUED_TEXT
+from utils.i18n import t
 from widgets.checkbox import DarkCheckBox
 from widgets.dialogs.feedback_dialog.handlers import FeedbackDialogHandlersMixin
 from widgets.dialogs.feedback_dialog.properties import FeedbackDialogPropertiesMixin
@@ -33,7 +34,7 @@ class FeedbackDialog(FeedbackDialogHandlersMixin, FeedbackDialogPropertiesMixin,
         *,
         event_logging_enabled: bool = False,
     ) -> None:
-        super().__init__(parent, title="Export Diagnostics / Send Feedback", size=(480, 380))
+        super().__init__(parent, title=t("window.title.diagnostics"), size=(480, 380))
         init_top_level_window(self)
         self.SetBackgroundColour(DARK_BG)
 

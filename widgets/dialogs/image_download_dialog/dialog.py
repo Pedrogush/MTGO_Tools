@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any
 import wx
 
 from utils.constants import DARK_BG, LIGHT_TEXT, SPACE_SM, SUBDUED_TEXT
+from utils.i18n import t
 from widgets.dialogs.image_download_dialog.handlers import ImageDownloadDialogHandlersMixin
 from widgets.dialogs.image_download_dialog.properties import ImageDownloadDialogPropertiesMixin
 from widgets.stylize import apply_type_level, init_top_level_window, stylize_button
@@ -37,7 +38,7 @@ class ImageDownloadDialog(
         bulk_data_cache_path: Path,
         on_status_update: Callable[[str], None] | None = None,
     ):
-        super().__init__(parent, title="Offline Images Mode", size=(460, 320))
+        super().__init__(parent, title=t("window.title.offline_images"), size=(460, 320))
         init_top_level_window(self)
         self.SetBackgroundColour(DARK_BG)
 

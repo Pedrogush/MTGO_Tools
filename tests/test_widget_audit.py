@@ -58,7 +58,7 @@ BUTTON_CLASSES = frozenset(
 
 #: Controls that wxMSW paints from a native theme, and that therefore need their
 #: specific ``stylize_*`` -- setting colours on them by hand is a documented
-#: no-op for most of this list. See ``widgets/stylize.py``'s measured table.
+#: no-op for most of this list. See ``docs/WXMSW_BEHAVIOUR.md``.
 NATIVE_THEMED_CLASSES = frozenset(
     {
         "wx.Choice",
@@ -73,8 +73,10 @@ NATIVE_THEMED_CLASSES = frozenset(
 
 #: Controls that take the near-white sunken client edge Windows draws at
 #: ``#FFFFFF`` and that no colour call reaches (phase 6). ``wx.SpinCtrl`` is not
-#: here because :func:`widgets.stylize.stylize_spinctrl` now strips it for every
-#: site, which is the better place for a control that never wants the edge.
+#: here because there is no longer one in the tree at all -- see
+#: :func:`test_no_bare_spin_control_survives_in_the_widget_tree`. Its field is a
+#: ``wx.TextCtrl`` inside a :class:`widgets.spin_ctrl.DarkSpinCtrl`, so it is
+#: covered by the ``wx.TextCtrl`` row above.
 CLIENT_EDGE_CLASSES = frozenset({"wx.TextCtrl", "wx.ListBox", "wx.ListCtrl"})
 
 #: Any callable that hands a widget to the styling layer. Local ``_stylize_*``
@@ -105,7 +107,7 @@ EDGE_STRIPPING_CALLS = frozenset(
 #: ``file:line`` sites where a control reaches the styling layer through a path
 #: this file's single-file name resolution cannot see.
 ROUTED_ELSEWHERE: dict[str, str] = {
-    "widgets/panels/card_table_panel/frame.py:181": (
+    "widgets/panels/card_table_panel/frame.py:182": (
         "The Grid/Table/Pile toggles are stashed in ``self._view_mode_buttons`` "
         "and re-stylized on every view change by "
         "``card_table_panel/toolbar.py::_refresh_view_mode_buttons`` -- they "
@@ -477,6 +479,50 @@ def test_no_bare_splitter_survives_in_the_widget_tree() -> None:
 
 
 # ---------------------------------------------------------------------------
+# One spin control
+# ---------------------------------------------------------------------------
+
+#: Every class that is, or wraps, a Win32 ``msctls_updown32``. ``wx.SpinButton``
+#: is the bare arrows; ``wx.SpinCtrl`` and ``wx.SpinCtrlDouble`` pair one with an
+#: ``Edit``. All three render the same light arrow blocks.
+SPIN_CLASSES = ("wx.SpinCtrl(", "wx.SpinCtrlDouble(", "wx.SpinButton(")
+
+
+def test_no_bare_spin_control_survives_in_the_widget_tree() -> None:
+    """The sixth guard of this shape, and the one where the fix is *not* styling.
+
+    A wxMSW ``wx.SpinCtrl`` is two HWNDs. The colours wx forwards reach the
+    ``Edit``; the ``msctls_updown32`` arrows beside it are a separate window
+    that stays light under **every** route wx or uxtheme offers -- measured
+    twice, once in phase 1 and once as an eight-variant probe in phase 9b
+    (``DarkMode_CFD``, ``DarkMode_Explorer``, ``DarkMode_Explorer::SPIN``,
+    ``DarkMode::SPIN``, ``DarkMode_CFD::SPIN``, ``ItemsView``, no visual style,
+    untouched), all with ``AllowDarkModeForWindow`` and ``WM_THEMECHANGED``.
+    Pixel-identical light arrows in all eight.
+
+    So, unlike :func:`test_every_native_themed_control_reaches_its_stylizer`,
+    there is no ``stylize_*`` call that fixes this one and no allowlist entry
+    that could be right: the control has to be
+    :class:`widgets.spin_ctrl.DarkSpinCtrl`. Note the shape of the failure this
+    guards against -- ``strip_native_client_edge`` on a ``wx.SpinCtrl`` was a
+    **silent no-op** for a whole phase because ``GetHandle()`` hands back the
+    arrows rather than the field.
+    """
+    offenders = [
+        f"{_rel(path)} ({cls.rstrip('(')})"
+        for path in _modules()
+        for cls in SPIN_CLASSES
+        if cls in path.read_text(encoding="utf-8") and _rel(path) != "widgets/spin_ctrl.py"
+    ]
+    assert offenders == [], (
+        "a wx.SpinCtrl's arrows are a separate msctls_updown32 HWND that no "
+        "colour, theme class or style flag reaches -- they render #ECECEC on "
+        "every dark surface. Use widgets.spin_ctrl.DarkSpinCtrl. "
+        f"Found in: {offenders}"
+    )
+
+
+# ---------------------------------------------------------------------------
 # One palette
 # ---------------------------------------------------------------------------
 
@@ -541,9 +587,11 @@ def test_no_colour_literal_reaches_a_widget_outside_the_allowlist() -> None:
       (``#E6EDF3`` for ``TEXT_PRIMARY``, ``#A8B2BD`` for ``TEXT_SECONDARY``,
       ``#7AA2F7`` for ``ACCENT_TEXT``) that no contrast test could see.
 
-    Docstrings are exempt: ``widgets/stylize.py``'s measured table quotes the
-    hex of everything wxMSW draws that we cannot reach, and that table is the
-    most reused artefact in this redesign.
+    Docstrings are exempt: several of them quote the hex of something wxMSW
+    draws that we cannot reach, next to the code that works around it. Phase 9
+    moved the biggest such collection out to ``docs/WXMSW_BEHAVIOUR.md``, but
+    the exemption stays -- the per-site notes that remain are the reason it
+    existed.
     """
     offenders: list[str] = []
     for path in _modules():
@@ -692,9 +740,10 @@ def test_no_call_site_uses_the_deprecated_multiline_font_bump() -> None:
             )
             if positional_multiline or keyword_multiline:
                 offenders.append(f"{_rel(path)}:{node.lineno}")
-    assert offenders == [], (
-        "pass level= instead; multiline= is a pre-type-scale 1-point bump:\n  "
-        + "\n  ".join(offenders)
+    assert (
+        offenders == []
+    ), "pass level= instead; multiline= is a pre-type-scale 1-point bump:\n  " + "\n  ".join(
+        offenders
     )
 
 

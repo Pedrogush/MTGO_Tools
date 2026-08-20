@@ -19,6 +19,13 @@ MESSAGES: dict[str, str] = {
     "tabs.stats.hand": "Terrenos na Mão Inicial",
     "tabs.stats.no_data": "Sem dados",
     "tabs.stats.no_deck": "Nenhum deck carregado.",
+    # Ver o catalogo en-US. "MDFC" fica em ingles: e a sigla que as cartas usam.
+    "tabs.count.cards.one": "{n} carta",
+    "tabs.count.cards.other": "{n} cartas",
+    "tabs.count.lands.one": "{n} terreno",
+    "tabs.count.lands.other": "{n} terrenos",
+    "tabs.count.mdfcs.one": "{n} MDFC",
+    "tabs.count.mdfcs.other": "{n} MDFCs",
     "tabs.empty.main": "Nenhum deck carregado",
     "tabs.empty.main.hint": "Escolha um deck na lista de resultados ou carregue um arquivo.",
     "tabs.empty.side": "Sideboard vazio",

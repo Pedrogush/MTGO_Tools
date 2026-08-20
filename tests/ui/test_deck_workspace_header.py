@@ -104,9 +104,7 @@ def test_the_count_label_is_the_row_member_that_gives_way(deck_selector_factory)
     try:
         table = frame.main_table
         header = _header_sizer(table)
-        item = next(
-            i for i in header.GetChildren() if i.GetWindow() is table.count_label
-        )
+        item = next(i for i in header.GetChildren() if i.GetWindow() is table.count_label)
         assert item.GetProportion() == 1
         assert not any(i.IsSpacer() and i.GetProportion() for i in header.GetChildren())
         style = table.count_label.GetWindowStyleFlag()

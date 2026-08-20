@@ -26,9 +26,7 @@ from tests.ui.conftest import pump_ui_events
 
 
 @pytest.mark.usefixtures("wx_app")
-def test_the_window_floor_does_not_move_with_the_loaded_card(
-    deck_selector_factory, wx_app
-) -> None:
+def test_the_window_floor_does_not_move_with_the_loaded_card(deck_selector_factory, wx_app) -> None:
     frame = deck_selector_factory()
     try:
         pump_ui_events(wx_app)

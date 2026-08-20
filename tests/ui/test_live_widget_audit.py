@@ -10,7 +10,7 @@ redesign kept losing widgets:
   and an allowlist is a promise nobody checks;
 * it also cannot see a call that *ran* and did nothing, which is this
   codebase's signature failure. Nine instances are documented in
-  ``widgets/stylize.py``'s table: colours set on a ``wx.Choice``, a foreground
+  ``docs/WXMSW_BEHAVIOUR.md``: colours set on a ``wx.Choice``, a foreground
   set on a ``wx.StatusBar``, ``SetHeaderAttr`` on a ``wx.ListCtrl``. Every one
   of them looked correct in the source.
 

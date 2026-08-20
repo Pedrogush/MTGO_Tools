@@ -110,9 +110,7 @@ class ModeSwitch(wx.Panel):
             # BU_EXACTFIT sizes to the text extent plus ~2px, and the selected
             # chip is bold; size_compact_button measures the bold face either
             # way, so the row keeps one width as the selection moves.
-            size_compact_button(
-                button, pad_x=MODE_SWITCH_PADDING_X, height=MODE_SWITCH_HEIGHT
-            )
+            size_compact_button(button, pad_x=MODE_SWITCH_PADDING_X, height=MODE_SWITCH_HEIGHT)
             button.Refresh()
         self.Layout()
 

@@ -6,6 +6,11 @@ from typing import TYPE_CHECKING
 
 import wx
 
+from widgets.panels.deck_research_panel.results_filter import (
+    EVENT_TYPE_VALUES,
+    PLACEMENT_FIELDS,
+)
+
 if TYPE_CHECKING:
     from widgets.panels.deck_research_panel.protocol import DeckResearchPanelProto
 
@@ -22,12 +27,16 @@ class DeckResearchPropertiesMixin(_Base):
     """
 
     def get_event_type_filter(self) -> str:
-        return self.event_type_choice.GetStringSelection()
+        # The canonical value, not the label on screen -- in pt-BR "All" reads
+        # "Todos" and results_filter matches on "All".
+        return self._option_value(self.event_type_choice, EVENT_TYPE_VALUES)
 
     def get_placement_filter(self) -> tuple[str, str, str]:
         return (
+            # The operators are symbols (-, >, =, ...), identical in both
+            # locales, so that one choice really is its own value.
             self.placement_op_choice.GetStringSelection(),
-            self.placement_field_choice.GetStringSelection(),
+            self._option_value(self.placement_field_choice, PLACEMENT_FIELDS),
             self.placement_value_filter.GetValue().strip(),
         )
 

@@ -69,7 +69,7 @@ focused, so 2.4.7 is unaffected.
 
 What wxMSW does to a **disabled** ``wx.TextCtrl``
 =================================================
-Newly measured in phase 6c and now in ``widgets/stylize.py``'s table: a
+Newly measured in phase 6c and now in ``docs/WXMSW_BEHAVIOUR.md``: a
 disabled ``wx.TextCtrl`` **ignores ``SetBackgroundColour`` entirely** and paints
 its client area ``#F0F0F0``. Setting the colour after ``Disable()``,
 ``disable_native_theme`` and Windows' own dark mode were all measured and all

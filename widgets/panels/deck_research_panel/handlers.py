@@ -4,6 +4,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from widgets.panels.deck_research_panel.results_filter import (
+    EVENT_TYPE_VALUES,
+    PLACEMENT_FIELDS,
+)
+
 if TYPE_CHECKING:
     from widgets.panels.deck_research_panel.protocol import DeckResearchPanelProto
 
@@ -16,8 +21,7 @@ class DeckResearchHandlersMixin(_Base):
     """UI-mutating setters, resets, and enable/disable helpers for :class:`DeckResearchPanel`."""
 
     def set_event_type_filter(self, value: str) -> None:
-        if not self.event_type_choice.SetStringSelection(value):
-            self.event_type_choice.SetSelection(0)
+        self._select_option(self.event_type_choice, EVENT_TYPE_VALUES, value)
 
     def reset_event_type_filter(self) -> None:
         self.event_type_choice.SetSelection(0)
@@ -25,8 +29,7 @@ class DeckResearchHandlersMixin(_Base):
     def set_placement_filter(self, op: str, field: str, value: str) -> None:
         if not self.placement_op_choice.SetStringSelection(op):
             self.placement_op_choice.SetSelection(0)
-        if not self.placement_field_choice.SetStringSelection(field):
-            self.placement_field_choice.SetSelection(0)
+        self._select_option(self.placement_field_choice, PLACEMENT_FIELDS, field)
         self.placement_value_filter.ChangeValue(value)
 
     def reset_placement_filter(self) -> None:

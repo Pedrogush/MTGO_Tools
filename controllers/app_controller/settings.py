@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 
 from loguru import logger
 
-from utils.i18n import normalize_locale
+from utils.i18n import normalize_locale, set_current_locale
 
 if TYPE_CHECKING:
     from controllers.app_controller.protocol import AppControllerProto
@@ -74,6 +74,10 @@ class SettingsMixin(_Base):
 
     def set_language(self, language: str) -> None:
         normalized = normalize_locale(language)
+        # Always publish, even when nothing changed: this is the one place
+        # that knows the language, and the seven top-level windows with no
+        # locale argument read it from utils.i18n (see set_current_locale).
+        set_current_locale(normalized)
         if self.current_language == normalized:
             return
         self.current_language = normalized

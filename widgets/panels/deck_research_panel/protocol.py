@@ -48,6 +48,14 @@ class DeckResearchPanelProto(Protocol):
     placement_value_filter: wx.TextCtrl
     player_name_filter: wx.TextCtrl
 
+    # Defined by FiltersBuilderMixin; used by the getter/setter mixins, which
+    # is what makes them cross-mixin surface.
+    def _option_labels(self, values: tuple[str, ...], prefix: str) -> list[str]: ...
+    @staticmethod
+    def _option_value(choice: wx.Choice, values: tuple[str, ...]) -> str: ...
+    @staticmethod
+    def _select_option(choice: wx.Choice, values: tuple[str, ...], value: str) -> None: ...
+
     deck_action_buttons: DeckActionButtons
     summary_text: wx.html.HtmlWindow
     summary_spark: SparkBarPanel
