@@ -122,6 +122,7 @@ class AutomationServer(
             "focus_text_input": self._handle_focus_text_input,
             # Mouse-wheel scroll latency instrumentation
             "wheel_scroll_start": self._handle_wheel_scroll_start,
+            "scroll_lines": self._handle_scroll_lines,
             "get_scroll_perf": self._handle_get_scroll_perf,
             # Splitter sash (the mainboard/sideboard split)
             "get_sash": self._handle_get_sash,

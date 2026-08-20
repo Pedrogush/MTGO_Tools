@@ -316,6 +316,28 @@ class AutomationClient:
             interval_ms=interval_ms,
         )
 
+    def scroll_lines(
+        self,
+        zone: str = "main",
+        view: str = "grid",
+        count: int = 10,
+        lines: int = 1,
+        interval_ms: float = 60.0,
+    ) -> dict[str, Any]:
+        """Scroll a card view through wx's own ``WM_VSCROLL`` path, repeatedly.
+
+        The scrollbar/keyboard path, which no application code sits on. Returns
+        as soon as the burst is scheduled so a video grab can record it.
+        """
+        return self._send_command(
+            "scroll_lines",
+            zone=zone,
+            view=view,
+            count=count,
+            lines=lines,
+            interval_ms=interval_ms,
+        )
+
     def get_scroll_perf(self, zone: str = "main", view: str = "grid") -> dict[str, Any]:
         """Read back the recorded wheel-scroll perf trace (input/paint events)."""
         return self._send_command("get_scroll_perf", zone=zone, view=view)

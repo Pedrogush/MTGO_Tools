@@ -358,6 +358,19 @@ def cmd_set_sash(client: AutomationClient, args: argparse.Namespace) -> int:
     return 0 if "error" not in result else 1
 
 
+def cmd_scroll_lines(client: AutomationClient, args: argparse.Namespace) -> int:
+    """Scroll a card view repeatedly through wx's own WM_VSCROLL path."""
+    result = client.scroll_lines(
+        zone=args.zone,
+        view=args.view,
+        count=args.count,
+        lines=args.lines,
+        interval_ms=args.interval_ms,
+    )
+    print(format_output(result, args.json))
+    return 0 if result.get("started") else 1
+
+
 def cmd_sash_drag(client: AutomationClient, args: argparse.Namespace) -> int:
     """Sweep a splitter's sash up and down like a live drag."""
     result = client.sash_drag(
@@ -671,6 +684,22 @@ Notes:
     # toggle-adv-filters
     subparsers.add_parser("toggle-adv-filters", help="Toggle advanced filters in builder panel")
 
+    # scroll-lines
+    p = subparsers.add_parser(
+        "scroll-lines", help="Scroll a card view through wx's own WM_VSCROLL path"
+    )
+    p.add_argument("--zone", default="main", help="Deck zone (main/side)")
+    p.add_argument("--view", default="grid", help="Card view (grid/pile)")
+    p.add_argument("--count", type=int, default=10, help="Scrolls to fire (default 10)")
+    p.add_argument("--lines", type=int, default=1, help="Lines per scroll (default 1)")
+    p.add_argument(
+        "--interval-ms",
+        type=float,
+        default=60.0,
+        dest="interval_ms",
+        help="Delay between scrolls in ms (default 60)",
+    )
+
     # get-sash / set-sash / sash-drag
     p = subparsers.add_parser("get-sash", help="Report a splitter's sash position and range")
     p.add_argument(
@@ -757,6 +786,7 @@ Notes:
         "toggle-adv-filters": cmd_toggle_adv_filters,
         "start-video": cmd_start_video,
         "stop-video": cmd_stop_video,
+        "scroll-lines": cmd_scroll_lines,
         "get-sash": cmd_get_sash,
         "set-sash": cmd_set_sash,
         "sash-drag": cmd_sash_drag,

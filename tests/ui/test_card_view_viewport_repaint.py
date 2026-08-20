@@ -1,69 +1,53 @@
-"""#983: moving a card view's viewport smears the edge fade.
+"""#983: moving a card view's viewport smeared the edge fade.
 
-What breaks
------------
+What broke
+----------
 The redesign's S5 fade (:mod:`widgets.panels.card_table_panel.edge_fade`) is the
 only thing the card views paint against the **viewport** rather than against the
 content: a 24px band hugging the pane edge. Everything else they draw is a blit
 out of a content-sized canvas, so it stays correct wherever the window's pixels
-end up.
+end up. A band does not, and wxMSW preserves whatever pixels it can.
 
-wxMSW keeps whatever pixels it can when the viewport moves and invalidates only
-the strip it cannot, and a ``wx.PaintDC`` is clipped to that update region by
-``BeginPaint``. So the fade painted by the *previous* frame survives wherever
-those preserved pixels ended up, and no paint handler is allowed to reach it.
-Both gestures do it, for the same reason:
+Captured off the screen mid-gesture, with the band temporarily rendered opaque
+so a stranded one could be counted: a twelve-notch wheel burst left four bands
+at exactly the 64px notch spacing, still there when the capture ended 500ms
+after the gesture, and a live sash sweep stacked them 90px deep.
 
-* **A wheel scroll.** wx moves the origin by blitting (``ScrollWindow``).
-  Logged from the pile view's own paint handler, six notches at 64px::
+What is pinned here
+-------------------
+Three independent levers hold the fix up, and each is pinned by the test that
+can actually see it:
 
-      region=(0, 289, 912, 64)  client=(912, 353)  view_y=124
-      region=(0, 289, 912, 64)  client=(912, 353)  view_y=188
+1. :func:`edge_fade.begin_viewport_paint` widens a paint's clip to the whole
+   client. Measured on the ``PaintDC``'s own HDC against a control window that
+   does not call it -- the only assertion here that depends on the machine, and
+   the control is what makes it honest (see below).
+2. Every gesture that moves the origin goes through
+   :func:`scroll_snap.scroll_viewport`, which keeps wx's scroll blit off the
+   screen. Asserted on the calls, so it does not vary with anything.
+3. Both card views carry ``wx.FULL_REPAINT_ON_RESIZE``, so MSW does not preserve
+   bits across the resizes of a live sash drag.
 
-  The band was at y 329..353; the blit carried it to y 265..289, just above the
-  strip wx asked for. One stale band per notch, 64px apart, still there 750ms
-  after the burst ended.
-* **A sash drag.** No blit needed -- a pane that grows repaints only the strip
-  it gained, once per mouse-move, so the swept band fills with overlapping
-  copies of the fade.
-
-What is pinned
---------------
-1. That a **resize** of a card view asks for a repaint of the whole client,
-   every time and in both directions, rather than trusting the region wx
-   invalidated.
-2. That a **scroll** of a window carrying :func:`edge_fade.
-   require_whole_client_repaints` really does hand its paint handler the whole
-   client, where an otherwise identical window gets a thin strip.
-3. That both card views actually carry it.
-
-(1) is asserted on the request rather than on pixels deliberately: what the view
-*asks for* does not vary with anything about the machine.
-
-(2) cannot be, because there is no request -- the whole point is that wx does
-this from C++ without consulting us, so the only honest assertion is on the
-update region the paint handler is handed. That measurement **does** vary with
-the machine: an occluded window has no preserved pixels, so MSW invalidates all
-of it and the bug hides. An earlier attempt at this test passed against unfixed
-code for exactly that reason. The guard is a **control window** built beside the
-subject and scrolled identically: if the control does not reproduce the partial
-region, this machine cannot see the defect and the test skips instead of
-passing. Reverting the fix makes the subject behave like its control, which is
-a failure and not a skip, because the control still reproduces.
-
-What no test here covers: that the resulting *pixels* have no stale band in them
-mid-gesture. That was verified by capturing the running app's screen during both
-gestures (see PR #983); it needs a real compositor and a real gesture, so it
-stays a manual check.
+**What no test here covers, and cannot:** that the pixels on screen hold no
+stale band while a gesture is in flight. That needs a real compositor, a real
+gesture and a frame grab of the screen surface; it was verified that way for
+#983 (both gestures, before and after, frames read back and counted) and it
+stays a manual check. Everything below is a proxy for it -- a good one, but the
+distinction is exactly what let an earlier attempt at this test pass against
+code the reporter could see was broken.
 """
 
 from __future__ import annotations
+
+import ctypes
+from ctypes import wintypes
 
 import pytest
 import wx
 
 from tests.ui.conftest import pump_ui_events
-from widgets.panels.card_table_panel import edge_fade
+from widgets.panels.card_table_panel import edge_fade, scroll_snap
+from widgets.panels.card_table_panel.scrolling import inject_wheel_notches
 
 #: Enough distinct cards that both zones are several rows deep at the frame's
 #: enforced floor, so both views really do have a clipped edge to fade.
@@ -88,10 +72,6 @@ _DECK = [
     "Vexing Bauble",
     "Damping Sphere",
 ]
-
-#: Pixels of sash travel per step. Smaller than the 24px fade band, which is what
-#: makes the stale bands overlap into a solid smear rather than read as stripes.
-_DRAG_STEP_PX = 15
 
 
 def _deck_tables_frame(deck_selector_factory, wx_app):
@@ -118,147 +98,94 @@ def _view(frame, zone: str, mode: str):
     return getattr(table, "pile_view" if mode == "pile" else "grid_view")
 
 
-def _sash_range(splitter: wx.SplitterWindow) -> tuple[int, int]:
-    minimum = splitter.GetMinimumPaneSize()
-    return minimum, splitter.GetClientSize().GetHeight() - minimum - splitter.GetSashSize()
-
-
-@pytest.mark.parametrize("zone", ["main", "side"])
-@pytest.mark.parametrize("mode", ["grid", "pile"])
-@pytest.mark.usefixtures("wx_app")
-def test_a_sash_drag_repaints_the_whole_card_view(
-    deck_selector_factory, wx_app, monkeypatch, zone, mode
-) -> None:
-    """Every step of a sash drag asks the resized view for a full repaint (#983).
-
-    Anything less leaves the previous step's edge fade on screen at the edge the
-    pane no longer has, which is the smear.
-    """
-    frame = _deck_tables_frame(deck_selector_factory, wx_app)
-    try:
-        view = _view(frame, zone, mode)
-        splitter = frame.deck_split
-        low, high = _sash_range(splitter)
-        assert high - low > 4 * _DRAG_STEP_PX, (
-            f"the split has no room to drag in (sash range {low}..{high}); "
-            "the frame is not laid out, so this test would prove nothing"
-        )
-
-        requested: list[tuple[bool, wx.Rect | None]] = []
-        monkeypatch.setattr(
-            view,
-            "Refresh",
-            lambda eraseBackground=True, rect=None: requested.append((eraseBackground, rect)),
-        )
-
-        splitter.SetSashPosition(high)
-        pump_ui_events(wx_app)
-
-        # Down and back up: one leg grows this pane and the other shrinks it,
-        # and before the fix the two failed differently -- a partial strip, and
-        # no repaint at all.
-        position = high
-        heights: list[int] = []
-        for target in (low, high):
-            while position != target:
-                step = min(_DRAG_STEP_PX, abs(target - position))
-                position += step if target > position else -step
-                requested.clear()
-                splitter.SetSashPosition(position)
-                height = view.GetClientSize().GetHeight()
-                assert heights[-1:] != [height], (
-                    f"the {zone} {mode} view did not resize when the sash moved to "
-                    f"{position} (still {height}px); this step proves nothing"
-                )
-                heights.append(height)
-                assert requested, (
-                    f"the {zone} {mode} view was not asked to repaint when the sash "
-                    f"moved to {position}: wxMSW invalidates only the strip it just "
-                    "exposed, so the edge fade stays painted at the old edge"
-                )
-                assert all(rect is None for _erase, rect in requested), (
-                    f"the {zone} {mode} view asked to repaint only {requested}; the "
-                    "fade sits at whichever edge the pane now has, so a partial "
-                    "repaint is what smears it"
-                )
-
-        assert len(set(heights)) > 4, (
-            f"the {zone} {mode} view barely resized during the drag "
-            f"(heights seen: {sorted(set(heights))})"
-        )
-    finally:
-        frame.Destroy()
-
-
 # ---------------------------------------------------------------------------
-# The scroll half. See the module docstring for why this one reads pixel-level
-# update regions and carries its own control.
+# 1. The clip a paint handler is given.
 
-_PROBE_SIZE = (360, 240)
+_PROBE_SIZE = (360, 260)
 _PROBE_CONTENT_H = 4000
-#: Scroll offsets to step through. Each is far enough from the last to leave a
-#: retained strip taller than the fade band, so a partial region would really
-#: strand one.
+#: Scroll offsets to step through. Each leaves a retained strip taller than the
+#: 24px fade band, so a clip short of the client would really strand one.
 _PROBE_OFFSETS = (64, 128, 192, 256)
 
 
-class _RegionProbe(wx.ScrolledWindow):
-    """A scrolled window that records the update region of every paint."""
+def _clip_box(dc: wx.DC) -> wx.Rect:
+    """The clip ``BeginPaint`` actually put on ``dc``, read off its HDC.
 
-    def __init__(self, parent: wx.Window, *, whole_client: bool) -> None:
+    ``wx.DC.GetClippingBox`` reports the *application's* clipping region, which
+    nothing here sets; the region that matters is the one Windows installed on
+    the device context before the handler ran, and ``GetClipBox`` is the only
+    way to see it.
+    """
+    rect = wintypes.RECT()
+    ctypes.windll.gdi32.GetClipBox(wintypes.HDC(dc.GetHandle()), ctypes.byref(rect))
+    return wx.Rect(rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top)
+
+
+class _ClipProbe(wx.ScrolledWindow):
+    """A scrolled window that records the clip of every paint it is given."""
+
+    def __init__(self, parent: wx.Window, *, widen: bool) -> None:
         super().__init__(parent, style=wx.BORDER_NONE)
+        self.widen = widen
         self.SetBackgroundStyle(wx.BG_STYLE_PAINT)
         self.SetScrollRate(1, 1)
         self.SetVirtualSize((_PROBE_SIZE[0], _PROBE_CONTENT_H))
-        if whole_client:
-            edge_fade.require_whole_client_repaints(self)
-        self.regions: list[wx.Rect] = []
+        self.clips: list[wx.Rect] = []
         self.Bind(wx.EVT_PAINT, self._on_paint)
 
     def _on_paint(self, _event: wx.PaintEvent) -> None:
-        dc = wx.AutoBufferedPaintDC(self)
-        self.PrepareDC(dc)
+        if self.widen:
+            edge_fade.begin_viewport_paint(self)
+        dc = wx.PaintDC(self)
+        self.clips.append(_clip_box(dc))
         dc.SetBackground(wx.Brush(wx.Colour(20, 20, 20)))
         dc.Clear()
-        self.regions.append(self.GetUpdateRegion().GetBox())
 
 
-def _scrolled_regions(probe: _RegionProbe, frame: wx.Frame, wx_app: wx.App) -> list[wx.Rect]:
-    """Step ``probe`` through the offsets, returning one region per paint."""
+def _scrolled_clips(probe: _ClipProbe, frame: wx.Frame, wx_app: wx.App) -> list[wx.Rect]:
+    """Step ``probe`` through the offsets, returning one clip per paint."""
     probe.Scroll(0, 0)
     frame.Update()
     pump_ui_events(wx_app)
-    probe.regions.clear()
+    probe.clips.clear()
     for offset in _PROBE_OFFSETS:
         probe.Scroll(0, offset)
         frame.Update()
         pump_ui_events(wx_app)
-    return list(probe.regions)
+    return list(probe.clips)
 
 
 @pytest.mark.usefixtures("wx_app")
-def test_a_scroll_invalidates_the_whole_client(wx_app) -> None:
-    """A scroll must repaint every strip, not only the one it exposed (#983).
+def test_a_scrolled_paint_is_clipped_to_the_whole_client(wx_app) -> None:
+    """``begin_viewport_paint`` must widen the paint it is called from (#983).
 
-    The control beside the subject is what makes this test mean anything: it is
-    the same window without :func:`edge_fade.require_whole_client_repaints`, and
-    if *it* is handed the whole client too then this machine is not preserving
-    pixels across a scroll and cannot see the defect at all.
+    ``BeginPaint`` clips the ``wx.PaintDC`` to the update region before the
+    handler runs, so a stale band outside it is unreachable however it is
+    composited. Invalidating from inside ``WM_PAINT`` and before the ``PaintDC``
+    exists is what makes the clip the whole client instead.
+
+    The control beside the subject is what makes this mean anything: it is the
+    same window without the call, and if *it* is handed the whole client too
+    then this machine is not preserving pixels across a scroll and cannot tell
+    the fix from its absence. An occluded or unredirected window does exactly
+    that, and that is how an earlier version of this test passed against unfixed
+    code -- so the control failing to reproduce is a **skip**, never a pass.
     """
     frame = wx.Frame(None, size=(2 * _PROBE_SIZE[0] + 60, _PROBE_SIZE[1] + 60))
     try:
         sizer = wx.BoxSizer(wx.HORIZONTAL)
-        control = _RegionProbe(frame, whole_client=False)
-        subject = _RegionProbe(frame, whole_client=True)
+        control = _ClipProbe(frame, widen=False)
+        subject = _ClipProbe(frame, widen=True)
         sizer.Add(control, 1, wx.EXPAND)
         sizer.Add(subject, 1, wx.EXPAND)
         frame.SetSizer(sizer)
         frame.Show()
+        frame.Raise()
         frame.Update()
         pump_ui_events(wx_app)
 
-        control_regions = _scrolled_regions(control, frame, wx_app)
-        subject_regions = _scrolled_regions(subject, frame, wx_app)
+        control_clips = _scrolled_clips(control, frame, wx_app)
+        subject_clips = _scrolled_clips(subject, frame, wx_app)
 
         control_h = control.GetClientSize().GetHeight()
         subject_h = subject.GetClientSize().GetHeight()
@@ -266,45 +193,177 @@ def test_a_scroll_invalidates_the_whole_client(wx_app) -> None:
             f"the probes are too short to retain anything across a scroll "
             f"(control {control_h}px, subject {subject_h}px); this proves nothing"
         )
-        assert control_regions and subject_regions, (
+        assert control_clips and subject_clips, (
             "neither probe painted at all when scrolled; the window is not being "
             "composited, so nothing here can be measured"
         )
 
-        if all(region.GetHeight() >= control_h for region in control_regions):
+        if all(clip.GetHeight() >= control_h for clip in control_clips):
             pytest.skip(
-                "this machine invalidates the whole client on a scroll even "
-                f"without the fix (control regions {control_regions}); it cannot "
+                "this machine hands a scrolled window its whole client even "
+                f"without the fix (control clips {control_clips}); it cannot "
                 "distinguish the fix from its absence -- an occluded or "
                 "unredirected window does this"
             )
 
-        stale = [region for region in subject_regions if region.GetHeight() < subject_h]
-        assert not stale, (
-            f"a scroll handed the view only {stale} of its {subject_h}px client. A "
-            "wx.PaintDC is clipped to that, so the previous frame's edge fade -- "
-            "which the scroll blitted up into the retained pixels -- can never be "
-            "erased, and the card rows come out smeared with dark bands"
+        narrow = [clip for clip in subject_clips if clip.GetHeight() < subject_h]
+        assert not narrow, (
+            f"a scrolled paint was clipped to {narrow} of a {subject_h}px client. "
+            "Nothing the handler draws can reach outside that, so the previous "
+            "frame's edge fade -- which the scroll blitted up into the retained "
+            "pixels -- can never be erased, and the card rows come out smeared"
         )
     finally:
         frame.Destroy()
         pump_ui_events(wx_app)
 
 
+@pytest.mark.usefixtures("wx_app")
+def test_widening_is_limited_to_paints_that_follow_a_viewport_move() -> None:
+    """A repeat paint at the same viewport must stay the targeted repaint.
+
+    The async image pipeline patches one card into the canvas and calls
+    ``RefreshRect``; widening *that* would undo an optimisation the fix has no
+    reason to touch, because a fade cannot go stale where nothing moved.
+    """
+    frame = wx.Frame(None, size=(*_PROBE_SIZE,))
+    try:
+        window = wx.ScrolledWindow(frame)
+        window.SetScrollRate(1, 1)
+        window.SetVirtualSize((_PROBE_SIZE[0], _PROBE_CONTENT_H))
+        frame.Show()
+
+        assert edge_fade.begin_viewport_paint(window) is True, (
+            "the first paint of a window has no previous viewport to compare "
+            "against, so it must be treated as a move"
+        )
+        assert edge_fade.begin_viewport_paint(window) is False, (
+            "a second paint at the same view start and client size cannot have "
+            "stranded anything, so it must not be widened"
+        )
+        window.Scroll(0, 64)
+        assert edge_fade.begin_viewport_paint(window) is True, (
+            "a scroll moves the viewport out from under the fade, so the paint "
+            "that follows it has to cover the whole client"
+        )
+        window.SetSize(_PROBE_SIZE[0], _PROBE_SIZE[1] // 2)
+        assert edge_fade.begin_viewport_paint(window) is True, (
+            "a resize moves the edge the fade is anchored to just as a scroll "
+            "does, so the paint that follows it has to cover the whole client"
+        )
+    finally:
+        frame.Destroy()
+
+
+# ---------------------------------------------------------------------------
+# 2. Keeping wx's scroll blit off the screen.
+
+
+@pytest.mark.usefixtures("wx_app")
+def test_scroll_viewport_keeps_the_blit_off_the_screen() -> None:
+    """``Scroll`` has to happen between ``Freeze`` and ``Thaw`` (#983).
+
+    ``wxScrollHelper::DoScroll`` blits the window's pixels to their new position
+    and repaints only the strip the blit could not cover, so for as long as that
+    result is on screen the previous frame's fade band is on screen with it.
+    Under ``Freeze`` (``WM_SETREDRAW(FALSE)``) the blit paints nothing at all,
+    and the ``Thaw`` + ``Update`` that follow put the next whole frame up in one
+    step.
+    """
+    frame = wx.Frame(None, size=(*_PROBE_SIZE,))
+    try:
+        window = wx.ScrolledWindow(frame)
+        window.SetScrollRate(1, 1)
+        window.SetVirtualSize((_PROBE_SIZE[0], _PROBE_CONTENT_H))
+        frame.Show()
+
+        calls: list[str] = []
+        for name in ("Freeze", "Thaw", "Update"):
+            original = getattr(window, name)
+
+            def record(*args, _name=name, _original=original, **kwargs):
+                calls.append(_name)
+                return _original(*args, **kwargs)
+
+            setattr(window, name, record)
+        original_scroll = window.Scroll
+
+        def record_scroll(*args, **kwargs):
+            calls.append("Scroll")
+            return original_scroll(*args, **kwargs)
+
+        window.Scroll = record_scroll
+
+        scroll_snap.scroll_viewport(window, -1, 64)
+
+        assert calls == ["Freeze", "Scroll", "Thaw", "Update"], (
+            f"scroll_viewport did {calls}; the Scroll has to sit inside the "
+            "Freeze/Thaw pair or wx's scroll blit reaches the screen carrying "
+            "the previous frame's edge fade with it"
+        )
+    finally:
+        frame.Destroy()
+
+
 @pytest.mark.parametrize("zone", ["main", "side"])
 @pytest.mark.parametrize("mode", ["grid", "pile"])
 @pytest.mark.usefixtures("wx_app")
-def test_the_card_views_ask_for_whole_client_repaints(
-    deck_selector_factory, wx_app, zone, mode
+def test_a_wheel_notch_goes_through_scroll_viewport(
+    deck_selector_factory, wx_app, monkeypatch, zone, mode
 ) -> None:
-    """The property the test above measures has to be on the real views."""
+    """The wheel is the gesture that reported #983; it must not call ``Scroll``."""
     frame = _deck_tables_frame(deck_selector_factory, wx_app)
     try:
         view = _view(frame, zone, mode)
-        assert view.IsDoubleBuffered(), (
-            f"the {zone} {mode} view is not asking wxMSW to repaint its whole "
-            "client on a scroll (edge_fade.require_whole_client_repaints), so "
-            "every wheel notch strands another copy of the edge fade"
+        view.Scroll(0, 0)
+        pump_ui_events(wx_app)
+
+        routed: list[tuple[int, int]] = []
+        monkeypatch.setattr(
+            scroll_snap,
+            "scroll_viewport",
+            lambda window, x, y: routed.append((x, y)),
+        )
+        monkeypatch.setattr(
+            view,
+            "Scroll",
+            lambda *args, **kwargs: pytest.fail(
+                f"the {zone} {mode} view's wheel called Scroll directly; wx's "
+                "scroll blit then reaches the screen and strands the edge fade"
+            ),
+        )
+        inject_wheel_notches(view, 1, up=False)
+
+        assert routed, (
+            f"a wheel notch on the {zone} {mode} view moved the origin without "
+            "going through scroll_viewport"
+        )
+    finally:
+        frame.Destroy()
+
+
+# ---------------------------------------------------------------------------
+# 3. Not preserving bits across a resize.
+
+
+@pytest.mark.parametrize("zone", ["main", "side"])
+@pytest.mark.parametrize("mode", ["grid", "pile"])
+@pytest.mark.usefixtures("wx_app")
+def test_the_card_views_repaint_fully_on_resize(deck_selector_factory, wx_app, zone, mode) -> None:
+    """Both views must be on wx's redraw-on-resize window class (#983).
+
+    A live sash drag resizes a pane faster than it can repaint. Without this
+    style MSW keeps the bits it can on every one of those resizes, and each
+    skipped repaint leaves another fade band behind -- which is why the sash
+    drag reads as a solid dark wash rather than as separate stripes.
+    """
+    frame = _deck_tables_frame(deck_selector_factory, wx_app)
+    try:
+        view = _view(frame, zone, mode)
+        assert view.GetWindowStyleFlag() & wx.FULL_REPAINT_ON_RESIZE, (
+            f"the {zone} {mode} view does not carry wx.FULL_REPAINT_ON_RESIZE, "
+            "so wxMSW preserves its pixels across a resize and a sash drag "
+            "stacks stale edge fades over the card art"
         )
     finally:
         frame.Destroy()

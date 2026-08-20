@@ -114,7 +114,9 @@ class DeckPileView(wx.ScrolledWindow):
         on_zone_transfer: Callable[[list[str], wx.Point], bool] | None = None,
         get_printing_image: Callable[[str], Path | None] | None = None,
     ) -> None:
-        super().__init__(parent, style=wx.HSCROLL | wx.VSCROLL)
+        # FULL_REPAINT_ON_RESIZE: see DeckGridView -- MSW must not keep bits
+        # across a resize or a live sash drag stacks stale edge fades (#983).
+        super().__init__(parent, style=wx.HSCROLL | wx.VSCROLL | wx.FULL_REPAINT_ON_RESIZE)
         self.zone = zone
         self._get_metadata = get_metadata
         self._get_card_image = get_card_image
@@ -185,17 +187,7 @@ class DeckPileView(wx.ScrolledWindow):
         # cards no longer snap in coarse jumps. The wheel scrolls a larger step
         # (see _on_wheel) since a notch would otherwise move only a few px.
         self.SetScrollRate(CARD_VIEW_SCROLL_RATE, CARD_VIEW_SCROLL_RATE)
-        # A scroll must repaint every strip, not just the one it exposed (#983):
-        # the edge fade is painted against the viewport, so wx's blit-and-
-        # invalidate-the-gap carries the previous frame's band into the retained
-        # pixels, where no paint handler may reach it. This is what reverses the
-        # "no SetDoubleBuffered(True)" this view used to carry -- that comment
-        # was right about the mechanism and wrong about wanting it. See
-        # ``edge_fade`` for the levers that were tried first and do not work.
-        edge_fade.require_whole_client_repaints(self)
-
         self.Bind(wx.EVT_PAINT, self._on_paint)
-        self.Bind(wx.EVT_SIZE, self._on_size)
         self.Bind(wx.EVT_LEFT_DOWN, self._on_left_down)
         self.Bind(wx.EVT_LEFT_UP, self._on_left_up)
         self.Bind(wx.EVT_RIGHT_DOWN, self._on_right_down)
@@ -225,19 +217,6 @@ class DeckPileView(wx.ScrolledWindow):
     def _on_scrollwin(self, event: wx.ScrollWinEvent) -> None:
         # Shared with the grid view so both settle identically (see scroll_snap).
         scroll_snap.handle_scrollwin(self, event)
-
-    def _on_size(self, event: wx.SizeEvent) -> None:
-        """Repaint the *whole* client, not just the strip wx exposed (#983).
-
-        The pile layout is width-independent so nothing here needs recomputing;
-        the repaint is for the edge fade alone. wxMSW invalidates only the newly
-        exposed strip of a resized window, which leaves the fade painted against
-        the *previous* viewport edge sitting un-erased in the middle of the
-        retained pixels -- once per mouse-move of a live sash drag. See the
-        module docstring of ``edge_fade``.
-        """
-        event.Skip()
-        self.Refresh()
 
     # ----- public API consumed by CardTablePanel -----
     def set_cards(self, cards: list[dict[str, Any]]) -> None:
@@ -423,6 +402,11 @@ class DeckPileView(wx.ScrolledWindow):
     # ----- paint -----
     def _on_paint(self, _event: wx.PaintEvent) -> None:
         t0 = perf_counter()
+        # Must run before the PaintDC exists: it is what widens this paint's
+        # clip to the whole client when the viewport has moved under the edge
+        # fade (#983). Its result says the update region can no longer be
+        # trusted to cull with.
+        whole_client = edge_fade.begin_viewport_paint(self)
         dc = wx.AutoBufferedPaintDC(self)
         self.PrepareDC(dc)
         dc.SetBackground(wx.Brush(wx.Colour(*DARK_PANEL)))
@@ -447,7 +431,7 @@ class DeckPileView(wx.ScrolledWindow):
             self._draw_overlays(dc)
         else:
             # Oversized pile: draw directly, culled to the repaint region.
-            dirty = self._dirty_logical_rect()
+            dirty = self._dirty_logical_rect(whole_client)
             for pile_idx, (label, members) in enumerate(self._piles):
                 self._draw_pile(dc, pile_idx, label, members, dirty)
             self._draw_overlays(dc, dirty)
@@ -467,12 +451,16 @@ class DeckPileView(wx.ScrolledWindow):
         # input (no-op unless the perf recorder is enabled).
         scroll_perf.record_paint(self, *self.GetViewStart(), dur_ms=(perf_counter() - t0) * 1000.0)
 
-    def _dirty_logical_rect(self) -> wx.Rect | None:
+    def _dirty_logical_rect(self, whole_client: bool = False) -> wx.Rect | None:
         """The region wx asked us to repaint, in logical (scrolled) coords.
 
-        ``None`` means repaint everything (empty update region, e.g. a full
-        ``Refresh``), so nothing is dropped from a non-scroll repaint.
+        ``None`` means repaint everything -- an empty update region (e.g. a full
+        ``Refresh``), or ``whole_client``, which is
+        :func:`edge_fade.begin_viewport_paint` reporting that it widened this
+        paint's clip past what ``GetUpdateRegion`` still remembers (#983).
         """
+        if whole_client:
+            return None
         box = self.GetUpdateRegion().GetBox()
         if box.IsEmpty():
             return None

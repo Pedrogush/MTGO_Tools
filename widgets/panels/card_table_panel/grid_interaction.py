@@ -54,15 +54,10 @@ class GridInteractionMixin:
     # ----- event handlers -----
     def _on_size(self, event: wx.SizeEvent) -> None:
         event.Skip()
+        old_cols = self._cols
         self._recompute_layout()
-        # Unconditional, not just when the column count changed (#983): wxMSW
-        # invalidates only the newly exposed strip of a resized window, so the
-        # edge fade -- the one thing painted against the viewport instead of
-        # against the content -- is left behind wherever the old edge was. A
-        # live sash drag resizes the view once per mouse-move, so those stale
-        # bands stack up into the smear the fade is supposed to prevent. See
-        # the module docstring of ``edge_fade``.
-        self.Refresh()
+        if self._cols != old_cols:
+            self.Refresh()
 
     def _on_left_down(self, event: wx.MouseEvent) -> None:
         point = self._to_logical(event.GetPosition())

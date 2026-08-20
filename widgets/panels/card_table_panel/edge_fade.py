@@ -5,16 +5,9 @@ are sliced in half by the pane edge with **no fade**, no partial-row suppression
 and no scroll affordance". A partial row is the correct thing for a scrolling
 pane to show -- it is how the pane says there is more -- but only if it reads as
 *dissolving* past the edge rather than as a clipped render. That is this
-module's whole job.
-
-The bottom band is drawn **always**; the top band only when the view is scrolled
-off its origin. The asymmetry is deliberate. The bottom edge of a scrolling pane
-is where a row gets sliced, and a band whose colour *is* the pane background
-costs nothing where there is no content under it -- scrolled fully down, or with
-a deck shorter than the viewport, it composites background over background and
-is invisible. Making it conditional bought no pixels and cost the property below.
-The **top** band keeps its condition because that is where the affordance now
-lives: no fade at the top means you are at the top.
+module's whole job, and it is drawn on an edge **only when there is content past
+it**, so it doubles as the missing scroll affordance: no fade at the top means
+you are at the top.
 
 Why a pre-rendered alpha bitmap and not a gradient brush
 --------------------------------------------------------
@@ -33,43 +26,38 @@ nothing.
 the buffered DC's contents are discarded. Both views already set it -- if either
 ever stops, this fade is the first thing that silently vanishes.
 
-Why the whole client must be invalidated whenever the viewport moves (#983)
----------------------------------------------------------------------------
+Why moving the viewport used to smear it (#983)
+-----------------------------------------------
 The fade is the one thing these views paint against the *viewport* rather than
 against the content, so it is the one thing that goes stale when the viewport
-moves under it. Both ways of moving it strand a copy, for the same reason:
-wxMSW keeps the pixels it can and invalidates only the strip it cannot, and a
-``wx.PaintDC`` is clipped to that update region by ``BeginPaint``. Nothing a
-paint handler draws can repair a pixel outside it -- which is why the fix is not
-a different *drawing*, it is a wider update region.
+moves under it. Everything else scrolls or resizes with the pixels and stays
+correct; a band does not, and wxMSW keeps whatever pixels it can.
 
-* **Scrolling.** wx moves the viewport by blitting (``ScrollWindow``) and
-  invalidating only the newly exposed strip. Logged from the pile view's own
-  paint handler over a six-notch wheel burst::
+Three separate mechanisms move a viewport here, and each needed its own answer.
+None of them is a *drawing* problem, which is why two earlier attempts that
+changed how the band was composited did not fix it:
 
-      region=(0, 289, 912, 64)  client=(912, 353)  view_y=124
-      region=(0, 289, 912, 64)  client=(912, 353)  view_y=188
+1. **wx's own scroll blit reaching the screen.** ``Scroll()`` goes through
+   ``wxScrollHelper::DoScroll``, which calls ``::ScrollWindow()`` -- a
+   screen-to-screen copy that carries the previous frame's band to a new
+   position and invalidates only the strip it could not cover. Answered by
+   :func:`scroll_snap.scroll_viewport`, which every gesture that moves the
+   origin goes through.
+2. **A repaint clipped to less than the whole client.** Whatever region wx does
+   hand a paint handler, the handler cannot repair a band outside it, because
+   ``BeginPaint`` clips the ``wx.PaintDC`` before the handler runs. Answered by
+   :func:`begin_viewport_paint`.
+3. **MSW preserving bits across a resize.** A pane being dragged by the sash is
+   resized faster than it can repaint, and each skipped repaint leaves another
+   band behind, which is why a sash drag reads as a solid wash rather than as
+   stripes. Answered by ``wx.FULL_REPAINT_ON_RESIZE`` on both views.
 
-  The bottom band of the previous frame lived at y 329..353; the blit carried it
-  to y 265..289, i.e. *just above* the 64px strip wx asked to be repainted. One
-  stale band per notch, 64px apart, and nothing washes them out -- they sat
-  unchanged for the remaining 750ms of every capture. This is the half that the
-  first attempt at #983 ruled out on a bad measurement (see the ``wx.Scrolled
-  Window`` entry in ``docs/WXMSW_BEHAVIOUR.md``, corrected) and it is the half
-  the reporter was looking at. :func:`require_whole_client_repaints` is what
-  stops it.
-
-* **A resize.** Same clipping, no blit needed: a pane that grows repaints only
-  the strip it gained and leaves the previous paint's fade sitting un-erased in
-  the retained pixels, once per mouse-move of a live sash drag. Both views
-  therefore ``Refresh()`` unconditionally from their ``EVT_SIZE`` handler, which
-  is measured to hold: every step of a 250px live sash sweep logs
-  ``region=(0, 0, w, h)``.
-
-If either mechanism is ever dropped, this fade is the first thing that smears.
-Neither costs much: every paint already blits the *whole* viewport out of the
-view's content canvas, so a wider update region widens only the copy that
-reaches the screen.
+Measured mid-gesture against the screen's own pixels, with the band temporarily
+rendered opaque so a stranded one could be counted: before, a twelve-notch wheel
+burst left four stranded bands at exactly the 64px notch spacing, still there
+when the capture ended 500ms after the gesture, and a sash sweep stacked them
+90px deep. After, every frame of both gestures holds exactly the bands the
+current viewport calls for.
 """
 
 from __future__ import annotations
@@ -77,6 +65,7 @@ from __future__ import annotations
 import wx
 
 from utils.constants import CARD_VIEW_EDGE_FADE_PX
+from widgets.panels.card_table_panel import scroll_snap
 
 # Alpha ramp exponent. 1.0 is a linear ramp, which reads as a grey wash over the
 # whole band; >1 keeps the fade close to the edge so the card under it stays
@@ -87,35 +76,74 @@ _cache: dict[tuple[int, int, bool, tuple[int, int, int]], wx.Bitmap] = {}
 _CACHE_MAX = 16
 
 
-def require_whole_client_repaints(window: wx.ScrolledWindow) -> None:
-    """Make every scroll of ``window`` invalidate all of it, not just the gap.
+def viewport_key(window: wx.ScrolledWindow) -> tuple[int, int, int, int]:
+    """The state the fade is anchored to: where the viewport is, and how big.
 
-    ``SetDoubleBuffered(True)`` is ``WS_EX_COMPOSITED``, under which MSW stops
-    preserving pixels across a scroll and hands the paint handler the whole
-    client. The two more targeted-looking levers were measured on wxMSW 4.2 and
-    do **not** work, which is the reason this one-liner gets a named function
-    and a paragraph (probe kept in the #983 thread):
+    Two paints that agree on this tuple compose the fade in the same place, so
+    the second one cannot strand the first one's band. Any change to it is a
+    move of the viewport under a fade that is already on screen.
+    """
+    view_x, view_y = window.GetViewStart()
+    return (view_x, view_y, *window.GetClientSize())
 
-    * ``EnableScrolling(False, False)`` -- documented as replacing the blit with
-      a refresh -- changes nothing. The update region stayed the 64px exposed
-      strip. Another entry for the silent-no-op list.
+
+def begin_viewport_paint(window: wx.ScrolledWindow) -> bool:
+    """Call first in an ``EVT_PAINT`` handler; returns "repaint everything".
+
+    Guarantees that a paint which follows a viewport move is clipped to the
+    whole client, not to the strip wx decided was enough. That is the property
+    the edge fade needs and the one thing a paint handler cannot otherwise have:
+    ``BeginPaint`` clips the ``wx.PaintDC`` to the update region *before* the
+    handler runs, so no choice of compositing -- alpha mask, ``wx.GCDC``,
+    unconditional band -- can reach a stale pixel outside it.
+
+    It works by invalidating from inside ``WM_PAINT`` and *before* the
+    ``PaintDC`` is constructed. ``Refresh()`` is ``::RedrawWindow(RDW_INVALIDATE)``,
+    which only adds to the window's pending update region; ``BeginPaint`` then
+    takes that region as the DC's clip. So the widening lands on the paint that
+    is starting rather than on a later one, and it cannot recurse, because
+    ``BeginPaint`` validates the whole region it just took. Measured on a bare
+    ``wx.ScrolledWindow`` scrolled 64px against a 264px client, reading
+    ``GetClipBox`` off the ``PaintDC``'s own HDC::
+
+        no widening: update=(0, 200, 185, 64)  clip=(0, 200, 185, 64)
+        widened:     update=(0, 200, 185, 64)  clip=(0,   0, 185, 264)
+
+    Widening is limited to the paints that can actually strand a band -- the
+    ones where :func:`viewport_key` changed since the last paint -- so the
+    per-card ``RefreshRect`` the async image pipeline fires stays the targeted
+    repaint it was built to be.
+
+    Returns ``True`` when the caller must render its whole viewport rather than
+    culling to the update region. ``wxWindowMSW`` snapshots ``m_updateRegion``
+    *before* dispatching the paint event, so ``GetUpdateRegion()`` still reports
+    the narrow strip after the clip has been widened, and a cull that believed
+    it would leave the widening with nothing to draw.
+
+    Levers that look right and are not, so nobody spends the afternoon again:
+
+    * ``EnableScrolling(False, False)`` is documented as replacing the blit with
+      a refresh and does nothing for the wheel. ``wxScrollHelper::DoScroll``
+      never consults the flag (wx 3.2 ``src/generic/scrlwing.cpp``); only
+      ``HandleOnScroll`` and ``AdjustScrollbars`` do. The earlier attempt at
+      #983 recorded this as a silent no-op, which is the symptom, not the cause.
     * Overriding ``ScrollWindow`` in the Python subclass is never called: wx
       scrolls from C++ without going back through the Python vtable.
-    * ``Refresh()`` after each of *our* ``Scroll()`` calls does give a whole-
-      client region, but only for the paths that go through our code. Driving
-      the same window with ``ScrollLines`` -- the scrollbar arrows and the
-      keyboard, which wx handles internally -- still produced ``(0, 243, 387,
-      1)``: a 1px strip, and a stale band left behind.
-
-    The cost is the one this window was avoiding deliberately: MSW now repaints
-    the whole client per notch. It is affordable here because both views already
-    render the whole viewport into the buffer on every paint regardless of the
-    update region -- the scroll path was never actually culled, only its final
-    blit was -- and because ``wx.AutoBufferedPaintDC`` degrades to a plain
-    ``wx.PaintDC`` once the window is double-buffered, so nothing is buffered
-    twice.
+    * ``SetDoubleBuffered(True)`` (``WS_EX_COMPOSITED``) measured clean for the
+      previous attempt and the reporter still saw the bands. It is documented as
+      unsupported for top-level windows since Windows 8 and is observed to be
+      ignored depending on DWM state, driver and window hierarchy. Nothing here
+      may rest on it, which is the whole reason this fix uses only calls whose
+      effect is visible in the same process that makes them.
     """
-    window.SetDoubleBuffered(True)
+    key = viewport_key(window)
+    if getattr(window, "_fade_viewport", None) == key:
+        return False
+    window._fade_viewport = key  # type: ignore[attr-defined]
+    box = window.GetUpdateRegion().GetBox()
+    if box.GetWidth() < key[2] or box.GetHeight() < key[3]:
+        window.Refresh(False)
+    return True
 
 
 def _fade_bitmap(width: int, height: int, top: bool, colour: tuple[int, int, int]) -> wx.Bitmap:
@@ -143,15 +171,12 @@ def _fade_bitmap(width: int, height: int, top: bool, colour: tuple[int, int, int
 def draw_edge_fades(
     window: wx.ScrolledWindow, dc: wx.DC, colour: tuple[int, int, int]
 ) -> tuple[bool, bool]:
-    """Composite the gradient mask over ``window``'s bottom edge, and its top.
-
-    The bottom mask is unconditional; the top one is drawn only when the view is
-    scrolled off its origin (see the module docstring for why they differ).
+    """Fade whichever of ``window``'s vertical edges has content beyond it.
 
     ``dc`` is expected to have been through ``PrepareDC``, so drawing happens in
     logical coordinates -- the origin of the viewport is the current view start.
-    Returns ``(top_drawn, bottom_drawn)`` so a test can assert what the view
-    composited without reading pixels.
+    Returns ``(top_drawn, bottom_drawn)`` so a test can assert which edges the
+    view believes are clipped without reading pixels.
     """
     ppu_x, ppu_y = window.GetScrollPixelsPerUnit()
     if ppu_y <= 0:
@@ -165,14 +190,17 @@ def draw_edge_fades(
     height = min(CARD_VIEW_EDGE_FADE_PX, client_h // 2)
     if height <= 1:
         return False, False
+    content_h = scroll_snap.content_height(window)
 
     top = view_y > 0
+    bottom = view_y + client_h < content_h
     if top:
         dc.DrawBitmap(_fade_bitmap(client_w, height, True, colour), view_x, view_y, True)
-    dc.DrawBitmap(
-        _fade_bitmap(client_w, height, False, colour),
-        view_x,
-        view_y + client_h - height,
-        True,
-    )
-    return top, True
+    if bottom:
+        dc.DrawBitmap(
+            _fade_bitmap(client_w, height, False, colour),
+            view_x,
+            view_y + client_h - height,
+            True,
+        )
+    return top, bottom

@@ -155,6 +155,21 @@ python -m automation.cli timer-alert-action stop
 > (~2-3 min) while MTGOSDK injects its diagnostic server into the MTGO client;
 > subsequent calls in the same MTGO session are fast.
 
+## Scrolling a deck card view
+
+`scroll-lines` drives a card view through **wx's own** `WM_VSCROLL` handling --
+the scrollbar arrows, the scrollbar itself and the keyboard all arrive there,
+and it is the one scroll path no application code sits on, which makes it where
+a viewport-anchored painting bug hides (#983).
+
+```bash
+python -m automation.cli scroll-lines --zone main --view pile --count 12 --lines 60
+```
+
+Like `sash-drag`, it runs the burst on a worker thread and returns as soon as it
+is scheduled, so `start-video` can be recording while it runs. `wheel-scroll-start`
+covers the other half -- the wheel, which the views handle themselves.
+
 ## Driving the mainboard/sideboard sash
 
 The deck workspace's split (`widgets/splitter.DarkSplitter`, `SP_LIVE_UPDATE`) is

@@ -243,19 +243,10 @@ def test_the_scrollbar_settles_on_a_boundary_and_its_arrows_move_a_whole_row(
 
 @pytest.mark.parametrize("mode", ["grid", "pile"])
 @pytest.mark.usefixtures("wx_app")
-def test_the_top_fade_marks_an_edge_with_content_past_it_and_the_bottom_is_always_on(
+def test_the_fade_marks_only_an_edge_with_content_past_it(
     deck_selector_factory, wx_app, mode
 ) -> None:
-    """The top fade is the scroll affordance; the bottom one is unconditional.
-
-    "No fade at the top means you are at the top" is the affordance the review
-    asked for and it still has to hold. The bottom band gave its half up in #983:
-    it is drawn at every origin, including the bottom clamp where there is no
-    content past the edge, because a band that appears and disappears with the
-    origin is a band the viewport can strand a copy of. It costs no pixels there
-    -- the mask's colour is the pane background, so over the whole last row it
-    composites background onto background.
-    """
+    """The fade is the scroll affordance, so it must be absent where it would lie."""
     frame = _floor_frame(deck_selector_factory, wx_app)
     try:
         view = _view(frame, "main", mode)
@@ -272,18 +263,12 @@ def test_the_top_fade_marks_an_edge_with_content_past_it_and_the_bottom_is_alway
         try:
             view.Scroll(0, 0)
             view.PrepareDC(dc)
-            assert edge_fade.draw_edge_fades(view, dc, (0, 0, 0)) == (False, True), (
-                "at the origin there is nothing above the top edge, so a fade "
-                "there would be claiming there is"
-            )
+            assert edge_fade.draw_edge_fades(view, dc, (0, 0, 0)) == (False, True)
 
             view.Scroll(0, content_h)  # clamps to the bottom
             dc.SetDeviceOrigin(0, 0)
             view.PrepareDC(dc)
-            assert edge_fade.draw_edge_fades(view, dc, (0, 0, 0)) == (True, True), (
-                "the bottom mask is unconditional (#983); making it depend on the "
-                "origin is what let a scroll strand copies of it"
-            )
+            assert edge_fade.draw_edge_fades(view, dc, (0, 0, 0)) == (True, False)
         finally:
             dc.SelectObject(wx.NullBitmap)
     finally:
