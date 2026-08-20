@@ -12,11 +12,13 @@ import wx
 
 from utils.constants import DARK_BG, DARK_PANEL, LIGHT_TEXT, SPACE_XS, SUBDUED_TEXT
 from utils.constants.ui_layout import COMPACT_RADAR_TOGGLE_BTN_SIZE
+from widgets.empty_state import EmptyState
 from widgets.panels.compact_radar_panel.handlers import CompactRadarHandlersMixin
 from widgets.panels.compact_radar_panel.properties import (
     CompactRadarPropertiesMixin,
     RadarViewMode,
 )
+from widgets.stylize import strip_native_client_edge
 
 if TYPE_CHECKING:
     from services.radar_service import RadarData
@@ -68,4 +70,19 @@ class CompactRadarPanel(CompactRadarHandlersMixin, CompactRadarPropertiesMixin, 
         self.card_list = wx.ListBox(self, style=wx.LB_SINGLE)
         self.card_list.SetBackgroundColour(DARK_BG)
         self.card_list.SetForegroundColour(LIGHT_TEXT)
+        strip_native_client_edge(self.card_list)
         sizer.Add(self.card_list, 1, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, SPACE_XS)
+
+        # S4: with no opponent detected this pane was ~325px of empty white-
+        # bordered ListBox under a one-line status label -- half of the tracker's
+        # height given to a rectangle that said nothing. The list is hidden while
+        # it is empty and the app's one empty-state block takes its place, so the
+        # message sits in the middle of the space it is explaining.
+        self.empty_state = EmptyState(
+            self,
+            message="Waiting for opponent\u2026",
+            hint="The archetype radar fills in as soon as a match is detected.",
+            surface="panel",
+        )
+        sizer.Add(self.empty_state, 1, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, SPACE_XS)
+        self.empty_state.Hide()

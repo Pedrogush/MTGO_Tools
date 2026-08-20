@@ -53,7 +53,6 @@ MESSAGES: dict[str, str] = {
     "app.choice.source.both": "Ambos",
     "app.choice.source.mtggoldfish": "MTGGoldfish",
     "app.choice.source.mtgo": "MTGO.com",
-    "app.label.deck_workspace": "Área de Trabalho",
     "app.label.deck_results": "Resultados de Deck",
     "app.label.card_inspector": "Inspetor de Cartas",
     "app.label.oracle_text": "Texto Oracle",

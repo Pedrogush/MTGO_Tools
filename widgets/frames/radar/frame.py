@@ -15,13 +15,15 @@ if str(_project_root) not in sys.path:
 import wx
 import wx.dataview as dv
 
-from utils.constants import DARK_ALT, DARK_PANEL, LIGHT_TEXT, SPACE_SM
+from utils.constants import DARK_ALT, DARK_BG, LIGHT_TEXT, SPACE_SM
 from utils.i18n import translate
 from widgets.frames.radar.handlers import RadarFrameHandlersMixin, RadarPanelHandlersMixin
 from widgets.frames.radar.properties import RadarFramePropertiesMixin, RadarPanelPropertiesMixin
+from widgets.section import SectionPanel
 from widgets.stylize import (
     apply_type_level,
     init_top_level_window,
+    strip_native_client_edge,
     stylize_choice,
     stylize_scrollable,
 )
@@ -42,7 +44,11 @@ class RadarPanel(RadarPanelHandlersMixin, RadarPanelPropertiesMixin, wx.Panel):
         locale: str | None = None,
     ):
         super().__init__(parent)
-        self.SetBackgroundColour(DARK_PANEL)
+        # SURFACE_BASE, not SURFACE_PANEL: this window was the only one in the
+        # app whose own surface was the same tone as the cards sitting on it, so
+        # a card had nothing to sit *on*. Now it matches Match History, Timer
+        # Alert and the tracker.
+        self.SetBackgroundColour(DARK_BG)
         self._locale = locale
 
         self.controller = controller
@@ -82,12 +88,12 @@ class RadarPanel(RadarPanelHandlersMixin, RadarPanelPropertiesMixin, wx.Panel):
         split_sizer = wx.BoxSizer(wx.HORIZONTAL)
         sizer.Add(split_sizer, 1, wx.EXPAND | wx.ALL, SPACE_SM)
 
-        mainboard_box = wx.StaticBox(self, label=self._t("radar.box.mainboard"))
-        mainboard_box.SetForegroundColour(LIGHT_TEXT)
-        mainboard_box_sizer = wx.StaticBoxSizer(mainboard_box, wx.VERTICAL)
-        split_sizer.Add(mainboard_box_sizer, 1, wx.EXPAND | wx.RIGHT, SPACE_SM)
+        mainboard_section = SectionPanel(
+            self, title=self._t("radar.box.mainboard"), outer_surface="base", padding=0
+        )
+        split_sizer.Add(mainboard_section, 1, wx.EXPAND | wx.RIGHT, SPACE_SM)
 
-        self.mainboard_list = dv.DataViewListCtrl(self)
+        self.mainboard_list = dv.DataViewListCtrl(mainboard_section.body)
         self.mainboard_list.AppendTextColumn(self._t("radar.col.card"), width=200)
         self.mainboard_list.AppendTextColumn(self._t("radar.col.inclusion"), width=90)
         self.mainboard_list.AppendTextColumn(self._t("radar.col.expected"), width=120)
@@ -97,15 +103,16 @@ class RadarPanel(RadarPanelHandlersMixin, RadarPanelPropertiesMixin, wx.Panel):
         self.mainboard_list.SetForegroundColour(LIGHT_TEXT)
         # After the columns, so the native header child exists to be themed.
         stylize_scrollable(self.mainboard_list)
+        strip_native_client_edge(self.mainboard_list)
         self._bind_tooltip_handlers(self.mainboard_list)
-        mainboard_box_sizer.Add(self.mainboard_list, 1, wx.EXPAND | wx.ALL, SPACE_SM)
+        mainboard_section.sizer.Add(self.mainboard_list, 1, wx.EXPAND)
 
-        sideboard_box = wx.StaticBox(self, label=self._t("radar.box.sideboard"))
-        sideboard_box.SetForegroundColour(LIGHT_TEXT)
-        sideboard_box_sizer = wx.StaticBoxSizer(sideboard_box, wx.VERTICAL)
-        split_sizer.Add(sideboard_box_sizer, 1, wx.EXPAND)
+        sideboard_section = SectionPanel(
+            self, title=self._t("radar.box.sideboard"), outer_surface="base", padding=0
+        )
+        split_sizer.Add(sideboard_section, 1, wx.EXPAND)
 
-        self.sideboard_list = dv.DataViewListCtrl(self)
+        self.sideboard_list = dv.DataViewListCtrl(sideboard_section.body)
         self.sideboard_list.AppendTextColumn(self._t("radar.col.card"), width=200)
         self.sideboard_list.AppendTextColumn(self._t("radar.col.inclusion"), width=90)
         self.sideboard_list.AppendTextColumn(self._t("radar.col.expected"), width=120)
@@ -115,8 +122,9 @@ class RadarPanel(RadarPanelHandlersMixin, RadarPanelPropertiesMixin, wx.Panel):
         self.sideboard_list.SetForegroundColour(LIGHT_TEXT)
         # After the columns, so the native header child exists to be themed.
         stylize_scrollable(self.sideboard_list)
+        strip_native_client_edge(self.sideboard_list)
         self._bind_tooltip_handlers(self.sideboard_list)
-        sideboard_box_sizer.Add(self.sideboard_list, 1, wx.EXPAND | wx.ALL, SPACE_SM)
+        sideboard_section.sizer.Add(self.sideboard_list, 1, wx.EXPAND)
 
 
 class RadarFrame(RadarFrameHandlersMixin, RadarFramePropertiesMixin, wx.Frame):
@@ -139,7 +147,7 @@ class RadarFrame(RadarFrameHandlersMixin, RadarFramePropertiesMixin, wx.Frame):
             style=style,
         )
         init_top_level_window(self)
-        self.SetBackgroundColour(DARK_PANEL)
+        self.SetBackgroundColour(DARK_BG)
         self._locale = locale
 
         self.controller = controller
@@ -158,7 +166,7 @@ class RadarFrame(RadarFrameHandlersMixin, RadarFramePropertiesMixin, wx.Frame):
 
     def _build_ui(self) -> None:
         panel = wx.Panel(self)
-        panel.SetBackgroundColour(DARK_PANEL)
+        panel.SetBackgroundColour(DARK_BG)
         sizer = wx.BoxSizer(wx.VERTICAL)
         panel.SetSizer(sizer)
 

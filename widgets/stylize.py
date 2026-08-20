@@ -101,9 +101,52 @@ widget               behaviour
                      returns ``None``) without it, so every construction site
                      needs a fallback. It also takes a light 1px client edge
                      unless constructed with ``wx.BORDER_NONE``
+``wx.ListBox``       rows honoured; it takes the same near-white sunken client
+                     edge as ``wx.TextCtrl`` -- see the ``client edge`` row
 ``wx.Notebook``      both ignored, **and Windows' dark mode does not reach
                      it either** — migration to ``FlatNotebook`` is the
                      only fix (see :mod:`widgets.notebook`)
+``FlatNotebook``     the generic replacement, and generic is not the same as
+                     reachable. Three colours have no setter and no
+                     ``SystemSettings`` route: the tab strip's bottom edge is a
+                     **2px ``#FFFFFF``** band from ``DrawTabsLine``, whose
+                     ``GetSingleLineBorderColour()`` is a hard-coded ``wx.WHITE``
+                     for every style except ``FNB_FANCY_TABS``; the active tab's
+                     outline and the inactive tabs' separators are
+                     ``COLOR_BTNSHADOW``, set on the DC by ``DrawTabs``. A
+                     renderer subclass installed on the notebook's own
+                     ``FNBRendererMgr`` reaches all three. Separately,
+                     ``DrawTabs`` strokes the strip's outline in the **tab
+                     container's** background -- a different window from the
+                     notebook, defaulting to ``#F0F0F0`` -- so
+                     ``notebook._pages.SetBackgroundColour`` is required on top
+                     of ``SetTabAreaColour``. Tab labels are measured and drawn
+                     with ``SYS_DEFAULT_GUI_FONT``, so they ignore the app's base
+                     font. See :mod:`widgets.notebook`
+``wx.StaticBox``     ``SetForegroundColour`` recolours **only the label**;
+                     ``SetBackgroundColour`` fills the interior. The etched
+                     groove itself is drawn by the theme at **``#DCDCDC``**
+                     (10.96:1 on ``SURFACE_PANEL``) and is not reachable at all,
+                     and neither is the label's position on it. Every one of the
+                     ten sites in the tree set both colours and every one still
+                     had a near-white frame. ``wx.StaticBoxSizer`` does **not**
+                     reparent what is added to it on this toolchain (probed on
+                     4.2.4 / 3.2.8): a child parented to the box's parent keeps
+                     that parent and still renders inside the box, which is why
+                     the ten sites used three different conventions. Replaced by
+                     :class:`widgets.section.SectionPanel`
+client edge          ``wx.TextCtrl``, ``wx.ListBox`` and ``wx.dataview``'s
+                     controls default to a sunken border Windows draws at
+                     **``#FFFFFF``** with a ``#828790`` outer line, untouched by
+                     process dark mode, by ``SetBackgroundColour`` or by
+                     ``SetWindowTheme``. ``wx.BORDER_NONE`` deletes it, from the
+                     constructor **and** post-construction via
+                     ``SetWindowStyleFlag``, but on a composite it must be applied
+                     to the window that owns the edge (``TreeListCtrl`` wraps a
+                     ``DataViewCtrl``; the wrapper is not it), and on a
+                     ``wx.TextCtrl`` inside the app it leaves the dark-mode edit
+                     border rather than nothing — see
+                     :func:`strip_native_client_edge`
 ``wx.StatusBar``     background honoured, **foreground silently ignored**
                      — hence :mod:`widgets.status_bar`
 ``wx.StaticLine``    **neither honoured**, and a ``wx.LI_VERTICAL`` one draws in
@@ -663,6 +706,41 @@ def stylize_scrollable(window: wx.Window, *, surface: str | None = None) -> None
     apply_dark_native_headers(window)
     if surface is not None:
         window.SetBackgroundColour(_colour(_SURFACE_COLOURS[surface]))
+
+
+def strip_native_client_edge(window: wx.Window) -> None:
+    """Remove the near-white 1px sunken client edge wxMSW gives list and text controls.
+
+    ``wx.ListBox``, ``wx.TextCtrl`` and ``wx.dataview``'s controls default to a
+    sunken border that Windows draws at **#FFFFFF** with a #828790 outer line --
+    13.7:1 on ``SURFACE_ALT``, and untouched by Windows' own dark mode, by
+    ``SetBackgroundColour``, or by ``SetWindowTheme``. Phase 6 measured it on all
+    three: it is the same near-white hairline the ``wx.StaticBox`` groove was, one
+    layer further in, and once a section card puts a 1px ``BORDER_SUBTLE`` edge
+    around one of these controls the result is a double border in which the wrong
+    one dominates.
+
+    ``wx.BORDER_NONE`` removes it, from the constructor **and** post-construction
+    via ``SetWindowStyleFlag`` -- verified by probe on ``DataViewListCtrl``,
+    ``ListBox`` and ``TextCtrl``. Post-construction is what this helper uses, so a
+    call site does not have to thread a style flag through a constructor it may
+    not own.
+
+    Two things it does not do:
+
+    * on a ``wx.TextCtrl`` inside the app the white edge is replaced by the dark
+      mode edit border (``#A0A0A0`` over ``#696969``) rather than removed. That is
+      the right outcome -- an input field's boundary *is* the affordance that
+      identifies it, which is the ``BORDER_STRONG`` case -- but it is not "no
+      border", and an isolated probe frame shows no border at all, so do not
+      expect the two to agree;
+    * on a composite it has to be applied to the window that owns the edge.
+      ``wx.dataview.TreeListCtrl`` wraps a ``DataViewCtrl``; calling this on the
+      wrapper alone changes nothing on screen.
+    """
+    style = window.GetWindowStyleFlag()
+    window.SetWindowStyleFlag((style & ~wx.BORDER_MASK) | wx.BORDER_NONE)
+    window.Refresh()
 
 
 def stylize_list_ctrl(ctrl: wx.ListCtrl, *, surface: str = "alt") -> None:

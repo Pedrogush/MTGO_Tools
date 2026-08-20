@@ -48,6 +48,13 @@ import wx
 from utils.constants import EMPTY_STATE_MAX_WIDTH, SPACE_MD, SPACE_SM
 from widgets.stylize import stylize_button, stylize_label, surface_colour
 
+#: Never wrap narrower than this, however narrow the pane gets.
+EMPTY_STATE_MIN_WRAP_WIDTH = 140
+
+#: Stretch weights above and below the block. See the comment in ``__init__``.
+EMPTY_STATE_TOP_WEIGHT = 2
+EMPTY_STATE_BOTTOM_WEIGHT = 3
+
 
 class EmptyState(wx.Panel):
     """A centred, width-constrained "nothing here yet" block.
@@ -78,7 +85,16 @@ class EmptyState(wx.Panel):
 
         sizer = wx.BoxSizer(wx.VERTICAL)
         self.SetSizer(sizer)
-        sizer.AddStretchSpacer(1)
+        # 2:3, not 1:1 (phase 6, S4). A block centred geometrically in a very
+        # tall region reads as *low*, which is why the Sideboard Guide's cluster
+        # looked adrift in its own void rather than placed in it. 40% from the
+        # top is the optical centre; in the short panes that also use this
+        # component the difference is a few pixels.
+        sizer.AddStretchSpacer(EMPTY_STATE_TOP_WEIGHT)
+
+        self._message_text = message
+        self._hint_text = hint or ""
+        self._wrapped_at = max_width
 
         self.message_label = wx.StaticText(self, label=message, style=wx.ALIGN_CENTRE_HORIZONTAL)
         stylize_label(self.message_label, subtle=True, level="body", surface=surface)
@@ -110,17 +126,52 @@ class EmptyState(wx.Panel):
                 self.secondary_button.Bind(wx.EVT_BUTTON, on_secondary)
             sizer.Add(self.secondary_button, 0, wx.ALIGN_CENTER_HORIZONTAL | wx.TOP, SPACE_SM)
 
-        sizer.AddStretchSpacer(1)
+        sizer.AddStretchSpacer(EMPTY_STATE_BOTTOM_WEIGHT)
+        self.Bind(wx.EVT_SIZE, self._on_size)
+
+    def _wrap_width(self) -> int:
+        """The width to wrap at: the max, or the pane, whichever is smaller.
+
+        Phase 6: ``Wrap`` only *inserts* breaks, it never shrinks a label below
+        its longest unbreakable run, so a block built for a 360px max and then
+        dropped into the opponent tracker's 215px pane simply had its hint
+        clipped by the pane edge. The floor stops a mid-drag splitter from
+        wrapping the copy one word per line.
+        """
+        available = self.GetClientSize().GetWidth() - 2 * SPACE_MD
+        return max(EMPTY_STATE_MIN_WRAP_WIDTH, min(self._max_width, available))
+
+    def _on_size(self, event: wx.SizeEvent) -> None:
+        event.Skip()
+        width = self._wrap_width()
+        if width == self._wrapped_at:
+            return
+        self._wrapped_at = width
+        self._rewrap()
+
+    def _rewrap(self) -> None:
+        """Re-apply the stored text and wrap it. ``Wrap`` is destructive.
+
+        It rewrites the label with hard line breaks, so re-wrapping at a new
+        width means restoring the original string first -- wrapping an
+        already-wrapped label keeps the old breaks.
+        """
+        self.message_label.SetLabel(self._message_text)
+        self.message_label.Wrap(self._wrapped_at)
+        if self.hint_label is not None:
+            self.hint_label.SetLabel(self._hint_text)
+            self.hint_label.Wrap(self._wrapped_at)
+        self.Layout()
 
     def set_message(self, message: str, hint: str | None = None) -> None:
-        """Re-label the block, re-wrapping to the same max width.
+        """Re-label the block, re-wrapping to the current available width.
 
-        ``Wrap`` is destructive -- it rewrites the label with hard line breaks --
-        so the new text has to be set before wrapping, every time.
+        A ``hint`` passed here is only shown if the block was **constructed** with
+        one: the label is created in ``__init__`` or not at all, so that a block
+        with no hint does not reserve the gap for one. A caller that re-labels
+        between hinted states must pass a hint at construction too.
         """
-        self.message_label.SetLabel(message)
-        self.message_label.Wrap(self._max_width)
-        if self.hint_label is not None:
-            self.hint_label.SetLabel(hint or "")
-            self.hint_label.Wrap(self._max_width)
-        self.Layout()
+        self._message_text = message
+        self._hint_text = hint or ""
+        self._wrapped_at = self._wrap_width()
+        self._rewrap()

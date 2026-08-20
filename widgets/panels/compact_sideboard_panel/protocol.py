@@ -6,6 +6,8 @@ from typing import Protocol
 
 import wx
 
+from widgets.empty_state import EmptyState
+
 
 class CompactSideboardPanelProto(Protocol):
     """Cross-mixin ``self`` surface for ``CompactSideboardPanel``."""
@@ -16,3 +18,4 @@ class CompactSideboardPanelProto(Protocol):
     toggle_btn: wx.Button
     status_label: wx.StaticText
     card_list: wx.ListBox
+    empty_state: EmptyState

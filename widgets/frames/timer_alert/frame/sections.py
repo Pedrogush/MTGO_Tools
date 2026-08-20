@@ -24,6 +24,7 @@ from utils.constants import (
 )
 from widgets.checkbox import DarkCheckBox
 from widgets.frames.timer_alert.frame.threshold_panel import SOUND_OPTIONS
+from widgets.section import SectionPanel
 from widgets.stylize import stylize_scrollable
 
 
@@ -45,11 +46,14 @@ class SectionsBuilderMixin:
     challenge_text: wx.StaticText | None
 
     def _build_thresholds_section(self, panel: wx.Panel, sizer: wx.Sizer) -> None:
-        threshold_box = wx.StaticBox(panel, label=self._t("timer.section.thresholds"))
-        threshold_box.SetForegroundColour(LIGHT_TEXT)
-        threshold_box.SetBackgroundColour(DARK_PANEL)
-        threshold_sizer = wx.StaticBoxSizer(threshold_box, wx.VERTICAL)
-        box_parent = threshold_sizer.GetStaticBox()
+        # padding=0: every child below already adds its own SPACE_XS inset, and
+        # this window has a fixed 580px height that phase 3 only just got the
+        # threshold list to fit inside.
+        threshold_section = SectionPanel(
+            panel, title=self._t("timer.section.thresholds"), padding=0
+        )
+        threshold_sizer = threshold_section.sizer
+        box_parent = threshold_section.body
 
         instructions = wx.StaticText(
             box_parent, label="Enter time in MM:SS format (e.g., 05:00 for 5 minutes)"
@@ -72,7 +76,7 @@ class SectionsBuilderMixin:
         add_btn.Bind(wx.EVT_BUTTON, lambda _evt: self._add_threshold_panel())
         threshold_sizer.Add(add_btn, 0, wx.ALL, SPACE_XS)
 
-        sizer.Add(threshold_sizer, 1, wx.ALL | wx.EXPAND, SPACE_MD)
+        sizer.Add(threshold_section, 1, wx.ALL | wx.EXPAND, SPACE_MD)
 
     def _build_options_section(self, panel: wx.Panel, sizer: wx.Sizer) -> None:
         options_grid = wx.FlexGridSizer(cols=2, hgap=SPACE_SM, vgap=SPACE_SM)
@@ -164,13 +168,14 @@ class SectionsBuilderMixin:
         sizer.Add(self.status_text, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, SPACE_MD)
 
         # Challenge timer display
-        challenge_box = wx.StaticBox(panel, label=self._t("timer.section.challenge"))
-        challenge_box.SetForegroundColour(LIGHT_TEXT)
-        challenge_box.SetBackgroundColour(DARK_PANEL)
-        challenge_sizer = wx.StaticBoxSizer(challenge_box, wx.VERTICAL)
-        self.challenge_text = wx.StaticText(challenge_box, label=self._t("timer.no_challenge"))
+        challenge_section = SectionPanel(
+            panel, title=self._t("timer.section.challenge"), padding=SPACE_SM
+        )
+        self.challenge_text = wx.StaticText(
+            challenge_section.body, label=self._t("timer.no_challenge")
+        )
         self.challenge_text.SetForegroundColour(LIGHT_TEXT)
         self.challenge_text.SetBackgroundColour(DARK_PANEL)
         self.challenge_text.Wrap(TIMER_ALERT_CHALLENGE_WRAP_WIDTH)
-        challenge_sizer.Add(self.challenge_text, 0, wx.ALL | wx.EXPAND, SPACE_SM)
-        sizer.Add(challenge_sizer, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, SPACE_MD)
+        challenge_section.sizer.Add(self.challenge_text, 0, wx.EXPAND)
+        sizer.Add(challenge_section, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, SPACE_MD)
