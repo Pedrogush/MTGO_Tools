@@ -376,8 +376,7 @@ def cmd_open_app(args: argparse.Namespace) -> int:
         client = AutomationClient(host=args.host, port=args.port, timeout=args.timeout)
         if not client.wait_for_server(timeout=args.wait_timeout):
             print(
-                f"App launched (PID {proc.pid}) but did not respond within"
-                f" {args.wait_timeout}s",
+                f"App launched (PID {proc.pid}) but did not respond within {args.wait_timeout}s",
                 file=sys.stderr,
             )
             return 1
