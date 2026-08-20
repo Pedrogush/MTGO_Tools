@@ -7,7 +7,14 @@ from typing import Any
 
 import wx
 
-from utils.constants import DARK_PANEL, SPACE_SM, SPACE_XS, SUBDUED_TEXT
+from utils.constants import (
+    DARK_PANEL,
+    SPACE_SM,
+    SPACE_XS,
+    SUBDUED_TEXT,
+    VIEW_TOGGLE_HEIGHT,
+    VIEW_TOGGLE_PADDING_X,
+)
 from utils.i18n import translate as _i18n_translate
 from widgets.mana_icon_factory import ManaIconFactory
 from widgets.panels.card_table_panel.grid_view import DeckGridView
@@ -30,7 +37,7 @@ from widgets.panels.card_table_panel.sorting import (
 )
 from widgets.panels.card_table_panel.table_view import DeckTableView
 from widgets.panels.card_table_panel.toolbar import CardTablePanelToolbarMixin
-from widgets.stylize import stylize_button
+from widgets.stylize import create_divider, size_compact_button, stylize_button
 
 # Simplebook page indices (alphabetical-by-mode after the bookend states).
 _PAGE_EMPTY = 0
@@ -129,6 +136,9 @@ class CardTablePanel(
         # F3: this and the printing button below rendered in the system's light
         # button face — the only two unthemed buttons left on the main window.
         stylize_button(self.pile_sort_button, kind="ghost", surface="panel")
+        size_compact_button(
+            self.pile_sort_button, pad_x=VIEW_TOGGLE_PADDING_X, height=VIEW_TOGGLE_HEIGHT
+        )
         self.pile_sort_button.SetToolTip(self._t("tabs.view.pile_sort"))
         self.pile_sort_button.Bind(wx.EVT_BUTTON, self._open_pile_sort_menu)
         header.Add(self.pile_sort_button, 0, wx.LEFT, SPACE_XS)
@@ -138,13 +148,23 @@ class CardTablePanel(
         # ``|`` divider. Only shown when a handler is wired (the mainboard zone).
         self.printing_button: wx.Button | None = None
         if self._on_printing_mode is not None:
-            divider = wx.StaticText(self, label="|")
-            divider.SetForegroundColour(SUBDUED_TEXT)
+            # C4: this separator was a literal ``wx.StaticText(label="|")``. A
+            # rule is chrome and a glyph is content, and the glyph inherited the
+            # label type ramp, so it grew with the base font while the rule it
+            # imitates would not have. The plan's cited precedent
+            # (``toolbar_buttons/panel.py``, a ``wx.StaticLine``) no longer
+            # exists -- phase 3b deleted the toolbar -- and a vertical
+            # StaticLine turned out to draw near-white here anyway; see
+            # :func:`widgets.stylize.create_divider`.
+            divider = create_divider(self, vertical=True, length=VIEW_TOGGLE_HEIGHT)
             header.Add(divider, 0, wx.ALIGN_CENTER_VERTICAL | wx.LEFT, SPACE_SM)
             self.printing_button = wx.Button(
                 self, label=self._t("tabs.view.printing"), style=wx.BU_EXACTFIT
             )
             stylize_button(self.printing_button, kind="ghost", surface="panel")
+            size_compact_button(
+                self.printing_button, pad_x=VIEW_TOGGLE_PADDING_X, height=VIEW_TOGGLE_HEIGHT
+            )
             self.printing_button.SetToolTip(self._t("tabs.view.printing.tooltip"))
             self.printing_button.Bind(wx.EVT_BUTTON, self._open_printing_menu)
             header.Add(self.printing_button, 0, wx.LEFT, SPACE_SM)
@@ -155,7 +175,7 @@ class CardTablePanel(
         self._content_book.SetBackgroundColour(DARK_PANEL)
 
         # Page 0: empty state.
-        self._empty_state = build_empty_state(self._content_book, zone)
+        self._empty_state = build_empty_state(self._content_book, zone, self._t)
         self._content_book.AddPage(self._empty_state, "empty")
 
         # Page 1: grid view — a single custom-drawn canvas (no per-card native

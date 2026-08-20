@@ -72,6 +72,10 @@ class DeckNotesPanelHandlersMixin(_Base):
         has_cards = bool(self._cards)
         self.scroll_win.Show(has_cards)
         self.empty_state_panel.Show(not has_cards)
+        # C5/C6: the toolbar's "+ Add Note" would otherwise sit in the top-left
+        # corner while the empty state's own CTA sits centred -- two primaries
+        # for one action. The empty state owns the action while it is up.
+        self.toolbar_panel.Show(has_cards)
         self.cards_sizer.Layout()
         self.scroll_win.Layout()
         self.scroll_win.FitInside()

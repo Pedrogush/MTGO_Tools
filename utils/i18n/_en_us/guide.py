@@ -27,7 +27,9 @@ MESSAGES: dict[str, str] = {
     "guide.btn.pin": "Pin for Tracker",
     "guide.btn.pinned": "Pinned ✓",
     "guide.btn.cta": "Add your first matchup",
-    "guide.empty": "No matchup notes yet.\nClick “Add” to create a sideboard guide entry.",
+    # C6: this named “Add” while its own CTA reads "Add your first matchup".
+    "guide.empty": "No matchup notes yet.",
+    "guide.empty.hint": "Plan which cards come in and out against each archetype you expect to face.",
     "guide.label.exclusions": "Exclusions",
     "guide.tooltip.flex_slots": "Mark mainboard cards as flex slots. Flex slots are highlighted in the Out selectors when creating guide entries, making it easier to identify cards to side out.",
     "guide.dialog.archetype_matchup": "Archetype/Matchup",

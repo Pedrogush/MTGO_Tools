@@ -13,11 +13,17 @@ from typing import TYPE_CHECKING
 
 import wx
 
-from utils.constants import DARK_BG, FORMAT_OPTIONS, LIGHT_TEXT, SPACE_SM, SPACE_XS, SUBDUED_TEXT
+from utils.constants import DARK_BG, FORMAT_OPTIONS, LIGHT_TEXT, SPACE_SM, SPACE_XS
 from utils.i18n import translate
 from widgets.frames.top_cards.handlers import TopCardsHandlersMixin
 from widgets.frames.top_cards.properties import TopCardsPropertiesMixin
-from widgets.stylize import init_top_level_window, stylize_button, stylize_choice, stylize_list_ctrl
+from widgets.stylize import (
+    create_status_label,
+    init_top_level_window,
+    stylize_button,
+    stylize_choice,
+    stylize_list_ctrl,
+)
 
 if TYPE_CHECKING:
     from services.format_card_pool_service import FormatCardPoolService
@@ -81,11 +87,11 @@ class TopCardsFrame(TopCardsHandlersMixin, TopCardsPropertiesMixin, wx.Frame):
         self.refresh_button.Bind(wx.EVT_BUTTON, lambda _evt: self.refresh_data())
         toolbar.Add(self.refresh_button, 0, wx.RIGHT, SPACE_SM)
 
-        toolbar.AddStretchSpacer(1)
-
-        self.status_label = wx.StaticText(panel, label="")
-        self.status_label.SetForegroundColour(SUBDUED_TEXT)
-        toolbar.Add(self.status_label, 0, wx.ALIGN_CENTER_VERTICAL)
+        # F8: see create_status_label -- proportion 1 in place of the spacer.
+        # This one started with an empty label, so its best size was ~0 wide and
+        # the first SetLabel had nothing but slack to grow into.
+        self.status_label = create_status_label(panel)
+        toolbar.Add(self.status_label, 1, wx.ALIGN_CENTER_VERTICAL | wx.LEFT, SPACE_SM)
 
         self.card_list = wx.ListCtrl(panel, style=wx.LC_REPORT | wx.LC_SINGLE_SEL)
         # wx.ListCtrl on MSW always left-aligns column 0 regardless of the

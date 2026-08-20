@@ -28,7 +28,13 @@ from utils.constants import (
 from utils.i18n import translate
 from widgets.frames.metagame_analysis.handlers import MetagameAnalysisHandlersMixin
 from widgets.frames.metagame_analysis.properties import MetagameAnalysisPropertiesMixin
-from widgets.stylize import apply_type_level, init_top_level_window, stylize_button, stylize_choice
+from widgets.stylize import (
+    apply_type_level,
+    create_status_label,
+    init_top_level_window,
+    stylize_button,
+    stylize_choice,
+)
 
 
 class MetagameAnalysisFrame(
@@ -145,11 +151,9 @@ class MetagameAnalysisFrame(
         self.refresh_button.Bind(wx.EVT_BUTTON, lambda _evt: self.refresh_data())
         toolbar.Add(self.refresh_button, 0, wx.RIGHT, SPACE_SM)
 
-        toolbar.AddStretchSpacer(1)
-
-        self.status_label = wx.StaticText(panel, label=self._t("app.status.ready"))
-        self.status_label.SetForegroundColour(SUBDUED_TEXT)
-        toolbar.Add(self.status_label, 0, wx.ALIGN_CENTER_VERTICAL)
+        # F8: see create_status_label -- proportion 1 in place of the spacer.
+        self.status_label = create_status_label(panel, self._t("app.status.ready"))
+        toolbar.Add(self.status_label, 1, wx.ALIGN_CENTER_VERTICAL | wx.LEFT, SPACE_SM)
 
         content_sizer = wx.BoxSizer(wx.HORIZONTAL)
         main_sizer.Add(content_sizer, 1, wx.ALL | wx.EXPAND, SPACE_SM)
