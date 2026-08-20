@@ -42,6 +42,13 @@ class CardTablePanelProto(Protocol):
     pile_sort_button: wx.Button
     printing_button: wx.Button | None
     _on_pile_sort_change: Callable[[str, str], None] | None
+    # Header reflow (phase 8): the controls move between _header_top and
+    # _header_bottom depending on whether they fit beside the count label.
+    _header_stack: wx.BoxSizer
+    _header_top: wx.BoxSizer
+    _header_bottom: wx.BoxSizer
+    _header_controls: wx.BoxSizer
+    _header_wrapped: bool
     _on_printing_mode: Callable[[str, str | None], None] | None
 
     def _t(self, key: str) -> str: ...

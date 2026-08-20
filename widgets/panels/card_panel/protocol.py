@@ -54,3 +54,8 @@ class CardPanelProto(Protocol):
     stats_side_avg: wx.StaticText
     stats_side_karsten: wx.StaticText
     stats_side_inclusion: wx.StaticText
+
+    # Unwrapped text of the labels that re-wrap to the panel, keyed by id().
+    _flowing_label_text: dict[int, str]
+
+    def set_flowing_label(self, label: wx.StaticText, text: str) -> None: ...

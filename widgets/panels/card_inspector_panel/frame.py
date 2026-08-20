@@ -119,7 +119,17 @@ class CardInspectorPanel(
         self.image_column_panel.SetBackgroundColour(DARK_PANEL)
         image_column = wx.BoxSizer(wx.VERTICAL)
         self.image_column_panel.SetSizer(image_column)
-        content.Add(self.image_column_panel, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, SPACE_MD)
+        # No right border here, and the details panel beside it carries the gap
+        # instead (wx.LEFT below). The gap only exists to separate the art from
+        # the details fallback -- which is hidden in every normal state, since it
+        # is what shows when a card has no image -- so putting it on the image
+        # column reserved 16px against nothing, permanently. Phase 8 measured
+        # the cost: this sizer wanted 300px inside the 284 that
+        # _apply_fixed_sizing pins the column at, and a wxBoxSizer border is not
+        # negotiable, so the *image* gave up the 16 and the card art was clipped
+        # by that much whenever a card was selected. A hidden item's border is
+        # skipped with the item, so the same gap on the other side is free.
+        content.Add(self.image_column_panel, 0, wx.ALIGN_CENTER_VERTICAL)
 
         # Card image display
         self.card_image_display = CardImageDisplay(
@@ -227,7 +237,7 @@ class CardInspectorPanel(
         self.details_panel.SetBackgroundColour(DARK_PANEL)
         details = wx.BoxSizer(wx.VERTICAL)
         self.details_panel.SetSizer(details)
-        content.Add(self.details_panel, 1, wx.EXPAND)
+        content.Add(self.details_panel, 1, wx.EXPAND | wx.LEFT, SPACE_MD)
 
         # Card name
         self.name_label = wx.StaticText(self.details_panel, label="Select a card to inspect.")

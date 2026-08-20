@@ -125,7 +125,30 @@ class CardTablePanel(
         outer = wx.BoxSizer(wx.VERTICAL)
         self.SetSizer(outer)
 
+        # The header is two rows deep and normally uses one of them.
+        #
+        # Phase 7 made the count label the row's flexible member so a deficit
+        # landed on the one item that degrades gracefully. Phase 8's sweep found
+        # that only postpones the problem: once the label is at its 48px floor
+        # the deficit moves back onto the buttons, and the row's real minimum is
+        # **view-mode and locale dependent** -- measured on the mainboard at the
+        # 10pt base, grid view needs 310px in en-US and 365 in pt-BR, and pile
+        # view (which shows the pile-sort button) needs 422 and 496. The deck
+        # workspace's own floor is 353: two card columns plus a scrollbar. So
+        # there is no single width at which this row always fits, and raising
+        # the workspace's minimum to the worst case would put ~150px back onto
+        # the window's floor to buy a toolbar that is idle most of the time.
+        #
+        # A toolbar that does not fit should wrap, not clip. The controls move
+        # to a second line when the panel is too narrow for them beside the
+        # count, and back up when it is not; see _reflow_header.
+        header_stack = wx.BoxSizer(wx.VERTICAL)
         header = wx.BoxSizer(wx.HORIZONTAL)
+        self._header_stack = header_stack
+        self._header_top = header
+        self._header_bottom = wx.BoxSizer(wx.HORIZONTAL)
+        self._header_controls = wx.BoxSizer(wx.HORIZONTAL)
+        self._header_wrapped = False
         # The count takes the row's slack instead of a stretch spacer, and
         # ellipsises rather than pushing the controls off the panel. F3/F7 widened
         # everything to its right by ~100px and in pt-BR at the 1200px minimum the
@@ -151,7 +174,7 @@ class CardTablePanel(
         # the divider is explicitly not in it.
         self.view_label = wx.StaticText(self, label=self._t("tabs.view.label"))
         stylize_label(self.view_label, level="caption", surface="panel", tone="secondary")
-        header.Add(self.view_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, SPACE_XS)
+        self._header_controls.Add(self.view_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, SPACE_XS)
 
         self._view_mode_buttons: dict[str, wx.Button] = {}
         for mode in VIEW_MODES:
@@ -159,7 +182,7 @@ class CardTablePanel(
             btn.SetToolTip(self._t(f"tabs.view.tooltip.{mode}"))
             btn.Bind(wx.EVT_BUTTON, lambda _evt, m=mode: self._on_view_button(m))
             self._view_mode_buttons[mode] = btn
-            header.Add(btn, 0, wx.LEFT, SPACE_XS)
+            self._header_controls.Add(btn, 0, wx.LEFT, SPACE_XS)
 
         # C4: this separator was a literal ``wx.StaticText(label="|")``. A rule
         # is chrome and a glyph is content, and the glyph inherited the label
@@ -174,7 +197,7 @@ class CardTablePanel(
         # one: both open menus, neither is a view, and both used to sit inside
         # the toggle group's run of chips.
         self.header_divider = create_divider(self, vertical=True, length=VIEW_TOGGLE_HEIGHT)
-        header.Add(self.header_divider, 0, wx.ALIGN_CENTER_VERTICAL | wx.LEFT, SPACE_SM)
+        self._header_controls.Add(self.header_divider, 0, wx.ALIGN_CENTER_VERTICAL | wx.LEFT, SPACE_SM)
 
         # F3: this was labelled "⋯". It named neither what it does nor what it is
         # currently doing, and it is the only route to the pile grouping key. Its
@@ -189,7 +212,7 @@ class CardTablePanel(
         )
         self.pile_sort_button.SetToolTip(self._t("tabs.view.pile_sort"))
         self.pile_sort_button.Bind(wx.EVT_BUTTON, self._open_pile_sort_menu)
-        header.Add(self.pile_sort_button, 0, wx.LEFT, SPACE_SM)
+        self._header_controls.Add(self.pile_sort_button, 0, wx.LEFT, SPACE_SM)
 
         # Printing-selection dropdown (issue #792, part 3): re-pick the art/edition
         # used for every card in the deck. Only shown when a handler is wired
@@ -206,9 +229,13 @@ class CardTablePanel(
             )
             self.printing_button.SetToolTip(self._t("tabs.view.printing.tooltip"))
             self.printing_button.Bind(wx.EVT_BUTTON, self._open_printing_menu)
-            header.Add(self.printing_button, 0, wx.LEFT, SPACE_SM)
+            self._header_controls.Add(self.printing_button, 0, wx.LEFT, SPACE_SM)
 
-        outer.Add(header, 0, wx.EXPAND | wx.BOTTOM, SPACE_XS)
+        header.Add(self._header_controls, 0, wx.ALIGN_CENTER_VERTICAL)
+        header_stack.Add(header, 0, wx.EXPAND)
+        header_stack.Add(self._header_bottom, 0, wx.EXPAND)
+        outer.Add(header_stack, 0, wx.EXPAND | wx.BOTTOM, SPACE_XS)
+        self.Bind(wx.EVT_SIZE, self._on_panel_size)
 
         self._content_book = wx.Simplebook(self)
         self._content_book.SetBackgroundColour(DARK_PANEL)

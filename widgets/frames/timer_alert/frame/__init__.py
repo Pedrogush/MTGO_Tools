@@ -34,7 +34,7 @@ from widgets.frames.timer_alert.frame.styling import StylingMixin
 from widgets.frames.timer_alert.frame.threshold_panel import SOUND_OPTIONS, ThresholdPanel
 from widgets.frames.timer_alert.handlers import TimerAlertHandlersMixin
 from widgets.frames.timer_alert.properties import TimerAlertPropertiesMixin
-from widgets.stylize import init_top_level_window
+from widgets.stylize import clamp_to_display, init_top_level_window
 
 if TYPE_CHECKING:
     from services.mtgo_bridge_service.client import BridgeWatcher
@@ -110,6 +110,40 @@ class TimerAlertFrame(
         self._build_status_section(panel, sizer)
 
         self._set_status("timer.configure")
+
+        # Phase 6 logged this window as wanting 438px inside a 404px client and
+        # phase 8 confirmed it: the three action buttons are a wx.GridSizer of
+        # equal columns (phase 4's A2), the widest of them needs 130px, and
+        # 3 x 130 + gaps + margins is 438. A wx.BoxSizer row absorbs a deficit
+        # silently in its last item; a GridSizer spreads it across every column,
+        # so all three buttons were narrower than their labels at once and none
+        # of them looked obviously wrong.
+        #
+        # Fixed by measurement rather than by a wider literal, because the
+        # binding term is a translated string: "Start Monitoring" is
+        # "Iniciar Monitoramento" in pt-BR and the checkbox above it is half
+        # again as long, so any width picked from the English build is wrong in
+        # the other locale by construction. TIMER_ALERT_FRAME_SIZE stays the
+        # floor; the content raises it when it needs to.
+        #
+        # This also gives the window its first minimum size. It has always
+        # carried wx.RESIZE_BORDER with no floor, so it could be dragged to
+        # nothing with no feedback.
+        content_min = self.ClientToWindowSize(sizer.CalcMin())
+        fitted = wx.Size(
+            max(TIMER_ALERT_FRAME_SIZE[0], content_min.GetWidth()),
+            max(TIMER_ALERT_FRAME_SIZE[1], content_min.GetHeight()),
+        )
+        self.SetMinSize(fitted)
+        if fitted.GetWidth() > self.GetSize().GetWidth() or (
+            fitted.GetHeight() > self.GetSize().GetHeight()
+        ):
+            self.SetSize(fitted)
+        # ...but never past the display. init_top_level_window already clamped
+        # the constructor's size; this window is the one that resizes itself
+        # afterwards, so it re-clamps by hand.
+        clamp_to_display(self)
+
         self.Bind(wx.EVT_SIZE, self._on_resize)
 
     def _add_threshold_panel(self) -> None:

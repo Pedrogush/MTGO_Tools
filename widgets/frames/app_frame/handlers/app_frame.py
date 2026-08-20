@@ -425,6 +425,14 @@ class AppFrameHandlersMixin(_Base):
         if force or self.left_mode != target:
             self.left_mode = target
             self._schedule_settings_save()
+        # The two pages have different minimum widths (measured 472 research /
+        # 474 builder once the builder's scroller shows its scrollbar), and a
+        # wx.Simplebook reports the *maximum* over its pages -- so switching
+        # mode can change the whole left column's minimum. Without this the
+        # enforced floor is whichever page happened to be up when it was last
+        # computed: the same stale-snapshot failure phase 3b flagged for the
+        # inspector. CallAfter so the page has finished its own layout first.
+        wx.CallAfter(self._apply_min_size)
 
     def _open_full_mana_keyboard(self) -> None:
         self.mana_keyboard_window = open_mana_keyboard(

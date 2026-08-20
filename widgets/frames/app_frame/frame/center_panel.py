@@ -9,9 +9,11 @@ from wx.lib.agw import flatnotebook as fnb
 
 from utils.constants import (
     DARK_PANEL,
+    DECK_ZONE_MIN_PANE_HEIGHT,
     SPACE_MD,
     SPACE_SM,
     SPACE_XS,
+    STATUS_LABEL_MIN_WIDTH,
     SUBDUED_TEXT,
 )
 from utils.perf import timed
@@ -71,13 +73,26 @@ class CenterPanelBuilderMixin(_Base):
         self.deck_tabs.SetMinSize((deck_tabs_width, -1))
         detail_box.SetMinSize((deck_tabs_width + SPACE_MD, -1))
 
-        # Collection status label below the tabs
+        # Collection status label below the tabs.
+        #
+        # F8 ellipsised the same defect in three other windows in phase 4 and
+        # missed this one. Measured at the deck workspace's own floor: the
+        # en-US string wants 389px and the pt-BR one 491px in a 353px panel, so
+        # it has been running off the right edge mid-word ("...to fetch from")
+        # in both locales at every window width below ~1400. All three
+        # ingredients are needed together and none works alone -- the ellipsize
+        # style is only read from the **constructor**, ST_NO_AUTORESIZE stops
+        # SetLabel resizing the control back to its own text, and wx.EXPAND is
+        # what gives it a box narrower than that text to ellipsise into.
         self.collection_status_label = wx.StaticText(
-            detail_box, label=self._t("app.status.collection_not_loaded")
+            detail_box,
+            label=self._t("app.status.collection_not_loaded"),
+            style=wx.ST_ELLIPSIZE_END | wx.ST_NO_AUTORESIZE,
         )
+        self.collection_status_label.SetMinSize((STATUS_LABEL_MIN_WIDTH, -1))
         self.collection_status_label.SetForegroundColour(SUBDUED_TEXT)
         self.collection_status_label.SetBackgroundColour(wx.Colour(*DARK_PANEL))
-        section.sizer.Add(self.collection_status_label, 0, wx.TOP, SPACE_XS)
+        section.sizer.Add(self.collection_status_label, 0, wx.EXPAND | wx.TOP, SPACE_XS)
 
         # Sideboard Guide and Notes tabs
         self.sideboard_guide_panel = SideboardGuidePanel(
@@ -137,7 +152,7 @@ class CenterPanelBuilderMixin(_Base):
         # call reaches it. Same style flags, so the saved sash position and the
         # 7px metrics are unchanged.
         self.deck_split = DarkSplitter(self.deck_tabs)
-        self.deck_split.SetMinimumPaneSize(80)
+        self.deck_split.SetMinimumPaneSize(DECK_ZONE_MIN_PANE_HEIGHT)
         # Mainboard absorbs more of any extra height on resize.
         self.deck_split.SetSashGravity(0.6)
 
