@@ -100,6 +100,25 @@ class AppMenuBar(wx.Panel):
         # to do. That is why the harness drives the *spec*, not the widget.
         anchor.PopupMenu(menu, wx.Point(0, anchor.GetSize().GetHeight()))
         menu.Destroy()
+        # Re-resolve rather than re-using the `button` we opened with. The chosen
+        # item's handler runs *inside* the loop above -- measured, see
+        # docs/WXMSW_BEHAVIOUR.md -- and `File > Preferences... > Language` calls
+        # set_menus from in there, which destroys every title button including
+        # this one. Reaching for the stale reference is how #962 crashed with
+        # "wrapped C/C++ object of type Button has been deleted".
+        #
+        # After a rebuild this correctly finds nothing: the titles are now
+        # translated, so no child matches, and there is genuinely nothing to
+        # un-highlight because _build stylizes the new buttons "flat" already.
+        # The asymmetry is the point -- the highlight belongs to a button, not to
+        # a title, and when that button is gone so is its highlight.
+        #
+        # `anchor` is deliberately left alone: it is PopupMenu's receiver, and
+        # wxMSW's DoPopupMenu touches only the menu and its own locals after
+        # dispatching the item, never the window's members. Popping the menu on
+        # the bar instead of the button would avoid the dead receiver but move
+        # the popup by however much the button is inset, for no measured gain.
+        button = self._button_for(title)
         if button is not None:
             self._highlight(button, False)
         return True
@@ -115,6 +134,17 @@ class AppMenuBar(wx.Panel):
         button.Update()
 
     def _button_for(self, title: str) -> wx.Button | None:
+        """The live title button labelled ``title``, or ``None``.
+
+        Matching on ``GetLabel()`` over ``GetChildren()`` rather than on a cached
+        list is deliberate, and is what makes open_menu's post-popup re-resolve
+        safe: a destroyed child leaves ``GetChildren()`` the instant it is
+        destroyed (measured), so this can only ever hand back a *live* button of
+        the *current* bar. A cached list would keep handing back dead wrappers.
+
+        One title per bar is already required by ``self._menus`` being a dict;
+        this shares that constraint rather than adding one.
+        """
         for child in self.GetChildren():
             if isinstance(child, wx.Button) and child.GetLabel() == title:
                 return child

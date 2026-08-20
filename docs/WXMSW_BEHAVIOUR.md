@@ -454,6 +454,52 @@ the flag is testing the numpad. Send the flag for the arrow/navigation block
 both, so a replacement that answers only one *is* a regression -- with NumLock
 off, the keypad's 8 and 2 send the non-extended form.
 
+## Nested modal loops and widget lifetime
+
+Measured in the #962 menu-bar fix with real Win32 input, because the automation
+harness deliberately never pops a menu (`widgets/menu_bar/spec.py` explains why).
+
+* **A popup menu item's handler runs before `PopupMenu` returns.** wxMSW drains
+  the `WM_COMMAND` itself inside `DoPopupMenu`, after `TrackPopupMenu` has already
+  torn the menu down. So the statement after `PopupMenu(...)` is *not* the next
+  thing to run once the user clicks -- the whole handler is, and so is anything
+  that handler opens.
+* **A `ShowModal` opened from that handler nests inside the popup**, and a third
+  loop nests inside that (a `wx.MessageBox` from a dialog's own handler). The
+  app's `File > Preferences...` is exactly this shape: a `ShowModal` two loops
+  deep, with `EVT_CHOICE` firing apply-on-change while both are still live.
+* **`wx.CallAfter` is not a way to defer work past a popup.** Queued from a popup
+  item's handler it fires *inside* the nested `ShowModal`'s event loop -- still
+  inside `PopupMenu`. It escapes the popup only when there is no inner loop to
+  catch it, because `DoPopupMenu`'s own drain filters `WM_COMMAND` and nothing
+  else. A `wx.CallAfter` at the *destroying* call site therefore does **not**
+  protect a reference the *caller* is holding across `PopupMenu`; this was tried
+  first and measured not to work.
+* **Destroying a child window happens immediately.**
+  `sizer.Clear(delete_windows=True)` and `child.Destroy()` free the C++ object on
+  the spot: the Python wrapper goes falsy and the child is out of
+  `GetChildren()` before the call returns. **Top-level windows are the
+  exception** -- `frame.Close()`/`Destroy()` defers to idle, and a popup's
+  `WM_COMMAND` drain never runs idle, so a frame closed from a menu item
+  outlives the `PopupMenu` it was closed from (measured on `File > Exit`).
+* **`bool(widget)` is a valid liveness test**, and the only one that does not
+  itself raise: `False` iff the C++ object is gone. Hidden *and* disabled live
+  windows stay truthy, so it cannot false-negative on a real widget.
+  `GetChildren()` is the other safe route -- it can only ever hand back live
+  windows.
+* **An event queued for a window that is then destroyed is discarded**, not
+  delivered. A handler bound *on* a widget therefore cannot fire after that
+  widget dies, which is why the menu bar's `EVT_ENTER_WINDOW` /
+  `EVT_LEAVE_WINDOW` lambdas capturing their own button are safe where
+  `open_menu`'s stack reference was not.
+
+The rule this leaves the app with: **a widget reference held across a modal call
+must be re-resolved afterwards, never re-used.** `AppMenuBar.open_menu` looks its
+title button up again after `PopupMenu` for exactly that reason -- see
+`tests/ui/test_menu_bar_rebuild_during_open.py`, which fails with the reported
+`RuntimeError: wrapped C/C++ object of type Button has been deleted` if it does
+not.
+
 ## What wx will **not** tell you
 
 `wx.Window.GetBackgroundColour()` is not an oracle for "what is this widget
