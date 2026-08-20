@@ -51,9 +51,16 @@ class CardInspectorPreviewHandlers(_Base):
         uuid = selection.get("uuid")
         set_code = selection.get("set")
         cache = self.controller.get_image_cache()
-        path = cache.get_image_by_uuid(uuid, "normal") if uuid else None
-        if path is None and set_code:
+        if uuid:
+            # The uuid *is* the printing. A name+set lookup would happily
+            # return a sibling printing from the same set (Secret Lair prints
+            # some cards a dozen times), putting another art on the board under
+            # this printing's name, so a uuid miss goes straight to the queue.
+            path = cache.get_image_by_uuid(uuid, "normal")
+        elif set_code:
             path = cache.get_image_path_for_printing(name, set_code, "normal")
+        else:
+            path = None
         if path is not None:
             return path
         try:
