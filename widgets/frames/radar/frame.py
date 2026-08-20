@@ -19,7 +19,12 @@ from utils.constants import DARK_ALT, DARK_PANEL, LIGHT_TEXT, SPACE_SM
 from utils.i18n import translate
 from widgets.frames.radar.handlers import RadarFrameHandlersMixin, RadarPanelHandlersMixin
 from widgets.frames.radar.properties import RadarFramePropertiesMixin, RadarPanelPropertiesMixin
-from widgets.stylize import apply_base_font, apply_type_level, stylize_choice, stylize_scrollable
+from widgets.stylize import (
+    apply_type_level,
+    init_top_level_window,
+    stylize_choice,
+    stylize_scrollable,
+)
 
 if TYPE_CHECKING:
     from services.radar_service import RadarData
@@ -133,7 +138,7 @@ class RadarFrame(RadarFrameHandlersMixin, RadarFramePropertiesMixin, wx.Frame):
             size=(900, 700),
             style=style,
         )
-        apply_base_font(self)
+        init_top_level_window(self)
         self.SetBackgroundColour(DARK_PANEL)
         self._locale = locale
 

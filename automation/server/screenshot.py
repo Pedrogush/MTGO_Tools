@@ -197,6 +197,7 @@ class ScreenshotMixin(_Base):
             "match_history": "history_window",
             "metagame": "metagame_window",
             "top_cards": "top_cards_window",
+            "radar": "radar_window",
             "mana_keyboard": "mana_keyboard_window",
         }
         attr = attr_map.get(window_name)
@@ -213,7 +214,7 @@ class ScreenshotMixin(_Base):
         """Take a screenshot of a named secondary top-level window.
 
         Supported window names: opponent_tracker, timer_alert, match_history,
-        metagame, top_cards, mana_keyboard.  The window must already be open
+        metagame, top_cards, radar, mana_keyboard.  The window must already be open
         (use open_widget first if needed).
         """
         import os
@@ -223,7 +224,8 @@ class ScreenshotMixin(_Base):
         window = self._resolve_secondary_window(window_name)
         if window is None:
             available = (
-                "opponent_tracker, timer_alert, match_history, metagame, top_cards, mana_keyboard"
+                "opponent_tracker, timer_alert, match_history, metagame, top_cards, "
+                "radar, mana_keyboard"
             )
             return {
                 "error": f"Window {window_name!r} not found or not open. Available: {available}"

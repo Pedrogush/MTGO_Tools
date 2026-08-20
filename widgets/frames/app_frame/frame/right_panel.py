@@ -1,4 +1,4 @@
-"""Right column construction (toolbar, card inspector, card panel) for :class:`AppFrame`."""
+"""Right column construction (card inspector, card panel) for :class:`AppFrame`."""
 
 from __future__ import annotations
 
@@ -8,7 +8,6 @@ import wx
 
 from utils.constants import DARK_PANEL, LIGHT_TEXT, SPACE_XS
 from utils.perf import timed
-from widgets.buttons.toolbar_buttons import ToolbarButtons
 from widgets.panels.card_inspector_panel import CardInspectorPanel
 from widgets.panels.card_panel import CardPanel
 
@@ -21,43 +20,14 @@ else:
 
 
 class RightPanelBuilderMixin(_Base):
-    """Builds the toolbar plus the inspector column (card inspector + oracle text).
+    """Builds the inspector column (card inspector + oracle text).
 
-    The toolbar lives at the top of the right-side container, while the
-    inspector and oracle text panels make up the rightmost column under it.
+    The toolbar that used to sit above this column became the window-wide menu
+    bar in phase 3b (see :mod:`widgets.menu_bar`).
 
     Kept as a mixin (no ``__init__``) so :class:`AppFrame` remains the single
     source of truth for instance-state initialization.
     """
-
-    @timed
-    def _build_toolbar(self, parent: wx.Window) -> ToolbarButtons:
-        return ToolbarButtons(
-            parent,
-            on_open_opponent_tracker=self.open_opponent_tracker,
-            on_open_timer_alert=self.open_timer_alert,
-            on_open_match_history=self.open_match_history,
-            on_open_metagame_analysis=self.open_metagame_analysis,
-            on_open_top_cards=self.open_top_cards,
-            on_open_radar=self.open_radar,
-            on_open_settings_menu=self._open_toolbar_settings_menu,
-            labels={
-                "opponent_tracker": self._t("toolbar.opponent_tracker"),
-                "timer_alert": self._t("toolbar.timer_alert"),
-                "match_history": self._t("toolbar.match_history"),
-                "metagame_analysis": self._t("toolbar.metagame_analysis"),
-                "top_cards": self._t("toolbar.top_cards"),
-                "radar": self._t("toolbar.radar"),
-                "settings": "\u2699",
-                "settings_tooltip": self._t("toolbar.settings"),
-                "opponent_tracker_tooltip": self._t("toolbar.tooltip.opponent_tracker"),
-                "timer_alert_tooltip": self._t("toolbar.tooltip.timer_alert"),
-                "match_history_tooltip": self._t("toolbar.tooltip.match_history"),
-                "metagame_analysis_tooltip": self._t("toolbar.tooltip.metagame_analysis"),
-                "top_cards_tooltip": self._t("toolbar.tooltip.top_cards"),
-                "radar_tooltip": self._t("toolbar.tooltip.radar"),
-            },
-        )
 
     @timed
     def _build_card_inspector(self, parent: wx.Window) -> wx.StaticBoxSizer:

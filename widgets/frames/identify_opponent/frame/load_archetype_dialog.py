@@ -8,7 +8,7 @@ import wx
 from loguru import logger
 
 from utils.constants import DARK_BG, FORMAT_OPTIONS, LIGHT_TEXT, SPACE_MD, SPACE_SM
-from widgets.stylize import apply_base_font, stylize_choice
+from widgets.stylize import init_top_level_window, stylize_choice
 
 if TYPE_CHECKING:
     from services.metagame_service import MetagameService
@@ -27,7 +27,7 @@ class _LoadArchetypeDialog(wx.Dialog):
         locale: str | None = None,
     ) -> None:
         super().__init__(parent, title=title, style=wx.DEFAULT_DIALOG_STYLE)
-        apply_base_font(self)
+        init_top_level_window(self)
         self.SetBackgroundColour(DARK_BG)
         self._metagame_service = metagame_service
         self._archetypes_by_format: dict[str, list[dict[str, Any]]] = {}

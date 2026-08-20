@@ -97,7 +97,7 @@ def check_list_widgets(client: AutomationClient) -> None:
     result = client.list_widgets()
     assert "widgets" in result, "Response should contain 'widgets'"
     widgets = result["widgets"]
-    assert "toolbar" in widgets, "Should have toolbar widget"
+    assert "menu_bar" in widgets, "Should have menu_bar widget"
     assert "research_panel" in widgets, "Should have research_panel widget"
 
 

@@ -11,7 +11,7 @@ from utils.app_icon import apply_app_icon
 from utils.constants import DARK_BG, DARK_PANEL, LIGHT_TEXT, SPACE_MD
 from widgets.frames.splash_frame.handlers import LoadingFrameHandlersMixin
 from widgets.frames.splash_frame.properties import LoadingFramePropertiesMixin
-from widgets.stylize import apply_base_font, apply_type_level
+from widgets.stylize import apply_type_level, init_top_level_window
 
 
 class LoadingFrame(LoadingFrameHandlersMixin, LoadingFramePropertiesMixin, wx.Frame):
@@ -24,7 +24,7 @@ class LoadingFrame(LoadingFrameHandlersMixin, LoadingFramePropertiesMixin, wx.Fr
             style=wx.BORDER_NONE | wx.STAY_ON_TOP,
             size=(420, 120),
         )
-        apply_base_font(self)
+        init_top_level_window(self)
         apply_app_icon(self)
         self._start = time.monotonic()
         self._min_duration = min_duration

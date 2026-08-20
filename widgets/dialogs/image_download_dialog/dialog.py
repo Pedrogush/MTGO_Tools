@@ -11,7 +11,7 @@ import wx
 from utils.constants import DARK_BG, LIGHT_TEXT, SPACE_SM, SUBDUED_TEXT
 from widgets.dialogs.image_download_dialog.handlers import ImageDownloadDialogHandlersMixin
 from widgets.dialogs.image_download_dialog.properties import ImageDownloadDialogPropertiesMixin
-from widgets.stylize import apply_base_font, apply_type_level
+from widgets.stylize import apply_type_level, init_top_level_window
 
 if TYPE_CHECKING:
     from services.image_service import BulkImageDownloader
@@ -38,7 +38,7 @@ class ImageDownloadDialog(
         on_status_update: Callable[[str], None] | None = None,
     ):
         super().__init__(parent, title="Offline Images Mode", size=(460, 320))
-        apply_base_font(self)
+        init_top_level_window(self)
         self.SetBackgroundColour(DARK_BG)
 
         self.image_cache = image_cache

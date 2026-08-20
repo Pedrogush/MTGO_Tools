@@ -285,6 +285,13 @@ def cmd_open_widget(client: AutomationClient, args: argparse.Namespace) -> int:
     return 0 if result.get("opened") else 1
 
 
+def cmd_menu(client: AutomationClient, args: argparse.Namespace) -> int:
+    """List the menu bar, or activate one menu item."""
+    result = client.menu(args.path)
+    print(format_output(result, args.json))
+    return 0 if result.get("ok") else 1
+
+
 def cmd_refresh_collection(client: AutomationClient, args: argparse.Namespace) -> int:
     """Trigger a collection refresh + export from the MTGO bridge."""
     result = client.refresh_collection(force=not args.no_force)
@@ -531,8 +538,27 @@ Notes:
     p = subparsers.add_parser("open-widget", help="Open a widget window")
     p.add_argument(
         "widget_name",
-        choices=["opponent_tracker", "match_history", "timer_alert", "metagame"],
+        choices=[
+            "opponent_tracker",
+            "match_history",
+            "timer_alert",
+            "metagame",
+            "top_cards",
+            "radar",
+        ],
         help="Widget to open",
+    )
+
+    # menu
+    p = subparsers.add_parser(
+        "menu",
+        help="List the menu bar, or activate an item ('Tools/Radar')",
+    )
+    p.add_argument(
+        "path",
+        nargs="?",
+        help="Menu path, e.g. 'Tools/Radar' or 'Settings/Language/pt-BR'. "
+        "Omit to list every menu.",
     )
 
     # screenshot-window
@@ -545,6 +571,7 @@ Notes:
             "match_history",
             "metagame",
             "top_cards",
+            "radar",
             "mana_keyboard",
         ],
         help="Window to capture (must already be open)",
@@ -655,6 +682,7 @@ Notes:
         "refresh-collection": cmd_refresh_collection,
         "timer-alert-action": cmd_timer_alert_action,
         "open-widget": cmd_open_widget,
+        "menu": cmd_menu,
         "screenshot-window": cmd_screenshot_window,
         "get-deck-notes": cmd_get_deck_notes,
         "type-into-oracle": cmd_type_into_oracle,

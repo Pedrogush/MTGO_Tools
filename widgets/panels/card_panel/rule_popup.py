@@ -14,7 +14,7 @@ import wx
 import wx.html
 
 from utils.constants import DARK_PANEL, SPACE_XS
-from widgets.stylize import apply_base_font
+from widgets.stylize import init_top_level_window
 
 
 class RulePopupFrame(wx.Frame):
@@ -27,7 +27,7 @@ class RulePopupFrame(wx.Frame):
             size=(520, 360),
             style=wx.DEFAULT_FRAME_STYLE | wx.FRAME_FLOAT_ON_PARENT,
         )
-        apply_base_font(self)
+        init_top_level_window(self)
         self.SetBackgroundColour(DARK_PANEL)
 
         sizer = wx.BoxSizer(wx.VERTICAL)

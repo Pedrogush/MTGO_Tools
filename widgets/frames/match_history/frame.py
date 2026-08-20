@@ -19,7 +19,7 @@ from utils.constants import SPACE_SM, SPACE_XS
 from utils.i18n import translate
 from widgets.frames.match_history.handlers import MatchHistoryHandlersMixin
 from widgets.frames.match_history.properties import MatchHistoryPropertiesMixin
-from widgets.stylize import apply_base_font, stylize_button, stylize_scrollable
+from widgets.stylize import init_top_level_window, stylize_button, stylize_scrollable
 
 DARK_BG = wx.Colour(20, 22, 27)
 DARK_PANEL = wx.Colour(34, 39, 46)
@@ -47,7 +47,7 @@ class MatchHistoryFrame(MatchHistoryHandlersMixin, MatchHistoryPropertiesMixin, 
             size=(self._FIXED_WIDTH, 460),
             style=style,
         )
-        apply_base_font(self)
+        init_top_level_window(self)
         self._locale = locale
         self.controller = controller
         # Lock horizontal size; allow vertical resize only

@@ -19,6 +19,11 @@ APP_FRAME_SIZE = (1480, 860)
 # (left sidebar + card inspector) and the 2-column grid floor are what let the
 # real content minimum drop to this size; see _apply_min_size, which raises the
 # floor dynamically when a tall panel (the inspector) is expanded.
+# Measured against this floor in phase 3b: the window meets it with the card
+# inspector collapsed (content floor 1067x562) and misses it with the inspector
+# expanded (1393x902, inspector-content dependent). The comment above described
+# an intent, not a measurement -- the real floor was 1310 before phase 3 and 1381
+# after it. Reducing the expanded case below 1200 is phase 8's column work.
 APP_FRAME_MIN_SIZE = (1200, 680)
 APP_FRAME_SUMMARY_MIN_HEIGHT = 90
 

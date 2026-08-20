@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING, Any
 import wx
 
 from utils.constants import SPACE_SM
-from widgets.stylize import apply_base_font, apply_type_level
+from widgets.stylize import apply_type_level, init_top_level_window
 
 if TYPE_CHECKING:
     from widgets.frames.app_frame import AppFrame
@@ -54,7 +54,7 @@ class _GuideRecordBar(wx.MiniFrame):
             title=t("guide.record.bar_title"),
             style=wx.CAPTION | wx.FRAME_FLOAT_ON_PARENT | wx.FRAME_TOOL_WINDOW,
         )
-        apply_base_font(self)
+        init_top_level_window(self)
         panel = wx.Panel(self)
         sizer = wx.BoxSizer(wx.VERTICAL)
         panel.SetSizer(sizer)

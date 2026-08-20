@@ -34,16 +34,38 @@ class IntrospectionMixin(_Base):
         return {"status": status_text}
 
     def _handle_get_window_info(self) -> dict[str, Any]:
-        """Get window information."""
+        """Get window information.
+
+        ``min_size`` is the frame's enforced floor -- the number the redesign's
+        "does this still fit a 1366x768 laptop" criterion is measured against.
+        It is recomputed by ``AppFrame._apply_min_size`` whenever a side panel is
+        collapsed or expanded, so toggling one (``click left_toggle`` twice) is
+        how to refresh it after the window's content has changed.
+        ``content_min_size`` is what the root panel's sizer wants *right now*,
+        which is the same number before the frame chrome is added -- when the two
+        disagree, the enforced floor is stale.
+        """
         pos = self.frame.GetPosition()
         size = self.frame.GetSize()
+        min_size = self.frame.GetMinSize()
         info: dict[str, Any] = {
             "title": self.frame.GetTitle(),
             "position": {"x": pos.x, "y": pos.y},
             "size": {"width": size.width, "height": size.height},
+            "min_size": {"width": min_size.width, "height": min_size.height},
             "visible": self.frame.IsShown(),
             "active": self.frame.IsActive(),
+            "left_collapsed": getattr(self.frame, "_left_collapsed", None),
+            "inspector_collapsed": getattr(self.frame, "_inspector_collapsed", None),
         }
+        root_panel = getattr(self.frame, "root_panel", None)
+        root_sizer = root_panel.GetSizer() if root_panel else None
+        if root_sizer is not None:
+            content_min = root_sizer.GetMinSize()
+            info["content_min_size"] = {
+                "width": content_min.GetWidth(),
+                "height": content_min.GetHeight(),
+            }
         tracker = getattr(self.frame, "tracker_window", None)
         if tracker is not None:
             try:
@@ -63,11 +85,13 @@ class IntrospectionMixin(_Base):
         """List available widgets and their states."""
         widgets = {}
 
-        # Toolbar buttons
-        if hasattr(self.frame, "toolbar"):
-            widgets["toolbar"] = {
-                "type": "ToolbarButtons",
-                "buttons": self._get_button_info(self.frame.toolbar),
+        # Menu bar (six toolbar buttons + a gear popup until phase 3b)
+        menu_bar = getattr(self.frame, "menu_bar", None)
+        if menu_bar is not None:
+            widgets["menu_bar"] = {
+                "type": "AppMenuBar",
+                "titles": menu_bar.titles(),
+                "buttons": self._get_button_info(menu_bar),
             }
 
         # Research panel
@@ -141,7 +165,7 @@ class IntrospectionMixin(_Base):
     def _find_widget(self, name: str) -> wx.Window | None:
         """Find a widget by name."""
         widget_map = {
-            "toolbar": getattr(self.frame, "toolbar", None),
+            "menu_bar": getattr(self.frame, "menu_bar", None),
             "research_panel": self.frame.research_panel,
             "builder_panel": self.frame.builder_panel,
             "deck_list": getattr(self.frame, "deck_list", None),
@@ -163,12 +187,20 @@ class IntrospectionMixin(_Base):
         return {"waited": ms}
 
     def _handle_open_widget(self, widget_name: str) -> dict[str, Any]:
-        """Open a top-level widget window (opponent_tracker, match_history, timer_alert, metagame)."""
+        """Open one of the six companion windows by name.
+
+        All six are listed here as of phase 3b. Until then only four were, and
+        the other two (``top_cards``, ``radar``) were reachable only through
+        ``click toolbar --label ...`` -- which stopped existing when the toolbar
+        became a menu bar. Review finding §5.2.
+        """
         handler_map = {
             "opponent_tracker": "open_opponent_tracker",
             "match_history": "open_match_history",
             "timer_alert": "open_timer_alert",
             "metagame": "open_metagame_analysis",
+            "top_cards": "open_top_cards",
+            "radar": "open_radar",
         }
         method_name = handler_map.get(widget_name)
         if not method_name:
@@ -178,6 +210,39 @@ class IntrospectionMixin(_Base):
             return {"opened": False, "error": f"Method not found: {method_name}"}
         method()
         return {"opened": True, "widget": widget_name}
+
+    def _handle_menu(self, path: str | list[str] | None = None) -> dict[str, Any]:
+        """List the menu bar, or activate one item by path.
+
+        ``path`` is ``"Tools/Radar"`` (or the equivalent list). A radio option
+        takes three segments, ``"Settings/Language/pt-BR"`` -- the last segment
+        matches either the option's value or its translated label.
+
+        This drives the entry's handler directly instead of popping the menu up,
+        because ``wx.PopupMenu`` runs a nested modal loop on the main thread and
+        would stop this very socket being serviced (review finding §5.5).
+        """
+        from widgets.menu_bar import describe, invoke_entry
+
+        menu_bar = getattr(self.frame, "menu_bar", None)
+        if menu_bar is None:
+            return {"ok": False, "error": "Menu bar not available"}
+        if path is None:
+            return {
+                "ok": True,
+                "menus": {title: describe(menu_bar.entries(title)) for title in menu_bar.titles()},
+            }
+        parts = path.split("/") if isinstance(path, str) else list(path)
+        if not parts:
+            return {"ok": False, "error": "Empty menu path"}
+        title, rest = parts[0], parts[1:]
+        if title not in menu_bar.titles():
+            return {"ok": False, "error": f"Menu not found: {title}"}
+        if not rest:
+            return {"ok": False, "error": f"No item given under {title!r}"}
+        if invoke_entry(menu_bar.entries(title), rest):
+            return {"ok": True, "path": parts}
+        return {"ok": False, "error": f"Menu item not found: {'/'.join(parts)}"}
 
     def _handle_refresh_collection(self, force: bool = True) -> dict[str, Any]:
         """Trigger a collection refresh + export through the real controller path.
@@ -231,3 +296,4 @@ class IntrospectionMixin(_Base):
             return {"text": "", "error": "Oracle text control not found"}
         value = ctrl.GetValue() if hasattr(ctrl, "GetValue") else ""
         return {"text": value}
+

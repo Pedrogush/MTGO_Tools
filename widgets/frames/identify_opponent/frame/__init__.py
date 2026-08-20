@@ -54,7 +54,7 @@ from widgets.frames.identify_opponent.properties import (
 )
 from widgets.panels.compact_radar_panel import CompactRadarPanel
 from widgets.panels.compact_sideboard_panel import CompactSideboardPanel
-from widgets.stylize import apply_base_font
+from widgets.stylize import init_top_level_window
 
 
 class MTGOpponentDeckSpy(
@@ -84,7 +84,7 @@ class MTGOpponentDeckSpy(
             size=OPPONENT_TRACKER_FRAME_SIZE,
             style=style,
         )
-        apply_base_font(self)
+        init_top_level_window(self)
 
         self._locale = locale
         self._poll_timer = wx.Timer(self)

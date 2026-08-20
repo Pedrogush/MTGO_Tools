@@ -1,4 +1,4 @@
-"""Toolbar UI strings. (Portuguese (Brazil))"""
+"""Menu-bar UI strings. (Portuguese (Brazil))"""
 
 MESSAGES: dict[str, str] = {
     "toolbar.opponent_tracker": "Rastreador de Oponente",
@@ -8,6 +8,11 @@ MESSAGES: dict[str, str] = {
     "toolbar.top_cards": "Top Cartas",
     "toolbar.radar": "Radar",
     "toolbar.settings": "Configurações",
+    "menu.file": "Arquivo",
+    "menu.tools": "Ferramentas",
+    "menu.settings": "Configurações",
+    "menu.help": "Ajuda",
+    "menu.exit": "Sair",
     "toolbar.load_collection": "Carregar Coleção",
     "toolbar.download_card_images": "Ativar Modo de Imagens Offline",
     "toolbar.update_card_database": "Atualizar Banco de Cartas",

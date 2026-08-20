@@ -134,6 +134,33 @@ def test_apply_base_font_does_not_reach_a_child_top_level_window(app: object) ->
         parent.Destroy()
 
 
+def test_init_top_level_window_applies_the_base_font(app: object) -> None:
+    """The call every top-level window makes carries both halves.
+
+    The dark caption cannot be asserted from wx -- it is a DWM attribute on the
+    HWND with no getter wx exposes -- so what is pinned here is that the font half
+    still happens and that the call is safe on a real frame. The caption half was
+    verified by screenshotting every window class in phase 3b.
+    """
+    window = wx.Frame(None)
+    try:
+        stylize.init_top_level_window(window)
+        assert window.GetFont().GetPointSize() == T.BASE_FONT_POINT_SIZE
+    finally:
+        window.Destroy()
+
+
+def test_apply_dark_caption_never_raises_on_any_window(app: object) -> None:
+    """It runs on captionless windows too (splash frame, rule popup), and off Windows."""
+    from widgets import native_dark
+
+    for window in (wx.Frame(None), wx.Frame(None, style=wx.FRAME_NO_TASKBAR | wx.BORDER_NONE)):
+        try:
+            assert isinstance(native_dark.apply_dark_caption(window), bool)
+        finally:
+            window.Destroy()
+
+
 def test_label_tone_override(frame: object) -> None:
     label = wx.StaticText(frame, label="x")
     stylize.stylize_label(label, tone="disabled", surface="alt")
