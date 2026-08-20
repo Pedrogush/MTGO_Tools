@@ -19,7 +19,12 @@ from utils.constants import SPACE_SM, SPACE_XS
 from utils.i18n import translate
 from widgets.frames.match_history.handlers import MatchHistoryHandlersMixin
 from widgets.frames.match_history.properties import MatchHistoryPropertiesMixin
-from widgets.stylize import init_top_level_window, stylize_button, stylize_scrollable
+from widgets.stylize import (
+    create_status_label,
+    init_top_level_window,
+    stylize_button,
+    stylize_scrollable,
+)
 
 DARK_BG = wx.Colour(20, 22, 27)
 DARK_PANEL = wx.Colour(34, 39, 46)
@@ -82,11 +87,10 @@ class MatchHistoryFrame(MatchHistoryHandlersMixin, MatchHistoryPropertiesMixin, 
         self.refresh_button.Bind(wx.EVT_BUTTON, lambda _evt: self.refresh_history())
         toolbar.Add(self.refresh_button, 0)
 
-        toolbar.AddStretchSpacer(1)
-
-        self.status_label = wx.StaticText(panel, label=self._t("app.status.ready"))
-        self.status_label.SetForegroundColour(SUBDUED_TEXT)
-        toolbar.Add(self.status_label, 0, wx.ALIGN_CENTER_VERTICAL)
+        # F8: the label takes the slack the stretch spacer used to, so it has a
+        # bounded box to ellipsise inside instead of overflowing the window edge.
+        self.status_label = create_status_label(panel, self._t("app.status.ready"))
+        toolbar.Add(self.status_label, 1, wx.ALIGN_CENTER_VERTICAL | wx.LEFT, SPACE_SM)
 
         metrics_box = wx.StaticBox(panel, label=self._t("match.metrics.title"))
         metrics_box.SetForegroundColour(LIGHT_TEXT)

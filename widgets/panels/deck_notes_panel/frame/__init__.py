@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING
 import wx
 
 from utils.constants import DARK_ALT, DARK_PANEL, SPACE_MD, SPACE_SM, SUBDUED_TEXT
+from widgets.empty_state import EmptyState
 from widgets.panels.deck_notes_panel.frame.note_card_widget import (
     NOTE_TYPES,
     _migrate,
@@ -71,17 +72,26 @@ class DeckNotesPanel(
         self.SetSizer(outer)
 
         # ── Toolbar ─────────────────────────────────────────────────────────
+        #
+        # C5/C6: this row is hidden while the empty state is up. It used to stay,
+        # which put "+ Add Note" in the panel's top-left corner and the sentence
+        # telling you to press it dead-centre ~1500px away -- and the sentence
+        # named a button called "Add" that has never existed. The empty state
+        # carries its own CTA now (see _refresh_view in handlers.py).
+        self.toolbar_panel = wx.Panel(self)
+        self.toolbar_panel.SetBackgroundColour(DARK_PANEL)
         toolbar = wx.BoxSizer(wx.HORIZONTAL)
-        outer.Add(toolbar, 0, wx.EXPAND | wx.ALL, SPACE_SM)
+        self.toolbar_panel.SetSizer(toolbar)
+        outer.Add(self.toolbar_panel, 0, wx.EXPAND | wx.ALL, SPACE_SM)
 
-        add_btn = wx.Button(self, label=self._t("notes.btn.add"))
+        add_btn = wx.Button(self.toolbar_panel, label=self._t("notes.btn.add"))
         stylize_button(add_btn, kind="primary")
         add_btn.Bind(wx.EVT_BUTTON, self._on_add_note)
         toolbar.Add(add_btn, 0, wx.RIGHT, SPACE_SM)
 
         toolbar.AddStretchSpacer(1)
 
-        self.save_btn = wx.Button(self, label=self._t("notes.btn.save"))
+        self.save_btn = wx.Button(self.toolbar_panel, label=self._t("notes.btn.save"))
         stylize_button(self.save_btn, kind="secondary")
         self.save_btn.Bind(wx.EVT_BUTTON, self._on_save_clicked)
         toolbar.Add(self.save_btn, 0)
@@ -95,19 +105,14 @@ class DeckNotesPanel(
         self.cards_sizer = wx.BoxSizer(wx.VERTICAL)
         self.scroll_win.SetSizer(self.cards_sizer)
 
-        self.empty_state_panel = wx.Panel(self)
-        self.empty_state_panel.SetBackgroundColour(DARK_ALT)
-        empty_sizer = wx.BoxSizer(wx.VERTICAL)
-        self.empty_state_panel.SetSizer(empty_sizer)
-        empty_sizer.AddStretchSpacer(1)
-        empty_label = wx.StaticText(
-            self.empty_state_panel,
-            label=self._t("notes.empty"),
-            style=wx.ALIGN_CENTRE_HORIZONTAL,
+        self.empty_state_panel = EmptyState(
+            self,
+            message=self._t("notes.empty"),
+            hint=self._t("notes.empty.hint"),
+            cta_label=self._t("notes.btn.add"),
+            on_cta=self._on_add_note,
+            surface="alt",
         )
-        empty_label.SetForegroundColour(SUBDUED_TEXT)
-        empty_sizer.Add(empty_label, 0, wx.ALIGN_CENTER | wx.ALL, SPACE_MD)
-        empty_sizer.AddStretchSpacer(1)
         self.empty_state_panel.Hide()
         outer.Add(self.empty_state_panel, 1, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, SPACE_SM)
 

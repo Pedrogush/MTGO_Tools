@@ -31,6 +31,32 @@ APP_FRAME_SUMMARY_MIN_HEIGHT = 90
 # and the right card-inspector column.
 COLLAPSE_TOGGLE_WIDTH = 16
 
+# C5/C6: the widest an empty state's message is allowed to get before it wraps.
+# The Sideboard Guide's empty state is a ~1600x850 void with a 300px cluster in
+# it and Deck Notes' is nearly as large, so an unconstrained wx.StaticText there
+# sets a line ~180 characters long. This is a measure-based cap, not a panel
+# fraction, because the readable-line-length problem is the same at 1481px and
+# at 2560px.
+EMPTY_STATE_MAX_WIDTH = 360
+
+# F8: width (px) reserved for the right-hand status label in the Match History,
+# Metagame Analysis and Top Cards toolbars. All three were a proportion-0
+# wx.StaticText after an AddStretchSpacer(1): the spacer took every spare pixel,
+# the label took its natural width on top of that, and the overflow ran off the
+# window edge mid-word ("Failed to", "Loade", "To"). The label takes the spare
+# space itself now (proportion 1, right-aligned, ST_ELLIPSIZE_END) and this is
+# the floor the toolbar reserves for it before the controls to its left start
+# losing room.
+STATUS_LABEL_MIN_WIDTH = 120
+
+# F4: the deck workspace's compact header buttons -- the Grid/Table/Pile
+# toggles, the pile-sort "..." and the printing "Art" button. All five are
+# wx.BU_EXACTFIT, which is the only way past wx.Button's 75x23 best-size floor
+# but sizes them to the text extent plus ~2px: measured 30x18 before phase 4.
+# See widgets.stylize.size_compact_button for why BU_EXACTFIT has to stay.
+VIEW_TOGGLE_HEIGHT = 26
+VIEW_TOGGLE_PADDING_X = 10
+
 # Width (px) of the status bar's right-hand field, which holds the "update
 # available" note (issue #142) and is empty the rest of the time. Fixed rather
 # than proportional so the status message on the left keeps all remaining width.

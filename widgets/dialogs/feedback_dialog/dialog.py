@@ -63,7 +63,7 @@ class FeedbackDialog(FeedbackDialogHandlersMixin, FeedbackDialogPropertiesMixin,
         sizer.Add(desc, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, SPACE_SM)
 
         # Notes area
-        notes_label = wx.StaticText(panel, label="Notes (optional):")
+        notes_label = wx.StaticText(panel, label="Notes (Optional)")
         notes_label.SetForegroundColour(LIGHT_TEXT)
         sizer.Add(notes_label, 0, wx.LEFT | wx.RIGHT | wx.TOP, SPACE_SM)
 

@@ -286,6 +286,24 @@ class IntrospectionMixin(_Base):
         wx.CallAfter(self.frame.Close, True)
         return {"closed": True}
 
+    def _handle_select_card(self, card_name: str, zone: str = "main") -> dict[str, Any]:
+        """Select a card by name in a deck zone, populating the Card Inspector.
+
+        Added in phase 4: the inspector's card-selected state (the printing
+        pager, "Save art", the wrapped-title + mana-pip row) was unreachable
+        from the harness, so F6 and A6 could not be verified on screen without
+        a real mouse click. ``focus_card`` is the panel's own selection entry
+        point, so this drives exactly the path a click drives.
+        """
+        panel = getattr(self.frame, "main_table" if zone == "main" else "side_table", None)
+        if panel is None:
+            return {"selected": False, "error": f"Zone not available: {zone}"}
+        focus = getattr(panel, "focus_card", None)
+        if not callable(focus):
+            return {"selected": False, "error": "Panel has no focus_card"}
+        ok = bool(focus(card_name))
+        return {"selected": ok, "card_name": card_name, "zone": zone}
+
     def _handle_get_inspector_oracle_text(self) -> dict[str, Any]:
         """Return the plain-text value of the card inspector's oracle text control."""
         inspector = getattr(self.frame, "card_inspector_panel", None)
@@ -296,4 +314,3 @@ class IntrospectionMixin(_Base):
             return {"text": "", "error": "Oracle text control not found"}
         value = ctrl.GetValue() if hasattr(ctrl, "GetValue") else ""
         return {"text": value}
-
