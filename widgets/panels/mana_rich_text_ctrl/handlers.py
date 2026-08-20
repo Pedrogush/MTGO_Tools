@@ -267,10 +267,11 @@ class ManaSymbolRichCtrlHandlersMixin:
 
     def _on_paint(self, _evt: wx.PaintEvent) -> None:
         from widgets.panels.mana_rich_text_ctrl.frame import (
-            _BORDER_INNER,
-            _BORDER_OUTER_DARK,
+            _BORDER_BASE,
+            _BORDER_FOCUS,
+            _BORDER_HALO,
             _BORDER_OUTER_DIP,
-            _BORDER_OUTER_LIGHT,
+            _BORDER_RING,
         )
 
         dc = wx.AutoBufferedPaintDC(self)
@@ -281,11 +282,11 @@ class ManaSymbolRichCtrlHandlersMixin:
         # Outer halo covers the whole rectangle; the inner ring and the
         # bottom outer row are painted over it. The inner RTC occupies
         # the centre.
-        dc.SetBrush(wx.Brush(_BORDER_OUTER_LIGHT))
+        dc.SetBrush(wx.Brush(_BORDER_HALO))
         dc.DrawRectangle(0, 0, size.width, size.height)
 
-        # Near-white inner ring inset by the outer halo.
-        dc.SetBrush(wx.Brush(_BORDER_INNER))
+        # The ring that identifies the field, inset by the halo.
+        dc.SetBrush(wx.Brush(_BORDER_RING))
         dc.DrawRectangle(
             outer,
             outer,
@@ -293,18 +294,15 @@ class ManaSymbolRichCtrlHandlersMixin:
             max(0, size.height - 2 * outer),
         )
 
-        # Bottom band: unfocused keeps the native split -- the inner row
-        # stays near-white from the inner-ring fill and only the outer
-        # row is mid-grey. On focus the whole 2-DIP band tints the
-        # Windows system accent colour (queried each paint so a theme
-        # change is picked up live) so it reads as one continuous focus
-        # underline matching the native TextCtrl.
+        # Bottom band: unfocused, the outer row drops back to the halo so the
+        # ring reads as one even rectangle. On focus the whole 2-DIP band
+        # becomes FOCUS_RING, so the underline is the app's focus token
+        # rather than the user's Windows accent colour.
         if self._inner.HasFocus():
-            accent = wx.SystemSettings.GetColour(wx.SYS_COLOUR_HIGHLIGHT)
-            dc.SetBrush(wx.Brush(accent))
+            dc.SetBrush(wx.Brush(_BORDER_FOCUS))
             dc.DrawRectangle(0, size.height - 2 * outer, size.width, 2 * outer)
         else:
-            dc.SetBrush(wx.Brush(_BORDER_OUTER_DARK))
+            dc.SetBrush(wx.Brush(_BORDER_BASE))
             dc.DrawRectangle(0, size.height - outer, size.width, outer)
 
     def _on_inner_focus_change(self, evt: wx.FocusEvent) -> None:

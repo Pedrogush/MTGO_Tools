@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any
 import wx
 from loguru import logger
 
-from widgets.panels.card_panel.html_renderer import build_card_html
+from widgets.panels.card_panel.html_renderer import _BODY_TEXT, _PANEL_BG, build_card_html
 from widgets.panels.card_panel.properties import _stats_lookup_names
 from widgets.panels.card_panel.rule_popup import RulePopupFrame
 
@@ -85,7 +85,10 @@ class CardPanelHandlersMixin(_Base):
             )
         except Exception as exc:
             logger.exception(f"Failed to build card HTML: {exc}")
-            html = f'<html><body bgcolor="#22272E" text="#E6EDF3"><p>{empty_text}</p></body></html>'
+            html = (
+                f'<html><body bgcolor="{_PANEL_BG}" text="{_BODY_TEXT}">'
+                f"<p>{empty_text}</p></body></html>"
+            )
         self.oracle_html.SetPage(html)
 
     def _fetch_keyword_lookup(self) -> dict[str, Any]:

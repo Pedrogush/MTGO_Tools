@@ -12,7 +12,12 @@ from utils.constants import DARK_PANEL, LIGHT_TEXT, SPACE_XS
 if TYPE_CHECKING:
     from services.comp_rules_service import CompRulesService, Section, Subsection
 from utils.i18n import translate
-from widgets.frames.rules_browser.html_render import render_outline_to_html
+from widgets.frames.rules_browser.html_render import (
+    _DEFAULT_BG,
+    _DEFAULT_TEXT,
+    render_outline_to_html,
+)
+from widgets.splitter import DarkSplitter
 from widgets.stylize import init_top_level_window
 
 
@@ -54,8 +59,7 @@ class RulesBrowserFrame(wx.Frame):
     # ----------------------------------------------------------------- UI
 
     def _build_ui(self) -> None:
-        self.splitter = wx.SplitterWindow(self, style=wx.SP_LIVE_UPDATE | wx.SP_3DSASH)
-        self.splitter.SetBackgroundColour(DARK_PANEL)
+        self.splitter = DarkSplitter(self)
 
         self.tree = wx.TreeCtrl(
             self.splitter,
@@ -104,7 +108,7 @@ class RulesBrowserFrame(wx.Frame):
         if not self._sections:
             empty = translate(self._locale, "rules_browser.body.empty")
             self.doc.SetPage(
-                f'<html><body bgcolor="#22272E" text="#E6EDF3">'
+                f'<html><body bgcolor="{_DEFAULT_BG}" text="{_DEFAULT_TEXT}">'
                 f'<p align="center">{empty}</p></body></html>'
             )
             return

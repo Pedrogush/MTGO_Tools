@@ -24,7 +24,9 @@ from widgets.stylize import (
     apply_type_level,
     init_top_level_window,
     strip_native_client_edge,
+    stylize_button,
     stylize_choice,
+    stylize_gauge,
     stylize_scrollable,
 )
 
@@ -72,11 +74,13 @@ class RadarPanel(RadarPanelHandlersMixin, RadarPanelPropertiesMixin, wx.Panel):
         header_sizer.Add(self.archetype_label, 1, wx.ALIGN_CENTER_VERTICAL)
 
         self.export_btn = wx.Button(self, label=self._t("radar.btn.export"))
+        stylize_button(self.export_btn, kind="secondary")
         self.export_btn.Enable(False)
         self.export_btn.Bind(wx.EVT_BUTTON, self._on_export_clicked)
         header_sizer.Add(self.export_btn, 0, wx.LEFT, SPACE_SM)
 
         self.use_search_btn = wx.Button(self, label=self._t("radar.btn.use_search"))
+        stylize_button(self.use_search_btn, kind="secondary")
         self.use_search_btn.Enable(False)
         self.use_search_btn.Bind(wx.EVT_BUTTON, self._on_use_search_clicked)
         header_sizer.Add(self.use_search_btn, 0, wx.LEFT, SPACE_SM)
@@ -182,15 +186,20 @@ class RadarFrame(RadarFrameHandlersMixin, RadarFramePropertiesMixin, wx.Frame):
         selection_sizer.Add(self.archetype_choice, 1, wx.RIGHT, SPACE_SM)
 
         self.generate_btn = wx.Button(panel, label=self._t("radar.dialog.generate"))
+        # The one primary on this surface: generating the radar is what the
+        # window is for, and every other button here is a follow-up to it.
+        stylize_button(self.generate_btn, kind="primary")
         self.generate_btn.Bind(wx.EVT_BUTTON, self._on_generate_clicked)
         selection_sizer.Add(self.generate_btn, 0, wx.RIGHT, SPACE_SM)
 
         self.cancel_btn = wx.Button(panel, label=self._t("radar.btn.cancel"))
+        stylize_button(self.cancel_btn, kind="secondary")
         self.cancel_btn.Bind(wx.EVT_BUTTON, self._on_cancel_clicked)
         self.cancel_btn.Enable(False)
         selection_sizer.Add(self.cancel_btn, 0)
 
         self.progress = wx.Gauge(panel, range=100)
+        stylize_gauge(self.progress)
         sizer.Add(self.progress, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, SPACE_SM)
 
         self.progress_label = wx.StaticText(panel, label="")

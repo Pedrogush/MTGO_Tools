@@ -4,13 +4,20 @@ Renders ``{W}``, ``{R/G}``, ``{2/W}`` etc. as inline images while keeping the
 brace-notation string as the canonical value returned by ``GetValue()``.
 
 Why this is a wx.Panel, not a wx.richtext.RichTextCtrl: the native
-TextCtrl's blue focus underline is painted by Windows' uxtheme on the
-EDIT control's non-client area, which a custom-drawn RichTextCtrl can't
-receive. To match the look we paint the whole 2-DIP grey frame ourselves
--- replicating the outer/inner two-tone composition sampled from an
-adjacent native wx.TextCtrl -- and tint the whole bottom band to the
-Windows system accent colour on focus. The actual rich-text buffer is
-a borderless child RichTextCtrl that fills the panel interior.
+TextCtrl's focus underline is painted by Windows' uxtheme on the EDIT
+control's non-client area, which a custom-drawn RichTextCtrl can't
+receive. So the whole 2-DIP frame is painted here. The actual rich-text
+buffer is a borderless child RichTextCtrl that fills the panel interior.
+
+Phase 6b re-founded that frame on the design tokens. It was sampled from
+an adjacent *native* wx.TextCtrl and reproduced literally -- ``#ECECEC``
+outer over a ``#FEFEFE`` inner ring -- which is the same near-white
+sunken client edge :func:`widgets.stylize.strip_native_client_edge` was
+written to delete from every other input in the app. Measured on the
+running builder: two 545x24 rectangles outlined at **15.6:1 against
+SURFACE_PANEL**, on the main window, in the panel with the most use.
+Copying the platform was the bug; the app is not drawn in the platform's
+palette any more.
 
 The placeholder hint is a separate ``wx.StaticText`` overlay rather than
 text written into the rich-text buffer. Writing the hint into the buffer
@@ -37,6 +44,7 @@ import wx
 import wx.richtext
 
 from utils.constants import DARK_ALT, HINT_TEXT, LIGHT_TEXT
+from utils.constants.theme import BORDER_SUBTLE, FOCUS_RING
 from widgets.panels.mana_rich_text_ctrl.handlers import (
     ManaRichTextInnerHandlersMixin,
     ManaSymbolRichCtrlHandlersMixin,
@@ -45,19 +53,36 @@ from widgets.panels.mana_rich_text_ctrl.properties import (
     ManaRichTextInnerPropertiesMixin,
     ManaSymbolRichCtrlPropertiesMixin,
 )
+from widgets.stylize import theme_font
 
 if TYPE_CHECKING:
     from widgets.mana_icon_factory import ManaIconFactory
 
 
-# Three-tone frame matching the native Win11 dark-mode TextCtrl outline,
-# as sampled from an adjacent wx.TextCtrl in the same dialog: a 1-DIP
-# outer halo (lighter on top/left/right, darker on bottom) wrapping a
-# 1-DIP near-white inner ring. Total frame thickness: 2 DIP on every
-# side. On focus the bottom outer row tints the accent colour.
-_BORDER_OUTER_LIGHT = wx.Colour(236, 236, 236)
-_BORDER_INNER = wx.Colour(254, 254, 254)
-_BORDER_OUTER_DARK = wx.Colour(131, 131, 131)
+# The frame keeps its three-tone composition and its 2-DIP geometry -- a
+# 1-DIP halo wrapping a 1-DIP ring, darker along the bottom -- because the
+# inner RichTextCtrl is laid out inside that inset and changing it reflows
+# four call sites. What changed in phase 6b is where the three colours come
+# from.
+#
+# BORDER_SUBTLE throughout, which is the same call phase 6 made for all ten
+# section cards: a quiet edge. BORDER_STRONG was tried first, on the argument
+# that the ring is the only thing identifying an input -- and measured against
+# the real builder it was wrong, because a stripped ``wx.TextCtrl`` in this app
+# renders with **no border at all**, so a 3.54:1 ring here would have made
+# these two fields the loud ones in a column of five. Whether a text input on
+# SURFACE_PANEL needs a visible boundary at all is a live question (its fill is
+# 1.10:1 on panel), but it is one question with one answer for every field, not
+# something this control gets to decide alone.
+_BORDER_HALO = wx.Colour(*BORDER_SUBTLE)
+_BORDER_RING = wx.Colour(*BORDER_SUBTLE)
+_BORDER_BASE = wx.Colour(*BORDER_SUBTLE)
+#: The focus underline. Was ``wx.SYS_COLOUR_HIGHLIGHT`` -- the *system*
+#: accent, a user setting rather than a token of ours, which phase 2
+#: rejected for exactly this reason when it looked at wx.ToggleButton's
+#: checked ring. FOCUS_RING is 7.43:1 on SURFACE_ALT and is drawn outside
+#: the field, which is where phase 0 said a focus ring has to live.
+_BORDER_FOCUS = wx.Colour(*FOCUS_RING)
 _BORDER_DIP = 2
 _BORDER_OUTER_DIP = 1
 
@@ -100,7 +125,12 @@ class _ManaRichTextInner(
         self._chord_keys: set[str] = set()
         self._mana_mode_active = False
 
-        font = wx.SystemSettings.GetFont(wx.SYS_DEFAULT_GUI_FONT)
+        # theme_font(), not wx.SYS_DEFAULT_GUI_FONT: this control is created
+        # under a parent that already carries the app's 10pt base, and asking
+        # the *system* for a font silently put it back to 9pt. Phase 3 wired
+        # apply_base_font into all 18 top-level windows and this was the one
+        # widget that re-fetched the platform default afterwards.
+        font = theme_font()
         self.SetFont(font)
         self.SetBackgroundColour(wx.Colour(*DARK_ALT))
 
@@ -160,7 +190,7 @@ class ManaSymbolRichCtrl(
         # Required by wx.AutoBufferedPaintDC: we paint the background
         # ourselves in _on_paint, so suppress the default erase-bg pass.
         self.SetBackgroundStyle(wx.BG_STYLE_PAINT)
-        self.SetBackgroundColour(_BORDER_OUTER_LIGHT)
+        self.SetBackgroundColour(_BORDER_HALO)
 
         self._inner = _ManaRichTextInner(
             self,

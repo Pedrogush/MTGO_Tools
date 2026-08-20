@@ -14,6 +14,7 @@ import wx
 import wx.html
 
 from utils.constants import DARK_PANEL, SPACE_XS
+from widgets.panels.card_panel.html_renderer import _BODY_TEXT, _PANEL_BG
 from widgets.stylize import init_top_level_window
 
 
@@ -64,8 +65,8 @@ def _render_rule_html(*, title: str, rule_id: str, body: str) -> str:
     """Render the rule body as HTML 3.2 — wx.html doesn't grok modern CSS."""
     safe_body = escape(body).replace("\n", "<br>")
     return (
-        '<html><body bgcolor="#22272E" text="#E6EDF3">'
-        f'<h3><font color="#E6EDF3">{escape(rule_id)}. {escape(title)}</font></h3>'
+        f'<html><body bgcolor="{_PANEL_BG}" text="{_BODY_TEXT}">'
+        f'<h3><font color="{_BODY_TEXT}">{escape(rule_id)}. {escape(title)}</font></h3>'
         f"<hr>"
         f'<font size="-1">{safe_body}</font>'
         "</body></html>"

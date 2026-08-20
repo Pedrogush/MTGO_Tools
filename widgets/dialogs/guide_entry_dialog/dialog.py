@@ -12,7 +12,14 @@ from widgets.checkbox import DarkCheckBox
 from widgets.dialogs.guide_entry_dialog.handlers import GuideEntryDialogHandlersMixin
 from widgets.dialogs.guide_entry_dialog.properties import GuideEntryDialogPropertiesMixin
 from widgets.panels.sideboard_card_selector import SideboardCardSelector
-from widgets.stylize import init_top_level_window, stylize_checkbox, stylize_combobox
+from widgets.stylize import (
+    apply_type_level,
+    init_top_level_window,
+    stylize_button,
+    stylize_checkbox,
+    stylize_combobox,
+    stylize_textctrl,
+)
 
 
 class GuideEntryDialog(GuideEntryDialogHandlersMixin, GuideEntryDialogPropertiesMixin, wx.Dialog):
@@ -63,7 +70,7 @@ class GuideEntryDialog(GuideEntryDialogHandlersMixin, GuideEntryDialogProperties
         # Play scenario section
         play_label = wx.StaticText(panel, label=self._t("guide.dialog.on_the_play"))
         play_label.SetForegroundColour(LIGHT_TEXT)
-        play_label.SetFont(play_label.GetFont().Bold())
+        apply_type_level(play_label, "heading")
         panel_sizer.Add(play_label, 0, wx.TOP | wx.LEFT, SPACE_SM)
 
         play_sizer = wx.BoxSizer(wx.HORIZONTAL)
@@ -88,7 +95,7 @@ class GuideEntryDialog(GuideEntryDialogHandlersMixin, GuideEntryDialogProperties
         # Draw scenario section
         draw_label = wx.StaticText(panel, label=self._t("guide.dialog.on_the_draw"))
         draw_label.SetForegroundColour(LIGHT_TEXT)
-        draw_label.SetFont(draw_label.GetFont().Bold())
+        apply_type_level(draw_label, "heading")
         panel_sizer.Add(draw_label, 0, wx.TOP | wx.LEFT, SPACE_SM)
 
         draw_sizer = wx.BoxSizer(wx.HORIZONTAL)
@@ -118,9 +125,9 @@ class GuideEntryDialog(GuideEntryDialogHandlersMixin, GuideEntryDialogProperties
         self.notes_ctrl = wx.TextCtrl(
             panel, value=(data or {}).get("notes", ""), style=wx.TE_MULTILINE, size=(-1, 80)
         )
-        self.notes_ctrl.SetBackgroundColour(DARK_ALT)
-        self.notes_ctrl.SetForegroundColour(LIGHT_TEXT)
-        self.notes_ctrl.SetHint(self._t("guide.dialog.notes_hint"))
+        stylize_textctrl(
+            self.notes_ctrl, level="body", placeholder=self._t("guide.dialog.notes_hint")
+        )
         panel_sizer.Add(self.notes_ctrl, 0, wx.EXPAND | wx.ALL, SPACE_XS)
 
         # Enable double entries checkbox
@@ -141,6 +148,7 @@ class GuideEntryDialog(GuideEntryDialogHandlersMixin, GuideEntryDialogProperties
         self.save_continue_btn = wx.Button(
             panel, label=self._t("guide.dialog.save_continue"), id=wx.ID_APPLY
         )
+        stylize_button(self.save_continue_btn, kind="secondary", surface="base")
         self.save_continue_btn.Bind(wx.EVT_BUTTON, self._on_save_continue)
         button_sizer.Add(self.save_continue_btn, 0, wx.RIGHT, SPACE_SM)
 
@@ -148,12 +156,14 @@ class GuideEntryDialog(GuideEntryDialogHandlersMixin, GuideEntryDialogProperties
 
         # OK button
         ok_btn = wx.Button(panel, label="OK", id=wx.ID_OK)
+        stylize_button(ok_btn, kind="primary", surface="base")
         ok_btn.SetDefault()
         ok_btn.Bind(wx.EVT_BUTTON, lambda evt: self.EndModal(wx.ID_OK))
         button_sizer.Add(ok_btn, 0, wx.RIGHT, SPACE_SM)
 
         # Cancel button
         cancel_btn = wx.Button(panel, label=self._t("guide.dialog.cancel"), id=wx.ID_CANCEL)
+        stylize_button(cancel_btn, kind="secondary", surface="base")
         cancel_btn.Bind(wx.EVT_BUTTON, lambda evt: self.EndModal(wx.ID_CANCEL))
         button_sizer.Add(cancel_btn, 0)
 
