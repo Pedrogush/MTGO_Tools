@@ -73,9 +73,19 @@ def test_every_deck_stats_fill_reads_against_the_chart_ground(name: str, value: 
 
 def test_the_type_bars_come_from_the_phase_0_palette() -> None:
     """Not "these look fine" -- these *are* the palette, in the chart's own order."""
-    palette = [T.to_hex(c) for c in T.chart_palette(len(_TYPE_COLOURS) - 1)]
-    assert [v for k, v in _TYPE_COLOURS.items() if k != "Other"] == palette
-    assert _TYPE_COLOURS["Other"] == T.to_hex(T.CHART_OTHER)
+    palette = [T.to_hex(c) for c in T.chart_palette(len(_TYPE_COLOURS))]
+    assert list(_TYPE_COLOURS.values()) == palette
+
+
+def test_the_neutral_is_no_longer_a_card_type() -> None:
+    """``CHART_OTHER`` reads as "not one of the categories", which is what it now
+
+    only ever means here: the swatch for an unnamed *colour*. It used to also be
+    the fill of an "Other" card-type bar -- a category the Comprehensive Rules
+    do not have. See tests/test_deck_stats_types.py.
+    """
+    assert "Other" not in _TYPE_COLOURS
+    assert _FALLBACK_SWATCH == T.to_hex(T.CHART_OTHER)
 
 
 def test_the_opening_hand_bars_no_longer_use_the_accent_as_a_categorical() -> None:

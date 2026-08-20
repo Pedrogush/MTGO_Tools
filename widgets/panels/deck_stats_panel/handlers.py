@@ -45,6 +45,15 @@ class DeckStatsPanelHandlersMixin(_Base):
                 f"  |  Lands: {land_label}"
             )
 
+            # A count of cards the card database could not describe, stated as
+            # what it is. The chart used to absorb them into an "Other" card
+            # type instead, which read as a fact about the deck when it is a
+            # fact about the data.
+            unclassified = self._unclassified_count()
+            if unclassified:
+                plural = "s" if unclassified != 1 else ""
+                summary += f"  |  {unclassified} card{plural} with no card data"
+
             self.summary_label.SetLabel(summary)
 
             curve_items = self._curve_items()

@@ -72,6 +72,7 @@ class AppControllerProto(Protocol):
     # UI / lifecycle handles
     _ui_callbacks: UICallbacks | None
     _worker: BackgroundWorker
+    _card_data_waiters: list[tuple[Callable[..., None], Callable[..., None]]]
     frame: AppFrame | None
     _bulk_check_worker_active: bool
     _available_update: UpdateInfo | None
