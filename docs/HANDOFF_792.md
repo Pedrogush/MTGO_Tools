@@ -11,7 +11,7 @@ design record; the "what was built for parts 1 & 2" summary is at the very end.
 ## 0. IMPORTANT: everything is verifiable from WSL. Do not skip live verification.
 
 This repo runs and is driven from WSL via the Windows interop bridge (`/init` + `cmd.exe`),
-using the Windows venv at `env\Scripts\python.exe`. The full pytest suite, ruff/black,
+using the Windows venv at `.venv\Scripts\python.exe`. The full pytest suite, ruff/black,
 and the real GUI app (launch + screenshot + drive) all work from this WSL shell.
 
 ### Run tests / lint (Windows interpreter, has wx)

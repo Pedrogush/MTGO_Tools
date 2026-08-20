@@ -1,5 +1,14 @@
 """Shared UI layout constants."""
 
+# Re-exported so `from utils.constants import SPACE_MD` works alongside the colour
+# tokens. theme.py is the single source of truth for the 4px spacing scale.
+from utils.constants.theme import SPACE_GRID as SPACE_GRID
+from utils.constants.theme import SPACE_LG as SPACE_LG
+from utils.constants.theme import SPACE_MD as SPACE_MD
+from utils.constants.theme import SPACE_SM as SPACE_SM
+from utils.constants.theme import SPACE_XL as SPACE_XL
+from utils.constants.theme import SPACE_XS as SPACE_XS
+
 # Preferred size on first launch / on displays large enough to host it. On a
 # smaller display the frame auto-maximizes instead (see _apply_window_preferences).
 APP_FRAME_SIZE = (1480, 860)
@@ -27,6 +36,14 @@ ARCHETYPE_LIST_ITEM_HEIGHT = 22
 ARCHETYPE_LIST_VISIBLE_ITEMS = 3
 ARCHETYPE_LIST_HEIGHT = ARCHETYPE_LIST_ITEM_HEIGHT * ARCHETYPE_LIST_VISIBLE_ITEMS
 
+# --- Spacing --------------------------------------------------------------
+# SPACE_* (the 4px scale) is re-exported from theme.py at the top of this module.
+#
+# DEPRECATED pending phase 3. These are a linear 2px scale (2/4/6/8/10/12) whose
+# steps are below the perceptual floor, so proximity cannot group anything. They
+# are still the values the current layout is built on, so phase 0 deliberately
+# leaves them untouched: changing them here would silently re-lay-out every panel.
+# Phase 3 migrates the ~50 sizer sites onto SPACE_* and deletes these.
 PADDING_XS = 2
 PADDING_SM = 4
 PADDING_MD = 6

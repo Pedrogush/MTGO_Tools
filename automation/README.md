@@ -161,7 +161,7 @@ bare `cmd.exe` returns `Exec format error` because WSLInterop binfmt registratio
 is missing, invoke it through `/init`:
 
 ```bash
-/init /mnt/c/Windows/System32/cmd.exe /c "cd /d C:\Users\Pedro\Documents\GitHub\mtgo_tools && env\Scripts\python.exe -m automation.cli --help"
+/init /mnt/c/Windows/System32/cmd.exe /c "cd /d C:\Users\Pedro\Documents\GitHub\mtgo_tools && .venv\Scripts\python.exe -m automation.cli --help"
 ```
 
 This is only an interop workaround for launching Windows commands from WSL. It

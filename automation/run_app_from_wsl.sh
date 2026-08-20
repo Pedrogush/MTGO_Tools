@@ -14,15 +14,15 @@ set -euo pipefail
 #   `cmd.exe: Invalid argument`
 #
 # The app must use the Windows virtualenv, not WSL Python, because wxPython is
-# installed in env\Scripts\python.exe and the desktop UI must run on Windows.
+# installed in .venv\Scripts\python.exe and the desktop UI must run on Windows.
 #
 # Usage:
 #   automation/run_app_from_wsl.sh
 #   AUTOMATION_PORT=19848 automation/run_app_from_wsl.sh
 #
 # CLI commands to run from another WSL shell while this stays attached:
-#   /init "$(command -v cmd.exe)" /c "env\\Scripts\\python.exe -m automation.cli ping"
-#   /init "$(command -v cmd.exe)" /c "env\\Scripts\\python.exe -m automation.cli --json window-info"
+#   /init "$(command -v cmd.exe)" /c ".venv\\Scripts\\python.exe -m automation.cli ping"
+#   /init "$(command -v cmd.exe)" /c ".venv\\Scripts\\python.exe -m automation.cli --json window-info"
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd -- "$SCRIPT_DIR/.." && pwd)"
@@ -46,4 +46,4 @@ fi
 
 cd "$REPO_ROOT"
 
-exec /init "$CMD_EXE" /c "env\\Scripts\\python.exe main.py --automation --automation-port $AUTOMATION_PORT"
+exec /init "$CMD_EXE" /c ".venv\\Scripts\\python.exe main.py --automation --automation-port $AUTOMATION_PORT"
