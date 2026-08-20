@@ -14,9 +14,8 @@ from utils.constants.deck_rules import (
 )
 from utils.constants.ui_images import STATS_MANA_SVG_DISPLAY_SIZE
 from utils.constants.ui_layout import (
-    PADDING_BASE,
-    PADDING_MD,
-    PADDING_SM,
+    SPACE_SM,
+    SPACE_XS,
     STATS_BAR_BORDER_RADIUS,
     STATS_CHART_BORDER_RADIUS,
     STATS_FONT_SIZE_BODY,
@@ -85,8 +84,8 @@ html, body {{
   display: flex;
   flex-direction: column;
   height: 100%;
-  padding: {PADDING_BASE}px;
-  gap: {PADDING_MD}px;
+  padding: {SPACE_SM}px;
+  gap: {SPACE_SM}px;
 }}
 
 /* ── Summary bar ── */
@@ -94,7 +93,7 @@ html, body {{
   color: #B9BFCA;
   font-size: {STATS_FONT_SIZE_LABEL}px;
   flex-shrink: 0;
-  padding: {PADDING_SM // 2}px 0;
+  padding: {SPACE_XS}px 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -103,7 +102,7 @@ html, body {{
 /* ── Top row: three charts side-by-side ── */
 .top-row {{
   display: flex;
-  gap: {PADDING_BASE}px;
+  gap: {SPACE_SM}px;
   flex: 3;
   min-height: 0;
 }}
@@ -120,7 +119,7 @@ html, body {{
   flex-direction: column;
   background: #28303A;
   border-radius: {STATS_CHART_BORDER_RADIUS}px;
-  padding: {PADDING_BASE}px {PADDING_BASE}px {PADDING_SM}px {PADDING_BASE}px;
+  padding: {SPACE_SM}px {SPACE_SM}px {SPACE_XS}px {SPACE_SM}px;
   flex: 1;
   min-width: 0;
   overflow: hidden;
@@ -132,14 +131,14 @@ html, body {{
   color: #8B929E;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  margin-bottom: {PADDING_SM}px;
+  margin-bottom: {SPACE_XS}px;
   flex-shrink: 0;
 }}
 
 .chart-empty {{
   color: #555;
   font-style: italic;
-  padding: {PADDING_BASE}px;
+  padding: {SPACE_SM}px;
 }}
 
 /* ── Vertical bar chart ── */
@@ -147,7 +146,7 @@ html, body {{
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  gap: {PADDING_SM}px;
+  gap: {SPACE_XS}px;
   flex: 1;
   min-height: 0;
   padding-bottom: {STATS_VBAR_XAXIS_PADDING_BOTTOM}px;  /* room for x-axis labels (icons up to {STATS_MANA_SVG_DISPLAY_SIZE}px tall) */
@@ -225,14 +224,14 @@ html, body {{
   justify-content: flex-start;
   flex: 1;
   min-height: 0;
-  gap: {PADDING_SM}px;
+  gap: {SPACE_XS}px;
   padding-top: 2px;
 }}
 
 .hbar-row {{
   display: flex;
   align-items: center;
-  gap: {PADDING_MD}px;
+  gap: {SPACE_SM}px;
   cursor: default;
   position: relative;
   height: {STATS_HBAR_ROW_HEIGHT}px;

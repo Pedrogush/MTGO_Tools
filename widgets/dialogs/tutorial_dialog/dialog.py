@@ -4,9 +4,18 @@ from __future__ import annotations
 
 import wx
 
-from utils.constants import DARK_BG, DARK_PANEL, LIGHT_TEXT, SUBDUED_TEXT
+from utils.constants import (
+    DARK_BG,
+    DARK_PANEL,
+    LIGHT_TEXT,
+    SPACE_LG,
+    SPACE_MD,
+    SPACE_SM,
+    SUBDUED_TEXT,
+)
 from utils.i18n import DEFAULT_LOCALE, translate
 from widgets.dialogs.tutorial_dialog.handlers import TutorialDialogHandlersMixin
+from widgets.stylize import apply_base_font, apply_type_level
 from widgets.wx_layout import relayout
 
 _STEP_KEYS: list[tuple[str, str]] = [
@@ -31,6 +40,7 @@ class TutorialDialog(TutorialDialogHandlersMixin, wx.Dialog):
             size=(540, 420),
             style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER,
         )
+        apply_base_font(self)
         self.SetBackgroundColour(DARK_BG)
         self._step = 0
         self._total = len(_STEP_KEYS)
@@ -53,15 +63,12 @@ class TutorialDialog(TutorialDialogHandlersMixin, wx.Dialog):
 
         self._title_label = wx.StaticText(header, label="")
         self._title_label.SetForegroundColour(LIGHT_TEXT)
-        font = self._title_label.GetFont()
-        font.SetPointSize(font.GetPointSize() + 3)
-        font.MakeBold()
-        self._title_label.SetFont(font)
-        header_sizer.Add(self._title_label, 1, wx.ALIGN_CENTER_VERTICAL | wx.LEFT, 16)
+        apply_type_level(self._title_label, "title")
+        header_sizer.Add(self._title_label, 1, wx.ALIGN_CENTER_VERTICAL | wx.LEFT, SPACE_MD)
 
         self._progress_label = wx.StaticText(header, label="")
         self._progress_label.SetForegroundColour(SUBDUED_TEXT)
-        header_sizer.Add(self._progress_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 16)
+        header_sizer.Add(self._progress_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, SPACE_MD)
 
         outer.Add(header, 0, wx.EXPAND)
 
@@ -76,7 +83,7 @@ class TutorialDialog(TutorialDialogHandlersMixin, wx.Dialog):
             style=wx.ST_NO_AUTORESIZE,
         )
         self._body_label.SetForegroundColour(LIGHT_TEXT)
-        outer.Add(self._body_label, 1, wx.EXPAND | wx.ALL, 20)
+        outer.Add(self._body_label, 1, wx.EXPAND | wx.ALL, SPACE_LG)
 
         # ---- bottom bar ----
         bottom_line = wx.StaticLine(self)
@@ -90,18 +97,18 @@ class TutorialDialog(TutorialDialogHandlersMixin, wx.Dialog):
         self._skip_btn = wx.Button(btn_bar, label=self._t("tutorial.btn.skip"))
         self._skip_btn.SetForegroundColour(SUBDUED_TEXT)
         self._skip_btn.Bind(wx.EVT_BUTTON, self._on_skip)
-        btn_sizer.Add(self._skip_btn, 0, wx.ALL, 8)
+        btn_sizer.Add(self._skip_btn, 0, wx.ALL, SPACE_SM)
 
         btn_sizer.AddStretchSpacer(1)
 
         self._back_btn = wx.Button(btn_bar, wx.ID_BACKWARD, label=self._t("tutorial.btn.back"))
         self._back_btn.Bind(wx.EVT_BUTTON, self._on_back)
-        btn_sizer.Add(self._back_btn, 0, wx.TOP | wx.BOTTOM | wx.RIGHT, 8)
+        btn_sizer.Add(self._back_btn, 0, wx.TOP | wx.BOTTOM | wx.RIGHT, SPACE_SM)
 
         self._next_btn = wx.Button(btn_bar, wx.ID_FORWARD, label=self._t("tutorial.btn.next"))
         self._next_btn.SetDefault()
         self._next_btn.Bind(wx.EVT_BUTTON, self._on_next)
-        btn_sizer.Add(self._next_btn, 0, wx.TOP | wx.BOTTOM | wx.RIGHT, 8)
+        btn_sizer.Add(self._next_btn, 0, wx.TOP | wx.BOTTOM | wx.RIGHT, SPACE_SM)
 
         outer.Add(btn_bar, 0, wx.EXPAND)
 

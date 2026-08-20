@@ -13,7 +13,8 @@ from html import escape
 import wx
 import wx.html
 
-from utils.constants import DARK_PANEL, PADDING_SM
+from utils.constants import DARK_PANEL, SPACE_XS
+from widgets.stylize import apply_base_font
 
 
 class RulePopupFrame(wx.Frame):
@@ -26,6 +27,7 @@ class RulePopupFrame(wx.Frame):
             size=(520, 360),
             style=wx.DEFAULT_FRAME_STYLE | wx.FRAME_FLOAT_ON_PARENT,
         )
+        apply_base_font(self)
         self.SetBackgroundColour(DARK_PANEL)
 
         sizer = wx.BoxSizer(wx.VERTICAL)
@@ -37,7 +39,7 @@ class RulePopupFrame(wx.Frame):
         )
         self._html.SetBackgroundColour(DARK_PANEL)
         self._html.SetBorders(4)
-        sizer.Add(self._html, 1, wx.EXPAND | wx.ALL, PADDING_SM)
+        sizer.Add(self._html, 1, wx.EXPAND | wx.ALL, SPACE_XS)
 
         self.Bind(wx.EVT_CLOSE, self._on_close)
 

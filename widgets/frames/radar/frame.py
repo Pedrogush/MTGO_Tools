@@ -15,11 +15,11 @@ if str(_project_root) not in sys.path:
 import wx
 import wx.dataview as dv
 
-from utils.constants import DARK_ALT, DARK_PANEL, LIGHT_TEXT
+from utils.constants import DARK_ALT, DARK_PANEL, LIGHT_TEXT, SPACE_SM
 from utils.i18n import translate
 from widgets.frames.radar.handlers import RadarFrameHandlersMixin, RadarPanelHandlersMixin
 from widgets.frames.radar.properties import RadarFramePropertiesMixin, RadarPanelPropertiesMixin
-from widgets.stylize import stylize_choice, stylize_scrollable
+from widgets.stylize import apply_base_font, apply_type_level, stylize_choice, stylize_scrollable
 
 if TYPE_CHECKING:
     from services.radar_service import RadarData
@@ -53,37 +53,34 @@ class RadarPanel(RadarPanelHandlersMixin, RadarPanelPropertiesMixin, wx.Panel):
         self.SetSizer(sizer)
 
         header_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        sizer.Add(header_sizer, 0, wx.EXPAND | wx.ALL, 6)
+        sizer.Add(header_sizer, 0, wx.EXPAND | wx.ALL, SPACE_SM)
 
         self.archetype_label = wx.StaticText(self, label=self._t("radar.label.no_radar"))
         self.archetype_label.SetForegroundColour(LIGHT_TEXT)
-        font = self.archetype_label.GetFont()
-        font.PointSize += 2
-        font = font.Bold()
-        self.archetype_label.SetFont(font)
+        apply_type_level(self.archetype_label, "heading")
         header_sizer.Add(self.archetype_label, 1, wx.ALIGN_CENTER_VERTICAL)
 
         self.export_btn = wx.Button(self, label=self._t("radar.btn.export"))
         self.export_btn.Enable(False)
         self.export_btn.Bind(wx.EVT_BUTTON, self._on_export_clicked)
-        header_sizer.Add(self.export_btn, 0, wx.LEFT, 6)
+        header_sizer.Add(self.export_btn, 0, wx.LEFT, SPACE_SM)
 
         self.use_search_btn = wx.Button(self, label=self._t("radar.btn.use_search"))
         self.use_search_btn.Enable(False)
         self.use_search_btn.Bind(wx.EVT_BUTTON, self._on_use_search_clicked)
-        header_sizer.Add(self.use_search_btn, 0, wx.LEFT, 6)
+        header_sizer.Add(self.use_search_btn, 0, wx.LEFT, SPACE_SM)
 
         self.summary_label = wx.StaticText(self, label="")
         self.summary_label.SetForegroundColour(LIGHT_TEXT)
-        sizer.Add(self.summary_label, 0, wx.ALL, 6)
+        sizer.Add(self.summary_label, 0, wx.ALL, SPACE_SM)
 
         split_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        sizer.Add(split_sizer, 1, wx.EXPAND | wx.ALL, 6)
+        sizer.Add(split_sizer, 1, wx.EXPAND | wx.ALL, SPACE_SM)
 
         mainboard_box = wx.StaticBox(self, label=self._t("radar.box.mainboard"))
         mainboard_box.SetForegroundColour(LIGHT_TEXT)
         mainboard_box_sizer = wx.StaticBoxSizer(mainboard_box, wx.VERTICAL)
-        split_sizer.Add(mainboard_box_sizer, 1, wx.EXPAND | wx.RIGHT, 6)
+        split_sizer.Add(mainboard_box_sizer, 1, wx.EXPAND | wx.RIGHT, SPACE_SM)
 
         self.mainboard_list = dv.DataViewListCtrl(self)
         self.mainboard_list.AppendTextColumn(self._t("radar.col.card"), width=200)
@@ -96,7 +93,7 @@ class RadarPanel(RadarPanelHandlersMixin, RadarPanelPropertiesMixin, wx.Panel):
         # After the columns, so the native header child exists to be themed.
         stylize_scrollable(self.mainboard_list)
         self._bind_tooltip_handlers(self.mainboard_list)
-        mainboard_box_sizer.Add(self.mainboard_list, 1, wx.EXPAND | wx.ALL, 6)
+        mainboard_box_sizer.Add(self.mainboard_list, 1, wx.EXPAND | wx.ALL, SPACE_SM)
 
         sideboard_box = wx.StaticBox(self, label=self._t("radar.box.sideboard"))
         sideboard_box.SetForegroundColour(LIGHT_TEXT)
@@ -114,7 +111,7 @@ class RadarPanel(RadarPanelHandlersMixin, RadarPanelPropertiesMixin, wx.Panel):
         # After the columns, so the native header child exists to be themed.
         stylize_scrollable(self.sideboard_list)
         self._bind_tooltip_handlers(self.sideboard_list)
-        sideboard_box_sizer.Add(self.sideboard_list, 1, wx.EXPAND | wx.ALL, 6)
+        sideboard_box_sizer.Add(self.sideboard_list, 1, wx.EXPAND | wx.ALL, SPACE_SM)
 
 
 class RadarFrame(RadarFrameHandlersMixin, RadarFramePropertiesMixin, wx.Frame):
@@ -136,6 +133,7 @@ class RadarFrame(RadarFrameHandlersMixin, RadarFramePropertiesMixin, wx.Frame):
             size=(900, 700),
             style=style,
         )
+        apply_base_font(self)
         self.SetBackgroundColour(DARK_PANEL)
         self._locale = locale
 
@@ -160,19 +158,19 @@ class RadarFrame(RadarFrameHandlersMixin, RadarFramePropertiesMixin, wx.Frame):
         panel.SetSizer(sizer)
 
         selection_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        sizer.Add(selection_sizer, 0, wx.EXPAND | wx.ALL, 10)
+        sizer.Add(selection_sizer, 0, wx.EXPAND | wx.ALL, SPACE_SM)
 
         label = wx.StaticText(panel, label=self._t("radar.dialog.select_archetype"))
         label.SetForegroundColour(LIGHT_TEXT)
-        selection_sizer.Add(label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 6)
+        selection_sizer.Add(label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, SPACE_SM)
 
         self.archetype_choice = wx.Choice(panel)
         stylize_choice(self.archetype_choice)
-        selection_sizer.Add(self.archetype_choice, 1, wx.RIGHT, 6)
+        selection_sizer.Add(self.archetype_choice, 1, wx.RIGHT, SPACE_SM)
 
         self.generate_btn = wx.Button(panel, label=self._t("radar.dialog.generate"))
         self.generate_btn.Bind(wx.EVT_BUTTON, self._on_generate_clicked)
-        selection_sizer.Add(self.generate_btn, 0, wx.RIGHT, 6)
+        selection_sizer.Add(self.generate_btn, 0, wx.RIGHT, SPACE_SM)
 
         self.cancel_btn = wx.Button(panel, label=self._t("radar.btn.cancel"))
         self.cancel_btn.Bind(wx.EVT_BUTTON, self._on_cancel_clicked)
@@ -180,11 +178,11 @@ class RadarFrame(RadarFrameHandlersMixin, RadarFramePropertiesMixin, wx.Frame):
         selection_sizer.Add(self.cancel_btn, 0)
 
         self.progress = wx.Gauge(panel, range=100)
-        sizer.Add(self.progress, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 10)
+        sizer.Add(self.progress, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, SPACE_SM)
 
         self.progress_label = wx.StaticText(panel, label="")
         self.progress_label.SetForegroundColour(LIGHT_TEXT)
-        sizer.Add(self.progress_label, 0, wx.ALL, 10)
+        sizer.Add(self.progress_label, 0, wx.ALL, SPACE_SM)
 
         self.radar_panel = RadarPanel(
             panel,
@@ -193,6 +191,6 @@ class RadarFrame(RadarFrameHandlersMixin, RadarFramePropertiesMixin, wx.Frame):
             on_use_for_search=self._use_radar_for_search,
             locale=self._locale,
         )
-        sizer.Add(self.radar_panel, 1, wx.EXPAND | wx.ALL, 10)
+        sizer.Add(self.radar_panel, 1, wx.EXPAND | wx.ALL, SPACE_SM)
 
         self.Bind(wx.EVT_CLOSE, self._on_close)

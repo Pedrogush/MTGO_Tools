@@ -7,8 +7,8 @@ from typing import TYPE_CHECKING, Any
 import wx
 from loguru import logger
 
-from utils.constants import DARK_BG, FORMAT_OPTIONS, LIGHT_TEXT
-from widgets.stylize import stylize_choice
+from utils.constants import DARK_BG, FORMAT_OPTIONS, LIGHT_TEXT, SPACE_MD, SPACE_SM
+from widgets.stylize import apply_base_font, stylize_choice
 
 if TYPE_CHECKING:
     from services.metagame_service import MetagameService
@@ -27,6 +27,7 @@ class _LoadArchetypeDialog(wx.Dialog):
         locale: str | None = None,
     ) -> None:
         super().__init__(parent, title=title, style=wx.DEFAULT_DIALOG_STYLE)
+        apply_base_font(self)
         self.SetBackgroundColour(DARK_BG)
         self._metagame_service = metagame_service
         self._archetypes_by_format: dict[str, list[dict[str, Any]]] = {}
@@ -34,9 +35,9 @@ class _LoadArchetypeDialog(wx.Dialog):
         sizer = wx.BoxSizer(wx.VERTICAL)
         self.SetSizer(sizer)
 
-        grid = wx.FlexGridSizer(2, 2, 6, 8)
+        grid = wx.FlexGridSizer(2, 2, SPACE_SM, SPACE_SM)
         grid.AddGrowableCol(1, 1)
-        sizer.Add(grid, 0, wx.EXPAND | wx.ALL, 12)
+        sizer.Add(grid, 0, wx.EXPAND | wx.ALL, SPACE_MD)
 
         lbl_fmt = wx.StaticText(self, label=format_label)
         lbl_fmt.SetForegroundColour(LIGHT_TEXT)
@@ -56,7 +57,7 @@ class _LoadArchetypeDialog(wx.Dialog):
         grid.Add(self._archetype_choice, 1, wx.EXPAND)
 
         btn_sizer = self.CreateStdDialogButtonSizer(wx.OK | wx.CANCEL)
-        sizer.Add(btn_sizer, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 12)
+        sizer.Add(btn_sizer, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, SPACE_MD)
 
         self._populate_archetype_choices()
         self.Fit()

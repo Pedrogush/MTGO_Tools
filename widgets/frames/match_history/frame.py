@@ -15,10 +15,11 @@ import wx
 import wx.dataview as dv
 from loguru import logger
 
+from utils.constants import SPACE_SM, SPACE_XS
 from utils.i18n import translate
 from widgets.frames.match_history.handlers import MatchHistoryHandlersMixin
 from widgets.frames.match_history.properties import MatchHistoryPropertiesMixin
-from widgets.stylize import stylize_button, stylize_scrollable
+from widgets.stylize import apply_base_font, stylize_button, stylize_scrollable
 
 DARK_BG = wx.Colour(20, 22, 27)
 DARK_PANEL = wx.Colour(34, 39, 46)
@@ -46,6 +47,7 @@ class MatchHistoryFrame(MatchHistoryHandlersMixin, MatchHistoryPropertiesMixin, 
             size=(self._FIXED_WIDTH, 460),
             style=style,
         )
+        apply_base_font(self)
         self._locale = locale
         self.controller = controller
         # Lock horizontal size; allow vertical resize only
@@ -73,7 +75,7 @@ class MatchHistoryFrame(MatchHistoryHandlersMixin, MatchHistoryPropertiesMixin, 
         panel.SetSizer(sizer)
 
         toolbar = wx.BoxSizer(wx.HORIZONTAL)
-        sizer.Add(toolbar, 0, wx.ALL | wx.EXPAND, 10)
+        sizer.Add(toolbar, 0, wx.ALL | wx.EXPAND, SPACE_SM)
 
         self.refresh_button = wx.Button(panel, label=self._t("match.btn.refresh"))
         self._stylize_button(self.refresh_button)
@@ -91,10 +93,10 @@ class MatchHistoryFrame(MatchHistoryHandlersMixin, MatchHistoryPropertiesMixin, 
         metrics_box.SetBackgroundColour(DARK_PANEL)
         metrics_sizer = wx.StaticBoxSizer(metrics_box, wx.VERTICAL)
         box_parent = metrics_sizer.GetStaticBox()
-        sizer.Add(metrics_sizer, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, 6)
+        sizer.Add(metrics_sizer, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, SPACE_SM)
 
         metrics_inner = wx.BoxSizer(wx.VERTICAL)
-        metrics_sizer.Add(metrics_inner, 0, wx.EXPAND | wx.ALL, 8)
+        metrics_sizer.Add(metrics_inner, 0, wx.EXPAND | wx.ALL, SPACE_SM)
 
         row1 = wx.BoxSizer(wx.HORIZONTAL)
         self.match_rate_label = wx.StaticText(
@@ -107,7 +109,7 @@ class MatchHistoryFrame(MatchHistoryHandlersMixin, MatchHistoryPropertiesMixin, 
         )
         self.game_rate_label.SetForegroundColour(LIGHT_TEXT)
         row1.Add(self.game_rate_label, 1, wx.ALIGN_CENTER_VERTICAL)
-        metrics_inner.Add(row1, 0, wx.EXPAND | wx.BOTTOM, 4)
+        metrics_inner.Add(row1, 0, wx.EXPAND | wx.BOTTOM, SPACE_XS)
 
         row2 = wx.BoxSizer(wx.HORIZONTAL)
         self.filtered_match_rate_label = wx.StaticText(
@@ -120,7 +122,7 @@ class MatchHistoryFrame(MatchHistoryHandlersMixin, MatchHistoryPropertiesMixin, 
         )
         self.filtered_game_rate_label.SetForegroundColour(LIGHT_TEXT)
         row2.Add(self.filtered_game_rate_label, 1, wx.ALIGN_CENTER_VERTICAL)
-        metrics_inner.Add(row2, 0, wx.EXPAND | wx.BOTTOM, 4)
+        metrics_inner.Add(row2, 0, wx.EXPAND | wx.BOTTOM, SPACE_XS)
 
         row3 = wx.BoxSizer(wx.HORIZONTAL)
         self.mulligan_rate_label = wx.StaticText(
@@ -135,7 +137,7 @@ class MatchHistoryFrame(MatchHistoryHandlersMixin, MatchHistoryPropertiesMixin, 
         row3.Add(self.avg_mulligans_label, 1, wx.ALIGN_CENTER_VERTICAL)
         metrics_inner.Add(row3, 0, wx.EXPAND)
 
-        metrics_inner.Add(wx.StaticLine(box_parent), 0, wx.EXPAND | wx.TOP | wx.BOTTOM, 6)
+        metrics_inner.Add(wx.StaticLine(box_parent), 0, wx.EXPAND | wx.TOP | wx.BOTTOM, SPACE_SM)
 
         row_opp = wx.BoxSizer(wx.HORIZONTAL)
         self.opp_match_rate_label = wx.StaticText(
@@ -151,27 +153,27 @@ class MatchHistoryFrame(MatchHistoryHandlersMixin, MatchHistoryPropertiesMixin, 
         metrics_inner.Add(row_opp, 0, wx.EXPAND)
 
         filter_row = wx.BoxSizer(wx.HORIZONTAL)
-        metrics_sizer.Add(filter_row, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 6)
+        metrics_sizer.Add(filter_row, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, SPACE_SM)
         filter_row.Add(
             wx.StaticText(box_parent, label=self._t("match.filter.start")),
             0,
             wx.ALIGN_CENTER_VERTICAL | wx.RIGHT,
-            4,
+            SPACE_XS,
         )
         self.start_date_ctrl = wx.TextCtrl(box_parent, size=(120, -1))
         self.start_date_ctrl.SetBackgroundColour(DARK_ALT)
         self.start_date_ctrl.SetForegroundColour(LIGHT_TEXT)
-        filter_row.Add(self.start_date_ctrl, 0, wx.RIGHT, 10)
+        filter_row.Add(self.start_date_ctrl, 0, wx.RIGHT, SPACE_SM)
         filter_row.Add(
             wx.StaticText(box_parent, label=self._t("match.filter.end")),
             0,
             wx.ALIGN_CENTER_VERTICAL | wx.RIGHT,
-            4,
+            SPACE_XS,
         )
         self.end_date_ctrl = wx.TextCtrl(box_parent, size=(120, -1))
         self.end_date_ctrl.SetBackgroundColour(DARK_ALT)
         self.end_date_ctrl.SetForegroundColour(LIGHT_TEXT)
-        filter_row.Add(self.end_date_ctrl, 0, wx.RIGHT, 10)
+        filter_row.Add(self.end_date_ctrl, 0, wx.RIGHT, SPACE_SM)
         apply_btn = wx.Button(box_parent, label=self._t("match.filter.apply"))
         apply_btn.Bind(wx.EVT_BUTTON, lambda _evt: self._update_metrics())
         filter_row.Add(apply_btn, 0)
@@ -190,7 +192,7 @@ class MatchHistoryFrame(MatchHistoryHandlersMixin, MatchHistoryPropertiesMixin, 
         stylize_scrollable(self.tree.GetDataView())
         self.tree.Bind(dv.EVT_TREELIST_ITEM_ACTIVATED, self.on_item_activated)
         self.tree.Bind(dv.EVT_TREELIST_SELECTION_CHANGED, self.on_item_selected)
-        sizer.Add(self.tree, 1, wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, 10)
+        sizer.Add(self.tree, 1, wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, SPACE_SM)
 
     def _on_frame_size(self, event: wx.SizeEvent) -> None:
         event.Skip()

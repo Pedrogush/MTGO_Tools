@@ -32,7 +32,6 @@ from utils.constants import (
     DECK_CARD_BADGE_PADDING,
     DECK_CARD_CORNER_RADIUS,
     DECK_CARD_IMAGE_BG,
-    DECK_CARD_NAME_FONT_SIZE,
     DECK_CARD_TEMPLATE_BORDER_ALPHA,
     DECK_CARD_TEMPLATE_BORDER_WIDTH,
     LIGHT_TEXT,
@@ -43,6 +42,7 @@ from widgets.panels.card_table_panel.card_render import (
     resolve_card_color,
 )
 from widgets.panels.card_table_panel.grid_layout import _CARD_HEIGHT, _CARD_WIDTH
+from widgets.stylize import type_font
 
 # Shared, bounded pool for decoding deck-cell card images off the UI thread.
 # One shared pool makes dispatch a near-free submit() and caps the number of
@@ -180,14 +180,7 @@ class GridImagesMixin:
             )
 
         dc.SetTextForeground(wx.Colour(0, 0, 0))
-        dc.SetFont(
-            wx.Font(
-                DECK_CARD_NAME_FONT_SIZE,
-                wx.FONTFAMILY_SWISS,
-                wx.FONTSTYLE_NORMAL,
-                wx.FONTWEIGHT_BOLD,
-            )
-        )
+        dc.SetFont(type_font("body", bold=True))
         name_lines = self._wrap_text(dc, name, rect.width - (DECK_CARD_BADGE_PADDING * 2))
         line_height = dc.GetTextExtent("Ag")[1]
         total_height = line_height * len(name_lines)

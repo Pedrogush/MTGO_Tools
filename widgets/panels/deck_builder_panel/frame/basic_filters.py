@@ -8,9 +8,8 @@ import wx
 
 from utils.constants import (
     BUILDER_MANA_ALL_BTN_SIZE,
-    PADDING_MD,
-    PADDING_SM,
-    PADDING_XS,
+    SPACE_SM,
+    SPACE_XS,
 )
 from widgets.buttons.mana_button import create_mana_button
 from widgets.checkbox import DarkCheckBox
@@ -38,29 +37,29 @@ class BasicFiltersBuilderMixin(_Base):
         stylize_button(back_btn, kind="secondary")
         back_btn.SetToolTip(self._t("builder.back_button.tooltip"))
         back_btn.Bind(wx.EVT_BUTTON, lambda _evt: self._on_back_clicked())
-        parent_sizer.Add(back_btn, 0, wx.EXPAND | wx.ALL, PADDING_MD)
+        parent_sizer.Add(back_btn, 0, wx.EXPAND | wx.ALL, SPACE_SM)
 
         info = wx.StaticText(self, label=self._t("builder.info"))
-        stylize_label(info, True)
-        parent_sizer.Add(info, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_MD)
+        stylize_label(info, subtle=True, level="body")
+        parent_sizer.Add(info, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, SPACE_SM)
 
     def _build_basic_filters(self, parent_sizer: wx.Sizer) -> None:
         # --- Card Name (always visible) ---
         lbl = wx.StaticText(self, label=self._t("builder.field.card_name"))
-        stylize_label(lbl, True)
-        parent_sizer.Add(lbl, 0, wx.LEFT | wx.RIGHT, PADDING_MD)
+        stylize_label(lbl, subtle=True, level="body")
+        parent_sizer.Add(lbl, 0, wx.LEFT | wx.RIGHT, SPACE_SM)
         name_ctrl = wx.TextCtrl(self)
         stylize_textctrl(name_ctrl)
         name_ctrl.SetHint(self._t("builder.hint.card_name"))
         name_ctrl.SetToolTip("Filter cards by name")
         name_ctrl.Bind(wx.EVT_TEXT, self._on_filters_changed)
         self.inputs["name"] = name_ctrl
-        parent_sizer.Add(name_ctrl, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_SM)
+        parent_sizer.Add(name_ctrl, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, SPACE_XS)
 
         # --- Mana Cost (always visible) ---
         lbl = wx.StaticText(self, label=self._t("builder.field.mana_cost"))
-        stylize_label(lbl, True)
-        parent_sizer.Add(lbl, 0, wx.LEFT | wx.RIGHT, PADDING_MD)
+        stylize_label(lbl, subtle=True, level="body")
+        parent_sizer.Add(lbl, 0, wx.LEFT | wx.RIGHT, SPACE_SM)
         mana_ctrl = ManaSymbolRichCtrl(
             self,
             self.mana_icons,
@@ -76,13 +75,13 @@ class BasicFiltersBuilderMixin(_Base):
         )
         mana_ctrl.Bind(wx.EVT_TEXT, self._on_filters_changed)
         self.inputs["mana"] = mana_ctrl
-        parent_sizer.Add(mana_ctrl, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_SM)
+        parent_sizer.Add(mana_ctrl, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, SPACE_XS)
 
         # Exact match checkbox
         match_row = wx.BoxSizer(wx.HORIZONTAL)
         match_label = wx.StaticText(self, label=self._t("builder.label.match"))
-        stylize_label(match_label, True)
-        match_row.Add(match_label, 0, wx.RIGHT, PADDING_MD)
+        stylize_label(match_label, subtle=True, level="body")
+        match_row.Add(match_label, 0, wx.RIGHT, SPACE_SM)
         exact_cb = DarkCheckBox(self, label=self._t("builder.check.exact_symbols"))
         stylize_checkbox(exact_cb, surface="panel")
         exact_cb.SetToolTip("When checked, match the exact mana symbols (no extras allowed)")
@@ -90,7 +89,7 @@ class BasicFiltersBuilderMixin(_Base):
         self.mana_exact_cb = exact_cb
         exact_cb.Bind(wx.EVT_CHECKBOX, self._on_filters_changed)
         match_row.AddStretchSpacer(1)
-        parent_sizer.Add(match_row, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, PADDING_XS)
+        parent_sizer.Add(match_row, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, SPACE_XS)
 
         # Mana symbol keyboard
         keyboard_row = wx.BoxSizer(wx.HORIZONTAL)
@@ -99,7 +98,7 @@ class BasicFiltersBuilderMixin(_Base):
         for token in ["W", "U", "B", "R", "G", "C", "X"]:
             btn = create_mana_button(self, token, self._append_mana_symbol, self.mana_icons)
             mana_btn_height = max(mana_btn_height, btn.GetSize().GetHeight())
-            keyboard_row.Add(btn, 0, wx.ALL, PADDING_XS)
+            keyboard_row.Add(btn, 0, wx.ALL, SPACE_XS)
         # G4: "All" opens the rest of this same keyboard, so it gets the same face
         # and the same height as the seven buttons beside it. It keeps its own
         # width because it carries a word rather than a glyph. The height is taken
@@ -111,11 +110,11 @@ class BasicFiltersBuilderMixin(_Base):
         stylize_button(all_btn, kind="ghost")
         all_btn.SetToolTip("Open the full mana symbol keyboard")
         all_btn.Bind(wx.EVT_BUTTON, lambda _evt: self._open_mana_keyboard())
-        keyboard_row.Add(all_btn, 0, wx.ALL, PADDING_XS)
+        keyboard_row.Add(all_btn, 0, wx.ALL, SPACE_XS)
         keyboard_row.AddStretchSpacer(1)
         parent_sizer.Add(
             keyboard_row,
             0,
             wx.ALIGN_CENTER_HORIZONTAL | wx.LEFT | wx.RIGHT | wx.BOTTOM,
-            PADDING_XS,
+            SPACE_XS,
         )

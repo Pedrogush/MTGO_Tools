@@ -21,7 +21,6 @@ from utils.constants import (
     DARK_ALT,
     DARK_PANEL,
     DECK_CARD_BADGE_PADDING,
-    DECK_CARD_BASE_FONT_SIZE,
     DECK_CARD_CORNER_RADIUS,
     SELECTION_BORDER,
     SELECTION_BORDER_WIDTH,
@@ -34,6 +33,7 @@ from widgets.panels.card_table_panel.grid_layout import (
     _CELL_HEIGHT,
     _MAX_CANVAS_PX,
 )
+from widgets.stylize import type_font
 
 
 class GridRenderMixin:
@@ -173,14 +173,7 @@ class GridRenderMixin:
         qty_for_check = int(qty_value) if isinstance(qty_value, float) else qty_value
         _, owned_rgb = self._owned_status(card["name"], qty_for_check)
         text = str(qty_value)
-        dc.SetFont(
-            wx.Font(
-                DECK_CARD_BASE_FONT_SIZE,
-                wx.FONTFAMILY_SWISS,
-                wx.FONTSTYLE_NORMAL,
-                wx.FONTWEIGHT_NORMAL,
-            )
-        )
+        dc.SetFont(type_font("body"))
         tw, th = dc.GetTextExtent(text)
         pad = DECK_CARD_BADGE_PADDING
         # The selected badge used to be a solid accent block on top of the art.
@@ -194,14 +187,9 @@ class GridRenderMixin:
         dc.DrawText(text, rect.x + pad * 2, rect.y + pad + (th + pad) // 2 - th // 2)
 
     def _draw_actions(self, dc: wx.DC, rect: wx.Rect, name: str) -> None:
-        dc.SetFont(
-            wx.Font(
-                DECK_CARD_BASE_FONT_SIZE,
-                wx.FONTFAMILY_SWISS,
-                wx.FONTSTYLE_NORMAL,
-                wx.FONTWEIGHT_BOLD,
-            )
-        )
+        # bold=True is buying glyph legibility at body size on top of card art,
+        # not marking a heading -- see type_font's docstring.
+        dc.SetFont(type_font("body", bold=True))
         for idx, (button_rect, glyph) in enumerate(
             zip(self._action_button_rects(rect), _ACTION_GLYPHS)
         ):

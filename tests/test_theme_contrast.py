@@ -668,18 +668,94 @@ def test_spacing_scale_is_on_the_4px_grid() -> None:
     assert scale == sorted(scale)
 
 
-def test_legacy_padding_constants_are_untouched() -> None:
-    """Phase 3 migrates these; phase 0 must not move the app's layout."""
+def test_legacy_padding_constants_are_gone() -> None:
+    """The inverse of the phase 0/1/2 guard, flipped deliberately in phase 3.
+
+    Until phase 3 this asserted PADDING_XS/SM/MD/LG/XL/BASE == (2, 4, 6, 10, 12,
+    8), so that an earlier phase could not silently re-lay-out the app by
+    editing a constant. Phase 3 is the phase that legitimately changes padding,
+    so the guard is inverted rather than deleted: the constants are gone, and
+    this fails if anyone reintroduces the 2px scale.
+    """
     from utils.constants import ui_layout
 
-    assert (
-        ui_layout.PADDING_XS,
-        ui_layout.PADDING_SM,
-        ui_layout.PADDING_MD,
-        ui_layout.PADDING_LG,
-        ui_layout.PADDING_XL,
-        ui_layout.PADDING_BASE,
-    ) == (2, 4, 6, 10, 12, 8)
+    for name in (
+        "PADDING_XS",
+        "PADDING_SM",
+        "PADDING_MD",
+        "PADDING_LG",
+        "PADDING_XL",
+        "PADDING_BASE",
+    ):
+        assert not hasattr(ui_layout, name), (
+            f"{name} is back. Spacing derives from the 4px SPACE_* scale; a 2px "
+            "step is below the perceptual floor and makes proximity unusable."
+        )
+
+
+def test_no_raw_spacing_literals_in_sizer_calls() -> None:
+    """No ``.Add(..., <int>)`` border/gap literals anywhere in ``widgets/``.
+
+    This is the acceptance criterion "all spacing derives from the 4px scale; no
+    raw literals in .Add()" turned into a guard. A literal 0 is allowed: an
+    explicit "no gap" is on the grid and naming it buys nothing.
+    """
+    import ast
+    from pathlib import Path
+
+    sizer_calls = {"Add", "AddSpacer", "Prepend", "Insert", "SetVGap", "SetHGap"}
+    ctors = {"FlexGridSizer", "GridSizer", "GridBagSizer"}
+    gap_kwargs = {"border", "gap", "vgap", "hgap"}
+
+    offenders = []
+    root = Path(__file__).resolve().parent.parent / "widgets"
+    for path in sorted(root.rglob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            func = node.func
+            name = (
+                func.attr
+                if isinstance(func, ast.Attribute)
+                else (func.id if isinstance(func, ast.Name) else None)
+            )
+            candidates = []
+            if name in sizer_calls:
+                for index, arg in enumerate(node.args):
+                    if name in ("AddSpacer", "SetVGap", "SetHGap") or index >= 2:
+                        candidates.append(arg)
+                candidates += [k.value for k in node.keywords if k.arg in gap_kwargs]
+            elif name in ctors:
+                candidates += [k.value for k in node.keywords if k.arg in gap_kwargs]
+                for index, arg in enumerate(node.args):
+                    if name in ("FlexGridSizer", "GridSizer") and index >= 2:
+                        candidates.append(arg)
+            for arg in candidates:
+                if (
+                    isinstance(arg, ast.Constant)
+                    and isinstance(arg.value, int)
+                    and not isinstance(arg.value, bool)
+                    and arg.value != 0
+                ):
+                    offenders.append(
+                        f"{path.relative_to(root.parent)}:{arg.lineno} {name}(... {arg.value})"
+                    )
+    assert not offenders, "raw spacing literals: " + ", ".join(offenders)
+
+
+def test_spacing_scale_has_perceptible_steps() -> None:
+    """Every adjacent step at least 1.5x, which the 2px PADDING_* scale was not.
+
+    PADDING_SM -> PADDING_MD was 4 -> 6 (1.5x on paper but only 2px, which is
+    what actually matters) and PADDING_MD -> PADDING_BASE was 6 -> 8 (1.33x).
+    The point of the 4px scale is that neighbouring levels differ by at least
+    4px *and* at least 1.5x, so two gaps read as two different gaps.
+    """
+    scale = [T.SPACE_XS, T.SPACE_SM, T.SPACE_MD, T.SPACE_LG, T.SPACE_XL]
+    for smaller, larger in zip(scale, scale[1:]):
+        assert larger - smaller >= T.SPACE_GRID
+        assert larger / smaller >= 1.33
 
 
 # ---------------------------------------------------------------------------

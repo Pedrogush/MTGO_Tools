@@ -83,9 +83,10 @@ class _FakeList(DeckResultsListPropertiesMixin, DeckResultsListHandlersMixin):
     """Concrete mixin host recording the wx base-class calls under test."""
 
     # Mirror the sizing constants defined on the real frame so the wx-free
-    # ``OnMeasureItem`` height formula can be exercised without wx.
-    _ITEM_MARGIN = 6
+    # ``OnMeasureItem`` caching can be exercised without wx.
+    _ITEM_MARGIN = 4
     _CARD_PADDING = 8
+    _ROW_GAP = 4
 
     def __init__(self) -> None:
         self._items: list[tuple[bool, tuple]] = []
@@ -94,9 +95,24 @@ class _FakeList(DeckResultsListPropertiesMixin, DeckResultsListHandlersMixin):
         self.freeze_calls = 0
         self.thaw_calls = 0
         self._char_height = 14
+        self._row_height: int | None = None
+        self.measure_calls = 0
 
     def GetCharHeight(self) -> int:
         return self._char_height
+
+    def _measure_row_height(self) -> int:
+        """Stand in for the real font measurement, which needs a live wx DC.
+
+        Phase 3 made row height a function of the type scale (heading + caption
+        rather than two identical char rows), so the real implementation opens a
+        ``wx.ClientDC``. The formula around the measurement -- gap, padding,
+        margins, and the caching -- is what these tests still cover.
+        """
+        self.measure_calls += 1
+        heading_h, body_h, caption_h = 17, 14, 11
+        content = max(heading_h, body_h) + self._ROW_GAP + caption_h
+        return content + (self._ITEM_MARGIN * 2) + (self._CARD_PADDING * 2)
 
     def SetItemCount(self, count: int) -> None:
         self.set_item_count_calls.append(count)
@@ -445,17 +461,32 @@ def test_get_count_tracks_mutations() -> None:
 
 
 def test_on_measure_item_height_formula() -> None:
-    """Row height is two char rows + 2px gap plus margin and padding on both sides."""
+    """Row height is the tallest top-row font + gap + caption, plus margins/padding."""
     lst = _FakeList()
-    lst._char_height = 14
 
-    # 14*2 + 2 (content) + 6*2 (margins) + 8*2 (padding) = 58
-    assert lst.OnMeasureItem(0) == 58
+    # max(17, 14) + 4 (gap) + 11 (caption) + 4*2 (margins) + 8*2 (padding) = 56
+    assert lst.OnMeasureItem(0) == 56
 
 
 def test_on_measure_item_independent_of_row_index() -> None:
-    """Every row measures the same fixed two-line height regardless of index."""
+    """Every row measures the same height regardless of index."""
     lst = _FakeList()
     lst.set_decks(_make_rows(3))
 
     assert lst.OnMeasureItem(0) == lst.OnMeasureItem(2)
+
+
+def test_on_measure_item_measures_once_for_the_whole_list() -> None:
+    """The measurement is cached.
+
+    ``wx.VListBox`` calls ``OnMeasureItem`` once per item and this list routinely
+    holds thousands of rows, so measuring three fonts on a fresh ``wx.ClientDC``
+    per call would allocate a DC per row during scrolling.
+    """
+    lst = _FakeList()
+    lst.set_decks(_make_rows(500))
+
+    for index in range(500):
+        lst.OnMeasureItem(index)
+
+    assert lst.measure_calls == 1

@@ -15,11 +15,20 @@ from loguru import logger
 from matplotlib.backends.backend_wxagg import FigureCanvasWxAgg as FigureCanvas
 from matplotlib.figure import Figure
 
-from utils.constants import DARK_ALT, DARK_BG, DARK_PANEL, LIGHT_TEXT, SUBDUED_TEXT
+from utils.constants import (
+    DARK_ALT,
+    DARK_BG,
+    DARK_PANEL,
+    LIGHT_TEXT,
+    SPACE_MD,
+    SPACE_SM,
+    SPACE_XS,
+    SUBDUED_TEXT,
+)
 from utils.i18n import translate
 from widgets.frames.metagame_analysis.handlers import MetagameAnalysisHandlersMixin
 from widgets.frames.metagame_analysis.properties import MetagameAnalysisPropertiesMixin
-from widgets.stylize import stylize_button, stylize_choice
+from widgets.stylize import apply_base_font, apply_type_level, stylize_button, stylize_choice
 
 
 class MetagameAnalysisFrame(
@@ -40,6 +49,7 @@ class MetagameAnalysisFrame(
             size=(980, 660),
             style=style,
         )
+        apply_base_font(self)
         self._locale = locale
         self.controller = controller
 
@@ -67,11 +77,11 @@ class MetagameAnalysisFrame(
         panel.SetSizer(main_sizer)
 
         toolbar = wx.BoxSizer(wx.HORIZONTAL)
-        main_sizer.Add(toolbar, 0, wx.LEFT | wx.RIGHT | wx.TOP | wx.EXPAND, 8)
+        main_sizer.Add(toolbar, 0, wx.LEFT | wx.RIGHT | wx.TOP | wx.EXPAND, SPACE_SM)
 
         format_label = wx.StaticText(panel, label=self._t("metagame.label.format"))
         format_label.SetForegroundColour(SUBDUED_TEXT)
-        toolbar.Add(format_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 5)
+        toolbar.Add(format_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, SPACE_XS)
         self.format_choice = wx.Choice(
             panel,
             choices=[
@@ -86,54 +96,54 @@ class MetagameAnalysisFrame(
         self.format_choice.SetSelection(0)
         stylize_choice(self.format_choice)
         self.format_choice.Bind(wx.EVT_CHOICE, self.on_format_change)
-        toolbar.Add(self.format_choice, 0, wx.RIGHT, 12)
+        toolbar.Add(self.format_choice, 0, wx.RIGHT, SPACE_MD)
 
         time_window_label = wx.StaticText(panel, label=self._t("metagame.label.time_window"))
         time_window_label.SetForegroundColour(SUBDUED_TEXT)
         time_window_tooltip = self._t("metagame.tooltip.time_window")
         time_window_label.SetToolTip(time_window_tooltip)
-        toolbar.Add(time_window_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 5)
+        toolbar.Add(time_window_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, SPACE_XS)
 
         self.days_prev_button = wx.Button(panel, label="\u2190", size=(28, 26))
         self._stylize_button(self.days_prev_button, kind="ghost")
         self.days_prev_button.Bind(wx.EVT_BUTTON, self.on_days_decrease)
         self.days_prev_button.SetToolTip(time_window_tooltip)
-        toolbar.Add(self.days_prev_button, 0, wx.RIGHT, 3)
+        toolbar.Add(self.days_prev_button, 0, wx.RIGHT, SPACE_XS)
 
         self.days_value_box, self.days_value_label = self._create_value_badge(
             panel, str(self.current_days), tooltip=time_window_tooltip
         )
-        toolbar.Add(self.days_value_box, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 3)
+        toolbar.Add(self.days_value_box, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, SPACE_XS)
 
         self.days_next_button = wx.Button(panel, label="\u2192", size=(28, 26))
         self._stylize_button(self.days_next_button, kind="ghost")
         self.days_next_button.Bind(wx.EVT_BUTTON, self.on_days_increase)
         self.days_next_button.SetToolTip(time_window_tooltip)
-        toolbar.Add(self.days_next_button, 0, wx.RIGHT, 12)
+        toolbar.Add(self.days_next_button, 0, wx.RIGHT, SPACE_MD)
 
         day_label = wx.StaticText(panel, label=self._t("metagame.label.starting_from"))
         day_label.SetForegroundColour(SUBDUED_TEXT)
-        toolbar.Add(day_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 5)
+        toolbar.Add(day_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, SPACE_XS)
 
         self.offset_prev_button = wx.Button(panel, label="\u2190", size=(28, 26))
         self._stylize_button(self.offset_prev_button, kind="ghost")
         self.offset_prev_button.Bind(wx.EVT_BUTTON, self.on_offset_decrease)
-        toolbar.Add(self.offset_prev_button, 0, wx.RIGHT, 3)
+        toolbar.Add(self.offset_prev_button, 0, wx.RIGHT, SPACE_XS)
 
         self.offset_value_box, self.offset_value_label = self._create_value_badge(
             panel, str(self.base_day_offset)
         )
-        toolbar.Add(self.offset_value_box, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 3)
+        toolbar.Add(self.offset_value_box, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, SPACE_XS)
 
         self.offset_next_button = wx.Button(panel, label="\u2192", size=(28, 26))
         self._stylize_button(self.offset_next_button, kind="ghost")
         self.offset_next_button.Bind(wx.EVT_BUTTON, self.on_offset_increase)
-        toolbar.Add(self.offset_next_button, 0, wx.RIGHT, 12)
+        toolbar.Add(self.offset_next_button, 0, wx.RIGHT, SPACE_MD)
 
         self.refresh_button = wx.Button(panel, label=self._t("metagame.btn.refresh"))
         self._stylize_button(self.refresh_button)
         self.refresh_button.Bind(wx.EVT_BUTTON, lambda _evt: self.refresh_data())
-        toolbar.Add(self.refresh_button, 0, wx.RIGHT, 8)
+        toolbar.Add(self.refresh_button, 0, wx.RIGHT, SPACE_SM)
 
         toolbar.AddStretchSpacer(1)
 
@@ -142,12 +152,12 @@ class MetagameAnalysisFrame(
         toolbar.Add(self.status_label, 0, wx.ALIGN_CENTER_VERTICAL)
 
         content_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        main_sizer.Add(content_sizer, 1, wx.ALL | wx.EXPAND, 8)
+        main_sizer.Add(content_sizer, 1, wx.ALL | wx.EXPAND, SPACE_SM)
 
         self.figure = Figure(figsize=(6, 5), facecolor="#14161b")
         self.canvas = FigureCanvas(panel, -1, self.figure)
         self.canvas.SetBackgroundColour(DARK_PANEL)
-        content_sizer.Add(self.canvas, 1, wx.EXPAND | wx.RIGHT, 8)
+        content_sizer.Add(self.canvas, 1, wx.EXPAND | wx.RIGHT, SPACE_SM)
 
         self.ax = self.figure.add_subplot(111)
         self.ax.set_facecolor("#14161b")
@@ -161,15 +171,12 @@ class MetagameAnalysisFrame(
 
         changes_label = wx.StaticText(right_panel, label=self._t("metagame.label.changes"))
         changes_label.SetForegroundColour(LIGHT_TEXT)
-        font = changes_label.GetFont()
-        font.MakeBold()
-        font.PointSize += 2
-        changes_label.SetFont(font)
-        right_sizer.Add(changes_label, 0, wx.LEFT | wx.RIGHT | wx.TOP, 8)
+        apply_type_level(changes_label, "heading")
+        right_sizer.Add(changes_label, 0, wx.LEFT | wx.RIGHT | wx.TOP, SPACE_SM)
 
         self.changes_html = wx.html.HtmlWindow(right_panel, style=wx.BORDER_NONE)
         self.changes_html.SetBackgroundColour(DARK_ALT)
-        right_sizer.Add(self.changes_html, 1, wx.ALL | wx.EXPAND, 8)
+        right_sizer.Add(self.changes_html, 1, wx.ALL | wx.EXPAND, SPACE_SM)
 
         self._sync_navigation_controls()
 

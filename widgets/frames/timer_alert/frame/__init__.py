@@ -22,7 +22,7 @@ from loguru import logger
 
 from utils.constants import (
     DARK_BG,
-    PADDING_SM,
+    SPACE_XS,
     TIMER_ALERT_FRAME_SIZE,
     TIMER_ALERT_POLL_INTERVAL_MS,
     TIMER_ALERT_REPEAT_INTERVAL_DEFAULT_MS,
@@ -34,6 +34,7 @@ from widgets.frames.timer_alert.frame.styling import StylingMixin
 from widgets.frames.timer_alert.frame.threshold_panel import SOUND_OPTIONS, ThresholdPanel
 from widgets.frames.timer_alert.handlers import TimerAlertHandlersMixin
 from widgets.frames.timer_alert.properties import TimerAlertPropertiesMixin
+from widgets.stylize import apply_base_font
 
 if TYPE_CHECKING:
     from services.mtgo_bridge_service.client import BridgeWatcher
@@ -65,6 +66,7 @@ class TimerAlertFrame(
             size=TIMER_ALERT_FRAME_SIZE,
             style=style,
         )
+        apply_base_font(self)
         self._locale = locale
         self.controller = controller
 
@@ -113,7 +115,7 @@ class TimerAlertFrame(
     def _add_threshold_panel(self) -> None:
         panel = ThresholdPanel(self.threshold_container, on_remove=self._remove_threshold_panel)
         self.threshold_panels.append(panel)
-        self.threshold_container_sizer.Add(panel, 0, wx.EXPAND | wx.BOTTOM, PADDING_SM)
+        self.threshold_container_sizer.Add(panel, 0, wx.EXPAND | wx.BOTTOM, SPACE_XS)
         self.threshold_container.Layout()
         self.threshold_container.FitInside()
 

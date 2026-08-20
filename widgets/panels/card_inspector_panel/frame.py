@@ -20,10 +20,9 @@ from utils.constants import (
     CARD_IMAGE_TEXT_MIN_HEIGHT,
     DARK_PANEL,
     LIGHT_TEXT,
-    PADDING_BASE,
-    PADDING_MD,
-    PADDING_SM,
-    PADDING_XL,
+    SPACE_MD,
+    SPACE_SM,
+    SPACE_XS,
     SUBDUED_TEXT,
 )
 from widgets.checkbox import DarkCheckBox
@@ -32,7 +31,7 @@ from widgets.panels.card_image_display import CardImageDisplay
 from widgets.panels.card_inspector_panel.handlers import CardInspectorPanelHandlersMixin
 from widgets.panels.card_inspector_panel.properties import CardInspectorPanelPropertiesMixin
 from widgets.panels.mana_rich_text_ctrl import ManaSymbolRichCtrl
-from widgets.stylize import stylize_button, stylize_checkbox
+from widgets.stylize import apply_type_level, stylize_button, stylize_checkbox
 
 if TYPE_CHECKING:
     from repositories.card_repository import CardDataManager
@@ -96,14 +95,14 @@ class CardInspectorPanel(
         self.SetSizer(sizer)
 
         content = wx.BoxSizer(wx.HORIZONTAL)
-        sizer.Add(content, 1, wx.EXPAND | wx.ALL, PADDING_MD)
+        sizer.Add(content, 1, wx.EXPAND | wx.ALL, SPACE_SM)
 
         # Left column: Card image and printing navigation
         self.image_column_panel = wx.Panel(self)
         self.image_column_panel.SetBackgroundColour(DARK_PANEL)
         image_column = wx.BoxSizer(wx.VERTICAL)
         self.image_column_panel.SetSizer(image_column)
-        content.Add(self.image_column_panel, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, PADDING_XL)
+        content.Add(self.image_column_panel, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, SPACE_MD)
 
         # Card image display
         self.card_image_display = CardImageDisplay(
@@ -111,9 +110,7 @@ class CardInspectorPanel(
             width=CARD_IMAGE_DISPLAY_WIDTH,
             height=CARD_IMAGE_DISPLAY_HEIGHT,
         )
-        image_column.Add(
-            self.card_image_display, 0, wx.ALIGN_CENTER_HORIZONTAL | wx.ALL, PADDING_SM
-        )
+        image_column.Add(self.card_image_display, 0, wx.ALIGN_CENTER_HORIZONTAL | wx.ALL, SPACE_XS)
         self.image_text_panel = wx.Panel(self.image_column_panel)
         self.image_text_panel.SetBackgroundColour(DARK_PANEL)
         self.image_text_panel.SetMinSize((CARD_IMAGE_DISPLAY_WIDTH, CARD_IMAGE_DISPLAY_HEIGHT))
@@ -125,8 +122,8 @@ class CardInspectorPanel(
             readonly=True,
             multiline=True,
         )
-        image_text_sizer.Add(self.image_text_ctrl, 1, wx.EXPAND | wx.ALL, PADDING_SM)
-        image_column.Add(self.image_text_panel, 0, wx.ALIGN_CENTER_HORIZONTAL | wx.ALL, PADDING_SM)
+        image_text_sizer.Add(self.image_text_ctrl, 1, wx.EXPAND | wx.ALL, SPACE_XS)
+        image_column.Add(self.image_text_panel, 0, wx.ALIGN_CENTER_HORIZONTAL | wx.ALL, SPACE_XS)
         self.image_text_panel.Hide()
 
         # Printing navigation panel
@@ -142,7 +139,7 @@ class CardInspectorPanel(
 
         # Keep the navigation rail aligned with the card image width so buttons don't jump
         image_width = getattr(self.card_image_display, "image_width", CARD_IMAGE_DISPLAY_WIDTH)
-        self.nav_panel.SetMinSize((image_width, nav_btn_size.GetHeight() + PADDING_SM))
+        self.nav_panel.SetMinSize((image_width, nav_btn_size.GetHeight() + SPACE_XS))
         self.nav_panel.SetMaxSize((image_width, -1))
 
         self.prev_btn = wx.Button(self.nav_panel, label="◀", size=nav_btn_size)
@@ -151,11 +148,11 @@ class CardInspectorPanel(
         # printing), and a disabled accent fill was C-b in issue #962.
         stylize_button(self.prev_btn, kind="ghost", surface="panel")
         self.prev_btn.Bind(wx.EVT_BUTTON, self._on_prev_printing)
-        nav_sizer.Add(self.prev_btn, 0, wx.RIGHT, PADDING_SM)
+        nav_sizer.Add(self.prev_btn, 0, wx.RIGHT, SPACE_XS)
 
         self.printing_label_width = max(
             CARD_IMAGE_PRINTING_LABEL_MIN_WIDTH,
-            image_width - (nav_btn_size.GetWidth() * 2) - (PADDING_BASE * 2),
+            image_width - (nav_btn_size.GetWidth() * 2) - (SPACE_MD),
         )
         self.printing_label = wx.StaticText(self.nav_panel, label="")
         self.printing_label.SetMinSize((self.printing_label_width, -1))
@@ -165,15 +162,15 @@ class CardInspectorPanel(
 
         self.loading_label = wx.StaticText(self.nav_panel, label="Loading printing…")
         self.loading_label.SetForegroundColour(SUBDUED_TEXT)
-        nav_sizer.Add(self.loading_label, 0, wx.LEFT | wx.ALIGN_CENTER_VERTICAL, PADDING_MD)
+        nav_sizer.Add(self.loading_label, 0, wx.LEFT | wx.ALIGN_CENTER_VERTICAL, SPACE_SM)
         self.loading_label.Hide()
 
         self.next_btn = wx.Button(self.nav_panel, label="▶", size=nav_btn_size)
         stylize_button(self.next_btn, kind="ghost", surface="panel")
         self.next_btn.Bind(wx.EVT_BUTTON, self._on_next_printing)
-        nav_sizer.Add(self.next_btn, 0, wx.LEFT, PADDING_SM)
+        nav_sizer.Add(self.next_btn, 0, wx.LEFT, SPACE_XS)
 
-        image_column.Add(self.nav_panel, 0, wx.ALIGN_CENTER_HORIZONTAL | wx.TOP, PADDING_MD)
+        image_column.Add(self.nav_panel, 0, wx.ALIGN_CENTER_HORIZONTAL | wx.TOP, SPACE_SM)
         self.nav_panel.Hide()  # Hidden by default
 
         # Save-art controls (issue #792, part 2): an "auto-save" checkmark that
@@ -195,9 +192,9 @@ class CardInspectorPanel(
         stylize_button(self.save_art_btn, kind="secondary")
         self.save_art_btn.SetToolTip("Save the current printing as this card's art")
         self.save_art_btn.Bind(wx.EVT_BUTTON, self._on_save_printing)
-        save_sizer.Add(self.save_art_btn, 0, wx.LEFT | wx.ALIGN_CENTER_VERTICAL, PADDING_MD)
+        save_sizer.Add(self.save_art_btn, 0, wx.LEFT | wx.ALIGN_CENTER_VERTICAL, SPACE_SM)
 
-        image_column.Add(self.save_panel, 0, wx.ALIGN_CENTER_HORIZONTAL | wx.TOP, PADDING_SM)
+        image_column.Add(self.save_panel, 0, wx.ALIGN_CENTER_HORIZONTAL | wx.TOP, SPACE_XS)
         self.save_panel.Hide()  # Hidden until a card has printings to choose from
 
         # Right column: Card details
@@ -209,12 +206,12 @@ class CardInspectorPanel(
 
         # Card name
         self.name_label = wx.StaticText(self.details_panel, label="Select a card to inspect.")
-        name_font = self.name_label.GetFont()
-        name_font.SetPointSize(name_font.GetPointSize() + 2)
-        name_font.MakeBold()
-        self.name_label.SetFont(name_font)
+        # heading rather than title: the inspector column is ~260px wide and a
+        # 15pt card name wraps to three lines there (that width problem is
+        # phase 8's; this just does not make it worse).
+        apply_type_level(self.name_label, "heading")
         self.name_label.SetForegroundColour(LIGHT_TEXT)
-        details.Add(self.name_label, 0, wx.BOTTOM, PADDING_SM)
+        details.Add(self.name_label, 0, wx.BOTTOM, SPACE_XS)
 
         # Mana cost container
         self.cost_container = wx.Panel(self.details_panel)
@@ -222,17 +219,17 @@ class CardInspectorPanel(
         self.cost_container.SetMinSize((-1, CARD_IMAGE_COST_MIN_HEIGHT))
         self.cost_sizer = wx.BoxSizer(wx.HORIZONTAL)
         self.cost_container.SetSizer(self.cost_sizer)
-        details.Add(self.cost_container, 0, wx.EXPAND | wx.BOTTOM, PADDING_SM)
+        details.Add(self.cost_container, 0, wx.EXPAND | wx.BOTTOM, SPACE_XS)
 
         # Type line
         self.type_label = wx.StaticText(self.details_panel, label="")
         self.type_label.SetForegroundColour(SUBDUED_TEXT)
-        details.Add(self.type_label, 0, wx.BOTTOM, PADDING_SM)
+        details.Add(self.type_label, 0, wx.BOTTOM, SPACE_XS)
 
         # Stats (mana value, P/T, colors, zone)
         self.stats_label = wx.StaticText(self.details_panel, label="")
         self.stats_label.SetForegroundColour(LIGHT_TEXT)
-        details.Add(self.stats_label, 0, wx.BOTTOM, PADDING_SM)
+        details.Add(self.stats_label, 0, wx.BOTTOM, SPACE_XS)
 
         # Oracle text
         self.text_ctrl = ManaSymbolRichCtrl(
@@ -242,27 +239,25 @@ class CardInspectorPanel(
             multiline=True,
         )
         self.text_ctrl.SetMinSize((-1, CARD_IMAGE_TEXT_MIN_HEIGHT))
-        details.Add(self.text_ctrl, 1, wx.EXPAND | wx.TOP, PADDING_SM)
+        details.Add(self.text_ctrl, 1, wx.EXPAND | wx.TOP, SPACE_XS)
 
         self._apply_fixed_sizing(image_width, nav_btn_size)
 
     def _apply_fixed_sizing(self, image_width: int, nav_btn_size: wx.Size) -> None:
         image_height = getattr(self.card_image_display, "image_height", CARD_IMAGE_DISPLAY_HEIGHT)
-        nav_height = nav_btn_size.GetHeight() + PADDING_SM
+        nav_height = nav_btn_size.GetHeight() + SPACE_XS
         # Reserve room for the save-art controls (issue #792) so they aren't
         # clipped by the otherwise fixed-height image column.
-        save_height = self.save_panel.GetBestSize().GetHeight() + PADDING_SM
-        image_column_height = (
-            image_height + (PADDING_SM * 2) + nav_height + save_height + PADDING_MD
-        )
-        column_width = image_width + PADDING_XL + PADDING_MD
+        save_height = self.save_panel.GetBestSize().GetHeight() + SPACE_XS
+        image_column_height = image_height + (SPACE_SM) + nav_height + save_height + SPACE_SM
+        column_width = image_width + SPACE_MD + SPACE_SM
 
         self.image_column_panel.SetMinSize((column_width, image_column_height))
         self.image_column_panel.SetMaxSize((column_width, image_column_height))
-        self.details_panel.SetMinSize((column_width + PADDING_MD, image_height))
-        self.details_panel.SetMaxSize((column_width + PADDING_MD, -1))
+        self.details_panel.SetMinSize((column_width + SPACE_SM, image_height))
+        self.details_panel.SetMaxSize((column_width + SPACE_SM, -1))
 
-        panel_width = column_width + PADDING_XL
-        panel_height = image_column_height + PADDING_XL
+        panel_width = column_width + SPACE_MD
+        panel_height = image_column_height + SPACE_MD
         self.SetMinSize((panel_width, panel_height))
         self.SetMaxSize((panel_width, -1))

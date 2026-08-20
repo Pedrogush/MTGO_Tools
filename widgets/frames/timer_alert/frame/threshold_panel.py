@@ -10,11 +10,12 @@ from utils.constants import (
     DARK_ALT,
     DARK_BG,
     LIGHT_TEXT,
-    PADDING_BASE,
+    SPACE_SM,
     TIMER_ALERT_DEFAULT_THRESHOLD_VALUE,
     TIMER_ALERT_REMOVE_BUTTON_SIZE,
     TIMER_ALERT_THRESHOLD_INPUT_SIZE,
 )
+from widgets.stylize import stylize_button
 
 # Built-in Windows sounds (always available)
 SOUND_OPTIONS = {
@@ -42,7 +43,7 @@ class ThresholdPanel(wx.Panel):
             self, size=TIMER_ALERT_THRESHOLD_INPUT_SIZE, value=TIMER_ALERT_DEFAULT_THRESHOLD_VALUE
         )
         self._stylize_entry(self.time_input)
-        sizer.Add(self.time_input, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, PADDING_BASE)
+        sizer.Add(self.time_input, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, SPACE_SM)
 
         # Remove button
         self.remove_btn = wx.Button(self, label="✕", size=TIMER_ALERT_REMOVE_BUTTON_SIZE)
@@ -55,11 +56,13 @@ class ThresholdPanel(wx.Panel):
         entry.SetForegroundColour(LIGHT_TEXT)
 
     def _stylize_remove_button(self, button: wx.Button) -> None:
-        button.SetBackgroundColour(wx.Colour(139, 35, 35))
-        button.SetForegroundColour(LIGHT_TEXT)
-        font = button.GetFont()
-        font.MakeBold()
-        button.SetFont(font)
+        """The one button phase 2's sweep missed.
+
+        It was a hand-rolled ``#8B2323`` fill with a bold label, set directly
+        rather than through the button system, so it kept wxMSW's light 2px
+        frame and its own off-token red. ``kind="danger"`` is the same role.
+        """
+        stylize_button(button, kind="danger", surface="panel")
 
     def _on_remove(self, _event: wx.CommandEvent) -> None:
         if self.on_remove_callback:

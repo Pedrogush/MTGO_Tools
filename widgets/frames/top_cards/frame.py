@@ -13,11 +13,11 @@ from typing import TYPE_CHECKING
 
 import wx
 
-from utils.constants import DARK_BG, FORMAT_OPTIONS, LIGHT_TEXT, SUBDUED_TEXT
+from utils.constants import DARK_BG, FORMAT_OPTIONS, LIGHT_TEXT, SPACE_SM, SPACE_XS, SUBDUED_TEXT
 from utils.i18n import translate
 from widgets.frames.top_cards.handlers import TopCardsHandlersMixin
 from widgets.frames.top_cards.properties import TopCardsPropertiesMixin
-from widgets.stylize import stylize_button, stylize_choice, stylize_list_ctrl
+from widgets.stylize import apply_base_font, stylize_button, stylize_choice, stylize_list_ctrl
 
 if TYPE_CHECKING:
     from services.format_card_pool_service import FormatCardPoolService
@@ -45,6 +45,7 @@ class TopCardsFrame(TopCardsHandlersMixin, TopCardsPropertiesMixin, wx.Frame):
             size=(1200, 700),
             style=style,
         )
+        apply_base_font(self)
         self._locale = locale
         self.controller = controller
         self._service: FormatCardPoolService = controller.format_card_pool_service
@@ -63,22 +64,22 @@ class TopCardsFrame(TopCardsHandlersMixin, TopCardsPropertiesMixin, wx.Frame):
         panel.SetSizer(main_sizer)
 
         toolbar = wx.BoxSizer(wx.HORIZONTAL)
-        main_sizer.Add(toolbar, 0, wx.ALL | wx.EXPAND, 10)
+        main_sizer.Add(toolbar, 0, wx.ALL | wx.EXPAND, SPACE_SM)
 
         label = wx.StaticText(panel, label=self._t("top_cards.label.format"))
         label.SetForegroundColour(LIGHT_TEXT)
-        toolbar.Add(label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 5)
+        toolbar.Add(label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, SPACE_XS)
 
         self.format_choice = wx.Choice(panel, choices=TOP_CARDS_FORMAT_OPTIONS)
         self.format_choice.SetSelection(TOP_CARDS_FORMAT_OPTIONS.index("Modern"))
         stylize_choice(self.format_choice)
         self.format_choice.Bind(wx.EVT_CHOICE, self.on_format_change)
-        toolbar.Add(self.format_choice, 0, wx.RIGHT, 15)
+        toolbar.Add(self.format_choice, 0, wx.RIGHT, SPACE_SM)
 
         self.refresh_button = wx.Button(panel, label=self._t("top_cards.btn.refresh"))
         self._stylize_button(self.refresh_button)
         self.refresh_button.Bind(wx.EVT_BUTTON, lambda _evt: self.refresh_data())
-        toolbar.Add(self.refresh_button, 0, wx.RIGHT, 10)
+        toolbar.Add(self.refresh_button, 0, wx.RIGHT, SPACE_SM)
 
         toolbar.AddStretchSpacer(1)
 
@@ -110,7 +111,7 @@ class TopCardsFrame(TopCardsHandlersMixin, TopCardsPropertiesMixin, wx.Frame):
         )
         self.card_list.InsertColumn(11, self._t("top_cards.col.formats"), format=center, width=160)
         stylize_list_ctrl(self.card_list, surface="panel")
-        main_sizer.Add(self.card_list, 1, wx.ALL | wx.EXPAND, 10)
+        main_sizer.Add(self.card_list, 1, wx.ALL | wx.EXPAND, SPACE_SM)
         self._bind_header_tooltips()
 
     def _stylize_button(self, button: wx.Button) -> None:

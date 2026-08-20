@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 import wx
 from loguru import logger
 
-from utils.constants.ui_layout import PADDING_BASE, PADDING_XL
+from utils.constants.ui_layout import SPACE_MD, SPACE_SM
 from utils.constants.ui_windows import (
     GUIDE_IMPORT_OPTIONS_DIALOG_HEIGHT,
     GUIDE_IMPORT_OPTIONS_DIALOG_WIDTH,
@@ -18,7 +18,7 @@ from widgets.frames.app_frame.handlers.sideboard_guide_csv import (
     export_guide_to_csv,
     import_guide_from_csv,
 )
-from widgets.stylize import stylize_checkbox
+from widgets.stylize import apply_base_font, stylize_checkbox
 
 if TYPE_CHECKING:
     from widgets.frames.app_frame import AppFrame
@@ -90,6 +90,7 @@ class SideboardGuideImportExportHandlers(_Base):
             title="Import Options",
             size=(GUIDE_IMPORT_OPTIONS_DIALOG_WIDTH, GUIDE_IMPORT_OPTIONS_DIALOG_HEIGHT),
         )
+        apply_base_font(options_dlg)
         panel = wx.Panel(options_dlg)
         sizer = wx.BoxSizer(wx.VERTICAL)
 
@@ -99,16 +100,16 @@ class SideboardGuideImportExportHandlers(_Base):
             "If unchecked, will overwrite existing entries for matching archetypes. "
             "If checked, will add entries even if archetypes already exist."
         )
-        sizer.Add(enable_double_checkbox, 0, wx.ALL, PADDING_XL)
+        sizer.Add(enable_double_checkbox, 0, wx.ALL, SPACE_MD)
 
         btn_sizer = wx.BoxSizer(wx.HORIZONTAL)
         btn_sizer.AddStretchSpacer()
         ok_btn = wx.Button(panel, label="Import", id=wx.ID_OK)
         ok_btn.SetDefault()
-        btn_sizer.Add(ok_btn, 0, wx.RIGHT, PADDING_BASE)
+        btn_sizer.Add(ok_btn, 0, wx.RIGHT, SPACE_SM)
         cancel_btn = wx.Button(panel, label="Cancel", id=wx.ID_CANCEL)
         btn_sizer.Add(cancel_btn, 0)
-        sizer.Add(btn_sizer, 0, wx.EXPAND | wx.ALL, PADDING_BASE)
+        sizer.Add(btn_sizer, 0, wx.EXPAND | wx.ALL, SPACE_SM)
 
         panel.SetSizer(sizer)
         options_dlg.Centre()

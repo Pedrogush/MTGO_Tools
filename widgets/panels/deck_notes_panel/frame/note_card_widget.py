@@ -8,9 +8,9 @@ from typing import Any
 
 import wx
 
-from utils.constants import DARK_ALT, DARK_BG, LIGHT_TEXT, SUBDUED_TEXT
+from utils.constants import DARK_ALT, DARK_BG, LIGHT_TEXT, SPACE_SM, SPACE_XS, SUBDUED_TEXT
 from utils.i18n import translate
-from widgets.stylize import stylize_choice, stylize_textctrl
+from widgets.stylize import apply_type_level, stylize_choice, stylize_textctrl
 
 NOTE_TYPES = ["General", "Matchup", "Sideboard Plan", "Custom"]
 
@@ -72,15 +72,15 @@ class _NoteCardWidget(wx.Panel):
 
         # ── Header row ──────────────────────────────────────────────────────
         header = wx.BoxSizer(wx.HORIZONTAL)
-        outer.Add(header, 0, wx.EXPAND | wx.ALL, 6)
+        outer.Add(header, 0, wx.EXPAND | wx.ALL, SPACE_SM)
 
         self.title_ctrl = wx.TextCtrl(self, value=card.get("title", ""))
         self.title_ctrl.SetBackgroundColour(DARK_ALT)
         self.title_ctrl.SetForegroundColour(LIGHT_TEXT)
-        font = self.title_ctrl.GetFont()
-        font.MakeBold()
-        self.title_ctrl.SetFont(font)
-        header.Add(self.title_ctrl, 1, wx.EXPAND | wx.RIGHT, 6)
+        # A note's title really is the note's heading -- one of the few places
+        # bold now earns its keep.
+        apply_type_level(self.title_ctrl, "heading")
+        header.Add(self.title_ctrl, 1, wx.EXPAND | wx.RIGHT, SPACE_SM)
 
         translated_types = [translate(locale, _NOTE_TYPE_I18N_KEYS.get(k, k)) for k in NOTE_TYPES]
         self.type_choice = wx.Choice(self, choices=translated_types)
@@ -90,7 +90,7 @@ class _NoteCardWidget(wx.Panel):
         self.type_choice.SetSelection(idx)
         self._update_type_color()
         self.type_choice.Bind(wx.EVT_CHOICE, self._on_type_changed)
-        header.Add(self.type_choice, 0, wx.RIGHT, 6)
+        header.Add(self.type_choice, 0, wx.RIGHT, SPACE_SM)
 
         up_btn = wx.Button(self, label="↑", size=(28, -1))
         down_btn = wx.Button(self, label="↓", size=(28, -1))
@@ -102,8 +102,8 @@ class _NoteCardWidget(wx.Panel):
         up_btn.Bind(wx.EVT_BUTTON, lambda _: self._on_move_up(self))
         down_btn.Bind(wx.EVT_BUTTON, lambda _: self._on_move_down(self))
         del_btn.Bind(wx.EVT_BUTTON, lambda _: self._on_delete(self))
-        header.Add(up_btn, 0, wx.RIGHT, 2)
-        header.Add(down_btn, 0, wx.RIGHT, 6)
+        header.Add(up_btn, 0, wx.RIGHT, SPACE_XS)
+        header.Add(down_btn, 0, wx.RIGHT, SPACE_SM)
         header.Add(del_btn, 0)
 
         # ── Body ────────────────────────────────────────────────────────────
@@ -113,8 +113,8 @@ class _NoteCardWidget(wx.Panel):
             style=wx.TE_MULTILINE | wx.TE_BESTWRAP,
         )
         self.body_ctrl.SetMinSize((-1, 80))
-        stylize_textctrl(self.body_ctrl, multiline=True)
-        outer.Add(self.body_ctrl, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 6)
+        stylize_textctrl(self.body_ctrl, level="body")
+        outer.Add(self.body_ctrl, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, SPACE_SM)
 
     def get_data(self) -> dict[str, str]:
         return {

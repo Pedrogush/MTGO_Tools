@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 
 import wx
 
-from utils.constants import DARK_PANEL, LIGHT_TEXT, PADDING_SM
+from utils.constants import DARK_PANEL, LIGHT_TEXT, SPACE_XS
 from utils.perf import timed
 from widgets.buttons.toolbar_buttons import ToolbarButtons
 from widgets.panels.card_inspector_panel import CardInspectorPanel
@@ -124,5 +124,5 @@ class RightPanelBuilderMixin(_Base):
             self._on_inspector_printing_selected
         )
 
-        card_sizer.Add(self.card_panel, 1, wx.EXPAND | wx.ALL, PADDING_SM)
+        card_sizer.Add(self.card_panel, 1, wx.EXPAND | wx.ALL, SPACE_XS)
         return card_sizer

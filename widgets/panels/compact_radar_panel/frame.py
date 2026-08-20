@@ -10,7 +10,8 @@ from typing import TYPE_CHECKING
 
 import wx
 
-from utils.constants import DARK_BG, DARK_PANEL, LIGHT_TEXT, SUBDUED_TEXT
+from utils.constants import DARK_BG, DARK_PANEL, LIGHT_TEXT, SPACE_XS, SUBDUED_TEXT
+from utils.constants.ui_layout import COMPACT_RADAR_TOGGLE_BTN_SIZE
 from widgets.panels.compact_radar_panel.handlers import CompactRadarHandlersMixin
 from widgets.panels.compact_radar_panel.properties import (
     CompactRadarPropertiesMixin,
@@ -40,7 +41,7 @@ class CompactRadarPanel(CompactRadarHandlersMixin, CompactRadarPropertiesMixin, 
 
         # Header row: label + view toggle button
         header_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        sizer.Add(header_sizer, 0, wx.EXPAND | wx.ALL, 4)
+        sizer.Add(header_sizer, 0, wx.EXPAND | wx.ALL, SPACE_XS)
 
         self.header_label = wx.StaticText(self, label="Radar: Loading...")
         self.header_label.SetForegroundColour(LIGHT_TEXT)
@@ -49,20 +50,22 @@ class CompactRadarPanel(CompactRadarHandlersMixin, CompactRadarPropertiesMixin, 
         self.header_label.SetFont(font)
         header_sizer.Add(self.header_label, 1, wx.ALIGN_CENTER_VERTICAL)
 
-        self.view_toggle_btn = wx.Button(self, label="Full Decklist", size=(90, 22))
+        self.view_toggle_btn = wx.Button(
+            self, label="Full Decklist", size=COMPACT_RADAR_TOGGLE_BTN_SIZE
+        )
         self.view_toggle_btn.SetBackgroundColour(DARK_BG)
         self.view_toggle_btn.SetForegroundColour(LIGHT_TEXT)
         self.view_toggle_btn.Bind(wx.EVT_BUTTON, self._on_toggle_view)
         self.view_toggle_btn.Hide()
-        header_sizer.Add(self.view_toggle_btn, 0, wx.LEFT, 4)
+        header_sizer.Add(self.view_toggle_btn, 0, wx.LEFT, SPACE_XS)
 
         # Status label (for loading/errors)
         self.status_label = wx.StaticText(self, label="")
         self.status_label.SetForegroundColour(SUBDUED_TEXT)
-        sizer.Add(self.status_label, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 4)
+        sizer.Add(self.status_label, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, SPACE_XS)
 
         # Scrollable list for cards
         self.card_list = wx.ListBox(self, style=wx.LB_SINGLE)
         self.card_list.SetBackgroundColour(DARK_BG)
         self.card_list.SetForegroundColour(LIGHT_TEXT)
-        sizer.Add(self.card_list, 1, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 4)
+        sizer.Add(self.card_list, 1, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, SPACE_XS)

@@ -110,15 +110,30 @@ class DeckResearchMixin(_Base):
         return {"deck_text": deck_text}
 
     def _handle_switch_tab(self, tab_name: str) -> dict[str, Any]:
-        """Switch to a specific tab in the deck tabs."""
-        if not hasattr(self.frame, "deck_tabs"):
-            return {"switched": False, "error": "Deck tabs not available"}
+        """Switch to a named tab in the deck workspace or the card panel.
 
-        notebook = self.frame.deck_tabs
-        for i in range(notebook.GetPageCount()):
-            if notebook.GetPageText(i).lower() == tab_name.lower():
-                notebook.SetSelection(i)
-                return {"switched": True, "tab": tab_name, "index": i}
+        Two notebooks carry tabs the harness needs to reach: the deck workspace
+        (``Deck Tables`` / ``Sideboard Guide`` / ``Deck Notes``) and the card
+        panel in the right column (``Oracle Text`` / ``Stats``). Searching both
+        is what makes the card panel's Stats tab capturable at all; before this
+        it was unreachable and every screenshot of it had to be taken by hand.
+        """
+        books = []
+        for attr, owner in (
+            ("deck_tabs", self.frame),
+            ("notebook", getattr(self.frame, "card_panel", None)),
+        ):
+            book = getattr(owner, attr, None) if owner is not None else None
+            if book is not None:
+                books.append((attr, book))
+        if not books:
+            return {"switched": False, "error": "No tab notebooks available"}
+
+        for attr, notebook in books:
+            for i in range(notebook.GetPageCount()):
+                if notebook.GetPageText(i).lower() == tab_name.lower():
+                    notebook.SetSelection(i)
+                    return {"switched": True, "tab": tab_name, "index": i, "notebook": attr}
 
         return {"switched": False, "error": f"Tab not found: {tab_name}"}
 
