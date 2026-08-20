@@ -17,6 +17,7 @@ from utils.constants import (
     VIEW_TOGGLE_PADDING_X,
 )
 from utils.i18n import translate as _i18n_translate
+from utils.i18n import translate_plural as _i18n_translate_plural
 from widgets.mana_icon_factory import ManaIconFactory
 from widgets.panels.card_table_panel.grid_view import DeckGridView
 from widgets.panels.card_table_panel.handlers import CardTablePanelHandlersMixin
@@ -197,15 +198,15 @@ class CardTablePanel(
         # one: both open menus, neither is a view, and both used to sit inside
         # the toggle group's run of chips.
         self.header_divider = create_divider(self, vertical=True, length=VIEW_TOGGLE_HEIGHT)
-        self._header_controls.Add(self.header_divider, 0, wx.ALIGN_CENTER_VERTICAL | wx.LEFT, SPACE_SM)
+        self._header_controls.Add(
+            self.header_divider, 0, wx.ALIGN_CENTER_VERTICAL | wx.LEFT, SPACE_SM
+        )
 
         # F3: this was labelled "⋯". It named neither what it does nor what it is
         # currently doing, and it is the only route to the pile grouping key. Its
         # label is now that key -- "Mana value" / "Color" / "Type" -- so the
         # control states the mode it will change, the way a dropdown does.
-        self.pile_sort_button = wx.Button(
-            self, label=self._pile_sort_label(), style=wx.BU_EXACTFIT
-        )
+        self.pile_sort_button = wx.Button(self, label=self._pile_sort_label(), style=wx.BU_EXACTFIT)
         stylize_button(self.pile_sort_button, kind="ghost", surface="panel")
         size_compact_button(
             self.pile_sort_button, pad_x=VIEW_TOGGLE_PADDING_X, height=VIEW_TOGGLE_HEIGHT
@@ -362,8 +363,11 @@ class CardTablePanel(
             self.pile_view.refresh_sort()
 
     # ----- header helpers -----
-    def _t(self, key: str) -> str:
-        return _i18n_translate(self._locale, key)
+    def _t(self, key: str, **kwargs: object) -> str:
+        return _i18n_translate(self._locale, key, **kwargs)
+
+    def _t_plural(self, key_base: str, count: int) -> str:
+        return _i18n_translate_plural(self._locale, key_base, count)
 
     def _switch_content_page(self) -> None:
         if not self.cards:

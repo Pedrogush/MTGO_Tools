@@ -14,7 +14,11 @@ from utils.constants import RESEARCH_VALUE_FIELD_MIN_WIDTH, SPACE_SM
 from widgets.input_frame import create_text_input
 from widgets.mode_switch import ModeSwitch
 from widgets.panels.deck_research_panel.frame.centered_choice import _CenteredChoice
-from widgets.panels.deck_research_panel.results_filter import PLACEMENT_FIELDS, PLACEMENT_OPERATORS
+from widgets.panels.deck_research_panel.results_filter import (
+    EVENT_TYPE_VALUES,
+    PLACEMENT_FIELDS,
+    PLACEMENT_OPERATORS,
+)
 from widgets.stylize import (
     stylize_choice,
     stylize_combobox,
@@ -35,6 +39,43 @@ class FiltersBuilderMixin(_Base):
     Kept as a mixin (no ``__init__``) so :class:`DeckResearchPanel` remains the
     single source of truth for instance-state initialization.
     """
+
+    # ------------------------------------------------------------------
+    # Choice options: stored value vs displayed label
+    # ------------------------------------------------------------------
+    # A wx.Choice's items are what the user reads, and the two choices in the
+    # placement row were built straight from the canonical value tuples -- so
+    # phase 7's translated "Result" label sat above "Placement"/"Wins" in
+    # pt-BR, and the row above it showed "All / Challenge / League / ...".
+    #
+    # The values cannot simply be translated in place: they are persisted in
+    # deck_selector_settings.json, matched against in results_filter, and
+    # crossed over the automation protocol. So the label is looked up here and
+    # the *index* is the correspondence between the two lists, which is why
+    # get/set go through _option_value / _select_option rather than through
+    # Get/SetStringSelection.
+
+    def _option_labels(self, values: tuple[str, ...], prefix: str) -> list[str]:
+        """Translated labels for *values*, falling back to the value itself.
+
+        The fallback is deliberate rather than defensive: the four MTGO event
+        series (Challenge, League, Showcase, Last Chance) are proper nouns and
+        have no catalogue entry in either locale, so they fall through to
+        themselves in both.
+        """
+        return [
+            self._labels.get(f"{prefix}{value.lower().replace(' ', '_')}", value)
+            for value in values
+        ]
+
+    @staticmethod
+    def _option_value(choice: wx.Choice, values: tuple[str, ...]) -> str:
+        index = choice.GetSelection()
+        return values[index] if 0 <= index < len(values) else values[0]
+
+    @staticmethod
+    def _select_option(choice: wx.Choice, values: tuple[str, ...], value: str) -> None:
+        choice.SetSelection(values.index(value) if value in values else 0)
 
     def _build_switch_button(self, sizer: wx.Sizer) -> None:
         """F2: the mode switch, showing which mode this is rather than the other one.
@@ -114,7 +155,7 @@ class FiltersBuilderMixin(_Base):
         event_date_row = wx.BoxSizer(wx.HORIZONTAL)
         self.event_type_choice = wx.Choice(
             self,
-            choices=["All", "Challenge", "League", "Showcase", "Last Chance"],
+            choices=self._option_labels(EVENT_TYPE_VALUES, "event_type_"),
         )
         self.event_type_choice.SetSelection(0)
         stylize_choice(self.event_type_choice)
@@ -163,7 +204,9 @@ class FiltersBuilderMixin(_Base):
             )
         placement_row.Add(self.placement_op_choice, 0, wx.EXPAND | wx.RIGHT, SPACE_SM)
 
-        self.placement_field_choice = _CenteredChoice(self, choices=list(PLACEMENT_FIELDS))
+        self.placement_field_choice = _CenteredChoice(
+            self, choices=self._option_labels(PLACEMENT_FIELDS, "placement_field_")
+        )
         self.placement_field_choice.SetSelection(0)
         stylize_choice(self.placement_field_choice)
         if self._on_placement_filter is not None:

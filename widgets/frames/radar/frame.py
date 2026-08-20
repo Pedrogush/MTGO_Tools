@@ -61,6 +61,27 @@ class RadarPanel(RadarPanelHandlersMixin, RadarPanelPropertiesMixin, wx.Panel):
 
         self._build_ui()
 
+    #: ``(key, width, align)`` for both radar lists. Four of the five columns
+    #: hold numbers -- an inclusion percentage, an expected copy count, an
+    #: average and a maximum -- and all five were appended at
+    #: ``DataViewListCtrl``'s left-aligned default, so a column of "12.5" over
+    #: "7.5" over "100.0" could not be compared by digit position. Phase 5
+    #: right-aligned the numeric columns in Top Cards and the deck table view
+    #: and did not reach this window; phase 9 finished it. The header takes the
+    #: same alignment as the data: a right-aligned number under a left-aligned
+    #: heading reads as two columns.
+    RADAR_COLUMNS = (
+        ("radar.col.card", 200, wx.ALIGN_LEFT),
+        ("radar.col.inclusion", 90, wx.ALIGN_RIGHT),
+        ("radar.col.expected", 120, wx.ALIGN_RIGHT),
+        ("radar.col.avg", 90, wx.ALIGN_RIGHT),
+        ("radar.col.max", 60, wx.ALIGN_RIGHT),
+    )
+
+    def _append_radar_columns(self, listing: dv.DataViewListCtrl) -> None:
+        for key, width, align in self.RADAR_COLUMNS:
+            listing.AppendTextColumn(self._t(key), width=width, align=align)
+
     def _build_ui(self) -> None:
         sizer = wx.BoxSizer(wx.VERTICAL)
         self.SetSizer(sizer)
@@ -98,11 +119,7 @@ class RadarPanel(RadarPanelHandlersMixin, RadarPanelPropertiesMixin, wx.Panel):
         split_sizer.Add(mainboard_section, 1, wx.EXPAND | wx.RIGHT, SPACE_SM)
 
         self.mainboard_list = dv.DataViewListCtrl(mainboard_section.body)
-        self.mainboard_list.AppendTextColumn(self._t("radar.col.card"), width=200)
-        self.mainboard_list.AppendTextColumn(self._t("radar.col.inclusion"), width=90)
-        self.mainboard_list.AppendTextColumn(self._t("radar.col.expected"), width=120)
-        self.mainboard_list.AppendTextColumn(self._t("radar.col.avg"), width=90)
-        self.mainboard_list.AppendTextColumn(self._t("radar.col.max"), width=60)
+        self._append_radar_columns(self.mainboard_list)
         self.mainboard_list.SetBackgroundColour(DARK_ALT)
         self.mainboard_list.SetForegroundColour(LIGHT_TEXT)
         # After the columns, so the native header child exists to be themed.
@@ -117,11 +134,7 @@ class RadarPanel(RadarPanelHandlersMixin, RadarPanelPropertiesMixin, wx.Panel):
         split_sizer.Add(sideboard_section, 1, wx.EXPAND)
 
         self.sideboard_list = dv.DataViewListCtrl(sideboard_section.body)
-        self.sideboard_list.AppendTextColumn(self._t("radar.col.card"), width=200)
-        self.sideboard_list.AppendTextColumn(self._t("radar.col.inclusion"), width=90)
-        self.sideboard_list.AppendTextColumn(self._t("radar.col.expected"), width=120)
-        self.sideboard_list.AppendTextColumn(self._t("radar.col.avg"), width=90)
-        self.sideboard_list.AppendTextColumn(self._t("radar.col.max"), width=60)
+        self._append_radar_columns(self.sideboard_list)
         self.sideboard_list.SetBackgroundColour(DARK_ALT)
         self.sideboard_list.SetForegroundColour(LIGHT_TEXT)
         # After the columns, so the native header child exists to be themed.

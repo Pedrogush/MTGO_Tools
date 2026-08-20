@@ -92,7 +92,7 @@ class SideboardGuideImportExportHandlers(_Base):
 
         options_dlg = wx.Dialog(
             self,
-            title="Import Options",
+            title=self._t("window.title.guide_import_options"),
             size=(GUIDE_IMPORT_OPTIONS_DIALOG_WIDTH, GUIDE_IMPORT_OPTIONS_DIALOG_HEIGHT),
         )
         init_top_level_window(options_dlg)

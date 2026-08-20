@@ -182,7 +182,6 @@ class IntrospectionMixin(_Base):
 
         return {"clicked": False, "error": f"Button not found: {label}"}
 
-
     def _find_widget(self, name: str) -> wx.Window | None:
         """Find a widget by name."""
         widget_map = {
@@ -200,7 +199,15 @@ class IntrospectionMixin(_Base):
             "left_toggle": getattr(self.frame, "left_toggle_btn", None),
             "inspector_toggle": getattr(self.frame, "inspector_toggle_btn", None),
         }
-        return widget_map.get(name)
+        if name in widget_map:
+            return widget_map[name]
+        # The six companion windows, by the same names ``open_widget`` and
+        # ``screenshot_window`` already use. Phase 7 made the label search walk
+        # to any depth (§5.7) and phase 9 found the other half of that gap: the
+        # search had no way to start at a window that is not the main frame, so
+        # ``click radar --label "Generate Radar"`` answered "Widget not found:
+        # radar" and every companion window's buttons were unreachable by label.
+        return self._resolve_secondary_window(name)
 
     def _handle_focus_text_input(self, window: str | None = None, index: int = 0) -> dict[str, Any]:
         """Focus the ``index``-th text input of a top-level window.
@@ -316,7 +323,9 @@ class IntrospectionMixin(_Base):
             return {"ok": True, "path": parts}
         return {"ok": False, "error": f"Menu item not found: {'/'.join(parts)}"}
 
-    def _handle_preferences(self, key: str | None = None, value: str | None = None) -> dict[str, Any]:
+    def _handle_preferences(
+        self, key: str | None = None, value: str | None = None
+    ) -> dict[str, Any]:
         """List the preferences, or set one by key.
 
         Phase 7 collapsed the ``Settings`` menu into a modal dialog, and

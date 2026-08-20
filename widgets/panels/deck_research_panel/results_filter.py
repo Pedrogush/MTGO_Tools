@@ -14,6 +14,27 @@ PLACEMENT_OP_NONE = "-"
 PLACEMENT_OPERATORS: tuple[str, ...] = (PLACEMENT_OP_NONE, ">", "≥", "≤", "<", "=")
 PLACEMENT_FIELDS: tuple[str, ...] = ("Placement", "Wins")
 
+#: The event-type filter's canonical values, in the order the choice lists them.
+#: ``"All"`` is the catch-all this module compares against; the other four are
+#: the labels :func:`_classify_event_type` produces.
+#:
+#: Both this and :data:`PLACEMENT_FIELDS` are **values, not labels**. They are
+#: matched against here, persisted by
+#: :class:`controllers.session_manager.DeckSelectorSessionManager`, and passed
+#: across the automation protocol, so they stay English and stay stable. What
+#: the user reads is looked up from the locale catalogue at the point the
+#: ``wx.Choice`` is built -- see
+#: ``widgets/panels/deck_research_panel/frame/filters.py``. Until phase 9 the
+#: two were the same strings, which is why phase 7's translated ``Result``
+#: label sat above two untranslated options in pt-BR.
+EVENT_TYPE_VALUES: tuple[str, ...] = (
+    "All",
+    "Challenge",
+    "League",
+    "Showcase",
+    "Last Chance",
+)
+
 _OPERATOR_FUNCS: dict[str, Callable[[int, int], bool]] = {
     ">": _op.gt,
     "≥": _op.ge,

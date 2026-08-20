@@ -19,6 +19,17 @@ MESSAGES: dict[str, str] = {
     "tabs.stats.hand": "Lands in Opening Hand",
     "tabs.stats.no_data": "No data",
     "tabs.stats.no_deck": "No deck loaded.",
+    # The deck-count label. Phase 7 made this the string the workspace header
+    # ellipsises when the window narrows, so it is load-bearing for layout as
+    # well as for meaning -- and until phase 9 it was
+    # f"{total} card{'s' if total != 1 else ''}", i.e. English grammar compiled
+    # into the widget. Two forms per noun; see utils.i18n.translate_plural.
+    "tabs.count.cards.one": "{n} card",
+    "tabs.count.cards.other": "{n} cards",
+    "tabs.count.lands.one": "{n} land",
+    "tabs.count.lands.other": "{n} lands",
+    "tabs.count.mdfcs.one": "{n} MDFC",
+    "tabs.count.mdfcs.other": "{n} MDFCs",
     "tabs.empty.main": "No deck loaded",
     "tabs.empty.main.hint": "Pick a deck from the results list, or load one from a file.",
     "tabs.empty.side": "Sideboard is empty",

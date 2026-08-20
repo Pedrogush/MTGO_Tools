@@ -63,7 +63,16 @@ class LeftPanelBuilderMixin(_Base):
                 "player_name": self._t("research.player_name"),
                 "placement": self._t("research.placement"),
                 "result": self._t("research.result"),
+                # Keys are "<prefix><value.lower() with _ for spaces>";
+                # see FiltersBuilderMixin._option_labels.
+                "placement_field_placement": self._t("research.placement_field.placement"),
+                "placement_field_wins": self._t("research.placement_field.wins"),
+                "event_type_all": self._t("research.event_type.all"),
                 "placement_hint": self._t("research.placement_hint"),
+                # The labels dict never carried this one, so the field fell back to
+                # its English default and read "Player name..." in pt-BR under a
+                # translated "Nome do jogador" label.
+                "player_name_hint": self._t("research.player_name_hint"),
                 "date": self._t("research.date"),
                 "info": self._t("research.info"),
                 "search_hint": self._t("research.search_hint"),

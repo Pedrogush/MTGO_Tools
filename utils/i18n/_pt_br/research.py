@@ -7,6 +7,7 @@ MESSAGES: dict[str, str] = {
     "research.player_name": "Nome do jogador",
     "research.placement": "Colocação",
     "research.placement_hint": "valor",
+    "research.player_name_hint": "Nome do jogador…",
     "research.date": "Data",
     "research.info": "Pesquisa de deck: busque decks de MTG por propriedade",
     "research.search_hint": "Buscar arquétipos...",
@@ -20,4 +21,9 @@ MESSAGES: dict[str, str] = {
     "research.tooltip.reload": "Atualiza os dados de arquétipos do MTGGoldfish",
     "research.switch_to_builder.tooltip": "Mudar para o modo Montador de Deck",
     "research.result": "Resultado",
+    # Ver o catalogo en-US: apenas o "All" e traduzido; Challenge, League,
+    # Showcase e Last Chance sao nomes proprios dos eventos do MTGO.
+    "research.placement_field.placement": "Colocação",
+    "research.placement_field.wins": "Vitórias",
+    "research.event_type.all": "Todos",
 }

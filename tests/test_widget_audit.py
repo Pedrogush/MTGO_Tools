@@ -58,7 +58,7 @@ BUTTON_CLASSES = frozenset(
 
 #: Controls that wxMSW paints from a native theme, and that therefore need their
 #: specific ``stylize_*`` -- setting colours on them by hand is a documented
-#: no-op for most of this list. See ``widgets/stylize.py``'s measured table.
+#: no-op for most of this list. See ``docs/WXMSW_BEHAVIOUR.md``.
 NATIVE_THEMED_CLASSES = frozenset(
     {
         "wx.Choice",
@@ -105,7 +105,7 @@ EDGE_STRIPPING_CALLS = frozenset(
 #: ``file:line`` sites where a control reaches the styling layer through a path
 #: this file's single-file name resolution cannot see.
 ROUTED_ELSEWHERE: dict[str, str] = {
-    "widgets/panels/card_table_panel/frame.py:181": (
+    "widgets/panels/card_table_panel/frame.py:182": (
         "The Grid/Table/Pile toggles are stashed in ``self._view_mode_buttons`` "
         "and re-stylized on every view change by "
         "``card_table_panel/toolbar.py::_refresh_view_mode_buttons`` -- they "
@@ -541,9 +541,11 @@ def test_no_colour_literal_reaches_a_widget_outside_the_allowlist() -> None:
       (``#E6EDF3`` for ``TEXT_PRIMARY``, ``#A8B2BD`` for ``TEXT_SECONDARY``,
       ``#7AA2F7`` for ``ACCENT_TEXT``) that no contrast test could see.
 
-    Docstrings are exempt: ``widgets/stylize.py``'s measured table quotes the
-    hex of everything wxMSW draws that we cannot reach, and that table is the
-    most reused artefact in this redesign.
+    Docstrings are exempt: several of them quote the hex of something wxMSW
+    draws that we cannot reach, next to the code that works around it. Phase 9
+    moved the biggest such collection out to ``docs/WXMSW_BEHAVIOUR.md``, but
+    the exemption stays -- the per-site notes that remain are the reason it
+    existed.
     """
     offenders: list[str] = []
     for path in _modules():
@@ -692,9 +694,10 @@ def test_no_call_site_uses_the_deprecated_multiline_font_bump() -> None:
             )
             if positional_multiline or keyword_multiline:
                 offenders.append(f"{_rel(path)}:{node.lineno}")
-    assert offenders == [], (
-        "pass level= instead; multiline= is a pre-type-scale 1-point bump:\n  "
-        + "\n  ".join(offenders)
+    assert (
+        offenders == []
+    ), "pass level= instead; multiline= is a pre-type-scale 1-point bump:\n  " + "\n  ".join(
+        offenders
     )
 
 

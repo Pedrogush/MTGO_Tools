@@ -9,6 +9,8 @@ from pathlib import Path
 
 from loguru import logger
 
+from utils.console import force_utf8_console
+
 
 def _warmup_filter(record) -> bool:
     """Drop records emitted by the background cache warm-up.
@@ -44,6 +46,11 @@ def configure_logging(logs_dir: Path) -> Path | None:
 
     Returns the file path in use when file logging is available, otherwise None.
     """
+    # Before any sink is attached: the console sink below is a *stream* sink, so
+    # a redirected stdout/stderr carries the locale encoding (cp1252 on this
+    # machine) and any log line holding a character outside it raises inside the
+    # sink. Card names alone are enough -- see utils/console.py.
+    force_utf8_console()
     console_level = os.environ.get("MTGO_LOG_LEVEL", "INFO").upper()
     logger.remove()
     for stream_name in ("stderr", "stdout"):

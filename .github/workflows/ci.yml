@@ -4,9 +4,13 @@ on:
   push:
     branches:
       - main
+  # Deliberately unfiltered. `branches:` on a pull_request trigger filters by the
+  # PR's *base*, so while this said `- main` the only PRs that ran CI were the
+  # ones targeting main -- and a stack of PRs targeting each other ran none. All
+  # thirteen PRs of the #962 UI redesign merged their way up such a stack, so the
+  # regression guards that redesign built (contrast, spacing, widget audit,
+  # layout minimums) never once ran on the changes they exist to guard.
   pull_request:
-    branches:
-      - main
   workflow_dispatch:
 
 jobs:
@@ -28,6 +32,45 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements-dev.txt
+      # Runs before the full suite so a design-system regression is named by a
+      # step rather than found somewhere in 2000+ results. These files are all in
+      # `tests/` and so run again below -- the full suite stays the authority;
+      # this step is for legibility and for failing fast. The set is pinned by
+      # tests/test_ci_guards.py, which fails if one of these paths stops
+      # existing.
+      #
+      # WHAT THIS PROTECTS (issue #962): every foreground/background pair in the
+      # app against WCAG AA, the categorical chart palette against colour-vision
+      # deficiency, the type and spacing scales, the ban on bare wx.StaticBox /
+      # wx.Notebook / wx.StaticLine / wx.SplitterWindow / wx.TextCtrl, every
+      # button reaching the button system, the enforced window minimums in both
+      # locales, live layout overflow in both locales, and card-view scroll
+      # snapping.
+      - name: Design-system guards (issue #962)
+        run: >-
+          pytest -q
+          tests/test_theme_contrast.py
+          tests/test_widget_audit.py
+          tests/test_stylize.py
+          tests/test_section.py
+          tests/test_notebook.py
+          tests/test_checkbox.py
+          tests/test_status_bar.py
+          tests/test_native_dark.py
+          tests/test_deck_stats_palette.py
+          tests/test_visible_defects.py
+          tests/test_menu_bar_spec.py
+          tests/test_preferences_spec.py
+          tests/test_window_titles.py
+          tests/test_automation_commands.py
+          tests/test_console_encoding.py
+          tests/ui/test_live_widget_audit.py
+          tests/ui/test_live_layout_overflow.py
+          tests/ui/test_layout_minimums.py
+          tests/ui/test_card_view_scroll_snap.py
+          tests/ui/test_clamp_to_display.py
+          tests/ui/test_inspector_column.py
+
       - name: Run pytest
         # Default pytest config excludes `network`-marked tests via addopts.
         # Live network tests can be run on demand via the `network-tests`

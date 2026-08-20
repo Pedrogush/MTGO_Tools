@@ -46,9 +46,9 @@ def test_quantity_badge_clears_the_card_title_band() -> None:
     "gatha's Soul Cauldron" and "rds of Paradise" straight off the captures.
     """
     _x, y, _w, _h = _badge_rect()
-    assert y > DECK_CARD_HEIGHT * _TITLE_BAND_BOTTOM_FRACTION, (
-        "the quantity badge is back inside the card's title band"
-    )
+    assert (
+        y > DECK_CARD_HEIGHT * _TITLE_BAND_BOTTOM_FRACTION
+    ), "the quantity badge is back inside the card's title band"
 
 
 def test_quantity_badge_stays_inside_the_art_box() -> None:
@@ -98,10 +98,19 @@ def test_window_titles_do_not_carry_a_product_prefix(locale: str) -> None:
 
     ``MTGO`` is the game's name, not this app's ("MTGO Tools"), and the Tools
     menu entry that opens each of these windows names it without the token.
+
+    The app's *own* name is removed before the check rather than allowlisted by
+    key. That is the distinction C8 actually draws -- "MTGO Match History" claims
+    to be one of the game's windows, "MTGO Tools" is what this program is called
+    -- and expressing it as an exempt key would have made the next window named
+    after the app fail for no reason. Phase 9's splash frame was that window.
     """
+    product = MESSAGES[locale]["app.title.main_frame"]
     titles = {k: v for k, v in MESSAGES[locale].items() if k.startswith("window.title.")}
     assert titles, "window.title.* catalogue vanished"
-    offenders = sorted(k for k, v in titles.items() if re.search(r"\bMTGO\b", v))
+    offenders = sorted(
+        k for k, v in titles.items() if re.search(r"\bMTGO\b", v.replace(product, ""))
+    )
     assert offenders == [], f"{locale}: window titles re-grew the MTGO token: {offenders}"
 
 
@@ -115,9 +124,9 @@ def test_window_titles_agree_with_the_menu_entries_that_open_them() -> None:
         ("toolbar.top_cards", "window.title.top_cards"),
     ):
         for locale in SUPPORTED_LOCALES:
-            assert MESSAGES[locale][menu_key] == MESSAGES[locale][window_key], (
-                f"{locale}: {menu_key} != {window_key}"
-            )
+            assert (
+                MESSAGES[locale][menu_key] == MESSAGES[locale][window_key]
+            ), f"{locale}: {menu_key} != {window_key}"
 
 
 # ---------------------------------------------------------------- C5 / C6
@@ -132,9 +141,9 @@ def test_empty_state_copy_does_not_name_a_button(locale: str) -> None:
     """
     for key in ("notes.empty", "guide.empty", "builder.empty.no_results"):
         value = MESSAGES[locale][key]
-        assert "“" not in value and '"' not in value, (
-            f"{locale}: {key} quotes a control name again: {value!r}"
-        )
+        assert (
+            "“" not in value and '"' not in value
+        ), f"{locale}: {key} quotes a control name again: {value!r}"
 
 
 def test_no_hand_rolled_empty_state_panels_remain() -> None:
