@@ -37,7 +37,10 @@ BULK_DATA_CACHE = IMAGE_CACHE_DIR / "bulk_data.json"
 # v6: finish-only variants of one physical printing (Scryfall lists the foil
 # run under a "\u2605"-suffixed collector number, same illustration and frame)
 # collapse into a single art entry.
-PRINTING_INDEX_VERSION = 6
+# v7: printings whose printed/flavor name differs from the Scryfall name (the
+# Omenpaths "Universes Within" MTGO printings, e.g. "Kavaero, Mind-Bitten" for
+# "Superior Spider-Man") are aliased under that name too (issue #986).
+PRINTING_INDEX_VERSION = 7
 PRINTING_INDEX_CACHE = IMAGE_CACHE_DIR / f"printings_v{PRINTING_INDEX_VERSION}.json"
 
 # Image size options (in order of preference for storage)
@@ -67,6 +70,10 @@ class BulkCardFace(msgspec.Struct, gc=False):
     """Minimal face entry from Scryfall bulk data (only fields we use)."""
 
     name: str | None = None
+    # Name actually printed on this face, when it differs from ``name`` — see
+    # the note on :class:`BulkCard`.
+    printed_name: str | None = None
+    flavor_name: str | None = None
     image_uris: dict[str, str] | None = None
 
     def get(self, key: str, default: Any = None) -> Any:  # noqa: ANN401
@@ -89,6 +96,14 @@ class BulkCard(msgspec.Struct, gc=False):
     """
 
     name: str | None = None
+    # Scryfall keeps the name a *printing* actually shows separate from the
+    # card's oracle ``name`` in two cases we care about: ``printed_name`` (the
+    # MTGO-only Omenpaths "Universes Within" printings — "Kavaero,
+    # Mind-Bitten" for "Superior Spider-Man") and ``flavor_name`` (the Godzilla
+    # / Dracula alternates). MTGO writes decklists with those printed names, so
+    # they have to be indexed as aliases or the card resolves nowhere (#986).
+    printed_name: str | None = None
+    flavor_name: str | None = None
     id: str | None = None
     set: str | None = None
     set_name: str | None = None
@@ -128,6 +143,10 @@ class BulkCardImage(msgspec.Struct, gc=False):
     """
 
     name: str | None = None
+    # See :class:`BulkCard` — the name MTGO uses for Omenpaths / flavor-name
+    # printings, indexed as an alias so those cards resolve at all (#986).
+    printed_name: str | None = None
+    flavor_name: str | None = None
     id: str | None = None
     set: str | None = None
     collector_number: str | None = None

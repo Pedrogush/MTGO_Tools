@@ -1615,9 +1615,12 @@ def test_download_all_images_returns_error_dict_on_load_failure(tmp_path, monkey
 class _JsonResponse:
     """A _FakeSession response carrying a JSON payload."""
 
-    def __init__(self, payload, status_ok: bool = True):
+    def __init__(self, payload, status_ok: bool = True, status_code: int | None = None):
         self._payload = payload
         self._ok = status_ok
+        # fetch_card_by_name branches on a 404 to retry via the printed-name
+        # search (#986), so the double has to carry a status code too.
+        self.status_code = status_code if status_code is not None else (200 if status_ok else 500)
 
     def raise_for_status(self):
         if not self._ok:

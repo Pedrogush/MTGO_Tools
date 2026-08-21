@@ -14,6 +14,25 @@ from loguru import logger
 from utils.atomic_io import atomic_write_bytes
 from utils.constants import SCRYFALL_REQUEST_TIMEOUT_SECONDS
 
+
+def _printed_name(source: Any) -> str | None:
+    """The name ``source`` is printed with, when it differs from its ``name``.
+
+    Scryfall carries the MTGO-visible name of an Omenpaths "Universes Within"
+    printing in ``printed_name`` and the Godzilla-style alternates in
+    ``flavor_name``. The cache records it alongside the oracle name so a lookup
+    by the name MTGO used finds the file instead of re-queueing the download
+    forever (issue #986).
+    """
+    if source is None:
+        return None
+    for field in ("printed_name", "flavor_name"):
+        value = (source.get(field) or "").strip()
+        if value and value.lower() != (source.get("name") or "").strip().lower():
+            return value
+    return None
+
+
 if TYPE_CHECKING:
     from services.image_service.downloader_protocol import BulkImageDownloaderProto
 
@@ -76,6 +95,7 @@ class ImageWriterMixin(_Base):
                 image_uris=image_uris,
                 size=size,
                 card=card,
+                printed_name=_printed_name(face) or _printed_name(card),
             )
             if success:
                 downloaded += 1
@@ -88,6 +108,7 @@ class ImageWriterMixin(_Base):
             self.cache.add_image(
                 uuid=uuid,
                 name=combined_name,
+                printed_name=_printed_name(card),
                 set_code=card.get("set", ""),
                 collector_number=card.get("collector_number", ""),
                 image_size=size,
@@ -126,6 +147,7 @@ class ImageWriterMixin(_Base):
         image_uris: dict[str, Any],
         size: str,
         card: dict[str, Any],
+        printed_name: str | None = None,
     ) -> tuple[bool, str, Path | None]:
         if self.cache.is_cached(uuid, size, face_index=face_index):
             path = self.cache.get_image_by_uuid(uuid, size, face_index=face_index)
@@ -155,6 +177,7 @@ class ImageWriterMixin(_Base):
         self.cache.add_image(
             uuid=uuid,
             name=name,
+            printed_name=printed_name if printed_name is not None else _printed_name(card),
             set_code=card.get("set", ""),
             collector_number=card.get("collector_number", ""),
             image_size=size,
