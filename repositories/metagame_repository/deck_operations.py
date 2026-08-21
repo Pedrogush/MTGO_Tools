@@ -10,6 +10,7 @@ from loguru import logger
 
 import repositories.metagame_repository as _pkg
 from repositories.metagame_repository.date_utils import _parse_deck_date
+from repositories.scrapers.mtggoldfish_visual import DeckUnavailableError
 from utils.atomic_io import locked_path
 
 if TYPE_CHECKING:
@@ -129,6 +130,12 @@ class DeckOperationsMixin(_Base):
             # avoiding a write-to-file / read-from-file roundtrip.
             deck_content = _pkg.fetch_deck_text(deck_number, source_filter=source_filter)
             return deck_content
+        except DeckUnavailableError as exc:
+            # The deck is gone from MTGGoldfish while its archetype listing
+            # still offers it. Nothing is broken here, so it does not belong in
+            # the log at ERROR next to real failures.
+            logger.info(f"Deck {deck_name} unavailable: {exc}")
+            raise
         except Exception as exc:
             logger.error(f"Failed to download deck {deck_name}: {exc}")
             raise

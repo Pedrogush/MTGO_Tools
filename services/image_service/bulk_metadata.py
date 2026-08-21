@@ -18,6 +18,7 @@ from services.image_service.schemas import BULK_DATA_URL, UTC
 from utils.atomic_io import atomic_write_stream
 from utils.constants import (
     BULK_DATA_CACHE_FRESHNESS_SECONDS,
+    BULK_DATA_REFRESH_INTERVAL_SECONDS,
     BYTES_PER_MB,
     SCRYFALL_BULK_STREAM_TIMEOUT_SECONDS,
     SCRYFALL_DOWNLOAD_CHUNK_SIZE,
@@ -31,6 +32,22 @@ if TYPE_CHECKING:
     _Base = BulkImageDownloaderProto
 else:
     _Base = object
+
+
+def _published_epoch(value: str) -> float | None:
+    """Scryfall's ISO-8601 ``updated_at`` as epoch seconds, or ``None``.
+
+    A timestamp without an offset is read as UTC rather than as local time,
+    which is what Scryfall means and keeps the comparison against the cache
+    file's mtime honest wherever the app happens to be running.
+    """
+    try:
+        parsed = datetime.fromisoformat(value)
+    except (TypeError, ValueError):
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=UTC)
+    return parsed.timestamp()
 
 
 class BulkMetadataMixin(_Base):
@@ -65,6 +82,23 @@ class BulkMetadataMixin(_Base):
     def is_bulk_data_outdated(
         self, max_staleness_seconds: int | None = None
     ) -> tuple[bool, dict[str, Any]]:
+        """Whether the cached bulk file should be replaced, plus the metadata.
+
+        The file is left alone until it is at least
+        ``BULK_DATA_REFRESH_INTERVAL_SECONDS`` old, whatever the vendor says:
+        Scryfall re-publishes ``default-cards`` daily and the download is
+        ~120 MB, so tracking every publish would cost a download a day for card
+        data that only changes meaningfully when a set arrives.
+
+        Past that age the vendor decides. When we have a record of which bulk
+        vintage the local file *is*, that is compared directly. When we do not —
+        a cache seeded by the installer, or written before the metadata row was
+        recorded — the file's own mtime stands in for it: anything Scryfall
+        published after we wrote the file is newer than what we hold. Without
+        that arm an unrecorded cache fell through to a 30-day age check and a
+        month-old file counted as current, which is how a set released a week
+        ago had no printings at all (issue #986 follow-up).
+        """
         # Lazy import so monkeypatches of ``BULK_DATA_CACHE`` on the schemas
         # module are honoured by tests.
         from services.image_service import schemas as _schemas
@@ -76,22 +110,40 @@ class BulkMetadataMixin(_Base):
         if not _schemas.BULK_DATA_CACHE.exists():
             return True, metadata
 
+        cache_mtime = self._bulk_cache_mtime()
+        cache_age_seconds = (
+            None if cache_mtime is None else datetime.now().timestamp() - cache_mtime
+        )
+        if cache_age_seconds is not None and cache_age_seconds < BULK_DATA_REFRESH_INTERVAL_SECONDS:
+            return False, metadata
+
         cached_updated, cached_uri = self._get_cached_bulk_data_record()
         if updated_at and download_uri and cached_updated and cached_uri:
             if updated_at == cached_updated and download_uri == cached_uri:
                 return False, metadata
             return True, metadata
 
+        if updated_at and cache_mtime is not None:
+            published_epoch = _published_epoch(updated_at)
+            if published_epoch is not None:
+                return published_epoch > cache_mtime, metadata
+
         # Fallback to age-based check when the vendor metadata lacks timestamps/URIs
         threshold = max_staleness_seconds or BULK_DATA_CACHE_FRESHNESS_SECONDS
-        try:
-            age_seconds = datetime.now().timestamp() - _schemas.BULK_DATA_CACHE.stat().st_mtime
-            if age_seconds < threshold:
-                return False, metadata
-        except OSError:
-            pass
+        if cache_age_seconds is not None and cache_age_seconds < threshold:
+            return False, metadata
 
         return True, metadata
+
+    @staticmethod
+    def _bulk_cache_mtime() -> float | None:
+        """Mtime of the on-disk bulk file, or ``None`` if it cannot be read."""
+        from services.image_service import schemas as _schemas
+
+        try:
+            return _schemas.BULK_DATA_CACHE.stat().st_mtime
+        except OSError:
+            return None
 
     def download_bulk_metadata(self, force: bool = False) -> tuple[bool, str]:
         from services.image_service import schemas as _schemas

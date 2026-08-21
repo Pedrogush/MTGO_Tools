@@ -19,6 +19,7 @@ from repositories.scrapers.mtggoldfish import (
     get_archetype_stats,
     get_archetypes,
 )
+from repositories.scrapers.mtggoldfish_visual import DeckUnavailableError
 
 # Sample HTML for testing
 SAMPLE_METAGAME_HTML = """
@@ -725,6 +726,67 @@ class TestFetchDeckText:
                 mtggoldfish.fetch_deck_text("123456")
 
         assert real_cache.get("123456") is None
+
+    def test_unavailable_deck_keeps_its_own_error_instead_of_a_parse_failure(self, real_cache):
+        """The user-facing wording is the point: it is gone, not unparseable."""
+        mtggoldfish.forget_unavailable_decks()
+        with patch(
+            "repositories.scrapers.mtggoldfish_visual.fetch_deck_text_from_visual_page",
+            side_effect=DeckUnavailableError("Deck 7915113 is no longer available"),
+        ):
+            with pytest.raises(DeckUnavailableError):
+                mtggoldfish.fetch_deck_text("7915113")
+
+        # And nothing is written to the cache for a deck that produced no text.
+        assert real_cache.get("7915113") is None
+
+    def test_unavailable_deck_is_not_refetched_for_the_rest_of_the_session(self, real_cache):
+        """The archetype listing keeps offering it, so every surface asks again.
+
+        Warm-up, the research prefetcher and each click were all paying a
+        round-trip to be told the same thing.
+        """
+        mtggoldfish.forget_unavailable_decks()
+        with patch(
+            "repositories.scrapers.mtggoldfish_visual.fetch_deck_text_from_visual_page",
+            side_effect=DeckUnavailableError("gone"),
+        ) as mock_visual:
+            for _ in range(3):
+                with pytest.raises(DeckUnavailableError):
+                    mtggoldfish.fetch_deck_text("7915113")
+
+        assert mock_visual.call_count == 1
+
+    def test_forgetting_an_unavailable_deck_allows_one_more_attempt(self, real_cache):
+        """A deck can come back; the memory is per-process and clearable."""
+        mtggoldfish.forget_unavailable_decks()
+        with patch(
+            "repositories.scrapers.mtggoldfish_visual.fetch_deck_text_from_visual_page",
+            side_effect=DeckUnavailableError("gone"),
+        ) as mock_visual:
+            with pytest.raises(DeckUnavailableError):
+                mtggoldfish.fetch_deck_text("7915113")
+            mtggoldfish.forget_unavailable_decks()
+            with pytest.raises(DeckUnavailableError):
+                mtggoldfish.fetch_deck_text("7915113")
+
+        assert mock_visual.call_count == 2
+
+    def test_an_available_deck_is_never_blocked_by_the_memory(self, real_cache):
+        """Only the deck that actually went missing is remembered."""
+        mtggoldfish.forget_unavailable_decks()
+        with patch(
+            "repositories.scrapers.mtggoldfish_visual.fetch_deck_text_from_visual_page",
+            side_effect=DeckUnavailableError("gone"),
+        ):
+            with pytest.raises(DeckUnavailableError):
+                mtggoldfish.fetch_deck_text("7915113")
+
+        with patch(
+            "repositories.scrapers.mtggoldfish_visual.fetch_deck_text_from_visual_page",
+            return_value="4 Lightning Bolt",
+        ):
+            assert mtggoldfish.fetch_deck_text("7913287") == "4 Lightning Bolt"
 
     def test_fetch_deck_text_successful_download_persists_result(self, real_cache):
         """On a cache miss the deck is downloaded and persisted with source

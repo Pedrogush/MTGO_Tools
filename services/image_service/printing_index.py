@@ -26,6 +26,7 @@ from services.image_service.schemas import (
     _printing_index_decoder,
 )
 from utils.atomic_io import atomic_write_json, locked_path
+from utils.card_names import fold_card_name
 
 if TYPE_CHECKING:
     from services.image_service.protocol import ImageServiceProto
@@ -184,6 +185,12 @@ def build_printing_index(
     (issue #986). Only that one printing lands under the alias, so the
     inspector shows the Omenpaths art for the Omenpaths name.
 
+    Every key is finally aliased under its accent-folded form, because MTGO
+    writes accented names in ASCII ("Gloin the Mighty", "Dain, Lord of the Iron
+    Hills") while the bulk data carries "Glóin"/"Dáin"; without the alias those
+    cards have no printings list at all, so the inspector shows neither the art
+    pager nor the edition picker.
+
     ``repositories.card_repository.builder.build_index`` needs the same guard
     for the *card data* index it builds from MTGJSON — the two indexes are keyed
     by name and aliased by face name in the same way, so fixing only one leaves
@@ -228,6 +235,13 @@ def build_printing_index(
                 continue
             by_name.setdefault(alias_key, []).append(entry)
         total_printings += 1
+
+    # Last, so an exact name (or a face/printed alias) always wins over another
+    # card's folded spelling.
+    for key, entries in list(by_name.items()):
+        folded = fold_card_name(key)
+        if folded and folded not in by_name:
+            by_name[folded] = entries
 
     for entries in by_name.values():
         # Newest first, then a total order on the rest of the identity. The

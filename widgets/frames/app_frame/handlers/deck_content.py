@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any
 import wx
 from loguru import logger
 
+from repositories.scrapers.mtggoldfish_visual import DeckUnavailableError
 from utils.deck import sanitize_filename
 from utils.perf import perf_phase
 from widgets.frames.app_frame.handlers.deck_formatting import format_deck_name
@@ -142,6 +143,17 @@ class DeckContentHandlers(_Base):
     def _on_deck_download_error(self: AppFrame, error: Exception) -> None:
         self.copy_button.Disable()
         self.save_button.Disable()
+        if isinstance(error, DeckUnavailableError):
+            # The archetype listing still offers decks MTGGoldfish has removed.
+            # Nothing failed on our side, so say what is true and say it calmly
+            # rather than raising an error box about parsing.
+            self._set_status("app.status.deck_unavailable")
+            wx.MessageBox(
+                self._t("app.deck_unavailable.body"),
+                self._t("app.deck_unavailable.title"),
+                wx.OK | wx.ICON_INFORMATION,
+            )
+            return
         self._set_status("app.status.deck_download_error", error=error)
         wx.MessageBox(f"Failed to download deck:\n{error}", "Deck Download", wx.OK | wx.ICON_ERROR)
 

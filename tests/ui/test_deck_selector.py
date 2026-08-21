@@ -749,3 +749,51 @@ def test_deck_filter_through_frame_narrows_and_empties_deck_list(
         assert not frame.deck_list.IsEnabled()
     finally:
         frame.Destroy()
+
+
+@pytest.mark.usefixtures("wx_app")
+def test_removed_deck_is_reported_calmly_and_accurately(deck_selector_factory):
+    """A deck MTGGoldfish removed is not an application failure.
+
+    The archetype listing still offers it, so clicking it is a normal thing to
+    do. The old path showed an ICON_ERROR box reading "Failed to download deck:
+    Could not parse deck data for deck 7915113", which blames the parser for a
+    page it never received.
+    """
+    from repositories.scrapers.mtggoldfish_visual import DeckUnavailableError
+
+    frame = deck_selector_factory()
+    try:
+        frame.copy_button.Enable(True)
+        frame.save_button.Enable(True)
+        with patch("wx.MessageBox") as message_box:
+            frame._on_deck_download_error(DeckUnavailableError("Deck 7915113 is gone"))
+
+        # Copy/save still go dead — there is no deck to act on.
+        assert not frame.copy_button.IsEnabled()
+        assert not frame.save_button.IsEnabled()
+
+        body, title, style = message_box.call_args.args[:3]
+        assert body == frame._t("app.deck_unavailable.body")
+        assert title == frame._t("app.deck_unavailable.title")
+        assert style & wx.ICON_INFORMATION
+        assert not style & wx.ICON_ERROR
+        # The raw exception text never reaches the user.
+        assert "parse" not in body.lower()
+    finally:
+        frame.Destroy()
+
+
+@pytest.mark.usefixtures("wx_app")
+def test_a_real_download_failure_still_raises_an_error_box(deck_selector_factory):
+    """Only the "deck is gone" case is downgraded; genuine failures are not."""
+    frame = deck_selector_factory()
+    try:
+        with patch("wx.MessageBox") as message_box:
+            frame._on_deck_download_error(RuntimeError("connection reset"))
+
+        body, _title, style = message_box.call_args.args[:3]
+        assert "connection reset" in body
+        assert style & wx.ICON_ERROR
+    finally:
+        frame.Destroy()

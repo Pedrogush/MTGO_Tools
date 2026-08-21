@@ -1,4 +1,5 @@
 import json
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
@@ -281,6 +282,30 @@ def _ensure_cache_migration():
                 logger.warning(f"Could not backup old JSON cache: {exc}")
 
 
+# Decks MTGGoldfish has stopped serving, remembered for this process only.
+# Mirrors the image queue's not-found set: a deck can come back (or the listing
+# can be wrong for a moment), so the memory deliberately does not outlive the
+# session and never reaches disk.
+_UNAVAILABLE_LOCK = threading.Lock()
+_UNAVAILABLE_DECKS: set[str] = set()
+
+
+def _remember_unavailable(deck_num: str) -> None:
+    with _UNAVAILABLE_LOCK:
+        _UNAVAILABLE_DECKS.add(str(deck_num))
+
+
+def _is_known_unavailable(deck_num: str) -> bool:
+    with _UNAVAILABLE_LOCK:
+        return str(deck_num) in _UNAVAILABLE_DECKS
+
+
+def forget_unavailable_decks() -> None:
+    """Drop the unavailable-deck memory (used by tests and a manual refresh)."""
+    with _UNAVAILABLE_LOCK:
+        _UNAVAILABLE_DECKS.clear()
+
+
 def fetch_deck_text(deck_num: str, source_filter: str | None = None) -> str:
     """
     Return a deck list as text, using the SQLite cache when available.
@@ -323,11 +348,24 @@ def fetch_deck_text(deck_num: str, source_filter: str | None = None) -> str:
 
     # The /deck/{id} endpoint sits behind Cloudflare's managed challenge, so we
     # fetch from /deck/visual/{id} which is served unprotected.
-    logger.info(f"Downloading deck {deck_num} from MTGGoldfish")
-    from repositories.scrapers.mtggoldfish_visual import fetch_deck_text_from_visual_page
+    from repositories.scrapers.mtggoldfish_visual import (
+        DeckUnavailableError,
+        fetch_deck_text_from_visual_page,
+    )
 
+    if _is_known_unavailable(deck_num):
+        raise DeckUnavailableError(f"Deck {deck_num} is no longer available on MTGGoldfish")
+
+    logger.info(f"Downloading deck {deck_num} from MTGGoldfish")
     try:
         deck_text = fetch_deck_text_from_visual_page(deck_num)
+    except DeckUnavailableError as exc:
+        # Not an error on our side and not worth re-fetching: the archetype
+        # listing keeps offering this deck, so the warm-up, the prefetcher and
+        # every click would each pay a round-trip to be told the same thing.
+        logger.info(f"Deck {deck_num} unavailable on MTGGoldfish: {exc}")
+        _remember_unavailable(deck_num)
+        raise
     except Exception as exc:
         logger.error(f"Visual-page fetch failed for deck {deck_num}: {exc}")
         raise ValueError(f"Could not parse deck data for deck {deck_num}") from exc

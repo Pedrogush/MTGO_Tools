@@ -18,6 +18,7 @@ from services.image_service.schemas import (
     BulkCardImage,
 )
 from utils.atomic_io import locked_path
+from utils.card_names import fold_card_name
 from utils.constants import SCRYFALL_REQUEST_TIMEOUT_SECONDS
 
 if TYPE_CHECKING:
@@ -26,6 +27,18 @@ if TYPE_CHECKING:
     _Base = BulkImageDownloaderProto
 else:
     _Base = object
+
+
+def _add_folded_aliases(index: dict[str, list[BulkCardImage]]) -> None:
+    """Alias every key under its accent-folded form, in place.
+
+    Runs after all exact names, face aliases and printed names are indexed so a
+    real card name always wins over another card's folded spelling.
+    """
+    for key, entries in list(index.items()):
+        folded = fold_card_name(key)
+        if folded and folded not in index:
+            index[folded] = entries
 
 
 def _printed_names(card: dict[str, Any]) -> set[str]:
@@ -93,23 +106,26 @@ class LocalResolverMixin(_Base):
         endpoint's exact operator (``!"..."``) *does* match printed names, so
         it is the general fallback: no per-card alias table needed.
 
-        Returns ``None`` when the search finds nothing, leaving the caller's
-        original 404 to stand as the genuine "no such card" answer.
+        Returns ``None`` only when the search positively reports "no cards
+        matched", leaving the caller's original 404 to stand as the genuine
+        "no such card" answer. Anything else — a rate-limit, a timeout, a
+        dropped connection — is **raised**, because the caller turns a ``None``
+        into that 404 and the download queue treats "404 not found" as
+        permanent: it records the card in its process-wide not-found set and
+        refuses to ask again for the rest of the session. Swallowing a
+        transient error here is how a momentary blip became "this card has no
+        image, ever" (issue #986 follow-up).
         """
         params = {"q": f'!"{name}"', "unique": "prints", "order": "released"}
-        try:
-            resp = self.session.get(
-                SCRYFALL_CARD_SEARCH_URL, params=params, timeout=SCRYFALL_REQUEST_TIMEOUT_SECONDS
-            )
-            if resp.status_code == 404:
-                # Scryfall answers 404 for "no cards matched", not just for a
-                # bad URL; that is a miss, not an error worth raising.
-                return None
-            resp.raise_for_status()
-            cards = resp.json().get("data") or []
-        except Exception as exc:
-            logger.debug(f"Printed-name search failed for {name}: {exc}")
+        resp = self.session.get(
+            SCRYFALL_CARD_SEARCH_URL, params=params, timeout=SCRYFALL_REQUEST_TIMEOUT_SECONDS
+        )
+        if resp.status_code == 404:
+            # Scryfall answers 404 for "no cards matched", not just for a bad
+            # URL; that is a miss, not an error worth raising.
             return None
+        resp.raise_for_status()
+        cards = resp.json().get("data") or []
         return _pick_printed_name_match(cards, name, set_code)
 
     def fetch_printings_by_name(self, name: str) -> list[dict[str, Any]]:
@@ -148,6 +164,12 @@ class LocalResolverMixin(_Base):
         if not index:
             return None
         entries = index.get((name or "").strip().lower())
+        if not entries:
+            # MTGO spells accented names in ASCII ("Gloin the Mighty"); the bulk
+            # data carries "Glóin the Mighty // Easy Pickings". Fall back to the
+            # folded key so those cards resolve locally instead of going out to
+            # the API and being recorded as a permanent miss.
+            entries = index.get(fold_card_name(name))
         if not entries:
             return None
         if uuid:
@@ -227,6 +249,7 @@ class LocalResolverMixin(_Base):
                     alias_key = alias.lower()
                     if alias_key != key and alias_key not in primary_names:
                         index.setdefault(alias_key, []).append(card)
+            _add_folded_aliases(index)
             self._local_image_index = index
             self._local_image_index_mtime = mtime
             logger.debug(f"Built local image index ({len(index)} names) from bulk data")

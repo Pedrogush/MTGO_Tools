@@ -13,6 +13,16 @@ METAGAME_CACHE_TTL_SECONDS = ONE_HOUR_SECONDS
 DEFAULT_BULK_DATA_MAX_AGE_DAYS = 30
 BULK_DATA_CACHE_FRESHNESS_SECONDS = DEFAULT_BULK_DATA_MAX_AGE_DAYS * ONE_DAY_SECONDS
 
+# How old the on-disk bulk file has to be before startup will replace it with a
+# newer one Scryfall has published. Scryfall re-publishes ``default-cards``
+# daily and the file is ~120 MB, so refreshing on every publish would cost a
+# download a day for card data that changes meaningfully only when a set
+# arrives; refusing to refresh at all leaves a new set invisible for as long as
+# the install lives (that is how The Hobbit went missing, issue #986
+# follow-up). Three days bounds the bandwidth and still picks up a release
+# within the week it lands.
+BULK_DATA_REFRESH_INTERVAL_SECONDS = 3 * ONE_DAY_SECONDS
+
 BULK_CACHE_MIN_AGE_DAYS = 1
 BULK_CACHE_MAX_AGE_DAYS = 365
 
