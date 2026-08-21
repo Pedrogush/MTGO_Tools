@@ -55,6 +55,7 @@ from loguru import logger
 
 from services.update_service import UpdateInfo
 from utils.constants import UPDATE_DOWNLOAD_CHUNK_SIZE, UPDATE_DOWNLOAD_TIMEOUT_SECONDS
+from utils.process_launch import describe_launch_block, launch_block_reason
 
 # Switches passed to the downloaded Setup. ``/SILENT`` because the user already
 # confirmed in the app's own dialog and a second wizard would be noise;
@@ -119,6 +120,28 @@ class UpdateCancelled(UpdateError):
 
 class LaunchFailed(UpdateError):
     """The verified installer could not be started."""
+
+
+class LaunchBlocked(LaunchFailed):
+    """Windows refused to run the verified installer.
+
+    A subclass rather than a sibling so every existing ``except LaunchFailed``
+    -- and the controller path that discards the download and keeps the app
+    running -- treats it identically; the only thing that changes is the
+    sentence the user reads, because this is the one launch failure where
+    retrying is guaranteed not to help and the resolution is in Windows
+    Security rather than in the app.
+
+    Its ``str`` is the explanation itself (see
+    :func:`utils.process_launch.describe_launch_block`), so a caller with no
+    special handling for it still shows something actionable. ``reason`` is the
+    :mod:`utils.process_launch` token behind it, carried separately so the UI
+    can pick translated copy instead of re-parsing the sentence.
+    """
+
+    def __init__(self, message: str, *, reason: str) -> None:
+        super().__init__(message)
+        self.reason = reason
 
 
 class UpdateNotDownloadable(UpdateError):
@@ -361,6 +384,15 @@ class UpdateInstaller:
             )
         except OSError as exc:
             logger.exception("Failed to launch the update installer")
+            # Windows refusing to run the file is not the same failure as being
+            # unable to start it, and it is the likelier one here: the installer
+            # is unsigned, freshly written, and about to be executed from the
+            # user's temp directory -- the exact profile Smart App Control and
+            # WDAC decline (issue: "CreateProcess failed; code 4551").
+            reason = launch_block_reason(exc)
+            if reason is not None:
+                blocked = describe_launch_block(exc, target="the MTGO Tools installer")
+                raise LaunchBlocked(str(blocked), reason=reason) from exc
             raise LaunchFailed(f"Could not start the installer: {exc}") from exc
 
     # ------------------------------------------------------------------ cleanup ------------------------------------------------------------------
@@ -437,6 +469,7 @@ __all__ = [
     "ChecksumUnavailable",
     "DownloadFailed",
     "INSTALLER_SWITCHES",
+    "LaunchBlocked",
     "LaunchFailed",
     "ProgressCallback",
     "UpdateCancelled",

@@ -18,6 +18,7 @@ from typing import Any
 from loguru import logger
 
 from utils.constants import BRIDGE_PROCESS_TERMINATE_TIMEOUT_SECONDS
+from utils.process_launch import describe_launch_block
 
 from .discovery import _require_bridge_path
 
@@ -29,14 +30,23 @@ def _watch_worker(
 ) -> None:
     cmd = [bridge_path, "watch"]
     logger.debug("Starting bridge watch subprocess: {}", cmd)
-    process = subprocess.Popen(
-        cmd,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        encoding="utf-8",
-        bufsize=1,
-    )  # nosec B603 - command is internal bridge watcher
+    try:
+        process = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding="utf-8",
+            bufsize=1,
+        )  # nosec B603 - command is internal bridge watcher
+    except OSError as exc:
+        # This runs in a worker process whose only channel back is the queue, so
+        # an unhandled OSError here would surface as a watcher that started and
+        # produced nothing. Windows refusing to run the unsigned bridge is a
+        # real cause of that (see utils/process_launch.py), and it is worth
+        # saying so in the log rather than leaving a silent watcher.
+        logger.error(describe_launch_block(exc, target="the MTGO bridge") or str(exc))
+        return
 
     buffer = ""
     depth = 0

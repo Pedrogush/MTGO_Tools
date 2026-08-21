@@ -100,6 +100,9 @@ MESSAGES: dict[str, str] = {
     "app.update.error.checksum_unavailable": "The checksum published with this release could not be read, so MTGO Tools refused to run the installer. Nothing was installed.",
     "app.update.error.checksum_mismatch": "The downloaded installer does not match the checksum published with the release, so MTGO Tools deleted it and ran nothing. A corrupted download is the likely explanation; a tampered file is the other one. Nothing was installed — use the release page if you want to install this version by hand.",
     "app.update.error.launch": "The installer was downloaded and verified, but it could not be started ({error}). Nothing was installed.",
+    "app.update.error.launch_blocked.app_control": "The installer was downloaded and verified, but Windows refused to run it: an Application Control policy (Smart App Control on Windows 11, or App Control for Business on a managed PC) blocks unsigned programs, and MTGO Tools is not code-signed. Nothing was installed, and retrying will not change the answer. The steps that do are here: {url}",
+    "app.update.error.launch_blocked.group_policy": "The installer was downloaded and verified, but Windows refused to run it: a group policy or AppLocker rule on this PC does not allow it. Nothing was installed, and retrying will not change the answer — this needs whoever administers the machine. More detail here: {url}",
+    "app.update.error.launch_blocked.antivirus": "The installer was downloaded and verified, but antivirus blocked it from running and may have quarantined the file. MTGO Tools ships unsigned, which is a common false positive. Nothing was installed. More detail here: {url}",
     "app.update.error.unavailable": "This release carries no installer MTGO Tools can apply on its own. Use the release page to update.",
     "app.update.error.generic": "The update stopped ({error}). Nothing was installed.",
 }

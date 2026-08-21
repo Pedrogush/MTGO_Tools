@@ -16,6 +16,7 @@ from queue import Empty
 from typing import Any
 
 from utils.constants import BRIDGE_PROCESS_TERMINATE_TIMEOUT_SECONDS
+from utils.process_launch import describe_launch_block
 
 from .discovery import _require_bridge_path
 
@@ -58,6 +59,16 @@ def _command_worker(
             raise BridgeCommandError(
                 f"Bridge command {list(args)!r} timed out after {timeout} seconds."
             ) from exc
+        except OSError as exc:
+            # The bridge is a bundled, unsigned .NET executable living under
+            # %LOCALAPPDATA%\Programs, so Smart App Control / WDAC can refuse to
+            # start it even though the install placed it correctly. Without this
+            # the parent shows the repr of an OSError and the user reads it as a
+            # broken install (see utils/process_launch.py).
+            blocked = describe_launch_block(exc, target="the MTGO bridge")
+            if blocked is not None:
+                raise BridgeCommandError(blocked) from exc
+            raise BridgeCommandError(f"Could not start the MTGO bridge: {exc}") from exc
         if completed.returncode != 0:
             raise BridgeCommandError(
                 f"Bridge exited with code {completed.returncode}: {completed.stderr.strip()}"

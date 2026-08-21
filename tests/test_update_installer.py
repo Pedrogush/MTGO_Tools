@@ -29,6 +29,7 @@ from services.update_installer import (
     ChecksumMismatch,
     ChecksumUnavailable,
     DownloadFailed,
+    LaunchBlocked,
     LaunchFailed,
     UpdateCancelled,
     UpdateError,
@@ -580,6 +581,64 @@ def test_a_spawn_failure_is_reported_as_its_own_error(
 
     with pytest.raises(LaunchFailed):
         installer.launch()
+
+
+def test_windows_refusing_to_run_the_installer_is_its_own_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """CreateProcess code 4551 is an Application Control block, not a bug here.
+
+    The file downloaded, hashed correctly and is sitting on disk; Windows simply
+    will not start it. Reported as ``LaunchFailed`` it reads as "the app broke",
+    which is what sends the user to the issue tracker instead of to Smart App
+    Control -- so it gets its own type, and that type still satisfies every
+    existing ``except LaunchFailed``.
+    """
+    _http(
+        monkeypatch,
+        {CHECKSUM_URL: _sidecar_response(), INSTALLER_URL: _installer_response()},
+    )
+    installer = UpdateInstaller(_info(), temp_root=tmp_path)
+    installer.download()
+
+    def _blocked(*_args: Any, **_kwargs: Any) -> Any:
+        exc = OSError("An Application Control policy has blocked this file")
+        exc.winerror = 4551  # type: ignore[attr-defined]
+        raise exc
+
+    monkeypatch.setattr(update_installer.subprocess, "Popen", _blocked)
+
+    with pytest.raises(LaunchBlocked) as caught:
+        installer.launch()
+
+    assert isinstance(caught.value, LaunchFailed)
+    assert caught.value.reason == "app_control"
+    # The message has to stand on its own: some callers show str(exc) directly.
+    assert "not code-signed" in str(caught.value)
+
+
+def test_an_ordinary_spawn_failure_is_not_reported_as_a_policy_block(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The other half of the claim: a missing file must not blame Windows."""
+    _http(
+        monkeypatch,
+        {CHECKSUM_URL: _sidecar_response(), INSTALLER_URL: _installer_response()},
+    )
+    installer = UpdateInstaller(_info(), temp_root=tmp_path)
+    installer.download()
+
+    def _boom(*_args: Any, **_kwargs: Any) -> Any:
+        exc = OSError("The system cannot find the file specified")
+        exc.winerror = 2  # type: ignore[attr-defined]
+        raise exc
+
+    monkeypatch.setattr(update_installer.subprocess, "Popen", _boom)
+
+    with pytest.raises(LaunchFailed) as caught:
+        installer.launch()
+
+    assert not isinstance(caught.value, LaunchBlocked)
 
 
 def test_launch_leaves_the_downloaded_file_in_place(
