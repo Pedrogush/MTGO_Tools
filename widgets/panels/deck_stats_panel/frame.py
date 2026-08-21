@@ -5,10 +5,13 @@ curve, colour distribution, type counts, and opening-hand land probability.
 
 Two backends, one data path
 ---------------------------
-The rich rendering needs ``wx.html2.WebView``, which needs the Microsoft Edge
-WebView2 runtime. That runtime ships with Windows 11 and current Windows 10 but
-is not guaranteed, so the panel falls back to ``wx.html.HtmlWindow`` -- wxWidgets'
-own HTML 3.2 renderer, compiled into wxPython and therefore always present.
+The rich rendering needs ``wx.html2.WebView`` *on its Edge backend*, which needs
+the Microsoft Edge WebView2 runtime. That runtime ships with Windows 11 and
+current Windows 10 but is not guaranteed, so the panel falls back to a painted
+:class:`~widgets.charts.painter.BarChartPanel` -- see
+:mod:`widgets.charts.view` for why the backend is demanded by name (wx hands
+back the IE backend instead of failing, and IE draws these charts wrong) and why
+wxHTML was rejected as the fallback.
 
 Before phase 5 the fallback existed only in the sense that construction did not
 crash: the panel logged a warning and left an empty sizer, so a user without
