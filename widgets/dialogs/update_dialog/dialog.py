@@ -61,6 +61,9 @@ class UpdateDialog(UpdateDialogHandlersMixin, UpdateDialogPropertiesMixin, wx.Di
         # is what puts the size on screen before the first byte, is not swallowed
         # as "no change".
         self._last_step = -1
+        # False until Update is pressed and again once the download has reached
+        # an outcome; see ``handlers._render_progress`` for what it guards.
+        self._accepting_progress = False
 
         self._build_ui()
         self._show_phase(PHASE_CONFIRM)

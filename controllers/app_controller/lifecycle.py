@@ -223,7 +223,13 @@ class LifecycleMixin(_Base):
         # for cancellation between chunks and nothing else would ask it to stop.
         # Harmless on the update's own exit path, where the download has already
         # finished and the flag is read by nobody.
-        installer = self._update_installer
+        #
+        # Read through getattr for the same reason as _cache_warmer above:
+        # shutdown() is the one method that can plausibly run against a
+        # half-built controller (a constructor that raised, a test that builds a
+        # partial object), and it must report the real failure rather than an
+        # AttributeError raised while cleaning up from it.
+        installer = getattr(self, "_update_installer", None)
         if installer is not None:
             installer.cancel()
         self.image_service.shutdown()

@@ -324,6 +324,32 @@ def test_a_failure_replaces_the_bar_with_the_reason(parent: Any) -> None:
         dialog.Destroy()
 
 
+def test_a_late_progress_tick_cannot_overwrite_the_handover_message(parent: Any) -> None:
+    """The last thing on screen before the app exits must stay on screen.
+
+    The queue ordering makes this unreachable today (every tick is queued before
+    the completion callback is), so this pins the guard rather than a bug: if the
+    chain ever changes, a stale byte counter replacing "Installing the update..."
+    while the window closes is indistinguishable from a hang.
+    """
+    dialog = _dialog(parent, _StubController(handle=_StubInstallerHandle()))
+    try:
+        dialog._on_update_clicked(None)
+        dialog._on_launched()
+        handover = dialog._status.GetLabel()
+
+        dialog._render_progress(90 * 1024 * 1024, 175 * 1024 * 1024)
+        assert dialog._status.GetLabel() == handover
+
+        # Same after a failure: the reason must not be replaced by a byte count.
+        dialog._on_failure(DownloadFailed("connection reset"))
+        reason = dialog._status.GetLabel()
+        dialog._render_progress(120 * 1024 * 1024, 175 * 1024 * 1024)
+        assert dialog._status.GetLabel() == reason
+    finally:
+        dialog.Destroy()
+
+
 def test_a_release_that_stopped_being_installable_is_reported_not_hung(parent: Any) -> None:
     """``apply_available_update`` returning ``None`` must not leave a dead bar."""
     dialog = _dialog(parent, _StubController(handle=None))

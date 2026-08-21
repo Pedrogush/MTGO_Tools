@@ -136,8 +136,8 @@ The sidecar holds one line in `sha256sum` format — `<lowercase hex>`, two
 spaces, `<filename>`. The **same** digest also appears as prose in the release
 notes, and the duplication is deliberate rather than an oversight: the prose is
 for a human verifying a 180+ MB unsigned download by hand with `Get-FileHash`,
-and the sidecar is for the in-app updater (in progress,
-[#142](https://github.com/Pedrogush/MTGO_Tools/issues/142)), which downloads the
+and the sidecar is for the in-app updater
+([#142](https://github.com/Pedrogush/MTGO_Tools/issues/142)), which downloads the
 installer and then *executes* it. Something deciding whether to run a binary
 needs an integrity check it can parse with certainty; a Markdown body whose
 wording is free to change is not one. Both are written from a single
@@ -177,8 +177,9 @@ offline, rate-limited, or served an unfamiliar payload all resolve to "no update
 info" rather than an error. The answer is cached with a timestamp and refreshed
 at most once every `UPDATE_CHECK_INTERVAL_SECONDS` (24 h), including across
 restarts, so repeat launches make one request a day. When a newer version does
-exist the app says so in the right-hand status-bar field and in the settings
-menu. The whole thing can be turned off from **⚙ → Check for updates**.
+exist the app says so in the right-hand status-bar field and in a **Help** menu
+entry that appears only while the update is pending. The whole thing can be
+turned off from **File ▸ Preferences… ▸ Check for updates**.
 
 Because the comparison is numeric, the version history has to stay monotonic —
 which is the concrete reason the 1.4.0 regression above mattered rather than
@@ -186,7 +187,7 @@ being merely untidy.
 
 ## Applying it
 
-Clicking either the status-bar note or the settings-menu entry opens the
+Clicking either the status-bar note or that Help-menu entry opens the
 updater ([#142](https://github.com/Pedrogush/MTGO_Tools/issues/142)): it
 confirms, downloads the installer asset with a progress bar, checks it against
 the `.sha256` sidecar published beside it, closes the app, and runs Setup with
@@ -198,6 +199,28 @@ never executed; there is no verification-optional path.
 > published before the sidecar existed — keep the original behaviour: the same
 > click opens the release page in a browser and the user installs it themselves.
 > `services.update_installer.can_auto_update` is what picks between the two.
+
+### What this does *not* do
+
+Worth knowing before relying on it, and worth keeping honest as it changes:
+
+- **The installer is not code-signed.** The SHA256 check proves the file matches
+  what the release publishes; it proves nothing about who published the release.
+  Windows SmartScreen still treats the build as it always has. The checksum is
+  fetched over HTTPS from the same host as the installer, so an attacker holding
+  that host can replace both — the sidecar closes the corruption and
+  wrong-file gaps, not a compromised release.
+- **A failed update is never applied halfway.** Every failure path deletes the
+  partial download and the running app is untouched, but the recovery is the
+  user's: nothing retries on its own, and a repeated failure is a manual install
+  from the release page.
+- **The relaunch depends on the installer, not the app.** The app exits so its
+  files can be replaced, so if `/RELAUNCH` does not fire the user is left with a
+  correctly updated build that simply did not reopen. `RelaunchRequested` in
+  `packaging/installer.iss` is only exercised by an actual Inno Setup build.
+- **`prune_releases.py` deletes old releases and their assets.** An app pinned to
+  an old version has nothing to say about that, but nothing in the updater reads
+  a pruned release either — it only ever asks for `latest`.
 
 ## What this means for you
 

@@ -64,6 +64,7 @@ class UpdateDialogHandlersMixin:
     _last_step: int
     _phase: str
     _wrap_width: int
+    _accepting_progress: bool
 
     # ------------------------------------------------------------------ phases
     def _show_phase(self, phase: str) -> None:
@@ -92,6 +93,7 @@ class UpdateDialogHandlersMixin:
 
     # ------------------------------------------------------------------ buttons
     def _on_update_clicked(self, _event: wx.CommandEvent) -> None:
+        self._accepting_progress = True
         self._show_phase(PHASE_PROGRESS)
         self._set_status(t("app.update.progress.starting"))
         # Nothing is known about the size until the first response header, so the
@@ -148,6 +150,7 @@ class UpdateDialogHandlersMixin:
     def _on_close(self, event: wx.CloseEvent) -> None:
         # Destroy explicitly for the same reason: the default handler hides a
         # modeless dialog, and a hidden one would keep taking progress callbacks.
+        self._accepting_progress = False
         installer = self._installer
         self._installer = None
         if installer is not None:
@@ -175,6 +178,25 @@ class UpdateDialogHandlersMixin:
             # ``bool(widget)`` is the one liveness test that does not itself
             # raise -- see docs/WXMSW_BEHAVIOUR.md.
             return
+        if not self._accepting_progress:
+            # Defensive, not load-bearing: as the code stands today this cannot
+            # fire. Every tick is queued with wx.CallAfter from inside
+            # ``UpdateInstaller.download`` on the worker thread, the completion
+            # callback is queued by BackgroundWorker only after download()
+            # returns, and wx dispatches pending calls in order -- so the last
+            # tick is always drained before ``_on_launched`` or ``_on_failure``
+            # runs.
+            #
+            # It is here because that argument is about the *whole* chain
+            # holding, and every link in it is somebody else's to change: a
+            # retry loop that re-enters download(), a progress callback fired
+            # from a second thread, or a future wx that coalesces CallAfters
+            # would each turn a late tick into "Installing the update..." being
+            # overwritten by a byte counter for a transfer that already
+            # finished -- with the app about to exit and no way to tell the
+            # difference from a hang. Two cheap lines beat re-deriving the
+            # ordering argument every time one of those changes.
+            return
         if total:
             self._gauge.SetValue(min(GAUGE_RANGE, done * GAUGE_RANGE // total))
         else:
@@ -185,6 +207,7 @@ class UpdateDialogHandlersMixin:
         """The installer is running; the app is about to close behind this."""
         if not self:
             return
+        self._accepting_progress = False
         self._installer = None
         self._cancel_btn.Enable(False)
         self._gauge.SetValue(GAUGE_RANGE)
@@ -196,6 +219,7 @@ class UpdateDialogHandlersMixin:
     def _on_failure(self, exc: BaseException) -> None:
         if not self:
             return
+        self._accepting_progress = False
         self._installer = None
         if isinstance(exc, UpdateCancelled):
             # The user asked for this; there is nothing to tell them about it.
