@@ -16,6 +16,7 @@ from utils.constants import (
     DECK_CARD_ACTION_BUTTON_SIZE,
     DECK_CARD_BADGE_ANCHOR_FRACTION,
     DECK_CARD_BUTTON_MARGIN,
+    DECK_CARD_COUNT_MAX_DOTS,
     DECK_CARD_HEIGHT,
     DECK_CARD_WIDTH,
 )
@@ -67,6 +68,100 @@ def test_quantity_badge_does_not_collide_with_the_action_chips() -> None:
     _btn_w, btn_h = DECK_CARD_ACTION_BUTTON_SIZE
     chips_top = DECK_CARD_HEIGHT - DECK_CARD_BUTTON_MARGIN - btn_h
     assert y + h <= chips_top
+
+
+# ---------------------------------------------------------------- #987
+
+
+def _count_dots(count: int):
+    """``count_dot_layout`` for a card at the origin, wx imported lazily."""
+    import wx
+
+    from widgets.panels.card_table_panel.grid_layout import count_dot_layout
+
+    return count_dot_layout(wx.Rect(0, 0, DECK_CARD_WIDTH, DECK_CARD_HEIGHT), count)
+
+
+@pytest.mark.parametrize("count", range(1, DECK_CARD_COUNT_MAX_DOTS + 1))
+def test_count_strip_draws_one_dot_per_copy(count: int) -> None:
+    """#987: the count is a stack of filled dots -- one per copy."""
+    _strip, dots = _count_dots(count)
+    assert len(dots) == count
+
+
+def test_count_dots_are_stacked_without_overlapping() -> None:
+    """Dots sit in one vertical column, bottom-anchored, and never touch."""
+    _strip, dots = _count_dots(DECK_CARD_COUNT_MAX_DOTS)
+    assert len({dot.x for dot in dots}) == 1, "the dots are not in a single column"
+    ordered = sorted(dots, key=lambda dot: dot.y)
+    for upper, lower in zip(ordered, ordered[1:]):
+        assert upper.y + upper.height < lower.y, "adjacent count dots overlap"
+
+
+def test_count_strip_stays_inside_the_card() -> None:
+    """The strip is a *strip*: it never draws off the card's left edge or its top."""
+    for count in range(1, DECK_CARD_COUNT_MAX_DOTS + 1):
+        strip, dots = _count_dots(count)
+        assert strip.x >= 0
+        assert strip.x + strip.width <= DECK_CARD_WIDTH
+        assert strip.y >= 0
+        assert strip.width < DECK_CARD_WIDTH * 0.15, "the count strip is no longer a thin strip"
+        for dot in dots:
+            assert strip.Contains(dot), "a count dot is drawn outside its strip"
+
+
+def test_tallest_count_stack_clears_the_card_title_band() -> None:
+    """H1's rule, re-applied to the dots: a full stack must stay below the title.
+
+    This is what caps :data:`DECK_CARD_COUNT_MAX_DOTS` -- the stack grows upward
+    from the art box's lower edge, so raising the cap is what would push it back
+    into the card name.
+    """
+    strip, _dots = _count_dots(DECK_CARD_COUNT_MAX_DOTS)
+    assert strip.y > DECK_CARD_HEIGHT * _TITLE_BAND_BOTTOM_FRACTION
+
+
+def test_count_strip_does_not_collide_with_the_action_chips() -> None:
+    """The +/-/x chips appear under the pointer; the strip must clear them."""
+    strip, _dots = _count_dots(DECK_CARD_COUNT_MAX_DOTS)
+    _btn_w, btn_h = DECK_CARD_ACTION_BUTTON_SIZE
+    chips_top = DECK_CARD_HEIGHT - DECK_CARD_BUTTON_MARGIN - btn_h
+    assert strip.y + strip.height <= chips_top
+
+
+def test_dot_column_stays_inside_the_strips_round_caps() -> None:
+    """The dots are blitted as one opaque rectangle inside the rounded strip.
+
+    That blit is what keeps a repaint cheap (an alpha ``DrawBitmap`` into the
+    grid's canvas bitmap measured ~5ms *per card*), but it only works while the
+    rectangle's corners sit inside the strip's round caps -- otherwise it squares
+    them off. This is the geometric condition the padding/diameter constants have
+    to keep satisfying.
+    """
+    from math import hypot
+
+    from utils.constants import DECK_CARD_COUNT_STRIP_PADDING
+
+    pad = DECK_CARD_COUNT_STRIP_PADDING
+    strip, _dots = _count_dots(DECK_CARD_COUNT_MAX_DOTS)
+    radius = strip.width / 2
+    cap_centre = (strip.x + radius, strip.y + radius)
+    for corner_x in (strip.x + pad, strip.x + strip.width - pad):
+        distance = hypot(corner_x - cap_centre[0], strip.y + pad - cap_centre[1])
+        assert distance <= radius, "the dot column's corners poke out of the strip's cap"
+
+
+def test_high_counts_degrade_to_the_numeral_instead_of_overflowing() -> None:
+    """A 20x Dragon's Approach is a numeral, not twenty dots stacked off the card."""
+    from widgets.panels.card_table_panel.grid_layout import count_fits_in_dots
+
+    assert count_fits_in_dots(DECK_CARD_COUNT_MAX_DOTS)
+    assert not count_fits_in_dots(DECK_CARD_COUNT_MAX_DOTS + 1)
+    assert not count_fits_in_dots(20)
+    # Nothing to draw for a zero/negative count, and no numeral either.
+    assert not count_fits_in_dots(0)
+    _strip, dots = _count_dots(0)
+    assert dots == []
 
 
 # ---------------------------------------------------------------- C7 / C8
