@@ -16,7 +16,6 @@ from widgets.panels.card_table_panel.sorting import (
     PILE_SORT_MV,
     PILE_SORT_TYPE,
     TABLE_ACTION_COUNT,
-    TABLE_ACTION_DESTRUCTIVE_GAP,
     TABLE_ACTION_SLOT_WIDTH,
     action_slot_at,
     action_slot_bounds,
@@ -412,10 +411,9 @@ def test_action_slot_at_maps_each_glyph_to_its_own_target():
     """Each control gets its own fixed-width target, not a third of the cell.
 
     Phase 5 replaced the equal-thirds split: the drawn glyphs measured ~14x14
-    with ~2px between them, well under a comfortable pointer target, and the
-    destructive ``x`` sat immediately beside the ``-`` that decrements the row.
+    with ~2px between them, well under a comfortable pointer target.
     """
-    width = TABLE_ACTION_SLOT_WIDTH * TABLE_ACTION_COUNT + TABLE_ACTION_DESTRUCTIVE_GAP
+    width = TABLE_ACTION_SLOT_WIDTH * TABLE_ACTION_COUNT
     bounds = action_slot_bounds(width)
     assert len(bounds) == TABLE_ACTION_COUNT
     for start, end in bounds:
@@ -426,17 +424,25 @@ def test_action_slot_at_maps_each_glyph_to_its_own_target():
         assert action_slot_at(end - 1, width) == index
 
 
-def test_action_slot_at_leaves_the_destructive_gap_dead():
-    """A click in the gap in front of ``x`` does nothing.
+def test_action_slots_are_evenly_spaced_with_no_gap_before_remove():
+    """The three controls are one evenly spaced group (#990).
 
-    The gap only separates the controls visually if it also refuses the click:
-    snapping to the nearest slot would make the pixels beside ``x`` delete the
-    row, which is the failure the separation exists to prevent.
+    ``x`` used to be pushed 16px away from ``-``, which read as it not belonging
+    to the pair beside it. The slots are now flush and identical, so every
+    control sits the same distance from its neighbour and no pixel between the
+    first and last slot is dead.
     """
-    width = TABLE_ACTION_SLOT_WIDTH * TABLE_ACTION_COUNT + TABLE_ACTION_DESTRUCTIVE_GAP
-    gap_start = TABLE_ACTION_SLOT_WIDTH * 2
-    for x in range(gap_start, gap_start + TABLE_ACTION_DESTRUCTIVE_GAP):
-        assert action_slot_at(x, width) is None
+    width = TABLE_ACTION_SLOT_WIDTH * TABLE_ACTION_COUNT
+    bounds = action_slot_bounds(width)
+    assert bounds[0][0] == 0 and bounds[-1][1] == width
+    # Every slot's end is the next slot's start: no separation anywhere.
+    assert [end for _, end in bounds[:-1]] == [start for start, _ in bounds[1:]]
+
+    strides = [b[0] - a[0] for a, b in zip(bounds, bounds[1:], strict=False)]
+    assert strides == [TABLE_ACTION_SLOT_WIDTH] * (TABLE_ACTION_COUNT - 1)
+
+    for x in range(bounds[0][0], bounds[-1][1]):
+        assert action_slot_at(x, width) is not None
 
 
 def test_action_slot_at_is_right_aligned_and_safe_at_the_edges():

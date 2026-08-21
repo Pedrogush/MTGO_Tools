@@ -8,7 +8,8 @@ These stateless renderers paint the :class:`DeckTableView` grid:
   ``…`` when the content is wider than the cell.
 * :class:`_InlineSymbolStringRenderer` draws oracle text with inline mana
   symbols (e.g. ``{T}: Add {G}.``).
-* :class:`_ActionCellRenderer` draws the trailing ``+ − ×`` row controls.
+* :class:`_ActionCellRenderer` draws the trailing ``+ − ×`` row controls as
+  stroked icons (green / amber / red) in three equal, evenly spaced slots.
 
 All renderers share :func:`_paint_row_background`, which keeps cell backgrounds
 at ``DARK_ALT`` and signals selection with a vertical accent bar painted on the
@@ -21,16 +22,16 @@ import wx
 import wx.grid as gridlib
 
 from utils.constants import SELECTION_BORDER, SPACE_SM
-from utils.constants.theme import DANGER_TEXT
+from utils.constants.theme import DANGER_TEXT, SUCCESS_TEXT, WARNING_TEXT
 from widgets.mana_icon_factory import ManaIconFactory, tokenize_mana_symbols
 from widgets.panels.card_table_panel.sorting import (
+    TABLE_ACTION_ADD,
     TABLE_ACTION_COUNT,
-    TABLE_ACTION_DESTRUCTIVE_GAP,
     TABLE_ACTION_REMOVE,
     TABLE_ACTION_SLOT_WIDTH,
+    TABLE_ACTION_SUB,
     action_slot_bounds,
 )
-from widgets.stylize import type_font
 
 _MANA_CELL_PADDING = 4
 _CELL_TEXT_PADDING = 4
@@ -46,14 +47,34 @@ _SELECTION_BAR_WIDTH = 3
 # flush against each other.
 _MANA_ICON_GAP = 0
 
-# Trailing, non-data "actions" column glyphs and width, rendered with the same
-# +/-/x controls the grid view shows on a selected card.
-_ACTION_GLYPHS = ("+", "−", "×")
-# Three 28px targets plus a 16px separation before the destructive one, plus
-# a trailing inset so the group does not sit flush against the row edge.
-_ACTIONS_COL_WIDTH = (
-    TABLE_ACTION_SLOT_WIDTH * TABLE_ACTION_COUNT + TABLE_ACTION_DESTRUCTIVE_GAP + SPACE_SM
-)
+# Trailing, non-data "actions" column: three evenly spaced 28px targets plus a
+# trailing inset so the group does not sit flush against the row edge.
+_ACTIONS_COL_WIDTH = TABLE_ACTION_SLOT_WIDTH * TABLE_ACTION_COUNT + SPACE_SM
+
+# The row controls are *stroked icons*, not typed characters (#990). Typed as
+# text, "+", "−" and "×" came out of the body font at three different optical
+# sizes and weights -- and only the "×" carried a colour -- so the trio read as
+# two stray characters next to one button. One box, one stroke width and one
+# colour role each makes them one control group.
+_ACTION_ICON_BOX = 16  # px square the icon bitmap is drawn into
+_ACTION_ICON_EXTENT = 11.0  # arm-to-arm span of the "+" and "−" strokes
+# Half-diagonal of the "×". Smaller than half of _ACTION_ICON_EXTENT because a
+# diagonal drawn to the same bounding box as an axis-aligned "+" reads bigger.
+_ACTION_ICON_CROSS_ARM = 4.0
+_ACTION_ICON_STROKE = 2
+
+#: Each control's colour role. Add is reversible and additive (success), subtract
+#: is reversible and reductive (warning), remove is the one that is not
+#: reversible (danger) -- it kept the colour it already had.
+_ACTION_ICON_COLOURS: dict[int, tuple[int, int, int]] = {
+    TABLE_ACTION_ADD: SUCCESS_TEXT,
+    TABLE_ACTION_SUB: WARNING_TEXT,
+    TABLE_ACTION_REMOVE: DANGER_TEXT,
+}
+
+# (action, background) -> pre-rendered icon bitmap. The icons are identical on
+# every row of every table, so they are drawn once and blitted thereafter.
+_ACTION_ICON_CACHE: dict[tuple[int, tuple[int, int, int]], wx.Bitmap] = {}
 
 # Cache of (token, target-size) → wx.Bitmap shared across all renderer
 # instances. Bitmap creation + scaling is expensive; oracle text repeats
@@ -80,6 +101,54 @@ def _scaled_bitmap(factory: ManaIconFactory, token: str, size: int) -> wx.Bitmap
         result = wx.Bitmap(img)
     _SCALED_BITMAP_CACHE[key] = result
     return result
+
+
+def _action_icon_bitmap(action: int, background: tuple[int, int, int]) -> wx.Bitmap:
+    """Return the stroked ``+`` / ``−`` / ``×`` icon for ``action``, cached.
+
+    Drawn through a :class:`wx.GraphicsContext` so the ``×``'s diagonals are
+    antialiased, onto an opaque bitmap filled with the cell ``background`` --
+    the actions cell is always the plain cell background (the selection bar
+    lives on the leftmost column only), so an opaque blit is exact and avoids
+    depending on wxMSW alpha-bitmap behaviour.
+    """
+    key = (action, background)
+    cached = _ACTION_ICON_CACHE.get(key)
+    if cached is not None:
+        return cached
+
+    box = _ACTION_ICON_BOX
+    bmp = wx.Bitmap(box, box)
+    dc = wx.MemoryDC(bmp)
+    dc.SetBackground(wx.Brush(wx.Colour(*background)))
+    dc.Clear()
+
+    gctx = wx.GraphicsContext.Create(dc)
+    pen = wx.Pen(wx.Colour(*_ACTION_ICON_COLOURS[action]), _ACTION_ICON_STROKE)
+    pen.SetCap(wx.CAP_ROUND)
+    gctx.SetPen(pen)
+
+    centre = box / 2.0
+    half = _ACTION_ICON_EXTENT / 2.0
+    path = gctx.CreatePath()
+    if action == TABLE_ACTION_REMOVE:
+        arm = _ACTION_ICON_CROSS_ARM
+        path.MoveToPoint(centre - arm, centre - arm)
+        path.AddLineToPoint(centre + arm, centre + arm)
+        path.MoveToPoint(centre + arm, centre - arm)
+        path.AddLineToPoint(centre - arm, centre + arm)
+    else:
+        path.MoveToPoint(centre - half, centre)
+        path.AddLineToPoint(centre + half, centre)
+        if action == TABLE_ACTION_ADD:
+            path.MoveToPoint(centre, centre - half)
+            path.AddLineToPoint(centre, centre + half)
+    gctx.StrokePath(path)
+
+    del gctx  # flush the context before the bitmap is released
+    dc.SelectObject(wx.NullBitmap)
+    _ACTION_ICON_CACHE[key] = bmp
+    return bmp
 
 
 def _split_inline_symbols(text: str) -> list[tuple[str, str]]:
@@ -337,7 +406,7 @@ class _InlineSymbolStringRenderer(gridlib.GridCellRenderer):
 
 
 class _ActionCellRenderer(gridlib.GridCellRenderer):
-    """Draws the ``+ − ×`` row controls, each glyph centered in an equal slot."""
+    """Draws the ``+ − ×`` row controls, each icon centered in an equal slot."""
 
     def Draw(
         self,
@@ -350,26 +419,15 @@ class _ActionCellRenderer(gridlib.GridCellRenderer):
         isSelected: bool,
     ) -> None:
         _paint_row_background(grid, dc, rect, col, isSelected)
-        # Bold buys legibility for a glyph run over card art -- the case
-        # type_font(bold=True) exists for, and the same call the grid view's
-        # own +/-/x chips use. GetDefaultCellFont().Bold() happened to agree,
-        # but only for as long as nothing moved the grid's font.
-        dc.SetFont(type_font("body", bold=True))
-        char_h = dc.GetCharHeight()
-        y = rect.y + max(0, (rect.height - char_h) // 2)
-        bounds = action_slot_bounds(rect.width - SPACE_SM)
-        for idx, glyph in enumerate(_ACTION_GLYPHS):
-            start, end = bounds[idx]
-            # The destructive control is the only one that is not reversible, so
-            # it is the only one that carries the danger colour. The gap in front
-            # of it is in action_slot_bounds.
-            dc.SetTextForeground(
-                wx.Colour(*DANGER_TEXT)
-                if idx == TABLE_ACTION_REMOVE
-                else grid.GetDefaultCellTextColour()
-            )
-            tw = dc.GetTextExtent(glyph)[0]
-            dc.DrawText(glyph, rect.x + start + (end - start - tw) // 2, y)
+        background = grid.GetDefaultCellBackgroundColour()
+        rgb = (background.Red(), background.Green(), background.Blue())
+        for idx, (start, end) in enumerate(action_slot_bounds(rect.width - SPACE_SM)):
+            bmp = _action_icon_bitmap(idx, rgb)
+            x = rect.x + start + (end - start - bmp.GetWidth()) // 2
+            y = rect.y + (rect.height - bmp.GetHeight()) // 2
+            # Opaque blit: the icon bitmap is pre-filled with this exact cell
+            # background, so no mask is needed (and none is cheaper).
+            dc.DrawBitmap(bmp, x, y, False)
 
     def GetBestSize(
         self,
