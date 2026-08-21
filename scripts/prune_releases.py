@@ -1,14 +1,26 @@
 #!/usr/bin/env python3
 """Keep the published GitHub Releases down to the ones anyone would install.
 
-Two rules, applied in order:
+Three rules, applied in order:
 
-1. **One release per ``MAJOR.MINOR`` line** -- the newest patch. Nobody wants
-   1.0.0 once 1.0.4 exists; it is the same line with known bugs still in it.
-   Keeping the newest patch of *each* line still lets someone stay on an older
-   line deliberately (the last build before a redesign, say).
-2. **At most ``--max`` releases** (default 10), newest first, in case the number
+1. **The newest patch of each ``MAJOR.MINOR`` line.** Nobody wants 1.0.0 once
+   1.0.4 exists; it is the same line with known bugs still in it. Keeping the
+   newest patch of *each* line still lets someone stay on an older line
+   deliberately (the last build before a redesign, say).
+2. **The ``x.y.0`` of each line** -- the line's first release, kept even once
+   later patches supersede it. This is the *upgrade-path* rule, and it exists
+   because rule 1 on its own made an update impossible to test: v1.2.0 was
+   deleted the instant v1.2.1 published, so the release you would upgrade *from*
+   never coexisted with the one you would upgrade *to*. A ``.0`` is also the
+   natural baseline of a line -- the build before any of its patches -- which
+   makes it the one worth keeping if you are keeping two.
+3. **At most ``--max`` releases** (default 10), newest first, in case the number
    of lines ever grows past that.
+
+Note how 2 and 3 interact: the cap is applied last and newest-first, so a repo
+with more lines than ``--max`` can still have a ``.0`` trimmed off the *oldest*
+end. That is the intended precedence -- the cap is a hard ceiling on storage,
+and the lines it reaches are the ones nobody is upgrading from any more.
 
 Only the **Release** is deleted, never the tag. Tags are the version history and
 the base ``next_version.py`` computes from, they cost nothing, and deleting one
@@ -61,13 +73,29 @@ def published_releases() -> list[tuple[int, int, int]]:
 def select_keep(
     versions: list[tuple[int, int, int]], max_releases: int = DEFAULT_MAX_RELEASES
 ) -> list[tuple[int, int, int]]:
-    """The releases that survive: newest patch per line, capped at ``max_releases``."""
+    """The releases that survive.
+
+    The newest patch of each ``MAJOR.MINOR`` line, plus that line's ``x.y.0`` if
+    it was ever published, capped at ``max_releases`` newest-first. A line whose
+    newest patch *is* its ``.0`` contributes one release, not two.
+
+    ``versions`` is only read, never assumed sorted -- the cap does its own
+    ordering, so a caller passing them oldest-first still gets the newest kept.
+    """
+    keep: set[tuple[int, int, int]] = set()
     newest_per_line: dict[tuple[int, int], tuple[int, int, int]] = {}
     for version in versions:
         line = (version[0], version[1])
         if version > newest_per_line.get(line, (-1, -1, -1)):
             newest_per_line[line] = version
-    return sorted(newest_per_line.values(), reverse=True)[:max_releases]
+        # The line's baseline, kept alongside the newest patch so there is
+        # always something to upgrade *from*. Only if it was really published:
+        # this iterates what `gh release list` returned, so a line that never
+        # shipped a .0 simply does not contribute one.
+        if version[2] == 0:
+            keep.add(version)
+    keep.update(newest_per_line.values())
+    return sorted(keep, reverse=True)[:max_releases]
 
 
 def main(argv: list[str] | None = None) -> int:
