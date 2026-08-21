@@ -51,6 +51,13 @@ MESSAGES: dict[str, str] = {
     "tabs.view.pile_sort.mv": "Mana value",
     "tabs.view.pile_sort.color": "Color",
     "tabs.view.pile_sort.type": "Type",
+    # #988: the pile columns show two bare numbers -- the bucket heading and
+    # the copy count -- and neither said what it was. These name them.
+    "tabs.view.pile.tooltip.mv": "Mana value — each pile holds the cards of that mana value (lands get their own pile)",
+    "tabs.view.pile.tooltip.color": "Color — each pile holds the cards of that color",
+    "tabs.view.pile.tooltip.type": "Type — each pile holds the cards of that card type",
+    "tabs.view.pile.tooltip.count.one": "{n} card in this pile",
+    "tabs.view.pile.tooltip.count.other": "{n} cards in this pile",
     "tabs.view.printing": "Art",
     "tabs.view.printing.tooltip": "Pick which printing (art) to use for every card",
     "tabs.view.printing.agnostic": "Default (no specific printing)",

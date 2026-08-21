@@ -34,6 +34,7 @@ from widgets.panels.card_table_panel.table_columns import (
     _MIN_TEXT_WIDTH,
     _MIN_TYPE_WIDTH,
     cell_text,
+    grow_text,
 )
 from widgets.panels.card_table_panel.table_columns import fit_to_width as fit
 from widgets.panels.deck_stats_panel.stats_chart_html import (
@@ -93,8 +94,38 @@ def test_sorting_by_quantity_puts_the_biggest_playset_first() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_no_shrink_when_the_row_already_fits() -> None:
-    assert _fit(sum(_NATURAL.values()) + 50) == {}
+def test_nothing_moves_when_the_row_fits_the_width_exactly() -> None:
+    assert _fit(sum(_NATURAL.values())) == {}
+
+
+@pytest.mark.parametrize("surplus", [1, 50, 320, 900, 1800])
+def test_the_leftover_width_goes_to_the_text_column(surplus: int) -> None:
+    """#989: the row stopped at its natural width and everything past it was a
+    dead strip -- widest on a maximised window, which is where the report came
+    from. Every other column is already as wide as its own content asked for, so
+    Text is the only one the space can still buy anything for."""
+    sizes = _fit(sum(_NATURAL.values()) + surplus)
+    assert sizes == {TEXT: _NATURAL[TEXT] + surplus}
+
+
+@pytest.mark.parametrize("available", [800, 1000, 1400, 2000])
+def test_the_row_fills_the_width_it_was_given(available: int) -> None:
+    assert _total(available) == available
+
+
+def test_growing_leaves_the_other_columns_at_their_natural_widths() -> None:
+    """Name/Mana/Type stop at what their content needs; a wider window must not
+    stretch a 12-character type line across half the screen."""
+    sizes = _fit(sum(_NATURAL.values()) + 600)
+    assert set(sizes) == {TEXT}
+
+
+def test_growing_needs_a_text_column_to_grow() -> None:
+    """A row measured without a Text column (or with one autosize found nothing
+    to put in) keeps its leftover rather than handing it to a column that would
+    render it blank."""
+    assert grow_text({QTY: 30, MANA: 80}, 200, TEXT) == {}
+    assert grow_text({TEXT: 0}, 200, TEXT) == {}
 
 
 #: Everything at its floor: the unshrinkable Qty and Mana columns, Name and Type

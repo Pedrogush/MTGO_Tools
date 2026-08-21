@@ -17,7 +17,9 @@ Behaviour kept at parity with the old grid cells:
 * Click a card to select it; click the selected card again to clear it. The
   selection is mirrored across the table/pile views by ``CardTablePanel``.
 * Hover forwards the card under the mouse to the inspector.
-* Each card's quantity is drawn top-left, coloured by owned status.
+* Each card's copy count is drawn as a stack of filled dots in a thin strip
+  down its left edge, coloured by owned status (#987); counts too high to
+  read as dots fall back to a numeral chip.
 * Inline ``+`` / ``−`` / ``×`` controls are drawn (not native buttons) as
   hit-zones on the hovered/selected card, hit-tested on click — the same
   drawn-control model the table view's actions column uses.
