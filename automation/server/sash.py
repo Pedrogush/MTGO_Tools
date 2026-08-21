@@ -13,6 +13,13 @@ resize and the paints it triggers, so the frames a background video grab picks
 up are the frames a real drag produces. ``SetSashPosition`` is the same call
 ``wxSplitterWindow`` makes for every mouse-move of a live drag, so the resize /
 repaint path under test is the real one.
+
+What it deliberately does **not** cover is whether a pointer can still *start*
+that drag. ``SetSashPosition`` bypasses ``OnMouseEvent`` and its ``SashHitTest``
+entirely, so a sash that has become immovable to the mouse still sweeps here.
+That gap let #1006 ship. ``get_sash`` therefore also reports the band's
+**screen** rectangle, so a real Win32 ``SendInput`` gesture can be aimed at it
+and the press path checked for real.
 """
 
 from __future__ import annotations
@@ -44,13 +51,34 @@ class SashMixin(_Base):
         if window is None:
             return {"error": f"No splitter: {splitter}"}
         minimum = window.GetMinimumPaneSize()
-        height = window.GetClientSize().GetHeight()
+        client = window.GetClientSize()
+        height = client.GetHeight()
+        position = window.GetSashPosition()
+        sash = window.GetSashSize()
+        # The sash band in *screen* coordinates, which is the one thing here a
+        # real input driver needs and the only way to check that the sash is
+        # still draggable. ``sash_drag`` below calls ``SetSashPosition``, so it
+        # keeps working perfectly on a sash whose hit test can no longer be
+        # reached by a pointer -- which is exactly the regression that shipped
+        # in #1006. Aim ``SendInput`` at ``screen`` to test the real gesture.
+        if window.GetSplitMode() == wx.SPLIT_VERTICAL:
+            band = wx.Rect(position, 0, sash, client.GetHeight())
+        else:
+            band = wx.Rect(0, position, client.GetWidth(), sash)
+        origin = window.ClientToScreen(wx.Point(band.x, band.y))
         return {
             "splitter": splitter,
-            "position": window.GetSashPosition(),
+            "position": position,
             "min": minimum,
-            "max": max(minimum, height - minimum - window.GetSashSize()),
+            "max": max(minimum, height - minimum - sash),
             "client_height": height,
+            "sash_size": sash,
+            "screen": {
+                "x": origin.x,
+                "y": origin.y,
+                "width": band.width,
+                "height": band.height,
+            },
         }
 
     def _handle_set_sash(self, splitter: str = "deck_split", position: int = 0) -> dict[str, Any]:

@@ -95,12 +95,22 @@ the native ``DrawSash`` never running at all, which needs a hook this toolkit
 does not expose to Python (see the table below for the two that looked like they
 would and do not).
 
-Dragging still goes through ``wxSplitterWindow``'s own ``OnMouseEvent``: the
-overlay sits at ``(0, 0)``, so its coordinates already *are* the splitter's and
-the events are forwarded untranslated. wx captures the mouse, clamps against the
-minimum pane size and fires ``wxEVT_SPLITTER_SASH_POS_CHANGED`` exactly as
-before, so the deck workspace's saved position keeps working with no code of
-ours in the path.
+Dragging still goes through ``wxSplitterWindow``'s own ``OnMouseEvent``, but
+only because the overlay **translates the coordinates** on the way. The overlay
+is sized to the band, so it sits at ``(position, 0)`` and a click in the middle
+of the sash reaches it as ``x = 3``. Forwarding that untranslated -- which is
+what the first version of this overlay did -- tells the splitter the pointer is
+3px from its left edge, ``SashHitTest`` says no, and **the sash stops being
+draggable at all** while every pixel measurement in this module still passes.
+Once the position is mapped back through screen coordinates, wx captures the
+mouse, clamps against the minimum pane size and fires
+``wxEVT_SPLITTER_SASH_POS_CHANGED`` exactly as before, so the deck workspace's
+saved position keeps working with no code of ours in the path.
+
+That is also why ``test_a_real_click_on_the_sash_starts_a_drag`` builds its
+events the way wxMSW does -- position relative to the window the pointer is
+over, not to the splitter. A test that hands the overlay splitter coordinates
+is testing the bug, and passed straight through it.
 
 Two routes that look like they should work do not, and both were measured
 rather than read:
@@ -164,15 +174,24 @@ class _SashOverlay(wx.Window):
             self.Bind(event, self._forward)
 
     def _forward(self, event: wx.MouseEvent) -> None:
-        """Hand the event to the splitter's own ``OnMouseEvent``.
+        """Hand the event to the splitter's own ``OnMouseEvent``, **translated**.
 
-        No coordinate translation: the overlay is at ``(0, 0)`` of the splitter's
-        client area, so the positions already match. Not skipped, because the
-        splitter is the one that should act on it -- and once wx captures the
-        mouse for a drag, the rest of the gesture goes straight to the splitter
-        without passing through here at all.
+        The translation is the whole of this method and it is not optional. A
+        mouse event's position is in the coordinates of the window it was
+        delivered to, and this overlay is at ``(position, 0)`` -- it is sized to
+        the sash band, not to the client area. So a real click in the middle of
+        a vertical sash arrives here as ``x = 3``, and forwarding that untouched
+        tells ``wxSplitterWindow::OnMouseEvent`` the pointer is 3px from the
+        left edge of the splitter. ``SashHitTest`` says no, no drag ever starts,
+        and the sash becomes immovable -- with every pixel-colour measurement
+        still passing, because the band is painted correctly the whole time.
+
+        Not skipped, because the splitter is the one that should act on it --
+        and once wx captures the mouse for a drag, the rest of the gesture goes
+        straight to the splitter without passing through here at all.
         """
         splitter = self.GetParent()
+        event.SetPosition(splitter.ScreenToClient(self.ClientToScreen(event.GetPosition())))
         event.SetEventObject(splitter)
         splitter.GetEventHandler().ProcessEvent(event)
 

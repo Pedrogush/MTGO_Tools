@@ -41,6 +41,12 @@ where a screen frame catches the white band:
 control: "no native pixels" would also pass if the gutter were black, empty or
 unpainted, so the divider is asserted to actually be there.
 
+:func:`test_a_real_click_on_the_sash_starts_a_drag` is the other one. Every
+colour assertion above keeps passing on a sash that cannot be moved at all --
+which is exactly what shipped once the overlay went in, because it forwarded a
+mouse position in *its* coordinates as if they were the splitter's. See
+:func:`_send` for why building these events by hand is what hid it.
+
 **What this cannot cover:** that no frame the compositor actually presents holds
 the light band. That needs a real gesture and a screen grab; it was verified that
 way (0 of 140 frames across drags and panel toggles after the fix, 25 of 90
@@ -107,6 +113,37 @@ def _native_pixels(splitter: wx.SplitterWindow) -> int:
     return sum(1 for pixel in _gutter_pixels(splitter) if pixel in NATIVE_SASH_COLOURS)
 
 
+def _send(
+    splitter: wx.SplitterWindow,
+    window: wx.Window,
+    event_type: int,
+    where: wx.Point,
+    dragging: bool = False,
+) -> None:
+    """Post a mouse event the way wxMSW delivers one, **not** the way it reads.
+
+    ``where`` is in the splitter's client coordinates, because that is what a
+    reader of these tests is thinking in. It is then converted into ``window``'s
+    own coordinates before being sent, because that is what wxMSW puts in a real
+    ``WM_MOUSEMOVE``: a mouse event's position is relative to the window it is
+    delivered to.
+
+    That conversion is the entire reason this helper exists. The sash band
+    belongs to :class:`widgets.splitter._SashOverlay`, a child sized to the band
+    and therefore *not* at the splitter's origin, so a real click on the middle
+    of a 7px sash reaches the overlay as ``3``, not as ``sash_position + 3``. An
+    earlier version of this module built its events by hand and handed the
+    overlay splitter coordinates, which made a broken forward look correct and
+    let an undraggable sash ship.
+    """
+    event = wx.MouseEvent(event_type)
+    event.SetEventObject(window)
+    event.SetPosition(window.ScreenToClient(splitter.ClientToScreen(where)))
+    if dragging:
+        event.SetLeftDown(True)
+    window.GetEventHandler().ProcessEvent(event)
+
+
 @pytest.fixture(name="split_frame")
 def fixture_split_frame(wx_app: wx.App):
     """A shown frame holding one horizontally split :class:`DarkSplitter`.
@@ -152,36 +189,72 @@ def test_the_gutter_is_border_subtle_not_merely_not_white(
     )
 
 
-def test_no_native_sash_through_a_live_mouse_drag(
-    split_frame: DarkSplitter, wx_app: wx.App
-) -> None:
-    """The drag path: ``SizeWindows()`` deferred to ``OnInternalIdle``.
+def test_a_real_click_on_the_sash_starts_a_drag(split_frame: DarkSplitter, wx_app: wx.App) -> None:
+    """The sash is still draggable, which the colour tests cannot tell you.
 
-    The events go into ``wxSplitterWindow``'s own ``OnMouseEvent`` through the
-    binding table a physical mouse's arrive on. They are sent to the **overlay**,
-    because that is the window a real pointer lands on now -- which also pins
-    that the overlay forwards them, i.e. that the sash is still draggable.
+    The regression this pins: the overlay covers the band, so a real pointer
+    lands on the *overlay*, and its position arrives in the overlay's own
+    coordinates -- ``3``, for a click on the middle of a 7px sash. Forwarded to
+    ``wxSplitterWindow::OnMouseEvent`` untranslated, that reads as 3px from the
+    splitter's edge, ``SashHitTest`` refuses, and the sash cannot be moved at
+    all. Verified against a physical Win32 ``SendInput`` drag, which moved the
+    sash 0px with the untranslated forward and 120px with it.
+
+    Every other test here would keep passing through that, because the band goes
+    on being painted the right colour while nothing can move it.
+
+    The press goes to the overlay because that is the window under the pointer;
+    the rest of the gesture goes to the splitter because ``OnMouseEvent``
+    captures the mouse on the press, and wxMSW routes to the capturing window
+    from then on.
     """
     splitter = split_frame
     overlay = splitter.GetChildren()[0]
     splitter.SetSashPosition(200)
     wx_app.Yield()
 
-    def send(event_type: int, y: int, dragging: bool = False) -> None:
-        event = wx.MouseEvent(event_type)
-        event.SetEventObject(overlay)
-        event.SetPosition(wx.Point(40, y))
-        if dragging:
-            event.SetLeftDown(True)
-        overlay.GetEventHandler().ProcessEvent(event)
+    grab = wx.Point(40, splitter.GetSashPosition() + splitter.GetSashSize() // 2)
+    drop = wx.Point(40, grab.y + 120)
+    _send(splitter, overlay, wx.wxEVT_LEFT_DOWN, grab)
+    wx_app.Yield()
+    _send(splitter, splitter, wx.wxEVT_MOTION, drop, dragging=True)
+    wx_app.Yield()
+    _send(splitter, splitter, wx.wxEVT_LEFT_UP, drop)
+    wx_app.Yield()
+
+    assert splitter.GetSashPosition() == 320, (
+        "a press on the sash band did not start a drag: the sash is at "
+        f"{splitter.GetSashPosition()}, not 320. The overlay must translate a "
+        "forwarded mouse position into the splitter's coordinates."
+    )
+    assert (
+        overlay.GetRect().y == 320
+    ), f"the sash moved but the overlay did not follow it: {overlay.GetRect()}"
+
+
+def test_no_native_sash_through_a_live_mouse_drag(
+    split_frame: DarkSplitter, wx_app: wx.App
+) -> None:
+    """The drag path: ``SizeWindows()`` deferred to ``OnInternalIdle``.
+
+    The events go into ``wxSplitterWindow``'s own ``OnMouseEvent`` through the
+    binding table a physical mouse's arrive on: the press to the **overlay**,
+    which is the window a real pointer lands on, and the moves to the splitter,
+    which has captured the mouse by then. :func:`_send` converts each position
+    into the receiving window's coordinates, as wxMSW does.
+    """
+    splitter = split_frame
+    overlay = splitter.GetChildren()[0]
+    splitter.SetSashPosition(200)
+    wx_app.Yield()
 
     # +3 lands inside the 7px band, which is what wxSplitterWindow's hit test
     # requires before it will start a drag.
-    send(wx.wxEVT_LEFT_DOWN, 203)
+    _send(splitter, overlay, wx.wxEVT_LEFT_DOWN, wx.Point(40, 203))
 
     offenders: list[tuple[str, int, int]] = []
     for target in range(210, 500, 20):
-        send(wx.wxEVT_MOTION, target + 3, dragging=True)
+        _send(splitter, splitter, wx.wxEVT_MOTION, wx.Point(40, target + 3), dragging=True)
         native = _native_pixels(splitter)
         if native:
             offenders.append(("no-yield", target, native))
@@ -189,7 +262,7 @@ def test_no_native_sash_through_a_live_mouse_drag(
         native = _native_pixels(splitter)
         if native:
             offenders.append(("after-yield", target, native))
-    send(wx.wxEVT_LEFT_UP, 503)
+    _send(splitter, splitter, wx.wxEVT_LEFT_UP, wx.Point(40, 503))
     wx_app.Yield()
 
     assert splitter.GetSashPosition() > 200, (

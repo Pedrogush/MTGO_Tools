@@ -468,10 +468,26 @@ reproducibly, against **25 in 90** before. The residue is a race inside one idle
 `Update()` lands. Closing it needs the native `DrawSash` never to run, and neither route
 that would achieve that is reachable from Python (below).
 
-Dragging is unaffected: the overlay sits at `(0, 0)`, so its coordinates already *are* the
-splitter's and mouse events are forwarded untranslated into `wxSplitterWindow`'s own
-`OnMouseEvent`. wx still captures the mouse, clamps against the minimum pane size and fires
-`wxEVT_SPLITTER_SASH_POS_CHANGED` itself.
+**The overlay must translate the mouse position it forwards, or the sash stops being
+draggable.** This one shipped. The overlay is sized to the band, so it sits at
+`(position, 0)`, and a mouse event's position is always in the coordinates of the window
+it was delivered to -- a click on the middle of a 7px vertical sash reaches the overlay as
+`x = 3`. Forwarded untouched into `wxSplitterWindow::OnMouseEvent`, that reads as 3px from
+the splitter's left edge, `SashHitTest` refuses, and no drag ever starts. Measured with a
+physical Win32 `SendInput` drag on a probe frame: **0px of movement untranslated, 120px
+with `splitter.ScreenToClient(overlay.ClientToScreen(pos))`**, the latter matching the
+pre-overlay build exactly.
+
+Nothing about the colour work notices this, which is why it got through: the band is
+painted correctly for the whole time it cannot be moved, so every pixel census still
+passes. The trap for a test is the same one: build the event with splitter coordinates and
+hand it to the overlay, and you have reproduced the bug rather than caught it. Sending a
+press to the window a real pointer is over, in *that* window's coordinates, is what makes
+the test able to fail.
+
+With the translation in, dragging is unaffected: wx captures the mouse on the press (so the
+rest of the gesture goes to the splitter directly, already in its coordinates), clamps
+against the minimum pane size and fires `wxEVT_SPLITTER_SASH_POS_CHANGED` itself.
 
 Two routes that look obvious do **not** work, and both were measured:
 

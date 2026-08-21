@@ -238,6 +238,20 @@ scheduled, so `start-video` can be recording while it runs. `SetSashPosition` is
 the same call `wxSplitterWindow` makes for every mouse-move of a live drag, so
 the resize/repaint path it exercises is the real one.
 
+**`sash-drag` cannot tell you the sash is still draggable.** It calls
+`SetSashPosition` directly, which skips `OnMouseEvent` and its `SashHitTest`
+entirely, so it sweeps just as happily on a sash no pointer can grab -- which is
+how #1006 shipped an immovable one. For that, `get-sash` also reports the band's
+`screen` rectangle (x/y/width/height, screen coordinates), so a real Win32
+`SendInput` gesture can be aimed at it and the press path checked for real:
+
+```python
+info = client.get_sash()
+band = info["screen"]
+user32.SetCursorPos(band["x"] + band["width"] // 2, band["y"] + band["height"] // 2)
+user32.mouse_event(0x0002, 0, 0, 0, 0)   # left down on the sash itself
+```
+
 > A sweep driven by one `python -m automation.cli` call per step measures
 > nothing: each invocation pays ~1.5s of Windows interpreter start-up, which is
 > longer than the whole recording. Drive multi-step timing from a single Python
