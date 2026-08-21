@@ -44,8 +44,8 @@ jobs:
       # deficiency, the type and spacing scales, the ban on bare wx.StaticBox /
       # wx.Notebook / wx.StaticLine / wx.SplitterWindow / wx.TextCtrl, every
       # button reaching the button system, the enforced window minimums in both
-      # locales, live layout overflow in both locales, and card-view scroll
-      # snapping.
+      # locales, live layout overflow in both locales, card-view scroll
+      # snapping, and the WebView backend the deck-stats charts render on.
       - name: Design-system guards (issue #962)
         run: >-
           pytest -q
@@ -59,6 +59,7 @@ jobs:
           tests/test_native_dark.py
           tests/test_deck_stats_palette.py
           tests/test_visible_defects.py
+          tests/test_webview_backend.py
           tests/test_menu_bar_spec.py
           tests/test_preferences_spec.py
           tests/test_window_titles.py
