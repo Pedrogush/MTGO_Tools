@@ -19,6 +19,21 @@ from loguru import logger
 
 from utils.constants.timing import MTGGOLDFISH_REQUEST_TIMEOUT_SECONDS
 
+
+class DeckUnavailableError(ValueError):
+    """MTGGoldfish no longer serves this deck.
+
+    Distinct from a parse failure on purpose. The archetype listing keeps
+    offering decks whose page has since gone (deleted or made private by its
+    owner) — currently ~7 of the 39 rows on a Commander archetype — and
+    ``/deck/visual/{id}`` answers those with a 302 to the site's ``/metagame``
+    landing page rather than a 404. Following that redirect lands on a 200 with
+    perfectly valid HTML that simply is not a deck, so the old code blamed the
+    parser and told the user "Could not parse deck data for deck 7915113" for
+    what is really "that deck is gone".
+    """
+
+
 _MAIN_SELECTOR = ".deck-visual-playmat-maindeck"
 _SIDE_SELECTOR = ".deck-visual-playmat-sideboard"
 _CARD_IMG_SELECTOR = "img.deck-visual-pile-card"
@@ -55,9 +70,26 @@ def parse_visual_page(html: str) -> str:
 
 
 def fetch_deck_text_from_visual_page(deck_num: str) -> str:
-    """Fallback fetcher: pull the deck text from the unprotected visual view."""
+    """Fallback fetcher: pull the deck text from the unprotected visual view.
+
+    Redirects are *not* followed: a deck that no longer exists is answered with
+    a 302 to ``/metagame``, and following it would hand the metagame landing
+    page to the deck parser. See :class:`DeckUnavailableError`.
+    """
     url = f"https://www.mtggoldfish.com/deck/visual/{deck_num}"
     logger.info(f"Fetching deck {deck_num} from MTGGoldfish visual")
-    page = requests.get(url, impersonate="chrome", timeout=MTGGOLDFISH_REQUEST_TIMEOUT_SECONDS)
+    page = requests.get(
+        url,
+        impersonate="chrome",
+        timeout=MTGGOLDFISH_REQUEST_TIMEOUT_SECONDS,
+        allow_redirects=False,
+    )
+    if page.status_code in (301, 302, 303, 307, 308):
+        raise DeckUnavailableError(
+            f"Deck {deck_num} is no longer available on MTGGoldfish "
+            f"(redirected to {page.headers.get('location', 'another page')})"
+        )
+    if page.status_code == 404:
+        raise DeckUnavailableError(f"Deck {deck_num} is no longer available on MTGGoldfish")
     page.raise_for_status()
     return parse_visual_page(page.text)
