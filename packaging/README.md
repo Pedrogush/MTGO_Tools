@@ -11,6 +11,20 @@ The install is **per-user and requires no administrator privileges** (`Privilege
 
 `test_install_uninstall.ps1` verifies that lifecycle end-to-end: it installs silently, seeds simulated runtime data, uninstalls, and asserts the machine is left clean — no orphaned registry key, no leftover install directory or bridge download, regenerable data gone, user data preserved. This is the test that catches stray-registry-key / leftover-file bugs that a file-only check (`test_installer.ps1`) can't.
 
+## Command-line switches
+
+Beyond Inno Setup's own switches (`/SILENT`, `/VERYSILENT`, `/DIR=...`, `/LOG`, ...),
+the installer understands one of ours:
+
+- **`/RELAUNCH`** — start the app once the install finishes. Intended for the in-app
+  updater, which runs `MTGOTools_Setup_v<VERSION>.exe /SILENT /RELAUNCH` and then exits
+  so its own files can be replaced; without the switch nothing would be left running to
+  bring the app back. It is *not* the "Launch MTGO Tools" checkbox on the Finished page:
+  that checkbox is a `postinstall` [Run] entry flagged `skipifsilent`, so it is
+  suppressed under `/SILENT` by design. `/RELAUNCH` is a separate [Run] entry gated by a
+  `Check:` function in `installer.iss`, which is why it works in a silent install. Omit
+  the switch and an interactive install behaves exactly as it always has.
+
 **Debugging an installed build:** the shipped executable is windowed (no console), but `debugpy` is bundled so you can attach an IDE debugger the same way you would in the editor. Set `MTGO_TOOLS_INSTALL_DEBUG=1` (or `MTGO_TOOLS_INSTALL_DEBUG=<port>`) before launching to have it listen on 127.0.0.1:5678, then use your IDE's "attach to process/port". Set `MTGO_TOOLS_INSTALL_DEBUG_WAIT=1` to block startup until the debugger attaches (for breaking on early startup code). The hook is inert unless the env var is set. File logs are always written to `%LOCALAPPDATA%\MTGO Tools\logs`; set `MTGO_LOG_LEVEL=DEBUG` for verbose output.
 
 Prerequisites: Inno Setup 6, Python 3.11+ with PyInstaller, and the **.NET 9 SDK** (required — used to publish the self-contained MTGO bridge that is shipped inside the installer). The SDK can be installed with no admin rights via `Invoke-WebRequest https://dot.net/v1/dotnet-install.ps1 -OutFile dotnet-install.ps1; .\dotnet-install.ps1 -Channel 9.0`; the build script auto-detects a per-user SDK under `%LOCALAPPDATA%\Microsoft\dotnet`. On Linux the build script uses Wine to run Inno Setup and will automatically download it if not present. Output is created at `dist/installer/MTGOTools_Setup_v<VERSION>.exe`, where `<VERSION>` comes from the repo-root `VERSION` file. The PyInstaller spec is `mtgo_tools.spec`, which produces a single-file `dist/mtgo_tools.exe`.

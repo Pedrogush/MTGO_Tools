@@ -12,7 +12,7 @@ Public API:
   release or ``None``.
 - :func:`parse_version` — ``"v1.2.3"`` → ``(1, 2, 3)``, or ``None``.
 
-Three properties matter more than the feature itself:
+Four properties matter more than the feature itself:
 
 *Nothing here is load-bearing.* The app is completely usable without update
 information, so every failure mode — offline, DNS failure, rate limit, a
@@ -30,8 +30,12 @@ answer ("nothing is published"), not a failure, and is stamped as one — so a
 release that was deleted or unpublished clears on the next check instead of
 being recommended forever from a cache that never gets overwritten.
 
-*Downloading and applying the update is out of scope.* The UI points at the
-release page and the existing installer takes over from there.
+*This module decides* whether *there is an update, never* whether *to apply
+one.* It reads the release payload and hands back what an updater would need —
+the installer asset's URL and its ``.sha256`` sidecar — but downloading,
+verifying and running that installer lives in :mod:`services.update_installer`,
+and the fallback of simply opening the release page in a browser stays valid at
+all times.
 """
 
 from __future__ import annotations
@@ -65,6 +69,17 @@ _API_HEADERS = {
     "X-GitHub-Api-Version": "2022-11-28",
 }
 
+# How the two assets `.github/workflows/release.yml` attaches are recognized in
+# the payload's ``assets`` array. Matched by prefix + suffix rather than by
+# rebuilding ``MTGOTools_Setup_v{version}.exe`` from the tag, so a release whose
+# asset and tag disagree about the version string (a re-upload, a hand-made
+# release) is still usable. The sidecar, by contrast, is required to be exactly
+# ``<installer name>.sha256``: a checksum file that names *some other* build is
+# worse than no checksum at all, because it would be trusted.
+INSTALLER_ASSET_PREFIX = "MTGOTools_Setup_"
+INSTALLER_ASSET_SUFFIX = ".exe"
+CHECKSUM_ASSET_SUFFIX = ".sha256"
+
 
 class _NoRelease:
     """Type of :data:`NO_RELEASE`; see there."""
@@ -84,10 +99,27 @@ NO_RELEASE = _NoRelease()
 
 @dataclass(frozen=True)
 class UpdateInfo:
-    """A published release newer than the running build."""
+    """A published release newer than the running build.
+
+    The three asset fields are all present or all absent, and absent is an
+    ordinary outcome rather than a failure: a release may carry no installer, or
+    an installer with no ``.sha256`` sidecar to verify it against. When that
+    happens the user is *still* told a newer version exists — the notice is
+    about the release, not about the app's ability to apply it — and the UI
+    falls back to opening :attr:`release_url` in a browser. Treating a missing
+    asset as "no update" would hide a real update behind a packaging detail.
+
+    They move together because a downloader needs both halves: an installer with
+    no checksum is a 174 MB executable the app would have to run unverified,
+    which it will not do. So "can this be applied in-app?" is exactly
+    "is :attr:`installer_url` set?".
+    """
 
     version: str  # bare semver, no leading "v" (e.g. "1.0.3")
     release_url: str
+    installer_url: str | None = None
+    checksum_url: str | None = None
+    installer_name: str | None = None  # e.g. "MTGOTools_Setup_v1.0.3.exe"
 
 
 class _CheckStamp(msgspec.Struct):
@@ -97,11 +129,22 @@ class _CheckStamp(msgspec.Struct):
     usable version (an unrecognized tag). That is still a completed check, so it
     carries a timestamp and suppresses re-checking — otherwise a payload the app
     can't read would mean an API call on every single launch, forever.
+
+    Every field after ``checked_at`` is optional *and* defaulted, which is what
+    keeps a stamp written by an older build readable: msgspec fills fields the
+    JSON omits from their defaults and ignores members it does not know, so
+    neither adding a field here nor removing one later turns a cached stamp into
+    a decode error (which would silently cost one API request per launch until
+    the stamp was rewritten). Anything added here must keep a default for that
+    reason.
     """
 
     checked_at: float
     latest_version: str | None = None
     release_url: str | None = None
+    installer_url: str | None = None
+    checksum_url: str | None = None
+    installer_name: str | None = None
 
 
 def parse_version(raw: str | None) -> tuple[int, int, int] | None:
@@ -126,6 +169,64 @@ def parse_version(raw: str | None) -> tuple[int, int, int] | None:
         return None
     major, minor, patch = (int(part) for part in parts)
     return major, minor, patch
+
+
+def _asset_download_url(asset: dict[str, Any]) -> str | None:
+    """The URL that serves an asset's *bytes*, or ``None``.
+
+    Deliberately only ``browser_download_url``. Every asset also carries a
+    ``url`` pointing at the API endpoint for it, but that endpoint answers with
+    the asset's JSON metadata unless the request sets
+    ``Accept: application/octet-stream`` — so falling back to it would hand the
+    downloader a URL that yields a few hundred bytes of JSON, which would then
+    fail SHA256 verification and be reported to the user as a corrupt download.
+    A missing ``browser_download_url`` means "not downloadable" instead.
+    """
+    url = asset.get("browser_download_url")
+    return url if isinstance(url, str) and url else None
+
+
+def _find_installer_assets(
+    payload: dict[str, Any],
+) -> tuple[str | None, str | None, str | None]:
+    """Locate the installer and its checksum sidecar in a release payload.
+
+    Returns ``(installer_url, checksum_url, installer_name)``, all three
+    ``None`` unless *both* assets were found — see :class:`UpdateInfo` for why
+    half a pair is worth nothing. Every degenerate payload shape (no ``assets``
+    key, a non-list, entries that aren't dicts or have no name) resolves to the
+    same "no assets" answer, because none of them is a reason to withhold the
+    update notice itself.
+    """
+    assets = payload.get("assets")
+    if not isinstance(assets, list):
+        return None, None, None
+    by_name: dict[str, dict[str, Any]] = {}
+    for asset in assets:
+        if isinstance(asset, dict):
+            name = asset.get("name")
+            if isinstance(name, str) and name:
+                by_name[name] = asset
+    # Sorted so a release that somehow carries two matching installers resolves
+    # the same way on every launch, rather than depending on upload order.
+    installer_name = next(
+        (
+            name
+            for name in sorted(by_name)
+            if name.startswith(INSTALLER_ASSET_PREFIX) and name.endswith(INSTALLER_ASSET_SUFFIX)
+        ),
+        None,
+    )
+    if installer_name is None:
+        logger.debug("Update check: release carries no installer asset")
+        return None, None, None
+    checksum_asset = by_name.get(f"{installer_name}{CHECKSUM_ASSET_SUFFIX}")
+    installer_url = _asset_download_url(by_name[installer_name])
+    checksum_url = _asset_download_url(checksum_asset) if checksum_asset is not None else None
+    if installer_url is None or checksum_url is None:
+        logger.info(f"Update check: {installer_name} has no usable checksum sidecar")
+        return None, None, None
+    return installer_url, checksum_url, installer_name
 
 
 class UpdateService:
@@ -231,10 +332,14 @@ class UpdateService:
             logger.info(f"Update check: unrecognized release tag {tag!r}")
             return _CheckStamp(checked_at=now)
         url = payload.get("html_url")
+        installer_url, checksum_url, installer_name = _find_installer_assets(payload)
         return _CheckStamp(
             checked_at=now,
             latest_version=".".join(str(number) for number in parsed),
             release_url=url if isinstance(url, str) and url else RELEASES_PAGE_URL,
+            installer_url=installer_url,
+            checksum_url=checksum_url,
+            installer_name=installer_name,
         )
 
     # ------------------------------------------------------------------ comparison ------------------------------------------------------------------
@@ -254,6 +359,9 @@ class UpdateService:
         return UpdateInfo(
             version=stamp.latest_version,
             release_url=stamp.release_url or RELEASES_PAGE_URL,
+            installer_url=stamp.installer_url,
+            checksum_url=stamp.checksum_url,
+            installer_name=stamp.installer_name,
         )
 
     # ------------------------------------------------------------------ stamp I/O ------------------------------------------------------------------
@@ -294,6 +402,9 @@ def reset_update_service() -> None:
 
 
 __all__ = [
+    "CHECKSUM_ASSET_SUFFIX",
+    "INSTALLER_ASSET_PREFIX",
+    "INSTALLER_ASSET_SUFFIX",
     "LATEST_RELEASE_API_URL",
     "NO_RELEASE",
     "RELEASES_PAGE_URL",

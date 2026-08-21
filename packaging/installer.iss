@@ -124,3 +124,62 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 [Run]
 ; Option to launch the application after installation
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
+; Relaunch after an in-app update. The updater downloads this installer, verifies
+; its SHA256, runs it as `/SILENT /RELAUNCH`, and exits so its own files can be
+; overwritten — which means nothing is left running to bring the app back. This
+; entry is what brings it back.
+;
+; It cannot be folded into the entry above: `postinstall` turns a [Run] entry into
+; a checkbox on the Finished page, and `skipifsilent` deliberately suppresses that
+; page's actions under /SILENT — which is precisely the mode a self-update runs in.
+; The two flags together mean "launch only when a human is watching", so a silent
+; install can never launch anything through them. The trap is that this looks like
+; it should work and simply does nothing.
+;
+; So this is a plain [Run] entry (no postinstall): it executes at the end of the
+; install regardless of silence, and a Check: function is what makes it conditional
+; instead. Without /RELAUNCH the Check returns False and the entry is skipped, so a
+; normal interactive install is byte-for-byte the experience it was before.
+;
+; nowait is load-bearing rather than cosmetic: Setup waits for a [Run] entry it
+; started unless told not to, and the app runs for hours. Without it Setup would
+; stay alive for the entire session — a stray process holding an install lock,
+; long after the update it performed was finished.
+Filename: "{app}\{#MyAppExeName}"; Flags: nowait; Check: RelaunchRequested
+
+[Code]
+// True only when Setup was started with a /RELAUNCH switch (see [Run] above).
+//
+// Inno has no built-in "was this bare flag passed?" helper. The closest thing is
+// the {param:Name} constant, which only reads /Name=Value pairs and so cannot
+// answer the question -- hence walking the parameter list by hand.
+//
+// Deliberately // line comments rather than a { ... } block: brace comments do
+// not nest, so the constant named above would close the comment early and the
+// rest of it would be compiled as code.
+//
+// The scan starts at 0, not 1. ParamStr(0) is conventionally Setup's own
+// executable path (Delphi semantics, which Inno mirrors) and so would never
+// match, but this file cannot be compiled on the Linux side of this project and
+// the failure mode if that assumption is ever wrong is the worst kind: the
+// switch is silently ignored and the app simply never comes back after an
+// update. Reading one extra parameter costs nothing and removes the assumption.
+//
+// CompareText is case-insensitive, matching how Windows and Inno's own switches
+// (/SILENT, /DIR=...) are treated -- a caller writing /relaunch means the same
+// thing. Setup ignores switches it does not recognise, so /RELAUNCH reaches here
+// without having to be declared anywhere else.
+function RelaunchRequested(): Boolean;
+var
+  I: Integer;
+begin
+  Result := False;
+  for I := 0 to ParamCount do
+  begin
+    if CompareText(ParamStr(I), '/RELAUNCH') = 0 then
+    begin
+      Result := True;
+      Exit;
+    end;
+  end;
+end;

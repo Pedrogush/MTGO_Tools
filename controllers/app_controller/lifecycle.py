@@ -218,5 +218,19 @@ class LifecycleMixin(_Base):
         cache_warmer = getattr(self, "_cache_warmer", None)
         if cache_warmer is not None:
             cache_warmer.stop()
+        # An in-flight update download is the one worker task that can hold the
+        # join below for its whole timeout: it is a 175 MB transfer that checks
+        # for cancellation between chunks and nothing else would ask it to stop.
+        # Harmless on the update's own exit path, where the download has already
+        # finished and the flag is read by nobody.
+        #
+        # Read through getattr for the same reason as _cache_warmer above:
+        # shutdown() is the one method that can plausibly run against a
+        # half-built controller (a constructor that raised, a test that builds a
+        # partial object), and it must report the real failure rather than an
+        # AttributeError raised while cleaning up from it.
+        installer = getattr(self, "_update_installer", None)
+        if installer is not None:
+            installer.cancel()
         self.image_service.shutdown()
         self._worker.shutdown(timeout=timeout)
