@@ -22,6 +22,10 @@ from utils.constants import (
     DECK_CARD_BADGE_ANCHOR_FRACTION,
     DECK_CARD_BADGE_PADDING,
     DECK_CARD_BUTTON_MARGIN,
+    DECK_CARD_COUNT_DOT_DIAMETER,
+    DECK_CARD_COUNT_DOT_GAP,
+    DECK_CARD_COUNT_MAX_DOTS,
+    DECK_CARD_COUNT_STRIP_PADDING,
     DECK_CARD_HEIGHT,
     DECK_CARD_WIDTH,
 )
@@ -62,6 +66,51 @@ def badge_rect(card_rect: wx.Rect, text_w: int, text_h: int) -> tuple[int, int, 
     height = text_h + pad
     anchor_y = card_rect.y + int(card_rect.height * DECK_CARD_BADGE_ANCHOR_FRACTION)
     return card_rect.x + pad, anchor_y - height - pad, width, height
+
+
+def count_dot_layout(card_rect: wx.Rect, count: int) -> tuple[wx.Rect, list[wx.Rect]]:
+    """Strip + per-dot rects for a card holding ``count`` copies (issue #987).
+
+    The count used to be a numeral in a chip pinned to the card's left edge,
+    which read as a tab stuck to the *side* of the card rather than as part of
+    it. It is now a stack of filled dots -- one per copy -- in a thin strip down
+    that same edge, which is the shape the space actually has.
+
+    The strip shares the numeral chip's left inset and bottom anchor
+    (:data:`DECK_CARD_BADGE_ANCHOR_FRACTION`, the art box's lower edge), and the
+    dots grow *upward* from it, so a 1-of and a 4-of line up at the bottom and
+    the stack reads as a fill level. Bottom-anchoring is also what keeps the tall
+    stacks clear of the title band; :data:`DECK_CARD_COUNT_MAX_DOTS` is set so
+    the tallest one still lands below it.
+
+    Returns ``(strip_rect, dot_rects)`` with the dots ordered bottom-up. A count
+    of zero or less gets an empty strip and no dots.
+    """
+    n = max(0, min(int(count), DECK_CARD_COUNT_MAX_DOTS))
+    diameter = DECK_CARD_COUNT_DOT_DIAMETER
+    gap = DECK_CARD_COUNT_DOT_GAP
+    pad = DECK_CARD_COUNT_STRIP_PADDING
+    width = diameter + pad * 2
+    height = (n * diameter + max(0, n - 1) * gap + pad * 2) if n else 0
+    anchor_y = card_rect.y + int(card_rect.height * DECK_CARD_BADGE_ANCHOR_FRACTION)
+    bottom = anchor_y - DECK_CARD_BADGE_PADDING
+    x = card_rect.x + DECK_CARD_BADGE_PADDING
+    strip = wx.Rect(x, bottom - height, width, height)
+    dots = [
+        wx.Rect(x + pad, bottom - pad - (i + 1) * diameter - i * gap, diameter, diameter)
+        for i in range(n)
+    ]
+    return strip, dots
+
+
+def count_fits_in_dots(count: int) -> bool:
+    """Whether ``count`` copies are drawn as dots rather than as a numeral.
+
+    Past :data:`DECK_CARD_COUNT_MAX_DOTS` the dots stop being countable at a
+    glance and the stack would climb into the card's title band, so a
+    ``20 Dragon's Approach`` degrades to the numeral chip instead of overflowing.
+    """
+    return 1 <= int(count) <= DECK_CARD_COUNT_MAX_DOTS
 
 
 class GridLayoutMixin:

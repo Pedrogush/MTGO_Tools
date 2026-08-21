@@ -168,7 +168,13 @@ def test_core_ui_translation_keys_exist_in_default_locale() -> None:
 
 @pytest.mark.parametrize(
     "key_base",
-    ["tabs.count.cards", "tabs.count.lands", "tabs.count.mdfcs"],
+    [
+        "tabs.count.cards",
+        "tabs.count.lands",
+        "tabs.count.mdfcs",
+        # #988: the pile-column count tooltip ("{n} cards in this pile").
+        "tabs.view.pile.tooltip.count",
+    ],
 )
 @pytest.mark.parametrize("locale", SUPPORTED_LOCALES)
 def test_plural_keys_exist_in_both_forms_for_every_locale(locale, key_base) -> None:

@@ -14,6 +14,11 @@ Behaviour required by issue #440:
   selection rectangle; cards intersected by the rectangle are selected.
 * Drag-and-drop one or more selected cards into another pile; the dropped
   stack is inserted at the position closest to where the mouse was released.
+  Dropping past the rightmost pile makes a **new** column (#991): a physical
+  deckbuilder pushes cards into a pile of their own whenever the automatic
+  grouping stops matching what they are thinking about, and the view should not
+  be the thing that says no. Such a column carries no bucket heading -- see
+  :data:`VIRTUAL_PILE_LABEL` -- but keeps its copy count.
 * Hover behaves like the other views — when no card is selected or when more
   than one card is selected, hovering forwards the card under the mouse.
 
@@ -47,12 +52,15 @@ from utils.constants import (
     SPACE_SM,
     SUBDUED_TEXT,
 )
+from utils.i18n import current_locale, t, translate_plural
 from utils.image_effects import apply_rounded_corner_alpha
 from widgets.panels.card_table_panel import edge_fade, scroll_perf, scroll_snap
 from widgets.panels.card_table_panel.marquee import RUBBER_AUTOSCROLL_PX, MarqueeController
 from widgets.panels.card_table_panel.scrolling import scroll_by_wheel
 from widgets.panels.card_table_panel.sorting import (
+    PILE_SORT_COLOR,
     PILE_SORT_MV,
+    PILE_SORT_TYPE,
     group_into_piles,
 )
 from widgets.stylize import stylize_scrollable, type_font
@@ -71,6 +79,39 @@ _PILE_PAD = 6  # padding inside a pile column
 # rendering omission, not missing data.
 _PILE_HEADER_HEIGHT = 22
 _PILE_TOP = _PILE_PAD + _PILE_HEADER_HEIGHT  # top inset for the first card in a pile
+# #988: the two numbers a pile column shows -- its bucket label and how many
+# copies it holds -- used to share the header band, label flush left and count
+# flush right, which read as two unrelated figures floating over the column.
+# The label is centred over the column now and the count moved into its own
+# band below the pile. "Below the pile" means below *this* pile's last card,
+# not a shared baseline at the bottom of the tallest column: a four-card pile
+# beside a fourteen-card one would otherwise caption itself ten card-strips
+# away, off-screen, with nothing between the number and the cards it counts.
+_PILE_FOOTER_HEIGHT = 20
+
+#: The label a *user-made* pile carries (#991).
+#:
+#: A pile the user built by dragging copies past the rightmost column has no
+#: bucket, so it has no bucket name: "3" / "Lands" / "Red" describe what
+#: ``group_into_piles`` decided, and a hand-made column is whatever the person
+#: holding the cards decided, which we are not inside the head of. It draws its
+#: copy count like every other column and nothing else.
+#:
+#: The empty label *is* the marker, deliberately, rather than a parallel list of
+#: flags or a third tuple element: every label ``group_into_piles`` produces is
+#: non-empty, ``_piles`` is inserted into and pruned throughout this file, and a
+#: side-table keyed by pile index would have to be re-indexed at every one of
+#: those points (and by every future one).
+VIRTUAL_PILE_LABEL = ""
+
+# How close (px) to a viewport edge a *drag* has to be held before the view
+# scrolls after it. The marquee autoscrolls only once the pointer leaves the
+# window (:data:`RUBBER_AUTOSCROLL_PX`); a card drag cannot wait that long,
+# because the trailing new-column slot lives past the rightmost pile and on a
+# deck wide enough to scroll it starts off-screen -- i.e. the gesture that makes
+# a column would be unreachable exactly when there are enough columns to want
+# one.
+_DRAG_EDGE_SCROLL_MARGIN = 48
 
 # Above this virtual width/height (px) we skip the cached full-content bitmap
 # and draw directly (culled), so a pathological pile can't allocate a huge
@@ -215,6 +256,15 @@ class DeckPileView(wx.ScrolledWindow):
         """The true content height -- the virtual size is inflated to the client."""
         return self._content_size.GetHeight()
 
+    def scroll_content_width(self) -> int:
+        """The true content width -- the virtual width holds a drag slot open.
+
+        See :meth:`_apply_drag_slot`: mid-drag the scroll range runs one column
+        past the last pile so the new-column slot can be reached, which makes
+        ``GetVirtualSize`` the wrong number to ask for the extent of the piles.
+        """
+        return self._content_size.GetWidth()
+
     def Scroll(self, *args: Any) -> None:
         """Move the origin without wx's scroll blit -- **every** caller (#983).
 
@@ -267,7 +317,15 @@ class DeckPileView(wx.ScrolledWindow):
         self._rebuild_piles()
 
     def refresh_sort(self) -> None:
-        """Called when the user changes the pile sort mode."""
+        """Called when the user changes the pile sort mode.
+
+        Rebuilding from the sort key discards any hand-made columns (#991), as
+        it already discarded any hand-made ordering: picking a new grouping is
+        asking for the deck to be re-dealt by that key, and the piles a user
+        made under "mana value" say nothing about how they would deal the same
+        cards by colour. Same for ``set_cards`` -- every edit to the zone
+        re-deals the deck, so an ad-hoc arrangement lasts until the next one.
+        """
         self._manual_overrides = False
         self._rebuild_piles()
 
@@ -351,12 +409,36 @@ class DeckPileView(wx.ScrolledWindow):
             self.SetVirtualSize((100, 100))
             return
         max_members = max(len(members) for _, members in self._piles)
-        height = _PILE_TOP + self._pile_height(max_members) + _PILE_PAD * 2
-        width = (_CARD_WIDTH + _PILE_GAP) * len(self._piles) + _PILE_GAP
+        height = (
+            _PILE_TOP + self._pile_height(max_members) + _PILE_PAD + _PILE_FOOTER_HEIGHT + _PILE_PAD
+        )
+        width = self._content_width()
         # Canvas tracks the true content extent; the scroll/virtual size may be
         # inflated to the client by wx, but the canvas must not be (see __init__).
         self._content_size = wx.Size(width, height)
-        self.SetVirtualSize((width, height))
+        self._apply_drag_slot()
+
+    def _content_width(self, extra_slots: int = 0) -> int:
+        """Width of ``len(self._piles) + extra_slots`` columns, with the gaps."""
+        return (_CARD_WIDTH + _PILE_GAP) * (len(self._piles) + extra_slots) + _PILE_GAP
+
+    def _apply_drag_slot(self) -> None:
+        """Publish the scroll range, holding a trailing column open mid-drag.
+
+        While a drag is running the view scrolls one column further right than
+        it has content for, so the new-column slot (#991) can be brought on
+        screen and dropped into on a deck too wide to fit. Only the *scroll*
+        range grows: ``_content_size`` -- and so the cached canvas -- stays the
+        true content extent, and ``_on_paint`` clamps its blit to the canvas and
+        leaves the reserved strip as cleared background. That is why this is not
+        folded into ``_update_virtual_size``: reserving the slot must not
+        invalidate the canvas and re-composite every card in the middle of a
+        gesture.
+        """
+        if self._content_size.GetWidth() <= 0:
+            return
+        extra = 1 if self._drag_active else 0
+        self.SetVirtualSize((self._content_width(extra), self._content_size.GetHeight()))
 
     def _pile_x(self, pile_index: int) -> int:
         return _PILE_GAP + pile_index * (_CARD_WIDTH + _PILE_GAP)
@@ -482,6 +564,7 @@ class DeckPileView(wx.ScrolledWindow):
         # (not here) so it spans the whole window instead of clipping to it.
 
         if self._drag_active and self._drag_pos:
+            self._draw_drop_indicator(dc)
             self._draw_drag_ghost(dc)
 
         # S5: dissolve whichever edge has content past it, so the partial row
@@ -617,29 +700,92 @@ class DeckPileView(wx.ScrolledWindow):
     def _pile_header_rect(self, pile_index: int) -> wx.Rect:
         return wx.Rect(self._pile_x(pile_index), _PILE_PAD, _CARD_WIDTH, _PILE_HEADER_HEIGHT)
 
-    def _draw_pile_header(self, dc: wx.DC, pile_idx: int, label: str, count: int) -> None:
-        """The column heading: bucket name on the left, copy count on the right.
+    def _pile_footer_rect(self, pile_index: int, member_count: int) -> wx.Rect:
+        """The band holding the copy count, directly under this pile's cards."""
+        y = _PILE_TOP + self._pile_height(member_count) + _PILE_PAD
+        return wx.Rect(self._pile_x(pile_index), y, _CARD_WIDTH, _PILE_FOOTER_HEIGHT)
+
+    def _draw_pile_header(self, dc: wx.DC, pile_idx: int, label: str) -> None:
+        """The column heading: the bucket name, centred over the column.
 
         Drawn into the cached canvas along with the cards, because it changes
         only when the piles are rebuilt -- the same reason the card art is baked
         in and only the selection outline is painted live.
+
+        A user-made column (#991) draws nothing here: it has no bucket, so a
+        bucket name would be a claim about the user's intent that we cannot
+        make. Its copy count still goes in the footer band under the pile like
+        every other column's. See :data:`VIRTUAL_PILE_LABEL`.
         """
+        if label == VIRTUAL_PILE_LABEL:
+            return
         rect = self._pile_header_rect(pile_idx)
+        dc.SetFont(type_font("caption", bold=True))
+        label_text = self._fit_text(dc, label, rect.width - SPACE_SM)
+        label_w, label_h = dc.GetTextExtent(label_text)
+        dc.SetTextForeground(wx.Colour(*LIGHT_TEXT))
+        dc.DrawText(
+            label_text,
+            rect.x + (rect.width - label_w) // 2,
+            rect.y + (rect.height - label_h) // 2,
+        )
+
+    def _draw_pile_footer(self, dc: wx.DC, pile_idx: int, count: int) -> None:
+        """The copy count, centred in the band under the pile's last card."""
+        rect = self._pile_footer_rect(pile_idx, count)
         count_text = str(count)
         dc.SetFont(type_font("caption", bold=False))
         count_w, count_h = dc.GetTextExtent(count_text)
         dc.SetTextForeground(wx.Colour(*SUBDUED_TEXT))
         dc.DrawText(
             count_text,
-            rect.GetRight() - count_w + 1,
+            rect.x + (rect.width - count_w) // 2,
             rect.y + (rect.height - count_h) // 2,
         )
 
-        dc.SetFont(type_font("caption", bold=True))
-        label_text = self._fit_text(dc, label, rect.width - count_w - SPACE_SM)
-        _label_w, label_h = dc.GetTextExtent(label_text)
-        dc.SetTextForeground(wx.Colour(*LIGHT_TEXT))
-        dc.DrawText(label_text, rect.x, rect.y + (rect.height - label_h) // 2)
+    # ----- tooltips over the two drawn numbers (#988) -----
+    # Neither number is a widget -- both are text painted into the cached
+    # canvas -- so there is nothing to hang a static tooltip on. The view
+    # carries one tooltip and retargets it from the motion handler, the same
+    # hit-test-then-SetToolTip shape the Top Cards header uses.
+    _SORT_TOOLTIP_KEYS = {
+        PILE_SORT_MV: "tabs.view.pile.tooltip.mv",
+        PILE_SORT_COLOR: "tabs.view.pile.tooltip.color",
+        PILE_SORT_TYPE: "tabs.view.pile.tooltip.type",
+    }
+
+    def tooltip_at(self, point: wx.Point) -> str:
+        """The tooltip for the logical ``point``; ``""`` where there is none."""
+        for pile_idx, (label, members) in enumerate(self._piles):
+            if self._pile_header_rect(pile_idx).Contains(point):
+                # A user-made column (#991) has no grouping key, so "Mana value
+                # -- each pile holds..." would describe a column the grouping
+                # never dealt. It draws no heading either; nothing to explain.
+                if label == VIRTUAL_PILE_LABEL:
+                    return ""
+                key = self._SORT_TOOLTIP_KEYS.get(
+                    self._get_sort_mode(), self._SORT_TOOLTIP_KEYS[PILE_SORT_MV]
+                )
+                return t(key)
+            if self._pile_footer_rect(pile_idx, len(members)).Contains(point):
+                return translate_plural(
+                    current_locale(), "tabs.view.pile.tooltip.count", len(members)
+                )
+        return ""
+
+    def _update_tooltip(self, point: wx.Point) -> None:
+        text = self.tooltip_at(point)
+        current = self.GetToolTip()
+        if (current.GetTip() if current else "") == text:
+            return
+        if not text:
+            # ``SetToolTip("")`` leaves an empty wx.ToolTip attached rather than
+            # detaching it (measured -- another wxMSW call that is accepted and
+            # then not quite honoured, cf. docs/WXMSW_BEHAVIOUR.md). UnsetToolTip
+            # is what stops a heading's tip following the pointer onto a card.
+            self.UnsetToolTip()
+            return
+        self.SetToolTip(text)
 
     def _draw_pile(
         self,
@@ -652,7 +798,10 @@ class DeckPileView(wx.ScrolledWindow):
         total = len(members)
         header = self._pile_header_rect(pile_idx)
         if dirty is None or dirty.Intersects(header):
-            self._draw_pile_header(dc, pile_idx, label, total)
+            self._draw_pile_header(dc, pile_idx, label)
+        footer = self._pile_footer_rect(pile_idx, total)
+        if dirty is None or dirty.Intersects(footer):
+            self._draw_pile_footer(dc, pile_idx, total)
         for member_idx, entry in enumerate(members):
             rect = self._card_rect(pile_idx, member_idx, total)
             if dirty is not None and not dirty.Intersects(rect):
@@ -708,6 +857,46 @@ class DeckPileView(wx.ScrolledWindow):
         while text and dc.GetTextExtent(text + ellipsis)[0] > max_width:
             text = text[:-1]
         return (text + ellipsis) if text else ""
+
+    def drop_indicator_rect(self) -> wx.Rect | None:
+        """The column the live drag would drop into, or ``None`` when idle.
+
+        Answers "where do these cards land if I let go now" for **every** target
+        the drag can have, so the new-column slot needs no visual language of
+        its own (#991): the same outline the drag has been following simply
+        steps off the last pile onto empty canvas beside it, which is what
+        "a column will be made here" looks like. Before this the pile view gave
+        no drop feedback at all, so nothing had to be un-taught.
+        """
+        if not self._drag_active or self._drag_pos is None or not self._drag_uids:
+            return None
+        index = self._pile_index_at(self._drag_pos.x)
+        if index is None:
+            return None
+        if index < len(self._piles):
+            count = len(self._piles[index][1])
+        else:
+            # The slot past the last pile: preview the pile being carried, so
+            # the outline is the size of what the drop will actually make.
+            count = len(self._drag_uids)
+        # Top of the heading band down to the bottom of the count band, so the
+        # outline encloses everything a column draws. #988 moved the count out
+        # from under the heading into its own band below the pile, so stopping
+        # at the last card would leave that number stranded just outside the
+        # outline; the footer rect is asked for the bottom rather than
+        # recomputed, so the two cannot drift apart.
+        bottom = self._pile_footer_rect(index, max(1, count)).GetBottom()
+        return wx.Rect(self._pile_x(index), _PILE_PAD, _CARD_WIDTH, bottom - _PILE_PAD + 1)
+
+    def _draw_drop_indicator(self, dc: wx.DC) -> None:
+        rect = self.drop_indicator_rect()
+        if rect is None:
+            return
+        dc.SetBrush(wx.TRANSPARENT_BRUSH)
+        # The selection token at its declared width -- the same accent the table
+        # view's drag-to-reorder insertion line uses (``table_dnd``).
+        dc.SetPen(wx.Pen(wx.Colour(*SELECTION_BORDER), SELECTION_BORDER_WIDTH))
+        dc.DrawRoundedRectangle(rect, DECK_CARD_CORNER_RADIUS)
 
     def _draw_drag_ghost(self, dc: wx.DC) -> None:
         """Render the dragged cards as a real pile anchored near the cursor.
@@ -816,10 +1005,19 @@ class DeckPileView(wx.ScrolledWindow):
             dy = abs(point.y - self._drag_press.y)
             if not self._drag_active and (dx > 4 or dy > 4):
                 self._drag_active = True
+                # Open the trailing new-column slot for the duration (#991).
+                self._apply_drag_slot()
             if self._drag_active:
                 self._drag_pos = point
+                self._autoscroll_during_drag(event.GetPosition())
+                # The origin may have just moved under the cursor; re-derive so
+                # the ghost and the drop indicator track the pointer and not the
+                # viewport we read the event against.
+                self._drag_pos = self._to_logical(event.GetPosition())
                 self.Refresh()
             return
+
+        self._update_tooltip(point)
 
         # Hover handling — only when no selection or multi-selection.
         # (With exactly one selected copy, that copy stays the active card and
@@ -865,6 +1063,8 @@ class DeckPileView(wx.ScrolledWindow):
             self._drag_press = None
             self._drag_uids = []
             self._drag_pos = None
+            # Hand the reserved new-column slot back now the gesture is over.
+            self._apply_drag_slot()
             self.Refresh()
             return
 
@@ -876,6 +1076,7 @@ class DeckPileView(wx.ScrolledWindow):
         scroll_by_wheel(self, event)
 
     def _on_leave(self, _event: wx.MouseEvent) -> None:
+        self.UnsetToolTip()
         if self._hover_uid is not None:
             self._hover_uid = None
             self.Refresh()
@@ -886,7 +1087,34 @@ class DeckPileView(wx.ScrolledWindow):
         self._drag_press = None
         self._drag_uids = []
         self._drag_pos = None
+        self._apply_drag_slot()
         self.Refresh()
+
+    def _autoscroll_during_drag(self, client_pos: wx.Point) -> None:
+        """Scroll one step toward an edge the dragged pile is being held near.
+
+        Unlike the marquee's autoscroll this fires while the pointer is still
+        *inside* the window (within :data:`_DRAG_EDGE_SCROLL_MARGIN` of an
+        edge), because a drop is aimed at something the user has to be able to
+        see -- the new-column slot most of all, since it is off-screen to the
+        right on any deck wide enough to scroll. One step per motion event, so
+        the travel is driven by the hand rather than by a timer.
+        """
+        client_w, client_h = self.GetClientSize()
+        view_x, view_y = self.GetViewStart()
+        new_x, new_y = view_x, view_y
+        step = RUBBER_AUTOSCROLL_PX
+        if client_pos.x < _DRAG_EDGE_SCROLL_MARGIN:
+            new_x = max(0, view_x - step)
+        elif client_pos.x > client_w - _DRAG_EDGE_SCROLL_MARGIN:
+            new_x = view_x + step
+        if client_pos.y < _DRAG_EDGE_SCROLL_MARGIN:
+            new_y = max(0, view_y - step)
+        elif client_pos.y > client_h - _DRAG_EDGE_SCROLL_MARGIN:
+            new_y = view_y + step
+        if (new_x, new_y) != (view_x, view_y):
+            # Scroll clamps to the virtual bounds, so overshoot is harmless.
+            self.Scroll(new_x, new_y)
 
     def _autoscroll_towards(self, client_pos: wx.Point) -> None:
         """Scroll one step toward any viewport edge the pointer is held beyond."""
@@ -963,26 +1191,30 @@ class DeckPileView(wx.ScrolledWindow):
         """Move the dragged copies into the pile nearest ``point``.
 
         Insertion index inside the target pile is the member-index nearest to
-        the y-coordinate of the release point.
+        the y-coordinate of the release point. A drop past the last pile makes a
+        new, unlabelled one (#991) -- see :data:`VIRTUAL_PILE_LABEL`.
         """
         if not self._drag_uids:
             return
         target_pile_idx = self._pile_index_at(point.x)
         if target_pile_idx is None:
             return
-        target_label, target_members = self._piles[target_pile_idx]
+        make_new_pile = target_pile_idx >= len(self._piles)
+        insert_idx = 0
+        if not make_new_pile:
+            _target_label, target_members = self._piles[target_pile_idx]
 
-        # Find drop position by y.
-        total = max(1, len(target_members))
-        rel_y = point.y - _PILE_TOP
-        # Map y to member index based on stacked layout.
-        pile_height = self._pile_height(total)
-        if pile_height <= 0:
-            insert_idx = len(target_members)
-        else:
-            # Members are drawn top-to-bottom, so y=0 → top → member 0.
-            slot_height = _NAME_STRIP_HEIGHT if total > 1 else _CARD_HEIGHT
-            insert_idx = max(0, min(len(target_members), int(rel_y // slot_height)))
+            # Find drop position by y.
+            total = max(1, len(target_members))
+            rel_y = point.y - _PILE_TOP
+            # Map y to member index based on stacked layout.
+            pile_height = self._pile_height(total)
+            if pile_height <= 0:
+                insert_idx = len(target_members)
+            else:
+                # Members are drawn top-to-bottom, so y=0 → top → member 0.
+                slot_height = _NAME_STRIP_HEIGHT if total > 1 else _CARD_HEIGHT
+                insert_idx = max(0, min(len(target_members), int(rel_y // slot_height)))
 
         # Extract dragged entries (remove from current piles).
         moved: list[dict[str, Any]] = []
@@ -1003,21 +1235,48 @@ class DeckPileView(wx.ScrolledWindow):
         order_index = {uid: i for i, uid in enumerate(self._drag_uids)}
         moved.sort(key=lambda e: order_index.get(e["_uid"], 0))
 
-        # Re-fetch target (its members list may have shrunk).
-        target_label, target_members = self._piles[target_pile_idx]
-        insert_idx = min(insert_idx, len(target_members))
-        new_members = target_members[:insert_idx] + moved + target_members[insert_idx:]
-        self._piles[target_pile_idx] = (target_label, new_members)
+        if make_new_pile:
+            self._piles.append((VIRTUAL_PILE_LABEL, moved))
+        else:
+            # Re-fetch target (its members list may have shrunk).
+            target_label, target_members = self._piles[target_pile_idx]
+            insert_idx = min(insert_idx, len(target_members))
+            new_members = target_members[:insert_idx] + moved + target_members[insert_idx:]
+            self._piles[target_pile_idx] = (target_label, new_members)
+        self._prune_empty_virtual_piles()
         self._manual_overrides = True
         self._update_virtual_size()
 
+    def _prune_empty_virtual_piles(self) -> None:
+        """Drop user-made columns the drag just emptied.
+
+        A user-made column is only its cards -- take the last one away and there
+        is nothing left for it to be, so it closes up immediately rather than
+        leaving a labelless "0" to be tidied away by hand. An emptied *automatic*
+        pile is kept: its heading still names a real bucket of the current
+        grouping, and it comes back on the next rebuild anyway.
+        """
+        self._piles = [
+            (label, members)
+            for label, members in self._piles
+            if members or label != VIRTUAL_PILE_LABEL
+        ]
+
     def _pile_index_at(self, logical_x: int) -> int | None:
+        """Index of the pile column nearest ``logical_x``.
+
+        ``len(self._piles)`` -- one past the end -- is a legal answer and means
+        the slot beyond the rightmost pile, i.e. "make a new column here" (#991).
+        It is scored by the same nearest-centre rule as every real column, so the
+        threshold for creating one is exactly the threshold for reaching any
+        other column: past the midpoint between it and its neighbour.
+        """
         if not self._piles:
             return None
-        # Snap to nearest pile column.
+        # Snap to nearest pile column, the trailing new-column slot included.
         best_idx = 0
         best_dist = abs(self._pile_x(0) + _CARD_WIDTH // 2 - logical_x)
-        for idx in range(1, len(self._piles)):
+        for idx in range(1, len(self._piles) + 1):
             d = abs(self._pile_x(idx) + _CARD_WIDTH // 2 - logical_x)
             if d < best_dist:
                 best_idx = idx
