@@ -2,7 +2,7 @@
 
 A thin view-collaborator mixin holding the cohesive cached canvas (the
 full-content bitmap a scroll blits a sub-rect out of) and the per-card drawing
-routines that paint art, quantity badges, selection accents and the drawn
+routines that paint art, the copy-count strip, selection accents and the drawn
 +/−/× controls.
 
 ``_on_paint`` itself stays on the concrete view (it orchestrates these), but the
@@ -16,6 +16,8 @@ from __future__ import annotations
 from typing import Any
 
 import wx
+from PIL import Image as PilImage
+from PIL import ImageDraw
 
 from utils.constants import (
     DARK_ALT,
@@ -23,6 +25,9 @@ from utils.constants import (
     DECK_CARD_BADGE_PADDING,
     DECK_CARD_BADGE_RADIUS,
     DECK_CARD_CORNER_RADIUS,
+    DECK_CARD_COUNT_STRIP_PADDING,
+    DECK_CARD_HEIGHT,
+    DECK_CARD_WIDTH,
     SELECTION_BORDER,
     SELECTION_BORDER_WIDTH,
     SURFACE_RAISED,
@@ -34,8 +39,69 @@ from widgets.panels.card_table_panel.grid_layout import (
     _CELL_HEIGHT,
     _MAX_CANVAS_PX,
     badge_rect,
+    count_dot_layout,
+    count_fits_in_dots,
 )
 from widgets.stylize import type_font
+
+#: Cached dot columns, keyed by ``(count, backing_rgb, dot_rgb)``. The column is
+#: identical on every card that shares those three, so a 60-card deck rasterises
+#: at most a handful of distinct bitmaps -- see :func:`_count_dots_bitmap`.
+_DOTS_CACHE: dict[tuple[int, tuple[int, int, int], tuple[int, int, int]], wx.Bitmap] = {}
+#: Bounded like the edge fade's cache: the key space is small (counts x two
+#: backings x the four owned-status hues), so this only trips if something
+#: unexpected starts varying the colours.
+_DOTS_CACHE_MAX = 64
+#: Supersample factor the dots are rasterised at before the area-average
+#: downscale that anti-aliases them.
+_DOTS_SUPERSAMPLE = 4
+
+
+def _count_dots_bitmap(
+    count: int, backing_rgb: tuple[int, int, int], dot_rgb: tuple[int, int, int]
+) -> wx.Bitmap:
+    """Build (and cache) the **opaque** dot column for a ``count``-copy strip.
+
+    Opaque, and only the column rather than the whole strip, for the reason the
+    card art next to it is flattened onto ``DARK_PANEL``: an alpha blit into the
+    canvas bitmap does not take wxMSW's ``BitBlt`` path. Measured on a 60-card
+    zone, one small alpha ``DrawBitmap`` per card costs ~5ms *each* (~330ms), and
+    a ``wx.GraphicsContext`` per card costs ~1.2ms each just to create the
+    context; the opaque blit used here is ~0.04ms. The strip's rounded outline is
+    drawn by the DC around it, exactly as the numeral chip's was.
+
+    The column is inset by :data:`DECK_CARD_COUNT_STRIP_PADDING` on all sides,
+    which keeps its square corners inside the pill's round caps, so painting one
+    over the other leaves the outline intact.
+
+    PIL rasterises the dots at :data:`_DOTS_SUPERSAMPLE` scale and the box
+    downscale averages that down to coverage-accurate anti-aliasing --
+    ``wx.DC.DrawCircle`` has none on wxMSW, and an 8px aliased circle reads as a
+    lumpy square.
+    """
+    key = (count, backing_rgb, dot_rgb)
+    cached = _DOTS_CACHE.get(key)
+    if cached is not None:
+        return cached
+    strip, dots = count_dot_layout(wx.Rect(0, 0, DECK_CARD_WIDTH, DECK_CARD_HEIGHT), count)
+    pad = DECK_CARD_COUNT_STRIP_PADDING
+    width, height = strip.width - pad * 2, strip.height - pad * 2
+    scale = _DOTS_SUPERSAMPLE
+    column = PilImage.new("RGB", (width * scale, height * scale), backing_rgb)
+    draw = ImageDraw.Draw(column)
+    for dot in dots:
+        x0 = (dot.x - strip.x - pad) * scale
+        y0 = (dot.y - strip.y - pad) * scale
+        draw.ellipse(
+            [x0, y0, x0 + dot.width * scale - 1, y0 + dot.height * scale - 1], fill=dot_rgb
+        )
+    image = wx.Image(width, height)
+    image.SetData(column.resize((width, height), PilImage.BOX).tobytes())
+    bitmap = image.ConvertToBitmap()
+    if len(_DOTS_CACHE) >= _DOTS_CACHE_MAX:
+        _DOTS_CACHE.clear()
+    _DOTS_CACHE[key] = bitmap
+    return bitmap
 
 
 class GridRenderMixin:
@@ -173,23 +239,64 @@ class GridRenderMixin:
             self._draw_actions(dc, rect, name)
 
     def _draw_qty(self, dc: wx.DC, rect: wx.Rect, card: dict[str, Any], is_selected: bool) -> None:
+        """Draw the card's copy count on its left edge (issue #987).
+
+        One filled dot per copy, stacked in a thin strip down that edge; past
+        :data:`DECK_CARD_COUNT_MAX_DOTS` copies the strip degrades to the numeral
+        chip, which is the only thing that stays readable for a 20-of.
+        """
         qty_value = card["qty"]
         qty_for_check = int(qty_value) if isinstance(qty_value, float) else qty_value
         _, owned_rgb = self._owned_status(card["name"], qty_for_check)
+        # The selected backing used to be a solid accent block on top of the art.
+        # Selection is already carried by the 2px accent edge around the whole
+        # card, so it only has to lift off the unselected one.
+        badge_bg = SURFACE_RAISED if is_selected else DARK_ALT
+        if count_fits_in_dots(qty_for_check):
+            self._draw_qty_dots(dc, rect, int(qty_for_check), badge_bg, owned_rgb)
+            return
         text = str(qty_value)
         dc.SetFont(type_font("body"))
         tw, th = dc.GetTextExtent(text)
         pad = DECK_CARD_BADGE_PADDING
-        # The selected badge used to be a solid accent block on top of the art.
-        # Selection is already carried by the 2px accent edge around the whole
-        # card, so the badge only has to lift off the unselected one.
-        badge_bg = SURFACE_RAISED if is_selected else DARK_ALT
         dc.SetBrush(wx.Brush(wx.Colour(*badge_bg)))
         dc.SetPen(wx.TRANSPARENT_PEN)
         bx, by, bw, bh = badge_rect(rect, tw, th)
         dc.DrawRoundedRectangle(bx, by, bw, bh, DECK_CARD_BADGE_RADIUS)
         dc.SetTextForeground(wx.Colour(*owned_rgb))
         dc.DrawText(text, bx + pad, by + (bh - th) // 2)
+
+    @staticmethod
+    def _draw_qty_dots(
+        dc: wx.DC,
+        rect: wx.Rect,
+        count: int,
+        backing_rgb: tuple[int, int, int],
+        dot_rgb: tuple[int, int, int],
+    ) -> None:
+        """Blit ``count`` filled dots into the card's left-edge strip.
+
+                The strip keeps the numeral chip's opaque backing: the dots sit over card
+                *art*, which is any colour at all, and the owned-status hue has to stay
+                readable against it -- a bare dot on a light art box would not.
+
+        The rounded backing is a DC rounded-rectangle (as the numeral chip's was)
+                with the anti-aliased dot column blitted inside it -- see
+                :func:`_count_dots_bitmap` for why the split.
+
+                ``dc`` is in content coordinates (the canvas ``wx.MemoryDC``, or the
+                scroll-shifted ``AutoBufferedPaintDC`` the selected overlay paints on),
+                which is what :func:`count_dot_layout` returns, so the strip's rect goes
+                straight in.
+        """
+        strip, _dots = count_dot_layout(rect, count)
+        pad = DECK_CARD_COUNT_STRIP_PADDING
+        dc.SetBrush(wx.Brush(wx.Colour(*backing_rgb)))
+        dc.SetPen(wx.TRANSPARENT_PEN)
+        dc.DrawRoundedRectangle(strip.x, strip.y, strip.width, strip.height, strip.width // 2)
+        dc.DrawBitmap(
+            _count_dots_bitmap(count, backing_rgb, dot_rgb), strip.x + pad, strip.y + pad, False
+        )
 
     def _draw_actions(self, dc: wx.DC, rect: wx.Rect, name: str) -> None:
         # bold=True is buying glyph legibility at body size on top of card art,

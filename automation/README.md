@@ -186,6 +186,40 @@ Like `sash-drag`, it runs the burst on a worker thread and returns as soon as it
 is scheduled, so `start-video` can be recording while it runs. `wheel-scroll-start`
 covers the other half -- the wheel, which the views handle themselves.
 
+## Pile-view columns and their drag-and-drop
+
+The pile view's entire interaction model is a mouse drag -- pick copies up, drop
+them into another column, or (since #991) past the rightmost one to make a
+column of your own. None of that is reachable through `click`, so `pile-drag`
+posts real `wx.MouseEvent`s into the view's own handler, one per step from a
+worker thread, exactly the way `sash-drag` posts one `SetSashPosition` per step:
+the events arrive through the same binding table a physical mouse's do, and
+spacing them out lets the paints run between them, so `start-video` records the
+frames a real drag produces.
+
+```bash
+python -m automation.cli --json pile-state                       # the columns, as they are
+python -m automation.cli pile-drag --pile 0 --member -1 --to-x 600 --to-y 200
+python -m automation.cli pile-drag --pile 0 --dx 400             # ...or relative to the grab
+```
+
+`pile-state` reports each column's label, copy count, member names and x, plus
+the viewport and the true content width. A column the user made carries no
+bucket label, so it reports `"virtual": true` and an empty `"label"`.
+
+`--member` indexes the copy inside the pile (`-1` = the bottom, fully visible
+card); coordinates are the pile view's own client coordinates, which is what
+`pile-state` reports as `client_x`. Like `sash-drag` it returns as soon as the
+gesture is scheduled. Two notes from using it:
+
+- The drag runs for `steps * interval-ms`, so a `screenshot` sent partway
+  through lands **mid-gesture** and captures the drag ghost and the drop
+  indicator -- the only way to see them, since they exist only while the button
+  is held.
+- Pressing the *same* copy twice in a row clears the selection instead of
+  priming a drag (the view's click-to-deselect), so a script that drags one card
+  twice must pick up something else in between.
+
 ## Driving the mainboard/sideboard sash
 
 The deck workspace's split (`widgets/splitter.DarkSplitter`, `SP_LIVE_UPDATE`) is

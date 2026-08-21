@@ -385,6 +385,30 @@ def cmd_scroll_lines(client: AutomationClient, args: argparse.Namespace) -> int:
     return 0 if result.get("started") else 1
 
 
+def cmd_pile_state(client: AutomationClient, args: argparse.Namespace) -> int:
+    """Report the pile view's columns."""
+    result = client.pile_state(zone=args.zone)
+    print(format_output(result, args.json))
+    return 0 if "piles" in result else 1
+
+
+def cmd_pile_drag(client: AutomationClient, args: argparse.Namespace) -> int:
+    """Drag a copy out of a pile column and drop it elsewhere."""
+    result = client.pile_drag(
+        zone=args.zone,
+        pile=args.pile,
+        member=args.member,
+        to_x=args.to_x,
+        to_y=args.to_y,
+        dx=args.dx,
+        dy=args.dy,
+        steps=args.steps,
+        interval_ms=args.interval_ms,
+    )
+    print(format_output(result, args.json))
+    return 0 if result.get("started") else 1
+
+
 def cmd_sash_drag(client: AutomationClient, args: argparse.Namespace) -> int:
     """Sweep a splitter's sash up and down like a live drag."""
     result = client.sash_drag(
@@ -727,6 +751,29 @@ Notes:
         help="Delay between scrolls in ms (default 60)",
     )
 
+    # pile-state / pile-drag (#991)
+    p = subparsers.add_parser("pile-state", help="Report the pile view's columns")
+    p.add_argument("--zone", default="main", help="Deck zone (main/side)")
+
+    p = subparsers.add_parser("pile-drag", help="Drag a copy between pile columns")
+    p.add_argument("--zone", default="main", help="Deck zone (main/side)")
+    p.add_argument("--pile", type=int, default=0, help="Source pile index (default 0)")
+    p.add_argument(
+        "--member", type=int, default=-1, help="Copy index in the pile (-1 = bottom card)"
+    )
+    p.add_argument("--to-x", type=int, default=None, dest="to_x", help="Drop client x")
+    p.add_argument("--to-y", type=int, default=None, dest="to_y", help="Drop client y")
+    p.add_argument("--dx", type=int, default=0, help="Drop offset x from the grab point")
+    p.add_argument("--dy", type=int, default=0, help="Drop offset y from the grab point")
+    p.add_argument("--steps", type=int, default=12, help="Motion events in the drag (default 12)")
+    p.add_argument(
+        "--interval-ms",
+        type=float,
+        default=40.0,
+        dest="interval_ms",
+        help="Delay between motion events in ms (default 40)",
+    )
+
     # get-sash / set-sash / sash-drag
     p = subparsers.add_parser("get-sash", help="Report a splitter's sash position and range")
     p.add_argument(
@@ -832,6 +879,8 @@ Notes:
         "get-sash": cmd_get_sash,
         "set-sash": cmd_set_sash,
         "sash-drag": cmd_sash_drag,
+        "pile-state": cmd_pile_state,
+        "pile-drag": cmd_pile_drag,
         "inspector-printings": cmd_inspector_printings,
         "set-inspector-printing": cmd_set_inspector_printing,
         "close-app": cmd_close_app,

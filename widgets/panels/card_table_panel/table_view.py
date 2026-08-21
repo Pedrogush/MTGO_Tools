@@ -314,9 +314,10 @@ class DeckTableView(wx.Panel):
         """Auto-size columns to their content, then fit-to-width.
 
         Each column's renderer reports its natural width via ``GetBestSize``.
-        Type/Text are capped so a single huge oracle text can't dominate. The
-        results are stored in ``_natural_widths`` so :meth:`_fit_to_width` can
-        re-expand columns when the viewport grows.
+        Type/Text are capped so a single huge oracle text can't dominate while
+        the columns are competing for the row. The results are stored in
+        ``_natural_widths`` so :meth:`_fit_to_width` can re-expand columns when
+        the viewport grows -- past the Text cap, once nothing is competing.
         """
         self._natural_widths = {}
         for idx, col_id in enumerate(TABLE_COLUMNS):
@@ -329,12 +330,14 @@ class DeckTableView(wx.Panel):
         self._fit_to_width()
 
     def _fit_to_width(self) -> None:
-        """Shrink Type/Text columns so the row fits the visible grid width.
+        """Size the columns so the row fills the visible grid width.
 
         Starts from ``_natural_widths`` so a panel resize re-expands the
-        columns back toward their natural widths. Other columns (mana, name,
-        color) are never shrunk. The proportional-shrink math lives in
-        :func:`table_columns.fit_to_width`; this only applies the result.
+        columns back toward their natural widths. When the row overflows,
+        Type/Text/Name shrink; when it leaves room over, Text takes all of it
+        rather than leaving a dead strip past the last column (#989). The math
+        lives in :func:`table_columns.fit_to_width`; this only applies the
+        result.
         """
         if not self._natural_widths:
             return
