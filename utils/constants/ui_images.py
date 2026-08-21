@@ -49,6 +49,18 @@ DECK_CARD_BADGE_PADDING = 4
 # bottom margin.
 DECK_CARD_BADGE_ANCHOR_FRACTION = 0.52
 DECK_CARD_BADGE_RADIUS = 4  # matches the +/-/x action chips
+
+# Issue #987: the quantity is drawn as a stack of filled dots in a thin strip
+# down the card's left edge -- one dot per copy -- rather than as a numeral in a
+# chip that reads as if it were hanging off the side of the card.
+DECK_CARD_COUNT_DOT_DIAMETER = 8  # diameter (px) of one filled count dot
+DECK_CARD_COUNT_DOT_GAP = 4  # vertical gap (px) between adjacent dots
+DECK_CARD_COUNT_STRIP_PADDING = 3  # padding (px) between the dots and the strip edge
+# Above this many copies the dots stop being countable at a glance (and would
+# start climbing into the card's title band), so the strip degrades to the
+# numeral chip instead. 6 clears a playset with room for small basic-land counts;
+# 20x Dragon's Approach falls back to "20".
+DECK_CARD_COUNT_MAX_DOTS = 6
 DECK_CARD_BUTTON_MARGIN = 6
 DECK_CARD_ACTION_BUTTON_SIZE = (28, 28)  # min/max size of +/−/× buttons (px)
 DECK_CARD_TEMPLATE_BORDER_WIDTH = 2  # pen width for the template placeholder border
