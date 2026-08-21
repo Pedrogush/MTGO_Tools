@@ -55,6 +55,7 @@ class CardImageCache:
         with sqlite3.connect(self.db_path, timeout=SQLITE_CONNECTION_TIMEOUT_SECONDS) as conn:
             self._create_schema(conn)
             self._ensure_face_index_support(conn)
+            self._ensure_printed_name_support(conn)
             conn.commit()
 
     def _create_schema(self, conn: sqlite3.Connection) -> None:
@@ -63,6 +64,11 @@ class CardImageCache:
                 uuid TEXT NOT NULL,
                 face_index INTEGER NOT NULL DEFAULT 0,
                 name TEXT NOT NULL,
+                -- Name this *printing* shows when it differs from the card's
+                -- oracle name: the Omenpaths "Universes Within" reprints and
+                -- the flavor-name printings. MTGO asks for images by that
+                -- name, so lookups have to match it too (issue #986).
+                printed_name TEXT,
                 set_code TEXT,
                 collector_number TEXT,
                 image_size TEXT NOT NULL,
@@ -125,6 +131,23 @@ class CardImageCache:
         """)
         conn.execute("DROP TABLE card_images_old")
 
+    def _ensure_printed_name_support(self, conn: sqlite3.Connection) -> None:
+        """Add the ``printed_name`` column to a database created before #986.
+
+        Runs after :meth:`_ensure_face_index_support`, which may have just
+        recreated the table from the current schema — hence the column check
+        rather than an unconditional ``ALTER``. The index is created here (not
+        in :meth:`_create_schema`) because that runs against pre-migration
+        databases, where the column does not exist yet.
+        """
+        info = conn.execute("PRAGMA table_info(card_images)").fetchall()
+        if not any(column[1] == "printed_name" for column in info):
+            logger.info("Migrating card_images table to record printed card names")
+            conn.execute("ALTER TABLE card_images ADD COLUMN printed_name TEXT")
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_card_printed_name ON card_images(printed_name)
+        """)
+
     def _resolve_path(self, stored_path: str) -> Path:
         return resolve_stored_path(stored_path, self.cache_dir, self._path_roots)
 
@@ -148,11 +171,12 @@ class CardImageCache:
                 """
                 SELECT file_path
                 FROM card_images
-                WHERE LOWER(name) = LOWER(?) AND image_size = ?
+                WHERE (LOWER(name) = LOWER(?) OR LOWER(printed_name) = LOWER(?))
+                  AND image_size = ?
                 ORDER BY face_index
                 LIMIT 1
                 """,
-                (card_name, size),
+                (card_name, card_name, size),
             )
             row = cursor.fetchone()
             if row:
@@ -173,11 +197,13 @@ class CardImageCache:
                 """
                 SELECT file_path
                 FROM card_images
-                WHERE strip_accents(name) = ? AND image_size = ?
+                WHERE (strip_accents(name) = ?
+                       OR strip_accents(COALESCE(printed_name, '')) = ?)
+                  AND image_size = ?
                 ORDER BY face_index
                 LIMIT 1
                 """,
-                (_strip_accents(card_name), size),
+                (_strip_accents(card_name), _strip_accents(card_name), size),
             )
             row = cursor.fetchone()
             if row:
@@ -243,23 +269,25 @@ class CardImageCache:
                     """
                     SELECT file_path
                     FROM card_images
-                    WHERE LOWER(name) = LOWER(?) AND LOWER(set_code) = LOWER(?)
+                    WHERE (LOWER(name) = LOWER(?) OR LOWER(printed_name) = LOWER(?))
+                      AND LOWER(set_code) = LOWER(?)
                       AND LOWER(collector_number) = LOWER(?) AND image_size = ?
                     ORDER BY face_index
                     LIMIT 1
                     """,
-                    (card_name, set_code, collector, size),
+                    (card_name, card_name, set_code, collector, size),
                 )
             else:
                 cursor = conn.execute(
                     """
                     SELECT file_path
                     FROM card_images
-                    WHERE LOWER(name) = LOWER(?) AND LOWER(set_code) = LOWER(?) AND image_size = ?
+                    WHERE (LOWER(name) = LOWER(?) OR LOWER(printed_name) = LOWER(?))
+                      AND LOWER(set_code) = LOWER(?) AND image_size = ?
                     ORDER BY face_index
                     LIMIT 1
                     """,
-                    (card_name, set_code, size),
+                    (card_name, card_name, set_code, size),
                 )
             row = cursor.fetchone()
             if row:
@@ -403,6 +431,7 @@ class CardImageCache:
         scryfall_uri: str | None = None,
         artist: str | None = None,
         face_index: int = 0,
+        printed_name: str | None = None,
     ) -> None:
         file_path_str = str(Path(file_path).resolve())
 
@@ -410,14 +439,15 @@ class CardImageCache:
             conn.execute(
                 """
                 INSERT OR REPLACE INTO card_images
-                (uuid, face_index, name, set_code, collector_number, image_size, file_path,
-                 downloaded_at, scryfall_uri, artist)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (uuid, face_index, name, printed_name, set_code, collector_number, image_size,
+                 file_path, downloaded_at, scryfall_uri, artist)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
                 (
                     uuid,
                     face_index,
                     name,
+                    printed_name or None,
                     set_code,
                     collector_number,
                     image_size,
@@ -429,9 +459,10 @@ class CardImageCache:
             )
             conn.commit()
 
-        key = (name.lower(), image_size)
         with self._path_cache_lock:
-            self._path_cache.pop(key, None)
+            for cached_name in (name, printed_name):
+                if cached_name:
+                    self._path_cache.pop((cached_name.lower(), image_size), None)
 
     def get_cache_stats(self) -> dict[str, Any]:
         with sqlite3.connect(self.db_path, timeout=SQLITE_CONNECTION_TIMEOUT_SECONDS) as conn:

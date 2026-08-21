@@ -58,6 +58,41 @@ def _collect_face_aliases(card: dict[str, Any], display_name: str) -> set[str]:
     return {alias for alias in aliases if alias.lower() != display_key}
 
 
+def _collect_printed_name_aliases(card: dict[str, Any], display_name: str) -> set[str]:
+    """Return the names *this printing* shows when they differ from ``name``.
+
+    Scryfall keeps a printing's own name apart from the card's oracle ``name``
+    in two shapes, and MTGO writes decklists using the printing's name in both:
+
+    * ``printed_name`` — the MTGO-only Omenpaths ("Universes Within") reprints
+      of a Universes Beyond card: ``name`` is "Superior Spider-Man" while the
+      card MTGO deals you says "Kavaero, Mind-Bitten" (issue #986).
+    * ``flavor_name`` — the Godzilla / Dracula alternate-art printings.
+
+    Neither is matched by Scryfall's ``/cards/collection`` name identifiers,
+    and ``printed_name`` is not matched by ``/cards/named?exact=`` either, so
+    without these aliases such a card resolves nowhere: no local index hit, no
+    printings, no image.
+    """
+    aliases: set[str] = set()
+    sources: list[dict[str, Any]] = [card, *(card.get("card_faces") or [])]
+    for source in sources:
+        for field in ("printed_name", "flavor_name"):
+            alias = (source.get(field) or "").strip()
+            if alias:
+                aliases.add(alias)
+
+    display_key = display_name.strip().lower()
+    return {alias for alias in aliases if alias.lower() != display_key}
+
+
+def collect_name_aliases(card: dict[str, Any], display_name: str) -> set[str]:
+    """Every alternate name a card record should also be indexed under."""
+    return _collect_face_aliases(card, display_name) | _collect_printed_name_aliases(
+        card, display_name
+    )
+
+
 # Collector-number suffixes Scryfall appends to the *foil run* of a card that
 # is otherwise the same printing: "1638" (nonfoil) and "1638\u2605" (rainbow
 # foil) are one Secret Lair card, one illustration, one frame.
@@ -142,6 +177,13 @@ def build_printing_index(
     "Lightning Bolt" printing list, or the inspector/dropdown would offer that
     adventure card as a Lightning Bolt printing (issue #792).
 
+    A printing whose own name differs from the card's oracle name (Omenpaths
+    "Universes Within" reprints, flavor-name printings) is aliased under that
+    printed name as well, so a deck that lists the card the way MTGO spells it
+    still gets a printings list — and therefore a pinned uuid to download by
+    (issue #986). Only that one printing lands under the alias, so the
+    inspector shows the Omenpaths art for the Omenpaths name.
+
     ``repositories.card_repository.builder.build_index`` needs the same guard
     for the *card data* index it builds from MTGJSON — the two indexes are keyed
     by name and aliased by face name in the same way, so fixing only one leaves
@@ -180,7 +222,7 @@ def build_printing_index(
             "full_art": bool(card.get("full_art")),
         }
         by_name.setdefault(key, []).append(entry)
-        for alias in _collect_face_aliases(card, name):
+        for alias in collect_name_aliases(card, name):
             alias_key = alias.lower()
             if alias_key == key or alias_key in primary_names:
                 continue

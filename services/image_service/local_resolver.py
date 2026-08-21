@@ -28,6 +28,41 @@ else:
     _Base = object
 
 
+def _printed_names(card: dict[str, Any]) -> set[str]:
+    """Lowercased printed/flavor names carried by ``card`` or any of its faces."""
+    names: set[str] = set()
+    for source in (card, *(card.get("card_faces") or [])):
+        for field in ("printed_name", "flavor_name"):
+            value = (source.get(field) or "").strip().lower()
+            if value:
+                names.add(value)
+    return names
+
+
+def _pick_printed_name_match(
+    cards: list[dict[str, Any]], name: str, set_code: str | None
+) -> dict[str, Any] | None:
+    """Pick the printing that actually shows ``name``, preferring ``set_code``.
+
+    Search returns every printing of the matched card, most of which show the
+    oracle name; only the ones whose printed/flavor name is the requested name
+    can honestly answer the request, so those are preferred (and the requested
+    set wins among them). Falls back to the first result so a match on some
+    other alias shape still yields an image rather than nothing.
+    """
+    if not cards:
+        return None
+    wanted = (name or "").strip().lower()
+    wanted_set = (set_code or "").strip().lower()
+
+    def rank(card: dict[str, Any]) -> tuple[int, int]:
+        printed = 0 if wanted in _printed_names(card) else 1
+        in_set = 0 if wanted_set and (card.get("set") or "").lower() == wanted_set else 1
+        return (printed, in_set)
+
+    return min(cards, key=rank)
+
+
 class LocalResolverMixin(_Base):
     """Local bulk-data image resolution plus Scryfall name/search fallbacks."""
 
@@ -38,8 +73,44 @@ class LocalResolverMixin(_Base):
         resp = self.session.get(
             SCRYFALL_CARD_NAMED_URL, params=params, timeout=SCRYFALL_REQUEST_TIMEOUT_SECONDS
         )
+        if resp.status_code == 404:
+            card = self._fetch_card_by_printed_name(name, set_code=set_code)
+            if card is not None:
+                return card
         resp.raise_for_status()
         return resp.json()
+
+    def _fetch_card_by_printed_name(
+        self, name: str, set_code: str | None = None
+    ) -> dict[str, Any] | None:
+        """Resolve a name that is a *printing's* name rather than a card name.
+
+        ``/cards/named?exact=`` matches Scryfall's ``name`` (and ``flavor_name``)
+        only. The MTGO-only Omenpaths "Universes Within" printings carry the
+        name MTGO shows in ``printed_name`` instead — "Kavaero, Mind-Bitten" is
+        the Omenpaths printing of "Superior Spider-Man" — so exact lookups 404
+        forever and the card never gets an image (issue #986). The search
+        endpoint's exact operator (``!"..."``) *does* match printed names, so
+        it is the general fallback: no per-card alias table needed.
+
+        Returns ``None`` when the search finds nothing, leaving the caller's
+        original 404 to stand as the genuine "no such card" answer.
+        """
+        params = {"q": f'!"{name}"', "unique": "prints", "order": "released"}
+        try:
+            resp = self.session.get(
+                SCRYFALL_CARD_SEARCH_URL, params=params, timeout=SCRYFALL_REQUEST_TIMEOUT_SECONDS
+            )
+            if resp.status_code == 404:
+                # Scryfall answers 404 for "no cards matched", not just for a
+                # bad URL; that is a miss, not an error worth raising.
+                return None
+            resp.raise_for_status()
+            cards = resp.json().get("data") or []
+        except Exception as exc:
+            logger.debug(f"Printed-name search failed for {name}: {exc}")
+            return None
+        return _pick_printed_name_match(cards, name, set_code)
 
     def fetch_printings_by_name(self, name: str) -> list[dict[str, Any]]:
         params = {"q": f'!"{name}"', "unique": "prints", "order": "released"}
@@ -103,7 +174,7 @@ class LocalResolverMixin(_Base):
         parses the full bulk file once; subsequent lookups are in-memory.
         """
         from services.image_service import schemas as _schemas
-        from services.image_service.printing_index import _collect_face_aliases
+        from services.image_service.printing_index import collect_name_aliases
         from services.image_service.schemas import _bulk_card_images_decoder
 
         bulk_path = _schemas.BULK_DATA_CACHE
@@ -149,8 +220,10 @@ class LocalResolverMixin(_Base):
                 index.setdefault(key, []).append(card)
                 # Alias individual face names (and split halves) so that deck
                 # entries that reference a single face still resolve locally,
-                # mirroring Scryfall's exact-name face matching.
-                for alias in _collect_face_aliases(card, name):
+                # mirroring Scryfall's exact-name face matching — plus the
+                # printing's own printed/flavor name, which is how MTGO spells
+                # the Omenpaths "Universes Within" cards (issue #986).
+                for alias in collect_name_aliases(card, name):
                     alias_key = alias.lower()
                     if alias_key != key and alias_key not in primary_names:
                         index.setdefault(alias_key, []).append(card)

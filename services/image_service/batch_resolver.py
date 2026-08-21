@@ -35,7 +35,7 @@ from typing import Any
 
 from loguru import logger
 
-from services.image_service.printing_index import _collect_face_aliases
+from services.image_service.printing_index import collect_name_aliases
 from services.image_service.schemas import SCRYFALL_CARD_COLLECTION_URL
 from utils.constants import timing
 from utils.constants.timing import (
@@ -180,6 +180,27 @@ class ScryfallBatchResolver:
         )
         for entry in entries:
             entry.result = _match_entry(entry, index)
+        self._retry_unmatched(entries)
+
+    def _retry_unmatched(self, entries: list[_Entry]) -> None:
+        """Re-resolve name-only entries the collection lookup did not answer.
+
+        ``/cards/collection`` matches a ``{"name": ...}`` identifier against
+        Scryfall's card ``name`` only, so a card MTGO spells with its
+        printing's ``printed_name`` — the Omenpaths "Universes Within" reprints
+        — comes back in ``not_found`` and would be recorded as a permanent
+        "no such card" (issue #986). The single-card path knows how to search
+        by printed name, so the few unmatched names go through it. A miss there
+        stays a miss, which is the pre-existing behaviour for a bogus name.
+        """
+        for entry in entries:
+            if entry.uuid or entry.result is not None:
+                continue
+            try:
+                entry.result = self._fetch_one(entry.name, entry.set_code)
+            except Exception as exc:
+                logger.debug(f"Single-card fallback failed for {entry.name}: {exc}")
+                entry.result = None
 
     def _post_collection(self, identifiers: list[dict[str, str]]) -> list[dict[str, Any]]:
         cards: list[dict[str, Any]] = []
@@ -198,9 +219,10 @@ def _build_card_index(cards: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
     """Index resolved cards by every identity a request might carry.
 
     Keys: ``id:<uuid>`` and ``name:<name>`` plus one ``name:`` alias per
-    face/split-half — so a request that used a single face name still finds its
-    combined-card object. A face alias never overwrites a real standalone card
-    of that name (mirrors the local-index guard, #792).
+    face/split-half and per printed/flavor name — so a request that used a
+    single face name, or the name MTGO prints on an Omenpaths "Universes
+    Within" card (#986), still finds its card object. An alias never overwrites
+    a real standalone card of that name (mirrors the local-index guard, #792).
     """
     index: dict[str, dict[str, Any]] = {}
     primary_names = {(card.get("name") or "").strip().lower() for card in cards if card.get("name")}
@@ -212,7 +234,7 @@ def _build_card_index(cards: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
         if not name:
             continue
         index.setdefault(f"name:{name.lower()}", card)
-        for alias in _collect_face_aliases(card, name):
+        for alias in collect_name_aliases(card, name):
             alias_key = alias.lower()
             if alias_key not in primary_names:
                 index.setdefault(f"name:{alias_key}", card)
