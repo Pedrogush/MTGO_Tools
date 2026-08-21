@@ -195,9 +195,34 @@ def test_apply_writes_the_computed_version(repo: Path) -> None:
 
 
 # ------------------------------------------------------------- retention ---
-def test_select_keep_keeps_the_newest_patch_of_each_line() -> None:
+def test_select_keep_keeps_the_newest_patch_and_the_baseline_of_each_line() -> None:
+    """Two per line: the newest patch, and the ``x.y.0`` it started from.
+
+    The middle patches go -- 1.1.5 and 1.0.4/1.0.2 are superseded builds of a
+    line whose newest is already kept.
+    """
     versions = [(1, 1, 6), (1, 1, 5), (1, 1, 0), (1, 0, 5), (1, 0, 4), (1, 0, 2), (1, 0, 0)]
-    assert select_keep(versions) == [(1, 1, 6), (1, 0, 5)]
+    assert select_keep(versions) == [(1, 1, 6), (1, 1, 0), (1, 0, 5), (1, 0, 0)]
+
+
+def test_select_keep_keeps_an_upgrade_path_within_a_line() -> None:
+    """The case that motivated the rule (#1003 -> v1.2.1).
+
+    Under the newest-patch-only rule v1.2.0 was deleted the instant v1.2.1
+    published, so there was no published release to upgrade *from* and the
+    in-app updater could not be exercised end to end.
+    """
+    assert select_keep([(1, 2, 1), (1, 2, 0), (1, 1, 8)]) == [(1, 2, 1), (1, 2, 0), (1, 1, 8)]
+
+
+def test_select_keep_does_not_double_count_a_line_that_is_only_a_baseline() -> None:
+    """A line whose newest patch *is* its ``.0`` contributes one release, not two."""
+    assert select_keep([(1, 3, 0), (1, 2, 4), (1, 2, 0)]) == [(1, 3, 0), (1, 2, 4), (1, 2, 0)]
+
+
+def test_select_keep_skips_a_baseline_that_was_never_published() -> None:
+    """A line that never shipped a ``.0`` just does not contribute one."""
+    assert select_keep([(1, 4, 3), (1, 4, 1)]) == [(1, 4, 3)]
 
 
 def test_select_keep_caps_the_total() -> None:
@@ -211,3 +236,14 @@ def test_select_keep_caps_the_total() -> None:
 def test_select_keep_is_ordered_newest_first() -> None:
     kept = select_keep([(1, 0, 0), (2, 1, 3), (1, 4, 2)])
     assert kept == [(2, 1, 3), (1, 4, 2), (1, 0, 0)]
+
+
+def test_the_cap_still_wins_over_a_baseline() -> None:
+    """``--max`` is a hard ceiling, applied last and newest-first.
+
+    A repo with more lines than the cap can lose a ``.0`` off the *oldest* end.
+    That is the intended precedence: the cap bounds storage, and the lines it
+    reaches are ones nobody is upgrading from any more.
+    """
+    versions = [(1, 0, 0), (1, 0, 1), (1, 1, 0), (1, 1, 1)]
+    assert select_keep(versions, max_releases=3) == [(1, 1, 1), (1, 1, 0), (1, 0, 1)]

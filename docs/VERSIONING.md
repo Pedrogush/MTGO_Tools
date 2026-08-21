@@ -152,12 +152,30 @@ applied silently put the app back on screen afterwards. See
 `scripts/prune_releases.py` keeps the published releases down to what someone
 would actually install:
 
-1. **One release per `MAJOR.MINOR` line** — the newest patch. Nobody wants `1.0.0`
+1. **The newest patch of each `MAJOR.MINOR` line.** Nobody wants `1.0.0`
    once `1.0.4` exists; it is the same line with known bugs still in it. Keeping
    the newest patch of *each* line still lets someone stay on an older line
    deliberately — the last build before a redesign, say.
-2. **At most 10 releases**, newest first, if the number of lines ever grows past
+2. **The `x.y.0` of each line** — its first release, kept even once later patches
+   supersede it.
+3. **At most 10 releases**, newest first, if the number of lines ever grows past
    that.
+
+Rule 2 is the **upgrade-path** rule. Rule 1 on its own made an update impossible
+to test end to end: `v1.2.0` was deleted the instant `v1.2.1` published, so the
+release you would upgrade *from* never coexisted with the one you would upgrade
+*to*, and the in-app updater had nothing to run against. A `.0` is also the
+natural baseline of a line — the build before any of its patches — which makes
+it the one worth keeping if you are keeping two.
+
+Rules 2 and 3 interact, and 3 wins: the cap is applied last and newest-first, so
+a repo with more lines than the cap can still have a `.0` trimmed off the
+*oldest* end. That is deliberate — the cap is a hard ceiling on storage, and the
+lines it reaches are ones nobody is upgrading from any more.
+
+> Pruning is **not** reversible. GitHub deletes release assets permanently, so a
+> `.0` that rule 1 already removed cannot be restored by adding rule 2 — it has
+> to be rebuilt from its tag (which is why the tags are never deleted).
 
 Only the **Release** and its assets (the ~180 MB installer and its checksum
 sidecar) are deleted. **Tags are never
