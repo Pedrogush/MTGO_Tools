@@ -20,9 +20,8 @@ Prerequisites: Inno Setup 6, Python 3.11+ with PyInstaller, and the **.NET 9 SDK
 The installer version is **not** hardcoded here — `installer.iss` reads the
 repo-root `VERSION` file at compile time (via ISPP `FileRead`), and the build/test
 scripts derive the `MTGOTools_Setup_v<VERSION>.exe` filename from the same file.
-`VERSION` is the single source of truth and is bumped automatically from
-conventional-commit messages by `scripts/next_version.py` and the Versioning CI
-workflow. To ship a specific version manually, edit `VERSION` and rebuild. See
+`VERSION` is the single source of truth. It is written by the release workflow
+after a merge lands on `main`, from the commits since the last release tag — see
 [`../docs/VERSIONING.md`](../docs/VERSIONING.md) for the full scheme.
 
 To customize edit installer.iss to change version, app name, included files, or shortcuts. For distribution sign the installer and generate checksums. The build and test scripts are CI/CD friendly.

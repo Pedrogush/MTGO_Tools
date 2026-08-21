@@ -16,9 +16,10 @@ def load_requirements(filename: str) -> list[str]:
 def read_version() -> str:
     """Single source of truth: the repo-root VERSION file.
 
-    Owned by the semver automation (scripts/next_version.py + the Versioning CI
-    workflow), which bumps it from conventional-commit messages. pyproject.toml
-    declares ``version`` dynamic; this supplies it.
+    Owned by the release automation (scripts/next_version.py +
+    .github/workflows/release.yml), which computes it after a merge lands and
+    commits it to ``main``. pyproject.toml declares ``version`` dynamic; this
+    supplies it.
     """
     return Path(__file__).with_name("VERSION").read_text(encoding="utf-8").strip()
 

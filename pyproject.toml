@@ -5,8 +5,8 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "mtg_metagame_tools"
 # Version is the single source of truth in the repo-root VERSION file, resolved
-# at build time by setup.py. Owned by the semver automation
-# (scripts/next_version.py + the Versioning CI workflow).
+# at build time by setup.py. Owned by the release automation
+# (scripts/next_version.py + .github/workflows/release.yml).
 dynamic = ["version"]
 description = "MTG Metagame Analysis: Opponent tracking and deck research tools for MTGO"
 authors = [{name = "yochi", email = "pedrogush@gmail.com"}]
