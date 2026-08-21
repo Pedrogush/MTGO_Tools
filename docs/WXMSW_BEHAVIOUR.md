@@ -434,6 +434,34 @@ silently stops being draggable. Own-drawn via `EVT_PAINT` (uniquely safe on a sp
 the panes are child windows, so the only pixels the handler owns are the gutter). See
 `widgets.splitter`
 
+**`EVT_PAINT` is not the only place wx paints the sash.**
+`wxSplitterWindow::SizeWindows()` ends by drawing it **straight onto a `wxClientDC`** --
+an immediate, un-invalidated write to the window surface that never becomes a `WM_PAINT`
+and so never reaches a paint handler. That is not an edge case: it runs on every live-drag
+step, every resize and every `SetSashPosition`, which is most of the times the sash is
+painted at all. Traced off the surface, one drag step runs `OnMouseEvent(MOTION)` ->
+`EVT_PAINT` (own-drawn, dark) -> `OnInternalIdle` -> `SizeWindows()` (native, light), so the
+own-drawn colour is painted *first* and loses. Measured: **14 of 15** drag steps left the
+light sash on screen, a `--method screen` video of a real sweep caught it in **9 of 43**
+frames, and a freshly laid-out split sat on the native band indefinitely -- which is the
+"light when left alone, dark while you drag it" the bug was reported as.
+
+The fix is to repaint the gutter *after* `SizeWindows()`, on both of the paths that reach
+it: `OnInternalIdle` (a live drag defers `SizeWindows()` there -- `OnMouseEvent` only sets
+`m_needUpdating`) and a `SetSashPosition` override (a programmatic move and a resize run it
+inline). Two routes that look obvious do **not** work, and both were measured:
+
+| route | result |
+| --- | --- |
+| `SetSashInvisible(True)` (which *does* stop `DrawSash` at source) plus a Python `GetSashSize()` override to restore the hit test | **no effect.** `GetSashSize()` is not virtual across the Python boundary: with the override returning 7, C++ still laid pane two out for a 0px sash. The documented trap is not escapable this way |
+| a `wx.DelegateRendererNative` subclass overriding `DrawSplitterSash`, installed with `wx.RendererNative.Set()` | **never called.** wxPython builds no director for it, so `wxSplitterWindow::DrawSash` keeps reaching the native renderer |
+
+Note the measurement method: this defect is **invisible to a `PrintWindow` capture**, which
+re-renders the widget tree and therefore reports the pixels the paint handler *intends*.
+It has to be read back with a `ClientDC` blit or grabbed off the screen
+(`automation.cli start-video --method screen`). That is why six phases of screenshots
+walked past it. `tests/ui/test_splitter_sash_colour.py` pins it
+
 ### `wx.StaticBox`
 
 `SetForegroundColour` recolours **only the label**; `SetBackgroundColour` fills the
