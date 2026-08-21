@@ -120,9 +120,9 @@ def test_sash_is_border_subtle_at_rest(split_frame: DarkSplitter, wx_app: wx.App
     gutter = _read_gutter(split_frame)
     assert gutter, "no gutter pixels were read back; the frame has no surface"
     assert _native_rows(gutter) == 0, f"native sash colours at rest: {gutter}"
-    assert gutter.count(SUBTLE) >= len(gutter) - 1, (
-        f"the sash gutter is not BORDER_SUBTLE {SUBTLE}: {gutter}"
-    )
+    assert (
+        gutter.count(SUBTLE) >= len(gutter) - 1
+    ), f"the sash gutter is not BORDER_SUBTLE {SUBTLE}: {gutter}"
 
 
 def test_sash_stays_dark_through_a_live_mouse_drag(
@@ -205,6 +205,6 @@ def test_sash_survives_a_resize(split_frame: DarkSplitter, wx_app: wx.App) -> No
         if _native_rows(_read_gutter(splitter)) >= 3:
             offenders.append(width)
 
-    assert offenders == [], (
-        f"a resize left the native near-white sash on the surface at widths {offenders}"
-    )
+    assert (
+        offenders == []
+    ), f"a resize left the native near-white sash on the surface at widths {offenders}"
