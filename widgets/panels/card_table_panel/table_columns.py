@@ -5,10 +5,11 @@ column widths so it can be unit-tested without any wx grid wiring:
 
 * :func:`cell_text` formats one cell's display string from a card + metadata.
 * :func:`fit_to_width` computes the Type/Text column widths that make the whole
-  row fit the visible viewport, shrinking proportionally to each column's
-  available room. It takes the natural widths (from autosize), the client
-  width and the column indices and returns the new sizes for the view to
-  apply — it never touches the grid itself.
+  row fill the visible viewport: it shrinks proportionally to each column's
+  available room when the row overflows, and hands the leftover to Text when it
+  does not. It takes the natural widths (from autosize), the client width and
+  the column indices and returns the new sizes for the view to apply — it
+  never touches the grid itself.
 
 Everything here is wx-independent (it only consumes the metadata dict and a few
 ints) so it stays directly testable off-Windows where wx is unimportable.
@@ -33,13 +34,20 @@ from widgets.panels.card_table_panel.sorting import (
 # costs memory in the grid table.
 _MAX_TEXT_CHARS = 400
 
-# Natural-width caps applied during AutoSize. fit_to_width then shrinks
-# further so the whole row fits the visible viewport.
+# Natural-width caps applied during AutoSize. fit_to_width then shrinks further
+# so the whole row fits the visible viewport, or grows Text so it fills it.
 _MAX_TYPE_WIDTH = 220
 # 540 gave the Text column ~420px in practice -- the widest column in the
 # table, for the content that is truncated mid-sentence anyway and is the
 # least glanceable thing in the row. Capped to something a reader can take
 # in at a glance; the full text is in the card inspector.
+#
+# This caps the *natural* width only: the share of the row Text claims while
+# every column is competing for the same pixels. It is not a ceiling on the
+# rendered column. Once the other columns have their natural widths and the row
+# still has room to spare, that room goes to Text -- see :func:`fit_to_width`.
+# Treating it as a ceiling is what #989 was: maximised, the row stopped hundreds
+# of pixels short of the viewport and the rest was a strip showing nothing.
 _MAX_TEXT_WIDTH = 320
 _MIN_TYPE_WIDTH = 60
 # The narrowest oracle-text column still worth drawing. Below it the cell is an
@@ -84,6 +92,23 @@ def cell_text(card: dict[str, Any], meta: Any, col_id: str) -> str:
     return ""
 
 
+def grow_text(natural_widths: dict[int, int], surplus: int, text_idx: int) -> dict[int, int]:
+    """Widen Text by ``surplus`` px so the row reaches the viewport's edge.
+
+    Split out of :func:`fit_to_width` so the "row is wider than its content"
+    half is testable on its own. Returns an empty mapping when there is no Text
+    column to grow (it was never measured, or autosize found nothing to show):
+    the surplus then stays where it is rather than being handed to a column that
+    would render it blank.
+    """
+    if surplus <= 0:
+        return {}
+    size = natural_widths.get(text_idx, 0)
+    if size <= 0:
+        return {}
+    return {text_idx: size + surplus}
+
+
 def fit_to_width(
     natural_widths: dict[int, int],
     available: int,
@@ -91,22 +116,39 @@ def fit_to_width(
     text_idx: int,
     name_idx: int | None = None,
 ) -> dict[int, int]:
-    """Shrinkable-column widths that make the row fit ``available`` px.
+    """Column widths that make the row *fill* ``available`` px.
 
-    Starts from ``natural_widths`` (the autosize baseline) and distributes the
-    overflow across Text, Type and Name proportionally to the room each has above
-    its own minimum. Mana, Qty and the trailing actions column are never shrunk:
-    the first two are icon/numeric columns with no filler, and the third hosts
-    fixed-size controls.
+    Starts from ``natural_widths`` (the autosize baseline) and goes one of two
+    ways:
+
+    * The row overflows -- distribute the overflow across Text, Type and Name
+      proportionally to the room each has above its own minimum. Mana, Qty and
+      the trailing actions column are never shrunk: the first two are
+      icon/numeric columns with no filler, and the third hosts fixed-size
+      controls.
+    * The row leaves room over -- give all of it to Text. Every other column is
+      already at the width its own content asked for, so the leftover cannot
+      make any of them more readable; parked to the right of the last column it
+      is a dead strip that shows nothing, which is #989. Text is the one column
+      whose content is always cut short (its natural width is capped at
+      ``_MAX_TEXT_WIDTH`` precisely so it cannot crowd the others out), so every
+      pixel it gains is another word of oracle text on screen.
+
+    Growing only happens once nothing is competing for the space, so it cannot
+    push the trailing +/-/x controls off the right edge the way an uncapped
+    natural width could -- the caller has already subtracted their column and
+    the vertical scrollbar from ``available``.
 
     Returns a mapping of column index -> new size for *only* the columns that
-    change. An empty mapping means no shrink is needed (and the caller should
-    restore the natural widths). The grid is never mutated here.
+    change. An empty mapping means the row already fits exactly (and the caller
+    should restore the natural widths). The grid is never mutated here.
     """
     if not natural_widths or available <= 0:
         return {}
     overflow = sum(natural_widths.values()) - available
-    if overflow <= 0:
+    if overflow < 0:
+        return grow_text(natural_widths, -overflow, text_idx)
+    if overflow == 0:
         return {}
 
     def room(idx: int | None, minimum: int) -> int:
