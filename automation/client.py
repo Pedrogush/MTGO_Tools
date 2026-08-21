@@ -338,6 +338,47 @@ class AutomationClient:
             interval_ms=interval_ms,
         )
 
+    def pile_state(self, zone: str = "main") -> dict[str, Any]:
+        """Report the pile view's columns: label, count, geometry, members.
+
+        A column the user made by dropping past the rightmost pile (#991)
+        reports ``virtual: true`` and an empty ``label``.
+        """
+        return self._send_command("pile_state", zone=zone)
+
+    def pile_drag(
+        self,
+        zone: str = "main",
+        pile: int = 0,
+        member: int = -1,
+        to_x: int | None = None,
+        to_y: int | None = None,
+        dx: int = 0,
+        dy: int = 0,
+        steps: int = 12,
+        interval_ms: float = 40.0,
+    ) -> dict[str, Any]:
+        """Drag one copy out of ``pile`` and drop it somewhere else.
+
+        ``member`` is the copy's index inside the pile (``-1`` = the bottom,
+        fully visible card). The destination is absolute client coordinates
+        (``to_x``/``to_y``) or an offset from the grab point (``dx``/``dy``).
+        Returns as soon as the gesture is scheduled so a video grab can record
+        it; poll :meth:`pile_state` to see where the cards landed.
+        """
+        return self._send_command(
+            "pile_drag",
+            zone=zone,
+            pile=pile,
+            member=member,
+            to_x=to_x,
+            to_y=to_y,
+            dx=dx,
+            dy=dy,
+            steps=steps,
+            interval_ms=interval_ms,
+        )
+
     def get_scroll_perf(self, zone: str = "main", view: str = "grid") -> dict[str, Any]:
         """Read back the recorded wheel-scroll perf trace (input/paint events)."""
         return self._send_command("get_scroll_perf", zone=zone, view=view)

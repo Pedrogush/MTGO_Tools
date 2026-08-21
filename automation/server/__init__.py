@@ -18,6 +18,8 @@ Split by responsibility into internal modules mirroring
 - ``zone_editing``: mainboard/sideboard/out zone editing (``ZoneEditingMixin``)
 - ``builder``: deck-builder search/filters/scrolling (``BuilderMixin``)
 - ``sash``: splitter sash reads + scripted live drags (``SashMixin``)
+- ``pile_drag``: pile-view column readout + scripted card drags
+  (``PileDragMixin``)
 - ``mana_rendering``: mana/oracle search inputs + LOREM_MANA card
   (``ManaRenderingMixin``)
 
@@ -34,6 +36,7 @@ from automation.server.builder import BuilderMixin
 from automation.server.deck_research import DeckResearchMixin
 from automation.server.introspection import IntrospectionMixin
 from automation.server.mana_rendering import ManaRenderingMixin
+from automation.server.pile_drag import PileDragMixin
 from automation.server.sash import SashMixin
 from automation.server.screenshot import ScreenshotMixin
 from automation.server.scroll_perf import ScrollPerfMixin
@@ -60,6 +63,7 @@ class AutomationServer(
     ManaRenderingMixin,
     ScrollPerfMixin,
     SashMixin,
+    PileDragMixin,
     VideoMixin,
 ):
     """Socket server for receiving automation commands."""
@@ -131,6 +135,9 @@ class AutomationServer(
             "get_sash": self._handle_get_sash,
             "set_sash": self._handle_set_sash,
             "sash_drag": self._handle_sash_drag,
+            # Pile-view columns and their drag-and-drop (#991)
+            "pile_state": self._handle_pile_state,
+            "pile_drag": self._handle_pile_drag,
             # Background-thread frame recording (transition capture)
             "start_video": self._handle_start_video,
             "stop_video": self._handle_stop_video,
