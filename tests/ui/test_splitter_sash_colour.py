@@ -144,16 +144,49 @@ def _send(
     window.GetEventHandler().ProcessEvent(event)
 
 
+#: The frame this module measures in, when the display can hold it. Wide on
+#: purpose: a partial-width native draw needs room to show, and the real deck
+#: workspace's sash is ~1585px.
+PREFERRED_FRAME_SIZE = (1100, 700)
+
+
+def _frame_size(preferred: tuple[int, int] = PREFERRED_FRAME_SIZE) -> wx.Size:
+    """``preferred``, shrunk to leave the whole window on the display.
+
+    **A window wider than the screen silently corrupts every assertion here.**
+    A ``ClientDC`` blit cannot read pixels that are not on the display: the
+    off-screen columns come back as ``#FFFFFF``, which is in
+    :data:`NATIVE_SASH_COLOURS`, so the read reports native-sash pixels that
+    nothing ever painted. It looks exactly like the bug under test.
+
+    Measured on a 2560x1080 display: a 3000px-wide frame produced **84 phantom
+    native pixels** in a 12-column strip against the right edge, at every sash
+    position and every frame size. That is the same 84 that failed CI, whose
+    windows-latest runner has a far smaller display than a dev machine -- so
+    this module passed locally and failed there, on a difference that has
+    nothing to do with the splitter.
+
+    The margin covers the window border and the taskbar; ``GetClientArea`` is
+    the work area rather than the raw geometry, so the taskbar is already out.
+    """
+    area = wx.Display().GetClientArea()
+    return wx.Size(
+        min(preferred[0], max(400, area.width - 40)),
+        min(preferred[1], max(320, area.height - 40)),
+    )
+
+
 @pytest.fixture(name="split_frame")
 def fixture_split_frame(wx_app: wx.App):
     """A shown frame holding one horizontally split :class:`DarkSplitter`.
 
-    Wide on purpose: a partial-width native draw needs room to show, and the
-    real deck workspace's sash is ~1585px. Shown and raised deliberately -- an
-    unmapped window has no surface to read back, so the measurement would be
-    vacuous.
+    Sized by :func:`_frame_size` and moved to the work area's origin, so the
+    whole client area is on the display and can actually be read back. Shown and
+    raised deliberately -- an unmapped window has no surface to read back, so
+    the measurement would be vacuous.
     """
-    frame = wx.Frame(None, size=(1100, 700))
+    frame = wx.Frame(None, size=_frame_size())
+    frame.SetPosition(wx.Display().GetClientArea().GetTopLeft())
     splitter = DarkSplitter(frame)
     top = wx.Panel(splitter)
     top.SetBackgroundColour(wx.Colour(0x22, 0x27, 0x2E))
@@ -302,7 +335,12 @@ def test_no_native_sash_through_a_resize(split_frame: DarkSplitter, wx_app: wx.A
     splitter = split_frame
     frame = splitter.GetParent()
     offenders: list[tuple[str, int]] = []
-    for width, height in ((1060, 680), (1020, 660), (1120, 720), (1160, 740), (1080, 690)):
+    base = _frame_size()
+    # Deltas, not absolutes: an absolute size larger than the display reads back
+    # off-screen white and reports native pixels nothing painted (see
+    # _frame_size). Shrinking only is always safe; growing is capped by base.
+    for dw, dh in ((-40, -20), (-80, -40), (-20, -10), (0, 0), (-60, -30)):
+        width, height = base.width + dw, base.height + dh
         frame.SetSize((width, height))
         native = _native_pixels(splitter)
         if native:
@@ -408,9 +446,12 @@ def test_the_gravity_prediction_matches_wx(split_frame: DarkSplitter, wx_app: wx
     splitter._predicted_position = spy  # type: ignore[method-assign]
     try:
         mismatches: list[tuple[int, int]] = []
-        for height in (640, 580, 700, 660):
+        base = _frame_size()
+        # Relative to the fitted frame for the same reason the resize test is:
+        # an absolute height taller than the display reads back off-screen.
+        for height in (base.height - 60, base.height - 120, base.height, base.height - 40):
             predictions.clear()
-            splitter.GetParent().SetSize((1100, height))
+            splitter.GetParent().SetSize((_frame_size().width, height))
             for _ in range(15):
                 wx_app.Yield()
             if not predictions:
