@@ -46,40 +46,36 @@ TABLE_ACTION_ADD, TABLE_ACTION_SUB, TABLE_ACTION_REMOVE = range(TABLE_ACTION_COU
 
 #: Each glyph's hit target, square. The review measured the drawn glyphs at
 #: ~14x14 with ~2px between them; 24 is the usual comfortable-pointer-target
-#: floor and is what the row height is now sized against too.
+#: floor and is what the row height is now sized against too. The slot is what
+#: separates the controls -- the icon inside it is ~14px, so ~14px of dead
+#: padding already sits between two adjacent icons.
 TABLE_ACTION_SLOT_WIDTH = 28
-#: Gap between the subtract and remove glyphs. ``x`` deletes the row outright
-#: while ``-`` decrements it, and they sat adjacent with a ~2px gap, so a
-#: mis-aimed decrement destroyed the row. This is a deliberate separation, not
-#: padding.
-TABLE_ACTION_DESTRUCTIVE_GAP = 16
 
 
 def action_slot_bounds(cell_width: int) -> list[tuple[int, int]]:
     """``(x0, x1)`` for each action slot, right-aligned inside ``cell_width``.
 
     Right-aligned so the controls stay pinned to the row's trailing edge however
-    wide the column ends up.
+    wide the column ends up, and evenly spaced: the three slots are the same
+    width and sit flush against each other.
+
+    #990: a 16px gap used to be inserted in front of the destructive ``x`` to
+    keep a mis-aimed decrement from deleting the row. It read as ``x`` not
+    belonging to the group beside it, and the 28px slot is doing that job
+    already -- the drawn icon is ~14px, so two adjacent icons are ~14px apart
+    even with the slots flush.
     """
-    widths = [TABLE_ACTION_SLOT_WIDTH] * TABLE_ACTION_COUNT
-    gaps = [0, 0, TABLE_ACTION_DESTRUCTIVE_GAP]
-    total = sum(widths) + sum(gaps)
-    x = max(0, cell_width - total)
-    bounds = []
-    for width, gap in zip(widths, gaps, strict=True):
-        x += gap
-        bounds.append((x, x + width))
-        x += width
-    return bounds
+    width = TABLE_ACTION_SLOT_WIDTH
+    x = max(0, cell_width - width * TABLE_ACTION_COUNT)
+    return [(x + i * width, x + (i + 1) * width) for i in range(TABLE_ACTION_COUNT)]
 
 
 def action_slot_at(x_in_cell: int, cell_width: int) -> int | None:
     """Map an x offset inside the actions cell to an action slot index.
 
-    Returns ``None`` for the gap in front of the destructive ``x`` and for the
-    dead space to the left of the group, so a click that lands between controls
-    does nothing instead of firing the nearest one. That is the point of the
-    gap: an unclaimed click beside ``x`` must not delete the row.
+    Returns ``None`` for the dead space to the left of the group and past its
+    trailing edge, so a click outside the controls does nothing instead of
+    firing the nearest one.
     """
     if cell_width <= 0:
         return None
