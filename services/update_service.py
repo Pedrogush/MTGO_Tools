@@ -25,6 +25,11 @@ timestamp and re-checked at most once per
 mean repeatedly hitting an API whose unauthenticated budget is 60 requests per
 hour per IP.
 
+*A pulled release stops being advertised.* A 404 from ``/releases/latest`` is an
+answer ("nothing is published"), not a failure, and is stamped as one — so a
+release that was deleted or unpublished clears on the next check instead of
+being recommended forever from a cache that never gets overwritten.
+
 *Downloading and applying the update is out of scope.* The UI points at the
 release page and the existing installer takes over from there.
 """
@@ -59,6 +64,22 @@ _API_HEADERS = {
     "Accept": "application/vnd.github+json",
     "X-GitHub-Api-Version": "2022-11-28",
 }
+
+
+class _NoRelease:
+    """Type of :data:`NO_RELEASE`; see there."""
+
+    __slots__ = ()
+
+    def __repr__(self) -> str:  # pragma: no cover - debugging aid only
+        return "NO_RELEASE"
+
+
+#: GitHub answered authoritatively that this repository has no published release
+#: (every release is a draft or a pre-release, or there are none at all). This is
+#: a completed check with a known answer, which is why it is not ``None``: a
+#: transport failure means "ask again", while this means "forget what you knew".
+NO_RELEASE = _NoRelease()
 
 
 @dataclass(frozen=True)
@@ -151,22 +172,50 @@ class UpdateService:
             # interval. The retry rate is bounded by launches, not by a timer.
             return self._to_update_info(stamp)
 
+        if payload is NO_RELEASE:
+            # GitHub answered, and the answer is "nothing is published". That is
+            # a *completed* check, not a failed one, so it gets stamped and the
+            # previous answer is dropped. Without this the two are indistinguishable
+            # and a release that was deleted or pulled goes on being advertised
+            # forever — every launch re-asks, 404s, and falls back to the stale
+            # answer it should have discarded.
+            stamp = _CheckStamp(checked_at=time.time())
+            self._write_stamp(stamp)
+            return self._to_update_info(stamp)
+
         stamp = self._stamp_from_payload(payload)
         self._write_stamp(stamp)
         return self._to_update_info(stamp)
 
     # ------------------------------------------------------------------ network ------------------------------------------------------------------
-    def _fetch_latest_release(self) -> dict[str, Any] | None:
-        """GET the latest release payload, or ``None`` on any failure at all."""
+    def _fetch_latest_release(self) -> dict[str, Any] | _NoRelease | None:
+        """The latest release payload, :data:`NO_RELEASE`, or ``None``.
+
+        Three outcomes, because "I could not reach GitHub" and "GitHub says there
+        is nothing published" call for opposite handling and only one of them is
+        a failure. A 404 from this endpoint is an *answer*: the repository has no
+        published non-prerelease, non-draft release. Collapsing it into ``None``
+        alongside the transport failures is what let a deleted release keep being
+        advertised.
+        """
         try:
             response = requests.get(
                 self.api_url, headers=_API_HEADERS, timeout=self.request_timeout
             )
-            response.raise_for_status()
-            payload = response.json()
         except Exception as exc:
             # Having no connection is the ordinary case here, not a fault worth
             # an ERROR + traceback for a check the user never asked for.
+            logger.debug(f"Update check request failed: {exc}")
+            return None
+
+        if response.status_code == 404:
+            logger.info("Update check: no published release for this repository")
+            return NO_RELEASE
+
+        try:
+            response.raise_for_status()
+            payload = response.json()
+        except Exception as exc:
             logger.debug(f"Update check request failed: {exc}")
             return None
         if not isinstance(payload, dict):
@@ -246,6 +295,7 @@ def reset_update_service() -> None:
 
 __all__ = [
     "LATEST_RELEASE_API_URL",
+    "NO_RELEASE",
     "RELEASES_PAGE_URL",
     "UpdateInfo",
     "UpdateService",
