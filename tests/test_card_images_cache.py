@@ -6,7 +6,7 @@ import sqlite3
 import sys
 import threading
 import types
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
 
@@ -38,6 +38,9 @@ _install_wx_stub()
 from services import image_service as card_images  # noqa: E402
 from services.image_service import schemas as card_images_schemas  # noqa: E402
 from services.image_service.bulk_store import decode_bulk_bytes, gzip_chunks  # noqa: E402
+from services.image_service.schemas import UTC  # noqa: E402
+from utils.constants import BULK_DATA_REFRESH_INTERVAL_SECONDS  # noqa: E402
+from utils.constants.timing import ONE_DAY_SECONDS  # noqa: E402
 
 
 def test_card_image_cache_migrates_face_index_column(tmp_path):
@@ -732,6 +735,14 @@ def test_download_by_name_falls_back_to_api_on_local_miss(tmp_path, monkeypatch)
 # ---------------------------------------------------------------------------
 
 
+def _backdate(path, seconds: float) -> None:
+    """Set ``path``'s mtime ``seconds`` into the past."""
+    import os
+
+    when = datetime.now().timestamp() - seconds
+    os.utime(path, (when, when))
+
+
 def _make_downloader(tmp_path, monkeypatch, bulk_contents="[]"):
     """Build a downloader with BULK_DATA_CACHE pointed at a temp bulk file."""
     cache_dir = tmp_path / "card_images"
@@ -760,8 +771,14 @@ def test_is_bulk_data_outdated_when_cache_file_missing(tmp_path, monkeypatch):
 
 
 def test_is_bulk_data_outdated_when_metadata_mismatches_cache(tmp_path, monkeypatch):
-    """A different updated_at/uri than the cached row => outdated."""
-    downloader, _ = _make_downloader(tmp_path, monkeypatch)
+    """A different updated_at/uri than the cached row => outdated.
+
+    The cached file is aged past the refresh interval first: below it the file
+    is left alone whatever the vendor says, so that the daily republishing of
+    ``default-cards`` does not cost a ~120 MB download a day.
+    """
+    downloader, bulk_path = _make_downloader(tmp_path, monkeypatch)
+    _backdate(bulk_path, BULK_DATA_REFRESH_INTERVAL_SECONDS + ONE_DAY_SECONDS)
     metadata = {
         "updated_at": "2024-02-02T00:00:00Z",
         "jsonl_download_uri": "http://example.com/new",
@@ -782,12 +799,110 @@ def test_is_bulk_data_outdated_when_metadata_mismatches_cache(tmp_path, monkeypa
     assert is_outdated is True
 
 
+def test_is_bulk_data_outdated_without_a_metadata_row_compares_the_file_mtime(
+    tmp_path, monkeypatch
+):
+    """The case that left a released set invisible for a month.
+
+    A cache with no ``bulk_data_meta`` row — seeded by the installer, or written
+    before the row was recorded — used to fall straight through to a 30-day age
+    check, so a file four weeks old counted as current and was never replaced.
+    A set released in the meantime therefore had no printings at all: no art
+    pager, no edition picker, no image. The file's own mtime stands in for the
+    missing row instead.
+    """
+    downloader, bulk_path = _make_downloader(tmp_path, monkeypatch)
+    _backdate(bulk_path, 7 * ONE_DAY_SECONDS)
+    published = datetime.now(UTC) - timedelta(days=1)
+    monkeypatch.setattr(
+        downloader,
+        "_fetch_bulk_metadata",
+        lambda: {
+            "updated_at": published.isoformat(),
+            "jsonl_download_uri": "http://example.com/new",
+        },
+    )
+
+    is_outdated, _ = downloader.is_bulk_data_outdated()
+    assert is_outdated is True
+
+
+def test_is_bulk_data_outdated_keeps_a_file_newer_than_the_publication(tmp_path, monkeypatch):
+    """Nothing published since we wrote the file: what we hold is current."""
+    downloader, bulk_path = _make_downloader(tmp_path, monkeypatch)
+    _backdate(bulk_path, 7 * ONE_DAY_SECONDS)
+    published = datetime.now(UTC) - timedelta(days=30)
+    monkeypatch.setattr(
+        downloader,
+        "_fetch_bulk_metadata",
+        lambda: {
+            "updated_at": published.isoformat(),
+            "jsonl_download_uri": "http://example.com/new",
+        },
+    )
+
+    is_outdated, _ = downloader.is_bulk_data_outdated()
+    assert is_outdated is False
+
+
+def test_is_bulk_data_outdated_leaves_a_recent_file_alone(tmp_path, monkeypatch):
+    """Scryfall republishes daily; a ~120 MB download a day is not the deal.
+
+    Below the refresh interval the cached file stands whatever the vendor says,
+    even with a mismatched metadata row.
+    """
+    downloader, _bulk_path = _make_downloader(tmp_path, monkeypatch)
+    monkeypatch.setattr(
+        downloader,
+        "_fetch_bulk_metadata",
+        lambda: {
+            "updated_at": "2099-01-01T00:00:00+00:00",
+            "jsonl_download_uri": "http://example.com/new",
+        },
+    )
+    with sqlite3.connect(downloader.cache.db_path) as conn:
+        conn.execute(
+            """
+            INSERT OR REPLACE INTO bulk_data_meta (id, downloaded_at, total_cards, bulk_data_uri)
+            VALUES (1, ?, ?, ?)
+            """,
+            ("2024-01-01T00:00:00Z", 0, "http://example.com/old"),
+        )
+        conn.commit()
+
+    is_outdated, _ = downloader.is_bulk_data_outdated()
+    assert is_outdated is False
+
+
+def test_is_bulk_data_stale_reports_a_check_it_could_not_make_as_not_stale(tmp_path, monkeypatch):
+    """Offline, the cached file is what we have; do not start a doomed download."""
+    downloader, _ = _make_downloader(tmp_path, monkeypatch)
+
+    def _boom() -> dict[str, Any]:
+        raise OSError("no route to host")
+
+    monkeypatch.setattr(downloader, "_fetch_bulk_metadata", _boom)
+
+    service = types.SimpleNamespace(
+        image_downloader=downloader,
+        image_cache=downloader.cache,
+        is_bulk_data_stale=card_images.ImageService.is_bulk_data_stale,
+    )
+    stale, reason = card_images.ImageService.is_bulk_data_stale(service)
+
+    assert stale is False
+    assert "unavailable" in reason
+
+
 def test_is_bulk_data_outdated_age_fallback_when_fresh(tmp_path, monkeypatch):
     """Vendor metadata lacking timestamps => age-based check; fresh file is not outdated."""
-    downloader, _ = _make_downloader(tmp_path, monkeypatch)
+    downloader, bulk_path = _make_downloader(tmp_path, monkeypatch)
     monkeypatch.setattr(downloader, "_fetch_bulk_metadata", lambda: {})
 
-    # The file was just written, so its age is well under the freshness threshold.
+    # Past the refresh interval, so the age fallback is what answers here; still
+    # well under the freshness threshold it compares against.
+    _backdate(bulk_path, BULK_DATA_REFRESH_INTERVAL_SECONDS + ONE_DAY_SECONDS)
+
     is_outdated, _ = downloader.is_bulk_data_outdated()
     assert is_outdated is False
 
@@ -1708,12 +1823,16 @@ def test_download_face_asset_uses_png_extension_for_png_size(tmp_path):
     assert downloader.session.calls == ["http://img/card.png"]
 
 
-def test_get_image_path_for_printing_does_not_accent_fold(tmp_path):
-    """The set-qualified printing lookup is exact and does NOT strip accents.
+def test_get_image_path_for_printing_accent_folds(tmp_path):
+    """The set-qualified printing lookup accent-folds, like the by-name one.
 
-    ``get_image_path`` accent-folds as a fallback, but the printing-level lookup
-    must stay exact: querying the ASCII spelling of an accented name with a set
-    code must miss rather than surface the accented row.
+    Updated from a characterization test that pinned the opposite. MTGO writes
+    accented names in ASCII, so the ASCII spelling *is* how the app asks for
+    these cards; leaving the printing-level lookup exact meant a downloaded
+    file never counted as cached and the card was re-downloaded on every hover
+    (issue #986 follow-up). The match stays pinned to the requested set and
+    collector number, so it can still only ever answer with the very printing
+    that was asked for.
     """
     cache = card_images.CardImageCache(
         cache_dir=tmp_path / "cache", db_path=tmp_path / "cache" / "images.db"
@@ -1732,8 +1851,11 @@ def test_get_image_path_for_printing_does_not_accent_fold(tmp_path):
 
     # Exact accented name + set resolves.
     assert cache.get_image_path_for_printing("Lórien Revealed", "LTR", "normal") == accent_file
-    # ASCII spelling with the same set must NOT accent-fold at the printing layer.
-    assert cache.get_image_path_for_printing("Lorien Revealed", "LTR", "normal") is None
+    # ASCII spelling with the same set resolves to the same row.
+    assert cache.get_image_path_for_printing("Lorien Revealed", "LTR", "normal") == accent_file
+    # A different card in the same set still misses — folding widens the name
+    # match, it does not loosen the set/printing pin.
+    assert cache.get_image_path_for_printing("Lorien Revealed", "MH2", "normal") is None
 
 
 # ---------------------------------------------------------------------------

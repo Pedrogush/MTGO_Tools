@@ -40,7 +40,10 @@ BULK_DATA_CACHE = IMAGE_CACHE_DIR / "bulk_data.json"
 # v7: printings whose printed/flavor name differs from the Scryfall name (the
 # Omenpaths "Universes Within" MTGO printings, e.g. "Kavaero, Mind-Bitten" for
 # "Superior Spider-Man") are aliased under that name too (issue #986).
-PRINTING_INDEX_VERSION = 7
+# v8: every key also carries an accent-folded alias, because MTGO spells
+# accented names in ASCII ("Gloin the Mighty" for "Glóin the Mighty // Easy
+# Pickings") and the index is keyed by the Scryfall spelling.
+PRINTING_INDEX_VERSION = 8
 PRINTING_INDEX_CACHE = IMAGE_CACHE_DIR / f"printings_v{PRINTING_INDEX_VERSION}.json"
 
 # Image size options (in order of preference for storage)

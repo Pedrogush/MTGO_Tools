@@ -395,3 +395,92 @@ def test_image_writer_records_the_printing_name_it_downloaded_under():
         _printed_name({"name": "Zilortha, Strength Incarnate", "flavor_name": "Godzilla"})
         == "Godzilla"
     )
+
+
+# ---------------------------------------------------------------------------
+# A transient failure is not "no such card"
+#
+# The download queue classifies any message reading "404 ... not found" as a
+# permanent failure: it files the card in a process-wide not-found set and
+# refuses to ask about it again for the rest of the session. So every path that
+# can *report* a 404 has to be sure it means one. The printed-name search
+# originally caught everything and returned None, which made a rate-limit or a
+# dropped connection indistinguishable from Scryfall saying the card does not
+# exist.
+# ---------------------------------------------------------------------------
+
+
+class _NamedThenFailingSearchSession:
+    """``/cards/named`` 404s and ``/cards/search`` fails in a transient way."""
+
+    def __init__(self, error: Exception | None = None, search_status: int = 429) -> None:
+        self.error = error
+        self.search_status = search_status
+        self.calls: list[str] = []
+
+    def get(self, url, params=None, timeout=None):
+        self.calls.append(url)
+        if url == card_images_schemas.SCRYFALL_CARD_NAMED_URL:
+            return _Response(404, {"object": "error", "code": "not_found"})
+        if self.error is not None:
+            raise self.error
+        return _Response(self.search_status, {})
+
+
+def test_rate_limited_printed_name_search_does_not_become_a_permanent_404():
+    """A 429 on the search must surface as an error the queue will retry."""
+    session = _NamedThenFailingSearchSession(search_status=429)
+    downloader = _downloader_with_session(session)
+
+    with pytest.raises(RuntimeError) as excinfo:
+        downloader.fetch_card_by_name(PRINTED_NAME)
+
+    # The 429 is what propagates, not the /cards/named 404 — the queue's
+    # _is_permanent_failure_message only trips on "404 ... not found".
+    assert "429" in str(excinfo.value)
+    assert "404" not in str(excinfo.value)
+
+
+def test_dropped_connection_during_printed_name_search_propagates():
+    """A transport error is not evidence about whether the card exists."""
+    session = _NamedThenFailingSearchSession(error=OSError("connection reset"))
+    downloader = _downloader_with_session(session)
+
+    with pytest.raises(OSError, match="connection reset"):
+        downloader.fetch_card_by_name(PRINTED_NAME)
+
+
+class _FailingFetchOne:
+    """A single-card fallback that fails the way the caller asks it to."""
+
+    def __init__(self, error: Exception) -> None:
+        self.error = error
+        self.calls: list[str] = []
+
+    def __call__(self, name: str, set_code: str | None) -> dict[str, Any]:
+        self.calls.append(name)
+        raise self.error
+
+
+def test_batch_retry_reports_a_transient_failure_as_an_error_not_a_miss():
+    """resolve() must raise so the queue retries with backoff, not give up."""
+    fetch_one = _FailingFetchOne(RuntimeError("429 Client Error: Too Many Requests"))
+    resolver = ScryfallBatchResolver(_CollectionMissSession(), fetch_one, debounce=0)
+    batch = [_Entry(ORACLE_NAME, None, None), _Entry(PRINTED_NAME, None, None)]
+
+    resolver._resolve_batch(batch)
+
+    assert batch[1].result is None
+    assert isinstance(batch[1].error, RuntimeError)
+
+
+def test_batch_retry_still_reports_a_genuine_404_as_a_plain_miss():
+    """A real "no such card" keeps its permanent-failure handling upstream."""
+    fetch_one = _FailingFetchOne(RuntimeError("404 Client Error: Not Found"))
+    resolver = ScryfallBatchResolver(_CollectionMissSession(), fetch_one, debounce=0)
+    batch = [_Entry(ORACLE_NAME, None, None), _Entry("Nonexistent Card", None, None)]
+
+    resolver._resolve_batch(batch)
+
+    assert batch[1].result is None
+    assert batch[1].error is None

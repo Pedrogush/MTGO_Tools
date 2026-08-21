@@ -37,6 +37,7 @@ from loguru import logger
 
 from services.image_service.printing_index import collect_name_aliases
 from services.image_service.schemas import SCRYFALL_CARD_COLLECTION_URL
+from utils.card_names import fold_card_name
 from utils.constants import timing
 from utils.constants.timing import (
     SCRYFALL_COLLECTION_MAX_IDENTIFIERS,
@@ -69,12 +70,31 @@ class _Entry:
 
 
 def _key(name: str, set_code: str | None, uuid: str | None) -> str:
-    """Stable coalescing key: same identity → one shared lookup per window."""
+    """Stable coalescing key: same identity → one shared lookup per window.
+
+    Names are accent-folded so the ASCII spelling MTGO uses and the accented one
+    Scryfall returns share a single lookup within a window.
+    """
     if uuid:
         return f"id:{uuid.lower()}"
     if set_code:
-        return f"set:{set_code.lower()}|{(name or '').lower()}"
-    return f"name:{(name or '').lower()}"
+        return f"set:{set_code.lower()}|{fold_card_name(name)}"
+    return f"name:{fold_card_name(name)}"
+
+
+def _is_not_found(exc: BaseException) -> bool:
+    """Whether ``exc`` is Scryfall answering "no such card" rather than a blip.
+
+    Only a 404 is an answer. A rate-limit, a timeout or a dropped connection
+    says nothing about whether the card exists, and must not be filed as one —
+    the queue treats "not found" as permanent for the rest of the session.
+    """
+    response = getattr(exc, "response", None)
+    status = getattr(response, "status_code", None)
+    if status is not None:
+        return status == 404
+    text = str(exc).lower()
+    return "404" in text and "not found" in text
 
 
 def _chunks(items: list[Any], size: int) -> Iterable[list[Any]]:
@@ -192,6 +212,13 @@ class ScryfallBatchResolver:
         "no such card" (issue #986). The single-card path knows how to search
         by printed name, so the few unmatched names go through it. A miss there
         stays a miss, which is the pre-existing behaviour for a bogus name.
+
+        A 404 there is still a miss. Anything else — a rate-limit, a timeout, a
+        dropped connection — is *not*, and is recorded as an error so
+        :meth:`resolve` re-raises it and the download queue retries it with
+        backoff. Reporting those as ``None`` too made the caller phrase them as
+        "404 not found", which the queue files as a permanent failure and never
+        asks about again for the rest of the session (issue #986 follow-up).
         """
         for entry in entries:
             if entry.uuid or entry.result is not None:
@@ -200,7 +227,10 @@ class ScryfallBatchResolver:
                 entry.result = self._fetch_one(entry.name, entry.set_code)
             except Exception as exc:
                 logger.debug(f"Single-card fallback failed for {entry.name}: {exc}")
-                entry.result = None
+                if _is_not_found(exc):
+                    entry.result = None
+                else:
+                    entry.error = exc
 
     def _post_collection(self, identifiers: list[dict[str, str]]) -> list[dict[str, Any]]:
         cards: list[dict[str, Any]] = []
@@ -223,6 +253,10 @@ def _build_card_index(cards: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
     single face name, or the name MTGO prints on an Omenpaths "Universes
     Within" card (#986), still finds its card object. An alias never overwrites
     a real standalone card of that name (mirrors the local-index guard, #792).
+    Every name key is then aliased under its accent-folded form: Scryfall
+    resolves the ASCII name MTGO sent ("Gloin the Mighty") but answers with the
+    accented one, so an exact-key match alone would drop the card as "not
+    found".
     """
     index: dict[str, dict[str, Any]] = {}
     primary_names = {(card.get("name") or "").strip().lower() for card in cards if card.get("name")}
@@ -238,13 +272,23 @@ def _build_card_index(cards: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
             alias_key = alias.lower()
             if alias_key not in primary_names:
                 index.setdefault(f"name:{alias_key}", card)
+    # Second pass so an exact name always wins over another card's folded form.
+    for key, card in list(index.items()):
+        if not key.startswith("name:"):
+            continue
+        folded = fold_card_name(key[len("name:") :])
+        if folded:
+            index.setdefault(f"name:{folded}", card)
     return index
 
 
 def _match_entry(entry: _Entry, index: dict[str, dict[str, Any]]) -> ResolvedCard:
     if entry.uuid:
         return index.get(f"id:{entry.uuid.lower()}")
-    return index.get(f"name:{(entry.name or '').lower()}")
+    exact = index.get(f"name:{(entry.name or '').lower()}")
+    if exact is not None:
+        return exact
+    return index.get(f"name:{fold_card_name(entry.name)}")
 
 
 __all__ = ["ScryfallBatchResolver"]

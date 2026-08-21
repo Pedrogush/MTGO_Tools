@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
+from services.image_service.downloader import BulkImageDownloader
 from services.image_service.workers import download_bulk_metadata_worker
 
 if TYPE_CHECKING:
@@ -39,6 +40,31 @@ class BulkDataMixin(_Base):
             return False, "Bulk data cache not found"
 
         return True, "Bulk data cache exists"
+
+    def is_bulk_data_stale(self) -> tuple[bool, str]:
+        """Whether a newer bulk file should be fetched over the cached one.
+
+        Separate from :meth:`check_bulk_data_exists` on purpose: a *missing*
+        cache has to block until the download lands, while a *stale* one is
+        perfectly usable and should be shown immediately and replaced in the
+        background. Nothing called the freshness check at all before, so an
+        install only ever saw the bulk data it downloaded on its first run —
+        cards from every set released since had no printings, no editions, and
+        no art pager (issue #986 follow-up).
+
+        Answers ``False`` when the check itself cannot be made (offline,
+        Scryfall down): the cached file is what we have either way, and a
+        download started on a guess would only fail.
+        """
+        downloader = self.image_downloader or BulkImageDownloader(self.image_cache)
+        try:
+            outdated, _metadata = downloader.is_bulk_data_outdated()
+        except Exception as exc:
+            logger.debug(f"Bulk data freshness check failed: {exc}")
+            return False, f"Freshness check unavailable: {exc}"
+        if outdated:
+            return True, "A newer Scryfall bulk file is available"
+        return False, "Bulk data is current"
 
     def download_bulk_metadata_async(
         self,

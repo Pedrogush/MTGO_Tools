@@ -48,6 +48,11 @@ class BulkDataMixin(_Base):
             if exists:
                 self.load_bulk_data_into_memory(on_status)
                 on_status("bulk.status.ready")
+                # Show what we have now, then quietly pick up anything Scryfall
+                # has published since. A stale cache is usable; a missing one
+                # is not, which is why only this branch refreshes in the
+                # background instead of blocking on the download.
+                self._refresh_bulk_data_if_stale(on_status, on_download_complete)
                 return
 
             logger.info(f"Bulk data needs download: {reason}")
@@ -79,6 +84,52 @@ class BulkDataMixin(_Base):
                 on_status("app.status.ready")
 
         self._worker.submit(worker, on_success=success_handler, on_error=error_handler)
+
+    def _refresh_bulk_data_if_stale(
+        self,
+        on_status: Callable[[str], None],
+        on_download_complete: Callable[[str], None],
+    ) -> None:
+        """Replace a stale bulk cache in the background, on a worker thread.
+
+        The freshness check is one small HTTP request but it is still network
+        I/O, so it runs off the UI thread; the download it may trigger is a
+        separate process (``download_bulk_metadata_async``) that already
+        refuses to start a second copy of itself. Any failure is swallowed —
+        the app is fully usable on the cache it just loaded.
+        """
+
+        def worker() -> tuple[bool, str]:
+            return self.image_service.is_bulk_data_stale()
+
+        def on_checked(result: tuple[bool, str]) -> None:
+            stale, reason = result
+            if not stale:
+                logger.debug(f"Bulk data refresh not needed: {reason}")
+                return
+            logger.info(f"Refreshing bulk data in the background: {reason}")
+
+            def _complete(msg: str) -> None:
+                on_download_complete(msg)
+                # Rebuild the printing index from the new file, then re-attempt
+                # the images that failed against the old one — that is what
+                # makes a newly-released set's cards get their printings, their
+                # editions and their art without a restart.
+                self.load_bulk_data_into_memory(on_status, force=True)
+                self.image_service.retry_failed_image_downloads()
+
+            def _failed(msg: str) -> None:
+                logger.warning(f"Background bulk data refresh failed: {msg}")
+
+            self.image_service.download_bulk_metadata_async(
+                on_success=_complete,
+                on_error=_failed,
+            )
+
+        def on_check_failed(exc: Exception) -> None:
+            logger.debug(f"Bulk data freshness check failed: {exc}")
+
+        self._worker.submit(worker, on_success=on_checked, on_error=on_check_failed)
 
     def load_bulk_data_into_memory(
         self, on_status: Callable[[str], None], force: bool = False

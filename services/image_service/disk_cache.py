@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import sqlite3
 import threading
-import unicodedata
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -21,15 +20,27 @@ from services.image_service.schemas import (
     IMAGE_SIZES,
     UTC,
 )
+from utils.card_names import fold_card_name
 from utils.constants import SQLITE_CONNECTION_TIMEOUT_SECONDS
 from utils.perf import timed
 
 
 def _strip_accents(text: str) -> str:
-    """Return *text* with combining diacritical marks removed (e.g. ó → o)."""
-    return "".join(
-        c for c in unicodedata.normalize("NFKD", text) if not unicodedata.combining(c)
-    ).lower()
+    """Return the accent-folded key for *text* (e.g. ó → o), lowercased.
+
+    Thin alias for :func:`utils.card_names.fold_card_name` so the SQL fallbacks
+    below compare names exactly the way the image indexes key them.
+    """
+    return fold_card_name(text)
+
+
+def _register_name_fold(conn: sqlite3.Connection) -> None:
+    """Expose :func:`_strip_accents` to SQL as ``strip_accents(name)``.
+
+    SQLite's ``LOWER()`` leaves combining characters alone, so accent-tolerant
+    name matching has to compare folded forms computed in Python.
+    """
+    conn.create_function("strip_accents", 1, _strip_accents)
 
 
 class CardImageCache:
@@ -148,6 +159,12 @@ class CardImageCache:
             CREATE INDEX IF NOT EXISTS idx_card_printed_name ON card_images(printed_name)
         """)
 
+    def _connect(self) -> sqlite3.Connection:
+        """Open a cache connection with ``strip_accents()`` available to SQL."""
+        conn = sqlite3.connect(self.db_path, timeout=SQLITE_CONNECTION_TIMEOUT_SECONDS)
+        _register_name_fold(conn)
+        return conn
+
     def _resolve_path(self, stored_path: str) -> Path:
         return resolve_stored_path(stored_path, self.cache_dir, self._path_roots)
 
@@ -166,7 +183,7 @@ class CardImageCache:
         return result
 
     def _get_image_path_from_db(self, card_name: str, size: str) -> Path | None:
-        with sqlite3.connect(self.db_path, timeout=SQLITE_CONNECTION_TIMEOUT_SECONDS) as conn:
+        with self._connect() as conn:
             cursor = conn.execute(
                 """
                 SELECT file_path
@@ -189,10 +206,8 @@ class CardImageCache:
                 return alias_path
 
             # Fallback: accent-insensitive lookup for cards like "Lórien Revealed"
-            # stored under their accented Scryfall name but requested without accents
-            # (or vice-versa).  SQLite's LOWER() does not strip combining characters,
-            # so we register a custom scalar and compare normalised forms.
-            conn.create_function("strip_accents", 1, _strip_accents)
+            # stored under their accented Scryfall name but requested without
+            # accents (MTGO spells them in ASCII), or vice-versa.
             cursor = conn.execute(
                 """
                 SELECT file_path
@@ -219,10 +234,14 @@ class CardImageCache:
         if not alias or "//" in alias:
             return None
 
-        alias_lower = alias.lower()
+        # Folded on both sides: MTGO asks for "Gloin the Mighty" while the row
+        # is stored as "Glóin the Mighty // Easy Pickings", and LOWER() alone
+        # never matches those two (issue #986 follow-up).
+        _register_name_fold(conn)
+        folded = _strip_accents(alias)
         patterns = (
-            f"{alias_lower} // %",
-            f"% // {alias_lower}",
+            f"{folded} // %",
+            f"% // {folded}",
         )
 
         for pattern in patterns:
@@ -230,7 +249,7 @@ class CardImageCache:
                 """
                 SELECT file_path
                 FROM card_images
-                WHERE LOWER(name) LIKE ? AND image_size = ?
+                WHERE strip_accents(name) LIKE ? AND image_size = ?
                 ORDER BY face_index
                 LIMIT 1
                 """,
@@ -262,32 +281,37 @@ class CardImageCache:
         """
         if not set_code:
             return self.get_image_path(card_name, size)
-        with sqlite3.connect(self.db_path, timeout=SQLITE_CONNECTION_TIMEOUT_SECONDS) as conn:
+        with self._connect() as conn:
             collector = (collector_number or "").strip()
+            folded = _strip_accents(card_name)
             if collector:
                 cursor = conn.execute(
                     """
                     SELECT file_path
                     FROM card_images
-                    WHERE (LOWER(name) = LOWER(?) OR LOWER(printed_name) = LOWER(?))
+                    WHERE (LOWER(name) = LOWER(?) OR LOWER(printed_name) = LOWER(?)
+                           OR strip_accents(name) = ?
+                           OR strip_accents(COALESCE(printed_name, '')) = ?)
                       AND LOWER(set_code) = LOWER(?)
                       AND LOWER(collector_number) = LOWER(?) AND image_size = ?
                     ORDER BY face_index
                     LIMIT 1
                     """,
-                    (card_name, card_name, set_code, collector, size),
+                    (card_name, card_name, folded, folded, set_code, collector, size),
                 )
             else:
                 cursor = conn.execute(
                     """
                     SELECT file_path
                     FROM card_images
-                    WHERE (LOWER(name) = LOWER(?) OR LOWER(printed_name) = LOWER(?))
+                    WHERE (LOWER(name) = LOWER(?) OR LOWER(printed_name) = LOWER(?)
+                           OR strip_accents(name) = ?
+                           OR strip_accents(COALESCE(printed_name, '')) = ?)
                       AND LOWER(set_code) = LOWER(?) AND image_size = ?
                     ORDER BY face_index
                     LIMIT 1
                     """,
-                    (card_name, card_name, set_code, size),
+                    (card_name, card_name, folded, folded, set_code, size),
                 )
             row = cursor.fetchone()
             if row:
@@ -316,10 +340,11 @@ class CardImageCache:
         if not alias or "//" in alias:
             return None
 
-        alias_lower = alias.lower()
+        _register_name_fold(conn)
+        folded = _strip_accents(alias)
         patterns = (
-            f"{alias_lower} // %",
-            f"% // {alias_lower}",
+            f"{folded} // %",
+            f"% // {folded}",
         )
         collector = (collector_number or "").strip()
         for pattern in patterns:
@@ -328,7 +353,7 @@ class CardImageCache:
                     """
                     SELECT file_path
                     FROM card_images
-                    WHERE LOWER(name) LIKE ? AND LOWER(set_code) = LOWER(?)
+                    WHERE strip_accents(name) LIKE ? AND LOWER(set_code) = LOWER(?)
                       AND LOWER(collector_number) = LOWER(?) AND image_size = ?
                     ORDER BY face_index
                     LIMIT 1
@@ -340,7 +365,8 @@ class CardImageCache:
                     """
                     SELECT file_path
                     FROM card_images
-                    WHERE LOWER(name) LIKE ? AND LOWER(set_code) = LOWER(?) AND image_size = ?
+                    WHERE strip_accents(name) LIKE ? AND LOWER(set_code) = LOWER(?)
+                      AND image_size = ?
                     ORDER BY face_index
                     LIMIT 1
                     """,

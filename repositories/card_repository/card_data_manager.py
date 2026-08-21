@@ -20,6 +20,7 @@ from loguru import logger
 from repositories.card_repository import remote, storage
 from repositories.card_repository.builder import build_index
 from repositories.card_repository.schemas import CardEntry
+from utils.card_names import fold_card_name
 from utils.constants import ATOMIC_DATA_HEAD_TTL_SECONDS, CARD_DATA_DIR
 from utils.perf import timed
 
@@ -37,8 +38,20 @@ def _resolve_name_index(cards: list, name_index: dict[str, int]) -> dict:
     The index stores ``cards_by_name`` as offsets into ``cards`` to avoid
     duplicating every card object on disk; this turns those offsets back into
     references to the shared card records.
+
+    Each alias also gets an accent-folded key, because decks come from MTGO
+    with accented names spelled in ASCII ("Dain, Lord of the Iron Hills") while
+    MTGJSON carries "Dáin" — without it those cards have no metadata at all in
+    the inspector and drop out of the deck's curve and colour stats. Folded
+    keys are added last so a real card name always wins over another card's
+    folded spelling.
     """
-    return {alias: cards[position] for alias, position in name_index.items()}
+    resolved = {alias: cards[position] for alias, position in name_index.items()}
+    for alias, card in list(resolved.items()):
+        folded = fold_card_name(alias)
+        if folded:
+            resolved.setdefault(folded, card)
+    return resolved
 
 
 class CardDataManager:
@@ -135,7 +148,11 @@ class CardDataManager:
 
     def get_card(self, name: str) -> CardEntry | None:
         self._require_cards()
-        return (self._cards_by_name or {}).get(name.lower())
+        by_name = self._cards_by_name or {}
+        card = by_name.get(name.lower())
+        if card is None:
+            card = by_name.get(fold_card_name(name))
+        return card
 
     def available_formats(self) -> list[str]:
         self._require_cards()
