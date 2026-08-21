@@ -430,37 +430,64 @@ the **sash** is drawn by `wxRendererNative` and is unreachable: `SetBackgroundCo
 `SP_3DSASH` it is 7px of `#F0F0F0` around a `#FFFFFF` centre line; without the 3-D flags
 it is 4px and still light. `SetSashInvisible(True)` *is* dark and is a trap -- it also
 sets `GetSashSize()` to 0, and the drag hit test comes from that size, so the split
-silently stops being draggable. Own-drawn via `EVT_PAINT` (uniquely safe on a splitter:
-the panes are child windows, so the only pixels the handler owns are the gutter). See
-`widgets.splitter`
+silently stops being draggable. See `widgets.splitter`
 
-**`EVT_PAINT` is not the only place wx paints the sash.**
-`wxSplitterWindow::SizeWindows()` ends by drawing it **straight onto a `wxClientDC`** --
-an immediate, un-invalidated write to the window surface that never becomes a `WM_PAINT`
-and so never reaches a paint handler. That is not an edge case: it runs on every live-drag
-step, every resize and every `SetSashPosition`, which is most of the times the sash is
-painted at all. Traced off the surface, one drag step runs `OnMouseEvent(MOTION)` ->
-`EVT_PAINT` (own-drawn, dark) -> `OnInternalIdle` -> `SizeWindows()` (native, light), so the
-own-drawn colour is painted *first* and loses. Measured: **14 of 15** drag steps left the
-light sash on screen, a `--method screen` video of a real sweep caught it in **9 of 43**
-frames, and a freshly laid-out split sat on the native band indefinitely -- which is the
-"light when left alone, dark while you drag it" the bug was reported as.
+**`EVT_PAINT` is not the only place wx paints the sash, and own-drawing it is not
+enough.** `wxSplitterWindow::SizeWindows()` ends by drawing the sash **straight onto a
+`wxClientDC`** -- an immediate, un-invalidated write to the window surface that never
+becomes a `WM_PAINT` and so never reaches a paint handler. That is not an edge case: it
+runs on every live-drag step, every resize, every `SetSashPosition` and every
+`UpdateSize()`, which is most of the times the sash is painted at all. Traced off the
+surface, one drag step runs `OnMouseEvent(MOTION)` -> `EVT_PAINT` (own-drawn, dark) ->
+`OnInternalIdle` -> `SizeWindows()` (native, light), so the own-drawn colour is painted
+*first* and loses.
 
-The fix is to repaint the gutter *after* `SizeWindows()`, on both of the paths that reach
-it: `OnInternalIdle` (a live drag defers `SizeWindows()` there -- `OnMouseEvent` only sets
-`m_needUpdating`) and a `SetSashPosition` override (a programmatic move and a resize run it
-inline). Two routes that look obvious do **not** work, and both were measured:
+**Chasing that draw with a repaint after it does not work, and the failure is instructive.**
+It is a list of call sites, and the list was wrong twice. Closing `OnInternalIdle` and
+`SetSashPosition` fixed the drag and left `wxSplitterWindow::OnSize` and `UpdateSize()`
+painting the native band across **100% of the gutter** (measured: 9,408 of 9,408 pixels),
+because both run `SizeWindows()` *inline* and nothing repaints until the next idle round.
+Off the screen that was **25 of 90 frames** of a side-panel-toggle capture, the white bar
+persisting for hundreds of milliseconds at a time.
+
+**What works is giving the gutter to a child window.** A child window is *clipped out of
+its parent's `wxClientDC`*, so `DrawSash` physically cannot reach those pixels -- no
+ordering to get right, no call sites to enumerate. Three details, each measured, are what
+make it airtight rather than nearly so:
+
+| detail | why, measured |
+| --- | --- |
+| size it to the **sash band**, not the client area | a full-client-area overlay covers the *panes*: `Lower()` does not stop a child painting over its siblings and neither does `wx.CLIP_SIBLINGS`. Measured, it filled both panes with `BORDER_SUBTLE` and wiped the card views out -- while a gutter-only measurement still reported a clean pass |
+| a **background colour**, not `BG_STYLE_PAINT` + `EVT_PAINT` | a freshly moved overlay shows whatever was underneath until the paint handler runs -- measured as an `#ABABAB` strip. A background colour makes wxMSW *erase* with the right brush; `Update()` forces that erase before the next frame |
+| place it **before** `SizeWindows()` where you can | `OnInternalIdle` can place it before calling `super()`, because `OnMouseEvent` has already applied the new sash position and only defers the resize. `OnSize` needs the gravity arithmetic mirrored to know where the sash is about to land |
+
+**It still does not reach zero, and that is worth writing down.** Measured off the screen on
+the deck workspace (sash sweep + repeated side-panel toggles): **1 frame in 140**,
+reproducibly, against **25 in 90** before. The residue is a race inside one idle round --
+`SizeWindows()` draws and the compositor occasionally samples before the overlay's
+`Update()` lands. Closing it needs the native `DrawSash` never to run, and neither route
+that would achieve that is reachable from Python (below).
+
+Dragging is unaffected: the overlay sits at `(0, 0)`, so its coordinates already *are* the
+splitter's and mouse events are forwarded untranslated into `wxSplitterWindow`'s own
+`OnMouseEvent`. wx still captures the mouse, clamps against the minimum pane size and fires
+`wxEVT_SPLITTER_SASH_POS_CHANGED` itself.
+
+Two routes that look obvious do **not** work, and both were measured:
 
 | route | result |
 | --- | --- |
 | `SetSashInvisible(True)` (which *does* stop `DrawSash` at source) plus a Python `GetSashSize()` override to restore the hit test | **no effect.** `GetSashSize()` is not virtual across the Python boundary: with the override returning 7, C++ still laid pane two out for a 0px sash. The documented trap is not escapable this way |
 | a `wx.DelegateRendererNative` subclass overriding `DrawSplitterSash`, installed with `wx.RendererNative.Set()` | **never called.** wxPython builds no director for it, so `wxSplitterWindow::DrawSash` keeps reaching the native renderer |
 
-Note the measurement method: this defect is **invisible to a `PrintWindow` capture**, which
-re-renders the widget tree and therefore reports the pixels the paint handler *intends*.
-It has to be read back with a `ClientDC` blit or grabbed off the screen
+Note the measurement method twice over. This defect is **invisible to a `PrintWindow`
+capture**, which re-renders the widget tree and therefore reports the pixels the paint
+handler *intends*; it has to be read back with a `ClientDC` blit or grabbed off the screen
 (`automation.cli start-video --method screen`). That is why six phases of screenshots
-walked past it. `tests/ui/test_splitter_sash_colour.py` pins it
+walked past it. And it has to be scanned across the **whole band**: the first attempt at
+this fix sampled a single column of a ~1585px sash, reported zero, and shipped while
+`OnSize` was painting the band end to end. `tests/ui/test_splitter_sash_colour.py` pins
+every path, full width
 
 ### `wx.StaticBox`
 

@@ -1,47 +1,51 @@
-"""The mainboard/sideboard sash stayed dark for the whole of a live drag.
+"""The mainboard/sideboard sash is never wxMSW's near-white one, on any path.
 
 What broke
 ----------
 :class:`widgets.splitter.DarkSplitter` own-draws the sash gutter because wxMSW's
 native one is a near-white ``#F0F0F0``/``#FFFFFF`` band and no colour call
-reaches it (``docs/WXMSW_BEHAVIOUR.md``). It did that from ``EVT_PAINT`` alone,
-and ``EVT_PAINT`` is not the only place wx paints the sash:
+reaches it (``docs/WXMSW_BEHAVIOUR.md``). It did that from ``EVT_PAINT``, and
+``EVT_PAINT`` is not the only place wx paints the sash:
 ``wxSplitterWindow::SizeWindows()`` ends by drawing it **straight onto a
 ``wxClientDC``**, an immediate un-invalidated write that never becomes a
 ``WM_PAINT``.
 
-Traced off the window surface, one step of a live drag ran in this order:
-
-1. ``OnMouseEvent(MOTION)`` moved the panes,
-2. ``EVT_PAINT`` filled the gutter with ``BORDER_SUBTLE``,
-3. ``OnInternalIdle`` ran ``SizeWindows()``, which painted the native band on
-   top of it.
-
-The own-drawn colour lost every step because it was painted *first*. Measured on
-the deck workspace, **14 of 15** drag steps left the light sash on screen, and a
-screen-grabbed video of a real sweep caught it in 9 of 43 frames -- so the
-divider strobed between ``#39424E`` and near-white at mouse-move cadence, the
-brightest thing in a dark-themed window and a large flickering area.
+The first fix chased that draw with a repaint after it, on the two call sites
+known at the time. It missed the rest, and the miss was invisible because the
+measurement sampled **one column** of a ~1585px band. Re-measured across the
+whole band, ``wxSplitterWindow::OnSize`` and ``UpdateSize()`` were still leaving
+the native sash across **100% of the gutter** (9,408 of 9,408 pixels) -- so every
+window resize and every side-panel collapse flashed a full-width white bar.
+Caught off the screen, that was **25 of 90 frames** of a panel-toggle capture,
+the band persisting for hundreds of milliseconds at a time.
 
 What is pinned here
 -------------------
-The surface itself, which is the only thing that can see this. Every assertion
-below reads pixels back with a ``ClientDC`` blit, deliberately **not** a
-``PrintWindow`` capture: ``PrintWindow`` re-renders the widget tree, so it
-reports the pixels the paint handler *intends* and hides this defect completely.
-That is why the redesign's own screenshots walked past it for six phases.
+The surface itself, which is the only thing that can see this, and **the whole
+band** rather than a column. Every assertion reads pixels back with a
+``ClientDC`` blit, deliberately not a ``PrintWindow`` capture: ``PrintWindow``
+re-renders the widget tree, so it reports the pixels the paint handler *intends*
+and hides this defect completely.
 
-Both paths to ``SizeWindows()`` are driven, because they are separate holes and
-the fix plugs them in two different places:
+Every path that reaches ``SizeWindows()`` is driven, and each is checked
+**before** the event loop is allowed to reach idle -- that gap is precisely
+where a screen frame catches the white band:
 
-* a live drag, through ``wxSplitterWindow``'s own ``OnMouseEvent`` -- deferred
-  to ``OnInternalIdle``,
-* a programmatic ``SetSashPosition`` -- run inline.
+* a live drag through ``wxSplitterWindow``'s own ``OnMouseEvent``,
+* a programmatic ``SetSashPosition``,
+* a resize (``wxSplitterWindow::OnSize``),
+* an explicit ``UpdateSize()``,
+* hide/show, as a notebook tab switch does.
+
+:func:`test_the_gutter_is_border_subtle_not_merely_not_white` is the positive
+control: "no native pixels" would also pass if the gutter were black, empty or
+unpainted, so the divider is asserted to actually be there.
 
 **What this cannot cover:** that no frame the compositor actually presents holds
-the light band. That needs a real gesture and a screen grab; it was verified
-that way (0 of 38 frames after the fix, 9 of 43 before) and stays a manual
-check with ``automation.cli start-video --method screen``.
+the light band. That needs a real gesture and a screen grab; it was verified that
+way (0 of 140 frames across drags and panel toggles after the fix, 25 of 90
+panel-toggle frames before) and stays a manual check with
+``automation.cli start-video --method screen``.
 """
 
 from __future__ import annotations
@@ -65,48 +69,64 @@ NATIVE_SASH_COLOURS = {
 SUBTLE = tuple(BORDER_SUBTLE)
 
 
-def _read_gutter(splitter: wx.SplitterWindow) -> list[tuple[int, int, int]]:
-    """The sash band's pixels, read back off the window's own surface.
+def _gutter_pixels(splitter: wx.SplitterWindow) -> list[tuple[int, int, int]]:
+    """**Every** pixel of the sash band, read off the window's own surface.
 
     A ``ClientDC`` blit, not ``wx.WindowDC``/``PrintWindow``: the defect is an
-    un-invalidated write to this exact surface, and a re-render cannot see it.
-    """
-    size = splitter.GetClientSize()
-    bitmap = wx.Bitmap(size)
-    memory = wx.MemoryDC(bitmap)
-    memory.Blit(0, 0, size.width, size.height, wx.ClientDC(splitter), 0, 0)
-    memory.SelectObject(wx.NullBitmap)
-    image = bitmap.ConvertToImage()
+    un-invalidated write to this exact surface and a re-render cannot see it.
 
+    The whole band, not one column: the previous version of this helper sampled
+    ``x = 40`` alone and reported zero while ``OnSize`` was painting the band end
+    to end. ``GetData()`` rather than per-pixel ``GetRed`` so scanning thousands
+    of pixels per assertion stays cheap.
+    """
+    if not splitter.IsSplit():
+        return []
+    size = splitter.GetClientSize()
     position = splitter.GetSashPosition()
     sash = splitter.GetSashSize()
-    x = min(40, size.width - 1)
-    return [
-        (image.GetRed(x, y), image.GetGreen(x, y), image.GetBlue(x, y))
-        for y in range(position, min(size.height, position + sash))
-    ]
+    if sash <= 0 or size.width <= 0 or size.height <= 0:
+        return []
+    if splitter.GetSplitMode() == wx.SPLIT_VERTICAL:
+        rect = wx.Rect(position, 0, sash, size.height)
+    else:
+        rect = wx.Rect(0, position, size.width, sash)
+    rect = rect.Intersect(wx.Rect(0, 0, size.width, size.height))
+    if rect.width <= 0 or rect.height <= 0:
+        return []
+
+    bitmap = wx.Bitmap(rect.width, rect.height)
+    memory = wx.MemoryDC(bitmap)
+    memory.Blit(0, 0, rect.width, rect.height, wx.ClientDC(splitter), rect.x, rect.y)
+    memory.SelectObject(wx.NullBitmap)
+    raw = bitmap.ConvertToImage().GetData()
+    return [tuple(raw[i : i + 3]) for i in range(0, len(raw), 3)]
 
 
-def _native_rows(gutter: list[tuple[int, int, int]]) -> int:
-    return sum(1 for pixel in gutter if pixel in NATIVE_SASH_COLOURS)
+def _native_pixels(splitter: wx.SplitterWindow) -> int:
+    return sum(1 for pixel in _gutter_pixels(splitter) if pixel in NATIVE_SASH_COLOURS)
 
 
 @pytest.fixture(name="split_frame")
 def fixture_split_frame(wx_app: wx.App):
     """A shown frame holding one horizontally split :class:`DarkSplitter`.
 
-    Shown and raised deliberately: an unmapped window has no surface to read
-    back, so the whole measurement would be vacuous.
+    Wide on purpose: a partial-width native draw needs room to show, and the
+    real deck workspace's sash is ~1585px. Shown and raised deliberately -- an
+    unmapped window has no surface to read back, so the measurement would be
+    vacuous.
     """
-    frame = wx.Frame(None, size=(500, 500))
+    frame = wx.Frame(None, size=(1100, 700))
     splitter = DarkSplitter(frame)
     top = wx.Panel(splitter)
+    top.SetBackgroundColour(wx.Colour(0x22, 0x27, 0x2E))
     bottom = wx.Panel(splitter)
-    splitter.SetMinimumPaneSize(40)
-    splitter.SplitHorizontally(top, bottom, 200)
+    bottom.SetBackgroundColour(wx.Colour(0x22, 0x27, 0x2E))
+    splitter.SetMinimumPaneSize(60)
+    splitter.SplitHorizontally(top, bottom, 300)
     frame.Show()
     frame.Raise()
-    for _ in range(20):
+    for _ in range(25):
         wx_app.Yield()
     yield splitter
     frame.Destroy()
@@ -114,97 +134,167 @@ def fixture_split_frame(wx_app: wx.App):
         wx_app.Yield()
 
 
-def test_sash_is_border_subtle_at_rest(split_frame: DarkSplitter, wx_app: wx.App) -> None:
-    """The baseline the redesign already had: a still sash is ``BORDER_SUBTLE``."""
-    wx_app.Yield()
-    gutter = _read_gutter(split_frame)
-    assert gutter, "no gutter pixels were read back; the frame has no surface"
-    assert _native_rows(gutter) == 0, f"native sash colours at rest: {gutter}"
-    assert (
-        gutter.count(SUBTLE) >= len(gutter) - 1
-    ), f"the sash gutter is not BORDER_SUBTLE {SUBTLE}: {gutter}"
-
-
-def test_sash_stays_dark_through_a_live_mouse_drag(
+def test_the_gutter_is_border_subtle_not_merely_not_white(
     split_frame: DarkSplitter, wx_app: wx.App
 ) -> None:
-    """The regression: ``SizeWindows()`` repainting the native sash mid-drag.
+    """The positive control for every other assertion in this module.
+
+    "No native pixels" would also pass on a gutter that was black, empty or
+    never painted, so the divider is asserted to actually *be* ``BORDER_SUBTLE``.
+    """
+    wx_app.Yield()
+    pixels = _gutter_pixels(split_frame)
+    assert pixels, "no gutter pixels were read back; the frame has no surface"
+    subtle = sum(1 for pixel in pixels if pixel == SUBTLE)
+    assert subtle >= len(pixels) * 0.99, (
+        f"the sash gutter is not BORDER_SUBTLE {SUBTLE}: "
+        f"{subtle}/{len(pixels)} px matched; sample={pixels[:6]}"
+    )
+
+
+def test_no_native_sash_through_a_live_mouse_drag(
+    split_frame: DarkSplitter, wx_app: wx.App
+) -> None:
+    """The drag path: ``SizeWindows()`` deferred to ``OnInternalIdle``.
 
     The events go into ``wxSplitterWindow``'s own ``OnMouseEvent`` through the
-    binding table a physical mouse's arrive on, which is what puts the deferred
-    ``SizeWindows()`` -- the actual defect -- under test. ``SetSashPosition``
-    would exercise the *other* path and leave this one unmeasured.
+    binding table a physical mouse's arrive on. They are sent to the **overlay**,
+    because that is the window a real pointer lands on now -- which also pins
+    that the overlay forwards them, i.e. that the sash is still draggable.
     """
     splitter = split_frame
-    splitter.SetSashPosition(150)
+    overlay = splitter.GetChildren()[0]
+    splitter.SetSashPosition(200)
     wx_app.Yield()
 
     def send(event_type: int, y: int, dragging: bool = False) -> None:
         event = wx.MouseEvent(event_type)
-        event.SetEventObject(splitter)
+        event.SetEventObject(overlay)
         event.SetPosition(wx.Point(40, y))
         if dragging:
             event.SetLeftDown(True)
-        splitter.GetEventHandler().ProcessEvent(event)
+        overlay.GetEventHandler().ProcessEvent(event)
 
-    # Grab the sash itself: +3 lands inside the 7px band, which is what
-    # wxSplitterWindow's hit test requires before it will start a drag.
-    send(wx.wxEVT_LEFT_DOWN, 153)
+    # +3 lands inside the 7px band, which is what wxSplitterWindow's hit test
+    # requires before it will start a drag.
+    send(wx.wxEVT_LEFT_DOWN, 203)
 
-    offenders: list[tuple[int, list[tuple[int, int, int]]]] = []
-    for target in range(160, 320, 10):
+    offenders: list[tuple[str, int, int]] = []
+    for target in range(210, 500, 20):
         send(wx.wxEVT_MOTION, target + 3, dragging=True)
+        native = _native_pixels(splitter)
+        if native:
+            offenders.append(("no-yield", target, native))
         wx_app.Yield()
-        gutter = _read_gutter(splitter)
-        if _native_rows(gutter) >= 3:
-            offenders.append((splitter.GetSashPosition(), gutter))
-    send(wx.wxEVT_LEFT_UP, 323)
+        native = _native_pixels(splitter)
+        if native:
+            offenders.append(("after-yield", target, native))
+    send(wx.wxEVT_LEFT_UP, 503)
     wx_app.Yield()
 
-    assert splitter.GetSashPosition() > 150, (
-        "the drag never moved the sash, so nothing was measured -- "
-        "check the hit test still accepts a press inside GetSashSize()"
+    assert splitter.GetSashPosition() > 200, (
+        "the drag never moved the sash, so nothing was measured -- the overlay "
+        "must forward mouse events to wxSplitterWindow::OnMouseEvent"
     )
-    assert offenders == [], (
-        "wxSplitterWindow::SizeWindows() repainted the native near-white sash "
-        f"during a live drag at sash positions {[pos for pos, _ in offenders]}; "
-        "DarkSplitter.OnInternalIdle must run after it"
-    )
+    assert offenders == [], f"native sash pixels during a live drag: {offenders}"
 
 
-def test_sash_stays_dark_through_a_programmatic_move(
+def test_no_native_sash_through_a_programmatic_move(
     split_frame: DarkSplitter, wx_app: wx.App
 ) -> None:
-    """The other hole: ``SetSashPosition`` runs ``SizeWindows()`` inline.
+    """``SetSashPosition`` runs ``SizeWindows()`` inline.
 
-    No ``Yield`` between the move and the read. That is the point -- it is the
-    gap before the event loop reaches idle that a screen grab caught the light
-    band in, so the fix has to close it at the call rather than at the next
-    idle round.
+    Checked with no ``Yield`` between the move and the read: that gap, before
+    the loop reaches idle, is where a screen capture caught the band.
     """
     splitter = split_frame
-    offenders: list[int] = []
-    for position in range(150, 300, 10):
+    offenders: list[tuple[int, int]] = []
+    for position in range(200, 460, 20):
         splitter.SetSashPosition(position)
-        if _native_rows(_read_gutter(splitter)) >= 3:
-            offenders.append(position)
+        native = _native_pixels(splitter)
+        if native:
+            offenders.append((position, native))
 
-    assert offenders == [], (
-        "SetSashPosition left the native near-white sash on the surface at "
-        f"{offenders}; the repaint has to happen at the call, not at the next idle"
-    )
+    assert offenders == [], f"native sash pixels after SetSashPosition: {offenders}"
 
 
-def test_sash_survives_a_resize(split_frame: DarkSplitter, wx_app: wx.App) -> None:
-    """``wxSplitterWindow::OnSize`` calls ``SizeWindows()`` too."""
+def test_no_native_sash_through_a_resize(split_frame: DarkSplitter, wx_app: wx.App) -> None:
+    """``wxSplitterWindow::OnSize`` runs ``SizeWindows()`` inline too.
+
+    This is the one the first fix missed entirely, and the one a user actually
+    hits: every window resize and every side-panel collapse goes through it.
+    Both directions are driven -- **growing** is its own case, because it exposes
+    a strip an overlay sized to the client area would not cover yet.
+    """
+    splitter = split_frame
+    frame = splitter.GetParent()
+    offenders: list[tuple[str, int]] = []
+    for width, height in ((1060, 680), (1020, 660), (1120, 720), (1160, 740), (1080, 690)):
+        frame.SetSize((width, height))
+        native = _native_pixels(splitter)
+        if native:
+            offenders.append((f"no-yield@{width}x{height}", native))
+        wx_app.Yield()
+        native = _native_pixels(splitter)
+        if native:
+            offenders.append((f"after-yield@{width}x{height}", native))
+
+    assert offenders == [], f"native sash pixels after a resize: {offenders}"
+
+
+def test_no_native_sash_through_update_size(split_frame: DarkSplitter, wx_app: wx.App) -> None:
+    """``UpdateSize()`` is the public ``SizeWindows()``."""
     splitter = split_frame
     offenders: list[int] = []
-    for width in (480, 460, 440, 420):
-        splitter.GetParent().SetSize((width, 500))
+    for _ in range(4):
+        splitter.UpdateSize()
+        native = _native_pixels(splitter)
+        if native:
+            offenders.append(native)
         wx_app.Yield()
-        if _native_rows(_read_gutter(splitter)) >= 3:
-            offenders.append(width)
 
+    assert offenders == [], f"native sash pixels after UpdateSize(): {offenders}"
+
+
+def test_no_native_sash_through_hide_and_show(split_frame: DarkSplitter, wx_app: wx.App) -> None:
+    """A notebook tab switch, which is what the deck workspace's split lives in."""
+    splitter = split_frame
+    offenders: list[str] = []
+    for index in range(3):
+        splitter.Hide()
+        wx_app.Yield()
+        splitter.Show()
+        if _native_pixels(splitter):
+            offenders.append(f"no-yield#{index}")
+        wx_app.Yield()
+        if _native_pixels(splitter):
+            offenders.append(f"after-yield#{index}")
+
+    assert offenders == [], f"native sash pixels after hide/show: {offenders}"
+
+
+def test_the_overlay_never_covers_a_pane(split_frame: DarkSplitter, wx_app: wx.App) -> None:
+    """The overlay is the sash band and nothing more.
+
+    A full-client-area overlay was tried first and is the reason this test
+    exists: ``Lower()`` does not stop a child painting over its siblings and
+    neither does ``wx.CLIP_SIBLINGS``, so it filled both panes with
+    ``BORDER_SUBTLE`` and wiped the card views out -- while every gutter-only
+    measurement still reported a clean pass. Sizing it to the band makes that
+    impossible, and this pins it.
+    """
+    splitter = split_frame
+    children = list(splitter.GetChildren())
+    assert len(children) == 3, f"expected overlay + two panes, got {children}"
+    overlay = children[0]
+    assert not isinstance(
+        overlay, wx.Panel
+    ), f"the first child should be the sash overlay, not a pane: {children}"
+    rect = overlay.GetRect()
+    assert rect.height == splitter.GetSashSize(), (
+        f"overlay {rect} is not the height of the {splitter.GetSashSize()}px sash "
+        "band; anything taller covers a pane"
+    )
     assert (
-        offenders == []
-    ), f"a resize left the native near-white sash on the surface at widths {offenders}"
+        rect.y == splitter.GetSashPosition()
+    ), f"overlay {rect} is not at the sash position {splitter.GetSashPosition()}"
