@@ -176,7 +176,17 @@ The check is background-only and best-effort: it never blocks startup, and being
 offline, rate-limited, or served an unfamiliar payload all resolve to "no update
 info" rather than an error. The answer is cached with a timestamp and refreshed
 at most once every `UPDATE_CHECK_INTERVAL_SECONDS` (24 h), including across
-restarts, so repeat launches make one request a day. When a newer version does
+restarts, so repeat launches make one request a day.
+
+> **Testing the updater.** That 24 h stamp makes the update path awkward to
+> verify: a release published less than a day after your last launch stays
+> invisible until the stamp expires, which looks exactly like the feature being
+> broken. Set **`MTGO_TOOLS_FORCE_UPDATE_CHECK=1`** to skip the stamp and re-ask
+> GitHub every launch. It is a development affordance and deliberately an env
+> var rather than a preference — the throttle exists to respect GitHub's
+> unauthenticated rate limit, so it is not something a user should be able to
+> leave switched on. `=0` (or `false`/`no`/`off`/empty) reads as off, so it is
+> safe to leave in a shell profile. When a newer version does
 exist the app says so in the right-hand status-bar field and in a **Help** menu
 entry that appears only while the update is pending. The whole thing can be
 turned off from **File ▸ Preferences… ▸ Check for updates**.
