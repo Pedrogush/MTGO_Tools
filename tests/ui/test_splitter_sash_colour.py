@@ -298,3 +298,61 @@ def test_the_overlay_never_covers_a_pane(split_frame: DarkSplitter, wx_app: wx.A
     assert (
         rect.y == splitter.GetSashPosition()
     ), f"overlay {rect} is not at the sash position {splitter.GetSashPosition()}"
+
+
+def test_the_gravity_prediction_matches_wx(split_frame: DarkSplitter, wx_app: wx.App) -> None:
+    """``_predicted_position`` must agree with where wx actually puts the sash.
+
+    The overlay is placed from that prediction *before* ``wxSplitterWindow::
+    OnSize`` runs its inline ``SizeWindows()``, because placing it at the
+    current position leaves it stale and lets the native band show. So the
+    prediction is a hand-written mirror of wx's gravity arithmetic, and an
+    unpinned mirror silently drifts the moment wx changes it.
+
+    Pinned against wx's own answer rather than against a recomputation of the
+    same formula -- comparing an implementation to itself would pass while both
+    were wrong. The spy captures each prediction as it is made, since both
+    inputs (`GetSashPosition`, `_last_client`) have already moved on by the time
+    the resize settles.
+
+    A wrong prediction costs a frame of white rather than correctness --
+    ``OnInternalIdle`` still corrects the overlay afterwards -- which is exactly
+    why it needs a test: nothing else would ever report it.
+    """
+    splitter = split_frame
+    splitter.SetSashGravity(0.6)
+    for _ in range(10):
+        wx_app.Yield()
+
+    predictions: list[int] = []
+    original = splitter._predicted_position
+
+    def spy(new_client: wx.Size) -> int:
+        predicted = original(new_client)
+        predictions.append(predicted)
+        return predicted
+
+    splitter._predicted_position = spy  # type: ignore[method-assign]
+    try:
+        mismatches: list[tuple[int, int]] = []
+        for height in (640, 580, 700, 660):
+            predictions.clear()
+            splitter.GetParent().SetSize((1100, height))
+            for _ in range(15):
+                wx_app.Yield()
+            if not predictions:
+                continue
+            actual = splitter.GetSashPosition()
+            if predictions[-1] != actual:
+                mismatches.append((predictions[-1], actual))
+    finally:
+        del splitter._predicted_position
+
+    assert predictions or mismatches, (
+        "_predicted_position was never called, so nothing was pinned -- "
+        "check that DarkSplitter still places the overlay from the size event"
+    )
+    assert mismatches == [], (
+        "_predicted_position disagrees with wxSplitterWindow::OnSize "
+        f"(predicted, actual): {mismatches}"
+    )

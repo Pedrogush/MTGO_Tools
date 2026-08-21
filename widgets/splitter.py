@@ -289,8 +289,14 @@ class DarkSplitter(wx.SplitterWindow):
         band is drawn -- measured as 7 of 140 screen frames still showing white
         during side-panel toggles. This mirrors that arithmetic so the overlay
         can be in the right place *first*; ``OnInternalIdle`` still corrects it
-        afterwards, so a wrong guess costs a frame rather than correctness, and
-        ``test_the_gravity_prediction_matches_wx`` pins the two together.
+        afterwards, so a wrong guess costs a frame of white rather than
+        correctness.
+
+        Being a hand-written mirror of wx internals, it drifts silently the
+        moment wx changes them -- and nothing else in the app would ever report
+        it. ``test_the_gravity_prediction_matches_wx`` pins it against wx's own
+        answer (not against a recomputation of this same formula, which would
+        pass while both were wrong).
         """
         vertical = self.GetSplitMode() == wx.SPLIT_VERTICAL
         size = new_client.width if vertical else new_client.height
