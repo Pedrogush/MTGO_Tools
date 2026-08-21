@@ -40,6 +40,7 @@ all times.
 
 from __future__ import annotations
 
+import os
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -76,6 +77,34 @@ _API_HEADERS = {
 # release) is still usable. The sidecar, by contrast, is required to be exactly
 # ``<installer name>.sha256``: a checksum file that names *some other* build is
 # worse than no checksum at all, because it would be trusted.
+#: Set to a truthy value to make every launch re-ask GitHub, ignoring the
+#: once-a-day stamp. Development and QA only, and deliberately an env var rather
+#: than a preference: the throttle exists to respect GitHub's unauthenticated
+#: rate limit, so this is not something a user should be able to leave on.
+#:
+#: It exists because the throttle makes the update path effectively untestable.
+#: A release published less than a day after your last launch is invisible until
+#: the stamp expires, so verifying the updater end to end meant hand-deleting
+#: `UPDATE_CHECK_CACHE_FILE` between runs -- which is both undiscoverable and
+#: easy to mistake for the feature being broken (it was, once, on 2026-08-21:
+#: a fresh 1.2.0 install showed no update because a stamp written four hours
+#: earlier still said the newest release was 1.1.7).
+FORCE_CHECK_ENV_VAR = "MTGO_TOOLS_FORCE_UPDATE_CHECK"
+
+#: Values that read as "off" when the variable is set but not meant to be on, so
+#: `MTGO_TOOLS_FORCE_UPDATE_CHECK=0` in a shell profile does what it looks like.
+_FALSEY = {"", "0", "false", "no", "off"}
+
+
+def force_check_requested() -> bool:
+    """Whether :data:`FORCE_CHECK_ENV_VAR` is set to something truthy.
+
+    Read at call time rather than import time so a test can set it with
+    ``monkeypatch.setenv`` and so it can be toggled in a long-running session.
+    """
+    return os.environ.get(FORCE_CHECK_ENV_VAR, "").strip().lower() not in _FALSEY
+
+
 INSTALLER_ASSET_PREFIX = "MTGOTools_Setup_"
 INSTALLER_ASSET_SUFFIX = ".exe"
 CHECKSUM_ASSET_SUFFIX = ".sha256"
@@ -259,9 +288,16 @@ class UpdateService:
         the app is launched. A stamp dated in the *future* counts as stale: a
         clock that ran fast and was then corrected would otherwise pin the
         cached answer permanently.
+
+        Setting :data:`FORCE_CHECK_ENV_VAR` skips the stamp entirely and asks
+        GitHub every launch. That is a development affordance, not a feature:
+        see the constant for why it is an env var.
         """
         stamp = self._read_stamp()
-        if stamp is not None and 0 <= (time.time() - stamp.checked_at) < self.check_interval:
+        forced = force_check_requested()
+        if forced:
+            logger.info(f"Update check: {FORCE_CHECK_ENV_VAR} is set, ignoring the cached result")
+        elif stamp is not None and 0 <= (time.time() - stamp.checked_at) < self.check_interval:
             logger.debug("Update check: cached result is still fresh")
             return self._to_update_info(stamp)
 

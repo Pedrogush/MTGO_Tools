@@ -17,6 +17,7 @@ from typing import Any
 import pytest
 
 from services.update_service import (
+    FORCE_CHECK_ENV_VAR,
     NO_RELEASE,
     RELEASES_PAGE_URL,
     UpdateInfo,
@@ -452,6 +453,80 @@ def test_the_throttle_suppresses_a_second_check(tmp_path: Path) -> None:
 
     assert len(calls) == 1
     assert first == second
+
+
+def test_the_force_env_var_defeats_the_throttle(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The dev escape hatch: every launch re-asks, stamp or no stamp.
+
+    Without it the update path is effectively untestable — a release published
+    less than a day after your last launch stays invisible until the stamp
+    expires, which is indistinguishable from the feature being broken.
+    """
+    monkeypatch.setenv(FORCE_CHECK_ENV_VAR, "1")
+    service, calls = _service(
+        tmp_path, responses=[_release_payload("v1.0.3"), _release_payload("v1.0.4")]
+    )
+
+    first = service.check()
+    second = service.check()
+
+    assert len(calls) == 2
+    assert first is not None and first.version == "1.0.3"
+    assert second is not None and second.version == "1.0.4"
+
+
+def test_the_force_env_var_defeats_a_stamp_from_a_previous_launch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The exact shape of the bug it exists for.
+
+    A stamp on disk says the newest release is 1.0.2 (true when it was written);
+    1.0.4 has shipped since. Unforced, the launch believes the stamp and stays
+    quiet; forced, it re-asks and finds the release.
+    """
+    first_run, _ = _service(tmp_path, responses=[_release_payload("v1.0.2")])
+    assert first_run.check() is None  # nothing newer than the running 1.0.2
+
+    monkeypatch.setenv(FORCE_CHECK_ENV_VAR, "1")
+    second_run, second_calls = _service(tmp_path, responses=[_release_payload("v1.0.4")])
+    result = second_run.check()
+
+    assert len(second_calls) == 1
+    assert result is not None
+    assert result.version == "1.0.4"
+
+
+@pytest.mark.parametrize("value", ["", "0", "false", "no", "off", "  OFF  "])
+def test_a_falsey_force_env_var_leaves_the_throttle_alone(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, value: str
+) -> None:
+    """`MTGO_TOOLS_FORCE_UPDATE_CHECK=0` in a profile does what it looks like."""
+    monkeypatch.setenv(FORCE_CHECK_ENV_VAR, value)
+    service, calls = _service(
+        tmp_path, responses=[_release_payload("v1.0.3"), _release_payload("v1.0.4")]
+    )
+
+    service.check()
+    service.check()
+
+    assert len(calls) == 1
+
+
+def test_the_throttle_holds_when_the_force_env_var_is_absent(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The default is unchanged: one request a day, however often you launch."""
+    monkeypatch.delenv(FORCE_CHECK_ENV_VAR, raising=False)
+    service, calls = _service(
+        tmp_path, responses=[_release_payload("v1.0.3"), _release_payload("v1.0.4")]
+    )
+
+    service.check()
+    service.check()
+
+    assert len(calls) == 1
 
 
 def test_the_throttle_survives_a_restart(tmp_path: Path) -> None:
