@@ -1,19 +1,28 @@
-# Publish a GitHub Release whenever main carries a version that hasn't shipped.
+# Decide, record, and publish a release -- all after the merge has landed.
 #
-# This is the last step of the versioning model in docs/VERSIONING.md: the number
-# is decided in the PR (versioning.yml commits VERSION onto the PR branch), and
-# merging that PR is what makes it real. So there is nothing to hand-pick here —
-# the workflow reads VERSION on main and asks a single question: does the tag
-# `v<VERSION>` already exist?
+# The version a change deserves depends on everything that shipped alongside it,
+# and that set is only final once the merge lands. The previous model decided the
+# number on the PR branch, which pinned it against a base that then moved; that is
+# how `main` once went backwards from 1.4.0 to 1.3.3 and published v1.3.4 *after*
+# v1.4.0. So the whole decision happens here, on `main`, in one place:
 #
-#   no  -> build the installer from main, tag, and publish the release
-#   yes -> that version already shipped; do nothing
+#   1. compute the next version from the newest vX.Y.Z tag + the commits since it
+#      (scripts/next_version.py -- inference proposes patch, a `Version-Bump:` or
+#      `Release-As:` trailer is what buys a minor or a major)
+#   2. record it by committing VERSION to `main`, so the file, the tag, and the
+#      installer all agree
+#   3. build and verify the installer from that exact commit, then tag + publish
+#   4. prune releases back to the newest patch per MAJOR.MINOR line, max 10
 #
-# That guard (rather than a `paths: [VERSION]` filter) is what makes this safe to
-# run on every push: it is idempotent, it cannot double-publish, and a release
-# that failed halfway is retried simply by pushing again or dispatching manually.
-# The guard runs on a cheap ubuntu job so the expensive Windows build is only
-# started when there is genuinely something to ship.
+# Idempotent by construction: the guard is "does the tag v<next> already have a
+# release?", so re-running publishes nothing twice, and a build that failed after
+# VERSION was recorded is retried by the next push (the recomputed number is the
+# same, the file already matches, the missing tag is what triggers the retry).
+#
+# PUSH ACCESS: `main` requires a PR, so the VERSION commit is pushed with a
+# write-scoped deploy key (secret RELEASE_SSH_KEY) that the ruleset lists as a
+# bypass actor. That push does re-trigger this workflow, hence the `chore(release):`
+# guard on the first job -- without it the run would queue behind itself for nothing.
 name: Release
 
 on:
@@ -30,42 +39,107 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  check:
-    name: Check for an unreleased version
+  decide:
+    name: Decide and record the version
     runs-on: ubuntu-latest
+    # Skip the workflow's own VERSION commit; anything else is a real merge.
+    if: ${{ github.event_name != 'push' || !startsWith(github.event.head_commit.message, 'chore(release):') }}
     outputs:
-      version: ${{ steps.gate.outputs.version }}
-      should_release: ${{ steps.gate.outputs.should_release }}
+      version: ${{ steps.decide.outputs.version }}
+      sha: ${{ steps.decide.outputs.sha }}
+      should_release: ${{ steps.decide.outputs.should_release }}
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # tags, so the "already released?" check is accurate
+          fetch-depth: 0 # tags: they are the base the next version is computed from
+          # Pushes VERSION back to `main`. Falls back to the built-in token when
+          # the secret is absent, which is enough to compute but not to record.
+          ssh-key: ${{ secrets.RELEASE_SSH_KEY }}
 
-      - name: Decide whether to release
-        id: gate
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Compute, record, and gate
+        id: decide
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          version="$(tr -d '[:space:]' < VERSION)"
-          echo "version=$version" >> "$GITHUB_OUTPUT"
+          base="$(python scripts/next_version.py base)"
+          next="$(python scripts/next_version.py next)"
+          level="$(python scripts/next_version.py bump)"
+          echo "version=$next" >> "$GITHUB_OUTPUT"
+          echo "Base $base, bump $level, next $next"
 
-          if git rev-parse -q --verify "refs/tags/v$version" >/dev/null; then
+          if [ "$next" = "$base" ]; then
             echo "should_release=false" >> "$GITHUB_OUTPUT"
-            echo "v$version is already tagged; nothing to release." >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo "should_release=true" >> "$GITHUB_OUTPUT"
-            echo "### Releasing \`v$version\`" >> "$GITHUB_STEP_SUMMARY"
+            echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+            echo "Nothing release-worthy since \`v$base\`; no release." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
           fi
 
+          # Already shipped? The tag *and* its release must both exist -- a tag
+          # with no release is a build that failed half-way, and retrying it is
+          # exactly what should happen.
+          if git rev-parse -q --verify "refs/tags/v$next" >/dev/null \
+             && gh release view "v$next" >/dev/null 2>&1; then
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+            echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+            echo "\`v$next\` already shipped; nothing to do." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          # Record the number on `main` so VERSION, the tag, and the installer
+          # agree. Skipped when the file already says it -- which is the case on
+          # a retry, and when a PR set it by hand.
+          if [ "$(tr -d '[:space:]' < VERSION)" != "$next" ]; then
+            python scripts/next_version.py apply
+            git config user.name  "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add VERSION
+            git commit -m "chore(release): VERSION $next"
+            if ! git push origin "HEAD:main"; then
+              # Two very different reasons the push can fail, and they must not
+              # be confused: a lost race is routine, a missing deploy key is a
+              # silent halt to every future release.
+              git fetch --no-tags origin main
+              if [ "$(git rev-parse origin/main)" = "$(git rev-parse HEAD^)" ]; then
+                echo "::error::Could not push VERSION to main, and main has not moved." \
+                     "Check the RELEASE_SSH_KEY deploy key and the main ruleset's bypass actors."
+                exit 1
+              fi
+              # `main` moved while we were deciding. That newer push is running
+              # this same job with a fuller commit range, so it computes at least
+              # this version and publishes it. Bowing out is the correct answer,
+              # not a failure.
+              echo "should_release=false" >> "$GITHUB_OUTPUT"
+              echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+              echo "\`main\` moved mid-run; the newer push will release." >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+          fi
+
+          echo "should_release=true" >> "$GITHUB_OUTPUT"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          {
+            echo "### Releasing \`v$next\` (was \`v$base\`, bump: $level)"
+          } >> "$GITHUB_STEP_SUMMARY"
+
   release:
-    name: Build and publish v${{ needs.check.outputs.version }}
-    needs: check
-    if: needs.check.outputs.should_release == 'true'
+    name: Build and publish v${{ needs.decide.outputs.version }}
+    needs: decide
+    if: needs.decide.outputs.should_release == 'true'
     runs-on: windows-latest
     env:
-      VERSION: ${{ needs.check.outputs.version }}
+      VERSION: ${{ needs.decide.outputs.version }}
     steps:
+      # The exact commit whose VERSION was recorded, not whatever `main` is by
+      # the time this ~10-minute Windows job starts.
       - uses: actions/checkout@v4
         with:
+          ref: ${{ needs.decide.outputs.sha }}
           fetch-depth: 0
 
       - name: Set up Python
@@ -87,7 +161,7 @@ jobs:
       - name: Install Inno Setup
         run: choco install innosetup -y
 
-      # Same build the PR CI exercises, so what ships here is what was tested —
+      # Same build the PR CI exercises, so what ships here is what was tested --
       # including the bundled bulk-data seed, which a release must carry (a
       # seedless install works but cold-starts with a ~130 MB download).
       - name: Build installer
@@ -111,9 +185,9 @@ jobs:
           $sha = (Get-FileHash -Algorithm SHA256 -Path $file).Hash.ToLower()
           "sha256=$sha" >> $env:GITHUB_OUTPUT
 
-      # The tag is created here rather than earlier so it is only ever written
-      # once a verified installer exists — a failed build leaves no tag behind
-      # and the next push retries cleanly.
+      # The tag is created here rather than in `decide` so it is only ever
+      # written once a verified installer exists -- a failed build leaves no tag
+      # behind and the next push retries cleanly.
       - name: Tag and publish release
         shell: bash
         env:
@@ -123,8 +197,12 @@ jobs:
           set -euo pipefail
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git tag -a "v$VERSION" -m "MTGO Tools v$VERSION"
-          git push origin "v$VERSION"
+          # Absent on a first run, present when a previous publish failed after
+          # tagging; either way the tag must end up on this commit.
+          if ! git rev-parse -q --verify "refs/tags/v$VERSION" >/dev/null; then
+            git tag -a "v$VERSION" -m "MTGO Tools v$VERSION"
+            git push origin "v$VERSION"
+          fi
 
           cat > notes.md <<EOF
           ## Install
@@ -153,3 +231,21 @@ jobs:
             --generate-notes
 
           echo "Published https://github.com/${{ github.repository }}/releases/tag/v$VERSION" >> "$GITHUB_STEP_SUMMARY"
+
+  prune:
+    name: Prune superseded releases
+    needs: [decide, release]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # Deletes the release and its ~180 MB installer, never the tag.
+      - name: Prune
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python scripts/prune_releases.py | tee -a "$GITHUB_STEP_SUMMARY"

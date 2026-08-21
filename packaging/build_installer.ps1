@@ -31,7 +31,7 @@ $DistDir = Join-Path $ProjectRoot "dist"
 $InstallerDir = Join-Path $DistDir "installer"
 
 # Version is the single source of truth in the repo-root VERSION file, owned by
-# the semver automation (scripts/next_version.py + the Versioning CI workflow).
+# the release automation (scripts/next_version.py + .github/workflows/release.yml).
 # installer.iss reads the same file, so the output filename below matches it.
 $VersionFile = Join-Path $ProjectRoot "VERSION"
 if (-not (Test-Path $VersionFile)) {
