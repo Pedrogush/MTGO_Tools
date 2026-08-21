@@ -15,6 +15,7 @@ from typing import Any
 import pytest
 
 from services.update_service import (
+    NO_RELEASE,
     RELEASES_PAGE_URL,
     UpdateInfo,
     UpdateService,
@@ -218,6 +219,71 @@ def test_a_failed_request_keeps_serving_the_last_known_answer(tmp_path: Path) ->
 
     assert result is not None
     assert result.version == "1.0.3"
+
+
+def test_a_deleted_release_stops_being_advertised(tmp_path: Path) -> None:
+    """The bug this guards: a pulled release recommended forever from a stale cache.
+
+    A 404 means "nothing is published", which is an answer. Treating it like a
+    transport failure made every later launch re-ask, 404, and fall back to the
+    very answer it should have thrown away.
+    """
+    service, calls = _service(
+        tmp_path,
+        check_interval=0.0,
+        responses=[_release_payload("v1.0.3"), NO_RELEASE],
+    )
+
+    assert service.check() is not None  # v1.0.3 is published and newer
+    # The release is then deleted, so GitHub starts answering 404.
+    assert service.check() is None
+    assert len(calls) == 2
+
+
+def test_a_deleted_release_stays_gone_across_restarts(tmp_path: Path) -> None:
+    """The cleared answer must be persisted, not just returned once."""
+    service, _calls = _service(
+        tmp_path, check_interval=0.0, responses=[_release_payload("v1.0.3"), NO_RELEASE]
+    )
+    service.check()
+    service.check()
+
+    # A fresh service reading the same stamp, with the throttle still holding.
+    restarted, calls = _service(tmp_path, check_interval=86400.0)
+
+    assert restarted.check() is None
+    assert not calls, "a stamped 'nothing published' must satisfy the throttle"
+
+
+def test_no_release_counts_as_a_completed_check(tmp_path: Path) -> None:
+    service, calls = _service(tmp_path, responses=[NO_RELEASE, _release_payload("v1.0.3")])
+
+    assert service.check() is None
+    # Throttled: the 404 was a real answer, so it holds the window like any other.
+    assert service.check() is None
+    assert len(calls) == 1
+
+
+def test_a_404_is_read_as_no_release_not_as_a_failure(tmp_path: Path, monkeypatch) -> None:
+    """The real ``requests`` seam: 404 must reach the NO_RELEASE path."""
+    import services.update_service as update_service
+
+    class _NotFound:
+        status_code = 404
+
+        def raise_for_status(self) -> None:  # pragma: no cover - never reached
+            raise AssertionError("404 must be handled before raise_for_status")
+
+        def json(self) -> Any:  # pragma: no cover - never reached
+            raise AssertionError("404 carries no payload worth reading")
+
+    monkeypatch.setattr(update_service.requests, "get", lambda *a, **k: _NotFound())
+    service = UpdateService(current_version="1.0.2", cache_path=tmp_path / "update_check.json")
+
+    assert service._fetch_latest_release() is update_service.NO_RELEASE
+    assert service.check() is None
+    # Stamped, unlike a transport failure — that is the whole distinction.
+    assert (tmp_path / "update_check.json").exists()
 
 
 def test_requests_failures_never_escape_the_service(tmp_path: Path, monkeypatch) -> None:
