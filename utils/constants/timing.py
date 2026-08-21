@@ -89,6 +89,16 @@ REMOTE_SNAPSHOT_BUNDLE_MAX_AGE_SECONDS = 6 * ONE_HOUR_SECONDS
 UPDATE_CHECK_INTERVAL_SECONDS = ONE_DAY_SECONDS
 UPDATE_CHECK_REQUEST_TIMEOUT_SECONDS = 10
 
+# Applying an update the check found (services/update_installer.py). The
+# timeout is per socket operation, not for the whole transfer: a ~175 MB
+# installer over a slow link legitimately takes many minutes, so a total
+# deadline would abort real downloads, while a stalled connection still fails
+# within the minute. The chunk size doubles as the progress-callback interval —
+# 256 KiB is ~700 UI updates across that installer, fine-grained enough for a
+# progress bar without a callback per network packet.
+UPDATE_DOWNLOAD_TIMEOUT_SECONDS = 60
+UPDATE_DOWNLOAD_CHUNK_SIZE = 256 * 1024
+
 # SQLite cache settings
 SQLITE_CONNECTION_TIMEOUT_SECONDS = 30.0
 SQLITE_BUSY_TIMEOUT_MS = 30000

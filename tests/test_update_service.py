@@ -9,6 +9,8 @@ reached.
 
 from __future__ import annotations
 
+import json
+import time
 from pathlib import Path
 from typing import Any
 
@@ -23,12 +25,36 @@ from services.update_service import (
     reset_update_service,
 )
 
+INSTALLER_NAME = "MTGOTools_Setup_v1.0.3.exe"
+INSTALLER_URL = f"https://github.test/download/{INSTALLER_NAME}"
+CHECKSUM_URL = f"{INSTALLER_URL}.sha256"
+
+
+def _asset(name: str, url: str | None = "https://github.test/download/x") -> dict[str, Any]:
+    asset: dict[str, Any] = {"name": name}
+    if url is not None:
+        asset["browser_download_url"] = url
+    return asset
+
 
 def _release_payload(
-    tag: str, url: str = "https://github.com/o/r/releases/tag/x"
+    tag: str,
+    url: str = "https://github.com/o/r/releases/tag/x",
+    assets: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """The subset of GitHub's ``/releases/latest`` payload the service reads."""
-    return {"tag_name": tag, "html_url": url}
+    payload: dict[str, Any] = {"tag_name": tag, "html_url": url}
+    if assets is not None:
+        payload["assets"] = assets
+    return payload
+
+
+def _released_assets() -> list[dict[str, Any]]:
+    """Exactly what `.github/workflows/release.yml` attaches to a release."""
+    return [
+        _asset(INSTALLER_NAME, INSTALLER_URL),
+        _asset(f"{INSTALLER_NAME}.sha256", CHECKSUM_URL),
+    ]
 
 
 def _service(
@@ -142,6 +168,117 @@ def test_check_falls_back_to_the_releases_page_without_an_html_url(tmp_path: Pat
 
     assert result is not None
     assert result.release_url == RELEASES_PAGE_URL
+
+
+# ---------------------------------------------------------------------------
+# Release assets (what the in-app updater needs to apply an update)
+# ---------------------------------------------------------------------------
+
+
+def test_check_reports_the_installer_and_checksum_assets(tmp_path: Path) -> None:
+    service, _calls = _service(
+        tmp_path, responses=[_release_payload("v1.0.3", assets=_released_assets())]
+    )
+
+    result = service.check()
+
+    assert result is not None
+    assert result.installer_url == INSTALLER_URL
+    assert result.checksum_url == CHECKSUM_URL
+    assert result.installer_name == INSTALLER_NAME
+
+
+@pytest.mark.parametrize(
+    "assets",
+    [
+        None,  # no "assets" key at all
+        [],  # a release with nothing attached
+        [{"name": 123}, "not a dict", {}],  # entries the payload shape says can't happen
+        [_asset("SHA256SUMS.txt")],  # attachments, but not the installer
+        [_asset(INSTALLER_NAME, INSTALLER_URL)],  # installer with no sidecar
+        [_asset(f"{INSTALLER_NAME}.sha256", CHECKSUM_URL)],  # sidecar with no installer
+        [_asset(INSTALLER_NAME, url=None), _asset(f"{INSTALLER_NAME}.sha256")],  # no URL
+        [
+            _asset(INSTALLER_NAME, INSTALLER_URL),
+            _asset("MTGOTools_Setup_v9.9.9.exe.sha256"),  # sidecar for another build
+        ],
+    ],
+)
+def test_a_release_without_a_usable_asset_pair_still_reports_the_update(
+    tmp_path: Path, assets: list[dict[str, Any]] | None
+) -> None:
+    # The notice is about the release existing, not about the app's ability to
+    # apply it: suppressing it here would hide a real update behind a packaging
+    # detail, when opening the release page still works perfectly well.
+    service, _calls = _service(tmp_path, responses=[_release_payload("v1.0.3", assets=assets)])
+
+    result = service.check()
+
+    assert result is not None
+    assert result.version == "1.0.3"
+    assert result.installer_url is None
+    assert result.checksum_url is None
+    assert result.installer_name is None
+
+
+def test_a_malformed_assets_array_does_not_break_the_check(tmp_path: Path) -> None:
+    payload = _release_payload("v1.0.3")
+    payload["assets"] = "not a list"
+    service, _calls = _service(tmp_path, responses=[payload])
+
+    result = service.check()
+
+    assert result is not None
+    assert result.installer_url is None
+
+
+def test_the_asset_urls_survive_a_restart(tmp_path: Path) -> None:
+    # They ride in the same on-disk stamp as the version, so a throttled launch
+    # can still offer an in-app update rather than only the release page.
+    first_run, _first_calls = _service(
+        tmp_path, responses=[_release_payload("v1.0.3", assets=_released_assets())]
+    )
+    first_run.check()
+
+    second_run, second_calls = _service(tmp_path, responses=[])
+    result = second_run.check()
+
+    assert not second_calls
+    assert result is not None
+    assert result.installer_url == INSTALLER_URL
+    assert result.checksum_url == CHECKSUM_URL
+
+
+def test_a_stamp_written_before_the_asset_fields_existed_still_decodes(tmp_path: Path) -> None:
+    # Exactly what a build from before this feature wrote. If msgspec rejected
+    # it the app would silently spend one API request per launch, forever.
+    stamp = {"checked_at": time.time(), "latest_version": "1.0.3", "release_url": "https://x.test"}
+    (tmp_path / "update_check.json").write_text(json.dumps(stamp), encoding="utf-8")
+    service, calls = _service(tmp_path, responses=[])
+
+    result = service.check()
+
+    assert not calls  # the stamp was read, not discarded as corrupt
+    assert result is not None
+    assert result.version == "1.0.3"
+    assert result.installer_url is None
+
+
+def test_a_stamp_carrying_unknown_fields_still_decodes(tmp_path: Path) -> None:
+    # The mirror image: a stamp written by a *newer* build, after a downgrade.
+    stamp = {
+        "checked_at": time.time(),
+        "latest_version": "1.0.3",
+        "signature_url": "https://x.test",
+    }
+    (tmp_path / "update_check.json").write_text(json.dumps(stamp), encoding="utf-8")
+    service, calls = _service(tmp_path, responses=[])
+
+    result = service.check()
+
+    assert not calls
+    assert result is not None
+    assert result.version == "1.0.3"
 
 
 # ---------------------------------------------------------------------------
