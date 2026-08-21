@@ -143,8 +143,8 @@ Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChang
 ;
 ; nowait is load-bearing rather than cosmetic: Setup waits for a [Run] entry it
 ; started unless told not to, and the app runs for hours. Without it Setup would
-; stay alive for the whole session, and the updater — which watches for Setup to
-; exit — would wait just as long.
+; stay alive for the entire session — a stray process holding an install lock,
+; long after the update it performed was finished.
 Filename: "{app}\{#MyAppExeName}"; Flags: nowait; Check: RelaunchRequested
 
 [Code]
@@ -158,7 +158,13 @@ Filename: "{app}\{#MyAppExeName}"; Flags: nowait; Check: RelaunchRequested
 // not nest, so the constant named above would close the comment early and the
 // rest of it would be compiled as code.
 //
-// ParamStr(0) is Setup's own executable path, so the scan starts at 1.
+// The scan starts at 0, not 1. ParamStr(0) is conventionally Setup's own
+// executable path (Delphi semantics, which Inno mirrors) and so would never
+// match, but this file cannot be compiled on the Linux side of this project and
+// the failure mode if that assumption is ever wrong is the worst kind: the
+// switch is silently ignored and the app simply never comes back after an
+// update. Reading one extra parameter costs nothing and removes the assumption.
+//
 // CompareText is case-insensitive, matching how Windows and Inno's own switches
 // (/SILENT, /DIR=...) are treated -- a caller writing /relaunch means the same
 // thing. Setup ignores switches it does not recognise, so /RELAUNCH reaches here
@@ -168,7 +174,7 @@ var
   I: Integer;
 begin
   Result := False;
-  for I := 1 to ParamCount do
+  for I := 0 to ParamCount do
   begin
     if CompareText(ParamStr(I), '/RELAUNCH') = 0 then
     begin
