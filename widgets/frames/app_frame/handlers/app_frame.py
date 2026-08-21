@@ -10,6 +10,7 @@ import wx
 from loguru import logger
 
 from services.image_service.priorities import PRIORITY_SELECTED_DECK
+from services.update_installer import can_auto_update
 from utils.constants import APP_FRAME_MIN_SIZE, APP_FRAME_SIZE, SPACE_SM
 from utils.constants.timing import IMAGE_REFRESH_COALESCE_MS
 from utils.i18n import LOCALE_LABELS
@@ -17,6 +18,7 @@ from utils.runtime_flags import is_automation_enabled
 from widgets.dialogs.help_dialog import show_help
 from widgets.dialogs.image_download_dialog import show_image_download_dialog
 from widgets.dialogs.tutorial_dialog import show_tutorial
+from widgets.dialogs.update_dialog import show_update_dialog
 from widgets.frames.app_frame.handlers.deck_formatting import simple_summary_html
 from widgets.frames.app_frame.handlers.session_logic import should_show_tutorial
 from widgets.frames.mana_keyboard import open_mana_keyboard
@@ -236,7 +238,7 @@ class AppFrameHandlersMixin(_Base):
             entries.append(
                 MenuEntry(
                     label=self._t("app.menu.get_update", version=available_update.version),
-                    on_activate=self._open_release_page,
+                    on_activate=self._open_update,
                 )
             )
         return entries
@@ -274,7 +276,9 @@ class AppFrameHandlersMixin(_Base):
         People open this app to research decks mid-tournament; a modal on launch
         would interrupt exactly the moment they can least afford it. The note
         sits in the right-hand status field until it is clicked (the Help menu
-        carries the same action), and the app is untouched otherwise.
+        carries the same action), and the app is untouched otherwise. Clicking it
+        opens the updater — see :meth:`_open_update`; the interruption the user
+        is spared is the unasked-for one, not the one they went and asked for.
         """
         if not self.status_bar:
             return
@@ -286,11 +290,28 @@ class AppFrameHandlersMixin(_Base):
 
     def _on_status_bar_click(self, event: wx.MouseEvent) -> None:
         # Scoped to the update field: a click on the status *message* must stay
-        # inert rather than launching a browser out of nowhere.
+        # inert rather than opening a window out of nowhere.
         if self.status_bar and self.status_bar.GetFieldRect(1).Contains(event.GetPosition()):
-            self._open_release_page()
+            self._open_update()
             return
         event.Skip()
+
+    def _open_update(self) -> None:
+        """The update note's action: the in-app updater, or the release page.
+
+        Both routes are permanent. ``can_auto_update`` is False for a release
+        that published no installer/checksum pair — a hand-made release, or one
+        from before the sidecar existed — and for those the update is still real
+        and still worth telling the user about, so the browser hop this feature
+        replaced stays as the fallback rather than the update being hidden.
+        """
+        update = self.controller.get_available_update()
+        if update is None:
+            return
+        if not can_auto_update(update):
+            self._open_release_page()
+            return
+        show_update_dialog(self, self.controller, update)
 
     def _open_release_page(self) -> None:
         """Open the release page for the pending update in the default browser."""

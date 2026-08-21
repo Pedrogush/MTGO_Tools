@@ -178,16 +178,26 @@ info" rather than an error. The answer is cached with a timestamp and refreshed
 at most once every `UPDATE_CHECK_INTERVAL_SECONDS` (24 h), including across
 restarts, so repeat launches make one request a day. When a newer version does
 exist the app says so in the right-hand status-bar field and in the settings
-menu; clicking either opens the release page. The whole thing can be turned off
-from **⚙ → Check for updates**.
+menu. The whole thing can be turned off from **⚙ → Check for updates**.
 
 Because the comparison is numeric, the version history has to stay monotonic —
 which is the concrete reason the 1.4.0 regression above mattered rather than
 being merely untidy.
 
-> **Not yet automated:** downloading and applying the update
-> ([#142](https://github.com/Pedrogush/MTGO_Tools/issues/142)). The app points at
-> the release page; users still download and re-run the installer.
+## Applying it
+
+Clicking either the status-bar note or the settings-menu entry opens the
+updater ([#142](https://github.com/Pedrogush/MTGO_Tools/issues/142)): it
+confirms, downloads the installer asset with a progress bar, checks it against
+the `.sha256` sidecar published beside it, closes the app, and runs Setup with
+`/SILENT /NORESTART /RELAUNCH` — the last of which is what puts the new build
+back on screen. A file whose digest does not match the sidecar is deleted and
+never executed; there is no verification-optional path.
+
+> Releases that carry no installer/sidecar pair — a hand-made release, or one
+> published before the sidecar existed — keep the original behaviour: the same
+> click opens the release page in a browser and the user installs it themselves.
+> `services.update_installer.can_auto_update` is what picks between the two.
 
 ## What this means for you
 

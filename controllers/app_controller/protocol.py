@@ -20,6 +20,7 @@ from utils.diagnostics import EventLogger
 
 if TYPE_CHECKING:
     from controllers.app_controller.ui_callbacks import UICallbacks
+    from services.update_installer import UpdateInstaller
     from services.update_service import UpdateInfo
     from widgets.frames.app_frame import AppFrame
 
@@ -76,6 +77,7 @@ class AppControllerProto(Protocol):
     frame: AppFrame | None
     _bulk_check_worker_active: bool
     _available_update: UpdateInfo | None
+    _update_installer: UpdateInstaller | None
 
     # Cross-mixin methods
     def fetch_archetypes(
