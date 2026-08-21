@@ -177,13 +177,32 @@ jobs:
       # Published so users can verify a 180+ MB unsigned executable they
       # downloaded over the internet. The app is not code-signed yet, so this
       # checksum is currently the only integrity check available to them.
+      #
+      # The same digest is published twice, for two different readers. The
+      # release notes carry it as prose, for a human checking a download by
+      # hand. The `.sha256` sidecar asset carries it in `sha256sum` format, for
+      # the in-app updater: it downloads this installer and then *executes* it,
+      # so it needs an integrity check it can parse with certainty rather than
+      # scraping a Markdown body whose wording is free to change.
       - name: Compute SHA256
         id: hash
         shell: pwsh
         run: |
-          $file = "dist/installer/MTGOTools_Setup_v$env:VERSION.exe"
+          $name = "MTGOTools_Setup_v$env:VERSION.exe"
+          # Resolved to an absolute path because the sidecar is written through
+          # .NET below, and .NET resolves relative paths against the process
+          # working directory rather than PowerShell's current location -- the
+          # two agree here, but only by accident of nothing having moved.
+          $file = Join-Path (Resolve-Path "dist/installer") $name
           $sha = (Get-FileHash -Algorithm SHA256 -Path $file).Hash.ToLower()
           "sha256=$sha" >> $env:GITHUB_OUTPUT
+          # `sha256sum` format exactly: lowercase hex, two spaces, filename, one
+          # line. Written via WriteAllText rather than Set-Content because the
+          # latter ends the line with CRLF on Windows, and a trailing carriage
+          # return lands inside the filename for any reader that splits on "\n"
+          # (`sha256sum -c` on Linux included). WriteAllText on PowerShell 7
+          # defaults to UTF-8 with no BOM; the content is ASCII either way.
+          [System.IO.File]::WriteAllText("$file.sha256", "$sha  $name`n")
 
       # The tag is created here rather than in `decide` so it is only ever
       # written once a verified installer exists -- a failed build leaves no tag
@@ -224,8 +243,13 @@ jobs:
           # --notes is prepended to --generate-notes' changelog (gh documents
           # that pairing for --notes specifically, not --notes-file), so the
           # install instructions lead and the commit changelog follows.
+          # The `.sha256` sidecar rides along as its own asset so the in-app
+          # updater can fetch a ~100-byte checksum, verify the installer it just
+          # downloaded, and refuse to execute a corrupt or tampered one -- no
+          # parsing of the human-facing notes above required.
           gh release create "v$VERSION" \
             "dist/installer/MTGOTools_Setup_v$VERSION.exe" \
+            "dist/installer/MTGOTools_Setup_v$VERSION.exe.sha256" \
             --title "MTGO Tools v$VERSION" \
             --notes "$(cat notes.md)" \
             --generate-notes
