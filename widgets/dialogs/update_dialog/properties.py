@@ -12,10 +12,12 @@ from services.update_installer import (
     ChecksumMismatch,
     ChecksumUnavailable,
     DownloadFailed,
+    LaunchBlocked,
     LaunchFailed,
     UpdateNotDownloadable,
 )
 from utils.i18n import t
+from utils.process_launch import ANTIVIRUS, APP_CONTROL, GROUP_POLICY, HELP_URL
 
 #: The dialog is one window with three faces rather than three windows: the
 #: confirmation, the transfer it starts, and whatever stopped it are one
@@ -43,6 +45,12 @@ _FAILURE_KEYS: tuple[tuple[type[BaseException], str], ...] = (
     (LaunchFailed, "app.update.error.launch"),
     (DownloadFailed, "app.update.error.download"),
 )
+
+#: The reason tokens :class:`LaunchBlocked` can carry, each with its own key
+#: under ``app.update.error.launch_blocked.``. Spelled out rather than derived
+#: from :data:`utils.process_launch.BLOCKED_WINERRORS` so that adding a Windows
+#: error code there can never silently produce a message that is a bare i18n key.
+_LAUNCH_BLOCK_REASONS: frozenset[str] = frozenset({APP_CONTROL, GROUP_POLICY, ANTIVIRUS})
 
 
 def format_bytes(value: int) -> str:
@@ -88,6 +96,16 @@ def failure_message(exc: BaseException) -> str:
     thrown away, since "MTGO Tools refused to run this" is the outcome and not a
     generic error.
     """
+    if isinstance(exc, LaunchBlocked):
+        # Handled ahead of the table because this one failure has three
+        # different explanations and three different fixes, and the sentence
+        # :mod:`services.update_installer` built is English -- the whole message
+        # here is explanation, so a pt-BR user would otherwise read none of it.
+        # An unrecognised token cannot ship a key name as the message: ``t``
+        # falls back to the key, so it is checked against the known set first.
+        if exc.reason in _LAUNCH_BLOCK_REASONS:
+            return t(f"app.update.error.launch_blocked.{exc.reason}", url=HELP_URL)
+        return t("app.update.error.launch", error=str(exc))
     for kind, key in _FAILURE_KEYS:
         if isinstance(exc, kind):
             return t(key, error=str(exc))

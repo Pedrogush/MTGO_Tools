@@ -28,6 +28,41 @@ pip install -r requirements-dev.txt
 python main.py
 ```
 
+### Windows blocked this app from running
+
+If Setup finishes and then shows
+
+> Unable to execute file: `...\AppData\Local\Programs\MTGO Tools\mtgo_tools.exe`
+> CreateProcess failed; code 4551.
+> An Application Control policy has blocked this file.
+
+the install worked. Windows error 4551 is
+`ERROR_SYSTEM_INTEGRITY_POLICY_VIOLATION`: an application-control component
+refused to *start* the program. Nothing is missing or corrupt — the files are on
+disk exactly where they belong.
+
+The cause is that MTGO Tools ships unsigned (there is no code-signing
+certificate behind this project), and application control blocks what it cannot
+attribute to a trusted publisher. Which component did it depends on the machine:
+
+- **Smart App Control** — Windows 11 Home/Pro, on by default for clean
+  installs. Open **Windows Security → App & browser control → Smart App Control
+  settings** and set it to **Off**. Note that Smart App Control cannot be turned
+  back on without reinstalling Windows, and it has no per-app allowlist, so this
+  is a deliberate trade rather than a toggle to flip casually.
+- **App Control for Business / WDAC / Device Guard** — a managed or work PC; the
+  message there reads "Your organization used Device Guard to block this app".
+  Only whoever administers the machine can allow it. A common policy shape also
+  forbids running anything from user-writable locations, which is where a
+  per-user install necessarily lands.
+- **AppLocker or a Software Restriction Policy** reports code 1260 instead, and
+  antivirus quarantine reports 225/226; the same reasoning applies.
+
+Either way it is a decision made by the operating system about an unsigned
+binary, not a fault in the build — and running the app from source
+(`python main.py`) is unaffected, because the policy applies to the packaged
+executable rather than to Python.
+
 ## Development
 
 Day-to-day development happens in WSL, while the app runtime target is Windows

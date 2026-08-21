@@ -19,6 +19,7 @@ from services.update_installer import (
     ChecksumMismatch,
     ChecksumUnavailable,
     DownloadFailed,
+    LaunchBlocked,
     LaunchFailed,
     UpdateCancelled,
     UpdateNotDownloadable,
@@ -75,6 +76,37 @@ def test_every_failure_gets_its_own_sentence() -> None:
         "a missing i18n key falls back to the key itself, which would ship the "
         f"key name as the message: {messages}"
     )
+
+
+def test_a_blocked_launch_reads_differently_per_reason_and_in_both_locales() -> None:
+    """Three ways Windows can refuse the installer, three different fixes.
+
+    Collapsing them would tell somebody whose antivirus quarantined the file to
+    go turn off Smart App Control. The locale sweep is not decoration: the whole
+    message here *is* the explanation (unlike the other failures, which carry an
+    English detail inside translated framing), so an untranslated key would
+    leave a pt-BR user with nothing readable -- and ``t`` falls back to the key
+    name, which would ship "app.update.error..." as the message.
+    """
+    reasons = ("app_control", "group_policy", "antivirus")
+    messages = [failure_message(LaunchBlocked("blocked", reason=r)) for r in reasons]
+    assert len(set(messages)) == len(reasons)
+    assert not any(m.startswith("app.update.") for m in messages)
+    for locale, table in MESSAGES.items():
+        for reason in reasons:
+            key = f"app.update.error.launch_blocked.{reason}"
+            assert key in table, f"{key} missing from {locale}"
+    # It subclasses LaunchFailed; the generic launch copy must not shadow it.
+    assert failure_message(LaunchBlocked("blocked", reason="app_control")) != failure_message(
+        LaunchFailed("access denied")
+    )
+
+
+def test_an_unknown_block_reason_falls_back_instead_of_shipping_a_key() -> None:
+    """A reason token added upstream without copy must degrade, not leak."""
+    message = failure_message(LaunchBlocked("blocked", reason="something_new"))
+    assert not message.startswith("app.update.")
+    assert "blocked" in message
 
 
 def test_a_checksum_mismatch_reads_as_a_refusal_rather_than_an_error() -> None:
