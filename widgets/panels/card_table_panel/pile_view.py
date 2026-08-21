@@ -47,12 +47,15 @@ from utils.constants import (
     SPACE_SM,
     SUBDUED_TEXT,
 )
+from utils.i18n import current_locale, t, translate_plural
 from utils.image_effects import apply_rounded_corner_alpha
 from widgets.panels.card_table_panel import edge_fade, scroll_perf, scroll_snap
 from widgets.panels.card_table_panel.marquee import RUBBER_AUTOSCROLL_PX, MarqueeController
 from widgets.panels.card_table_panel.scrolling import scroll_by_wheel
 from widgets.panels.card_table_panel.sorting import (
+    PILE_SORT_COLOR,
     PILE_SORT_MV,
+    PILE_SORT_TYPE,
     group_into_piles,
 )
 from widgets.stylize import stylize_scrollable, type_font
@@ -71,6 +74,15 @@ _PILE_PAD = 6  # padding inside a pile column
 # rendering omission, not missing data.
 _PILE_HEADER_HEIGHT = 22
 _PILE_TOP = _PILE_PAD + _PILE_HEADER_HEIGHT  # top inset for the first card in a pile
+# #988: the two numbers a pile column shows -- its bucket label and how many
+# copies it holds -- used to share the header band, label flush left and count
+# flush right, which read as two unrelated figures floating over the column.
+# The label is centred over the column now and the count moved into its own
+# band below the pile. "Below the pile" means below *this* pile's last card,
+# not a shared baseline at the bottom of the tallest column: a four-card pile
+# beside a fourteen-card one would otherwise caption itself ten card-strips
+# away, off-screen, with nothing between the number and the cards it counts.
+_PILE_FOOTER_HEIGHT = 20
 
 # Above this virtual width/height (px) we skip the cached full-content bitmap
 # and draw directly (culled), so a pathological pile can't allocate a huge
@@ -351,7 +363,9 @@ class DeckPileView(wx.ScrolledWindow):
             self.SetVirtualSize((100, 100))
             return
         max_members = max(len(members) for _, members in self._piles)
-        height = _PILE_TOP + self._pile_height(max_members) + _PILE_PAD * 2
+        height = (
+            _PILE_TOP + self._pile_height(max_members) + _PILE_PAD + _PILE_FOOTER_HEIGHT + _PILE_PAD
+        )
         width = (_CARD_WIDTH + _PILE_GAP) * len(self._piles) + _PILE_GAP
         # Canvas tracks the true content extent; the scroll/virtual size may be
         # inflated to the client by wx, but the canvas must not be (see __init__).
@@ -617,29 +631,80 @@ class DeckPileView(wx.ScrolledWindow):
     def _pile_header_rect(self, pile_index: int) -> wx.Rect:
         return wx.Rect(self._pile_x(pile_index), _PILE_PAD, _CARD_WIDTH, _PILE_HEADER_HEIGHT)
 
-    def _draw_pile_header(self, dc: wx.DC, pile_idx: int, label: str, count: int) -> None:
-        """The column heading: bucket name on the left, copy count on the right.
+    def _pile_footer_rect(self, pile_index: int, member_count: int) -> wx.Rect:
+        """The band holding the copy count, directly under this pile's cards."""
+        y = _PILE_TOP + self._pile_height(member_count) + _PILE_PAD
+        return wx.Rect(self._pile_x(pile_index), y, _CARD_WIDTH, _PILE_FOOTER_HEIGHT)
+
+    def _draw_pile_header(self, dc: wx.DC, pile_idx: int, label: str) -> None:
+        """The column heading: the bucket name, centred over the column.
 
         Drawn into the cached canvas along with the cards, because it changes
         only when the piles are rebuilt -- the same reason the card art is baked
         in and only the selection outline is painted live.
         """
         rect = self._pile_header_rect(pile_idx)
+        dc.SetFont(type_font("caption", bold=True))
+        label_text = self._fit_text(dc, label, rect.width - SPACE_SM)
+        label_w, label_h = dc.GetTextExtent(label_text)
+        dc.SetTextForeground(wx.Colour(*LIGHT_TEXT))
+        dc.DrawText(
+            label_text,
+            rect.x + (rect.width - label_w) // 2,
+            rect.y + (rect.height - label_h) // 2,
+        )
+
+    def _draw_pile_footer(self, dc: wx.DC, pile_idx: int, count: int) -> None:
+        """The copy count, centred in the band under the pile's last card."""
+        rect = self._pile_footer_rect(pile_idx, count)
         count_text = str(count)
         dc.SetFont(type_font("caption", bold=False))
         count_w, count_h = dc.GetTextExtent(count_text)
         dc.SetTextForeground(wx.Colour(*SUBDUED_TEXT))
         dc.DrawText(
             count_text,
-            rect.GetRight() - count_w + 1,
+            rect.x + (rect.width - count_w) // 2,
             rect.y + (rect.height - count_h) // 2,
         )
 
-        dc.SetFont(type_font("caption", bold=True))
-        label_text = self._fit_text(dc, label, rect.width - count_w - SPACE_SM)
-        _label_w, label_h = dc.GetTextExtent(label_text)
-        dc.SetTextForeground(wx.Colour(*LIGHT_TEXT))
-        dc.DrawText(label_text, rect.x, rect.y + (rect.height - label_h) // 2)
+    # ----- tooltips over the two drawn numbers (#988) -----
+    # Neither number is a widget -- both are text painted into the cached
+    # canvas -- so there is nothing to hang a static tooltip on. The view
+    # carries one tooltip and retargets it from the motion handler, the same
+    # hit-test-then-SetToolTip shape the Top Cards header uses.
+    _SORT_TOOLTIP_KEYS = {
+        PILE_SORT_MV: "tabs.view.pile.tooltip.mv",
+        PILE_SORT_COLOR: "tabs.view.pile.tooltip.color",
+        PILE_SORT_TYPE: "tabs.view.pile.tooltip.type",
+    }
+
+    def tooltip_at(self, point: wx.Point) -> str:
+        """The tooltip for the logical ``point``; ``""`` where there is none."""
+        for pile_idx, (_label, members) in enumerate(self._piles):
+            if self._pile_header_rect(pile_idx).Contains(point):
+                key = self._SORT_TOOLTIP_KEYS.get(
+                    self._get_sort_mode(), self._SORT_TOOLTIP_KEYS[PILE_SORT_MV]
+                )
+                return t(key)
+            if self._pile_footer_rect(pile_idx, len(members)).Contains(point):
+                return translate_plural(
+                    current_locale(), "tabs.view.pile.tooltip.count", len(members)
+                )
+        return ""
+
+    def _update_tooltip(self, point: wx.Point) -> None:
+        text = self.tooltip_at(point)
+        current = self.GetToolTip()
+        if (current.GetTip() if current else "") == text:
+            return
+        if not text:
+            # ``SetToolTip("")`` leaves an empty wx.ToolTip attached rather than
+            # detaching it (measured -- another wxMSW call that is accepted and
+            # then not quite honoured, cf. docs/WXMSW_BEHAVIOUR.md). UnsetToolTip
+            # is what stops a heading's tip following the pointer onto a card.
+            self.UnsetToolTip()
+            return
+        self.SetToolTip(text)
 
     def _draw_pile(
         self,
@@ -652,7 +717,10 @@ class DeckPileView(wx.ScrolledWindow):
         total = len(members)
         header = self._pile_header_rect(pile_idx)
         if dirty is None or dirty.Intersects(header):
-            self._draw_pile_header(dc, pile_idx, label, total)
+            self._draw_pile_header(dc, pile_idx, label)
+        footer = self._pile_footer_rect(pile_idx, total)
+        if dirty is None or dirty.Intersects(footer):
+            self._draw_pile_footer(dc, pile_idx, total)
         for member_idx, entry in enumerate(members):
             rect = self._card_rect(pile_idx, member_idx, total)
             if dirty is not None and not dirty.Intersects(rect):
@@ -821,6 +889,8 @@ class DeckPileView(wx.ScrolledWindow):
                 self.Refresh()
             return
 
+        self._update_tooltip(point)
+
         # Hover handling — only when no selection or multi-selection.
         # (With exactly one selected copy, that copy stays the active card and
         # hover must not override it.)
@@ -876,6 +946,7 @@ class DeckPileView(wx.ScrolledWindow):
         scroll_by_wheel(self, event)
 
     def _on_leave(self, _event: wx.MouseEvent) -> None:
+        self.UnsetToolTip()
         if self._hover_uid is not None:
             self._hover_uid = None
             self.Refresh()
