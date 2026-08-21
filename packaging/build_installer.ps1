@@ -94,6 +94,18 @@ function Ensure-GitSync {
         return
     }
 
+    # Never in CI. A CI job must build exactly the commit it checked out, and
+    # since versioning moved after the merge (docs/VERSIONING.md) `main` grows a
+    # `chore(release): VERSION x.y.z` commit seconds after any merge lands. A
+    # pull here swallows it mid-build: the run that merged PR #1000 read VERSION
+    # as 1.1.6, pulled 1.1.7 into the tree, and then ISCC -- which reads the file
+    # again at compile time -- emitted MTGOTools_Setup_v1.1.7.exe while the
+    # script went looking for the 1.1.6 name it had already computed.
+    if ($env:CI) {
+        Write-Info "CI detected; building the checked-out commit without pulling."
+        return
+    }
+
     Write-Info "Syncing with remote branch..."
     $currentLocation = Get-Location
     Push-Location $ProjectRoot
@@ -108,6 +120,15 @@ function Ensure-GitSync {
 
 # Ensure we are on the latest branch before building
 Ensure-GitSync
+
+# Re-read VERSION after the sync. installer.iss reads the same file itself, at
+# ISCC compile time -- minutes later, and after this pull. Reading it once up top
+# left two readers of a file that had moved in between, and the only symptom was
+# the build "succeeding" and then failing on a filename that did not exist.
+# Defence in depth: the CI guard above already prevents the pull that caused it,
+# but a local build pulling a colleague's version bump would desync the same way.
+$AppVersion = (Get-Content -Raw $VersionFile).Trim()
+$InstallerFileName = "MTGOTools_Setup_v$AppVersion.exe"
 
 # Step 0: clean previous dist output
 Write-Info "Cleaning dist directory..."
