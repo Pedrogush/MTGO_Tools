@@ -718,6 +718,61 @@ def stylize_list_ctrl(ctrl: wx.ListCtrl, *, surface: str = "alt") -> None:
     strip_native_client_edge(ctrl)
 
 
+def stylize_tree_list(tree: wx.Window, *, surface: str = "alt") -> None:
+    """Theme a ``wx.dataview.TreeListCtrl`` -- rows, header text and chrome.
+
+    ``TreeListCtrl`` is a thin wrapper around a ``DataViewCtrl``, and the split
+    ownership is what makes it easy to half-theme: the wrapper owns the row
+    colours, while the scrollbars, the sunken client edge and the native
+    ``SysHeader32`` all belong to the inner control. Match History set the
+    wrapper's *background* and nothing else, so every row of match text painted
+    in wx's default **#000000 on ``SURFACE_ALT`` -- 1.53:1** (issue: black font
+    in Match History). This function exists so the omission cannot recur one
+    control at a time.
+
+    Three findings, each measured on wxPython 4.2.4 / wxWidgets 3.2.8 (msw) by
+    capturing the control and reading the pixels back, not by asking wx what it
+    thinks it stored:
+
+    * ``SetForegroundColour`` on the **wrapper** repaints the rows and
+      propagates to the inner ``DataViewCtrl``. Setting it on the inner control
+      works too; setting it on the ``wxDataViewMainWindow`` child -- the window
+      that actually draws the rows -- is a silent no-op, which is the trap
+      ``docs/WXMSW_BEHAVIOUR.md`` warns about.
+    * The header **text** is not covered by any of that. It is drawn by
+      ``wxMSWHeaderCtrl`` in the wx foreground colour, which stays black even
+      once :func:`stylize_scrollable` has handed the native header to the OS
+      dark theme -- so the app's dark header strip carried black labels.
+      ``SetHeaderAttr`` is the one public call that moves it.
+    * ``SetHeaderAttr`` sets the foreground only, so it is applied **solely when
+      the OS dark theme is actually painting the header dark**. Without native
+      dark mode the header is still the default near-white and light text on it
+      would be strictly worse than the black it replaced -- the same reasoning
+      that keeps it out of :func:`stylize_list_ctrl`, which has no dark header
+      to pair it with.
+    """
+    fill = _colour(_SURFACE_COLOURS[surface])
+    text = _colour(TEXT_PRIMARY)
+    inner = tree.GetDataView()
+
+    tree.SetBackgroundColour(fill)
+    tree.SetForegroundColour(text)
+    inner.SetBackgroundColour(fill)
+    inner.SetForegroundColour(text)
+
+    # Scrollbars and the native header child belong to the inner control; the
+    # sunken client edge is drawn on both, so both have to be handed over.
+    stylize_scrollable(tree)
+    stylize_scrollable(inner)
+    strip_native_client_edge(tree)
+    strip_native_client_edge(inner)
+
+    if native_dark_mode_active():
+        attr = wx.ItemAttr()
+        attr.SetTextColour(text)
+        inner.SetHeaderAttr(attr)
+
+
 def native_dark_mode_active() -> bool:
     """Whether native controls are being drawn by Windows' dark theme."""
     return is_app_dark_mode_enabled()

@@ -33,9 +33,9 @@ from widgets.stylize import (
     create_divider,
     create_status_label,
     init_top_level_window,
-    strip_native_client_edge,
     stylize_button,
-    stylize_scrollable,
+    stylize_label,
+    stylize_tree_list,
 )
 
 # These were five wx.Colour literals holding a byte-for-byte copy of the
@@ -172,7 +172,7 @@ class MatchHistoryFrame(MatchHistoryHandlersMixin, MatchHistoryPropertiesMixin, 
         filter_row = wx.BoxSizer(wx.HORIZONTAL)
         metrics_sizer.Add(filter_row, 0, wx.EXPAND | wx.TOP, SPACE_SM)
         filter_row.Add(
-            wx.StaticText(box_parent, label=self._t("match.filter.start")),
+            self._filter_label(box_parent, "match.filter.start"),
             0,
             wx.ALIGN_CENTER_VERTICAL | wx.RIGHT,
             SPACE_XS,
@@ -181,7 +181,7 @@ class MatchHistoryFrame(MatchHistoryHandlersMixin, MatchHistoryPropertiesMixin, 
         self.start_date_ctrl = start_field.ctrl
         filter_row.Add(start_field, 0, wx.RIGHT, SPACE_SM)
         filter_row.Add(
-            wx.StaticText(box_parent, label=self._t("match.filter.end")),
+            self._filter_label(box_parent, "match.filter.end"),
             0,
             wx.ALIGN_CENTER_VERTICAL | wx.RIGHT,
             SPACE_XS,
@@ -196,20 +196,15 @@ class MatchHistoryFrame(MatchHistoryHandlersMixin, MatchHistoryPropertiesMixin, 
         filter_row.AddStretchSpacer(1)
 
         self.tree = dv.TreeListCtrl(panel, style=dv.TL_DEFAULT_STYLE | dv.TL_SINGLE)
-        self.tree.SetBackgroundColour(DARK_ALT)
         self.tree.AppendColumn(self._t("match.col.players"), width=380)
         self.tree.AppendColumn(self._t("match.col.result"), width=100)
         self.tree.AppendColumn(self._t("match.col.mulligans"), width=90)
         self.tree.AppendColumn(self._t("match.col.date"), width=140)
-        # After the columns exist, so the native header child is there to theme. A
-        # TreeListCtrl wraps a DataViewCtrl and the header and scrollbars belong to
-        # the inner control, so both have to be handed over.
-        stylize_scrollable(self.tree)
-        stylize_scrollable(self.tree.GetDataView())
-        # The sunken edge belongs to the inner DataViewCtrl, not the wrapper --
-        # stripping it from the TreeListCtrl alone changes nothing on screen.
-        strip_native_client_edge(self.tree)
-        strip_native_client_edge(self.tree.GetDataView())
+        # After the columns exist, so the native header child is there to theme.
+        # This site used to set the background and stop there, which left every
+        # row of match text painting in wx's default black; the wrapper/inner
+        # split that made that easy to miss now lives in one helper.
+        stylize_tree_list(self.tree)
         self.tree.Bind(dv.EVT_TREELIST_ITEM_ACTIVATED, self.on_item_activated)
         self.tree.Bind(dv.EVT_TREELIST_SELECTION_CHANGED, self.on_item_selected)
         sizer.Add(self.tree, 1, wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, SPACE_SM)
@@ -260,6 +255,19 @@ class MatchHistoryFrame(MatchHistoryHandlersMixin, MatchHistoryPropertiesMixin, 
         value.SetForegroundColour(colour)
         sizer.Add(value, 1, wx.EXPAND | wx.ALIGN_CENTER_VERTICAL)
         return value
+
+    def _filter_label(self, parent: wx.Window, key: str) -> wx.StaticText:
+        """A date-filter caption, themed like the metric labels beside it.
+
+        These two were the only ``wx.StaticText``\\ s in the window built inline
+        with no ``SetForegroundColour``, so they rendered in wx's default black
+        on ``SURFACE_PANEL`` (1.53:1) while every label around them was
+        ``TEXT_PRIMARY``. Routed through the helper so a third one cannot be
+        added without a colour.
+        """
+        label = wx.StaticText(parent, label=self._t(key))
+        stylize_label(label, level="body", surface="panel", tone="primary")
+        return label
 
     def _stylize_button(self, button: wx.Button) -> None:
         stylize_button(button, kind="secondary")

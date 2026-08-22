@@ -363,6 +363,37 @@ def test_list_ctrl_rows_are_themed(frame: object) -> None:
     assert _rgb(ctrl.GetForegroundColour()) == T.TEXT_PRIMARY
 
 
+def test_tree_list_rows_get_a_text_colour(frame: object) -> None:
+    """Match History's tree painted **black on ``SURFACE_ALT``** (1.53:1).
+
+    The call site set the background and nothing else, so every row of match
+    text kept wx's default black. This pins the pairing at the wx level; the
+    pixels themselves were verified by capturing the window and reading them
+    back, because wxMSW accepts colour calls it then ignores (see
+    ``docs/WXMSW_BEHAVIOUR.md``) and this control has one of those: the same
+    call on the ``wxDataViewMainWindow`` child changes nothing on screen.
+    """
+    import wx.dataview as dv
+
+    tree = dv.TreeListCtrl(frame, style=dv.TL_DEFAULT_STYLE | dv.TL_SINGLE)
+    tree.AppendColumn("Players")
+    stylize.stylize_tree_list(tree)
+    assert _rgb(tree.GetBackgroundColour()) == T.SURFACE_ALT
+    assert _rgb(tree.GetForegroundColour()) == T.TEXT_PRIMARY
+
+
+def test_tree_list_themes_the_wrapped_data_view_too(frame: object) -> None:
+    """``TreeListCtrl`` is a wrapper; the control that draws the rows is inside it."""
+    import wx.dataview as dv
+
+    tree = dv.TreeListCtrl(frame, style=dv.TL_DEFAULT_STYLE | dv.TL_SINGLE)
+    tree.AppendColumn("Players")
+    stylize.stylize_tree_list(tree, surface="panel")
+    inner = tree.GetDataView()
+    assert _rgb(inner.GetBackgroundColour()) == T.SURFACE_PANEL
+    assert _rgb(inner.GetForegroundColour()) == T.TEXT_PRIMARY
+
+
 def test_disable_native_theme_is_safe_to_call(frame: object) -> None:
     """It must never raise: every stylize entry point calls it unconditionally."""
     choice = wx.Choice(frame, choices=["a"])

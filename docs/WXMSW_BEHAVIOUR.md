@@ -225,6 +225,25 @@ is worth stating because so much else on this control is not reachable: the rada
 window's four numeric columns had been left at the left-aligned default since they
 were written, and the fix really is the one argument.
 
+`TreeListCtrl` is a wrapper around a `DataViewCtrl`, and the colour calls land on
+three different windows -- measured by capturing five probe controls side by side
+and counting how many text pixels came back near-black:
+
+- `SetForegroundColour` on the **wrapper** repaints the rows, and propagates to
+  the inner `GetDataView()`. Calling it on the inner control directly works too.
+- The same call on the `wxDataViewMainWindow` child -- the window that actually
+  paints the rows -- is a **silent no-op**. It is the obvious place to reach for
+  once you have enumerated the children, and it is the wrong one.
+- The **header text** is drawn by the `wxMSWHeaderCtrl` grandchild in the wx
+  foreground colour, and `SetWindowTheme`'s dark `ItemsView` class does not move
+  it: the header strip comes back `#202020` with the labels still at `#000000`,
+  which is a *worse* pairing (1.29:1) than the untouched light header it
+  replaced. `DataViewCtrl.SetHeaderAttr(wx.ItemAttr)` is the only public call
+  that moves the label colour -- so it is safe **only** once the strip is
+  already dark, i.e. gated on native dark mode being active. (Setting
+  `SetForegroundColour` on the `wxHeaderCtrl` child works identically; the attr
+  is the documented route.)
+
 ### `wx.Gauge`
 
 **both silently ignored**, and Windows' own dark mode does **not** reach it -- so unlike
