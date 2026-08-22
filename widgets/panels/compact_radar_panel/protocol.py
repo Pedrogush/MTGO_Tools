@@ -18,6 +18,8 @@ class CompactRadarPanelProto(Protocol):
 
     current_radar: RadarData | None
     _view_mode: RadarViewMode
+    _header_text: str
+    _resizing: bool
     header_label: wx.StaticText
     view_toggle_btn: wx.Button
     status_label: wx.StaticText

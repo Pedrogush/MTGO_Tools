@@ -7,6 +7,10 @@ from typing import TYPE_CHECKING
 import wx
 from loguru import logger
 
+from utils.constants.ui_layout import (
+    COMPACT_RADAR_HEADER_WRAP_MARGIN,
+    COMPACT_RADAR_MIN_WRAP_WIDTH,
+)
 from widgets.panels.compact_radar_panel.properties import (
     _TOP_MAINBOARD_LIMIT,
     _TOP_SIDEBOARD_LIMIT,
@@ -28,9 +32,42 @@ class CompactRadarHandlersMixin(_Base):
 
     # ============= Public API =============
 
+    def _set_header_text(self, text: str) -> None:
+        """Set the pane heading, wrapped to the width the panel actually has.
+
+        The heading shares its row with the view toggle, so a long archetype
+        name ("Radar: Gruul Basking Broodscale Combo") does not fit on one line
+        in a narrow pane and ``wx.StaticText`` clips whatever runs past the
+        edge. Wrapping keeps the whole archetype name readable.
+        """
+        self._header_text = text
+        self.header_label.SetLabel(text)
+        self.header_label.Wrap(self._header_wrap_width())
+
+    def _header_wrap_width(self) -> int:
+        toggle_w = (
+            self.view_toggle_btn.GetSize().GetWidth() if self.view_toggle_btn.IsShown() else 0
+        )
+        width = self.GetClientSize().GetWidth() - toggle_w - COMPACT_RADAR_HEADER_WRAP_MARGIN
+        return max(width, COMPACT_RADAR_MIN_WRAP_WIDTH)
+
+    def _on_resized(self, event: wx.SizeEvent) -> None:
+        """Re-wrap the heading for the pane's new width."""
+        event.Skip()
+        if self._resizing or not hasattr(self, "header_label"):
+            return
+        self._resizing = True
+        try:
+            # Lay out first: the wrap measures the panel's client width, which
+            # the sizer has not applied to the children yet.
+            self.Layout()
+            self._set_header_text(self._header_text)
+        finally:
+            self._resizing = False
+
     def display_radar(self, radar: RadarData) -> None:
         self.current_radar = radar
-        self.header_label.SetLabel(f"Radar: {radar.archetype_name}")
+        self._set_header_text(f"Radar: {radar.archetype_name}")
         self.view_toggle_btn.Show()
         self._show_list()
         self._populate_card_list()
@@ -40,7 +77,7 @@ class CompactRadarHandlersMixin(_Base):
 
     def clear(self) -> None:
         self.current_radar = None
-        self.header_label.SetLabel("Radar: —")
+        self._set_header_text("Radar: —")
         self.card_list.Clear()
         self.view_toggle_btn.Hide()
         self._show_empty(
@@ -68,7 +105,7 @@ class CompactRadarHandlersMixin(_Base):
         relayout(self)
 
     def set_loading(self, message: str = "Loading radar data...") -> None:
-        self.header_label.SetLabel("Radar: Loading...")
+        self._set_header_text("Radar: Loading...")
         self.status_label.SetLabel(message)
         self.card_list.Clear()
         self.view_toggle_btn.Hide()
@@ -76,7 +113,7 @@ class CompactRadarHandlersMixin(_Base):
         relayout(self.GetParent())
 
     def set_error(self, error_message: str) -> None:
-        self.header_label.SetLabel("Radar: Error")
+        self._set_header_text("Radar: Error")
         self.status_label.SetLabel(error_message)
         self.card_list.Clear()
         self.view_toggle_btn.Hide()

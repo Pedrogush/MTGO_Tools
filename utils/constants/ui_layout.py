@@ -365,11 +365,19 @@ BUILDER_MANA_ALL_BTN_SIZE = (52, 28)  # size of the "All" mana keyboard button (
 # "On Play"/"On Draw" measure 51px at the 10pt base and need 75x25 with chrome;
 # the old 70x22 clipped on both axes. 80x28 on the 4px grid.
 COMPACT_SIDEBOARD_TOGGLE_BTN_SIZE = (80, 28)  # size of the On Play/On Draw toggle button (px)
+# Room the guide's list leaves for its own vertical scrollbar and margins when
+# measuring how wide a wrapped note line may be (px).
+COMPACT_SIDEBOARD_NOTE_WRAP_MARGIN = 28
+COMPACT_SIDEBOARD_MIN_WRAP_WIDTH = 120
 
 # Compact radar panel — the Full Decklist / Top Cards view toggle. Was an inline
 # (90, 22) literal in compact_radar_panel/frame.py and 3px short of its own label
 # at the 10pt base; phase 3's overflow sweep is what found it, not phase 0's list.
 COMPACT_RADAR_TOGGLE_BTN_SIZE = (96, 28)
+# Room the radar heading leaves for the toggle button beside it and the panel's
+# own margins when it is wrapped to the pane width (px).
+COMPACT_RADAR_HEADER_WRAP_MARGIN = 28
+COMPACT_RADAR_MIN_WRAP_WIDTH = 120
 
 # Opponent Tracker — hypergeometric calculator panel layout
 CALC_SECTION_PADDING = 6  # uniform padding around calculator sections

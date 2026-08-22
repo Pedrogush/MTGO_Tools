@@ -14,6 +14,8 @@ class CompactSideboardPanelProto(Protocol):
 
     _current_entry: dict | None
     _play_first: bool
+    _header_text: str
+    _resizing: bool
     header_label: wx.StaticText
     toggle_btn: wx.Button
     status_label: wx.StaticText

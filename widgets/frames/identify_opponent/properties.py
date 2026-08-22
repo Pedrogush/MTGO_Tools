@@ -28,6 +28,11 @@ from utils.constants import (
 )
 from utils.i18n import translate
 
+#: What :func:`get_latest_deck` answers when the player has no result in that
+#: format. It is a sentinel, not a deck name, so callers must filter it out
+#: rather than treat it as a match.
+UNKNOWN_DECK_RESULT = "Unknown"
+
 LEGACY_DECK_MONITOR_CONFIG = Path("deck_monitor_config.json")
 LEGACY_DECK_MONITOR_CACHE = Path("deck_monitor_cache.json")
 LEGACY_DECK_MONITOR_CACHE_CONFIG = CONFIG_DIR / "deck_monitor_cache.json"
@@ -52,7 +57,7 @@ def get_latest_deck(player: str, option: str):
         res.raise_for_status()
     except Exception as exc:
         logger.error(f"Failed to fetch player page for {player}: {exc}")
-        return "Unknown"
+        return UNKNOWN_DECK_RESULT
     soup = bs4.BeautifulSoup(res.text, "lxml")
     table = soup.find("table")
     if not table and player[0] == "0":
@@ -68,12 +73,12 @@ def get_latest_deck(player: str, option: str):
             res.raise_for_status()
         except Exception as exc:
             logger.error(f"Failed retry fetch for player {player}: {exc}")
-            return "Unknown"
+            return UNKNOWN_DECK_RESULT
         soup = bs4.BeautifulSoup(res.text, "lxml")
         table = soup.find("table")
     if not table:
         logger.debug(f"No results table found for player {player}")
-        return "Unknown"
+        return UNKNOWN_DECK_RESULT
     entries = table.find_all("tr")
     for entry in entries:
         tds = entry.find_all("td")
@@ -86,7 +91,7 @@ def get_latest_deck(player: str, option: str):
             logger.debug(f"{player} last 5-0 seen playing {tds[3].text}, in {tds[0].text}")
             return tds[3].text
 
-    return "Unknown"
+    return UNKNOWN_DECK_RESULT
 
 
 class MTGOpponentDeckSpyPropertiesMixin:

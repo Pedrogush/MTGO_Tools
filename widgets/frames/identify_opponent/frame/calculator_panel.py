@@ -50,6 +50,12 @@ class CalculatorPanelBuilderMixin:
     spin_target: DarkSpinCtrl
     calc_result_label: wx.StaticText
     _left_splitter: wx.SplitterWindow
+    #: Sash position that shows the calculator whole; ``None`` until fitted.
+    _preferred_sash: int | None = None
+    #: Set once the user drags the sash, after which their choice is kept.
+    _sash_user_set: bool = False
+    #: True while this code moves the sash, so the move is not read as a drag.
+    _applying_sash: bool = False
 
     def _build_calculator_panel(self, parent: wx.Window) -> None:
         self.calc_panel = wx.Panel(parent)
@@ -205,12 +211,60 @@ class CalculatorPanelBuilderMixin:
         clear_btn.Bind(wx.EVT_BUTTON, self._on_clear_calculator)
         grid.Add(clear_btn, 0, wx.EXPAND)
 
-        calc_sizer.Add(grid, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, CALC_SECTION_PADDING)
+        # Left-aligned at its natural width rather than stretched across the
+        # pane. A2 gave the six cells one identical width, which wx.GridSizer
+        # guarantees on its own; stretching them was only ever harmless while
+        # this column was pinned to the calculator's fitted width. Now that the
+        # column takes a share of the window, EXPAND turned six small buttons
+        # into six half-pane slabs. The stretch spacer keeps the block's left
+        # edge flush with the spin-control grid above it at any pane width.
+        button_row = wx.BoxSizer(wx.HORIZONTAL)
+        button_row.Add(grid, 0)
+        button_row.AddStretchSpacer(1)
+        calc_sizer.Add(
+            button_row, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, CALC_SECTION_PADDING
+        )
 
     def _fit_left_splitter(self) -> None:
         calc_best = self.calc_panel.GetBestSize()
         sash_h = calc_best.GetHeight()
         splitter_w = calc_best.GetWidth()
+        self._preferred_sash = sash_h
         self._left_splitter.SetMinSize(wx.Size(splitter_w, -1))
         self._left_splitter.SetSashPosition(sash_h)
+        # CHANGING, not CHANGED: wx sends CHANGED for its own resize-time
+        # clamping too, so binding that marked every window resize as a user
+        # drag and permanently disabled the restore below. CHANGING is only
+        # sent from the live-drag mouse handler.
+        self._left_splitter.Bind(wx.EVT_SPLITTER_SASH_POS_CHANGING, self._on_left_sash_dragged)
         self.Layout()
+
+    def _on_left_sash_dragged(self, event: wx.SplitterEvent) -> None:
+        """A dragged sash is the user's choice; stop re-fitting it for them."""
+        event.Skip()
+        if not self._applying_sash:
+            self._sash_user_set = True
+
+    def _restore_left_sash(self) -> None:
+        """Put the sash back where the calculator fits after a window resize.
+
+        Shrinking the window forces wx to clamp the sash up so the bottom pane
+        keeps its minimum; growing the window again does not push it back, so
+        the calculator stayed cut off mid-control until someone dragged the sash
+        by hand. Re-applying the fitted position (which wx clamps again when
+        there is no room) restores it, unless the user has moved it themselves.
+        """
+        if self._sash_user_set or self._preferred_sash is None:
+            return
+        # Deferred via CallAfter, so the frame may already be on its way out.
+        if not self._is_widget_ok(getattr(self, "_left_splitter", None)):
+            return
+        if not self._left_splitter.IsSplit():
+            return
+        if self._left_splitter.GetSashPosition() == self._preferred_sash:
+            return
+        self._applying_sash = True
+        try:
+            self._left_splitter.SetSashPosition(self._preferred_sash)
+        finally:
+            self._applying_sash = False
