@@ -34,6 +34,7 @@ from widgets.stylize import (
     create_status_label,
     init_top_level_window,
     stylize_button,
+    stylize_choice,
     stylize_label,
     stylize_tree_list,
 )
@@ -54,7 +55,11 @@ class MatchHistoryFrame(MatchHistoryHandlersMixin, MatchHistoryPropertiesMixin, 
     """Simple window displaying recent MTGO matches grouped by event."""
 
     _FIXED_WIDTH = 850
-    _COL_WIDTHS = [100, 90, 140]  # Result, Mulligans, Date (pixels)
+    _COL_WIDTHS = [90, 100, 90, 140]  # Format, Result, Mulligans, Date (pixels)
+    #: Width of each filter dropdown. Three of them plus their captions have
+    #: to fit inside the window's locked 850 px, which is why they get their
+    #: own row rather than joining the date fields.
+    _FILTER_CHOICE_WIDTH = 150
 
     def __init__(
         self,
@@ -79,6 +84,9 @@ class MatchHistoryFrame(MatchHistoryHandlersMixin, MatchHistoryPropertiesMixin, 
         self.start_filter: str | None = None
         self.end_filter: str | None = None
         self.current_username: str | None = None
+        self.format_choice: wx.Choice | None = None
+        self.our_archetype_choice: wx.Choice | None = None
+        self.opp_archetype_choice: wx.Choice | None = None
 
         self._build_ui()
         self.Centre(wx.BOTH)
@@ -191,12 +199,29 @@ class MatchHistoryFrame(MatchHistoryHandlersMixin, MatchHistoryPropertiesMixin, 
         filter_row.Add(end_field, 0, wx.RIGHT, SPACE_SM)
         apply_btn = wx.Button(box_parent, label=self._t("match.filter.apply"))
         stylize_button(apply_btn, kind="secondary", surface="panel")
-        apply_btn.Bind(wx.EVT_BUTTON, lambda _evt: self._update_metrics())
+        apply_btn.Bind(wx.EVT_BUTTON, lambda _evt: self._on_filter_changed(None))
         filter_row.Add(apply_btn, 0)
         filter_row.AddStretchSpacer(1)
 
+        # Second row rather than more controls on the date row: three dropdowns
+        # and their captions do not fit beside two date fields and a button in
+        # 850 locked pixels. They feed the same two "(filtered)" values the date
+        # range already drives, so the panel gains no new numbers -- only more
+        # ways to narrow the two it had.
+        scope_row = wx.BoxSizer(wx.HORIZONTAL)
+        metrics_sizer.Add(scope_row, 0, wx.EXPAND | wx.TOP, SPACE_XS)
+        self.format_choice = self._add_filter_choice(scope_row, box_parent, "match.filter.format")
+        self.our_archetype_choice = self._add_filter_choice(
+            scope_row, box_parent, "match.filter.our_archetype"
+        )
+        self.opp_archetype_choice = self._add_filter_choice(
+            scope_row, box_parent, "match.filter.opp_archetype"
+        )
+        scope_row.AddStretchSpacer(1)
+
         self.tree = dv.TreeListCtrl(panel, style=dv.TL_DEFAULT_STYLE | dv.TL_SINGLE)
         self.tree.AppendColumn(self._t("match.col.players"), width=380)
+        self.tree.AppendColumn(self._t("match.col.format"), width=90)
         self.tree.AppendColumn(self._t("match.col.result"), width=100)
         self.tree.AppendColumn(self._t("match.col.mulligans"), width=90)
         self.tree.AppendColumn(self._t("match.col.date"), width=140)
@@ -257,17 +282,47 @@ class MatchHistoryFrame(MatchHistoryHandlersMixin, MatchHistoryPropertiesMixin, 
         return value
 
     def _filter_label(self, parent: wx.Window, key: str) -> wx.StaticText:
-        """A date-filter caption, themed like the metric labels beside it.
+        """A filter-row caption, themed like the metric labels beside it.
 
-        These two were the only ``wx.StaticText``\\ s in the window built inline
-        with no ``SetForegroundColour``, so they rendered in wx's default black
-        on ``SURFACE_PANEL`` (1.53:1) while every label around them was
-        ``TEXT_PRIMARY``. Routed through the helper so a third one cannot be
-        added without a colour.
+        The two date captions were the only ``wx.StaticText``\\ s in the window
+        built inline with no ``SetForegroundColour``, so they rendered in wx's
+        default black on ``SURFACE_PANEL`` (1.53:1) while every label around
+        them was ``TEXT_PRIMARY``. Routed through the helper so the next one
+        cannot be added without a colour.
         """
         label = wx.StaticText(parent, label=self._t(key))
         stylize_label(label, level="body", surface="panel", tone="primary")
         return label
+
+    def _add_filter_choice(
+        self,
+        sizer: wx.BoxSizer,
+        parent: wx.Window,
+        key: str,
+    ) -> wx.Choice:
+        """Add one captioned filter dropdown, returning the control.
+
+        Starts holding only its "all" entry: the real values come from the
+        parsed history (``_refresh_filter_choices``), because offering a format
+        or an archetype the user has never played would invite them to select a
+        bucket that can only ever read "0 matches".
+        """
+        sizer.Add(
+            self._filter_label(parent, key),
+            0,
+            wx.ALIGN_CENTER_VERTICAL | wx.RIGHT,
+            SPACE_XS,
+        )
+        choice = wx.Choice(
+            parent,
+            choices=[self._t("match.filter.all")],
+            size=(self._FILTER_CHOICE_WIDTH, -1),
+        )
+        choice.SetSelection(0)
+        stylize_choice(choice, surface="panel")
+        choice.Bind(wx.EVT_CHOICE, self._on_filter_changed)
+        sizer.Add(choice, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, SPACE_SM)
+        return choice
 
     def _stylize_button(self, button: wx.Button) -> None:
         stylize_button(button, kind="secondary")

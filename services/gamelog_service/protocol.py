@@ -14,6 +14,8 @@ from __future__ import annotations
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, Protocol
 
+from services.gamelog_service.formats import RarityIndexProto
+
 if TYPE_CHECKING:
     from repositories.card_repository import CardDataManager
 
@@ -26,6 +28,7 @@ class GamelogServiceProto(Protocol):
         self,
         file_path: str,
         card_manager: CardDataManager | None = ...,
+        rarity_index: RarityIndexProto | None = ...,
     ) -> dict[str, Any] | None: ...
     def parse_all_gamelogs(
         self,
@@ -33,6 +36,7 @@ class GamelogServiceProto(Protocol):
         limit: int | None = ...,
         progress_callback: Any = ...,
         card_manager: CardDataManager | None = ...,
+        rarity_index: RarityIndexProto | None = ...,
     ) -> list[dict[str, Any]]: ...
 
     # Discovery
@@ -48,7 +52,14 @@ class GamelogServiceProto(Protocol):
         cards: list[str],
         card_manager: CardDataManager | None = ...,
         last_parsed_format: str = ...,
+        rarity_index: RarityIndexProto | None = ...,
     ) -> str: ...
+    def deck_is_pauper(
+        self,
+        cards: list[str],
+        rarity_index: RarityIndexProto | None = ...,
+        min_known: int = ...,
+    ) -> bool: ...
     def detect_archetype(self, cards: list[str]) -> str: ...
 
     # Usernames

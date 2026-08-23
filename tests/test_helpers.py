@@ -81,6 +81,9 @@ reset_collection_service = _optional_reset(
 reset_comp_rules_service = _optional_reset(
     "services.comp_rules_service", "reset_comp_rules_service"
 )
+reset_card_rarity_service = _optional_reset(
+    "services.card_rarity_service", "reset_card_rarity_service"
+)
 reset_card_service = _optional_reset("services.card_service", "reset_card_service")
 reset_metagame_service = _optional_reset("services.metagame_service", "reset_metagame_service")
 reset_radar_service = _optional_reset("services.radar_service", "reset_radar_service")
@@ -94,6 +97,7 @@ reset_deck_cache = _optional_reset("repositories.deck_text_cache", "reset_deck_c
 def reset_all_services() -> None:
     """Reset all global service instances."""
     reset_bundle_snapshot_client()
+    reset_card_rarity_service()
     reset_card_service()
     reset_collection_service()
     reset_comp_rules_service()

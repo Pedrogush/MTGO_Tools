@@ -5,7 +5,8 @@ Split by responsibility into internal modules:
 - ``usernames``: bridge username lookup, name normalization, inference helpers
 - ``discovery``: locate GameLog directories/files (bridge + filesystem scan)
 - ``parser``: raw text → records (timestamps, players, cards, mulligans, scores, results)
-- ``formats``: format detection via legalities, archetype classification
+- ``formats``: format detection (Pauper by rarity, the rest by legality),
+  archetype classification
 - ``service``: top-level orchestrators (``parse_gamelog_file``, ``parse_all_gamelogs``)
 """
 
@@ -18,6 +19,8 @@ from services.gamelog_service.discovery import (
     locate_gamelog_directory_via_bridge,
 )
 from services.gamelog_service.formats import (
+    RarityIndexProto,
+    deck_is_pauper,
     detect_archetype,
     detect_format_from_cards,
 )
@@ -39,6 +42,8 @@ from services.gamelog_service.usernames import (
 
 __all__ = [
     "GamelogServiceProto",
+    "RarityIndexProto",
+    "deck_is_pauper",
     "detect_archetype",
     "detect_format_from_cards",
     "extract_cards_played",

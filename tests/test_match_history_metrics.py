@@ -39,6 +39,9 @@ _props = _load_properties_module()
 resolve_match_perspective = _props.resolve_match_perspective
 compute_history_metrics = _props.compute_history_metrics
 compute_opponent_stats = _props.compute_opponent_stats
+filter_match_metrics = _props.filter_match_metrics
+collect_filter_options = _props.collect_filter_options
+normalize_format = _props.normalize_format
 MatchHistoryPropertiesMixin = _props.MatchHistoryPropertiesMixin
 
 
@@ -430,3 +433,159 @@ def test_within_range_boundaries_inclusive() -> None:
     end = date(2026, 1, 31)
     assert mixin._within_range(start, start, end) is True
     assert mixin._within_range(end, start, end) is True
+
+
+# ----------------------------------------------------------------- per-format / per-archetype
+def _filterable_metric(
+    *,
+    day: int = 1,
+    win: bool = True,
+    fmt: str = "Modern",
+    ours: str = "Burn",
+    theirs: str = "Tron",
+) -> dict:
+    """One per-match metric dict, in the shape ``_iter_matches`` produces."""
+    return {
+        "date": date(2026, 1, day),
+        "match_win": win,
+        "games_won": 2 if win else 0,
+        "games_total": 2,
+        "total_mulligans": 1,
+        "format": fmt,
+        "our_archetype": ours,
+        "opp_archetype": theirs,
+        "opponent": "someone",
+    }
+
+
+def test_normalize_format_buckets_missing_values_as_unknown() -> None:
+    assert normalize_format("Modern") == "Modern"
+    assert normalize_format("  Legacy ") == "Legacy"
+    for empty in (None, "", "   ", 0, []):
+        assert normalize_format(empty) == "Unknown"
+
+
+def test_filter_with_no_constraints_returns_everything() -> None:
+    metrics = [_filterable_metric(fmt="Modern"), _filterable_metric(fmt="Pauper")]
+    assert filter_match_metrics(metrics) == metrics
+
+
+def test_filter_by_format_only() -> None:
+    metrics = [
+        _filterable_metric(fmt="Modern"),
+        _filterable_metric(fmt="Pauper"),
+        _filterable_metric(fmt="Modern"),
+    ]
+    assert len(filter_match_metrics(metrics, mtg_format="Modern")) == 2
+
+
+def test_filter_by_our_archetype_and_by_theirs_are_separate_dimensions() -> None:
+    """ "How I do *with* Burn" and "how I do *against* Burn" are different questions."""
+    metrics = [
+        _filterable_metric(ours="Burn", theirs="Tron"),
+        _filterable_metric(ours="Tron", theirs="Burn"),
+    ]
+    ours = filter_match_metrics(metrics, our_archetype="Burn")
+    theirs = filter_match_metrics(metrics, opp_archetype="Burn")
+    assert len(ours) == 1 and ours[0]["opp_archetype"] == "Tron"
+    assert len(theirs) == 1 and theirs[0]["our_archetype"] == "Tron"
+
+
+def test_filters_compose_rather_than_replace_each_other() -> None:
+    """The regression this guards: a format filter that quietly drops the dates."""
+    metrics = [
+        _filterable_metric(day=1, fmt="Modern", ours="Burn"),
+        _filterable_metric(day=9, fmt="Modern", ours="Burn"),
+        _filterable_metric(day=1, fmt="Pauper", ours="Burn"),
+        _filterable_metric(day=1, fmt="Modern", ours="Tron"),
+    ]
+    selected = filter_match_metrics(
+        metrics,
+        start=date(2026, 1, 1),
+        end=date(2026, 1, 5),
+        mtg_format="Modern",
+        our_archetype="Burn",
+    )
+    assert len(selected) == 1
+    assert selected[0]["date"] == date(2026, 1, 1)
+
+
+def test_filter_drops_undated_matches_only_once_a_bound_is_set() -> None:
+    metrics = [{**_filterable_metric(), "date": None}]
+    assert filter_match_metrics(metrics) == metrics
+    assert filter_match_metrics(metrics, start=date(2026, 1, 1)) == []
+
+
+def test_filtered_metrics_feed_the_existing_rate_computation() -> None:
+    """The point of the filter: it narrows the pair of "(filtered)" numbers."""
+    metrics = [
+        _filterable_metric(fmt="Modern", win=True),
+        _filterable_metric(fmt="Modern", win=False),
+        _filterable_metric(fmt="Pauper", win=True),
+    ]
+    computed = compute_history_metrics(metrics, filter_match_metrics(metrics, mtg_format="Modern"))
+    assert computed["total_matches"] == 3
+    assert computed["filtered"]["match_total"] == 2
+    assert computed["filtered"]["match_rate"] == 50.0
+
+
+def test_collect_filter_options_offers_only_values_that_occur() -> None:
+    metrics = [
+        _filterable_metric(fmt="Modern", ours="Burn", theirs="Tron"),
+        _filterable_metric(fmt="Pauper", ours="Familiars", theirs="Burn"),
+    ]
+    options = collect_filter_options(metrics)
+    assert options["formats"] == ["Modern", "Pauper"]
+    assert options["our_archetypes"] == ["Burn", "Familiars"]
+    assert options["opp_archetypes"] == ["Burn", "Tron"]
+
+
+def test_collect_filter_options_sorts_unknown_last() -> None:
+    """ "Unknown" is a catch-all, not a name, so it does not belong under U."""
+    metrics = [
+        _filterable_metric(fmt="Unknown"),
+        _filterable_metric(fmt="Modern"),
+        _filterable_metric(fmt="Vintage"),
+    ]
+    assert collect_filter_options(metrics)["formats"] == ["Modern", "Vintage", "Unknown"]
+
+
+def test_iter_matches_carries_format_and_both_archetypes() -> None:
+    """The filter dimensions have to survive the raw-match -> metrics conversion."""
+    mixin = _make_mixin("me")
+    rows = mixin._iter_matches(
+        [
+            {
+                "players": ["them", "me"],
+                "winner": "me",
+                "match_score": "1-2",
+                "format": "Pauper",
+                "player1_archetype": "Tron",
+                "player2_archetype": "Burn",
+                "player1_mulligans": [0],
+                "player2_mulligans": [1],
+                "timestamp": datetime(2026, 1, 4, 12, 0),
+            }
+        ]
+    )
+    assert rows[0]["format"] == "Pauper"
+    assert rows[0]["our_archetype"] == "Burn"
+    assert rows[0]["opp_archetype"] == "Tron"
+    assert rows[0]["opponent"] == "them"
+
+
+def test_iter_matches_buckets_a_missing_format_as_unknown() -> None:
+    """Every match built before format detection was wired carries no format."""
+    mixin = _make_mixin("me")
+    rows = mixin._iter_matches(
+        [
+            {
+                "players": ["me", "them"],
+                "winner": "me",
+                "match_score": "2-0",
+                "timestamp": datetime(2026, 1, 4, 12, 0),
+            }
+        ]
+    )
+    assert rows[0]["format"] == "Unknown"
+    assert rows[0]["our_archetype"] == "Unknown"

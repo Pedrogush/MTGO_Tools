@@ -10,8 +10,11 @@ import wx.dataview as dv
 from loguru import logger
 
 from widgets.frames.match_history.properties import (
+    collect_filter_options,
     compute_history_metrics,
     compute_opponent_stats,
+    filter_match_metrics,
+    normalize_format,
     resolve_match_perspective,
 )
 
@@ -35,6 +38,9 @@ class MatchHistoryHandlersMixin:
     opp_mull_rate_label: wx.StaticText
     start_date_ctrl: wx.TextCtrl
     end_date_ctrl: wx.TextCtrl
+    format_choice: wx.Choice
+    our_archetype_choice: wx.Choice
+    opp_archetype_choice: wx.Choice
 
     # ------------------------------------------------------------------ worker bootstraps
     def _init_username(self) -> None:
@@ -119,9 +125,10 @@ class MatchHistoryHandlersMixin:
             label = f"{our_name} ({our_archetype}) vs {opp_name} ({opp_archetype})"
 
             item = self.tree.AppendItem(root, label)
-            self.tree.SetItemText(item, 1, result_display)
-            self.tree.SetItemText(item, 2, f"{total_mulls} ({mull_detail})")
-            self.tree.SetItemText(item, 3, date_str)
+            self.tree.SetItemText(item, 1, normalize_format(match.get("format")))
+            self.tree.SetItemText(item, 2, result_display)
+            self.tree.SetItemText(item, 3, f"{total_mulls} ({mull_detail})")
+            self.tree.SetItemText(item, 4, date_str)
 
             # Cache the resolved opponent so on_item_selected can look it up without
             # re-deriving it (avoids misidentification when current_username is None
@@ -131,6 +138,7 @@ class MatchHistoryHandlersMixin:
             self.tree.SetItemData(item, match)
 
         self._set_busy(False, self._t("match.status.loaded", count=len(matches)))
+        self._refresh_filter_choices()
         self._update_metrics()
         self._clear_opp_stats()
 
@@ -202,7 +210,11 @@ class MatchHistoryHandlersMixin:
             self._clear_opp_stats()
             return
 
-        stats = compute_opponent_stats(self._iter_matches(matches))
+        # Scoped by the same filters as everything else: with a format or an
+        # archetype selected, "how do I do against this player" has to mean
+        # "…in the matches currently on screen", or the two halves of the panel
+        # disagree about which history they are describing.
+        stats = compute_opponent_stats(self._apply_filters(self._iter_matches(matches)))
         if not stats:
             self._clear_opp_stats()
             return
@@ -220,6 +232,75 @@ class MatchHistoryHandlersMixin:
         self.opp_match_rate_label.SetLabel("\u2014")
         self.opp_mull_rate_label.SetLabel("\u2014")
 
+    def _selected_choice(self, choice: wx.Choice) -> str | None:
+        """The dropdown's value, or ``None`` for its "all" entry.
+
+        ``None`` is what :func:`filter_match_metrics` reads as "no constraint on
+        this dimension", so the "all" entry needs no special case downstream.
+        """
+        if choice is None:
+            return None
+        index = choice.GetSelection()
+        if index <= 0:
+            return None
+        return choice.GetString(index)
+
+    def _apply_filters(self, metrics: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Narrow per-match metrics by every filter the window currently shows.
+
+        The date range and the three dropdowns go through one call so they
+        compose: picking a format does not clear the dates, and the opponent
+        panel and the headline rates are narrowed by exactly the same set.
+        """
+        return filter_match_metrics(
+            metrics,
+            start=self._parse_date_input(self.start_date_ctrl.GetValue()),
+            end=self._parse_date_input(self.end_date_ctrl.GetValue()),
+            mtg_format=self._selected_choice(self.format_choice),
+            our_archetype=self._selected_choice(self.our_archetype_choice),
+            opp_archetype=self._selected_choice(self.opp_archetype_choice),
+        )
+
+    def _refresh_filter_choices(self) -> None:
+        """Repopulate the three dropdowns from the history that was just loaded.
+
+        Only values actually present are offered (see
+        :func:`collect_filter_options`). A selection that survives the reload is
+        restored, so refreshing does not silently widen the numbers on screen.
+        """
+        options = collect_filter_options(self._iter_matches(self.history_items))
+        for choice, key in (
+            (self.format_choice, "formats"),
+            (self.our_archetype_choice, "our_archetypes"),
+            (self.opp_archetype_choice, "opp_archetypes"),
+        ):
+            if choice is None:
+                continue
+            previous = self._selected_choice(choice)
+            choice.Set([self._t("match.filter.all")] + options[key])
+            restored = choice.FindString(previous) if previous else wx.NOT_FOUND
+            choice.SetSelection(restored if restored != wx.NOT_FOUND else 0)
+
+    def _on_filter_changed(self, _event: wx.CommandEvent) -> None:
+        """A dropdown moved: re-apply immediately, no Apply click needed.
+
+        The date fields keep their button because a half-typed date is not a
+        filter; a dropdown has no half-selected state, so waiting for a second
+        click would only be a step to forget.
+        """
+        self._update_metrics()
+        self._refresh_selected_opp_stats()
+
+    def _refresh_selected_opp_stats(self) -> None:
+        """Re-scope the opponent panel after a filter change, or clear it."""
+        item = self.tree.GetSelection() if self.tree else None
+        match_data = self.tree.GetItemData(item) if item and item.IsOk() else None
+        opp_name = self._get_opponent_name(match_data) if match_data else None
+        if opp_name:
+            self._update_opp_stats(opp_name)
+        else:
+            self._clear_opp_stats()
+
     def _update_metrics(self) -> None:
         matches = self._iter_matches(self.history_items)
         if not matches:
@@ -234,12 +315,7 @@ class MatchHistoryHandlersMixin:
                 label.SetLabel("\u2014")
             return
 
-        start = self._parse_date_input(self.start_date_ctrl.GetValue())
-        end = self._parse_date_input(self.end_date_ctrl.GetValue())
-        if start or end:
-            filtered = [match for match in matches if self._within_range(match["date"], start, end)]
-        else:
-            filtered = matches
+        filtered = self._apply_filters(matches)
 
         metrics = compute_history_metrics(matches, filtered)
 

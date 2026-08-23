@@ -40,6 +40,7 @@ _install_wx_stub()
 
 from repositories.card_repository.schemas import CardEntry  # noqa: E402
 from services.gamelog_service import (  # noqa: E402
+    deck_is_pauper,
     detect_archetype,
     detect_format_from_cards,
     extract_cards_played,
@@ -664,6 +665,141 @@ class _FakeCardManager:
 def _make_manager(card_legalities: dict[str, dict[str, str]]) -> _FakeCardManager:
     """Build a real card manager where each card name maps to given legalities."""
     return _FakeCardManager(card_legalities)
+
+
+class _FakeRarityIndex:
+    """A small real rarity index: which names are common, which are known at all.
+
+    Deliberately not a mock. The whole point of the Pauper rule is the
+    *three-valued* answer -- common / not common / never heard of it -- and a
+    mock that returns a bool for everything cannot express the third, which is
+    the case that decides whether one unrecognised card name vetoes a deck.
+    """
+
+    def __init__(self, common: set[str], known: set[str] | None = None) -> None:
+        self._common = {name.lower() for name in common}
+        self._known = {name.lower() for name in (known if known is not None else common)}
+
+    @property
+    def is_loaded(self) -> bool:
+        return True
+
+    def has_common_printing(self, card_name: str) -> bool | None:
+        key = card_name.lower()
+        if key not in self._known:
+            return None
+        return key in self._common
+
+
+class _UnloadedRarityIndex(_FakeRarityIndex):
+    """The shape a rarity index has before its data is available."""
+
+    @property
+    def is_loaded(self) -> bool:
+        return False
+
+
+class TestDeckIsPauper:
+    """The Pauper rule: every card in the deck has a printing at common.
+
+    Pauper cannot come out of the legality intersection -- every Pauper card is
+    also Legacy- and Vintage-legal, so intersecting legality can never single it
+    out, and re-ordering the priority list to make Pauper win the tie would be
+    keying off the wrong property entirely. Rarity is the property that actually
+    defines the format.
+    """
+
+    def _commons(self, count: int = 8) -> list[str]:
+        return [f"common{i}" for i in range(count)]
+
+    def test_all_common_is_pauper(self):
+        cards = self._commons()
+        assert deck_is_pauper(cards, _FakeRarityIndex(set(cards))) is True
+
+    def test_one_non_common_card_is_not_pauper(self):
+        cards = self._commons()
+        index = _FakeRarityIndex(common=set(cards), known=set(cards) | {"force of will"})
+        assert deck_is_pauper([*cards, "Force of Will"], index) is False
+
+    def test_a_card_the_index_never_heard_of_does_not_veto(self):
+        """A token or a differently-spelled printing must not decide the format.
+
+        MTGO and MTGGoldfish disagree about ``Summon: Choco/Mog`` vs
+        ``Summon: Choco // Mog``; the card is a common either way, and reading
+        the unrecognised spelling as "not common" would misfile the whole match.
+        """
+        cards = self._commons()
+        index = _FakeRarityIndex(set(cards))
+        assert deck_is_pauper([*cards, "Goblin Token"], index) is True
+
+    def test_too_few_recognised_cards_is_not_pauper(self):
+        """The floor that stops a short game reading as Pauper by accident.
+
+        A Modern deck that cast one Lightning Bolt off two basics satisfies
+        "every card has a common printing" while saying nothing about format.
+        """
+        cards = self._commons(3)
+        assert deck_is_pauper(cards, _FakeRarityIndex(set(cards))) is False
+
+    def test_min_known_is_the_boundary(self):
+        cards = self._commons(5)
+        index = _FakeRarityIndex(set(cards))
+        assert deck_is_pauper(cards, index, min_known=5) is True
+        assert deck_is_pauper(cards, index, min_known=6) is False
+
+    def test_duplicate_names_count_once(self):
+        """Four copies of one common are one card's worth of evidence."""
+        index = _FakeRarityIndex({"common0"})
+        assert deck_is_pauper(["common0"] * 20, index) is False
+
+    def test_no_index_is_not_pauper(self):
+        cards = self._commons()
+        assert deck_is_pauper(cards, None) is False
+
+    def test_unloaded_index_is_not_pauper(self):
+        cards = self._commons()
+        assert deck_is_pauper(cards, _UnloadedRarityIndex(set(cards))) is False
+
+
+class TestPauperBeatsTheLegalityIntersection:
+    """The rarity test runs first, and it has to: legality cannot see Pauper."""
+
+    def _pauper_deck(self) -> dict[str, dict[str, str]]:
+        # Exactly what a Pauper card looks like to the legality index: legal in
+        # Pauper *and* in every format above it. The intersection therefore
+        # contains Modern/Legacy/Vintage and answers "Modern".
+        legalities = {
+            "pauper": "Legal",
+            "modern": "Legal",
+            "legacy": "Legal",
+            "vintage": "Legal",
+        }
+        return {f"common{i}": legalities for i in range(8)}
+
+    def test_legality_alone_calls_a_pauper_deck_modern(self):
+        deck = self._pauper_deck()
+        assert detect_format_from_cards(list(deck), _make_manager(deck)) == "Modern"
+
+    def test_rarity_corrects_it(self):
+        deck = self._pauper_deck()
+        index = _FakeRarityIndex(set(deck))
+        assert detect_format_from_cards(list(deck), _make_manager(deck), rarity_index=index) == (
+            "Pauper"
+        )
+
+    def test_a_modern_deck_with_a_rare_stays_modern(self):
+        deck = self._pauper_deck()
+        deck["ragavan"] = {"modern": "Legal", "legacy": "Legal", "vintage": "Legal"}
+        index = _FakeRarityIndex(common=set(deck) - {"ragavan"}, known=set(deck))
+        assert detect_format_from_cards(list(deck), _make_manager(deck), rarity_index=index) == (
+            "Modern"
+        )
+
+    def test_rarity_needs_no_card_manager(self):
+        """The Pauper answer does not depend on legality data being loaded."""
+        deck = self._pauper_deck()
+        index = _FakeRarityIndex(set(deck))
+        assert detect_format_from_cards(list(deck), None, rarity_index=index) == "Pauper"
 
 
 class TestDetectFormatFromCards:

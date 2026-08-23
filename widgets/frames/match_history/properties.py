@@ -77,6 +77,87 @@ def resolve_match_perspective(
     }
 
 
+#: What an unset format or archetype is shown and filtered as. The parser
+#: already writes "Unknown" for an archetype it cannot name; a match whose
+#: format could not be detected arrives as ``None`` or an empty string, and
+#: both have to land in the same bucket or the dropdown grows two entries that
+#: mean the same thing.
+UNKNOWN_LABEL = "Unknown"
+
+
+def normalize_format(value: Any) -> str:
+    """Return a match's format as a non-empty display string."""
+    text = (value or "").strip() if isinstance(value, str) else ""
+    return text or UNKNOWN_LABEL
+
+
+def filter_match_metrics(
+    metrics: list[dict[str, Any]],
+    *,
+    start: date | None = None,
+    end: date | None = None,
+    mtg_format: str | None = None,
+    our_archetype: str | None = None,
+    opp_archetype: str | None = None,
+) -> list[dict[str, Any]]:
+    """Return the per-match metric dicts passing every supplied constraint.
+
+    One predicate chain rather than one path per filter: the date range was
+    already applied inline at the call site, and adding format and archetype
+    beside it would otherwise have meant three list comprehensions that each
+    have to remember the other two. ``None`` means "no constraint on this
+    dimension", so every combination composes.
+
+    Pure: no wx, no ``self`` state.
+    """
+    selected = list(metrics)
+    if start or end:
+        selected = [m for m in selected if _date_in_range(m.get("date"), start, end)]
+    if mtg_format:
+        selected = [m for m in selected if m.get("format") == mtg_format]
+    if our_archetype:
+        selected = [m for m in selected if m.get("our_archetype") == our_archetype]
+    if opp_archetype:
+        selected = [m for m in selected if m.get("opp_archetype") == opp_archetype]
+    return selected
+
+
+def _date_in_range(value: date | None, start: date | None, end: date | None) -> bool:
+    """Whether *value* falls inside the (optional) range.
+
+    A match with no date is excluded as soon as either bound is set -- it cannot
+    be shown to satisfy a range it has no position in.
+    """
+    if value is None:
+        return not (start or end)
+    if start and value < start:
+        return False
+    if end and value > end:
+        return False
+    return True
+
+
+def collect_filter_options(metrics: list[dict[str, Any]]) -> dict[str, list[str]]:
+    """Return the distinct format / archetype values present, each sorted.
+
+    Only values that actually occur are offered: a Modern-only player is never
+    shown a Pauper entry, and never learns the detector has a Vintage bucket it
+    would be wrong about. "Unknown" sorts last when present, because it is a
+    catch-all rather than a name.
+    """
+
+    def _sorted(key: str) -> list[str]:
+        values = {str(m.get(key) or UNKNOWN_LABEL) for m in metrics}
+        known = sorted(value for value in values if value != UNKNOWN_LABEL)
+        return known + ([UNKNOWN_LABEL] if UNKNOWN_LABEL in values else [])
+
+    return {
+        "formats": _sorted("format"),
+        "our_archetypes": _sorted("our_archetype"),
+        "opp_archetypes": _sorted("opp_archetype"),
+    }
+
+
 def compute_history_metrics(
     matches: list[dict[str, Any]], filtered: list[dict[str, Any]]
 ) -> dict[str, Any] | None:
@@ -238,6 +319,11 @@ class MatchHistoryPropertiesMixin:
 
             match_win = (winner == our_name) if winner and our_name else False
 
+            # The three filter dimensions travel with the metrics rather than
+            # being re-derived downstream: ``filter_match_metrics`` is pure and
+            # is handed these dicts, not the raw matches.
+            perspective = resolve_match_perspective(match, self.current_username)
+
             results.append(
                 {
                     "date": date_obj,
@@ -245,6 +331,10 @@ class MatchHistoryPropertiesMixin:
                     "games_won": our_score,
                     "games_total": our_score + opp_score,
                     "total_mulligans": our_mulligans,
+                    "format": normalize_format(match.get("format")),
+                    "our_archetype": perspective["our_archetype"] or UNKNOWN_LABEL,
+                    "opp_archetype": perspective["opp_archetype"] or UNKNOWN_LABEL,
+                    "opponent": perspective["opp_name"],
                 }
             )
 
@@ -274,10 +364,9 @@ class MatchHistoryPropertiesMixin:
             return None
 
     def _within_range(self, date_obj: date | None, start: date | None, end: date | None) -> bool:
-        if date_obj is None:
-            return False if start or end else True
-        if start and date_obj < start:
-            return False
-        if end and date_obj > end:
-            return False
-        return True
+        """Thin wrapper: the rule itself lives in :func:`_date_in_range`.
+
+        Kept so the two date bounds have one implementation now that
+        :func:`filter_match_metrics` applies them too.
+        """
+        return _date_in_range(date_obj, start, end)
