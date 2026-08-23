@@ -31,11 +31,14 @@ _FORMAT_DISPLAY: dict[str, str] = {
 #: whose few visible cards happen to be commons -- a Modern deck that cast one
 #: Lightning Bolt off basic lands satisfies "every card has a common printing".
 #:
-#: Five is where the measurement lands (see :func:`deck_is_pauper`): it keeps
-#: 100% recall on real Pauper decks at every sample size tested, and holds false
-#: positives at 0.00-0.10% of 1,992 non-Pauper decks. Raising it to 8 removes
-#: the last false positive but drops recall to 0.9% once only a quarter of a
-#: deck is visible, which is the common case in a short match.
+#: Five is where the measurement lands (see :func:`deck_is_pauper` for the
+#: table). It costs nothing at the sample sizes a real match produces -- 100%
+#: recall and zero false positives once half a deck is visible, which pooling
+#: both players' cards comfortably clears -- and it is a safety margin for the
+#: degenerate short game, where it roughly thirds the false-positive rate
+#: (0.30% -> 0.10%) at the price of recall on quarter-deck samples. Raising it
+#: to 8 drives false positives to zero but collapses recall to 0.9% there,
+#: which is too much to pay for a case pooling already avoids.
 _PAUPER_MIN_KNOWN_CARDS = 5
 
 
@@ -74,17 +77,37 @@ def deck_is_pauper(
     It is *theoretically* possible to build a Legacy or Vintage deck entirely
     out of cards that have common printings, and in practice nobody does -- the
     utility lands and the effects those decks are built around live at uncommon
-    and above. Measured against 2,337 real format-labelled decklists (the app's
-    own MTGGoldfish archetype/deck caches, joined by format):
+    and above.
 
-    ==================  ==============  ==========================
-    cards visible       Pauper recall   false positives (n=1,992)
-    ==================  ==============  ==========================
-    whole maindeck      345/345 (100%)  0 (0.00%)
-    half the deck       345/345 (100%)  0 (0.00%)
-    a quarter           345/345 (100%)  5 (0.25%)
-    six cards           345/345 (100%)  2 (0.10%)
-    ==================  ==============  ==========================
+    Measured against 2,335 real format-labelled decklists (345 Pauper, 1,990
+    other) joined out of the app's own MTGGoldfish archetype and deck-text
+    caches. Each row samples a fraction of every deck's distinct names to stand
+    in for "only the cards actually cast are visible in a game log", and is
+    averaged over 25 seeds -- a single draw is not enough, because at six-name
+    samples the false-positive count swings between 0 and 5 purely on which
+    cards the draw happens to pick. **These are the numbers for this function as
+    called, i.e. with the default** ``min_known=5``:
+
+    ======================  ====================  ==============  =========================
+    names seen (median, of                        Pauper recall   false positives (n=1,990)
+    a Pauper deck)          sample
+    ======================  ====================  ==============  =========================
+    20                      whole maindeck        345/345 (100%)  0 (0.00%)
+    10                      half the names        345/345 (100%)  0 (0.00%)
+    6                       six names             345/345 (100%)  2.4 mean, 0-5 (0.12%)
+    5                       a quarter of the      201/345 (58.3%) 2.0 mean, 0-5 (0.10%)
+                            names
+    ======================  ====================  ==============  =========================
+
+    The last row is the *floor* talking, not the rule failing, and the first
+    column is why the two six-ish rows differ: Pauper decks are the most
+    redundant in the corpus (median 20 distinct maindeck names against 27-37 for
+    the constructed formats), so a quarter of one is five names and often three
+    or four -- at or under ``min_known``. Drop the floor to 3 and that row
+    returns 99.9% recall, but its false positives roughly triple (5.9 mean, up
+    to 13). Production sits at the top of this table rather than the bottom:
+    :func:`~services.gamelog_service.service.parse_gamelog_file` pools *both*
+    players' cards, so a real match offers about twice one deck's evidence.
 
     Unknown names (tokens, mis-parsed log lines) are skipped rather than treated
     as non-common, so one unrecognised string cannot veto the whole verdict.
