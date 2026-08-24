@@ -424,6 +424,17 @@ class UpdateInstaller:
         cannot replace files the running app has open, and ``/RELAUNCH`` is what
         starts the new build once it is done.
 
+        "Right after" is not the same as "before Setup reaches the file", and it
+        cannot be made so from here. This process has to be alive to start Setup
+        at all; its shutdown then joins background threads with a 10 s timeout
+        each (:class:`~utils.background_worker.BackgroundWorker`), and the
+        PyInstaller onefile bootloader still has a ~175 MB unpack directory to
+        delete before the last process holding ``mtgo_tools.exe`` goes away. So
+        the wait belongs on the other side: ``packaging/installer.iss`` polls
+        that executable and does not start copying until it is no longer locked.
+        Without it the update ends on Setup's "An error occurred while trying to
+        replace the existing file: DeleteFile failed; code 5. Access is denied."
+
         Only ever reachable for a file :meth:`download` verified — the path is
         stored by that method and by nothing else.
         """

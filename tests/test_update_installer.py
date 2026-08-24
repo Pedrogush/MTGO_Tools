@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -752,3 +753,55 @@ def test_cleanup_on_an_untouched_installer_does_nothing(tmp_path: Path) -> None:
     UpdateInstaller(_info(), temp_root=tmp_path).cleanup()
 
     assert list(tmp_path.iterdir()) == []
+
+
+# ---------------------------------------------------------------------------
+# the installer's side of the same bargain
+# ---------------------------------------------------------------------------
+#
+# launch() starts Setup and returns, and the app then takes as long as it takes
+# to exit — background threads are joined with a 10 s timeout each, and the
+# PyInstaller onefile bootloader still has a ~175 MB unpack directory to delete
+# after that. Nothing on this side of the line can close that gap: the process
+# has to be alive to start Setup at all. What closes it is Setup waiting, in
+# packaging/installer.iss, and without that wait the update ends on "DeleteFile
+# failed; code 5" over mtgo_tools.exe.
+#
+# These are guards, not functional tests. They cannot run Setup — that needs
+# Windows, a built installer and a real upgrade over a running app (the manual
+# recipe is in packaging/README.md). What they can do is fail when the pieces
+# that wait are edited out of the script, which is the way this regresses
+# silently. Parsed as text for the same reason tests/test_ci_guards.py reads a
+# workflow that way: nothing here should learn to compile Inno Setup.
+
+INSTALLER_ISS = Path(__file__).resolve().parent.parent / "packaging" / "installer.iss"
+
+
+def _installer_script() -> str:
+    assert INSTALLER_ISS.exists(), f"{INSTALLER_ISS} is missing"
+    return INSTALLER_ISS.read_text(encoding="utf-8")
+
+
+def test_setup_waits_for_the_running_app_before_replacing_its_files() -> None:
+    script = _installer_script()
+
+    assert "procedure WaitForAppExecutable();" in script
+    # Called from ssInstall specifically: that is the only hook that runs after
+    # Setup has listed the files in use and before it acts on them. Moving the
+    # call later (a BeforeInstall: on the [Files] entry) puts it after Restart
+    # Manager's shutdown attempt, which is where an install with the app still
+    # running already fails.
+    step = script.split("procedure CurStepChanged(CurStep: TSetupStep);", 1)[1]
+    body = step.split("end;", 1)[0]
+    assert "ssInstall" in body
+    assert "WaitForAppExecutable();" in body
+
+
+def test_restart_manager_does_not_restart_the_app_behind_relaunch() -> None:
+    # Restart Manager restarting what it closed, plus the /RELAUNCH [Run] entry,
+    # is two copies of the app after one update.
+    #
+    # Anchored to a line of its own: the comment above the directive names it
+    # too, and a substring search passes on the explanation alone after the
+    # directive itself has been deleted.
+    assert re.search(r"^RestartApplications=no\s*$", _installer_script(), re.MULTILINE)

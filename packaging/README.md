@@ -55,6 +55,42 @@ the installer understands one of ours:
 
 Prerequisites: Inno Setup 6, Python 3.11+ with PyInstaller, and the **.NET 9 SDK** (required — used to publish the self-contained MTGO bridge that is shipped inside the installer). The SDK can be installed with no admin rights via `Invoke-WebRequest https://dot.net/v1/dotnet-install.ps1 -OutFile dotnet-install.ps1; .\dotnet-install.ps1 -Channel 9.0`; the build script auto-detects a per-user SDK under `%LOCALAPPDATA%\Microsoft\dotnet`. On Linux the build script uses Wine to run Inno Setup and will automatically download it if not present. Output is created at `dist/installer/MTGOTools_Setup_v<VERSION>.exe`, where `<VERSION>` comes from the repo-root `VERSION` file. The PyInstaller spec is `mtgo_tools.spec`, which produces a single-file `dist/mtgo_tools.exe`.
 
+## Installing over a running app
+
+Setup can be started while the build it is replacing is still running, and in the case
+of an in-app update it always is: the updater launches Setup and only *then* closes the
+app, and that close is not instant (it joins background threads with a 10 s timeout
+each). Replacing a running executable is what produces
+
+```
+An error occurred while trying to replace the existing file:
+DeleteFile failed; code 5. Access is denied.
+```
+
+named on `{app}\mtgo_tools.exe`. Windows Restart Manager does not save you here.
+`CloseApplications` is `yes` (Inno's default) so Setup does ask RM to close the app, and
+RM *finds* it — but it cannot close it, because a PyInstaller onefile build runs as two
+processes and the bootloader parent has no window for RM's graceful shutdown to talk to.
+Setup then stops on `Some applications could not be shut down`, one dialog earlier.
+
+So `installer.iss` waits. `WaitForAppExecutable()` is called from
+`CurStepChanged(ssInstall)` — the one hook that runs after Setup has listed the in-use
+files and before it does anything about them — and polls `{app}\mtgo_tools.exe` with
+`CreateFileW` (`GENERIC_WRITE`, no sharing) for up to 30 seconds, letting the app finish
+the exit it is already performing. Asking the *file* rather than looking for a process is
+deliberate: it needs no cooperation from the build being replaced (no mutex, no PID on
+the command line), which is what makes it work for upgrades from builds that already
+shipped, and it covers every process holding the executable at once. If the wait times
+out, Setup carries on and reports what it could not replace, exactly as it did before —
+the mechanism can only remove failures, never add one. `RestartApplications=no` keeps RM
+from restarting the app it closed, which would otherwise collide with `/RELAUNCH`.
+
+Verifying it by hand needs Windows and a built installer: install, start the app, then
+run `MTGOTools_Setup_v<VERSION>.exe /SILENT /LOG=%TEMP%\setup.log` and close the app
+while Setup is running. The log should show `MTGO Tools is still holding ... waiting for
+it to exit`, then `released its executable after N ms`, and end in `Installation process
+succeeded`.
+
 ## Versioning
 
 The installer version is **not** hardcoded here — `installer.iss` reads the
