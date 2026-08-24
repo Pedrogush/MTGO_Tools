@@ -38,6 +38,9 @@ from utils.constants import (
     DARK_BG,
     OPPONENT_TRACKER_CACHE_TTL_SECONDS,
     OPPONENT_TRACKER_FRAME_SIZE,
+    OPPONENT_TRACKER_GUIDE_COLUMN_PROPORTION,
+    OPPONENT_TRACKER_GUIDE_MIN_WIDTH,
+    OPPONENT_TRACKER_LEFT_COLUMN_PROPORTION,
     OPPONENT_TRACKER_LEFT_SASH_POS,
     OPPONENT_TRACKER_POLL_INTERVAL_MS,
     OPPONENT_TRACKER_SECTION_PADDING,
@@ -95,6 +98,7 @@ class MTGOpponentDeckSpy(
         self.last_seen_decks: dict[str, str] = {}  # format -> deck name
 
         self._saved_position: list[int] | None = None
+        self._resizing: bool = False
 
         # Background poll worker
         self._bg_worker = BackgroundWorker()
@@ -123,6 +127,7 @@ class MTGOpponentDeckSpy(
 
         self.Bind(wx.EVT_TIMER, self._on_poll_tick, self._poll_timer)
         self.Bind(wx.EVT_CLOSE, self.on_close)
+        self.Bind(wx.EVT_SIZE, self._on_frame_resized)
 
         wx.CallAfter(self._start_polling)
 
@@ -131,11 +136,34 @@ class MTGOpponentDeckSpy(
 
         panel = wx.Panel(self)
         panel.SetBackgroundColour(DARK_BG)
+        self._content_panel = panel
         outer_sizer = wx.BoxSizer(wx.VERTICAL)
         panel.SetSizer(outer_sizer)
 
         self._build_header(panel, outer_sizer)
         self._build_main_area(panel, outer_sizer)
+
+    def _on_frame_resized(self, event: wx.SizeEvent) -> None:
+        """Re-wrap the header labels to the new width, then lay the frame out.
+
+        The header labels are wrapped to the window's real width, so the wrap
+        has to be recomputed whenever that width changes; a stale wrap either
+        leaves the headline needlessly broken up or, once the window is
+        narrowed, lets it overflow the space the sizer gave it.
+        """
+        event.Skip()
+        if self._resizing or not hasattr(self, "deck_label"):
+            return
+        self._resizing = True
+        try:
+            self._rewrap_header_labels()
+            self.Layout()
+            # After the frame's own EVT_SIZE handling has resized the panel and
+            # the splitter -- until then the splitter still has its old height
+            # and wx would just clamp the sash straight back.
+            wx.CallAfter(self._restore_left_sash)
+        finally:
+            self._resizing = False
 
     def _build_main_area(self, panel: wx.Panel, outer_sizer: wx.Sizer) -> None:
         """Compose the main two-panel area: left splitter (calc/radar) and right sideboard."""
@@ -152,8 +180,15 @@ class MTGOpponentDeckSpy(
         # the light sash; DarkSplitter's default keeps the 3-D sash metrics
         # without either paint.
         self._left_splitter = DarkSplitter(panel)
+        # Proportion, not 0: with the left column pinned to its fitted width the
+        # sideboard guide absorbed *every* spare pixel -- roughly two thirds of
+        # the window for a panel that is usually five lines long, while the
+        # radar's card list beside it was clipped mid-name.
         main_sizer.Add(
-            self._left_splitter, 0, wx.RIGHT | wx.EXPAND, OPPONENT_TRACKER_SECTION_PADDING
+            self._left_splitter,
+            OPPONENT_TRACKER_LEFT_COLUMN_PROPORTION,
+            wx.RIGHT | wx.EXPAND,
+            OPPONENT_TRACKER_SECTION_PADDING,
         )
 
         self._build_calculator_panel(self._left_splitter)
@@ -170,8 +205,9 @@ class MTGOpponentDeckSpy(
 
         # Right panel: Sideboard Guide
         self.sideboard_panel = CompactSideboardPanel(panel)
+        self.sideboard_panel.SetMinSize(wx.Size(OPPONENT_TRACKER_GUIDE_MIN_WIDTH, -1))
         self.sideboard_panel.set_no_pinned_deck()
-        main_sizer.Add(self.sideboard_panel, 1, wx.EXPAND)
+        main_sizer.Add(self.sideboard_panel, OPPONENT_TRACKER_GUIDE_COLUMN_PROPORTION, wx.EXPAND)
 
 
 def main() -> None:

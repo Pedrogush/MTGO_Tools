@@ -24,8 +24,13 @@ class CompactSideboardPanel(CompactSideboardHandlersMixin, wx.Panel):
 
         self._current_entry: dict | None = None
         self._play_first: bool = True  # True = on play, False = on draw
+        # Unwrapped header text. ``wx.StaticText.Wrap`` rewrites the label in
+        # place, so the source string has to be kept to re-wrap on a resize.
+        self._header_text: str = "Guide: \u2014"
+        self._resizing: bool = False
 
         self._build_ui()
+        self.Bind(wx.EVT_SIZE, self._on_resized)
         self.Hide()
 
     def _build_ui(self) -> None:
@@ -35,7 +40,7 @@ class CompactSideboardPanel(CompactSideboardHandlersMixin, wx.Panel):
         header = wx.BoxSizer(wx.HORIZONTAL)
         sizer.Add(header, 0, wx.EXPAND | wx.ALL, SPACE_XS)
 
-        self.header_label = wx.StaticText(self, label="Guide: —")
+        self.header_label = wx.StaticText(self, label=self._header_text)
         self.header_label.SetForegroundColour(LIGHT_TEXT)
         # See the compact radar panel: a pane heading, on the ladder.
         apply_type_level(self.header_label, "heading")

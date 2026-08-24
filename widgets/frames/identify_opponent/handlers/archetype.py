@@ -12,11 +12,8 @@ from typing import TYPE_CHECKING
 import wx
 from loguru import logger
 
-from utils.constants import (
-    ACTIVE_GUIDE_FILE,
-    GUIDE_STORE,
-    OPPONENT_TRACKER_LABEL_WRAP_WIDTH,
-)
+from utils.constants import ACTIVE_GUIDE_FILE, GUIDE_STORE
+from widgets.frames.identify_opponent.properties import UNKNOWN_DECK_RESULT
 
 if TYPE_CHECKING:
     from widgets.frames.identify_opponent.protocol import MTGOpponentDeckSpyProto
@@ -58,7 +55,7 @@ class ManualArchetypeMixin(_Base):
             return
 
         _format_name, archetype_name = next(iter(self.last_seen_decks.items()))
-        if not archetype_name or archetype_name == "Unknown":
+        if not archetype_name or archetype_name == UNKNOWN_DECK_RESULT:
             self.sideboard_panel.clear()
             return
 
@@ -130,12 +127,10 @@ class ManualArchetypeMixin(_Base):
         self._manual_archetype_loaded = True
         self.player_name = "(manual)"
         self.last_seen_decks = {fmt: archetype}
-        self.deck_label.SetLabel(
+        self._set_deck_label(
             self._t("tracker.label.manual_archetype", archetype=archetype, fmt=fmt)
         )
-        self.deck_label.Wrap(OPPONENT_TRACKER_LABEL_WRAP_WIDTH)
-        self.status_label.SetLabel(self._t("tracker.status.manual_loaded"))
-        self.status_label.Wrap(OPPONENT_TRACKER_LABEL_WRAP_WIDTH)
+        self._set_status_label(self._t("tracker.status.manual_loaded"))
         self.load_arch_btn.SetLabel(self._t("tracker.btn.unload_archetype"))
         self._trigger_radar_load()
         self._update_guide_display()

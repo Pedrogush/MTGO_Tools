@@ -33,8 +33,13 @@ class CompactRadarPanel(CompactRadarHandlersMixin, CompactRadarPropertiesMixin, 
 
         self.current_radar: RadarData | None = None
         self._view_mode: RadarViewMode = RadarViewMode.TOP_CARDS
+        # Unwrapped heading text; ``wx.StaticText.Wrap`` rewrites the label in
+        # place, so the source string is needed to re-wrap on a resize.
+        self._header_text: str = "Radar: Loading..."
+        self._resizing: bool = False
 
         self._build_ui()
+        self.Bind(wx.EVT_SIZE, self._on_resized)
         self.Hide()
 
     def _build_ui(self) -> None:
@@ -45,7 +50,7 @@ class CompactRadarPanel(CompactRadarHandlersMixin, CompactRadarPropertiesMixin, 
         header_sizer = wx.BoxSizer(wx.HORIZONTAL)
         sizer.Add(header_sizer, 0, wx.EXPAND | wx.ALL, SPACE_XS)
 
-        self.header_label = wx.StaticText(self, label="Radar: Loading...")
+        self.header_label = wx.StaticText(self, label=self._header_text)
         self.header_label.SetForegroundColour(LIGHT_TEXT)
         # It names the pane below it, so it is a heading -- which is what the
         # ladder's "heading" level is. Hand-rolled ``font.Bold()`` left it at

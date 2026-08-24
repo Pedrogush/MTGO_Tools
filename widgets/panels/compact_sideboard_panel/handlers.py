@@ -7,6 +7,10 @@ from typing import TYPE_CHECKING
 import wx
 from loguru import logger
 
+from utils.constants.ui_layout import (
+    COMPACT_SIDEBOARD_MIN_WRAP_WIDTH,
+    COMPACT_SIDEBOARD_NOTE_WRAP_MARGIN,
+)
 from widgets.wx_layout import relayout
 
 if TYPE_CHECKING:
@@ -20,9 +24,42 @@ else:
 class CompactSideboardHandlersMixin(_Base):
     """Public setters, toggle callback, and list population for :class:`CompactSideboardPanel`."""
 
+    def _set_header_text(self, text: str) -> None:
+        """Set the pane heading, wrapped to the width the panel actually has.
+
+        The heading shares its row with the On Play/On Draw toggle, so a long
+        archetype name ("Guide: Goryo's Vengeance") does not fit on one line in
+        a narrow column and ``wx.StaticText`` simply clips what does not fit.
+        Wrapping it keeps the whole archetype name readable.
+        """
+        self._header_text = text
+        self.header_label.SetLabel(text)
+        self.header_label.Wrap(self._header_wrap_width())
+
+    def _header_wrap_width(self) -> int:
+        toggle_w = self.toggle_btn.GetSize().GetWidth() if self.toggle_btn.IsShown() else 0
+        width = self.GetClientSize().GetWidth() - toggle_w - COMPACT_SIDEBOARD_NOTE_WRAP_MARGIN
+        return max(width, COMPACT_SIDEBOARD_MIN_WRAP_WIDTH)
+
+    def _on_resized(self, event: wx.SizeEvent) -> None:
+        """Re-wrap the heading and the notes for the panel's new width."""
+        event.Skip()
+        if self._resizing or not hasattr(self, "header_label"):
+            return
+        self._resizing = True
+        try:
+            # Lay out first: both re-wraps measure their control's client width,
+            # and the children still carry the *previous* width until the sizer
+            # has run for the new one.
+            self.Layout()
+            self._set_header_text(self._header_text)
+            self._populate_list()
+        finally:
+            self._resizing = False
+
     def display_entry(self, entry: dict, archetype_name: str) -> None:
         self._current_entry = entry
-        self.header_label.SetLabel(f"Guide: {archetype_name}")
+        self._set_header_text(f"Guide: {archetype_name}")
         self.toggle_btn.Show()
         self._show_list()
         self._populate_list()
@@ -32,7 +69,7 @@ class CompactSideboardHandlersMixin(_Base):
 
     def clear(self) -> None:
         self._current_entry = None
-        self.header_label.SetLabel("Guide: —")
+        self._set_header_text("Guide: —")
         self.card_list.Clear()
         self.toggle_btn.Hide()
         self._show_empty(
@@ -43,7 +80,7 @@ class CompactSideboardHandlersMixin(_Base):
 
     def set_no_guide(self, archetype_name: str) -> None:
         self._current_entry = None
-        self.header_label.SetLabel(f"Guide: {archetype_name}")
+        self._set_header_text(f"Guide: {archetype_name}")
         self.card_list.Clear()
         self.toggle_btn.Hide()
         self._show_empty(
@@ -55,7 +92,7 @@ class CompactSideboardHandlersMixin(_Base):
 
     def set_no_pinned_deck(self) -> None:
         self._current_entry = None
-        self.header_label.SetLabel("Guide: —")
+        self._set_header_text("Guide: —")
         self.card_list.Clear()
         self.toggle_btn.Hide()
         self._show_empty(
@@ -123,5 +160,30 @@ class CompactSideboardHandlersMixin(_Base):
         if notes:
             self.card_list.Append("")
             self.card_list.Append("Notes:")
-            for line in notes.splitlines():
+            for line in self._wrap_note_lines(notes):
                 self.card_list.Append(f"  {line}")
+
+    def _wrap_note_lines(self, notes: str) -> list[str]:
+        """Break free-text notes into lines that fit the list's width.
+
+        ``wx.ListBox`` neither wraps nor scrolls horizontally, so a note longer
+        than the column was silently cut off mid-sentence. Measuring with the
+        list's own font is the only way to know where to break: the guide text
+        is proportional, so a character count would be wrong at both ends.
+        """
+        width = max(
+            self.card_list.GetClientSize().GetWidth() - COMPACT_SIDEBOARD_NOTE_WRAP_MARGIN,
+            COMPACT_SIDEBOARD_MIN_WRAP_WIDTH,
+        )
+        wrapped: list[str] = []
+        for paragraph in notes.splitlines():
+            current = ""
+            for word in paragraph.split():
+                candidate = f"{current} {word}".strip()
+                if not current or self.card_list.GetTextExtent(candidate)[0] <= width:
+                    current = candidate
+                else:
+                    wrapped.append(current)
+                    current = word
+            wrapped.append(current)
+        return wrapped

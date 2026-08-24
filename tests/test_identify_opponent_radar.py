@@ -411,9 +411,14 @@ class _FakeLabel:
     def __init__(self) -> None:
         self.label = ""
         self.shown = True
+        #: Width the label was last wrapped to, or ``None`` if never wrapped.
+        self.wrapped_to: int | None = None
 
     def SetLabel(self, text: str) -> None:
         self.label = text
+
+    def Wrap(self, width: int) -> None:
+        self.wrapped_to = width
 
     def Show(self) -> None:
         self.shown = True
@@ -464,16 +469,33 @@ class _FakeEmptyState:
         self.shown = False
 
 
+class _FakeSize:
+    """The one accessor the panel's width arithmetic uses off a wx size."""
+
+    def __init__(self, width: int) -> None:
+        self._width = width
+
+    def GetWidth(self) -> int:
+        return self._width
+
+
 class _FakeButton:
-    def __init__(self) -> None:
+    def __init__(self, width: int = 96) -> None:
         self.shown = True
         self.label = ""
+        self._width = width
 
     def Show(self) -> None:
         self.shown = True
 
     def Hide(self) -> None:
         self.shown = False
+
+    def IsShown(self) -> bool:
+        return self.shown
+
+    def GetSize(self) -> _FakeSize:
+        return _FakeSize(self._width)
 
     def SetLabel(self, text: str) -> None:
         self.label = text
@@ -499,6 +521,10 @@ class _FakePanelHost(CompactRadarHandlersMixin):
         self._parent = _FakeParent()
         self.shown = False
         self.layout_calls = 0
+        self._client_width = 400
+
+    def GetClientSize(self) -> _FakeSize:
+        return _FakeSize(self._client_width)
 
     def Show(self) -> None:
         self.shown = True

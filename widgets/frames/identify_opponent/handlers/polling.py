@@ -12,12 +12,9 @@ from typing import TYPE_CHECKING
 import wx
 from loguru import logger
 
-from utils.constants import (
-    FORMAT_OPTIONS,
-    OPPONENT_TRACKER_LABEL_WRAP_WIDTH,
-)
+from utils.constants import FORMAT_OPTIONS
 from utils.find_opponent_names import find_opponent_names
-from widgets.frames.identify_opponent.properties import get_latest_deck
+from widgets.frames.identify_opponent.properties import UNKNOWN_DECK_RESULT, get_latest_deck
 
 if TYPE_CHECKING:
     from widgets.frames.identify_opponent.protocol import MTGOpponentDeckSpyProto
@@ -41,7 +38,7 @@ class OpponentPollingMixin(_Base):
 
     def _start_polling(self) -> None:
         self._watching_enabled = True
-        self.status_label.SetLabel(self._t("tracker.label.watching"))
+        self._set_status_label(self._t("tracker.label.watching"))
         if not self._poll_timer.IsRunning():
             self._poll_timer.Start(self.POLL_INTERVAL_MS)
         self._submit_poll()
@@ -108,7 +105,7 @@ class OpponentPollingMixin(_Base):
                 if kind == "error"
                 else self._t("tracker.status.no_active_match")
             )
-            self.status_label.SetLabel(label)
+            self._set_status_label(label)
             self.player_name = ""
             self.last_seen_decks = {}
             self._clear_radar_display()
@@ -124,8 +121,7 @@ class OpponentPollingMixin(_Base):
                 self._trigger_radar_load()
                 self._update_guide_display()
 
-        self.status_label.SetLabel(f"Match detected: vs {self.player_name}")
-        self.status_label.Wrap(OPPONENT_TRACKER_LABEL_WRAP_WIDTH)
+        self._set_status_label(f"Match detected: vs {self.player_name}")
         self._refresh_opponent_display()
 
     def _lookup_decks_all_formats(
@@ -143,7 +139,11 @@ class OpponentPollingMixin(_Base):
         for fmt in FORMAT_OPTIONS:
             try:
                 deck = get_latest_deck(opponent_name, fmt)
-                if deck:  # Only include if deck was found
+                # ``get_latest_deck`` answers "Unknown" for a format the player
+                # has no result in, which is truthy -- so every one of the nine
+                # formats used to earn a bullet in the headline and the real
+                # matches were buried under eight "Unknown" lines.
+                if deck and deck != UNKNOWN_DECK_RESULT:
                     decks[fmt] = deck
             except Exception as exc:  # noqa: BLE001
                 logger.debug(f"Failed to lookup {fmt} deck for {opponent_name}: {exc}")
@@ -170,5 +170,4 @@ class OpponentPollingMixin(_Base):
                 lines.append(f"  • {fmt}: {deck}")
             text = "\n".join(lines)
 
-        self.deck_label.SetLabel(text)
-        self.deck_label.Wrap(OPPONENT_TRACKER_LABEL_WRAP_WIDTH)
+        self._set_deck_label(text)
