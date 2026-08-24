@@ -437,6 +437,25 @@ class UpdateService:
             installer_name=stamp.installer_name,
         )
 
+    def forget(self) -> None:
+        """Discard the cached answer so the next :meth:`check` really asks.
+
+        For the caller that has just *proved* the stamp wrong — the updater
+        getting a 404 on the installer URL it was given, because the release was
+        pruned between the check and the click. Re-checking on the strength of
+        that is not the same as ignoring the throttle: it is one request in
+        response to one piece of evidence, so the rate limit the throttle exists
+        to protect is in no danger.
+
+        Best-effort and idempotent, like the writes: failing to delete a cache
+        file must not turn into an error on a path that is already reporting one.
+        A stamp that survives this simply expires the ordinary way.
+        """
+        try:
+            self.cache_path.unlink(missing_ok=True)
+        except OSError as exc:
+            logger.debug(f"Update check: unable to drop the cached result: {exc}")
+
     # ------------------------------------------------------------------ stamp I/O ------------------------------------------------------------------
     def _read_stamp(self) -> _CheckStamp | None:
         if not self.cache_path.is_file():

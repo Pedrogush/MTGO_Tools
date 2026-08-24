@@ -13,6 +13,7 @@ from services.update_installer import (
     ChecksumUnavailable,
     DownloadFailed,
     LaunchFailed,
+    ReleaseUnavailable,
     UpdateNotDownloadable,
 )
 from utils.i18n import t
@@ -38,6 +39,7 @@ _MIB = 1024 * 1024
 #: through to the generic one.
 _FAILURE_KEYS: tuple[tuple[type[BaseException], str], ...] = (
     (ChecksumMismatch, "app.update.error.checksum_mismatch"),
+    (ReleaseUnavailable, "app.update.error.release_gone"),
     (ChecksumUnavailable, "app.update.error.checksum_unavailable"),
     (UpdateNotDownloadable, "app.update.error.unavailable"),
     (LaunchFailed, "app.update.error.launch"),
@@ -88,6 +90,13 @@ def failure_message(exc: BaseException) -> str:
     thrown away, since "MTGO Tools refused to run this" is the outcome and not a
     generic error.
     """
+    if isinstance(exc, ReleaseUnavailable) and exc.replacement is not None:
+        # The one failure that ends with something to do rather than something
+        # to be sorry about: the release is gone, and the re-check the updater
+        # made on the spot found the one that replaced it. Named here rather
+        # than left to "try again later", because trying again is precisely
+        # what will not work.
+        return t("app.update.error.release_gone_replaced", version=exc.replacement.version)
     for kind, key in _FAILURE_KEYS:
         if isinstance(exc, kind):
             return t(key, error=str(exc))

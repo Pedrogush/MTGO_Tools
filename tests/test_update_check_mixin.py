@@ -22,6 +22,7 @@ from services.update_installer import (
     ChecksumMismatch,
     DownloadFailed,
     LaunchFailed,
+    ReleaseUnavailable,
     UpdateCancelled,
 )
 from services.update_service import UpdateInfo
@@ -405,3 +406,96 @@ def test_quitting_the_app_cancels_a_download_still_in_flight() -> None:
 
     assert installer.cancelled == 1
     assert controller._worker.shutdowns == 1
+
+
+# ---------------------------------------------------------------------------
+# A release that vanished between the check and the click
+# ---------------------------------------------------------------------------
+
+
+def _patch_service_for_recheck(monkeypatch, result: UpdateInfo | None) -> dict[str, Any]:
+    """A service singleton that records ``forget()`` as well as ``check()``."""
+    import services.update_service as update_service
+
+    seen: dict[str, Any] = {"checks": 0, "forgets": 0, "order": []}
+
+    class _StubService:
+        def check(self) -> UpdateInfo | None:
+            seen["checks"] += 1
+            seen["order"].append("check")
+            return result
+
+        def forget(self) -> None:
+            seen["forgets"] += 1
+            seen["order"].append("forget")
+
+    monkeypatch.setattr(update_service, "get_update_service", lambda: _StubService())
+    return seen
+
+
+def test_a_release_that_is_gone_triggers_one_fresh_check(monkeypatch) -> None:
+    # The user clicked update on an answer that was true when it was cached and
+    # is not any more -- the release was pruned in between. Retrying cannot fix
+    # that and neither can waiting out the stamp, so the cached answer is
+    # dropped and the question asked again, once.
+    replacement = UpdateInfo(version="1.0.9", release_url="https://example.test/v1.0.9")
+    seen = _patch_service_for_recheck(monkeypatch, replacement)
+    _patch_installer(monkeypatch, download_error=ReleaseUnavailable("gone"))
+    controller = _Controller()
+    controller._available_update = APPLICABLE
+    outcome = _Outcome()
+
+    _apply(controller, outcome)
+
+    # Dropped *before* asking: a check made first would just be served the very
+    # stamp that is known to be wrong.
+    assert seen["order"] == ["forget", "check"]
+    assert len(outcome.failures) == 1
+    assert isinstance(outcome.failures[0], ReleaseUnavailable)
+    assert outcome.failures[0].replacement == replacement
+
+
+def test_the_fresh_answer_replaces_the_pending_update(monkeypatch) -> None:
+    # Otherwise the app would go on offering the dead release for the rest of
+    # the session, having just been told it is dead.
+    replacement = UpdateInfo(version="1.0.9", release_url="https://example.test/v1.0.9")
+    _patch_service_for_recheck(monkeypatch, replacement)
+    _patch_installer(monkeypatch, download_error=ReleaseUnavailable("gone"))
+    controller = _Controller()
+    controller._available_update = APPLICABLE
+
+    _apply(controller, _Outcome())
+
+    assert controller.get_available_update() == replacement
+
+
+def test_nothing_newer_leaves_no_pending_update_at_all(monkeypatch) -> None:
+    # The honest outcome when the release is gone and nothing replaced it (the
+    # whole line was pulled, or the re-check itself failed and returned None).
+    _patch_service_for_recheck(monkeypatch, None)
+    _patch_installer(monkeypatch, download_error=ReleaseUnavailable("gone"))
+    controller = _Controller()
+    controller._available_update = APPLICABLE
+    outcome = _Outcome()
+
+    _apply(controller, outcome)
+
+    assert controller.get_available_update() is None
+    assert outcome.failures[0].replacement is None
+
+
+def test_an_ordinary_download_failure_does_not_re_check(monkeypatch) -> None:
+    # The throttle exists to respect a 60-per-hour budget. Only evidence that
+    # the cached answer is *wrong* buys a request outside it -- "the transfer
+    # broke" is not that evidence, and the pending update stays as it was.
+    seen = _patch_service_for_recheck(monkeypatch, None)
+    _patch_installer(monkeypatch, download_error=DownloadFailed("connection reset"))
+    controller = _Controller()
+    controller._available_update = APPLICABLE
+    outcome = _Outcome()
+
+    _apply(controller, outcome)
+
+    assert seen["order"] == []
+    assert controller.get_available_update() == APPLICABLE
+    assert isinstance(outcome.failures[0], DownloadFailed)

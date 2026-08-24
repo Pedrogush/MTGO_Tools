@@ -101,5 +101,7 @@ MESSAGES: dict[str, str] = {
     "app.update.error.checksum_mismatch": "O instalador baixado não corresponde à soma de verificação publicada com a versão, então o MTGO Tools apagou o arquivo e não executou nada. A explicação provável é um download corrompido; a outra é um arquivo adulterado. Nada foi instalado — use a página da versão se quiser instalar esta versão na mão.",
     "app.update.error.launch": "O instalador foi baixado e verificado, mas não foi possível iniciá-lo ({error}). Nada foi instalado.",
     "app.update.error.unavailable": "Esta versão não traz um instalador que o MTGO Tools consiga aplicar sozinho. Use a página da versão para atualizar.",
+    "app.update.error.release_gone": "Esta versão não está mais publicada — ela foi removida depois da última verificação do MTGO Tools, então não havia nada para baixar. Nada foi instalado.",
+    "app.update.error.release_gone_replaced": "Aquela versão não está mais publicada. O MTGO Tools verificou de novo: a v{version} é a mais recente agora — feche esta janela e abra o aviso de atualização outra vez para instalá-la. Nada foi instalado.",
     "app.update.error.generic": "A atualização parou ({error}). Nada foi instalado.",
 }

@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from controllers.app_controller.protocol import AppControllerProto
-    from services.update_installer import ProgressCallback, UpdateInstaller
+    from services.update_installer import ProgressCallback, ReleaseUnavailable, UpdateInstaller
     from services.update_service import UpdateInfo
 
     _Base = AppControllerProto
@@ -90,7 +90,11 @@ class UpdateCheckMixin(_Base):
         "after" to report to: the installer is already running, and the next
         thing this method does is close the window the caller lives in.
         """
-        from services.update_installer import UpdateInstaller, can_auto_update
+        from services.update_installer import (
+            ReleaseUnavailable,
+            UpdateInstaller,
+            can_auto_update,
+        )
 
         info = self._available_update
         if info is None or not can_auto_update(info):
@@ -104,12 +108,23 @@ class UpdateCheckMixin(_Base):
 
         def _fail(exc: BaseException) -> None:
             self._update_installer = None
+            if isinstance(exc, ReleaseUnavailable):
+                # Adopt what the re-check below found (or None, when the answer
+                # is that nothing newer is published any more). Done here rather
+                # than on the worker thread that produced it because everything
+                # else reads this attribute from the UI thread, and _fail is
+                # already on it -- BackgroundWorker routes on_error through
+                # wx.CallAfter.
+                self._available_update = exc.replacement
             logger.info(f"In-app update failed: {type(exc).__name__}: {exc}")
             if on_failure is not None:
                 on_failure(exc)
 
         def _download() -> Path:
-            return installer.download(on_progress)
+            try:
+                return installer.download(on_progress)
+            except ReleaseUnavailable as exc:
+                raise self._recheck_after_missing_release(info, exc) from exc
 
         def _on_downloaded(_path: Path) -> None:
             self._update_installer = None
@@ -128,6 +143,46 @@ class UpdateCheckMixin(_Base):
 
         self._worker.submit(_download, on_success=_on_downloaded, on_error=_fail)
         return installer
+
+    def _recheck_after_missing_release(
+        self, missing: UpdateInfo, exc: ReleaseUnavailable
+    ) -> ReleaseUnavailable:
+        """Ask GitHub again after being sent to a release that is gone.
+
+        The user clicked update on an answer that was true when it was cached
+        and is not any more: the release was unpublished, or pruned by
+        ``scripts/prune_releases.py``, between the check and the click. Retrying
+        the download cannot fix that, and neither can waiting for the stamp to
+        expire on its own — up to a day of every launch offering the same dead
+        release.
+
+        So the stamp is dropped and one fresh check is made, and the result is
+        attached to the error the caller is about to see. Returns that error
+        rather than raising it, so the ``raise ... from exc`` at the call site
+        reads as the single place the failure leaves this method.
+
+        Runs on the download thread (it is called from inside ``_download``),
+        which is where :meth:`UpdateService.check` belongs anyway — it is the
+        same network-and-disk work the background check does. It cannot raise:
+        ``check`` absorbs its own failures and returns ``None``, which lands
+        here as "nothing to offer instead" and is the honest answer when the
+        re-check could not be made either.
+        """
+        from services.update_installer import ReleaseUnavailable
+        from services.update_service import get_update_service
+
+        logger.info(
+            f"Update: v{missing.version} is no longer published; "
+            "dropping the cached check and asking again"
+        )
+        service = get_update_service()
+        service.forget()
+        replacement = service.check()
+        if replacement is None:
+            logger.info("Update: no newer release is published any more")
+        else:
+            logger.info(f"Update: v{replacement.version} is the newest release now")
+        return ReleaseUnavailable(str(exc), replacement=replacement)
 
     def _exit_for_update(self) -> None:
         """Close the app so the installer can replace the files it has open.
