@@ -261,9 +261,31 @@ screenshot, which is the only way this shows up. Own-draw instead (see
 
 ### `wx.html2.WebView`
 
-needs the Edge WebView2 runtime; `WebView.New` raises (or returns `None`) without it, so
-every construction site needs a fallback. It also takes a light 1px client edge unless
-constructed with `wx.BORDER_NONE`
+needs the Edge WebView2 runtime, and **does not tell you when it has not got it**. The
+entry here used to say `WebView.New` raises or returns `None` without the runtime; it
+does neither. Measured on a machine with `WebView2Loader.dll` moved out of the wx
+package: `IsBackendAvailable("wxWebViewEdge")` goes `False`, and `New()` -- with the
+default backend *and* with `backend="wxWebViewEdge"` asked for by name -- still returns a
+live, non-`None` control. What you get is the **IE** backend, i.e. Trident in IE7
+document mode, which has no flexbox: every `display:flex` in a page collapses to a
+block. Screenshotted side by side, the deck-stats charts then render every bar at full
+panel width, with the value labels centred above them and the row labels on top of
+their own tracks -- a *wrong* chart, not a plainer one, and it shipped in 1.2.3 because
+nothing checked. The only reliable signal is `IsBackendAvailable` before constructing;
+see `widgets.charts.view.create_webview`.
+
+Its loader DLL is a packaging trap of the same shape. wxPython keeps
+`WebView2Loader.dll` next to `wx/_html2*.pyd` and wxWidgets loads it by **bare name** at
+runtime, so no extension module imports it and PyInstaller's dependency analysis never
+sees it -- a bundle silently downgrades to IE. Measured by moving the DLL around: wx
+finds it beside its own package and in the process's working directory -- neither of
+which a bundled app can count on. Bundling it (`packaging/mtgo_tools.spec`) is therefore
+only half the fix; the half that does not depend on Windows' search order is to
+`ctypes`-load it by absolute path before touching `wx.html2`
+(`widgets.charts.view.ensure_webview2_loader`), after which Windows resolves wx's own
+load-by-name to the already-loaded module -- measured both ways.
+
+It also takes a light 1px client edge unless constructed with `wx.BORDER_NONE`
 
 ### `wx.ListBox`
 

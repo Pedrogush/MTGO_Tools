@@ -43,6 +43,34 @@ for rel in [
 # It is downloaded to {app}/mtgo_integration/ by the Inno Setup installer.
 binaries = []
 
+# wxPython's Edge/WebView2 backend loads WebView2Loader.dll by bare name at
+# runtime, so no .pyd imports it and PyInstaller's dependency analysis never sees
+# it. Shipping without it does not disable the WebView: wxWidgets silently hands
+# back the IE backend instead, which is Trident in IE7 document mode and has no
+# flexbox -- which is how the installed build rendered every deck-stats bar at
+# full panel width while the same code from source looked right.
+#
+# It is bundled into ``wx/`` so the layout matches site-packages, and
+# ``widgets.charts.view.ensure_webview2_loader`` loads it from there by absolute
+# path. Both strings are cross-checked against that module by
+# tests/test_webview_backend.py.
+WEBVIEW2_LOADER_NAME = "WebView2Loader.dll"
+WEBVIEW2_LOADER_DEST = "wx"
+
+import importlib.util  # noqa: E402
+
+_wx_spec = importlib.util.find_spec("wx")
+_wx_dir = pathlib.Path(_wx_spec.origin).parent if _wx_spec and _wx_spec.origin else None
+_webview2_loader = _wx_dir / WEBVIEW2_LOADER_NAME if _wx_dir else None
+if _webview2_loader and _webview2_loader.exists():
+    binaries += [(str(_webview2_loader), WEBVIEW2_LOADER_DEST)]
+elif sys.platform == "win32":
+    # Fail the build rather than ship a bundle whose charts render on IE.
+    raise SystemExit(
+        f"{WEBVIEW2_LOADER_NAME} not found next to the wx package "
+        f"({_wx_dir}); the packaged app would fall back to the IE WebView backend"
+    )
+
 entry_point = project_root / "main.py"
 app_icon = project_root / "assets" / "icons" / "hammer.ico"
 
