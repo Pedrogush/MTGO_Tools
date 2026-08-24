@@ -53,6 +53,31 @@ ArchitecturesInstallIn64BitMode=x64compatible
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
+[Messages]
+; Finished-page wording. This replaces the "launch the app now" checkbox that
+; used to live in [Run] -- see the comment there for why it is gone.
+;
+; Chosen over the alternatives deliberately. An InfoAfterFile would add a whole
+; extra wizard page for two sentences, and a [CustomMessages] string needs
+; [Code] to get onto the page at all; overriding the stock messages puts the
+; instruction exactly where the user is already looking, with no new page and no
+; Pascal. Inno picks FinishedLabel when Setup created a shortcut and
+; FinishedLabelNoIcons when it did not, and it picks at run time, so both are
+; overridden -- an override on only one of them is a finish page that silently
+; reverts to the stock text under conditions you cannot see from here.
+;
+; Untagged (no "english." prefix), so these apply to every entry in [Languages].
+; That section currently lists exactly one language, English, so there is no
+; second catalogue to keep in sync today -- but if a language is ever added
+; here, these two lines still cover it in English rather than going blank, and
+; that is the moment to add "<lang>.FinishedLabel=" siblings. The app's own
+; en-US/pt-BR catalogues under utils/i18n/ are unrelated: they translate the
+; application, not Setup, which ships only what [Languages] declares.
+;
+; %n is Inno's newline escape and [name] expands to AppName.
+FinishedLabel=Setup has finished installing [name] on your computer.%n%nTo start it, open the Start menu and choose [name] (or use the desktop shortcut, if you asked for one).%n%nSetup does not start [name] for you: on some machines Windows Application Control blocks a program that an installer launches. Opening it from the Start menu is not affected.
+FinishedLabelNoIcons=Setup has finished installing [name] on your computer.%n%nTo start it, open the Start menu and choose [name].%n%nSetup does not start [name] for you: on some machines Windows Application Control blocks a program that an installer launches. Opening it from the Start menu is not affected.
+
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
@@ -122,19 +147,48 @@ Name: "{group}\README"; Filename: "{app}\README.md"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
 [Run]
-; Option to launch the application after installation
-Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
+; There is deliberately no "Launch MTGO Tools" checkbox here.
+;
+; It used to be this entry:
+;
+;   Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,...}";
+;       Flags: nowait postinstall skipifsilent
+;
+; `postinstall` is what turns a [Run] entry into that checkbox, and ticking it
+; made *Setup* the process that started the app. On a machine with Windows
+; Application Control active (Smart App Control on consumer Windows 11, App
+; Control for Business / WDAC on managed ones) that is refused, and the install
+; ends on "CreateProcess failed; code 4551 -- an Application Control policy has
+; blocked this file" (issue #1009). The app is installed and fine at that point;
+; the same user can open it from the Start menu immediately afterwards, which is
+; the workaround #1009 reports. So the checkbox does not fail gracefully -- it
+; manufactures an error dialog for an install that worked.
+;
+; Rather than word that error better, we stopped provoking it: the finish page
+; now points at the Start Menu shortcut created in [Icons] (see the [Messages]
+; overrides above). The cost is one extra click for everyone; the benefit is
+; that nobody's install ends on a scary failure.
+;
+; RESTORE THIS ONCE THE BINARY IS CODE-SIGNED. Application Control blocks
+; mtgo_tools.exe because it carries no trusted publisher signature; a signed
+; build is expected to launch from Setup normally, at which point the checkbox
+; is a straight usability win and should come back (together with reverting the
+; FinishedLabel/FinishedLabelNoIcons overrides above). A code-signing
+; certificate is being pursued through the SignPath Foundation open-source
+; programme. Do not restore it before then: doing so reopens #1009.
+;
 ; Relaunch after an in-app update. The updater downloads this installer, verifies
 ; its SHA256, runs it as `/SILENT /RELAUNCH`, and exits so its own files can be
 ; overwritten — which means nothing is left running to bring the app back. This
 ; entry is what brings it back.
 ;
-; It cannot be folded into the entry above: `postinstall` turns a [Run] entry into
-; a checkbox on the Finished page, and `skipifsilent` deliberately suppresses that
-; page's actions under /SILENT — which is precisely the mode a self-update runs in.
-; The two flags together mean "launch only when a human is watching", so a silent
-; install can never launch anything through them. The trap is that this looks like
-; it should work and simply does nothing.
+; It could not be folded into the postinstall checkbox that used to sit above,
+; and must not be folded into it if that checkbox is ever restored: `postinstall`
+; turns a [Run] entry into a checkbox on the Finished page, and `skipifsilent`
+; deliberately suppresses that page's actions under /SILENT — which is precisely
+; the mode a self-update runs in. The two flags together mean "launch only when a
+; human is watching", so a silent install can never launch anything through them.
+; The trap is that this looks like it should work and simply does nothing.
 ;
 ; So this is a plain [Run] entry (no postinstall): it executes at the end of the
 ; install regardless of silence, and a Check: function is what makes it conditional
@@ -145,6 +199,16 @@ Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChang
 ; started unless told not to, and the app runs for hours. Without it Setup would
 ; stay alive for the entire session — a stray process holding an install lock,
 ; long after the update it performed was finished.
+;
+; KNOWN, UNFIXED: this entry is still Setup calling CreateProcess on an unsigned
+; mtgo_tools.exe, so on a machine with Application Control active it should be
+; refused for exactly the same reason the checkbox above was — meaning an
+; auto-update there leaves the app closed and it does not come back. It is left
+; alone on purpose: removing it would break the update restart for everyone to
+; help the few, and the obvious alternative (launching the Start Menu shortcut
+; via explorer.exe, so the launch is re-parented the way the #1009 workaround is)
+; cannot be verified without a machine that actually has Smart App Control on.
+; Tracked in #1020. Code-signing resolves this one too.
 Filename: "{app}\{#MyAppExeName}"; Flags: nowait; Check: RelaunchRequested
 
 [Code]
