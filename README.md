@@ -6,6 +6,10 @@ A desktop application for Magic: The Gathering Online (MTGO) players providing m
 ![Platform](https://img.shields.io/badge/platform-Windows-lightgrey)
 ![License](https://img.shields.io/badge/license-MIT-orange)
 
+[English](README.md) · [Português (Brasil)](README.pt-BR.md)
+
+![MTGO Tools main window: the Modern archetype Boros Energy selected on the left with its recent tournament results, a 5-0 league decklist rendered as card images in the centre, and the Card Inspector on the right showing Ocelot Pride's art, printings and oracle text](docs/images/deck-research.png)
+
 ## Features
 
 - **Metagame Analysis**: Browse top archetypes from MTGGoldfish with win rates, popularity, and per-day deck counts. Radar view shows card inclusion rates across recent tournament decks.
@@ -16,6 +20,26 @@ A desktop application for Magic: The Gathering Online (MTGO) players providing m
 - **Sideboard Guides**: Create and manage matchup-specific sideboarding plans, stored per deck configuration.
 - **Collection Management**: Import your MTGO collection via the .NET Bridge and see what cards you own or are missing for any deck.
 - **Challenge Timer**: Alerts when MTGO challenge events are about to start.
+
+![Metagame Analysis window: a horizontal bar chart of Modern metagame share over the last 5 days, led by Goryo's Vengeance at 8.7%, beside a Metagame Changes panel listing archetypes that gained or lost share against the previous period](docs/images/metagame-analysis.png)
+
+*Metagame share for the selected format and time window, with the period-over-period movers.*
+
+![Archetype Radar window for Goryo's Vengeance in Modern: two tables listing every mainboard and sideboard card played across 17 analysed decks, each with its inclusion percentage and expected number of copies](docs/images/archetype-radar.png)
+
+*Radar: inclusion rate and expected copies for every card an archetype played, mainboard and sideboard.*
+
+![Top Cards window: a table aggregated from 761 Modern decks, ranking cards by total copies with mainboard and sideboard deck counts, all-decks and when-played averages, archetype counts and format legality](docs/images/top-cards.png)
+
+*Format-wide card counts, with both "all decks" and Karsten-style "when played" averages.*
+
+![Deck Builder panel: a card search filtered by the mana cost 1R with advanced filters expanded for type line, oracle text, mana value, colour identity and format, showing nine matching cards with their mana costs rendered as symbols, next to the loaded decklist](docs/images/deck-builder.png)
+
+*Card search by name, mana cost, type, oracle text, colour identity and format legality.*
+
+![Deck Stats tab: mana curve, colour share and card type breakdown for a 60-card Boros Energy deck, with a bar chart of the probability of each number of lands in the opening hand](docs/images/deck-stats.png)
+
+*Per-deck mana curve, colour share, type breakdown and opening-hand land probabilities.*
 
 ## Installation
 
