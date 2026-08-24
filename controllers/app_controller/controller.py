@@ -6,6 +6,8 @@ import threading
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
+from loguru import logger
+
 from controllers.app_controller.archetypes import ArchetypesMixin
 from controllers.app_controller.bulk_data import BulkDataMixin
 from controllers.app_controller.card_data import CardDataMixin
@@ -18,6 +20,7 @@ from controllers.app_controller.updates import UpdateCheckMixin
 from controllers.session_manager import DeckSelectorSessionManager
 from services import mtgo_bridge_service
 from services.archetype_resolver import find_archetype_by_name
+from services.card_rarity_service import get_card_rarity_service
 from services.card_service import get_card_service
 from services.collection_service import get_collection_service
 from services.comp_rules_service import get_comp_rules_service, linkify_cross_refs
@@ -27,7 +30,11 @@ from services.format_card_pool_service import get_format_card_pool_service
 from services.gamelog_service import (
     get_current_username,
     infer_username_from_matches,
-    parse_all_gamelogs,
+)
+from services.gamelog_service import (
+    # Aliased because ``AppController`` now exposes a *method* of this name that
+    # supplies the card and rarity indexes the format detector needs.
+    parse_all_gamelogs as _parse_all_gamelogs,
 )
 from services.image_service import (
     BULK_DATA_CACHE,
@@ -103,7 +110,6 @@ class AppController(
         # widgets can call them via the controller reference instead of
         # importing from ``services`` directly.
         self.find_archetype_by_name = find_archetype_by_name
-        self.parse_all_gamelogs = parse_all_gamelogs
         self.infer_username_from_matches = infer_username_from_matches
         self.get_current_username = get_current_username
         self.linkify_cross_refs = linkify_cross_refs
@@ -171,6 +177,44 @@ class AppController(
         # Set only while an in-app update is downloading, so shutdown() can stop
         # it; see UpdateCheckMixin.apply_available_update.
         self._update_installer: UpdateInstaller | None = None
+
+    def parse_all_gamelogs(self, **kwargs):
+        """Parse the MTGO game logs with the card data the detector needs.
+
+        This is a method rather than the bare service function the other
+        stateless helpers above are bound to, because the format detector takes
+        two data sources that are **not available at construction time**: the
+        card index loads asynchronously at startup, and the rarity index is
+        derived from the Scryfall bulk on first use. Binding the function meant
+        it was always called with neither, so ``detect_format_from_cards`` took
+        its "no data" branch on every match and every parsed match came back
+        with ``format == "Unknown"`` -- the field existed and was never once
+        populated in a shipped build.
+
+        Resolving both here, per call, is what makes the format real. Callers
+        run this on a worker thread (Match History does), which is required:
+        deriving the rarity index reads and decompresses the bulk file.
+        """
+        kwargs.setdefault("card_manager", self.card_service.get_card_manager())
+        kwargs.setdefault("rarity_index", self._loaded_rarity_index())
+        return _parse_all_gamelogs(**kwargs)
+
+    def _loaded_rarity_index(self):
+        """Return the rarity index if it can be loaded, else ``None``.
+
+        ``None`` is a supported answer all the way down: the Pauper test is
+        skipped and format detection falls back to the legality intersection,
+        which is what happens on a fresh install before the card-art bulk file
+        has been downloaded.
+        """
+        rarity_service = get_card_rarity_service()
+        try:
+            if not rarity_service.load():
+                return None
+        except Exception as exc:  # noqa: BLE001 - never block a history refresh
+            logger.debug(f"Rarity index unavailable, skipping the Pauper test: {exc}")
+            return None
+        return rarity_service
 
     # ----- Backward-compat repository accessors -----
     # Widgets, handlers, and a few tests still reach for ``controller.card_repo``,

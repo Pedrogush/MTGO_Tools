@@ -8,7 +8,11 @@ from typing import TYPE_CHECKING
 from loguru import logger
 
 from services.gamelog_service.discovery import find_all_gamelog_dirs, find_gamelog_files
-from services.gamelog_service.formats import detect_archetype, detect_format_from_cards
+from services.gamelog_service.formats import (
+    RarityIndexProto,
+    detect_archetype,
+    detect_format_from_cards,
+)
 from services.gamelog_service.parser import (
     extract_cards_played,
     extract_players,
@@ -26,6 +30,7 @@ if TYPE_CHECKING:
 def parse_gamelog_file(
     file_path: str,
     card_manager: CardDataManager | None = None,
+    rarity_index: RarityIndexProto | None = None,
 ) -> dict | None:
     try:
         with open(file_path, encoding="latin1") as f:
@@ -87,7 +92,12 @@ def parse_gamelog_file(
         match_id = os.path.basename(file_path).replace("Match_GameLog_", "").replace(".dat", "")
 
         # Detect format and archetypes
-        detected_format = detect_format_from_cards(player1_deck + player2_deck, card_manager)
+        # Both decks pooled on purpose: the two players are by definition in
+        # the same format, so twice the cards is twice the evidence for both
+        # the rarity test and the legality intersection.
+        detected_format = detect_format_from_cards(
+            player1_deck + player2_deck, card_manager, rarity_index=rarity_index
+        )
         player1_archetype = detect_archetype(player1_deck)
         player2_archetype = detect_archetype(player2_deck)
 
@@ -122,6 +132,7 @@ def parse_all_gamelogs(
     limit: int = None,
     progress_callback=None,
     card_manager: CardDataManager | None = None,
+    rarity_index: RarityIndexProto | None = None,
 ) -> list[dict]:
     if directory is None:
         directories = find_all_gamelog_dirs()
@@ -152,7 +163,7 @@ def parse_all_gamelogs(
         if progress_callback:
             progress_callback(i + 1, total_files)
 
-        match_data = parse_gamelog_file(file_path, card_manager)
+        match_data = parse_gamelog_file(file_path, card_manager, rarity_index)
         if match_data:
             matches.append(match_data)
 
