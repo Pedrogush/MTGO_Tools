@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Protocol
 
+from repositories.card_repository.schemas import PLAYABLE_LEGALITY_STATES
+
 if TYPE_CHECKING:
     from repositories.card_repository import CardDataManager
 
@@ -165,7 +167,11 @@ def _detect_format_via_legalities(
         entry = card_manager.get_card(card_name)
         if entry is None:
             continue
-        legal = {fmt for fmt in _COMPETITIVE_FORMATS if entry.legalities.get(fmt) == "Legal"}
+        legal = {
+            fmt
+            for fmt in _COMPETITIVE_FORMATS
+            if entry.legalities.get(fmt) in PLAYABLE_LEGALITY_STATES
+        }
         if legal:
             legal_format_sets.append(legal)
 

@@ -38,15 +38,51 @@ def resolve_paths(data_dir: Path | str = CARD_DATA_DIR) -> tuple[Path, Path, Pat
     The index is persisted as ``msgspec.msgpack`` (binary) for fast, compact
     decode. The version in the filename invalidates older caches: ``_v2`` added
     double-faced-aware records, ``_v3`` stores ``cards_by_name`` as a
-    name -> index map instead of duplicated card objects, and ``_v4`` stops a
+    name -> index map instead of duplicated card objects, ``_v4`` stops a
     combined card's face alias from claiming a real standalone card's name
-    (e.g. "Emeritus of Conflict // Lightning Bolt" over "Lightning Bolt").
+    (e.g. "Emeritus of Conflict // Lightning Bolt" over "Lightning Bolt"), and
+    ``_v5`` keeps ``Restricted`` legalities rather than discarding them along
+    with the banned ones (see
+    :func:`~repositories.card_repository.builder._merge_legalities`). That last
+    one is why the version had to move at all: a v4 index has *already* thrown
+    the restricted entries away, so fixing the builder changes nothing for
+    anyone holding one. The new filename is what forces the rebuild.
     The ``.msgpack`` extension distinguishes the binary index from the legacy
     JSON.
     """
     base = Path(data_dir)
     base.mkdir(parents=True, exist_ok=True)
-    return base, base / "atomic_cards_index_v4.msgpack", base / "atomic_cards_meta.json"
+    return base, base / "atomic_cards_index_v5.msgpack", base / "atomic_cards_meta.json"
+
+
+def prune_superseded_indexes(data_dir: Path | str, keep: Path) -> list[Path]:
+    """Delete index blobs from older schema versions, returning what went.
+
+    The version lives in the filename, so every bump leaves the previous
+    ~20 MB msgpack sitting in ``data/`` forever -- this machine was carrying a
+    ``_v3`` next to its ``_v4`` for exactly that reason. Call this only once
+    *keep* has loaded successfully: an unreadable new index must still be able
+    to fall back on nothing worse than a re-download, and deleting the old one
+    first would not change that, but deleting it *before* knowing the new one
+    decodes is a needless window.
+
+    Only ``atomic_cards_index_v*.msgpack`` files are considered; the legacy
+    JSON has its own one-shot migration in :func:`migrate_legacy_index`.
+    """
+    removed: list[Path] = []
+    keep = Path(keep)
+    for candidate in sorted(Path(data_dir).glob("atomic_cards_index_v*.msgpack")):
+        if candidate.name == keep.name:
+            continue
+        try:
+            candidate.unlink()
+        except OSError as exc:
+            logger.debug(f"Could not remove superseded card index {candidate}: {exc}")
+            continue
+        removed.append(candidate)
+    if removed:
+        logger.info(f"Removed {len(removed)} superseded card index file(s)")
+    return removed
 
 
 def legacy_index_path(data_dir: Path | str = CARD_DATA_DIR) -> Path:
@@ -108,6 +144,7 @@ def write_meta(meta_path: Path, meta: dict[str, Any]) -> None:
 
 __all__ = [
     "legacy_index_path",
+    "prune_superseded_indexes",
     "load_index",
     "load_meta",
     "migrate_legacy_index",
