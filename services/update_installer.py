@@ -40,6 +40,7 @@ part (detached process creation) degrades to the POSIX equivalent.
 from __future__ import annotations
 
 import hashlib
+import os
 import re
 import shutil
 import subprocess  # nosec B404 - running the downloaded installer is the point
@@ -63,6 +64,40 @@ from utils.constants import UPDATE_DOWNLOAD_CHUNK_SIZE, UPDATE_DOWNLOAD_TIMEOUT_
 # its files to be replaced, so the installer is what puts it back on screen
 # (packaging/installer.iss).
 INSTALLER_SWITCHES: tuple[str, ...] = ("/SILENT", "/NORESTART", "/RELAUNCH")
+
+# Bootloader variables that must not reach the installer (issue: "_MEI" DLL error
+# after an in-app update).
+#
+# A PyInstaller onefile app runs from a directory it unpacked into %TEMP%
+# (``_MEIxxxxxx``) and advertises that directory to its own child processes
+# through these environment variables — that is how a re-executed child, such as
+# a ``multiprocessing`` "spawn" worker, reuses the unpacked bundle instead of
+# unpacking a second copy. They live in ``os.environ``, so *every* child this app
+# starts inherits them, including one that is not a child of the bundle at all.
+#
+# That is what breaks an update. Setup inherits them, Setup's ``/RELAUNCH`` entry
+# starts the freshly installed ``mtgo_tools.exe`` and it inherits them in turn —
+# and the bootloader's test for "am I a re-executed child?" is whether
+# ``_PYI_ARCHIVE_FILE`` names the executable now running. After an update it does:
+# the new build sits at the same path as the old one. So the new process trusts
+# ``_PYI_APPLICATION_HOME_DIR``, which points into the *old* app's unpack
+# directory — deleted seconds earlier when that app exited — and dies before
+# Python starts with ``Failed to load Python DLL '...\_MEIxxxxxx\python3xx.dll'``.
+#
+# Stripping them for this one child is the whole fix: with no inherited state to
+# trust, the new process unpacks its own bundle the way a fresh start does.
+# ``_MEIPASS2`` is the pre-6.0 spelling, kept so a rollback of the pinned
+# PyInstaller cannot quietly reopen this.
+#
+# Only the installer's environment is filtered. The variables are load-bearing
+# for the app's own ``multiprocessing`` children, which must keep them.
+_BOOTLOADER_ENV_VARS: tuple[str, ...] = (
+    "_PYI_APPLICATION_HOME_DIR",
+    "_PYI_ARCHIVE_FILE",
+    "_PYI_PARENT_PROCESS_LEVEL",
+    "_PYI_SPLASH_IPC",
+    "_MEIPASS2",
+)
 
 # Where the download lands. Not the install directory (%LOCALAPPDATA%\Programs
 # is exactly what the installer is about to overwrite, and writing into it can
@@ -353,6 +388,7 @@ class UpdateInstaller:
             subprocess.Popen(  # nosec B603 - argv list, no shell, verified local path
                 command,
                 cwd=str(target.parent),
+                env=_installer_env(),
                 stdin=subprocess.DEVNULL,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
@@ -400,6 +436,22 @@ def _iter_chunks(response: requests.Response, chunk_size: int) -> Iterator[bytes
     for chunk in response.iter_content(chunk_size=chunk_size):
         if chunk:
             yield chunk
+
+
+def _installer_env() -> dict[str, str]:
+    """This process's environment minus PyInstaller's bootloader variables.
+
+    See :data:`_BOOTLOADER_ENV_VARS` for why they cannot be allowed to reach
+    Setup: they describe an unpack directory that stops existing moments after
+    Setup starts, and the app Setup relaunches would follow them into it.
+
+    A copy is returned rather than ``os.environ`` being mutated — the app is
+    still running and still spawning ``multiprocessing`` workers that need those
+    variables, and it keeps this safe to call from the worker thread ``launch()``
+    runs on. Everything else is passed through unchanged: Setup is a normal
+    Windows program and wants the user's real environment.
+    """
+    return {key: value for key, value in os.environ.items() if key not in _BOOTLOADER_ENV_VARS}
 
 
 def _detached_popen_kwargs() -> dict[str, Any]:

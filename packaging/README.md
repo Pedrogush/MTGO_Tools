@@ -4,6 +4,7 @@ Build on Windows: `.\build_installer.ps1`
 Build on Linux: `./build_installer.sh`
 Test the installer file: `.\test_installer.ps1` or `./test_installer.sh`
 Test the install/uninstall path: `.\test_install_uninstall.ps1` (Windows only)
+Test that an update's relaunch works: `.\test_update_relaunch.ps1` (Windows only)
 
 This directory contains Inno Setup configuration and build scripts for creating a professional Windows installer. The installer includes license agreement, custom install directory selection, Start Menu and Desktop shortcuts, and bundles all dependencies including the PyInstaller executable, .NET bridge, and vendor data.
 
@@ -31,6 +32,24 @@ the installer understands one of ours:
   and it should come back once the binary is code-signed. `/RELAUNCH` still launches the
   app from Setup and so is expected to hit the same block on the same machines; it is
   kept because removing it would break the auto-update restart for everyone. See #1020.
+
+  `/RELAUNCH` has one non-obvious requirement, and `test_update_relaunch.ps1` is what
+  guards it. The app is a PyInstaller onefile build: it runs from a directory it
+  unpacked into `%TEMP%` (`_MEIxxxxxx`) and points its own child processes at that
+  directory through `_PYI_APPLICATION_HOME_DIR` / `_PYI_ARCHIVE_FILE` /
+  `_PYI_PARENT_PROCESS_LEVEL`, which is how its `multiprocessing` workers reuse the
+  bundle instead of unpacking a second copy. Setup inherits those variables from the
+  app that launched it, and the app Setup relaunches inherits them from Setup — at
+  which point the bootloader, seeing `_PYI_ARCHIVE_FILE` name the executable it is
+  running (the same path before and after an update), skips unpacking and loads Python
+  from the *old* app's directory, deleted seconds earlier when that app exited. The
+  result is `Failed to load Python DLL '...\_MEIxxxxxx\python3xx.dll'` and no app.
+  So `installer.iss` clears them in `CurStepChanged(ssInstall)` — before the `[Run]`
+  entry, which executes at the end of the install step and therefore *before*
+  `ssPostInstall` — and `services/update_installer.py` also filters them out of the
+  environment it gives Setup. Two layers on purpose: the second fixes updates launched
+  by builds that carry it, the first is what rescues an update launched by an older
+  build, since the installer doing the rescuing is the one being upgraded to.
 
 **Debugging an installed build:** the shipped executable is windowed (no console), but `debugpy` is bundled so you can attach an IDE debugger the same way you would in the editor. Set `MTGO_TOOLS_INSTALL_DEBUG=1` (or `MTGO_TOOLS_INSTALL_DEBUG=<port>`) before launching to have it listen on 127.0.0.1:5678, then use your IDE's "attach to process/port". Set `MTGO_TOOLS_INSTALL_DEBUG_WAIT=1` to block startup until the debugger attaches (for breaking on early startup code). The hook is inert unless the env var is set. File logs are always written to `%LOCALAPPDATA%\MTGO Tools\logs`; set `MTGO_LOG_LEVEL=DEBUG` for verbose output.
 

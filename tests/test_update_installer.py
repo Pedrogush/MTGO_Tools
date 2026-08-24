@@ -15,6 +15,7 @@ file" and "never launches an unverified file" actually have to hold.
 from __future__ import annotations
 
 import hashlib
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -552,6 +553,56 @@ def test_launch_detaches_the_installer_from_this_process(
         assert flags & subprocess.CREATE_NEW_PROCESS_GROUP  # type: ignore[attr-defined]
     else:
         assert kwargs["start_new_session"] is True
+
+
+def test_launch_does_not_hand_the_installer_the_bootloader_variables(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The regression this guards: a onefile build advertises its %TEMP% unpack
+    # directory through these variables, Setup inherits them, and the app Setup
+    # relaunches inherits them from Setup — then loads Python from a directory
+    # the exiting app already deleted and dies with "Failed to load Python DLL
+    # ...\_MEIxxxxxx\python3xx.dll" before any of this project's code runs.
+    _http(
+        monkeypatch,
+        {CHECKSUM_URL: _sidecar_response(), INSTALLER_URL: _installer_response()},
+    )
+    captured = _capture_popen(monkeypatch)
+    monkeypatch.setenv("_PYI_APPLICATION_HOME_DIR", r"C:\Temp\_MEI123456")
+    monkeypatch.setenv("_PYI_ARCHIVE_FILE", r"C:\Programs\MTGO Tools\mtgo_tools.exe")
+    monkeypatch.setenv("_PYI_PARENT_PROCESS_LEVEL", "1")
+    monkeypatch.setenv("_MEIPASS2", r"C:\Temp\_MEI123456")
+    monkeypatch.setenv("MTGO_TOOLS_MARKER", "kept")
+    installer = UpdateInstaller(_info(), temp_root=tmp_path)
+    installer.download()
+
+    installer.launch()
+
+    env = captured["kwargs"]["env"]
+    assert not [key for key in env if key.startswith(("_PYI", "_MEIPASS"))]
+    # Only those are dropped: Setup is an ordinary Windows program and needs the
+    # rest of the user's environment (TEMP, PATH, the profile directories).
+    assert env["MTGO_TOOLS_MARKER"] == "kept"
+
+
+def test_launch_leaves_this_process_environment_alone(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The app is still running and still spawning multiprocessing workers, which
+    # need those variables to reuse the unpacked bundle instead of unpacking a
+    # second copy. Filtering has to be per-child, not a mutation of os.environ.
+    _http(
+        monkeypatch,
+        {CHECKSUM_URL: _sidecar_response(), INSTALLER_URL: _installer_response()},
+    )
+    _capture_popen(monkeypatch)
+    monkeypatch.setenv("_PYI_APPLICATION_HOME_DIR", r"C:\Temp\_MEI123456")
+    installer = UpdateInstaller(_info(), temp_root=tmp_path)
+    installer.download()
+
+    installer.launch()
+
+    assert os.environ["_PYI_APPLICATION_HOME_DIR"] == r"C:\Temp\_MEI123456"
 
 
 def test_launch_without_a_download_fails_instead_of_running_something_else(
