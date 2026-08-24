@@ -9,6 +9,8 @@ from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
+from utils.atomic_io import atomic_write_text
+
 if TYPE_CHECKING:
     from services.collection_service.protocol import CollectionServiceProto
 
@@ -32,8 +34,9 @@ class ExporterMixin(_Base):
             filename = f"{filename_prefix}_{timestamp}.json"
             filepath = directory / filename
 
-            with filepath.open("w", encoding="utf-8") as f:
-                json.dump(cards, f, indent=2)
+            # Serialised with json rather than atomic_write_json so that card
+            # data the stdlib rejects still raises instead of being coerced.
+            atomic_write_text(filepath, json.dumps(cards, indent=2))
 
             logger.info(f"Exported collection to {filepath} ({len(cards)} cards)")
             return filepath

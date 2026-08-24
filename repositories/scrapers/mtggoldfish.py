@@ -8,7 +8,7 @@ import bs4
 from curl_cffi import requests
 from loguru import logger
 
-from utils.atomic_io import atomic_write_json, locked_path
+from utils.atomic_io import atomic_write_json, atomic_write_text, locked_path
 from utils.constants import (
     ARCHETYPE_CACHE_FILE,
     ARCHETYPE_DECKS_CACHE_FILE,
@@ -57,8 +57,7 @@ def _save_cached_archetypes(mtg_format: str, items: list[dict]):
         data = {}
     data[mtg_format] = {"timestamp": time.time(), "items": items}
     ARCHETYPE_LIST_CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
-    with ARCHETYPE_LIST_CACHE_FILE.open("w", encoding="utf-8") as fh:
-        json.dump(data, fh, indent=2)
+    atomic_write_json(ARCHETYPE_LIST_CACHE_FILE, data, indent=2)
 
 
 def get_archetypes(
@@ -247,8 +246,7 @@ def get_archetype_stats(mtg_format: str):
                 [deck for deck in decks if date.lower() in deck["date"].lower()]
             )
     ARCHETYPE_CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
-    with ARCHETYPE_CACHE_FILE.open("w", encoding="utf-8") as f:
-        json.dump(stats, f, indent=4)
+    atomic_write_json(ARCHETYPE_CACHE_FILE, stats, indent=4)
     return stats
 
 
@@ -386,8 +384,7 @@ def download_deck(deck_num: str, source_filter: str | None = None):
     deck_text = fetch_deck_text(deck_num, source_filter=source_filter)
 
     CURR_DECK_FILE.parent.mkdir(parents=True, exist_ok=True)
-    with CURR_DECK_FILE.open("w", encoding="utf-8") as f:
-        f.write(deck_text)
+    atomic_write_text(CURR_DECK_FILE, deck_text)
 
 
 if __name__ == "__main__":
