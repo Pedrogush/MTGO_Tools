@@ -31,7 +31,10 @@ _SM_CYVIRTUALSCREEN = 79
 _SW_HIDE = 0
 _SW_SHOWNOACTIVATE = 4  # restore from minimized to most-recent rect, no activate
 
-_user32 = ctypes.windll.user32 if _os.name == "nt" else None  # type: ignore[attr-defined]
+# A private instance rather than the process-wide ``ctypes.windll.user32``, for
+# the reason spelled out in :mod:`automation.server.video_capture`: ``argtypes``
+# set on the shared handle are set on every other importer's handle as well.
+_user32 = ctypes.WinDLL("user32") if _os.name == "nt" else None
 if _user32 is not None:
     _user32.PrintWindow.argtypes = [
         ctypes.c_void_p,  # HWND

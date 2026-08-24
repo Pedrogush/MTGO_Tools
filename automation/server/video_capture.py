@@ -29,8 +29,19 @@ import threading
 import time
 from ctypes import wintypes
 
-_user32 = ctypes.windll.user32 if os.name == "nt" else None  # type: ignore[attr-defined]
-_gdi32 = ctypes.windll.gdi32 if os.name == "nt" else None  # type: ignore[attr-defined]
+# Private handles, NOT ``ctypes.windll.user32``. ``ctypes.windll`` caches one
+# instance per DLL for the whole process and hands the same object to every
+# importer, so the ``argtypes`` assigned below would be assigned on everyone
+# else's ``user32`` too. ``pygetwindow`` calls ``GetWindowRect`` with a ``RECT``
+# of its own making, and once this module has declared the parameter as
+# ``LP_RECT`` over ``wintypes.RECT`` that call raises
+# ``ArgumentError: expected LP_RECT instance instead of pointer to RECT``.
+# ``pygetwindow.getAllTitles()`` swallows it per-window and returns [], which
+# silently disabled the opponent tracker's detection in any ``--automation``
+# process (issue #1013). ``ctypes.WinDLL(...)`` builds a fresh, unshared
+# instance, so the prototypes below stay this module's business.
+_user32 = ctypes.WinDLL("user32") if os.name == "nt" else None
+_gdi32 = ctypes.WinDLL("gdi32") if os.name == "nt" else None
 
 _PW_RENDERFULLCONTENT = 0x00000002
 _DIB_RGB_COLORS = 0
