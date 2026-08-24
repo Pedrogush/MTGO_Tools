@@ -32,7 +32,7 @@ def test_resolve_paths_uses_msgpack_extension(tmp_path: Path) -> None:
     base, index_path, meta_path = storage.resolve_paths(tmp_path / "data")
     assert base == tmp_path / "data"
     assert base.is_dir()  # resolve_paths must create the directory.
-    assert index_path.name == "atomic_cards_index_v4.msgpack"
+    assert index_path.name == "atomic_cards_index_v5.msgpack"
     assert meta_path.name == "atomic_cards_meta.json"
 
 
@@ -145,3 +145,40 @@ def test_load_meta_invalid_json_returns_none(tmp_path: Path) -> None:
     _, _, meta_path = storage.resolve_paths(tmp_path)
     meta_path.write_text("{not valid json", encoding="utf-8")
     assert storage.load_meta(meta_path) is None
+
+
+def test_prune_superseded_indexes_removes_older_versions_only(tmp_path: Path) -> None:
+    """Old version blobs go; the current one and anything else stays.
+
+    The version lives in the filename, so without this every bump leaves its
+    predecessor behind at ~20 MB -- which is exactly what happened between v3
+    and v4.
+    """
+    _, index_path, meta_path = storage.resolve_paths(tmp_path)
+    storage.write_index(index_path, _sample_index())
+    stale_v3 = tmp_path / "atomic_cards_index_v3.msgpack"
+    stale_v4 = tmp_path / "atomic_cards_index_v4.msgpack"
+    unrelated = tmp_path / "atomic_cards_index_v2.json"
+    for path in (stale_v3, stale_v4, unrelated):
+        path.write_bytes(b"stale")
+    meta_path.write_text("{}", encoding="utf-8")
+
+    removed = storage.prune_superseded_indexes(tmp_path, index_path)
+
+    assert sorted(p.name for p in removed) == [
+        "atomic_cards_index_v3.msgpack",
+        "atomic_cards_index_v4.msgpack",
+    ]
+    assert index_path.exists()
+    # The legacy JSON has its own one-shot migration; this must not touch it,
+    # nor the metadata sidecar.
+    assert unrelated.exists()
+    assert meta_path.exists()
+
+
+def test_prune_superseded_indexes_is_a_no_op_when_alone(tmp_path: Path) -> None:
+    _, index_path, _ = storage.resolve_paths(tmp_path)
+    storage.write_index(index_path, _sample_index())
+
+    assert storage.prune_superseded_indexes(tmp_path, index_path) == []
+    assert index_path.exists()

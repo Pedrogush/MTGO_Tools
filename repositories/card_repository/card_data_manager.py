@@ -19,7 +19,7 @@ from loguru import logger
 
 from repositories.card_repository import remote, storage
 from repositories.card_repository.builder import build_index
-from repositories.card_repository.schemas import CardEntry
+from repositories.card_repository.schemas import PLAYABLE_LEGALITY_STATES, CardEntry
 from utils.card_names import fold_card_name
 from utils.constants import ATOMIC_DATA_HEAD_TTL_SECONDS, CARD_DATA_DIR
 from utils.perf import timed
@@ -74,6 +74,7 @@ class CardDataManager:
         # a TTL (see ATOMIC_DATA_HEAD_TTL_SECONDS) or when forced.
         if not force and not missing_index and self._head_is_fresh(local_meta):
             self._load_index()
+            storage.prune_superseded_indexes(self.data_dir, self.index_path)
             return
 
         remote_meta = remote.fetch_dataset_headers()
@@ -106,6 +107,9 @@ class CardDataManager:
                     ) from exc
                 logger.warning(f"Failed to refresh MTGJSON data, using cache: {exc}")
         self._load_index()
+        # Only now that the current index has decoded: a bump renames the file,
+        # so without this every past version stays on disk at ~20 MB each.
+        storage.prune_superseded_indexes(self.data_dir, self.index_path)
 
     def search_cards(
         self,
@@ -133,7 +137,7 @@ class CardDataManager:
                 )
                 if not any(query in h for h in haystacks if h):
                     continue
-            if fmt and card.legalities.get(fmt) != "Legal":
+            if fmt and card.legalities.get(fmt) not in PLAYABLE_LEGALITY_STATES:
                 continue
             if type_filter and type_filter not in type_line:
                 continue
@@ -160,7 +164,7 @@ class CardDataManager:
         formats: list[str] = []
         for card in self._cards or []:
             for fmt, state in card.legalities.items():
-                if state != "Legal" or fmt in seen:
+                if state not in PLAYABLE_LEGALITY_STATES or fmt in seen:
                     continue
                 seen.add(fmt)
                 formats.append(fmt)

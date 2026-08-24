@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
-from repositories.card_repository import CardDataManager
+from repositories.card_repository import PLAYABLE_LEGALITY_STATES, CardDataManager
 from services.search_service.mana_filters import (
     matches_color_filter,
     matches_mana_cost,
@@ -82,7 +82,11 @@ class BuilderSearchMixin(_Base):
 
             if selected_formats:
                 legalities = card.get("legalities", {}) or {}
-                if not all(legalities.get(fmt) == "Legal" for fmt in selected_formats):
+                # ``Restricted`` is playable (one copy), so a format filter that
+                # excluded it hid Black Lotus and friends from a Vintage search.
+                if not all(
+                    legalities.get(fmt) in PLAYABLE_LEGALITY_STATES for fmt in selected_formats
+                ):
                     continue
 
             if filters.get("format_pool_enabled") and format_pool_cards:

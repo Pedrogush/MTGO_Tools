@@ -22,7 +22,11 @@ from __future__ import annotations
 from repositories.card_repository.card_data_manager import CardDataManager, load_card_manager
 from repositories.card_repository.protocol import CardDataManagerProto, CardRepositoryProto
 from repositories.card_repository.repository import CardRepository
-from repositories.card_repository.schemas import CardEntry, CardIndex
+from repositories.card_repository.schemas import (
+    PLAYABLE_LEGALITY_STATES,
+    CardEntry,
+    CardIndex,
+)
 
 _default_repository: CardRepository | None = None
 
@@ -41,6 +45,7 @@ def reset_card_repository() -> None:
 
 
 __all__ = [
+    "PLAYABLE_LEGALITY_STATES",
     "CardDataManager",
     "CardDataManagerProto",
     "CardEntry",

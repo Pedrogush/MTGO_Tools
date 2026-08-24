@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from repositories.card_repository.schemas import PLAYABLE_LEGALITY_STATES
+
 
 def build_index(atomic_cards: dict[str, list[dict[str, Any]]]) -> dict[str, Any]:
     cards: dict[str, dict[str, Any]] = {}
@@ -161,11 +163,37 @@ def _merge_legalities(
     base: dict[str, Any] | None,
     incoming: dict[str, Any] | None,
 ) -> dict[str, Any]:
+    """Union the *playable* legalities of two printings of the same card.
+
+    Playable is ``Legal`` **or** ``Restricted``
+    (:data:`~repositories.card_repository.schemas.PLAYABLE_LEGALITY_STATES`);
+    only ``Banned`` is dropped. Keeping ``Restricted`` out used to cost the app
+    Vintage detection outright: the ~50 cards restricted in Vintage (Black
+    Lotus, the Moxen, Ancestral Recall, Time Walk, Sol Ring, Mana Crypt,
+    Brainstorm, Merchant Scroll, Gitaxian Probe, Urza's Saga, ...) are legal in
+    no other constructed format, so stripping ``Restricted`` left most of them
+    with an *empty* legality map and left the rest looking Legacy-only. The
+    legality intersection in
+    :func:`services.gamelog_service.formats.detect_format_from_cards` then came
+    out empty for any real Vintage deck and the format resolved to "Unknown"
+    (issue seen in Match History, PR #1018).
+
+    The state itself is preserved rather than flattened to ``Legal``, because
+    "one copy maximum" is a real and different answer to "is this card legal
+    here?" and a deck-legality check will eventually want it.
+
+    ``Legal`` wins over ``Restricted`` when two printings disagree: the union
+    is about the widest pool the card is playable in, and a downgrade from a
+    variation would narrow it for no reason.
+    """
     merged: dict[str, Any] = {}
     for source in (base or {}), (incoming or {}):
         for fmt, state in source.items():
-            if state == "Legal":
-                merged[fmt] = state
+            if state not in PLAYABLE_LEGALITY_STATES:
+                continue
+            if merged.get(fmt) == "Legal":
+                continue
+            merged[fmt] = state
     return merged
 
 

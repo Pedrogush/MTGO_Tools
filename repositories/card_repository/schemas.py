@@ -12,6 +12,17 @@ from typing import Any
 
 import msgspec
 
+#: The MTGJSON legality states that mean "you may play this card in that
+#: format". MTGJSON emits exactly three values (verified against the
+#: 2026-08-23 ``AtomicCards.json``: 342,773 ``Legal``, 1,217 ``Banned``,
+#: 109 ``Restricted``), and ``Restricted`` is a *playable* state -- it caps the
+#: deck at a single copy, it does not remove the card from the pool. Vintage is
+#: the format built around that distinction: Black Lotus, Ancestral Recall,
+#: Sol Ring, Brainstorm, Merchant Scroll and 48 other printings are restricted
+#: there and legal nowhere else in constructed, so treating ``Restricted`` as
+#: "not legal" makes a Vintage deck look like it has no format at all.
+PLAYABLE_LEGALITY_STATES: frozenset[str] = frozenset({"Legal", "Restricted"})
+
 
 class CardEntry(msgspec.Struct, gc=False):
     """A single card record as stored in the local atomic-cards index.
@@ -67,3 +78,6 @@ class CardIndex(msgspec.Struct):
 
     cards: list[CardEntry]
     cards_by_name: dict[str, int]
+
+
+__all__ = ["PLAYABLE_LEGALITY_STATES", "CardEntry", "CardIndex"]

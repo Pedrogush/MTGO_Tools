@@ -145,8 +145,17 @@ def test_build_index_single_face_card():
     assert index["cards_by_name"]["lightning bolt"] == 0
 
 
-def test_build_index_merges_and_filters_legalities():
-    """Only ``Legal`` formats survive, unioned across printings."""
+def test_build_index_drops_banned_but_keeps_restricted():
+    """``Banned`` is dropped; ``Restricted`` survives, unioned across printings.
+
+    MTGJSON emits exactly three legality states -- ``Legal``, ``Banned`` and
+    ``Restricted`` -- and only ``Banned`` means "you may not play this". A
+    restricted card is playable, capped at one copy, which is the whole shape
+    of Vintage. Discarding it alongside the banned cards left Black Lotus and
+    the rest of the restricted list with an *empty* legality map, and the
+    format detector then had nothing to intersect (see
+    :func:`repositories.card_repository.builder._merge_legalities`).
+    """
     payload = {
         "Splinter Twin": [
             {
@@ -168,8 +177,43 @@ def test_build_index_merges_and_filters_legalities():
     index = build_index(payload)
     entry = index["cards"][0]
 
-    # Banned/Restricted dropped; Legal formats from both printings unioned.
-    assert entry["legalities"] == {"legacy": "Legal", "commander": "Legal"}
+    # Banned dropped; Legal and Restricted from both printings unioned, and the
+    # state itself is preserved rather than flattened to "Legal".
+    assert entry["legalities"] == {
+        "legacy": "Legal",
+        "commander": "Legal",
+        "vintage": "Restricted",
+    }
+
+
+def test_build_index_prefers_legal_over_restricted_across_printings():
+    """When two printings disagree, the wider answer (``Legal``) wins.
+
+    The union is about the largest pool the card is playable in, so a
+    variation that happens to carry the narrower state must not downgrade a
+    format another printing calls outright legal.
+    """
+    payload = {
+        "State Flip": [
+            {
+                "name": "State Flip",
+                "manaCost": "{1}",
+                "manaValue": 1,
+                "type": "Artifact",
+                "legalities": {"vintage": "Restricted", "legacy": "Legal"},
+            },
+            {
+                "name": "State Flip",
+                "manaCost": "{1}",
+                "manaValue": 1,
+                "type": "Artifact",
+                "legalities": {"vintage": "Legal", "legacy": "Restricted"},
+            },
+        ]
+    }
+    entry = build_index(payload)["cards"][0]
+
+    assert entry["legalities"] == {"vintage": "Legal", "legacy": "Legal"}
 
 
 def test_build_index_legalities_union_keeps_legal_across_printings():

@@ -38,6 +38,7 @@ def _install_wx_stub() -> None:
 
 _install_wx_stub()
 
+from repositories.card_repository.builder import build_index  # noqa: E402
 from repositories.card_repository.schemas import CardEntry  # noqa: E402
 from services.gamelog_service import (  # noqa: E402
     deck_is_pauper,
@@ -927,6 +928,127 @@ class TestDetectFormatFromCards:
             detect_format_from_cards(list(deck.keys()), manager, last_parsed_format="Modern")
             == "Modern"
         )
+
+
+# ---------------------------------------------------------------------------
+# Regression: a real Vintage decklist, through the real index builder
+# ---------------------------------------------------------------------------
+
+#: Sixteen real cards from a real Vintage list, each carrying the legality
+#: states MTGJSON actually publishes for it (AtomicCards, 2026-08-23), narrowed
+#: to the six formats ``_COMPETITIVE_FORMATS`` considers. Nothing here is
+#: invented: seven of these cards are ``Restricted`` in Vintage and ``Banned``
+#: or absent everywhere else, which is precisely the combination the index used
+#: to erase.
+_REAL_VINTAGE_LEGALITIES: dict[str, dict[str, str]] = {
+    "Ancestral Recall": {"legacy": "Banned", "vintage": "Restricted"},
+    "Black Lotus": {"legacy": "Banned", "vintage": "Restricted"},
+    "Brainstorm": {"legacy": "Legal", "pauper": "Legal", "vintage": "Restricted"},
+    "Force of Will": {"legacy": "Legal", "vintage": "Legal"},
+    "Mana Crypt": {"legacy": "Banned", "vintage": "Restricted"},
+    "Mana Drain": {"legacy": "Banned", "vintage": "Legal"},
+    "Merchant Scroll": {
+        "legacy": "Legal",
+        "modern": "Legal",
+        "pauper": "Legal",
+        "vintage": "Restricted",
+    },
+    "Mox Jet": {"legacy": "Banned", "vintage": "Restricted"},
+    "Mox Sapphire": {"legacy": "Banned", "vintage": "Restricted"},
+    "Null Rod": {"legacy": "Legal", "vintage": "Legal"},
+    "Sol Ring": {"legacy": "Banned", "vintage": "Restricted"},
+    "Swords to Plowshares": {"legacy": "Legal", "vintage": "Legal"},
+    "Time Walk": {"legacy": "Banned", "vintage": "Restricted"},
+    "Urza's Saga": {"legacy": "Legal", "modern": "Legal", "vintage": "Restricted"},
+    "Volcanic Island": {"legacy": "Legal", "vintage": "Legal"},
+    "Wasteland": {"legacy": "Legal", "vintage": "Legal"},
+}
+
+
+def _vintage_atomic_payload() -> dict[str, list[dict[str, Any]]]:
+    """The list above in MTGJSON ``AtomicCards`` shape, ready for the builder."""
+    return {
+        name: [{"name": name, "type": "Card", "legalities": dict(legalities)}]
+        for name, legalities in _REAL_VINTAGE_LEGALITIES.items()
+    }
+
+
+def _manager_from_built_index(payload: dict[str, list[dict[str, Any]]]) -> _FakeCardManager:
+    """Run the payload through the production index builder, then wrap it."""
+    index = build_index(payload)
+    return _make_manager({card["name"]: card["legalities"] for card in index["cards"]})
+
+
+class TestRealVintageDeckDetection:
+    """The Match History "Unknown format" bug, end to end (PR #1018).
+
+    Every Vintage match in ``scripts/mock_match_history.py`` came out as
+    ``Unknown`` because :func:`~repositories.card_repository.builder.build_index`
+    kept only ``Legal`` legalities. That erased Vintage's restricted list, and a
+    Vintage deck is *built* out of it -- so the legality intersection contained
+    a Vintage-only card on one side and a card that had lost its Vintage
+    legality on the other, came out empty, and the detector fell through to
+    ``last_parsed_format``.
+
+    These go through the real builder rather than hand-written ``CardEntry``
+    legalities, because the bug lived in the builder and a fixture written by
+    hand would simply not have reproduced it.
+    """
+
+    def test_real_vintage_decklist_detects_as_vintage(self):
+        manager = _manager_from_built_index(_vintage_atomic_payload())
+        assert detect_format_from_cards(list(_REAL_VINTAGE_LEGALITIES), manager) == "Vintage"
+
+    def test_restricted_cards_survive_the_index_build(self):
+        index = build_index(_vintage_atomic_payload())
+        by_name = {card["name"]: card["legalities"] for card in index["cards"]}
+        # Banned everywhere it is not restricted: under the old rule these came
+        # out as {} and the detector could not see them at all.
+        assert by_name["Black Lotus"] == {"vintage": "Restricted"}
+        assert by_name["Ancestral Recall"] == {"vintage": "Restricted"}
+        # A card restricted in Vintage and legal elsewhere keeps both.
+        assert by_name["Brainstorm"] == {
+            "legacy": "Legal",
+            "pauper": "Legal",
+            "vintage": "Restricted",
+        }
+
+    def test_dropping_restricted_puts_the_deck_back_in_unknown(self):
+        """The pre-fix behaviour, spelled out so it cannot creep back.
+
+        Same deck, same detector -- only the ``Restricted`` entries removed, as
+        the old ``_merge_legalities`` removed them. If this ever stops
+        returning "Unknown", the assertion above has stopped being evidence of
+        anything.
+        """
+        index = build_index(_vintage_atomic_payload())
+        legal_only = {
+            card["name"]: {
+                fmt: state for fmt, state in card["legalities"].items() if state == "Legal"
+            }
+            for card in index["cards"]
+        }
+        manager = _make_manager(legal_only)
+        assert detect_format_from_cards(list(_REAL_VINTAGE_LEGALITIES), manager) == "Unknown"
+
+    def test_restricted_does_not_pull_a_legacy_deck_into_vintage(self):
+        """Widening "legal" must not cost the neighbouring formats.
+
+        Every card here is Legacy-legal, so ``legacy`` stays in the
+        intersection and wins on ``_COMPETITIVE_FORMATS`` order even though all
+        of them are Vintage-legal too.
+        """
+        legacy_deck = {
+            name: legalities
+            for name, legalities in _REAL_VINTAGE_LEGALITIES.items()
+            if legalities.get("legacy") == "Legal"
+        }
+        payload = {
+            name: [{"name": name, "type": "Card", "legalities": dict(legalities)}]
+            for name, legalities in legacy_deck.items()
+        }
+        manager = _manager_from_built_index(payload)
+        assert detect_format_from_cards(list(legacy_deck), manager) == "Legacy"
 
 
 # ---------------------------------------------------------------------------
