@@ -212,6 +212,62 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 Filename: "{app}\{#MyAppExeName}"; Flags: nowait; Check: RelaunchRequested
 
 [Code]
+// Win32 SetEnvironmentVariableW, used by ClearInheritedBootloaderVars below.
+// Declared with a string second parameter and called with '' rather than the
+// documented NULL: Pascal Script has no null pointer to pass, and Windows drops
+// a variable set to an empty value from the environment block anyway, which is
+// exactly the "as if it was never set" this needs. Verified against the real
+// bootloader rather than assumed -- an emptied-but-present variable would hit a
+// different failure ("Invalid value in _PYI_PARENT_PROCESS_LEVEL").
+function SetEnvironmentVariable(lpName: string; lpValue: string): BOOL;
+  external 'SetEnvironmentVariableW@kernel32.dll stdcall';
+
+// Remove the PyInstaller bootloader variables Setup inherited from the app that
+// started it, so the app relaunched below does not inherit them in turn.
+//
+// The app is a PyInstaller onefile build: it runs from a directory it unpacked
+// into %TEMP% (_MEIxxxxxx) and points its own child processes at that directory
+// through _PYI_APPLICATION_HOME_DIR / _PYI_ARCHIVE_FILE / _PYI_PARENT_PROCESS_LEVEL,
+// which is how its multiprocessing workers reuse the bundle. Those variables are
+// in the environment of every process it starts -- including this Setup, launched
+// by services/update_installer.py.
+//
+// Left alone, they are fatal here. Setup relaunches {app}\mtgo_tools.exe, that
+// process inherits them, and the bootloader decides whether it is a re-executed
+// child by asking whether _PYI_ARCHIVE_FILE names the executable now running.
+// After an update it does -- the new build is at the same path as the old one --
+// so it skips unpacking and loads Python from _PYI_APPLICATION_HOME_DIR: the old
+// app's unpack directory, deleted when that app exited seconds ago. The result is
+// a bootloader error box, "Failed to load Python DLL '...\_MEIxxxxxx\python3xx.dll'",
+// and no app.
+//
+// update_installer.py now filters these before starting Setup, which fixes
+// updates launched by builds carrying that fix. This does the same one step
+// later, and is what makes an update launched by an *already released* build
+// (1.2.0 through 1.2.7, all of which pass the variables through) survive: the
+// installer that fixes the upgrade is the one being upgraded to.
+//
+// ssInstall, not ssPostInstall: a [Run] entry without the postinstall flag --
+// the relaunch entry above -- executes at the end of the install step, which is
+// *before* ssPostInstall fires. Cleaning up there runs too late to be inherited
+// by anything.
+procedure ClearInheritedBootloaderVars();
+begin
+  SetEnvironmentVariable('_PYI_APPLICATION_HOME_DIR', '');
+  SetEnvironmentVariable('_PYI_ARCHIVE_FILE', '');
+  SetEnvironmentVariable('_PYI_PARENT_PROCESS_LEVEL', '');
+  SetEnvironmentVariable('_PYI_SPLASH_IPC', '');
+  // The pre-6.0 spelling, cleared so a rollback of the pinned PyInstaller
+  // cannot quietly reopen this.
+  SetEnvironmentVariable('_MEIPASS2', '');
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+begin
+  if CurStep = ssInstall then
+    ClearInheritedBootloaderVars();
+end;
+
 // True only when Setup was started with a /RELAUNCH switch (see [Run] above).
 //
 // Inno has no built-in "was this bare flag passed?" helper. The closest thing is
