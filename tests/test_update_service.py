@@ -254,14 +254,17 @@ def test_the_asset_urls_survive_a_restart(tmp_path: Path) -> None:
 def test_a_stamp_written_before_the_asset_fields_existed_still_decodes(tmp_path: Path) -> None:
     # Exactly what a build from before this feature wrote. If msgspec rejected
     # it the app would silently spend one API request per launch, forever.
+    #
+    # Such a stamp names no version, so it is re-checked rather than trusted
+    # (see the version-keyed throttle below); the request failing is what puts
+    # the decoded stamp back on show, and its content is the assertion here.
     stamp = {"checked_at": time.time(), "latest_version": "1.0.3", "release_url": "https://x.test"}
     (tmp_path / "update_check.json").write_text(json.dumps(stamp), encoding="utf-8")
-    service, calls = _service(tmp_path, responses=[])
+    service, _calls = _service(tmp_path, responses=[None])
 
     result = service.check()
 
-    assert not calls  # the stamp was read, not discarded as corrupt
-    assert result is not None
+    assert result is not None  # decoded, not discarded as corrupt
     assert result.version == "1.0.3"
     assert result.installer_url is None
 
@@ -271,6 +274,7 @@ def test_a_stamp_carrying_unknown_fields_still_decodes(tmp_path: Path) -> None:
     stamp = {
         "checked_at": time.time(),
         "latest_version": "1.0.3",
+        "current_version": "1.0.2",
         "signature_url": "https://x.test",
     }
     (tmp_path / "update_check.json").write_text(json.dumps(stamp), encoding="utf-8")
@@ -453,6 +457,100 @@ def test_the_throttle_suppresses_a_second_check(tmp_path: Path) -> None:
 
     assert len(calls) == 1
     assert first == second
+
+
+def test_a_new_install_does_not_inherit_the_previous_one_s_answer(tmp_path: Path) -> None:
+    """The 2026-08-24 report: a fresh 1.2.0 install offering a pruned 1.2.7.
+
+    An install keeps %LOCALAPPDATA%, so the stamp outlives the build that wrote
+    it. Reused on time alone, a two-hour-old "the newest release is 1.0.3" from
+    the previous install is served to the one that replaced it -- naming, by
+    then, a release the prune may already have deleted.
+    """
+    previous_install, _ = _service(
+        tmp_path, current_version="1.0.2", responses=[_release_payload("v1.0.3")]
+    )
+    previous_install.check()
+
+    # Same machine, same cache directory, different build -- and the stamp it
+    # left is minutes old, so the time-based throttle alone would serve it.
+    new_install, calls = _service(
+        tmp_path, current_version="1.0.1", responses=[_release_payload("v1.0.4")]
+    )
+    result = new_install.check()
+
+    assert len(calls) == 1
+    assert result is not None
+    assert result.version == "1.0.4"
+
+
+def test_the_throttle_still_holds_for_the_build_that_asked(tmp_path: Path) -> None:
+    # The version key must not defeat the throttle it is keyed on: relaunching
+    # the same build inside the interval still answers from disk, or the rate
+    # limit this whole mechanism exists to respect would be spent on restarts.
+    first_run, _first_calls = _service(tmp_path, responses=[_release_payload("v1.0.3")])
+    first_run.check()
+
+    second_run, calls = _service(tmp_path, responses=[_release_payload("v1.0.4")])
+    result = second_run.check()
+
+    assert not calls
+    assert result is not None
+    assert result.version == "1.0.3"
+
+
+def test_the_stamp_records_the_version_that_asked(tmp_path: Path) -> None:
+    # Persisted rather than derived, because the point is to compare against a
+    # *later* build's version. Read back as JSON: this is a file format other
+    # builds have to keep reading (see the _CheckStamp docstring).
+    service, _calls = _service(
+        tmp_path, current_version="1.0.2", responses=[_release_payload("v1.0.3")]
+    )
+
+    service.check()
+
+    stamp = json.loads((tmp_path / "update_check.json").read_text(encoding="utf-8"))
+    assert stamp["current_version"] == "1.0.2"
+
+
+def test_a_completed_check_with_no_release_also_records_the_version(tmp_path: Path) -> None:
+    # The NO_RELEASE branch writes its own stamp; without the version on it the
+    # next install would re-ask forever rather than being throttled at all.
+    service, _calls = _service(tmp_path, current_version="1.0.2", responses=[NO_RELEASE])
+
+    service.check()
+
+    stamp = json.loads((tmp_path / "update_check.json").read_text(encoding="utf-8"))
+    assert stamp["current_version"] == "1.0.2"
+    assert stamp["latest_version"] is None
+
+
+def test_forget_drops_the_cached_answer(tmp_path: Path) -> None:
+    # What the updater calls when it has just proved the stamp wrong: a 404 on
+    # the installer URL the stamp handed it, because the release was pruned
+    # between the check and the click.
+    first_run, _first_calls = _service(tmp_path, responses=[_release_payload("v1.0.3")])
+    first_run.check()
+
+    second_run, calls = _service(tmp_path, responses=[_release_payload("v1.0.4")])
+    second_run.forget()
+    result = second_run.check()
+
+    assert len(calls) == 1  # the throttle would have suppressed this
+    assert result is not None
+    assert result.version == "1.0.4"
+
+
+def test_forget_is_safe_with_no_stamp_to_drop(tmp_path: Path) -> None:
+    # It runs on a path that is already reporting a failure, so it may not
+    # produce one of its own -- including on the first launch after an install,
+    # where there is no cache file at all.
+    service, _calls = _service(tmp_path, responses=[])
+
+    service.forget()  # must not raise
+    service.forget()  # idempotent
+
+    assert not (tmp_path / "update_check.json").exists()
 
 
 def test_the_force_env_var_defeats_the_throttle(

@@ -31,6 +31,7 @@ from services.update_installer import (
     ChecksumUnavailable,
     DownloadFailed,
     LaunchFailed,
+    ReleaseUnavailable,
     UpdateCancelled,
     UpdateError,
     UpdateInstaller,
@@ -70,7 +71,9 @@ class _FakeResponse:
         status_error: Exception | None = None,
         chunk_error: Exception | None = None,
         content_length: str | None = None,
+        status_code: int = 200,
     ) -> None:
+        self.status_code = status_code
         self.text = text
         self._chunks = chunks or []
         self._status_error = status_error
@@ -490,6 +493,78 @@ def test_every_failure_is_an_update_error(tmp_path: Path, monkeypatch: pytest.Mo
     _http(monkeypatch, {CHECKSUM_URL: _FakeResponse(text="nonsense")})
 
     with pytest.raises(UpdateError):
+        UpdateInstaller(_info(), temp_root=tmp_path).download()
+
+
+# ---------------------------------------------------------------------------
+# a release that is gone
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("status", [404, 410])
+def test_a_pulled_release_is_reported_as_gone_not_as_a_broken_checksum(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, status: int
+) -> None:
+    # The sidecar is fetched first, so a release deleted between the update check
+    # and the click is discovered on *that* request. Flattened into
+    # ChecksumUnavailable it would tell the user the release is fine and its
+    # checksum is broken, and invite them to install it by hand from a release
+    # page that no longer exists.
+    requested = _http(monkeypatch, {CHECKSUM_URL: _FakeResponse(status_code=status)})
+    installer = UpdateInstaller(_info(), temp_root=tmp_path)
+
+    with pytest.raises(ReleaseUnavailable):
+        installer.download()
+
+    # And the 175 MB was never started: the answer was known from ~100 bytes.
+    assert requested == [CHECKSUM_URL]
+
+
+def test_a_pulled_release_carries_no_replacement_of_its_own(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # This module does not know about the throttled check in update_service, so
+    # it never fills this in; the controller does, after re-checking. None here
+    # means "nobody looked", not "nothing newer exists".
+    _http(monkeypatch, {CHECKSUM_URL: _FakeResponse(status_code=404)})
+
+    with pytest.raises(ReleaseUnavailable) as caught:
+        UpdateInstaller(_info(), temp_root=tmp_path).download()
+
+    assert caught.value.replacement is None
+
+
+def test_an_installer_asset_that_is_gone_is_also_reported_as_gone(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Reachable when the installer outlives its sidecar, or when a prune lands
+    # between the two requests. The generic ``except Exception`` in the download
+    # loop catches UpdateError subclasses too, so this asserts the specific
+    # clause that lets this one back out.
+    _http(
+        monkeypatch,
+        {CHECKSUM_URL: _sidecar_response(), INSTALLER_URL: _FakeResponse(status_code=404)},
+    )
+    installer = UpdateInstaller(_info(), temp_root=tmp_path)
+
+    with pytest.raises(ReleaseUnavailable):
+        installer.download()
+
+    assert installer.installer_path is None
+    assert not list(tmp_path.iterdir())  # no half-written file left behind
+
+
+def test_an_ordinary_bad_status_is_still_an_ordinary_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # 500 means "try again later" and must not be mistaken for "this release is
+    # gone" — the difference decides whether the app re-checks or retries.
+    _http(
+        monkeypatch,
+        {CHECKSUM_URL: _FakeResponse(status_code=500, status_error=requests.HTTPError("boom"))},
+    )
+
+    with pytest.raises(ChecksumUnavailable):
         UpdateInstaller(_info(), temp_root=tmp_path).download()
 
 

@@ -23,7 +23,10 @@ line. :meth:`UpdateService.check` does not raise.
 timestamp and re-checked at most once per
 :data:`UPDATE_CHECK_INTERVAL_SECONDS`, so launching the app repeatedly does not
 mean repeatedly hitting an API whose unauthenticated budget is 60 requests per
-hour per IP.
+hour per IP. The stamp also records the version that asked, and a stamp from a
+different version is re-checked immediately however recent it is: an install
+keeps the data directory, so otherwise the newly installed build would report
+what the one it replaced had been told.
 
 *A pulled release stops being advertised.* A 404 from ``/releases/latest`` is an
 answer ("nothing is published"), not a failure, and is stamped as one — so a
@@ -86,9 +89,17 @@ _API_HEADERS = {
 #: A release published less than a day after your last launch is invisible until
 #: the stamp expires, so verifying the updater end to end meant hand-deleting
 #: `UPDATE_CHECK_CACHE_FILE` between runs -- which is both undiscoverable and
-#: easy to mistake for the feature being broken (it was, once, on 2026-08-21:
-#: a fresh 1.2.0 install showed no update because a stamp written four hours
-#: earlier still said the newest release was 1.1.7).
+#: easy to mistake for the feature being broken.
+#:
+#: The half of that which was a real bug is fixed rather than worked around
+#: here: a stamp written by a *different* version is now ignored outright
+#: (`_CheckStamp.current_version`), so installing a build to test an upgrade
+#: from it no longer inherits the previous install's answer. That was the
+#: 2026-08-21 report -- a fresh 1.2.0 install showing no update because a stamp
+#: written four hours earlier still said the newest release was 1.1.7 -- and it
+#: recurred on 2026-08-24, with 1.2.0 offering a 1.2.7 that had been pruned.
+#: What is left for this variable is the case no version key can cover: the same
+#: build asking twice in a day, across a release published in between.
 FORCE_CHECK_ENV_VAR = "MTGO_TOOLS_FORCE_UPDATE_CHECK"
 
 #: Values that read as "off" when the variable is set but not meant to be on, so
@@ -174,6 +185,12 @@ class _CheckStamp(msgspec.Struct):
     installer_url: str | None = None
     checksum_url: str | None = None
     installer_name: str | None = None
+    #: The running version that asked. The throttle is keyed on this as well as
+    #: on time, because "the newest release is X" is only an answer *for the
+    #: build that asked*: install a different one and the question has changed.
+    #: ``None`` means a stamp written before this field existed, which is
+    #: likewise not an answer for the running build -- so both re-check.
+    current_version: str | None = None
 
 
 def parse_version(raw: str | None) -> tuple[int, int, int] | None:
@@ -297,9 +314,28 @@ class UpdateService:
         forced = force_check_requested()
         if forced:
             logger.info(f"Update check: {FORCE_CHECK_ENV_VAR} is set, ignoring the cached result")
-        elif stamp is not None and 0 <= (time.time() - stamp.checked_at) < self.check_interval:
-            logger.debug("Update check: cached result is still fresh")
-            return self._to_update_info(stamp)
+        elif stamp is not None:
+            if stamp.current_version != self.current_version:
+                # A different build wrote that answer, so it is not an answer to
+                # the question this build is asking. Installing over an existing
+                # copy keeps %LOCALAPPDATA% -- the stamp included -- so without
+                # this a fresh install of 1.2.0 goes on reporting whatever the
+                # *previous* install was told for the rest of the interval: on
+                # 2026-08-24 that was "1.2.7 is the newest release", from a stamp
+                # written hours earlier, naming a release the prune had since
+                # deleted and an installer URL that would 404.
+                written_by = (
+                    f"v{stamp.current_version}"
+                    if stamp.current_version
+                    else "a build that did not record its version"
+                )
+                logger.info(
+                    f"Update check: cached result came from {written_by}, "
+                    f"re-checking for v{self.current_version}"
+                )
+            elif 0 <= (time.time() - stamp.checked_at) < self.check_interval:
+                logger.debug("Update check: cached result is still fresh")
+                return self._to_update_info(stamp)
 
         payload = self._fetch_latest_release()
         if payload is None:
@@ -316,7 +352,7 @@ class UpdateService:
             # and a release that was deleted or pulled goes on being advertised
             # forever — every launch re-asks, 404s, and falls back to the stale
             # answer it should have discarded.
-            stamp = _CheckStamp(checked_at=time.time())
+            stamp = _CheckStamp(checked_at=time.time(), current_version=self.current_version)
             self._write_stamp(stamp)
             return self._to_update_info(stamp)
 
@@ -366,11 +402,12 @@ class UpdateService:
         parsed = parse_version(tag if isinstance(tag, str) else None)
         if parsed is None:
             logger.info(f"Update check: unrecognized release tag {tag!r}")
-            return _CheckStamp(checked_at=now)
+            return _CheckStamp(checked_at=now, current_version=self.current_version)
         url = payload.get("html_url")
         installer_url, checksum_url, installer_name = _find_installer_assets(payload)
         return _CheckStamp(
             checked_at=now,
+            current_version=self.current_version,
             latest_version=".".join(str(number) for number in parsed),
             release_url=url if isinstance(url, str) and url else RELEASES_PAGE_URL,
             installer_url=installer_url,
@@ -399,6 +436,25 @@ class UpdateService:
             checksum_url=stamp.checksum_url,
             installer_name=stamp.installer_name,
         )
+
+    def forget(self) -> None:
+        """Discard the cached answer so the next :meth:`check` really asks.
+
+        For the caller that has just *proved* the stamp wrong — the updater
+        getting a 404 on the installer URL it was given, because the release was
+        pruned between the check and the click. Re-checking on the strength of
+        that is not the same as ignoring the throttle: it is one request in
+        response to one piece of evidence, so the rate limit the throttle exists
+        to protect is in no danger.
+
+        Best-effort and idempotent, like the writes: failing to delete a cache
+        file must not turn into an error on a path that is already reporting one.
+        A stamp that survives this simply expires the ordinary way.
+        """
+        try:
+            self.cache_path.unlink(missing_ok=True)
+        except OSError as exc:
+            logger.debug(f"Update check: unable to drop the cached result: {exc}")
 
     # ------------------------------------------------------------------ stamp I/O ------------------------------------------------------------------
     def _read_stamp(self) -> _CheckStamp | None:

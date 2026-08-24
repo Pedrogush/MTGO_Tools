@@ -101,5 +101,7 @@ MESSAGES: dict[str, str] = {
     "app.update.error.checksum_mismatch": "The downloaded installer does not match the checksum published with the release, so MTGO Tools deleted it and ran nothing. A corrupted download is the likely explanation; a tampered file is the other one. Nothing was installed — use the release page if you want to install this version by hand.",
     "app.update.error.launch": "The installer was downloaded and verified, but it could not be started ({error}). Nothing was installed.",
     "app.update.error.unavailable": "This release carries no installer MTGO Tools can apply on its own. Use the release page to update.",
+    "app.update.error.release_gone": "This release is not published any more — it was removed after MTGO Tools last checked, so there was nothing to download. Nothing was installed.",
+    "app.update.error.release_gone_replaced": "That release is not published any more. MTGO Tools checked again: v{version} is the newest release now — close this and open the update prompt again to install it. Nothing was installed.",
     "app.update.error.generic": "The update stopped ({error}). Nothing was installed.",
 }

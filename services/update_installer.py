@@ -113,6 +113,13 @@ _TEMP_DIR_PREFIX = "mtgo_tools_update_"
 # cannot be mistaken for a checksum.
 _SIDECAR_LINE = re.compile(r"^(?P<digest>[0-9a-fA-F]{64})(?:[ \t]+\*?(?P<name>.*))?$")
 
+# Statuses that mean "this asset is not there", as opposed to "this request did
+# not work". GitHub answers 404 for the download URL of an asset whose release
+# was deleted; 410 is included because it is the other status that means gone
+# for good, and treating it as a transient error would have the app suggest
+# retrying something that cannot come back.
+_GONE_STATUS_CODES = frozenset({404, 410})
+
 ProgressCallback = Callable[[int, int | None], None]
 """``(bytes_done, bytes_total)``. ``bytes_total`` is ``None`` when the server
 sent no usable ``Content-Length`` — the UI must handle an indeterminate total
@@ -146,6 +153,30 @@ class ChecksumMismatch(UpdateError):
     other one; from here they are indistinguishable, so both end the same way —
     the file is deleted and nothing is executed.
     """
+
+
+class ReleaseUnavailable(UpdateError):
+    """The release this update points at is not published any more.
+
+    Distinct from :class:`DownloadFailed` because the two need opposite
+    responses. A failed transfer means "try again later"; a 404 on an asset URL
+    means the answer this app is acting on is out of date, and retrying it can
+    only 404 again. The fix is to ask GitHub what the newest release is *now* —
+    which is exactly what a release prune (``scripts/prune_releases.py``) makes
+    a routine event rather than a freak one: an update stamped before a prune
+    names an installer that no longer exists.
+
+    :attr:`replacement` is what a re-check found in its place, when the caller
+    performed one. It is set by the caller rather than in here — this module
+    deliberately knows nothing about the throttled check in
+    :mod:`services.update_service` — and stays ``None`` when nobody re-checked,
+    so the UI can tell "that release is gone" from "that release is gone, here
+    is the one that replaced it".
+    """
+
+    def __init__(self, message: str, *, replacement: UpdateInfo | None = None) -> None:
+        super().__init__(message)
+        self.replacement = replacement
 
 
 class UpdateCancelled(UpdateError):
@@ -298,8 +329,16 @@ class UpdateInstaller:
         url = self.info.checksum_url or ""
         try:
             response = requests.get(url, timeout=self.timeout)
+            _raise_if_release_gone(response, self.info.version)
             response.raise_for_status()
             text = response.text
+        except ReleaseUnavailable:
+            # Reported as itself, not as "the checksum could not be read": the
+            # sidecar is fetched first, so a pulled release is discovered here
+            # and the user would otherwise be told the release is fine and its
+            # checksum is broken.
+            logger.info(f"Update: release v{self.info.version} is no longer published")
+            raise
         except Exception as exc:
             logger.info(f"Update: checksum sidecar unavailable ({exc})")
             raise ChecksumUnavailable(
@@ -336,6 +375,7 @@ class UpdateInstaller:
         done = 0
         try:
             with requests.get(url, stream=True, timeout=self.timeout) as response:
+                _raise_if_release_gone(response, self.info.version)
                 response.raise_for_status()
                 total = _content_length(response)
                 if progress is not None:
@@ -353,6 +393,14 @@ class UpdateInstaller:
                             progress(done, total)
         except UpdateCancelled:
             logger.info(f"Update download cancelled after {done} bytes")
+            self.cleanup()
+            raise
+        except ReleaseUnavailable:
+            # Reachable when the installer asset outlives its sidecar, or when a
+            # prune lands between the two requests. Same treatment as above: it
+            # must not be flattened into DownloadFailed by the clause below,
+            # which catches every Exception including this one.
+            logger.info(f"Update: release v{self.info.version} is no longer published")
             self.cleanup()
             raise
         except OSError as exc:
@@ -414,6 +462,20 @@ class UpdateInstaller:
         if directory is None:
             return
         shutil.rmtree(directory, ignore_errors=True)
+
+
+def _raise_if_release_gone(response: requests.Response, version: str) -> None:
+    """Turn a 404/410 into :class:`ReleaseUnavailable` before anything else sees it.
+
+    Checked ahead of ``raise_for_status`` so this one status does not arrive as
+    the generic ``HTTPError`` that every other bad status does — the whole point
+    is that it is not a bad status, it is a correct answer to a question that
+    has gone stale.
+    """
+    if response.status_code in _GONE_STATUS_CODES:
+        raise ReleaseUnavailable(
+            f"Release v{version} is no longer published (HTTP {response.status_code})"
+        )
 
 
 def _content_length(response: requests.Response) -> int | None:
@@ -491,6 +553,7 @@ __all__ = [
     "INSTALLER_SWITCHES",
     "LaunchFailed",
     "ProgressCallback",
+    "ReleaseUnavailable",
     "UpdateCancelled",
     "UpdateError",
     "UpdateInstaller",

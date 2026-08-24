@@ -20,6 +20,7 @@ from services.update_installer import (
     ChecksumUnavailable,
     DownloadFailed,
     LaunchFailed,
+    ReleaseUnavailable,
     UpdateCancelled,
     UpdateNotDownloadable,
 )
@@ -67,6 +68,7 @@ def test_every_failure_gets_its_own_sentence() -> None:
             ChecksumMismatch("integrity check failed"),
             LaunchFailed("access denied"),
             UpdateNotDownloadable("no installer asset"),
+            ReleaseUnavailable("release pulled"),
             RuntimeError("something else entirely"),
         )
     ]
@@ -90,6 +92,29 @@ def test_a_checksum_mismatch_reads_as_a_refusal_rather_than_an_error() -> None:
         assert "checksum" in message or "soma de verificação" in message, locale
         # Both locales say what became of the download and what did not happen.
         assert "delet" in message or "apagou" in message, locale
+
+
+def test_a_pulled_release_names_the_one_that_replaced_it() -> None:
+    """The one failure that ends with something to do rather than an apology.
+
+    "Try again later" is exactly wrong here -- the release is gone and retrying
+    can only 404 again -- so the message says which version to install instead,
+    from the re-check the updater made on the spot.
+    """
+    replacement = UpdateInfo(version="1.2.9", release_url="https://example.test/v1.2.9")
+    message = failure_message(ReleaseUnavailable("gone", replacement=replacement))
+
+    assert "1.2.9" in message
+    assert message != failure_message(ReleaseUnavailable("gone"))
+
+
+def test_a_pulled_release_with_nothing_to_offer_says_so_plainly() -> None:
+    # No replacement means nobody found one, and inventing a next step would be
+    # worse than saying the release is not there.
+    message = failure_message(ReleaseUnavailable("gone"))
+
+    assert not message.startswith("app.update.")
+    assert "1.2.9" not in message
 
 
 def test_a_failure_message_carries_the_underlying_detail() -> None:
