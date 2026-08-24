@@ -19,11 +19,18 @@ the installer understands one of ours:
 - **`/RELAUNCH`** — start the app once the install finishes. Intended for the in-app
   updater, which runs `MTGOTools_Setup_v<VERSION>.exe /SILENT /RELAUNCH` and then exits
   so its own files can be replaced; without the switch nothing would be left running to
-  bring the app back. It is *not* the "Launch MTGO Tools" checkbox on the Finished page:
-  that checkbox is a `postinstall` [Run] entry flagged `skipifsilent`, so it is
-  suppressed under `/SILENT` by design. `/RELAUNCH` is a separate [Run] entry gated by a
-  `Check:` function in `installer.iss`, which is why it works in a silent install. Omit
-  the switch and an interactive install behaves exactly as it always has.
+  bring the app back. `/RELAUNCH` is a [Run] entry gated by a `Check:` function in
+  `installer.iss` rather than a `postinstall` one, which is why it fires in a silent
+  install (`postinstall` entries become Finished-page checkboxes, and `skipifsilent`
+  suppresses those under `/SILENT` by design). Omit the switch and an interactive
+  install behaves exactly as it always has.
+
+  This used to be contrasted with a "Launch MTGO Tools" checkbox on the Finished page.
+  That checkbox is gone: Setup launching the app is what Windows Application Control
+  refuses (#1009), so the Finished page now points at the Start Menu shortcut instead,
+  and it should come back once the binary is code-signed. `/RELAUNCH` still launches the
+  app from Setup and so is expected to hit the same block on the same machines; it is
+  kept because removing it would break the auto-update restart for everyone. See #1020.
 
 **Debugging an installed build:** the shipped executable is windowed (no console), but `debugpy` is bundled so you can attach an IDE debugger the same way you would in the editor. Set `MTGO_TOOLS_INSTALL_DEBUG=1` (or `MTGO_TOOLS_INSTALL_DEBUG=<port>`) before launching to have it listen on 127.0.0.1:5678, then use your IDE's "attach to process/port". Set `MTGO_TOOLS_INSTALL_DEBUG_WAIT=1` to block startup until the debugger attaches (for breaking on early startup code). The hook is inert unless the env var is set. File logs are always written to `%LOCALAPPDATA%\MTGO Tools\logs`; set `MTGO_LOG_LEVEL=DEBUG` for verbose output.
 
