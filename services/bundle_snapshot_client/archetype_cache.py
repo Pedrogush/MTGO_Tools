@@ -3,16 +3,19 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
 from utils.atomic_io import atomic_write_json, locked_path
+from utils.constants import DECK_CACHE_DB_FILE
 from utils.deck_dates import repair_future_date
 from utils.format_keys import normalize_archetype_list_cache, normalize_format_key
 from utils.perf import timed
 
 if TYPE_CHECKING:
+    from repositories.deck_text_cache import DeckTextCache
     from services.bundle_snapshot_client.protocol import BundleSnapshotClientProto
 
     _Base = BundleSnapshotClientProto
@@ -22,6 +25,33 @@ else:
 
 class ArchetypeCacheMixin(_Base):
     """Hydrate archetype-list, archetype-deck, MTGO decklist, and deck-text caches."""
+
+    def _deck_text_cache(self) -> DeckTextCache:
+        """Return the deck-text cache this client hydrates into.
+
+        Every other artifact the client writes is addressed by a path handed to
+        the constructor; the deck-text cache used to be the exception, reaching
+        past that for the process-wide singleton, so a client configured with a
+        different database wrote its deck texts to the real
+        ``cache/deck_cache.db`` anyway.
+
+        Production is unchanged: with the default database this is still the
+        shared singleton, one instance and one schema check for the scraper, the
+        app controller and this client alike. A client pointed at a different
+        database gets its own instance instead. The comparison resolves both
+        sides — a relative spelling of the default path must return the
+        singleton, not open a second connection over the same file.
+        """
+        from repositories.deck_text_cache import DeckTextCache, get_deck_cache
+
+        db_file = Path(self.deck_text_cache_db_file)
+        if db_file.resolve() == Path(DECK_CACHE_DB_FILE).resolve():
+            return get_deck_cache()
+        cached = self._deck_text_cache_instance
+        if cached is None or cached.db_path != db_file:
+            cached = DeckTextCache(db_path=db_file)
+            self._deck_text_cache_instance = cached
+        return cached
 
     @timed
     def _hydrate_archetype_lists(self, archetype_entries: list[dict[str, Any]], now: float) -> None:
@@ -98,9 +128,7 @@ class ArchetypeCacheMixin(_Base):
         if not deck_texts:
             return 0
         try:
-            from repositories.deck_text_cache import get_deck_cache
-
-            inserted = get_deck_cache().bulk_set(deck_texts, skip_existing=True)
+            inserted = self._deck_text_cache().bulk_set(deck_texts, skip_existing=True)
             logger.debug(f"Hydrated {inserted}/{len(deck_texts)} deck texts into SQLite cache")
             return inserted
         except Exception as exc:
@@ -161,9 +189,7 @@ class ArchetypeCacheMixin(_Base):
 
         if deck_texts:
             try:
-                from repositories.deck_text_cache import get_deck_cache
-
-                get_deck_cache().bulk_set(deck_texts, skip_existing=True)
+                self._deck_text_cache().bulk_set(deck_texts, skip_existing=True)
             except Exception as exc:
                 logger.warning(f"Failed to insert MTGO deck texts: {exc}")
 

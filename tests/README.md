@@ -63,6 +63,12 @@ test pyramid (Mike Cohn, *Succeeding with Agile*; Fowler,
 
 - Redirect file/cache constants to `tmp_path` via `monkeypatch.setattr` — this is
   path relocation of real I/O, and is encouraged.
+- **Except when the constant is consumed as a constructor default** (e.g.
+  `def __init__(self, db_path: Path = DECK_CACHE_DB)`): that default is bound at
+  import time, so `monkeypatch.setattr` on the constant cannot reach it and the
+  code keeps writing to the real path. Give the collaborator a seam — a
+  constructor parameter defaulting to the constant — and point the seam at
+  `tmp_path` instead.
 - Keep sample fixtures small and checked in under `tests/fixtures/`.
 - Parse results back and assert on real values; don't assert "no exception raised"
   and call it coverage.
