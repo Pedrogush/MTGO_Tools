@@ -465,6 +465,35 @@ def test_apply_merges_with_existing_archetype_list_cache(tmp_client: BundleSnaps
     assert _FORMAT in data  # new entry added
 
 
+def test_apply_migrates_case_variant_archetype_list_keys(tmp_client: BundleSnapshotClient) -> None:
+    """Capitalised keys left behind by an older build are folded into the canonical one.
+
+    The repository layer used to write "Modern" while this client wrote
+    "modern", so one file ended up holding both with different contents and
+    neither writer saw the other's work. Hydrating now migrates the old keys:
+    the hydrated format is replaced by the bundle's authoritative list, and a
+    format the bundle does not carry survives under its canonical key.
+    """
+    existing = {
+        "Modern": {
+            "timestamp": 1.0,
+            "items": [{"name": "Amulet Titan", "href": "amulet-titan"}],
+        },
+        "Legacy": {"timestamp": 1.0, "items": [{"name": "ANT", "href": "ant"}]},
+    }
+    tmp_client.archetype_list_cache_file.parent.mkdir(parents=True, exist_ok=True)
+    tmp_client.archetype_list_cache_file.write_text(json.dumps(existing), encoding="utf-8")
+
+    bundle = _make_bundle()
+    with patch.object(tmp_client, "_http_get_bytes", return_value=BundleResponse(content=bundle)):
+        tmp_client.apply()
+
+    data = json.loads(tmp_client.archetype_list_cache_file.read_text())
+    assert sorted(data) == ["legacy", _FORMAT]
+    assert [item["href"] for item in data[_FORMAT]["items"]] == [_SLUG]
+    assert [item["href"] for item in data["legacy"]["items"]] == ["ant"]
+
+
 def test_apply_multiple_formats(tmp_client: BundleSnapshotClient) -> None:
     archetypes = [
         {

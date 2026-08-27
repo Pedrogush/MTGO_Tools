@@ -9,6 +9,7 @@ from loguru import logger
 
 from utils.atomic_io import atomic_write_json, locked_path
 from utils.deck_dates import repair_future_date
+from utils.format_keys import normalize_archetype_list_cache, normalize_format_key
 from utils.perf import timed
 
 if TYPE_CHECKING:
@@ -37,8 +38,12 @@ class ArchetypeCacheMixin(_Base):
                 except (OSError, json.JSONDecodeError):
                     pass
 
+            # Migrate any case-variant keys a previous version left behind so
+            # the hydrated list is the one the readers actually look up.
+            existing = normalize_archetype_list_cache(existing)
+
             for entry in archetype_entries:
-                fmt = entry.get("format", "").lower()
+                fmt = normalize_format_key(entry.get("format", ""))
                 archetypes = entry.get("archetypes")
                 if not fmt or not isinstance(archetypes, list):
                     continue
@@ -115,7 +120,7 @@ class ArchetypeCacheMixin(_Base):
 
         name_to_href: dict[str, dict[str, str]] = {}
         for entry in archetype_entries:
-            fmt = entry.get("format", "").lower()
+            fmt = normalize_format_key(entry.get("format", ""))
             for arch in entry.get("archetypes", []):
                 name = arch.get("name", "")
                 href = arch.get("href", "")
@@ -126,7 +131,7 @@ class ArchetypeCacheMixin(_Base):
         decks_by_href: dict[str, list[dict[str, Any]]] = {}
 
         for entry in mtgo_decklist_entries:
-            fmt = entry.get("format", "").lower()
+            fmt = normalize_format_key(entry.get("format", ""))
             fmt_lookup = name_to_href.get(fmt, {})
             for event in entry.get("events", []):
                 for deck in event.get("decks", []):

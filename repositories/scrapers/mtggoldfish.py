@@ -30,6 +30,7 @@ from utils.constants import (
     ONE_DAY_SECONDS,
 )
 from utils.deck_dates import repair_future_date
+from utils.format_keys import normalize_archetype_list_cache, normalize_format_key
 from utils.json_io import fast_load
 from utils.perf import timed
 
@@ -42,7 +43,7 @@ def _load_cached_archetypes(mtg_format: str, max_age: int = METAGAME_CACHE_TTL_S
     except Exception as exc:
         logger.warning(f"Cached archetype list invalid: {exc}")
         return None
-    entry = data.get(mtg_format)
+    entry = normalize_archetype_list_cache(data).get(normalize_format_key(mtg_format))
     if not entry:
         return None
     if time.time() - entry.get("timestamp", 0) > max_age:
@@ -55,7 +56,10 @@ def _save_cached_archetypes(mtg_format: str, items: list[dict]):
         data = fast_load(ARCHETYPE_LIST_CACHE_FILE) if ARCHETYPE_LIST_CACHE_FILE.exists() else {}
     except Exception:
         data = {}
-    data[mtg_format] = {"timestamp": time.time(), "items": items}
+    # Migrate any case-variant keys a previous version left behind before
+    # writing, so the file ends up with exactly one entry per format.
+    data = normalize_archetype_list_cache(data)
+    data[normalize_format_key(mtg_format)] = {"timestamp": time.time(), "items": items}
     ARCHETYPE_LIST_CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
     atomic_write_json(ARCHETYPE_LIST_CACHE_FILE, data, indent=2)
 

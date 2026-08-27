@@ -2,6 +2,7 @@
 
 import json
 import time
+from unittest.mock import patch
 
 import pytest
 
@@ -172,8 +173,10 @@ def test_save_cached_archetypes_new_file(metagame_repo, archetype_cache_file):
     assert archetype_cache_file.exists()
     with archetype_cache_file.open("r", encoding="utf-8") as f:
         data = json.load(f)
-    assert "Modern" in data
-    assert len(data["Modern"]["items"]) == 2
+    # Keys are canonicalised to lower case so every layer sharing this file
+    # looks the entry up under the same name.
+    assert "modern" in data
+    assert len(data["modern"]["items"]) == 2
 
 
 def test_save_cached_archetypes_existing_file(metagame_repo, archetype_cache_file):
@@ -194,8 +197,8 @@ def test_save_cached_archetypes_existing_file(metagame_repo, archetype_cache_fil
     # Both formats should exist
     with archetype_cache_file.open("r", encoding="utf-8") as f:
         data = json.load(f)
-    assert "Standard" in data
-    assert "Modern" in data
+    assert "standard" in data
+    assert "modern" in data
 
 
 def test_save_cached_archetypes_update_existing_format(metagame_repo, archetype_cache_file):
@@ -216,8 +219,8 @@ def test_save_cached_archetypes_update_existing_format(metagame_repo, archetype_
     # Should have new data
     with archetype_cache_file.open("r", encoding="utf-8") as f:
         data = json.load(f)
-    assert len(data["Modern"]["items"]) == 1
-    assert data["Modern"]["items"][0]["name"] == "New Archetype"
+    assert len(data["modern"]["items"]) == 1
+    assert data["modern"]["items"][0]["name"] == "New Archetype"
 
 
 # ============= Deck Cache Tests =============
@@ -527,7 +530,7 @@ def test_get_archetypes_recovers_from_corrupt_cache(
 
     assert result == fresh_archetypes
     cached = json.loads(archetype_cache_file.read_text(encoding="utf-8"))
-    assert cached["Modern"]["items"] == fresh_archetypes
+    assert cached["modern"]["items"] == fresh_archetypes
 
 
 def test_get_decks_recovers_from_corrupt_cache(
@@ -1543,3 +1546,82 @@ def test_goldfish_archetype_is_still_scraped(
 
     assert calls == ["modern-boros-energy"]
     assert result == [fresh]
+
+
+# ============= Archetype-list cache key casing =============
+#
+# The repository keyed cache/archetype_list.json by the format string verbatim
+# while the scraper and the bundle client lowercased it, so the file carried
+# both "Modern" and "modern" with different contents and neither writer ever
+# saw the other's work.
+
+
+def test_archetype_list_cache_round_trips_across_key_casing(metagame_repo):
+    metagame_repo._save_cached_archetypes("Modern", [{"name": "Boros Energy", "href": "boros"}])
+
+    assert metagame_repo._load_cached_archetypes("modern") == [
+        {"name": "Boros Energy", "href": "boros"}
+    ]
+    assert metagame_repo._load_cached_archetypes("  MODERN ") == [
+        {"name": "Boros Energy", "href": "boros"}
+    ]
+
+
+def test_archetype_list_cache_written_by_the_scraper_is_read_by_the_repository(
+    archetype_cache_file, archetype_deck_cache_file
+):
+    """The two layers share one file; they must also share one key."""
+    from repositories.scrapers import mtggoldfish
+
+    repo = MetagameRepository(
+        cache_ttl=3600,
+        archetype_list_cache_file=archetype_cache_file,
+        archetype_decks_cache_file=archetype_deck_cache_file,
+    )
+    bundle_items = [{"name": "Dimir Frog", "href": "modern-dimir-frog", "source": "mtgo"}]
+
+    with patch.object(mtggoldfish, "ARCHETYPE_LIST_CACHE_FILE", archetype_cache_file):
+        mtggoldfish._save_cached_archetypes("modern", bundle_items)
+        assert repo._load_cached_archetypes("Modern") == bundle_items
+
+        repo._save_cached_archetypes("Modern", [{"name": "Boros Energy", "href": "boros"}])
+        assert mtggoldfish._load_cached_archetypes("modern", max_age=3600) == [
+            {"name": "Boros Energy", "href": "boros"}
+        ]
+
+
+def test_dual_case_archetype_list_file_is_migrated_without_losing_data(
+    metagame_repo, archetype_cache_file
+):
+    """A file written by both spellings keeps every archetype it already had."""
+    now = time.time()
+    _write_cache(
+        archetype_cache_file,
+        {
+            "Modern": {
+                "timestamp": now,
+                "items": [{"name": "Boros Energy", "href": "modern-boros-energy"}],
+            },
+            "modern": {
+                "timestamp": now - 60,
+                "items": [
+                    {"name": "Boros Energy", "href": "modern-boros-energy"},
+                    {"name": "Dimir Frog", "href": "modern-dimir-frog", "source": "mtgo"},
+                ],
+            },
+            "Legacy": {"timestamp": now, "items": [{"name": "ANT", "href": "legacy-ant"}]},
+        },
+    )
+
+    merged = metagame_repo._load_cached_archetypes("modern")
+    assert [item["name"] for item in merged] == ["Boros Energy", "Dimir Frog"]
+
+    # Writing any format collapses the file to canonical keys, leaving the
+    # formats it did not touch intact.
+    metagame_repo._save_cached_archetypes("Modern", [{"name": "Fresh", "href": "fresh"}])
+    stored = json.loads(archetype_cache_file.read_text(encoding="utf-8"))
+    assert sorted(stored) == ["legacy", "modern"]
+    assert stored["modern"]["items"] == [{"name": "Fresh", "href": "fresh"}]
+    assert metagame_repo._load_cached_archetypes("LEGACY") == [
+        {"name": "ANT", "href": "legacy-ant"}
+    ]

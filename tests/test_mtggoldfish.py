@@ -1066,6 +1066,85 @@ class TestArchetypeStatsMtgoOnlyArchetypes:
         assert all(deck["source"] == "mtggoldfish" for deck in decks)
 
 
+# ---------------------------------------------------------------------------
+# Archetype-list cache keys are case-insensitive
+#
+# The repository layer keyed this file by the format string verbatim ("Modern")
+# while the scraper and the bundle client lowercased it, so
+# cache/archetype_list.json carried every format twice with different contents
+# and neither writer could ever see the other's work.
+# ---------------------------------------------------------------------------
+
+
+class TestArchetypeListCacheKeyCasing:
+    def test_saved_under_one_case_is_read_under_another(self, temp_archetype_list_file):
+        with patch(
+            "repositories.scrapers.mtggoldfish.ARCHETYPE_LIST_CACHE_FILE", temp_archetype_list_file
+        ):
+            _save_cached_archetypes("Modern", [{"name": "Boros Energy", "href": "modern-boros"}])
+
+            assert _load_cached_archetypes("modern", max_age=3600) == [
+                {"name": "Boros Energy", "href": "modern-boros"}
+            ]
+
+        stored = json.loads(temp_archetype_list_file.read_text())
+        assert list(stored) == ["modern"]
+
+    def test_existing_dual_case_file_keeps_both_lists(self, temp_archetype_list_file):
+        """Migration must not drop archetypes a user already has cached."""
+        now = time.time()
+        temp_archetype_list_file.write_text(
+            json.dumps(
+                {
+                    "Modern": {
+                        "timestamp": now,
+                        "items": [{"name": "Boros Energy", "href": "modern-boros-energy"}],
+                    },
+                    "modern": {
+                        "timestamp": now - 10,
+                        "items": [
+                            {"name": "Boros Energy", "href": "modern-boros-energy"},
+                            {"name": "Dimir Frog", "href": "modern-dimir-frog", "source": "mtgo"},
+                        ],
+                    },
+                }
+            )
+        )
+
+        with patch(
+            "repositories.scrapers.mtggoldfish.ARCHETYPE_LIST_CACHE_FILE", temp_archetype_list_file
+        ):
+            merged = _load_cached_archetypes("MODERN", max_age=3600)
+
+        assert [item["name"] for item in merged] == ["Boros Energy", "Dimir Frog"]
+
+    def test_saving_collapses_a_dual_case_file_to_one_key(self, temp_archetype_list_file):
+        now = time.time()
+        temp_archetype_list_file.write_text(
+            json.dumps(
+                {
+                    "Modern": {"timestamp": now, "items": [{"name": "Old", "href": "old"}]},
+                    "modern": {
+                        "timestamp": now - 10,
+                        "items": [{"name": "Older", "href": "older"}],
+                    },
+                    "Legacy": {"timestamp": now, "items": [{"name": "ANT", "href": "ant"}]},
+                }
+            )
+        )
+
+        with patch(
+            "repositories.scrapers.mtggoldfish.ARCHETYPE_LIST_CACHE_FILE", temp_archetype_list_file
+        ):
+            _save_cached_archetypes("modern", [{"name": "Fresh", "href": "fresh"}])
+
+        stored = json.loads(temp_archetype_list_file.read_text())
+        assert sorted(stored) == ["legacy", "modern"]
+        assert stored["modern"]["items"] == [{"name": "Fresh", "href": "fresh"}]
+        # An untouched format is migrated in place, not dropped.
+        assert stored["legacy"]["items"] == [{"name": "ANT", "href": "ant"}]
+
+
 @pytest.mark.network
 def test_live_goldfish_archetype_page_is_reachable():
     """Upstream contract: a real MTGGoldfish archetype slug still answers 200.
