@@ -10,6 +10,8 @@ import pytest
 if sys.platform != "win32":
     pytest.skip("wxPython UI tests must run on Windows", allow_module_level=True)
 
+import repositories.deck_text_cache as deck_text_cache
+import repositories.metagame_repository as metagame_repository
 import repositories.scrapers.mtggoldfish as mtggoldfish
 import services.image_service as card_images
 import services.image_service.schemas as card_images_schemas
@@ -84,6 +86,28 @@ def fixture_wx_app() -> wx.App:
     app.Destroy()
 
 
+def _isolate_path_singletons(cache: Path) -> None:
+    """Point the path-holding global singletons at *cache* instead of the real repo.
+
+    ``DeckTextCache`` and ``MetagameRepository`` both hold their paths on the
+    instance (``DeckTextCache.__init__`` defaults ``db_path`` to
+    ``DECK_CACHE_DB_FILE`` at *import* time; ``MetagameRepository`` takes its two
+    cache files as keyword arguments). Neither can be redirected by patching
+    ``utils.constants`` — but both are only ever reached through a lazy
+    module-level accessor (``get_deck_cache`` / ``get_metagame_repository``), so
+    seeding that module global with an instance built on temp paths is genuine
+    isolation with no production change.
+
+    Teardown is already handled: tests/conftest.py's autouse ``reset_global_state``
+    calls ``reset_all_globals`` after every test, which clears both globals.
+    """
+    deck_text_cache._cache_instance = deck_text_cache.DeckTextCache(db_path=cache / "deck_cache.db")
+    metagame_repository._default_repository = metagame_repository.MetagameRepository(
+        archetype_list_cache_file=cache / "archetype_list.json",
+        archetype_decks_cache_file=cache / "archetype_decks_cache.json",
+    )
+
+
 @pytest.fixture(autouse=True)
 def ui_environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Isolate filesystem paths and make background workers deterministic."""
@@ -94,6 +118,24 @@ def ui_environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     image_cache = cache / "card_images"
     _ensure_dirs(config, cache, decks, image_cache)
 
+    # Path constants redirected by rebinding the attribute on ``utils.constants``.
+    #
+    # READ BEFORE ADDING A LINE HERE. ``monkeypatch.setattr(constants, NAME, ...)``
+    # only reaches consumers that resolve ``constants.NAME`` at *call* time. Every
+    # production consumer in this repo instead does ``from utils.constants import
+    # NAME`` at module scope — several then bake it into a constructor default —
+    # so the name is already bound to the real path long before this fixture runs
+    # and the rebind is inert.
+    #
+    # Load-bearing today (verified by tests/test_ui_conftest_isolation_guard.py):
+    #   * CURR_DECK_FILE — utils/deck.py reads ``constants.CURR_DECK_FILE``.
+    #
+    # The rest are kept because they are cheap, harmless, and document intent for
+    # the day a consumer switches to attribute access — but do not mistake them
+    # for isolation. Real isolation for a path-holding component comes from
+    # injecting the path into it (the pattern c73d49cf established on
+    # MetagameRepository), or from seeding its module-level singleton — see
+    # ``_isolate_path_singletons`` below.
     replacements = {
         "CONFIG_DIR": config,
         "CACHE_DIR": cache,
@@ -104,14 +146,14 @@ def ui_environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         "DECK_MONITOR_CACHE_FILE": cache / "deck_monitor_cache.json",
         "ARCHETYPE_CACHE_FILE": cache / "archetype_cache.json",
         "ARCHETYPE_LIST_CACHE_FILE": cache / "archetype_list.json",
-        "MTGO_ARTICLES_CACHE_FILE": cache / "mtgo_articles.json",
         "DECK_TEXT_CACHE_FILE": cache / "deck_text_cache.json",
         "ARCHETYPE_DECKS_CACHE_FILE": cache / "archetype_decks_cache.json",
-        "DECK_CACHE_FILE": cache / "deck_cache.json",
         "CURR_DECK_FILE": decks / "curr_deck.txt",
     }
     for attr, value in replacements.items():
         monkeypatch.setattr(constants, attr, value, raising=False)
+
+    _isolate_path_singletons(cache)
 
     monkeypatch.setattr(card_images_schemas, "IMAGE_CACHE_DIR", image_cache, raising=False)
     monkeypatch.setattr(
