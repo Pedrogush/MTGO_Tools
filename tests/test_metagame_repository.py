@@ -1431,3 +1431,115 @@ def test_background_refresh_falls_through_to_live_when_remote_raises(tmp_path, m
 
     assert done.wait(timeout=5), "background refresh did not complete in time"
     assert received == [live_archetypes]
+
+
+# ============= MTGO-only archetypes =============
+#
+# The archetype list mixes the MTGGoldfish scrape with MTGO-only archetypes
+# published by the remote bundle, whose href is a slugified display name with
+# no MTGGoldfish page behind it. Clicking one after its cache entry aged past
+# the TTL used to spend a round trip on a guaranteed 404, log it at ERROR, and
+# only then fall through to the stale-cache branch.
+
+
+def _recording_scraper(monkeypatch, decks=None):
+    """Replace the MTGGoldfish deck scrape with a call recorder."""
+    calls = []
+
+    def _fetch(href):
+        calls.append(href)
+        return list(decks or [])
+
+    monkeypatch.setattr("repositories.metagame_repository.get_archetype_decks", _fetch)
+    return calls
+
+
+def test_mtgo_only_archetype_is_served_from_stale_cache_without_scraping(
+    archetype_cache_file, archetype_deck_cache_file, monkeypatch
+):
+    """An expired MTGO-only entry is served from cache, not fetched."""
+    repo = MetagameRepository(
+        cache_ttl=3600,
+        archetype_list_cache_file=archetype_cache_file,
+        archetype_decks_cache_file=archetype_deck_cache_file,
+    )
+    mtgo_decks = [
+        {"name": "Dimir Frog", "date": "2026-03-25", "source": "mtgo", "number": "m1"},
+        {"name": "Dimir Frog", "date": "2026-03-26", "source": "mtgo", "number": "m2"},
+    ]
+    _write_cache(
+        archetype_deck_cache_file,
+        {"modern-dimir-frog": {"timestamp": time.time() - 7200, "items": mtgo_decks}},
+    )
+    calls = _recording_scraper(monkeypatch)
+
+    result = repo.get_decks_for_archetype(
+        {"name": "Dimir Frog", "href": "modern-dimir-frog", "source": "mtgo"}
+    )
+
+    assert calls == []
+    assert [deck["number"] for deck in result] == ["m2", "m1"]
+
+
+def test_mtgo_only_archetype_is_not_scraped_even_on_force_refresh(
+    archetype_cache_file, archetype_deck_cache_file, monkeypatch
+):
+    """There is nothing upstream to refresh from, so force_refresh cannot help."""
+    repo = MetagameRepository(
+        cache_ttl=3600,
+        archetype_list_cache_file=archetype_cache_file,
+        archetype_decks_cache_file=archetype_deck_cache_file,
+    )
+    mtgo_deck = {"name": "Dimir Frog", "date": "2026-03-25", "source": "mtgo", "number": "m1"}
+    _write_cache(
+        archetype_deck_cache_file,
+        {"modern-dimir-frog": {"timestamp": time.time(), "items": [mtgo_deck]}},
+    )
+    calls = _recording_scraper(monkeypatch)
+
+    result = repo.get_decks_for_archetype(
+        {"name": "Dimir Frog", "href": "modern-dimir-frog", "source": "mtgo"},
+        force_refresh=True,
+    )
+
+    assert calls == []
+    assert result == [mtgo_deck]
+
+
+def test_mtgo_only_archetype_without_cached_decks_returns_empty(
+    archetype_cache_file, archetype_deck_cache_file, monkeypatch
+):
+    """Cache-miss branch: no entry at all yields no decks and no round trip."""
+    repo = MetagameRepository(
+        cache_ttl=3600,
+        archetype_list_cache_file=archetype_cache_file,
+        archetype_decks_cache_file=archetype_deck_cache_file,
+    )
+    calls = _recording_scraper(monkeypatch, decks=[{"name": "GF", "date": "2026-03-26"}])
+
+    result = repo.get_decks_for_archetype(
+        {"name": "Dimir Frog", "href": "modern-dimir-frog", "source": "mtgo"}
+    )
+
+    assert calls == []
+    assert result == []
+
+
+def test_goldfish_archetype_is_still_scraped(
+    archetype_cache_file, archetype_deck_cache_file, monkeypatch
+):
+    """The guard is limited to source='mtgo'; ordinary archetypes still fetch."""
+    repo = MetagameRepository(
+        cache_ttl=3600,
+        archetype_list_cache_file=archetype_cache_file,
+        archetype_decks_cache_file=archetype_deck_cache_file,
+    )
+    fresh = {"name": "Boros Energy", "date": "2026-03-26", "source": "mtggoldfish", "number": "g1"}
+    calls = _recording_scraper(monkeypatch, decks=[fresh])
+
+    result = repo.get_decks_for_archetype(
+        {"name": "Boros Energy", "href": "modern-boros-energy", "source": "mtggoldfish"}
+    )
+
+    assert calls == ["modern-boros-energy"]
+    assert result == [fresh]

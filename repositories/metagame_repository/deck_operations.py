@@ -46,6 +46,16 @@ class DeckOperationsMixin(_Base):
                 logger.debug(f"Using cached decks for {archetype_name}")
                 return self._sort_decks_by_date(self._filter_decks_by_source(cached, source_filter))
 
+        if archetype.get("source") == "mtgo":
+            # MTGO-only archetypes come from the remote bundle and carry a
+            # slugified display name as their href, not a MTGGoldfish slug —
+            # MTGGoldfish has no page for them, so scraping one only spends a
+            # round trip to log a 404. Serve whatever the bundle hydrated,
+            # ignoring the TTL: nothing refreshes these through MTGGoldfish.
+            logger.debug(f"MTGO-only archetype {archetype_name}: serving cached decks")
+            cached = self._load_cached_decks(archetype_href, max_age=None) or []
+            return self._sort_decks_by_date(self._filter_decks_by_source(cached, source_filter))
+
         logger.info(f"Fetching fresh decks for {archetype_name}")
         try:
             # Dynamic lookup — see archetype_resolution.py for the rationale.

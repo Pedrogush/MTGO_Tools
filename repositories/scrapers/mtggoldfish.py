@@ -205,6 +205,25 @@ def get_archetype_decks(archetype: str):
     return decks
 
 
+def _decks_for_archetype(archetype: dict) -> list[dict]:
+    """Return an archetype's decks without a doomed round trip for MTGO-only ones.
+
+    The archetype list is a merge of the MTGGoldfish scrape and MTGO-only
+    archetypes published by the remote bundle. An MTGO-only entry's ``href`` is
+    a slugified display name ("modern-dimir-frog"), not a MTGGoldfish slug —
+    MTGGoldfish has no page for it at all, so fetching one is a guaranteed 404
+    (42 of them per Modern refresh). Their decks come from the bundle-hydrated
+    cache instead, read with the stale window because nothing ever refreshes
+    those entries through this path.
+    """
+    if archetype.get("source") == "mtgo":
+        return (
+            _load_cached_archetype_decks(archetype["href"], max_age=MTGGOLDFISH_STALE_CACHE_SECONDS)
+            or []
+        )
+    return get_archetype_decks(archetype["href"])
+
+
 @timed
 def get_archetype_stats(mtg_format: str):
     cache_path = ARCHETYPE_CACHE_FILE
@@ -232,7 +251,7 @@ def get_archetype_stats(mtg_format: str):
         decks_by_name = dict(
             zip(
                 (archetype["name"] for archetype in archetypes),
-                executor.map(lambda archetype: get_archetype_decks(archetype["href"]), archetypes),
+                executor.map(_decks_for_archetype, archetypes),
             )
         )
     for archetype in archetypes:

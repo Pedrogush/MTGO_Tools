@@ -20,6 +20,11 @@ from repositories.scrapers.mtggoldfish import (
     get_archetypes,
 )
 from repositories.scrapers.mtggoldfish_visual import DeckUnavailableError
+from utils.constants import (
+    METAGAME_CACHE_TTL_SECONDS,
+    MTGGOLDFISH_REQUEST_TIMEOUT_SECONDS,
+    MTGGOLDFISH_STALE_CACHE_SECONDS,
+)
 
 # Sample HTML for testing
 SAMPLE_METAGAME_HTML = """
@@ -929,3 +934,153 @@ class TestDownloadDeck:
             download_deck("123456", source_filter="mtgo")
 
         mock_fetch.assert_called_once_with("123456", source_filter="mtgo")
+
+
+# ---------------------------------------------------------------------------
+# MTGO-only archetypes
+#
+# The archetype list get_archetype_stats iterates is not the MTGGoldfish scrape
+# - it is the merged list the remote bundle publishes: MTGGoldfish archetypes
+# plus MTGO-only ones whose href is a mechanically slugified display name
+# ("Dimir Frog" -> "modern-dimir-frog") with no MTGGoldfish page behind it.
+# Mapping every entry through get_archetype_decks made each of those a
+# guaranteed 404 - 42 of them per Modern refresh, every one logged as an error.
+# ---------------------------------------------------------------------------
+
+
+def _goldfish_response():
+    """A 200 for any archetype page, so a stray fetch succeeds loudly."""
+    response = Mock()
+    response.text = SAMPLE_ARCHETYPE_DECKS_HTML
+    response.raise_for_status = Mock()
+    return response
+
+
+class TestArchetypeStatsMtgoOnlyArchetypes:
+    """MTGO-only archetypes are served from cache and never fetched."""
+
+    ARCHETYPES = [
+        {"name": "Rakdos Midrange", "href": "modern-rakdos-midrange"},
+        {"name": "Dimir Frog", "href": "modern-dimir-frog", "source": "mtgo"},
+    ]
+    GOLDFISH_URL = "https://www.mtggoldfish.com/archetype/modern-rakdos-midrange/decks"
+
+    @staticmethod
+    def _mtgo_deck(date):
+        return {
+            "date": date,
+            "number": "999999",
+            "player": "MtgoPlayer",
+            "event": "Modern Challenge",
+            "result": "5-0",
+            "name": "Dimir Frog",
+            "source": "mtgo",
+        }
+
+    def _run(self, tmp_path, decks_cache_payload=None):
+        """Run get_archetype_stats against tmp caches, recording fetched URLs."""
+        decks_cache = tmp_path / "archetype_decks.json"
+        if decks_cache_payload is not None:
+            decks_cache.write_text(json.dumps(decks_cache_payload), encoding="utf-8")
+        requested = []
+
+        def fake_get(url, **kwargs):
+            requested.append(url)
+            return _goldfish_response()
+
+        with (
+            patch.object(mtggoldfish, "get_archetypes", return_value=self.ARCHETYPES),
+            patch.object(mtggoldfish.requests, "get", side_effect=fake_get),
+            patch.object(mtggoldfish, "ARCHETYPE_CACHE_FILE", tmp_path / "archetype_stats.json"),
+            patch.object(mtggoldfish, "ARCHETYPE_DECKS_CACHE_FILE", decks_cache),
+        ):
+            stats = get_archetype_stats("modern")
+        return stats, requested
+
+    def test_only_the_goldfish_archetype_is_fetched(self, tmp_path):
+        """The MTGO-only entry resolves from the bundle-hydrated deck cache; the
+        MTGGoldfish entry is the sole HTTP round trip.
+
+        The cached MTGO decks are deliberately older than the one-hour TTL: that
+        is the state a bundle-hydrated entry spends most of its life in, and it
+        is the state that used to send a doomed GET at MTGGoldfish. Nothing ever
+        refreshes these through MTGGoldfish, so the stale window - not the TTL -
+        is what governs them.
+        """
+        today = datetime.now().strftime("%Y-%m-%d")
+        mtgo_deck = self._mtgo_deck(today)
+        aged = time.time() - (METAGAME_CACHE_TTL_SECONDS * 2)
+        stats, requested = self._run(
+            tmp_path,
+            {"modern-dimir-frog": {"timestamp": aged, "items": [mtgo_deck]}},
+        )
+
+        assert requested == [self.GOLDFISH_URL]
+        assert stats["modern"]["Dimir Frog"]["decks"] == [mtgo_deck]
+        assert stats["modern"]["Dimir Frog"]["results"][today] == 1
+        assert [deck["number"] for deck in stats["modern"]["Rakdos Midrange"]["decks"]] == [
+            "123456",
+            "789012",
+        ]
+
+    def test_mtgo_decks_past_the_stale_window_are_dropped_not_fetched(self, tmp_path):
+        """Beyond the stale window the entry is unusable - but still not worth a
+        404, so the archetype reports no decks."""
+        expired = time.time() - (MTGGOLDFISH_STALE_CACHE_SECONDS * 2)
+        stats, requested = self._run(
+            tmp_path,
+            {
+                "modern-dimir-frog": {
+                    "timestamp": expired,
+                    "items": [self._mtgo_deck("2020-01-01")],
+                }
+            },
+        )
+
+        assert requested == [self.GOLDFISH_URL]
+        assert stats["modern"]["Dimir Frog"]["decks"] == []
+
+    def test_missing_deck_cache_yields_no_decks_and_no_fetch(self, tmp_path):
+        """Cache-miss branch: no cache file at all still must not hit the network
+        for an archetype MTGGoldfish has no page for."""
+        today = datetime.now().strftime("%Y-%m-%d")
+        stats, requested = self._run(tmp_path)
+
+        assert requested == [self.GOLDFISH_URL]
+        entry = stats["modern"]["Dimir Frog"]
+        assert entry["decks"] == []
+        assert entry["results"][today] == 0
+
+    def test_decks_for_archetype_returns_goldfish_decks_for_normal_entries(self, tmp_path):
+        """The helper is a pass-through for anything not tagged source=mtgo."""
+        decks_cache = tmp_path / "archetype_decks.json"
+        with (
+            patch.object(mtggoldfish.requests, "get", return_value=_goldfish_response()),
+            patch.object(mtggoldfish, "ARCHETYPE_DECKS_CACHE_FILE", decks_cache),
+        ):
+            decks = mtggoldfish._decks_for_archetype(
+                {"name": "Rakdos Midrange", "href": "modern-rakdos-midrange"}
+            )
+
+        assert [deck["number"] for deck in decks] == ["123456", "789012"]
+        assert all(deck["source"] == "mtggoldfish" for deck in decks)
+
+
+@pytest.mark.network
+def test_live_goldfish_archetype_page_is_reachable():
+    """Upstream contract: a real MTGGoldfish archetype slug still answers 200.
+
+    The 404 wave this module guards against came from archetypes MTGGoldfish
+    has no page for, not from a broken URL shape or a blocked client, so it is
+    worth being able to check the shape against the live site. Marked
+    ``network``: the default run is ``-m 'not network'``, so this is deselected
+    unless invoked with ``pytest -m network``.
+    """
+    response = mtggoldfish.requests.get(
+        "https://www.mtggoldfish.com/archetype/modern-boros-energy/decks",
+        impersonate="chrome",
+        timeout=MTGGOLDFISH_REQUEST_TIMEOUT_SECONDS,
+    )
+
+    assert response.status_code == 200
+    assert "table-striped" in response.text
