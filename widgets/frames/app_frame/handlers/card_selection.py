@@ -77,6 +77,26 @@ class CardSelectionHandlers(_Base):
         self._handle_zone_delta(zone, name, count)
         return True
 
+    def _show_deck_tables_tab(self: AppFrame) -> bool:
+        """Bring the mainboard/sideboard page of the deck workspace to the front.
+
+        Located by identity rather than by index or by tab text: the page order
+        is a construction detail and the label is translated, so both are the
+        wrong thing to match on. Returns whether the page was found, so a caller
+        can tell "already showing" from "no such page" (there is none before the
+        centre panel is built).
+        """
+        notebook = getattr(self, "deck_tabs", None)
+        page = getattr(self, "deck_split", None)
+        if notebook is None or page is None:
+            return False
+        for index in range(notebook.GetPageCount()):
+            if notebook.GetPage(index) is page:
+                if notebook.GetSelection() != index:
+                    notebook.SetSelection(index)
+                return True
+        return False
+
     def _focus_card_in_zone(self: AppFrame, zone: str, card_name: str) -> None:
         table = self._get_table_for_zone(zone)
         if not table:

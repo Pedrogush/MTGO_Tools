@@ -244,6 +244,10 @@ class SideboardGuideRecordHandlers(_Base):
             "base_main": [dict(c) for c in self.zone_cards.get("main", [])],
             "base_side": [dict(c) for c in self.zone_cards.get("side", [])],
         }
+        # The Record button lives on the Sideboard Guide tab, so the walk begins
+        # with the workspace showing the guide -- not the two zones the walk is
+        # entirely about moving cards between. Put those on screen first.
+        self._show_deck_tables_tab()
         self._guide_record_bar = _GuideRecordBar(
             self,
             t=self._t,

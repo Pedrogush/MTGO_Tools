@@ -341,6 +341,76 @@ def test_regression_the_add_buttons_are_refused_while_recording(zone: str) -> No
     assert frame.zone_cards[zone] == []
 
 
+# ----- the record walk puts the two zones on screen (issue #1027) -----
+
+
+class _Page:
+    """Stand-in for a notebook page window; identity is all that matters."""
+
+
+class _Notebook:
+    """Stand-in for the deck workspace's ``FlatNotebook``."""
+
+    def __init__(self, pages: list[_Page], selection: int = 0) -> None:
+        self._pages = pages
+        self._selection = selection
+        self.selections: list[int] = []
+
+    def GetPageCount(self) -> int:
+        return len(self._pages)
+
+    def GetPage(self, index: int) -> _Page:
+        return self._pages[index]
+
+    def GetSelection(self) -> int:
+        return self._selection
+
+    def SetSelection(self, index: int) -> None:
+        self._selection = index
+        self.selections.append(index)
+
+
+def _frame_with_workspace(selection: int, *, pages: int = 4, split_at: int = 0) -> _Frame:
+    frame = _Frame()
+    page_list = [_Page() for _ in range(pages)]
+    frame.deck_split = page_list[split_at]
+    frame.deck_tabs = _Notebook(page_list, selection)
+    return frame
+
+
+def test_showing_the_deck_tables_selects_that_page() -> None:
+    """The Record button is on the guide tab; the walk is about the two zones."""
+    frame = _frame_with_workspace(selection=1)
+    assert frame._show_deck_tables_tab() is True
+    assert frame.deck_tabs.selections == [0]
+
+
+def test_the_deck_tables_page_is_found_by_identity_not_by_index() -> None:
+    """Page order is a construction detail and the tab label is translated."""
+    frame = _frame_with_workspace(selection=0, split_at=3)
+    assert frame._show_deck_tables_tab() is True
+    assert frame.deck_tabs.selections == [3]
+
+
+def test_showing_the_deck_tables_when_already_there_changes_nothing() -> None:
+    frame = _frame_with_workspace(selection=2, split_at=2)
+    assert frame._show_deck_tables_tab() is True
+    assert frame.deck_tabs.selections == []
+
+
+def test_showing_the_deck_tables_before_the_workspace_exists_is_a_no_op() -> None:
+    """Reported as not-found rather than raising -- there is no page yet."""
+    frame = _Frame()
+    assert frame._show_deck_tables_tab() is False
+
+
+def test_showing_the_deck_tables_reports_a_page_that_is_not_in_the_notebook() -> None:
+    frame = _frame_with_workspace(selection=1)
+    frame.deck_split = _Page()  # never added to the notebook
+    assert frame._show_deck_tables_tab() is False
+    assert frame.deck_tabs.selections == []
+
+
 def test_search_adds_resume_once_the_walk_is_over() -> None:
     frame = _Frame(recording=True)
     frame._add_search_card_to_active_zone("Lightning Bolt")
