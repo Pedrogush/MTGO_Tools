@@ -23,6 +23,7 @@ MESSAGES: dict[str, str] = {
     "builder.status.cards": "cartas",
     "builder.status.cleared": "Filtros limpos.",
     "builder.status.results": "Os resultados atualizam automaticamente enquanto você digita.",
+    "builder.locked.recording": "A busca de cartas fica bloqueada enquanto um guia de sideboard está sendo gravado.",
     "builder.col.name": "Nome",
     "builder.col.mana_cost": "Custo de Mana",
     "builder.hint.card_name": "ex.: Ragavan",

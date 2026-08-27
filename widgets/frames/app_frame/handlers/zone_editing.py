@@ -128,9 +128,51 @@ class ZoneEditingHandlers(_Base):
         if not dest_table or not dest_table.GetScreenRect().Contains(screen_point):
             return False
         for name in names:
-            # Only move a copy that's actually present in the source zone.
-            if any(c["name"].lower() == name.lower() for c in self.zone_cards.get(source_zone, [])):
-                self._handle_zone_delta(source_zone, name, -1)
-                self._handle_zone_delta(dest_zone, name, 1)
+            self._move_zone_copy(source_zone, dest_zone, name)
         self._active_deck_zone = dest_zone
         return True
+
+    def _is_recording_guide(self) -> bool:
+        """True while the sideboard-guide record walk is running (#782)."""
+        return bool(getattr(self, "_guide_record", None))
+
+    def _move_zone_copy(self: AppFrame, source_zone: str, dest_zone: str, name: str) -> bool:
+        """Move one copy of ``name`` from ``source_zone`` to ``dest_zone``.
+
+        Only moves a copy that is actually present in the source zone, so a
+        gesture aimed at a card the zone no longer holds can't conjure one into
+        the destination. Both halves go through ``_handle_zone_delta`` so the
+        deck text, stats and both tables re-render.
+        """
+        if not any(c["name"].lower() == name.lower() for c in self.zone_cards.get(source_zone, [])):
+            return False
+        self._handle_zone_delta(source_zone, name, -1)
+        self._handle_zone_delta(dest_zone, name, 1)
+        return True
+
+    def _handle_zone_activate(self: AppFrame, zone: str, name: str) -> None:
+        """Act on a double-click on ``name`` in ``zone`` (issue #1027).
+
+        The gesture means different things in the two workflows the deck
+        workspace supports, and the difference is deliberate:
+
+        * **Normal deck editing** — one copy comes out. It is the inverse of the
+          double-click in the search results, which puts one copy in.
+        * **Sideboard-guide recording** — one copy crosses to the other zone.
+          That walk expresses a plan as a main<->side diff against the base 75
+          (see :mod:`sideboard_guide_record`), so removing a card outright would
+          record a change the player cannot actually make between games; the
+          double-click is simply a faster way to do what dragging the card
+          across already does.
+
+        Zones other than the mainboard and sideboard have nothing to swap with,
+        so they always take the removal branch.
+        """
+        if self._is_recording_guide() and zone in {"main", "side"}:
+            dest_zone = "side" if zone == "main" else "main"
+            if self._move_zone_copy(zone, dest_zone, name):
+                self._active_deck_zone = dest_zone
+            return
+        self._handle_zone_delta(zone, name, -1)
+        if zone in {"main", "side"}:
+            self._active_deck_zone = zone

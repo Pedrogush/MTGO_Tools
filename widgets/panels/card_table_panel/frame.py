@@ -94,6 +94,7 @@ class CardTablePanel(
         on_zone_transfer: Callable[[str, list[str], wx.Point], bool] | None = None,
         on_printing_mode: Callable[[str, str | None], None] | None = None,
         get_printing_image: Callable[[str], Any] | None = None,
+        on_activate: Callable[[str, str], None] | None = None,
     ) -> None:
         super().__init__(parent)
         self.zone = zone
@@ -112,6 +113,10 @@ class CardTablePanel(
         self._on_zone_transfer = on_zone_transfer
         self._on_printing_mode = on_printing_mode
         self._get_printing_image = get_printing_image
+        # Double-click on a card in this zone (issue #1027). All three views
+        # route their double-click through here, so the gesture behaves the
+        # same whichever one is on top.
+        self._on_activate = on_activate
 
         self.cards: list[dict[str, Any]] = []
         self.selected_name: str | None = None
@@ -261,6 +266,7 @@ class CardTablePanel(
             on_remove=self._handle_view_remove,
             on_zone_transfer=self._handle_view_zone_transfer,
             get_printing_image=get_printing_image,
+            on_activate=self._handle_view_activate,
         )
         self._content_book.AddPage(self.grid_view, "grid")
 
@@ -276,6 +282,7 @@ class CardTablePanel(
             on_delta=lambda name, delta: self._on_delta(self.zone, name, delta),
             on_remove=self._handle_view_remove,
             on_zone_transfer=self._handle_view_zone_transfer,
+            on_activate=self._handle_view_activate,
         )
         self._content_book.AddPage(self.table_view, "table")
 
@@ -291,6 +298,7 @@ class CardTablePanel(
             on_remove=self._handle_view_remove,
             on_zone_transfer=self._handle_view_zone_transfer,
             get_printing_image=get_printing_image,
+            on_activate=self._handle_view_activate,
         )
         self._content_book.AddPage(self.pile_view, "pile")
 
@@ -401,6 +409,11 @@ class CardTablePanel(
         """Remove ``name`` from this panel's zone (grid/pile-view action)."""
         if self._on_remove:
             self._on_remove(self.zone, name)
+
+    def _handle_view_activate(self, name: str) -> None:
+        """Forward a view's double-click on ``name`` with this panel's zone."""
+        if self._on_activate:
+            self._on_activate(self.zone, name)
 
     def _handle_view_zone_transfer(self, names: list[str], screen_point: wx.Point) -> bool:
         """Offer a cross-zone drop to the frame; returns True if it was consumed.

@@ -107,8 +107,8 @@ class LeftPanelBuilderMixin(_Base):
             on_search=self._on_builder_search,
             on_clear=self._on_builder_clear,
             on_result_selected=self._on_builder_result_selected,
-            on_add_to_main=lambda name, count=1: self._handle_zone_delta("main", name, count),
-            on_add_to_side=lambda name, count=1: self._handle_zone_delta("side", name, count),
+            on_add_to_main=lambda name, count=1: self._add_search_card_to_zone("main", name, count),
+            on_add_to_side=lambda name, count=1: self._add_search_card_to_zone("side", name, count),
             on_add_to_active_zone=self._add_search_card_to_active_zone,
             on_prefetch_images=lambda names: self.controller.image_service.prefetch_card_images(
                 "search", names, priority=PRIORITY_RESEARCH_VISIBLE

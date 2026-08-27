@@ -253,6 +253,10 @@ class SideboardGuideRecordHandlers(_Base):
             on_cancel=self._record_cancel,
         )
         self._update_record_bar()
+        # The search is closed while the walk runs (#1027) -- see
+        # ``_add_search_card_to_zone`` for why a deck edit mid-walk would be
+        # recorded as a sideboarding decision.
+        self._set_search_locked(True)
         # Park the bar at the top-right of the window, clear of the deck zones.
         frame_rect = self.GetScreenRect()
         bar_size = self._guide_record_bar.GetSize()
@@ -306,8 +310,15 @@ class SideboardGuideRecordHandlers(_Base):
         bar = getattr(self, "_guide_record_bar", None)
         self._guide_record_bar = None
         self._guide_record = None
+        self._set_search_locked(False)
         if bar:
             bar.Destroy()
+
+    def _set_search_locked(self: AppFrame, locked: bool) -> None:
+        """Lock or unlock the card search panel for the record walk (#1027)."""
+        panel = getattr(self, "builder_panel", None)
+        if panel is not None:
+            panel.set_search_locked(locked)
 
     # ----- helpers -----
     def _record_reset_zones(self: AppFrame) -> None:

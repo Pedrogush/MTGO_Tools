@@ -113,6 +113,8 @@ class DeckBuilderPanelHandlersMixin(_Base):
         return digit_keys.get(key_code)
 
     def _add_result_by_index(self, idx: int) -> None:
+        if self.search_locked:
+            return
         card = self.get_result_at_index(idx)
         if card and self._on_add_to_active_zone:
             name = card.get("name")
@@ -120,6 +122,8 @@ class DeckBuilderPanelHandlersMixin(_Base):
                 self._on_add_to_active_zone(name)
 
     def _on_add_to_zone(self, zone: str, count: int = 1) -> None:
+        if self.search_locked:
+            return
         card = self.get_selected_result()
         if not card:
             return
@@ -131,8 +135,40 @@ class DeckBuilderPanelHandlersMixin(_Base):
         elif zone == "side" and self._on_add_to_side:
             self._on_add_to_side(name, count)
 
+    def set_search_locked(self, locked: bool) -> None:
+        """Close the search for business while a guide is being recorded (#1027).
+
+        Two layers, because either alone leaves a hole. ``Enable(False)`` greys
+        the whole column so the state is *visible* -- a disabled field says "not
+        now" where a field that silently swallows what you type says the app is
+        broken -- but a disabled parent does not stop a programmatic call, and
+        the panel's add routes are reachable from the frame. The
+        ``search_locked`` flag is what actually holds them, and it is checked in
+        the two methods every route funnels through.
+        """
+        locked = bool(locked)
+        if locked == self.search_locked:
+            return
+        self.search_locked = locked
+        if self.status_label:
+            if locked:
+                # Kept so unlocking restores the real "Showing N cards." line
+                # rather than the panel's generic placeholder.
+                self._status_before_lock = self.status_label.GetLabel()
+                self.status_label.SetLabel(self._t("builder.locked.recording"))
+            else:
+                self.status_label.SetLabel(
+                    self._status_before_lock or self._t("builder.status.results")
+                )
+                self._status_before_lock = ""
+        # Disabling the panel disables its children with it; re-enabling restores
+        # each child's own state, so the add buttons come back correctly greyed
+        # for "nothing selected" via _update_add_buttons below.
+        self.Enable(not locked)
+        self._update_add_buttons()
+
     def _update_add_buttons(self) -> None:
-        has_selection = self.get_selected_result() is not None
+        has_selection = self.get_selected_result() is not None and not self.search_locked
         if self._add_main_btn:
             self._add_main_btn.Enable(has_selection and bool(self._on_add_to_main))
         if self._add_side_btn:

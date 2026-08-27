@@ -54,8 +54,28 @@ class CardSelectionHandlers(_Base):
 
     def _add_search_card_to_active_zone(self: AppFrame, name: str) -> None:
         zone = self._get_active_zone_for_add()
-        self._handle_zone_delta(zone, name, 1)
+        if not self._add_search_card_to_zone(zone, name):
+            return
         self._focus_card_in_zone(zone, name)
+
+    def _add_search_card_to_zone(self: AppFrame, zone: str, name: str, count: int = 1) -> bool:
+        """Add ``count`` copies of a search result to ``zone``; report whether it happened.
+
+        Every route out of the card search — the Add buttons, the 1-4 / Shift+1-4
+        hotkeys, '+', and the double-click added in #1027 — funnels through here
+        so the record-mode lock has exactly one place to hold. During a
+        sideboard-guide record walk the search is closed for business: that walk
+        diffs the current mainboard against the base 75 to derive the matchup's
+        plan, so a card added from the search would be recorded as "bring this
+        in" for a card that is nowhere in the 75 (see #1027). Locking the search
+        for the duration is what keeps the recorded entry a sideboarding plan
+        rather than a deck edit.
+        """
+        if self._is_recording_guide():
+            self._set_status("builder.locked.recording")
+            return False
+        self._handle_zone_delta(zone, name, count)
+        return True
 
     def _focus_card_in_zone(self: AppFrame, zone: str, card_name: str) -> None:
         table = self._get_table_for_zone(zone)

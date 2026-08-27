@@ -160,6 +160,9 @@ class _Panel(DeckBuilderPanelHandlersMixin):
         # path. When omitted, every index resolves to ``selected`` (the prior
         # behaviour).
         self._index_cards = index_cards
+        # Mirrors the panel's own state: every add route checks the record-mode
+        # search lock (issue #1027), so the double has to carry it too.
+        self.search_locked = False
         self.results_ctrl = _ResultsCtrl(first_selected)
         self.main_calls: list[tuple[str, int]] = []
         self.side_calls: list[tuple[str, int]] = []

@@ -129,6 +129,32 @@ class GridInteractionMixin:
             self.CaptureMouse()
         self.Refresh()
 
+    def _on_left_dclick(self, event: wx.MouseEvent) -> None:
+        """Report a double-click on a card so the frame can act on it (#1027).
+
+        MSW turns the second press of a double-click into WM_LBUTTONDBLCLK, so
+        this fires *instead of* a second ``_on_left_down`` -- the first press has
+        already selected the card and the "click the selected card again to
+        clear it" branch is never reached, which is what makes the gesture
+        stable. A double-click that lands on the inline +/-/x controls is
+        ignored: the first press already fired that action and firing it twice
+        from one gesture is never what the user meant.
+        """
+        if self._on_activate is None:
+            event.Skip()
+            return
+        point = self._to_logical(event.GetPosition())
+        idx = self._hit_test(point)
+        if idx is None:
+            event.Skip()
+            return
+        name = self._cards[idx]["name"]
+        if self._shows_actions(name):
+            rect = self._card_rect(idx)
+            if any(button.Contains(point) for button in self._action_button_rects(rect)):
+                return
+        self._on_activate(name)
+
     def begin_marquee_at_screen(self, screen_point: wx.Point, *, additive: bool = False) -> None:
         """Start a marquee from anywhere in the app (e.g. the frame background)."""
         self._marquee.begin_at_screen(screen_point, additive=additive)
