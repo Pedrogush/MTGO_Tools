@@ -6,10 +6,14 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+import requests
 
 if sys.platform != "win32":
     pytest.skip("wxPython UI tests must run on Windows", allow_module_level=True)
 
+from network_guard import NetworkWatch, install_network_tripwire
+
+import repositories.metagame_repository as metagame_repository
 import repositories.scrapers.mtggoldfish as mtggoldfish
 import services.image_service as card_images
 import services.image_service.schemas as card_images_schemas
@@ -21,6 +25,7 @@ from controllers.app_controller import (
     reset_deck_selector_controller,
 )
 from repositories.card_repository import CardDataManager
+from services.image_service.scryfall_session import ScryfallSession
 from utils.constants import METAGAME_CACHE_TTL_SECONDS
 from widgets.frames.app_frame import AppFrame
 
@@ -61,6 +66,123 @@ SAMPLE_CARDS = [
 def _ensure_dirs(*dirs: Path) -> None:
     for directory in dirs:
         directory.mkdir(parents=True, exist_ok=True)
+
+
+SAMPLE_ARCHETYPES = [
+    {"name": "Mono Red Aggro", "href": "mono-red-aggro"},
+    {"name": "Azorius Control", "href": "azorius-control"},
+]
+
+SAMPLE_DECK_TEXT = "4 Mountain\n4 Island\nSideboard\n2 Dispel\n"
+
+
+def fake_archetypes(
+    fmt: str,
+    cache_ttl: int = METAGAME_CACHE_TTL_SECONDS,
+    allow_stale: bool = True,
+):  # noqa: ARG001
+    return SAMPLE_ARCHETYPES
+
+
+def fake_archetype_decks(archetype: str) -> list[dict[str, Any]]:
+    return [
+        {
+            "name": archetype,
+            "number": "1",
+            "player": "TestPilot",
+            "event": "Test Event",
+            "result": "2-1",
+            "date": "2024-10-01",
+        },
+    ]
+
+
+def fake_fetch_deck_text(deck_num: str, source_filter: str | None = None) -> str:  # noqa: ARG001
+    return SAMPLE_DECK_TEXT
+
+
+@pytest.fixture(scope="session", autouse=True, name="network_attempts")
+def fixture_network_attempts() -> list[str]:
+    """Take the whole UI session offline, and record anything that tries anyway.
+
+    Session-scoped on purpose. The archetype refresh, the deck-text prefetch and
+    the image pipeline all do their work on daemon threads that routinely outlive
+    the test that started them. A per-test patch is unwound while those threads
+    are still running, so they land on the *real* scraper in the gap between
+    tests — which is how real Scryfall ``.jpg`` files ended up in a developer's
+    ``cache/card_images/`` during a ``pytest tests/ui`` run. Holding both the
+    fakes and the tripwire for the whole session closes that gap.
+
+    Three layers, outermost first:
+
+    1. The MTGGoldfish scraper entry points are faked on ``mtggoldfish``, on
+       ``widgets.frames.app_frame`` **and** on ``repositories.metagame_repository``.
+       The last one is the seam this package documents for exactly this purpose:
+       it re-exports the scraper functions into its own namespace at import time
+       and its mixins look them up there (``_pkg.get_archetypes(...)``), so
+       rebinding only the scraper module leaves those copies pointing at the real
+       thing and the UI suite scrapes for real.
+    2. Scryfall traffic is short-circuited at
+       :class:`~services.image_service.scryfall_session.ScryfallSession` — the
+       adapter this app owns and routes *all* Scryfall API and CDN calls through
+       (``BulkImageDownloader.session``, shared with the batch resolver and the
+       bulk-metadata fetcher). Faking our own adapter rather than the transport
+       under it is what ``tests/README.md`` §2 asks for, and it lets the image
+       pipeline run its real offline-fallback branches.
+    3. Under both, the transport tripwire: nothing in this directory can reach
+       the wire at any point, and anything that tries is recorded for
+       :func:`fixture_blocked_network` to fail on.
+    """
+    with pytest.MonkeyPatch.context() as session_patch:
+        attempts = install_network_tripwire(session_patch)
+
+        # Spelled out one module at a time rather than looped: the guard in
+        # tests/test_ui_network_fakes.py reads these names straight out of the
+        # source, and a loop variable would hide them from it.
+        session_patch.setattr(mtggoldfish, "get_archetypes", fake_archetypes, raising=False)
+        session_patch.setattr(
+            mtggoldfish, "get_archetype_decks", fake_archetype_decks, raising=False
+        )
+        session_patch.setattr(mtggoldfish, "fetch_deck_text", fake_fetch_deck_text, raising=False)
+        session_patch.setattr(app_frame, "get_archetypes", fake_archetypes, raising=False)
+        session_patch.setattr(app_frame, "get_archetype_decks", fake_archetype_decks, raising=False)
+        session_patch.setattr(metagame_repository, "get_archetypes", fake_archetypes, raising=False)
+        session_patch.setattr(
+            metagame_repository, "get_archetype_decks", fake_archetype_decks, raising=False
+        )
+        session_patch.setattr(
+            metagame_repository, "fetch_deck_text", fake_fetch_deck_text, raising=False
+        )
+        # The remote-snapshot fetch is the resolver's other network branch and is
+        # env-gated; pin it off so a developer with REMOTE_SNAPSHOTS_ENABLED
+        # exported doesn't silently put the UI suite back on the wire.
+        session_patch.setattr(metagame_repository, "REMOTE_SNAPSHOTS_ENABLED", False, raising=False)
+
+        def offline(self, method, url, *args, **kwargs):  # noqa: ANN001, ARG001
+            raise requests.ConnectionError(f"Scryfall is offline in tests: {method} {url}")
+
+        session_patch.setattr(ScryfallSession, "request", offline, raising=False)
+        yield attempts
+
+
+@pytest.fixture(autouse=True, name="blocked_network")
+def fixture_blocked_network(network_attempts: list[str]) -> NetworkWatch:
+    """Fail any UI test that reached for the real network.
+
+    ``tests/README.md`` §2 allows exactly one category of test double — outbound
+    network and scraping — so a UI test must never make a real request. Checking
+    for downloaded files afterwards is both late and lossy; this asserts on the
+    transport-boundary record instead.
+
+    Declared before :func:`ui_environment` so it is torn down after it and sees
+    every call the test *and its fixtures* attempted. Tests may also take it as
+    an argument to assert mid-test.
+    """
+    watch = NetworkWatch(network_attempts)
+    yield watch
+    assert not watch.attempts, "UI test made real outbound network calls:\n  " + "\n  ".join(
+        watch.attempts
+    )
 
 
 @pytest.fixture(scope="session", name="wx_app")
@@ -183,36 +305,12 @@ def ui_environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(mtggoldfish, attr, value, raising=False)
 
     def fake_download(number: str, source_filter: str | None = None) -> None:  # noqa: ARG001
-        (decks / "curr_deck.txt").write_text(
-            "4 Mountain\n4 Island\nSideboard\n2 Dispel\n", encoding="utf-8"
-        )
+        (decks / "curr_deck.txt").write_text(SAMPLE_DECK_TEXT, encoding="utf-8")
 
-    archetype_list = [
-        {"name": "Mono Red Aggro", "href": "mono-red-aggro"},
-        {"name": "Azorius Control", "href": "azorius-control"},
-    ]
-
-    def fake_archetypes(
-        fmt: str, cache_ttl: int = METAGAME_CACHE_TTL_SECONDS, allow_stale: bool = True
-    ):
-        return archetype_list
-
-    def fake_archetype_decks(archetype: str):
-        return [
-            {
-                "name": archetype,
-                "number": "1",
-                "player": "TestPilot",
-                "event": "Test Event",
-                "result": "2-1",
-                "date": "2024-10-01",
-            },
-        ]
-
-    monkeypatch.setattr(mtggoldfish, "get_archetypes", fake_archetypes, raising=False)
-    monkeypatch.setattr(mtggoldfish, "get_archetype_decks", fake_archetype_decks, raising=False)
-    monkeypatch.setattr(app_frame, "get_archetypes", fake_archetypes, raising=False)
-    monkeypatch.setattr(app_frame, "get_archetype_decks", fake_archetype_decks, raising=False)
+    # The scraper *reads* are faked for the whole session by
+    # ``fixture_network_attempts`` — background threads outlive the test that
+    # starts them, so a per-test patch leaves a window on the real network.
+    # ``download_deck`` needs this test's temp ``decks`` dir, so it stays here.
     monkeypatch.setattr(mtggoldfish, "download_deck", fake_download, raising=False)
     monkeypatch.setattr(app_frame, "download_deck", fake_download, raising=False)
 
@@ -320,22 +418,7 @@ def deck_selector_factory(wx_app) -> AppFrame:
         controller.session_manager.mark_tutorial_shown()
 
         # Make archetype/deck loading synchronous for tests
-        local_archetypes = [
-            {"name": "Mono Red Aggro", "href": "mono-red-aggro"},
-            {"name": "Azorius Control", "href": "azorius-control"},
-        ]
-
-        def fake_archetype_decks(archetype: str):
-            return [
-                {
-                    "name": archetype,
-                    "number": "1",
-                    "player": "TestPilot",
-                    "event": "Test Event",
-                    "result": "2-1",
-                    "date": "2024-10-01",
-                },
-            ]
+        local_archetypes = SAMPLE_ARCHETYPES
 
         def fetch_archetypes_sync(force: bool = False) -> None:  # noqa: ARG001
             frame._on_archetypes_loaded(local_archetypes)
@@ -362,7 +445,7 @@ def deck_selector_factory(wx_app) -> AppFrame:
         controller.check_and_download_bulk_data = lambda *_, **__: None  # type: ignore[assignment]
         controller.run_initial_loads = lambda *_, **__: None  # type: ignore[assignment]
 
-        fake_deck_text = "4 Mountain\n4 Island\nSideboard\n2 Dispel\n"
+        fake_deck_text = SAMPLE_DECK_TEXT
 
         def fake_download_deck_text(deck_number, on_success, on_error, on_status):  # noqa: ARG001
             on_status("Downloading deck…")
