@@ -2,6 +2,7 @@
 
 import json
 import time
+from unittest.mock import patch
 
 import pytest
 
@@ -172,8 +173,10 @@ def test_save_cached_archetypes_new_file(metagame_repo, archetype_cache_file):
     assert archetype_cache_file.exists()
     with archetype_cache_file.open("r", encoding="utf-8") as f:
         data = json.load(f)
-    assert "Modern" in data
-    assert len(data["Modern"]["items"]) == 2
+    # Keys are canonicalised to lower case so every layer sharing this file
+    # looks the entry up under the same name.
+    assert "modern" in data
+    assert len(data["modern"]["items"]) == 2
 
 
 def test_save_cached_archetypes_existing_file(metagame_repo, archetype_cache_file):
@@ -194,8 +197,8 @@ def test_save_cached_archetypes_existing_file(metagame_repo, archetype_cache_fil
     # Both formats should exist
     with archetype_cache_file.open("r", encoding="utf-8") as f:
         data = json.load(f)
-    assert "Standard" in data
-    assert "Modern" in data
+    assert "standard" in data
+    assert "modern" in data
 
 
 def test_save_cached_archetypes_update_existing_format(metagame_repo, archetype_cache_file):
@@ -216,8 +219,8 @@ def test_save_cached_archetypes_update_existing_format(metagame_repo, archetype_
     # Should have new data
     with archetype_cache_file.open("r", encoding="utf-8") as f:
         data = json.load(f)
-    assert len(data["Modern"]["items"]) == 1
-    assert data["Modern"]["items"][0]["name"] == "New Archetype"
+    assert len(data["modern"]["items"]) == 1
+    assert data["modern"]["items"][0]["name"] == "New Archetype"
 
 
 # ============= Deck Cache Tests =============
@@ -527,7 +530,7 @@ def test_get_archetypes_recovers_from_corrupt_cache(
 
     assert result == fresh_archetypes
     cached = json.loads(archetype_cache_file.read_text(encoding="utf-8"))
-    assert cached["Modern"]["items"] == fresh_archetypes
+    assert cached["modern"]["items"] == fresh_archetypes
 
 
 def test_get_decks_recovers_from_corrupt_cache(
@@ -1431,3 +1434,194 @@ def test_background_refresh_falls_through_to_live_when_remote_raises(tmp_path, m
 
     assert done.wait(timeout=5), "background refresh did not complete in time"
     assert received == [live_archetypes]
+
+
+# ============= MTGO-only archetypes =============
+#
+# The archetype list mixes the MTGGoldfish scrape with MTGO-only archetypes
+# published by the remote bundle, whose href is a slugified display name with
+# no MTGGoldfish page behind it. Clicking one after its cache entry aged past
+# the TTL used to spend a round trip on a guaranteed 404, log it at ERROR, and
+# only then fall through to the stale-cache branch.
+
+
+def _recording_scraper(monkeypatch, decks=None):
+    """Replace the MTGGoldfish deck scrape with a call recorder."""
+    calls = []
+
+    def _fetch(href):
+        calls.append(href)
+        return list(decks or [])
+
+    monkeypatch.setattr("repositories.metagame_repository.get_archetype_decks", _fetch)
+    return calls
+
+
+def test_mtgo_only_archetype_is_served_from_stale_cache_without_scraping(
+    archetype_cache_file, archetype_deck_cache_file, monkeypatch
+):
+    """An expired MTGO-only entry is served from cache, not fetched."""
+    repo = MetagameRepository(
+        cache_ttl=3600,
+        archetype_list_cache_file=archetype_cache_file,
+        archetype_decks_cache_file=archetype_deck_cache_file,
+    )
+    mtgo_decks = [
+        {"name": "Dimir Frog", "date": "2026-03-25", "source": "mtgo", "number": "m1"},
+        {"name": "Dimir Frog", "date": "2026-03-26", "source": "mtgo", "number": "m2"},
+    ]
+    _write_cache(
+        archetype_deck_cache_file,
+        {"modern-dimir-frog": {"timestamp": time.time() - 7200, "items": mtgo_decks}},
+    )
+    calls = _recording_scraper(monkeypatch)
+
+    result = repo.get_decks_for_archetype(
+        {"name": "Dimir Frog", "href": "modern-dimir-frog", "source": "mtgo"}
+    )
+
+    assert calls == []
+    assert [deck["number"] for deck in result] == ["m2", "m1"]
+
+
+def test_mtgo_only_archetype_is_not_scraped_even_on_force_refresh(
+    archetype_cache_file, archetype_deck_cache_file, monkeypatch
+):
+    """There is nothing upstream to refresh from, so force_refresh cannot help."""
+    repo = MetagameRepository(
+        cache_ttl=3600,
+        archetype_list_cache_file=archetype_cache_file,
+        archetype_decks_cache_file=archetype_deck_cache_file,
+    )
+    mtgo_deck = {"name": "Dimir Frog", "date": "2026-03-25", "source": "mtgo", "number": "m1"}
+    _write_cache(
+        archetype_deck_cache_file,
+        {"modern-dimir-frog": {"timestamp": time.time(), "items": [mtgo_deck]}},
+    )
+    calls = _recording_scraper(monkeypatch)
+
+    result = repo.get_decks_for_archetype(
+        {"name": "Dimir Frog", "href": "modern-dimir-frog", "source": "mtgo"},
+        force_refresh=True,
+    )
+
+    assert calls == []
+    assert result == [mtgo_deck]
+
+
+def test_mtgo_only_archetype_without_cached_decks_returns_empty(
+    archetype_cache_file, archetype_deck_cache_file, monkeypatch
+):
+    """Cache-miss branch: no entry at all yields no decks and no round trip."""
+    repo = MetagameRepository(
+        cache_ttl=3600,
+        archetype_list_cache_file=archetype_cache_file,
+        archetype_decks_cache_file=archetype_deck_cache_file,
+    )
+    calls = _recording_scraper(monkeypatch, decks=[{"name": "GF", "date": "2026-03-26"}])
+
+    result = repo.get_decks_for_archetype(
+        {"name": "Dimir Frog", "href": "modern-dimir-frog", "source": "mtgo"}
+    )
+
+    assert calls == []
+    assert result == []
+
+
+def test_goldfish_archetype_is_still_scraped(
+    archetype_cache_file, archetype_deck_cache_file, monkeypatch
+):
+    """The guard is limited to source='mtgo'; ordinary archetypes still fetch."""
+    repo = MetagameRepository(
+        cache_ttl=3600,
+        archetype_list_cache_file=archetype_cache_file,
+        archetype_decks_cache_file=archetype_deck_cache_file,
+    )
+    fresh = {"name": "Boros Energy", "date": "2026-03-26", "source": "mtggoldfish", "number": "g1"}
+    calls = _recording_scraper(monkeypatch, decks=[fresh])
+
+    result = repo.get_decks_for_archetype(
+        {"name": "Boros Energy", "href": "modern-boros-energy", "source": "mtggoldfish"}
+    )
+
+    assert calls == ["modern-boros-energy"]
+    assert result == [fresh]
+
+
+# ============= Archetype-list cache key casing =============
+#
+# The repository keyed cache/archetype_list.json by the format string verbatim
+# while the scraper and the bundle client lowercased it, so the file carried
+# both "Modern" and "modern" with different contents and neither writer ever
+# saw the other's work.
+
+
+def test_archetype_list_cache_round_trips_across_key_casing(metagame_repo):
+    metagame_repo._save_cached_archetypes("Modern", [{"name": "Boros Energy", "href": "boros"}])
+
+    assert metagame_repo._load_cached_archetypes("modern") == [
+        {"name": "Boros Energy", "href": "boros"}
+    ]
+    assert metagame_repo._load_cached_archetypes("  MODERN ") == [
+        {"name": "Boros Energy", "href": "boros"}
+    ]
+
+
+def test_archetype_list_cache_written_by_the_scraper_is_read_by_the_repository(
+    archetype_cache_file, archetype_deck_cache_file
+):
+    """The two layers share one file; they must also share one key."""
+    from repositories.scrapers import mtggoldfish
+
+    repo = MetagameRepository(
+        cache_ttl=3600,
+        archetype_list_cache_file=archetype_cache_file,
+        archetype_decks_cache_file=archetype_deck_cache_file,
+    )
+    bundle_items = [{"name": "Dimir Frog", "href": "modern-dimir-frog", "source": "mtgo"}]
+
+    with patch.object(mtggoldfish, "ARCHETYPE_LIST_CACHE_FILE", archetype_cache_file):
+        mtggoldfish._save_cached_archetypes("modern", bundle_items)
+        assert repo._load_cached_archetypes("Modern") == bundle_items
+
+        repo._save_cached_archetypes("Modern", [{"name": "Boros Energy", "href": "boros"}])
+        assert mtggoldfish._load_cached_archetypes("modern", max_age=3600) == [
+            {"name": "Boros Energy", "href": "boros"}
+        ]
+
+
+def test_dual_case_archetype_list_file_is_migrated_without_losing_data(
+    metagame_repo, archetype_cache_file
+):
+    """A file written by both spellings keeps every archetype it already had."""
+    now = time.time()
+    _write_cache(
+        archetype_cache_file,
+        {
+            "Modern": {
+                "timestamp": now,
+                "items": [{"name": "Boros Energy", "href": "modern-boros-energy"}],
+            },
+            "modern": {
+                "timestamp": now - 60,
+                "items": [
+                    {"name": "Boros Energy", "href": "modern-boros-energy"},
+                    {"name": "Dimir Frog", "href": "modern-dimir-frog", "source": "mtgo"},
+                ],
+            },
+            "Legacy": {"timestamp": now, "items": [{"name": "ANT", "href": "legacy-ant"}]},
+        },
+    )
+
+    merged = metagame_repo._load_cached_archetypes("modern")
+    assert [item["name"] for item in merged] == ["Boros Energy", "Dimir Frog"]
+
+    # Writing any format collapses the file to canonical keys, leaving the
+    # formats it did not touch intact.
+    metagame_repo._save_cached_archetypes("Modern", [{"name": "Fresh", "href": "fresh"}])
+    stored = json.loads(archetype_cache_file.read_text(encoding="utf-8"))
+    assert sorted(stored) == ["legacy", "modern"]
+    assert stored["modern"]["items"] == [{"name": "Fresh", "href": "fresh"}]
+    assert metagame_repo._load_cached_archetypes("LEGACY") == [
+        {"name": "ANT", "href": "legacy-ant"}
+    ]

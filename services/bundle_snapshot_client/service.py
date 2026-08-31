@@ -5,7 +5,7 @@ from __future__ import annotations
 import time
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
@@ -17,6 +17,7 @@ from services.bundle_snapshot_client.stamp import StampMixin
 from utils.constants import (
     ARCHETYPE_DECKS_CACHE_FILE,
     ARCHETYPE_LIST_CACHE_FILE,
+    DECK_CACHE_DB_FILE,
     FORMAT_CARD_POOL_DB_FILE,
     RADAR_CACHE_DB_FILE,
     REMOTE_SNAPSHOT_BASE_URL,
@@ -25,6 +26,9 @@ from utils.constants import (
     REMOTE_SNAPSHOT_BUNDLE_STAMP_FILE,
     REMOTE_SNAPSHOT_REQUEST_TIMEOUT_SECONDS,
 )
+
+if TYPE_CHECKING:
+    from repositories.deck_text_cache import DeckTextCache
 
 
 class BundleSnapshotClient(
@@ -44,6 +48,7 @@ class BundleSnapshotClient(
         archetype_decks_cache_file: Path = ARCHETYPE_DECKS_CACHE_FILE,
         format_card_pool_db_file: Path = FORMAT_CARD_POOL_DB_FILE,
         radar_db_file: Path = RADAR_CACHE_DB_FILE,
+        deck_text_cache_db_file: Path = DECK_CACHE_DB_FILE,
         stamp_file: Path = REMOTE_SNAPSHOT_BUNDLE_STAMP_FILE,
         max_age: int = REMOTE_SNAPSHOT_BUNDLE_MAX_AGE_SECONDS,
         request_timeout: int = REMOTE_SNAPSHOT_REQUEST_TIMEOUT_SECONDS,
@@ -54,6 +59,10 @@ class BundleSnapshotClient(
         self.archetype_decks_cache_file = Path(archetype_decks_cache_file)
         self.format_card_pool_db_file = Path(format_card_pool_db_file)
         self.radar_db_file = Path(radar_db_file)
+        self.deck_text_cache_db_file = Path(deck_text_cache_db_file)
+        # Only used when the client is pointed away from the default database;
+        # the production path keeps sharing the process-wide singleton.
+        self._deck_text_cache_instance: DeckTextCache | None = None
         self.stamp_file = Path(stamp_file)
         self.max_age = max_age
         self.request_timeout = request_timeout

@@ -30,6 +30,7 @@ from utils.constants import (
     ONE_DAY_SECONDS,
 )
 from utils.deck_dates import repair_future_date
+from utils.format_keys import normalize_archetype_list_cache, normalize_format_key
 from utils.json_io import fast_load
 from utils.perf import timed
 
@@ -42,7 +43,7 @@ def _load_cached_archetypes(mtg_format: str, max_age: int = METAGAME_CACHE_TTL_S
     except Exception as exc:
         logger.warning(f"Cached archetype list invalid: {exc}")
         return None
-    entry = data.get(mtg_format)
+    entry = normalize_archetype_list_cache(data).get(normalize_format_key(mtg_format))
     if not entry:
         return None
     if time.time() - entry.get("timestamp", 0) > max_age:
@@ -55,7 +56,10 @@ def _save_cached_archetypes(mtg_format: str, items: list[dict]):
         data = fast_load(ARCHETYPE_LIST_CACHE_FILE) if ARCHETYPE_LIST_CACHE_FILE.exists() else {}
     except Exception:
         data = {}
-    data[mtg_format] = {"timestamp": time.time(), "items": items}
+    # Migrate any case-variant keys a previous version left behind before
+    # writing, so the file ends up with exactly one entry per format.
+    data = normalize_archetype_list_cache(data)
+    data[normalize_format_key(mtg_format)] = {"timestamp": time.time(), "items": items}
     ARCHETYPE_LIST_CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
     atomic_write_json(ARCHETYPE_LIST_CACHE_FILE, data, indent=2)
 
@@ -205,6 +209,25 @@ def get_archetype_decks(archetype: str):
     return decks
 
 
+def _decks_for_archetype(archetype: dict) -> list[dict]:
+    """Return an archetype's decks without a doomed round trip for MTGO-only ones.
+
+    The archetype list is a merge of the MTGGoldfish scrape and MTGO-only
+    archetypes published by the remote bundle. An MTGO-only entry's ``href`` is
+    a slugified display name ("modern-dimir-frog"), not a MTGGoldfish slug —
+    MTGGoldfish has no page for it at all, so fetching one is a guaranteed 404
+    (42 of them per Modern refresh). Their decks come from the bundle-hydrated
+    cache instead, read with the stale window because nothing ever refreshes
+    those entries through this path.
+    """
+    if archetype.get("source") == "mtgo":
+        return (
+            _load_cached_archetype_decks(archetype["href"], max_age=MTGGOLDFISH_STALE_CACHE_SECONDS)
+            or []
+        )
+    return get_archetype_decks(archetype["href"])
+
+
 @timed
 def get_archetype_stats(mtg_format: str):
     cache_path = ARCHETYPE_CACHE_FILE
@@ -232,7 +255,7 @@ def get_archetype_stats(mtg_format: str):
         decks_by_name = dict(
             zip(
                 (archetype["name"] for archetype in archetypes),
-                executor.map(lambda archetype: get_archetype_decks(archetype["href"]), archetypes),
+                executor.map(_decks_for_archetype, archetypes),
             )
         )
     for archetype in archetypes:

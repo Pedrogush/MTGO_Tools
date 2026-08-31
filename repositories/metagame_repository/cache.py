@@ -10,6 +10,7 @@ from loguru import logger
 
 from repositories.metagame_repository.date_utils import _parse_deck_date
 from utils.atomic_io import atomic_write_json, locked_path
+from utils.format_keys import normalize_archetype_list_cache, normalize_format_key
 
 if TYPE_CHECKING:
     from repositories.metagame_repository.protocol import MetagameRepositoryProto
@@ -42,7 +43,7 @@ class CacheMixin(_Base):
             logger.warning(f"Cached archetype list invalid: {exc}")
             return None
 
-        entry = data.get(mtg_format)
+        entry = normalize_archetype_list_cache(data).get(normalize_format_key(mtg_format))
         if not entry:
             return None
 
@@ -64,7 +65,10 @@ class CacheMixin(_Base):
                 except json.JSONDecodeError as exc:
                     logger.warning(f"Archetype cache invalid, rebuilding: {exc}")
 
-            data[mtg_format] = {"timestamp": time.time(), "items": items}
+            # Migrate any case-variant keys a previous version left behind
+            # before writing, so the file ends up with one entry per format.
+            data = normalize_archetype_list_cache(data)
+            data[normalize_format_key(mtg_format)] = {"timestamp": time.time(), "items": items}
 
             try:
                 atomic_write_json(self.archetype_list_cache_file, data, indent=2)

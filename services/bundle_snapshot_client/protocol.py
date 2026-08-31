@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Protocol
 
 if TYPE_CHECKING:
+    from repositories.deck_text_cache import DeckTextCache
     from services.bundle_snapshot_client.http import BundleResponse
 
 
@@ -18,6 +19,8 @@ class BundleSnapshotClientProto(Protocol):
     archetype_decks_cache_file: Path
     format_card_pool_db_file: Path
     radar_db_file: Path
+    deck_text_cache_db_file: Path
+    _deck_text_cache_instance: DeckTextCache | None
     stamp_file: Path
     max_age: int
     request_timeout: int

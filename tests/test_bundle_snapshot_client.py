@@ -4,14 +4,17 @@ from __future__ import annotations
 
 import io
 import json
+import sqlite3
 import tarfile
 import time
+import uuid
 from pathlib import Path
 from typing import Any
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import pytest
 
+from repositories.deck_text_cache import DeckTextCache
 from repositories.format_card_pool_repository import FormatCardPoolRepository
 from repositories.radar_repository import RadarRepository
 from services.bundle_snapshot_client import (
@@ -20,6 +23,7 @@ from services.bundle_snapshot_client import (
     reset_bundle_snapshot_client,
 )
 from services.bundle_snapshot_client.http import BundleResponse
+from utils.constants import DECK_CACHE_DB_FILE
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -176,6 +180,41 @@ def _make_bundle(
     return buf.getvalue()
 
 
+def _real_deck_cache_state() -> tuple[tuple[int, int] | None, ...]:
+    """Existence/mtime/size of the real deck-text database and its WAL sidecar."""
+    states: list[tuple[int, int] | None] = []
+    for path in (DECK_CACHE_DB_FILE, DECK_CACHE_DB_FILE.with_suffix(".db-wal")):
+        try:
+            stat = path.stat()
+        except OSError:
+            states.append(None)
+        else:
+            states.append((stat.st_mtime_ns, stat.st_size))
+    return tuple(states)
+
+
+@pytest.fixture(autouse=True)
+def _guard_real_deck_cache_db():
+    """Fail any test in this module that writes to the developer's deck cache.
+
+    Every artifact the client hydrates is addressed by a constructor path — but
+    the deck-text writes used to reach past those for the module-level
+    singleton, which resolves to the real ``cache/deck_cache.db``. So a test
+    that had carefully wired five paths to ``tmp_path`` still wrote deck texts
+    into the checkout. Two ``stat`` calls per test keep that from returning.
+
+    It watches the file, not the writer, so running the app against the same
+    install while the suite runs can trip it: the app writing a downloaded deck
+    is indistinguishable here from a test doing it. A failure that survives a
+    re-run with the app closed is a real leak.
+    """
+    before = _real_deck_cache_state()
+    yield
+    assert (
+        _real_deck_cache_state() == before
+    ), f"a test in this module wrote to the real deck cache at {DECK_CACHE_DB_FILE}"
+
+
 @pytest.fixture
 def tmp_client(tmp_path: Path) -> BundleSnapshotClient:
     """Return a BundleSnapshotClient wired to tmp_path files."""
@@ -186,6 +225,7 @@ def tmp_client(tmp_path: Path) -> BundleSnapshotClient:
         archetype_decks_cache_file=tmp_path / "archetype_decks.json",
         format_card_pool_db_file=tmp_path / "format_card_pool.db",
         radar_db_file=tmp_path / "radar_cache.db",
+        deck_text_cache_db_file=tmp_path / "deck_cache.db",
         stamp_file=tmp_path / "bundle_stamp.json",
         max_age=3600,
         request_timeout=30,
@@ -465,6 +505,35 @@ def test_apply_merges_with_existing_archetype_list_cache(tmp_client: BundleSnaps
     assert _FORMAT in data  # new entry added
 
 
+def test_apply_migrates_case_variant_archetype_list_keys(tmp_client: BundleSnapshotClient) -> None:
+    """Capitalised keys left behind by an older build are folded into the canonical one.
+
+    The repository layer used to write "Modern" while this client wrote
+    "modern", so one file ended up holding both with different contents and
+    neither writer saw the other's work. Hydrating now migrates the old keys:
+    the hydrated format is replaced by the bundle's authoritative list, and a
+    format the bundle does not carry survives under its canonical key.
+    """
+    existing = {
+        "Modern": {
+            "timestamp": 1.0,
+            "items": [{"name": "Amulet Titan", "href": "amulet-titan"}],
+        },
+        "Legacy": {"timestamp": 1.0, "items": [{"name": "ANT", "href": "ant"}]},
+    }
+    tmp_client.archetype_list_cache_file.parent.mkdir(parents=True, exist_ok=True)
+    tmp_client.archetype_list_cache_file.write_text(json.dumps(existing), encoding="utf-8")
+
+    bundle = _make_bundle()
+    with patch.object(tmp_client, "_http_get_bytes", return_value=BundleResponse(content=bundle)):
+        tmp_client.apply()
+
+    data = json.loads(tmp_client.archetype_list_cache_file.read_text())
+    assert sorted(data) == ["legacy", _FORMAT]
+    assert [item["href"] for item in data[_FORMAT]["items"]] == [_SLUG]
+    assert [item["href"] for item in data["legacy"]["items"]] == ["ant"]
+
+
 def test_apply_multiple_formats(tmp_client: BundleSnapshotClient) -> None:
     archetypes = [
         {
@@ -580,39 +649,21 @@ def test_deck_entry_missing_href_skipped(tmp_client: BundleSnapshotClient) -> No
 # ---------------------------------------------------------------------------
 
 
-def test_apply_hydrates_deck_text_cache(tmp_client: BundleSnapshotClient, tmp_path: Path) -> None:
-    from repositories.deck_text_cache import DeckTextCache
-
-    db_path = tmp_path / "deck_cache.db"
-    cache = DeckTextCache(db_path=db_path)
-
+def test_apply_hydrates_deck_text_cache(tmp_client: BundleSnapshotClient) -> None:
     bundle = _make_bundle()
-    with (
-        patch.object(tmp_client, "_http_get_bytes", return_value=BundleResponse(content=bundle)),
-        patch("repositories.deck_text_cache.get_deck_cache", return_value=cache),
-    ):
+    with patch.object(tmp_client, "_http_get_bytes", return_value=BundleResponse(content=bundle)):
         tmp_client.apply()
 
-    result = cache.get("1234")
+    result = DeckTextCache(db_path=tmp_client.deck_text_cache_db_file).get("1234")
     assert result is not None
     assert "Lightning Bolt" in result
 
 
-def test_deck_text_hydration_skips_existing(
-    tmp_client: BundleSnapshotClient, tmp_path: Path
-) -> None:
-    from repositories.deck_text_cache import DeckTextCache
-
-    db_path = tmp_path / "deck_cache.db"
-    cache = DeckTextCache(db_path=db_path)
+def test_deck_text_hydration_skips_existing(tmp_client: BundleSnapshotClient) -> None:
+    cache = DeckTextCache(db_path=tmp_client.deck_text_cache_db_file)
     cache.set("1234", "4 Existing Card\n", source="mtggoldfish")
 
-    bundle = _make_bundle()
-    with (
-        patch.object(tmp_client, "_http_get_bytes", return_value=BundleResponse(content=bundle)),
-        patch("repositories.deck_text_cache.get_deck_cache", return_value=cache),
-    ):
-        tmp_client._hydrate_deck_texts([("1234", "4 Lightning Bolt\n", "mtggoldfish")])
+    tmp_client._hydrate_deck_texts([("1234", "4 Lightning Bolt\n", "mtggoldfish")])
 
     # Original entry preserved (INSERT OR IGNORE)
     assert cache.get("1234") == "4 Existing Card\n"
@@ -842,19 +893,12 @@ _MTGO_DECKLIST_ENTRY = {
 }
 
 
-def test_apply_merges_mtgo_decklists_into_archetype_cache(
-    tmp_client: BundleSnapshotClient, tmp_path: Path
-) -> None:
+def test_apply_merges_mtgo_decklists_into_archetype_cache(tmp_client: BundleSnapshotClient) -> None:
     """MTGO decks with matching archetype names are merged into the deck cache."""
-    from repositories.deck_text_cache import DeckTextCache
-
-    db_path = tmp_path / "deck_cache.db"
-    cache = DeckTextCache(db_path=db_path)
     bundle = _make_bundle(mtgo_decklists=[_MTGO_DECKLIST_ENTRY])
 
     with patch.object(tmp_client, "_http_get_bytes", return_value=BundleResponse(content=bundle)):
-        with patch("repositories.deck_text_cache.get_deck_cache", return_value=cache):
-            tmp_client.apply()
+        tmp_client.apply()
 
     data = json.loads(tmp_client.archetype_decks_cache_file.read_text())
     assert _SLUG in data
@@ -867,55 +911,40 @@ def test_apply_merges_mtgo_decklists_into_archetype_cache(
     assert mtgo_items[0]["number"] == "9001"
 
 
-def test_apply_mtgo_deck_text_stored_in_cache(
-    tmp_client: BundleSnapshotClient, tmp_path: Path
-) -> None:
+def test_apply_mtgo_deck_text_stored_in_cache(tmp_client: BundleSnapshotClient) -> None:
     """Inline deck_text from MTGO bundle entries is stored in the deck text cache."""
-    from repositories.deck_text_cache import DeckTextCache
-
-    db_path = tmp_path / "deck_cache.db"
-    cache = DeckTextCache(db_path=db_path)
     bundle = _make_bundle(mtgo_decklists=[_MTGO_DECKLIST_ENTRY])
 
     with patch.object(tmp_client, "_http_get_bytes", return_value=BundleResponse(content=bundle)):
-        with patch("repositories.deck_text_cache.get_deck_cache", return_value=cache):
-            tmp_client.apply()
+        tmp_client.apply()
 
-    text = cache.get("9001")
+    # Read back through the database the client was configured with — the
+    # second of the two call sites that used to write to the singleton.
+    text = DeckTextCache(db_path=tmp_client.deck_text_cache_db_file).get("9001")
     assert text is not None
     assert "Lightning Bolt" in text
 
 
-def test_apply_mtgo_unmatched_archetype_skipped(
-    tmp_client: BundleSnapshotClient, tmp_path: Path
-) -> None:
+def test_apply_mtgo_unmatched_archetype_skipped(tmp_client: BundleSnapshotClient) -> None:
     """MTGO decks whose archetype name has no match in the archetype list are skipped."""
-    from repositories.deck_text_cache import DeckTextCache
-
-    db_path = tmp_path / "deck_cache.db"
-    cache = DeckTextCache(db_path=db_path)
     bundle = _make_bundle(mtgo_decklists=[_MTGO_DECKLIST_ENTRY])
 
     with patch.object(tmp_client, "_http_get_bytes", return_value=BundleResponse(content=bundle)):
-        with patch("repositories.deck_text_cache.get_deck_cache", return_value=cache):
-            tmp_client.apply()
+        tmp_client.apply()
 
     # "Unknown Archetype" (deck 9002) should not be stored
-    text = cache.get("9002")
+    text = DeckTextCache(db_path=tmp_client.deck_text_cache_db_file).get("9002")
     assert text is None
 
 
 def test_hydrate_mtgo_returns_merged_count_skipping_unmatched(
-    tmp_client: BundleSnapshotClient, tmp_path: Path
+    tmp_client: BundleSnapshotClient,
 ) -> None:
     """_hydrate_mtgo_decklists returns the count of matched decks (unmatched excluded).
 
     The entry has two decks but only one ("Boros Energy") matches a known
     archetype, so the merged total returned must be exactly 1.
     """
-    from repositories.deck_text_cache import DeckTextCache
-
-    cache = DeckTextCache(db_path=tmp_path / "deck_cache.db")
     archetype_entries = [
         {
             "schema_version": "1",
@@ -924,10 +953,9 @@ def test_hydrate_mtgo_returns_merged_count_skipping_unmatched(
             "archetypes": [{"name": "Boros Energy", "href": _SLUG}],
         }
     ]
-    with patch("repositories.deck_text_cache.get_deck_cache", return_value=cache):
-        total = tmp_client._hydrate_mtgo_decklists(
-            [_MTGO_DECKLIST_ENTRY], archetype_entries, now=time.time()
-        )
+    total = tmp_client._hydrate_mtgo_decklists(
+        [_MTGO_DECKLIST_ENTRY], archetype_entries, now=time.time()
+    )
 
     assert total == 1
 
@@ -942,19 +970,12 @@ def test_hydrate_mtgo_returns_zero_when_nothing_matches(
     assert total == 0
 
 
-def test_apply_mtgo_preserves_goldfish_decks(
-    tmp_client: BundleSnapshotClient, tmp_path: Path
-) -> None:
+def test_apply_mtgo_preserves_goldfish_decks(tmp_client: BundleSnapshotClient) -> None:
     """MTGGoldfish decks in the cache are preserved alongside merged MTGO decks."""
-    from repositories.deck_text_cache import DeckTextCache
-
-    db_path = tmp_path / "deck_cache.db"
-    cache = DeckTextCache(db_path=db_path)
     bundle = _make_bundle(mtgo_decklists=[_MTGO_DECKLIST_ENTRY])
 
     with patch.object(tmp_client, "_http_get_bytes", return_value=BundleResponse(content=bundle)):
-        with patch("repositories.deck_text_cache.get_deck_cache", return_value=cache):
-            tmp_client.apply()
+        tmp_client.apply()
 
     data = json.loads(tmp_client.archetype_decks_cache_file.read_text())
     items = data[_SLUG]["items"]
@@ -964,23 +985,101 @@ def test_apply_mtgo_preserves_goldfish_decks(
     assert len(mtgo_items) == 1
 
 
-def test_apply_mtgo_deduplicates_on_re_hydration(
-    tmp_client: BundleSnapshotClient, tmp_path: Path
-) -> None:
+def test_apply_mtgo_deduplicates_on_re_hydration(tmp_client: BundleSnapshotClient) -> None:
     """Re-applying the bundle replaces previous MTGO entries rather than duplicating them."""
-    from repositories.deck_text_cache import DeckTextCache
-
-    db_path = tmp_path / "deck_cache.db"
-    cache = DeckTextCache(db_path=db_path)
     bundle = _make_bundle(mtgo_decklists=[_MTGO_DECKLIST_ENTRY])
 
     with patch.object(tmp_client, "_http_get_bytes", return_value=BundleResponse(content=bundle)):
-        with patch("repositories.deck_text_cache.get_deck_cache", return_value=cache):
-            tmp_client.apply()
-            # Force a second apply by clearing the stamp
-            tmp_client.stamp_file.unlink()
-            tmp_client.apply()
+        tmp_client.apply()
+        # Force a second apply by clearing the stamp
+        tmp_client.stamp_file.unlink()
+        tmp_client.apply()
 
     data = json.loads(tmp_client.archetype_decks_cache_file.read_text())
     mtgo_items = [d for d in data[_SLUG]["items"] if d.get("source") == "mtgo"]
     assert len(mtgo_items) == 1  # not doubled
+
+
+# ---------------------------------------------------------------------------
+# Deck-text database injection
+#
+# Every artifact the client hydrates is addressed by a constructor path — the
+# deck-text cache used to be the exception, reaching for the module-level
+# singleton and so always writing to the real cache/deck_cache.db, whatever the
+# client was constructed with. Tests that wired five paths to tmp_path were
+# writing bundle deck texts into the developer's checkout.
+# ---------------------------------------------------------------------------
+
+
+def _deck_numbers_in_real_cache(deck_number: str) -> int:
+    """Count rows for *deck_number* in the real database, without writing to it.
+
+    ``immutable=1`` promises SQLite there are no writers, so it neither creates
+    the -shm/-wal sidecars nor touches the file — a plain connection to a WAL
+    database would.
+    """
+    if not DECK_CACHE_DB_FILE.exists():
+        return 0
+    uri = f"file:{DECK_CACHE_DB_FILE.as_posix()}?immutable=1"
+    with sqlite3.connect(uri, uri=True) as conn:
+        try:
+            row = conn.execute(
+                "SELECT COUNT(*) FROM deck_cache WHERE deck_number = ?", (deck_number,)
+            ).fetchone()
+        except sqlite3.DatabaseError:  # not our schema — nothing of ours in it
+            return 0
+    return int(row[0])
+
+
+def test_apply_hydrates_deck_texts_into_the_configured_database(
+    tmp_client: BundleSnapshotClient,
+) -> None:
+    """Bundle deck texts land in the client's database and nowhere else."""
+    deck_id = f"isolation-probe-{uuid.uuid4().hex}"
+    bundle = _make_bundle(
+        deck_texts=[
+            {
+                "schema_version": "1",
+                "kind": "deck_text_blob",
+                "format": _FORMAT,
+                "source": "mtggoldfish",
+                "deck_id": deck_id,
+                "deck_text": "4 Probe Lightning Bolt\n",
+            }
+        ]
+    )
+    before = _real_deck_cache_state()
+
+    with patch.object(tmp_client, "_http_get_bytes", return_value=BundleResponse(content=bundle)):
+        tmp_client.apply()
+
+    stored = DeckTextCache(db_path=tmp_client.deck_text_cache_db_file).get(deck_id)
+    assert stored is not None
+    assert "Probe Lightning Bolt" in stored
+    # The real database was neither created, modified, nor written into.
+    assert _real_deck_cache_state() == before
+    assert _deck_numbers_in_real_cache(deck_id) == 0
+
+
+def test_deck_text_cache_defaults_to_the_shared_production_cache() -> None:
+    """Unconfigured, the client still uses the process-wide singleton."""
+    client = BundleSnapshotClient()
+    singleton = Mock()
+
+    with patch("repositories.deck_text_cache.get_deck_cache", return_value=singleton) as get_cache:
+        assert client._deck_text_cache() is singleton
+
+    assert client.deck_text_cache_db_file == DECK_CACHE_DB_FILE
+    assert get_cache.call_count == 1
+
+
+def test_deck_text_cache_honours_an_explicit_database(tmp_client: BundleSnapshotClient) -> None:
+    """A configured database gets its own instance, reused across hydrations."""
+    cache = tmp_client._deck_text_cache()
+
+    assert cache.db_path == tmp_client.deck_text_cache_db_file
+    assert tmp_client._deck_text_cache() is cache
+
+    # And it is a working cache, not a bare path holder.
+    cache.set("4242", "4 Ragavan, Nimble Pilferer\n", source="mtggoldfish")
+    assert DeckTextCache(db_path=tmp_client.deck_text_cache_db_file).get("4242") is not None
