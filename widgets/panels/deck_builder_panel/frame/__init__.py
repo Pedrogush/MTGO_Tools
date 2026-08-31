@@ -111,6 +111,11 @@ class DeckBuilderPanel(
         self._adv_panel: wx.Panel | None = None
         self._adv_toggle_btn: wx.Button | None = None
         self.results_cache: list[dict[str, Any]] = []
+        # Set while a sideboard guide is being recorded (issue #1027): every add
+        # route out of this panel is refused and the column is greyed out, so a
+        # deck edit can't be mistaken for a sideboarding decision.
+        self.search_locked: bool = False
+        self._status_before_lock: str = ""
         self._search_timer = wx.Timer(self)
         self.Bind(wx.EVT_TIMER, self._on_search_timer, self._search_timer)
         # Debounces image prefetch while the results list scrolls or refills.

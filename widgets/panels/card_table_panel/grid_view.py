@@ -85,6 +85,7 @@ class DeckGridView(
         on_remove: Callable[[str], None] | None = None,
         on_zone_transfer: Callable[[list[str], wx.Point], bool] | None = None,
         get_printing_image: Callable[[str], Path | None] | None = None,
+        on_activate: Callable[[str], None] | None = None,
     ) -> None:
         # FULL_REPAINT_ON_RESIZE puts this window on wx's CS_HREDRAW|CS_VREDRAW
         # class, so MSW invalidates the whole client on a resize instead of
@@ -106,6 +107,11 @@ class DeckGridView(
         self._on_delta = on_delta
         self._on_remove = on_remove
         self._on_zone_transfer = on_zone_transfer
+        # Double-click on a card (issue #1027). What it *means* is decided by
+        # the frame -- take a copy out in normal editing, move a copy across
+        # zones while a sideboard guide is being recorded -- so the view only
+        # reports which card was activated.
+        self._on_activate = on_activate
 
         self._cards: list[dict[str, Any]] = []
         # Multi-selection by card name (a single click selects exactly one).
@@ -168,6 +174,7 @@ class DeckGridView(
         self.Bind(wx.EVT_SIZE, self._on_size)
         self.Bind(wx.EVT_LEFT_DOWN, self._on_left_down)
         self.Bind(wx.EVT_LEFT_UP, self._on_left_up)
+        self.Bind(wx.EVT_LEFT_DCLICK, self._on_left_dclick)
         self.Bind(wx.EVT_MOTION, self._on_motion)
         self.Bind(wx.EVT_MOUSEWHEEL, self._on_wheel)
         self.Bind(wx.EVT_LEAVE_WINDOW, self._on_leave)

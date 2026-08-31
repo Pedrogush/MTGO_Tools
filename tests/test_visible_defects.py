@@ -173,6 +173,10 @@ _COLON_ALLOWED = {
     "tabs.view.printing.date_prompt",
     "guide.record.mode_prompt",
     "guide.record.coverage_prompt",
+    # Sibling of the two above: the record walk's dialog prompts are sentences
+    # introducing a list, not field labels. This one had no entry in either
+    # locale at all until #1027, so the dialog showed the raw key.
+    "guide.record.curated_prompt",
 }
 
 

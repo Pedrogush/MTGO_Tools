@@ -154,6 +154,7 @@ class DeckPileView(wx.ScrolledWindow):
         on_remove: Callable[[str], None] | None = None,
         on_zone_transfer: Callable[[list[str], wx.Point], bool] | None = None,
         get_printing_image: Callable[[str], Path | None] | None = None,
+        on_activate: Callable[[str], None] | None = None,
     ) -> None:
         # FULL_REPAINT_ON_RESIZE: see DeckGridView -- MSW must not keep bits
         # across a resize or a live sash drag stacks stale edge fades (#983).
@@ -168,6 +169,8 @@ class DeckPileView(wx.ScrolledWindow):
         self._get_sort_mode = get_sort_mode or (lambda: PILE_SORT_MV)
         self._on_remove = on_remove
         self._on_zone_transfer = on_zone_transfer
+        # Double-click on a copy (issue #1027); the frame decides what it means.
+        self._on_activate = on_activate
 
         self._cards: list[dict[str, Any]] = []
         # piles is a list of (label, [card_entries...]) — card_entries are
@@ -232,6 +235,7 @@ class DeckPileView(wx.ScrolledWindow):
         self.Bind(wx.EVT_SIZE, self._on_size)
         self.Bind(wx.EVT_LEFT_DOWN, self._on_left_down)
         self.Bind(wx.EVT_LEFT_UP, self._on_left_up)
+        self.Bind(wx.EVT_LEFT_DCLICK, self._on_left_dclick)
         self.Bind(wx.EVT_RIGHT_DOWN, self._on_right_down)
         self.Bind(wx.EVT_MOTION, self._on_motion)
         self.Bind(wx.EVT_MOUSEWHEEL, self._on_wheel)
@@ -975,6 +979,23 @@ class DeckPileView(wx.ScrolledWindow):
         if not self.HasCapture():
             self.CaptureMouse()
         self.Refresh()
+
+    def _on_left_dclick(self, event: wx.MouseEvent) -> None:
+        """Report a double-click on a copy so the frame can act on it (#1027).
+
+        The pile view draws one cell per *copy*, so the activated card is named
+        by the copy under the cursor -- a double-click on the third Lightning
+        Bolt in the pile means Lightning Bolt, exactly as the drag does.
+        """
+        if self._on_activate is None:
+            event.Skip()
+            return
+        hit = self._hit_test(self._to_logical(event.GetPosition()))
+        if hit is None:
+            event.Skip()
+            return
+        _pile_idx, _member_idx, entry = hit
+        self._on_activate(entry["name"])
 
     def _on_right_down(self, event: wx.MouseEvent) -> None:
         """Right-click removes the card under the cursor from the deck zone.

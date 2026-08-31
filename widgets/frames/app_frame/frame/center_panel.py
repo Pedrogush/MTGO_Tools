@@ -212,6 +212,9 @@ class CenterPanelBuilderMixin(_Base):
             on_view_mode_change=self._persist_deck_view_mode,
             on_pile_sort_change=self._persist_pile_sort_mode,
             on_zone_transfer=self._handle_zone_transfer,
+            # Double-click a card in this zone (issue #1027): one copy out in
+            # normal editing, one copy across zones while recording a guide.
+            on_activate=self._handle_zone_activate,
             # The printing-selection dropdown re-pricks art for the whole
             # decklist, so it only belongs on the mainboard header (issue #792).
             on_printing_mode=(self._handle_printing_mode if zone == "main" else None),

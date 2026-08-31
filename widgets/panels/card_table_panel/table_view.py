@@ -100,6 +100,7 @@ class DeckTableView(wx.Panel):
         on_delta: Callable[[str, int], None] | None = None,
         on_remove: Callable[[str], None] | None = None,
         on_zone_transfer: Callable[[list[str], wx.Point], bool] | None = None,
+        on_activate: Callable[[str], None] | None = None,
     ) -> None:
         super().__init__(parent)
         self.zone = zone
@@ -111,6 +112,8 @@ class DeckTableView(wx.Panel):
         self._on_delta = on_delta
         self._on_remove = on_remove
         self._on_zone_transfer = on_zone_transfer
+        # Double-click on a row (issue #1027); the frame decides what it means.
+        self._on_activate = on_activate
 
         self._cards: list[dict[str, Any]] = []
         self._rows: list[dict[str, Any]] = []  # cards in current display order
@@ -242,6 +245,7 @@ class DeckTableView(wx.Panel):
         self.grid.Bind(gridlib.EVT_GRID_SELECT_CELL, self._on_cell_select)
         grid_window.Bind(wx.EVT_LEFT_DOWN, self._on_grid_left_down)
         grid_window.Bind(wx.EVT_LEFT_UP, self._on_grid_left_up)
+        grid_window.Bind(wx.EVT_LEFT_DCLICK, self._on_grid_left_dclick)
         grid_window.Bind(wx.EVT_MOTION, self._on_grid_motion)
         grid_window.Bind(wx.EVT_LEAVE_WINDOW, self._on_grid_leave)
         grid_window.Bind(wx.EVT_MOUSE_CAPTURE_LOST, self._on_grid_capture_lost)
@@ -496,6 +500,24 @@ class DeckTableView(wx.Panel):
 
         # Prime a potential drag-to-reorder (begins once the pointer moves).
         self._drag.prime(wx.Point(x, y), self._selected_names)
+
+    def _on_grid_left_dclick(self, event: wx.MouseEvent) -> None:
+        """Report a double-click on a row so the frame can act on it (#1027).
+
+        A double-click inside the actions column is ignored -- the first press
+        already fired that +/-/x -- and so is one below the last row.
+        """
+        if self._on_activate is None:
+            event.Skip()
+            return
+        x, y = self.grid.CalcUnscrolledPosition(event.GetPosition())
+        row = self.grid.YToRow(y)
+        if row == wx.NOT_FOUND or not (0 <= row < len(self._rows)):
+            event.Skip()
+            return
+        if self.grid.XToCol(x) == _ACTIONS_COL:
+            return
+        self._on_activate(self._rows[row]["name"])
 
     def _on_grid_left_up(self, event: wx.MouseEvent) -> None:
         if self._marquee.active:
