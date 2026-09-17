@@ -14,6 +14,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, Protocol
 
+from services.gamelog_service.archetypes import ArchetypeClassifierProto
 from services.gamelog_service.formats import RarityIndexProto
 
 if TYPE_CHECKING:
@@ -29,6 +30,7 @@ class GamelogServiceProto(Protocol):
         file_path: str,
         card_manager: CardDataManager | None = ...,
         rarity_index: RarityIndexProto | None = ...,
+        archetype_model: ArchetypeClassifierProto | None = ...,
     ) -> dict[str, Any] | None: ...
     def parse_all_gamelogs(
         self,
@@ -37,6 +39,7 @@ class GamelogServiceProto(Protocol):
         progress_callback: Any = ...,
         card_manager: CardDataManager | None = ...,
         rarity_index: RarityIndexProto | None = ...,
+        archetype_model: ArchetypeClassifierProto | None = ...,
     ) -> list[dict[str, Any]]: ...
 
     # Discovery
@@ -60,7 +63,14 @@ class GamelogServiceProto(Protocol):
         rarity_index: RarityIndexProto | None = ...,
         min_known: int = ...,
     ) -> bool: ...
-    def detect_archetype(self, cards: list[str]) -> str: ...
+
+    # Archetypes
+    def detect_archetype(
+        self,
+        cards: list[str],
+        model: ArchetypeClassifierProto | None = ...,
+        mtg_format: str | None = ...,
+    ) -> str: ...
 
     # Usernames
     def get_current_username(self) -> str | None: ...

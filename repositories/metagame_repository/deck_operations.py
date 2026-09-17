@@ -10,6 +10,7 @@ from loguru import logger
 
 import repositories.metagame_repository as _pkg
 from repositories.metagame_repository.date_utils import _parse_deck_date
+from repositories.scrapers.mtggoldfish import DeckListFetchError
 from repositories.scrapers.mtggoldfish_visual import DeckUnavailableError
 from utils.atomic_io import locked_path
 
@@ -67,6 +68,14 @@ class DeckOperationsMixin(_Base):
             merged = decks + bundle_mtgo
             self._save_cached_decks(archetype_href, merged)
             return self._sort_decks_by_date(self._filter_decks_by_source(merged, source_filter))
+        except DeckListFetchError:
+            # Offline, or MTGGoldfish served an error page: keep the cache as it
+            # is and serve what it holds, however old. Saving here would replace
+            # the archetype's decks with an empty list.
+            cached = self._load_cached_decks(archetype_href, max_age=None) or []
+            if cached:
+                logger.warning(f"Returning stale cached decks for {archetype_name}")
+            return self._sort_decks_by_date(self._filter_decks_by_source(cached, source_filter))
         except Exception as exc:
             logger.error(f"Failed to fetch decks for {archetype_name}: {exc}")
             cached = self._load_cached_decks(archetype_href, max_age=None)

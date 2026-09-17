@@ -63,10 +63,22 @@ def separator() -> MenuEntry:
 
 @dataclass(frozen=True)
 class MenuSpec:
-    """A top-level menu: its title plus a builder for its (current) entries."""
+    """A top-level menu: its title plus a builder for its (current) entries.
+
+    A spec with ``on_activate`` is an **action title** instead (#1034): it sits on
+    the bar looking exactly like a menu title, but clicking it runs the action
+    rather than dropping a menu down, and it has no entries. ``Save`` and
+    ``Load`` are the two -- one click for the two things a deck session does
+    most, without a menu in the way.
+    """
 
     title: str
-    build: Callable[[], Sequence[MenuEntry]]
+    build: Callable[[], Sequence[MenuEntry]] = tuple
+    on_activate: Callable[[], None] | None = None
+
+    @property
+    def is_action(self) -> bool:
+        return self.on_activate is not None
 
 
 def invoke_entry(entries: Sequence[MenuEntry], path: Sequence[str]) -> bool:

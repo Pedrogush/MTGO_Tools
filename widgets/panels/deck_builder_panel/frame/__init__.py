@@ -22,6 +22,7 @@ from widgets.panels.deck_builder_panel.frame.results_pane import ResultsPaneBuil
 from widgets.panels.deck_builder_panel.frame.search_results_view import _SearchResultsView
 from widgets.panels.deck_builder_panel.handlers import DeckBuilderPanelHandlersMixin
 from widgets.panels.deck_builder_panel.properties import DeckBuilderPanelPropertiesMixin
+from widgets.panels.deck_builder_panel.result_drag import SearchResultDragController
 from widgets.stylize import stylize_scrollable
 
 if TYPE_CHECKING:
@@ -71,6 +72,8 @@ class DeckBuilderPanel(
         on_add_to_side: Callable[..., None] | None = None,
         on_add_to_active_zone: Callable[[str], None] | None = None,
         on_prefetch_images: Callable[[list[str]], None] | None = None,
+        on_drop_result: Callable[[str, wx.Point], bool] | None = None,
+        drop_zone_at: Callable[[wx.Point], str | None] | None = None,
         locale: str | None = None,
     ) -> None:
         # wx.VSCROLL only -- the column never scrolls sideways. TAB_TRAVERSAL is
@@ -94,6 +97,11 @@ class DeckBuilderPanel(
         self._on_add_to_side = on_add_to_side
         self._on_add_to_active_zone = on_add_to_active_zone
         self._on_prefetch_images = on_prefetch_images
+        # Dragging a result onto a deck zone (issue #1033): the frame resolves
+        # the zone under a screen point and owns the add, so the record-mode lock
+        # holds for a drop exactly as it does for the buttons.
+        self._on_drop_result = on_drop_result
+        self._drop_zone_at = drop_zone_at
 
         # State variables
         self.inputs: dict[str, wx.TextCtrl] = {}
@@ -105,6 +113,7 @@ class DeckBuilderPanel(
         self.color_mode_choice: wx.Choice | None = None
         self.text_mode_choice: wx.Choice | None = None
         self.results_ctrl: _SearchResultsView | None = None
+        self._result_drag: SearchResultDragController | None = None
         self.status_label: wx.StaticText | None = None
         self._add_main_btn: wx.Button | None = None
         self._add_side_btn: wx.Button | None = None

@@ -98,7 +98,10 @@ class AdvancedFiltersBuilderMixin(_Base):
         text_mode_choice = wx.Choice(pwin, choices=["=", "≈"])
         text_mode_choice.SetSelection(0)
         stylize_choice(text_mode_choice)
-        text_mode_choice.SetToolTip("= matches all words; ≈ matches any word")
+        text_mode_choice.SetToolTip(
+            "= matches the exact phrase\n"
+            "≈ matches every word, in any order (gains also finds gain, gained)"
+        )
         self.text_mode_choice = text_mode_choice
         text_mode_choice.Bind(wx.EVT_CHOICE, self._on_filters_changed)
         text_row.Add(text_mode_choice, 0, wx.ALIGN_CENTER_VERTICAL)

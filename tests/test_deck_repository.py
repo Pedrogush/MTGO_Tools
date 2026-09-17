@@ -1,4 +1,6 @@
 import json
+import os
+import sqlite3
 import tempfile
 import threading
 from pathlib import Path
@@ -681,3 +683,88 @@ def test_build_daily_average_deck_empty_without_progress_callback(deck_repo):
 
     assert result == {}
     assert calls == []
+
+
+# --------------------------------------------------------------------------- #1034
+
+
+def test_write_deck_file_writes_exactly_the_chosen_path(deck_repo, tmp_path):
+    target = tmp_path / "picked" / "My Deck.txt"
+    target.parent.mkdir()
+    target.write_text("old", encoding="utf-8")
+
+    written = deck_repo.write_deck_file(target, SAMPLE_DECK)
+
+    # Save As already asked about overwriting, so no "_1" rename here.
+    assert written == target
+    assert target.read_text(encoding="utf-8") == SAMPLE_DECK
+
+
+def test_find_saved_deck_matches_the_saved_file_path(db_repo, tmp_path):
+    path = tmp_path / "Murktide.txt"
+    db_repo.save_to_db(
+        "Murktide", SAMPLE_DECK, format_type="Modern", archetype="Murktide", file_path=path
+    )
+
+    found = db_repo.find_saved_deck(file_path=path)
+    assert found is not None
+    assert (found["format"], found["archetype"]) == ("Modern", "Murktide")
+    if os.name == "nt":
+        # Windows compares paths case-insensitively, and so does the lookup there.
+        assert db_repo.find_saved_deck(file_path=str(path).upper())["archetype"] == "Murktide"
+
+
+def test_find_saved_deck_falls_back_to_the_deck_text(db_repo, tmp_path):
+    db_repo.save_to_db(
+        "Burn", SAMPLE_DECK.strip(), archetype="Burn", file_path=tmp_path / "Burn.txt"
+    )
+
+    moved = tmp_path / "moved" / "Burn copy.txt"
+    found = db_repo.find_saved_deck(file_path=moved, deck_content=SAMPLE_DECK + "\r\n")
+
+    assert found is not None and found["archetype"] == "Burn"
+    assert db_repo.find_saved_deck(file_path=moved, deck_content="1 Island") is None
+    assert db_repo.find_saved_deck() is None
+
+
+def test_resaving_the_same_file_updates_its_record_instead_of_adding_one(db_repo, tmp_path):
+    path = tmp_path / "Deck.txt"
+    first = db_repo.save_to_db("Deck", SAMPLE_DECK, archetype="Old", file_path=path)
+    second = db_repo.save_to_db("Deck", SAMPLE_DECK, archetype="New", file_path=path)
+
+    assert first == second
+    assert len(db_repo.get_decks()) == 1
+    record = db_repo.find_saved_deck(file_path=path)
+    assert record["archetype"] == "New"
+    assert record["date_modified"]
+
+
+def test_a_database_from_before_file_path_gains_the_column(tmp_path):
+    db_path = tmp_path / "old.db"
+    conn = sqlite3.connect(db_path)
+    conn.execute("""
+        CREATE TABLE decks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            content TEXT NOT NULL,
+            format TEXT,
+            archetype TEXT,
+            player TEXT,
+            source TEXT NOT NULL DEFAULT 'manual',
+            date_saved TEXT NOT NULL,
+            date_modified TEXT,
+            metadata TEXT NOT NULL DEFAULT '{}'
+        )
+        """)
+    conn.execute(
+        "INSERT INTO decks (name, content, date_saved) VALUES ('Legacy row', 'x', '2024-01-01')"
+    )
+    conn.commit()
+    conn.close()
+
+    repo = DeckRepository(db_path=db_path)
+    path = tmp_path / "New.txt"
+    repo.save_to_db("New", SAMPLE_DECK, archetype="Arch", file_path=path)
+
+    assert repo.find_saved_deck(file_path=path)["archetype"] == "Arch"
+    assert {deck["name"] for deck in repo.get_decks()} == {"Legacy row", "New"}

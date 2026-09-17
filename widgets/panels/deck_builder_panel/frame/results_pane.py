@@ -17,6 +17,7 @@ from utils.constants import (
 from widgets.checkbox import DarkCheckBox
 from widgets.empty_state import EmptyState
 from widgets.panels.deck_builder_panel.frame.search_results_view import _SearchResultsView
+from widgets.panels.deck_builder_panel.result_drag import SearchResultDragController
 from widgets.stylize import stylize_button, stylize_checkbox, stylize_choice, stylize_list_ctrl
 
 if TYPE_CHECKING:
@@ -101,6 +102,20 @@ class ResultsPaneBuilderMixin(_Base):
         results.Bind(wx.EVT_LEFT_DOWN, self._on_results_left_down)
         results.Bind(wx.EVT_LIST_ITEM_ACTIVATED, self._on_result_activated)
         results.Bind(wx.EVT_KEY_DOWN, self._on_result_key_down)
+        # Drag a result onto the mainboard or sideboard (issue #1033). The list
+        # detects the drag itself for an unselected row; the motion / release /
+        # capture bindings carry the gesture once it holds the mouse.
+        results.Bind(wx.EVT_LIST_BEGIN_DRAG, self._on_results_begin_drag)
+        results.Bind(wx.EVT_MOTION, self._on_results_motion)
+        results.Bind(wx.EVT_LEFT_UP, self._on_results_left_up)
+        results.Bind(wx.EVT_MOUSE_CAPTURE_LOST, self._on_results_capture_lost)
+        self._result_drag = SearchResultDragController(
+            results,
+            card_at=self.get_result_at_index,
+            zone_at=self._drop_zone_for_result,
+            on_drop=self._drop_result,
+            on_click_selected=self._deselect_result,
+        )
         # The virtual list emits cache hints for each row range it is about to
         # draw — the scroll signal driving image prefetch (issue #951).
         results.Bind(wx.EVT_LIST_CACHE_HINT, self._on_results_cache_hint)

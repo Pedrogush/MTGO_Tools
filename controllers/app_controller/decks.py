@@ -9,6 +9,8 @@ from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
+from services.card_rarity_service import get_card_rarity_service
+from services.gamelog_service import detect_format_from_cards
 from utils.perf import perf_phase
 
 if TYPE_CHECKING:
@@ -56,6 +58,8 @@ class DeckManagementMixin(_Base):
         deck_content: str,
         format_name: str,
         deck: dict[str, Any] | None = None,
+        file_path: Path | None = None,
+        archetype: str | None = None,
     ) -> tuple[Path, int | None]:
         return self.workflow_service.save_deck(
             deck_name=deck_name,
@@ -63,7 +67,74 @@ class DeckManagementMixin(_Base):
             format_name=format_name,
             deck=deck,
             deck_save_dir=self.deck_save_dir,
+            file_path=file_path,
+            archetype=archetype,
         )
+
+    def find_saved_deck(self, file_path: Path, deck_text: str) -> dict[str, Any] | None:
+        """The saved-deck record (format, archetype, ...) for a deck file, if any.
+
+        Best effort, like the save it reads back: a database problem must never
+        stop a deck file from loading.
+        """
+        try:
+            return self.workflow_service.deck_repo.find_saved_deck(
+                file_path=file_path, deck_content=deck_text
+            )
+        except Exception as exc:  # noqa: BLE001 - the file itself already loaded
+            logger.warning(f"Saved-deck lookup failed for {file_path}: {exc}")
+            return None
+
+    def detect_deck_format(self, deck_text: str) -> str:
+        """The format a deck list reads as, or ``""`` when it cannot be told.
+
+        The same detector Match History uses (legality intersection, plus the
+        rarity test for Pauper). The rarity index is only consulted if something
+        has already loaded it: building it reads the Scryfall bulk file, which is
+        not something to do on the UI thread behind a Save click. Without it a
+        Pauper list reads as the most restrictive constructed format it is legal
+        in, and the save dialog lets the user correct that.
+        """
+        stats = self.deck_service.analyze_deck(deck_text)
+        names = [name for name, _qty in stats["mainboard_cards"]]
+        names += [name for name, _qty in stats["sideboard_cards"]]
+        if not names:
+            return ""
+        rarity_service = get_card_rarity_service()
+        detected = detect_format_from_cards(
+            names,
+            self.card_service.get_card_manager(),
+            last_parsed_format="",
+            rarity_index=rarity_service if rarity_service.is_loaded else None,
+        )
+        return detected or ""
+
+    def load_archetype_names(
+        self,
+        mtg_format: str,
+        on_success: Callable[[list[str]], None],
+    ) -> None:
+        """Deliver the archetype names for ``mtg_format``, from the metagame list.
+
+        The list the research panel shows already holds them for the current
+        format, so that answers synchronously. Any other format goes through the
+        metagame repository (local cache, then the remote bundle) on the worker
+        thread; a failure delivers an empty list rather than an error, because an
+        archetype is optional when saving.
+        """
+        if mtg_format == self.current_format and self.archetypes:
+            on_success([str(entry.get("name", "")) for entry in self.archetypes])
+            return
+
+        def loader(fmt: str) -> list[str]:
+            archetypes = self.metagame_service.get_archetypes_for_format(fmt)
+            return [str(entry.get("name", "")) for entry in archetypes or []]
+
+        def error_handler(error: Exception) -> None:
+            logger.warning(f"Archetype list unavailable for {mtg_format}: {error}")
+            on_success([])
+
+        self._worker.submit(loader, mtg_format, on_success=on_success, on_error=error_handler)
 
     def build_daily_average_deck(
         self,

@@ -105,6 +105,56 @@ def test_describe_is_json_safe_and_carries_current_state() -> None:
     ]
 
 
+def _path_groups(seen: list[object], value: str = "") -> list[PreferenceGroup]:
+    return [
+        PreferenceGroup(
+            title="Deck data",
+            items=(
+                Preference(
+                    key="default_deck_save_path",
+                    kind="path",
+                    label="Default deck folder",
+                    value=value,
+                    placeholder="Not set",
+                    on_path=lambda path: seen.append(("path", path)),
+                ),
+            ),
+        )
+    ]
+
+
+def test_a_path_preference_takes_an_existing_folder(tmp_path) -> None:
+    seen: list[object] = []
+    assert apply_preference(_path_groups(seen), "default_deck_save_path", str(tmp_path))
+    assert seen == [("path", str(tmp_path))]
+
+
+@pytest.mark.parametrize("value", ["", "clear", "None", " unset "])
+def test_a_path_preference_clears(value: str) -> None:
+    seen: list[object] = []
+    assert apply_preference(_path_groups(seen, "C:\\x"), "default_deck_save_path", value)
+    assert seen == [("path", "")]
+
+
+def test_a_path_preference_refuses_a_missing_folder(tmp_path) -> None:
+    seen: list[object] = []
+    missing = tmp_path / "not here"
+    assert not apply_preference(_path_groups(seen), "default_deck_save_path", str(missing))
+    assert seen == []
+
+
+def test_describe_reports_a_path_preferences_value() -> None:
+    rows = describe(_path_groups([], "C:\\Decks"))[0]["items"]
+    assert rows == [
+        {
+            "key": "default_deck_save_path",
+            "kind": "path",
+            "label": "Default deck folder",
+            "value": "C:\\Decks",
+        }
+    ]
+
+
 def test_the_menu_bar_no_longer_carries_a_settings_menu() -> None:
     """#968 put ``Settings`` in the bar "so that phase 7 can collapse it".
 

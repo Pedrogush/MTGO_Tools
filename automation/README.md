@@ -95,6 +95,10 @@ python -m automation.cli menu "Help/Show Tutorial"  # run a plain item
 automation socket being serviced for as long as the menu is open (§5.5 of the UI
 review). `list-widgets` reports the bar under `menu_bar`, with its titles.
 
+`Save` and `Load` on the bar are action titles, not menus: `menu Save` runs the
+action itself, and `--json menu` lists them under `actions`. Both open modal
+dialogs, so the same warning as below applies to them.
+
 **Do not `menu "File/Preferences…"` in a script.** It is the one entry that opens
 a modal dialog, and `ShowModal` starves this socket exactly the way `PopupMenu`
 does — the harness will appear dead until someone presses Escape.
@@ -113,8 +117,10 @@ python -m automation.cli prefs check_for_updates off     # on / off / toggle
 python -m automation.cli prefs average_hours 48
 ```
 
-Keys are `deck_data_source`, `language`, `average_method`, `average_hours` and
-`check_for_updates`. They are stable; the labels beside them are translated.
+Keys are `deck_data_source`, `default_deck_save_path`, `language`,
+`average_method`, `average_hours` and `check_for_updates`. They are stable; the
+labels beside them are translated. `default_deck_save_path` takes an existing
+folder, or `clear` to unset it (the deck dialogs then open in Documents).
 
 ### Inspecting the card inspector's art pager
 
@@ -219,6 +225,30 @@ gesture is scheduled. Two notes from using it:
 - Pressing the *same* copy twice in a row clears the selection instead of
   priming a drag (the view's click-to-deselect), so a script that drags one card
   twice must pick up something else in between.
+
+## Dragging a search result onto a deck zone
+
+The card search's drag (#1033) starts inside the native list control --
+comctl32 decides when a press has travelled far enough to be a drag -- so posted
+wx events cannot prove it works; only real mouse input can. `drag-targets`
+supplies the screen coordinates that input needs:
+
+```bash
+python -m automation.cli --json drag-targets --limit 5
+```
+
+It reports the visible search result rows (`index`, `name`, `selected`,
+`rect`), each deck zone's pane (`rect`, `shown`, `view_mode`, and `zone_at_centre`
+-- what the frame's own drop test resolves at the pane's centre, `null` when the
+pane is hidden behind another workspace tab), and the first grid-view cards of
+each zone for a zone-to-zone drag. Every `rect` is `[x, y, width, height]` in
+screen pixels, ready for `SetCursorPos` + `mouse_event`. Read the zones back
+with `get-zone-cards`.
+
+Two things that look like bugs and are not: a grid card's `rect` can lie outside
+its pane when the view is scrolled (pressing there lands on whatever *is* on
+screen), and pressing the grid card that is already the only selection clears
+it instead of starting a drag.
 
 ## Driving the mainboard/sideboard sash
 

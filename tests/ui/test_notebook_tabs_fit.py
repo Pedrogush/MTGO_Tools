@@ -63,8 +63,8 @@ import pytest
 import wx
 import wx.lib.agw.flatnotebook as fnb
 
+import utils.constants as constants
 from tests.ui.conftest import pump_ui_events
-from utils.constants import DECK_SELECTOR_SETTINGS_FILE
 from utils.i18n import SUPPORTED_LOCALES
 
 
@@ -96,7 +96,11 @@ def _dropped(notebook: fnb.FlatNotebook) -> int:
 def test_every_notebook_page_has_a_visible_tab_at_the_minimum(
     deck_selector_factory, wx_app, locale
 ) -> None:
-    DECK_SELECTOR_SETTINGS_FILE.write_text(json.dumps({"language": locale}), encoding="utf-8")
+    # Read the path at call time: ``ui_environment`` points it into tmp_path, and
+    # a module-level import would keep the real config file -- which this line
+    # then overwrote on every run, while the frame read the (empty) patched one.
+    settings_file = constants.DECK_SELECTOR_SETTINGS_FILE
+    settings_file.write_text(json.dumps({"language": locale}), encoding="utf-8")
     frame = deck_selector_factory()
     try:
         assert frame.locale == locale, "the frame did not pick the locale up from settings"

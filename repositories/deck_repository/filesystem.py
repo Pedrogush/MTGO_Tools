@@ -66,6 +66,19 @@ class FilesystemMixin(_Base):
         logger.info(f"Saved deck to file: {file_path}")
         return file_path
 
+    def write_deck_file(self, file_path: Path, deck_content: str) -> Path:
+        """Write a deck to exactly ``file_path``, replacing any file already there.
+
+        The counterpart of :meth:`save_deck_to_file` for a path the user picked in
+        a Save As dialog, which has already asked before overwriting -- so unlike
+        that method this never renames to ``_1``.
+        """
+        file_path = Path(file_path)
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+        atomic_write_text(file_path, deck_content)
+        logger.info(f"Saved deck to file: {file_path}")
+        return file_path
+
     def list_deck_files(self, directory: Path | None = None) -> list[Path]:
         if directory is None:
             directory = DECKS_DIR

@@ -121,6 +121,24 @@ class DeckSelectorSessionManager:
     def update_update_check_enabled(self, enabled: bool) -> None:
         self.settings["update_check_enabled"] = bool(enabled)
 
+    def get_default_deck_save_path(self) -> str:
+        """The user's chosen deck folder for Save/Load Deck, ``""`` when unset (#1034).
+
+        Deliberately a separate key from the config's ``deck_selector_save_path``:
+        that one is filled in on every launch (so "not set" cannot be expressed
+        with it) and it is also where collection exports are written and read back
+        from, which a user picking a folder for their deck lists should not move.
+        """
+        value = self.settings.get("default_deck_save_path", "")
+        return value.strip() if isinstance(value, str) else ""
+
+    def update_default_deck_save_path(self, path: str | None) -> None:
+        value = str(path).strip() if path else ""
+        if value:
+            self.settings["default_deck_save_path"] = value
+        else:
+            self.settings.pop("default_deck_save_path", None)
+
     _VALID_DECK_VIEW_MODES = {"grid", "table", "pile"}
     _VALID_PILE_SORTS = {"mv", "color", "type"}
 

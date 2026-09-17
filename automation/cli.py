@@ -286,6 +286,13 @@ def cmd_get_builder_list_metrics(client: AutomationClient, args: argparse.Namesp
     return 0
 
 
+def cmd_drag_targets(client: AutomationClient, args: argparse.Namespace) -> int:
+    """Report screen rectangles for a physical drag onto the deck zones."""
+    result = client.drag_targets(limit=args.limit)
+    print(format_output(result, args.json))
+    return 0 if "zones" in result else 1
+
+
 def cmd_open_widget(client: AutomationClient, args: argparse.Namespace) -> int:
     """Open a widget window."""
     result = client.open_widget(args.widget_name)
@@ -625,6 +632,13 @@ Notes:
         help="Get the builder results list geometry (columns vs. client width)",
     )
 
+    # drag-targets (#1033)
+    p = subparsers.add_parser(
+        "drag-targets",
+        help="Screen rects of search rows, deck zone panes and grid cards (for real drags)",
+    )
+    p.add_argument("--limit", type=int, default=10, help="Rows/cards to report per list")
+
     # refresh-collection
     p = subparsers.add_parser(
         "refresh-collection",
@@ -865,6 +879,7 @@ Notes:
         "get-builder-results": cmd_get_builder_results,
         "get-builder-top-item": cmd_get_builder_top_item,
         "get-builder-list-metrics": cmd_get_builder_list_metrics,
+        "drag-targets": cmd_drag_targets,
         "refresh-collection": cmd_refresh_collection,
         "timer-alert-action": cmd_timer_alert_action,
         "open-widget": cmd_open_widget,

@@ -32,8 +32,9 @@ Every control writes through immediately, exactly as its menu item did. Two
 reasons: the settings already applied live from the menu, so an OK/Cancel model
 would be a behaviour change rather than a presentation one; and ``Language``
 re-translates the running UI (including this dialog's parent menu bar) the moment
-it is set, so a "Cancel" would have to unwind a re-translation. The one button is
-``Close``.
+it is set, so a "Cancel" would have to unwind a re-translation. The one
+dialog-level button is ``Close``; the default deck folder's ``Browse…`` and
+``Clear`` (#1034) belong to that one setting and write through like the rest.
 """
 
 from __future__ import annotations
@@ -80,6 +81,8 @@ class PreferencesDialog(wx.Dialog):
 
         self._groups = list(groups)
         self._controls: dict[str, wx.Window] = {}
+        self._path_buttons: dict[str, tuple[wx.Button, wx.Button]] = {}
+        self._path_values: dict[str, str] = {}
 
         outer = wx.BoxSizer(wx.VERTICAL)
         self.SetSizer(outer)
@@ -136,6 +139,9 @@ class PreferencesDialog(wx.Dialog):
             self._controls[item.key] = check
             self._add_help(section, item.help, indent=check.GetMinSize().GetHeight() + SPACE_XS)
             return
+        if item.kind == "path":
+            self._add_path_item(section, item)
+            return
 
         label = wx.StaticText(body, label=item.label)
         stylize_label(label, level="body", surface="panel", tone="primary")
@@ -153,6 +159,76 @@ class PreferencesDialog(wx.Dialog):
         section.sizer.Add(choice, 0, wx.EXPAND | wx.TOP, SPACE_XS)
         self._controls[item.key] = choice
         self._add_help(section, item.help)
+
+    def _add_path_item(self, section: SectionPanel, item: Preference) -> None:
+        """A folder setting: the folder as text, then Browse… and Clear.
+
+        The folder is shown in a label, not a text field. Typing a path by hand
+        invites one that does not exist, and the only thing a text field would
+        add over the folder picker is that failure mode.
+        """
+        body = section.body
+        label = wx.StaticText(body, label=item.label)
+        stylize_label(label, level="body", surface="panel", tone="primary")
+        section.sizer.Add(label, 0, wx.EXPAND)
+
+        row = wx.BoxSizer(wx.HORIZONTAL)
+        value_label = wx.StaticText(
+            body, label="", style=wx.ST_ELLIPSIZE_MIDDLE | wx.ST_NO_AUTORESIZE
+        )
+        browse = wx.Button(body, label=item.browse_label)
+        stylize_button(browse, kind="secondary", surface="panel")
+        clear = wx.Button(body, label=item.clear_label)
+        stylize_button(clear, kind="secondary", surface="panel")
+        row.Add(value_label, 1, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, SPACE_SM)
+        row.Add(browse, 0, wx.RIGHT, SPACE_XS)
+        row.Add(clear, 0)
+        section.sizer.Add(row, 0, wx.EXPAND | wx.TOP, SPACE_XS)
+
+        self._controls[item.key] = value_label
+        self._path_buttons[item.key] = (browse, clear)
+        self._show_path(item, item.value)
+        browse.Bind(wx.EVT_BUTTON, lambda _evt, pref=item: self._on_browse(pref))
+        clear.Bind(wx.EVT_BUTTON, lambda _evt, pref=item: self._set_path(pref, ""))
+        self._add_help(section, item.help)
+
+    def _show_path(self, item: Preference, value: str) -> None:
+        self._path_values[item.key] = value
+        value_label = self._controls[item.key]
+        value_label.SetLabel(value or item.placeholder)
+        value_label.SetToolTip(value or item.placeholder)
+        # A set folder is a value; the placeholder is a note about its absence.
+        stylize_label(
+            value_label,
+            level="body",
+            surface="panel",
+            tone="primary" if value else "secondary",
+        )
+        _browse, clear = self._path_buttons[item.key]
+        clear.Enable(bool(value))
+        stylize_button(clear, kind="secondary", surface="panel", enabled=bool(value))
+
+    def _on_browse(self, pref: Preference) -> None:
+        with wx.DirDialog(
+            self,
+            pref.label,
+            defaultPath=self._path_values.get(pref.key, ""),
+            style=wx.DD_DEFAULT_STYLE | wx.DD_DIR_MUST_EXIST,
+        ) as dlg:
+            if dlg.ShowModal() != wx.ID_OK:
+                return
+            chosen = dlg.GetPath()
+        if chosen:
+            self._set_path(pref, chosen)
+
+    def _set_path(self, pref: Preference, value: str) -> None:
+        if pref.on_path is not None:
+            pref.on_path(value)
+        self._show_path(pref, value)
+
+    def path_buttons_for(self, key: str) -> tuple[wx.Button, wx.Button] | None:
+        """The (Browse…, Clear) buttons of a ``path`` setting. For tests and captures."""
+        return self._path_buttons.get(key)
 
     def _add_help(self, section: SectionPanel, text: str, *, indent: int = 0) -> None:
         if not text:

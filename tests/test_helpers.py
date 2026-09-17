@@ -66,6 +66,9 @@ reset_metagame_repository = _optional_reset(
     "repositories.metagame_repository", "reset_metagame_repository"
 )
 reset_radar_repository = _optional_reset("repositories.radar_repository", "reset_radar_repository")
+reset_archetype_model_service = _optional_reset(
+    "services.archetype_model_service", "reset_archetype_model_service"
+)
 reset_bundle_snapshot_client = _optional_reset(
     "services.bundle_snapshot_client", "reset_bundle_snapshot_client"
 )
@@ -96,6 +99,7 @@ reset_deck_cache = _optional_reset("repositories.deck_text_cache", "reset_deck_c
 
 def reset_all_services() -> None:
     """Reset all global service instances."""
+    reset_archetype_model_service()
     reset_bundle_snapshot_client()
     reset_card_rarity_service()
     reset_card_service()

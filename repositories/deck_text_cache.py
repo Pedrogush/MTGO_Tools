@@ -9,6 +9,7 @@ even with millions of cached decks.
 import json
 import sqlite3
 import time
+from collections.abc import Iterable
 from pathlib import Path
 
 from loguru import logger
@@ -21,6 +22,9 @@ from utils.constants import (
 
 # SQLite database location
 DECK_CACHE_DB = DECK_CACHE_DB_FILE
+
+# SQLite's default host-parameter limit is 999 on older builds.
+_BULK_READ_CHUNK = 900
 
 
 class DeckTextCache:
@@ -127,6 +131,36 @@ class DeckTextCache:
         except sqlite3.Error as exc:
             logger.error(f"Error reading from deck cache: {exc}")
             return None
+
+    def get_many(self, deck_numbers: Iterable[str]) -> dict[str, str]:
+        """Return ``{deck_number: deck_text}`` for every cached number in *deck_numbers*.
+
+        A bulk read for consumers that scan the cache rather than open one deck
+        (the archetype model reads a few thousand at startup). Unlike :meth:`get`
+        it leaves the access statistics alone: a background scan is not a user
+        opening a deck, and writing thousands of LRU bumps would turn a read into
+        a write transaction contending with the bundle hydration.
+        """
+        wanted = list(dict.fromkeys(str(number) for number in deck_numbers if number))
+        found: dict[str, str] = {}
+        if not wanted:
+            return found
+        try:
+            with sqlite3.connect(self.db_path, timeout=SQLITE_CONNECTION_TIMEOUT_SECONDS) as conn:
+                conn.execute(f"PRAGMA busy_timeout={SQLITE_BUSY_TIMEOUT_MS}")
+                for start in range(0, len(wanted), _BULK_READ_CHUNK):
+                    chunk = wanted[start : start + _BULK_READ_CHUNK]
+                    placeholders = ",".join("?" * len(chunk))
+                    # Only "?" placeholders are interpolated; the values are bound.
+                    rows = conn.execute(
+                        "SELECT deck_number, deck_text FROM deck_cache "  # nosec B608
+                        f"WHERE deck_number IN ({placeholders})",
+                        chunk,
+                    )
+                    found.update(rows)
+        except sqlite3.Error as exc:
+            logger.error(f"Error bulk-reading the deck cache: {exc}")
+        return found
 
     def set(self, deck_number: str, deck_text: str, source: str = "mtggoldfish") -> bool:
         max_retries = 3

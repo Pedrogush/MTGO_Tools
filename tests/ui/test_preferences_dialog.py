@@ -105,3 +105,97 @@ def test_the_only_button_is_the_close_button(dialog) -> None:
 
     walk(dlg)
     assert [b.GetId() for b in buttons] == [wx.ID_CANCEL]
+
+
+# ------------------------------------------------------------------ path (#1034)
+
+
+class _FakeDirDialog:
+    chosen: str | None = None
+    opened_at: list[str] = []
+
+    def __init__(self, parent, message="", defaultPath="", style=0):  # noqa: ANN001
+        _FakeDirDialog.opened_at.append(defaultPath)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_exc: object) -> None:
+        return None
+
+    def ShowModal(self) -> int:  # noqa: N802 - wx API
+        return wx.ID_OK if _FakeDirDialog.chosen else wx.ID_CANCEL
+
+    def GetPath(self) -> str:  # noqa: N802 - wx API
+        return _FakeDirDialog.chosen or ""
+
+
+@pytest.fixture(name="path_dialog")
+def fixture_path_dialog(wx_app, monkeypatch: pytest.MonkeyPatch):
+    seen: list[str] = []
+    _FakeDirDialog.chosen = None
+    _FakeDirDialog.opened_at = []
+    monkeypatch.setattr(wx, "DirDialog", _FakeDirDialog)
+    groups = [
+        PreferenceGroup(
+            title="Deck data",
+            items=(
+                Preference(
+                    key="default_deck_save_path",
+                    kind="path",
+                    label="Default deck folder",
+                    help="Where Save Deck and Load Deck open.",
+                    value="",
+                    placeholder="Not set (Documents)",
+                    on_path=seen.append,
+                ),
+            ),
+        )
+    ]
+    dlg = PreferencesDialog(None, groups)
+    yield dlg, seen
+    dlg.Destroy()
+
+
+def _press(button: wx.Button) -> None:
+    event = wx.CommandEvent(wx.wxEVT_BUTTON, button.GetId())
+    event.SetEventObject(button)
+    button.ProcessEvent(event)
+
+
+def test_an_unset_folder_shows_the_placeholder_and_cannot_be_cleared(path_dialog) -> None:
+    dlg, _seen = path_dialog
+    assert dlg.control_for("default_deck_save_path").GetLabel() == "Not set (Documents)"
+    _browse, clear = dlg.path_buttons_for("default_deck_save_path")
+    assert not clear.IsEnabled()
+
+
+def test_browse_picks_a_folder_and_writes_it_through(path_dialog, tmp_path) -> None:
+    dlg, seen = path_dialog
+    _FakeDirDialog.chosen = str(tmp_path)
+    browse, clear = dlg.path_buttons_for("default_deck_save_path")
+
+    _press(browse)
+
+    assert seen == [str(tmp_path)]
+    assert dlg.control_for("default_deck_save_path").GetLabel() == str(tmp_path)
+    assert clear.IsEnabled()
+
+    # Browsing again starts from the folder already chosen.
+    _FakeDirDialog.chosen = None
+    _press(browse)
+    assert _FakeDirDialog.opened_at == ["", str(tmp_path)]
+    assert seen == [str(tmp_path)]  # cancelled: nothing written
+
+
+def test_clear_unsets_the_folder(path_dialog, tmp_path) -> None:
+    dlg, seen = path_dialog
+    _FakeDirDialog.chosen = str(tmp_path)
+    browse, clear = dlg.path_buttons_for("default_deck_save_path")
+    _press(browse)
+
+    _press(clear)
+
+    assert seen == [str(tmp_path), ""]
+    assert dlg.control_for("default_deck_save_path").GetLabel() == "Not set (Documents)"
+    assert not clear.IsEnabled()

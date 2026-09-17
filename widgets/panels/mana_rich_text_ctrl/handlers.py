@@ -19,6 +19,11 @@ from widgets.panels.mana_rich_text_ctrl.keyboard_evts import key_char
 if TYPE_CHECKING:
     from widgets.mana_icon_factory import ManaIconFactory
 
+#: RichTextImage property naming the ``{X}`` symbol an inline image stands for.
+MANA_SYMBOL_PROPERTY = "mana_symbol"
+
+_LINE_BREAK_KEYS = frozenset({wx.WXK_RETURN, wx.WXK_NUMPAD_ENTER})
+
 
 class ManaRichTextInnerHandlersMixin:
     """Event callbacks, buffer rendering, and public state setters for the inner RichTextCtrl."""
@@ -31,6 +36,8 @@ class ManaRichTextInnerHandlersMixin:
     _held_keys: set[str]
     _chord_keys: set[str]
     _mana_mode_active: bool
+    _single_line: bool
+    _rendering: bool
     _hint_label: wx.StaticText
 
     # ------------------------------------------------------------------
@@ -87,6 +94,7 @@ class ManaRichTextInnerHandlersMixin:
     # ------------------------------------------------------------------
 
     def _rerender(self) -> None:
+        self._rendering = True
         self.Freeze()
         try:
             self.Clear()
@@ -96,7 +104,42 @@ class ManaRichTextInnerHandlersMixin:
             self.SetInsertionPointEnd()
         finally:
             self.Thaw()
+            self._rendering = False
         self._sync_hint_visibility()
+
+    def _buffer_plain_text(self) -> str:
+        """Rebuild the brace-notation value from what the buffer now holds.
+
+        Text runs are read as-is and each symbol image as the ``{X}`` it was
+        written for (tagged in :meth:`_write_mana_image`), so the value survives
+        edits made anywhere in the box, not just at its end.
+        """
+        paragraphs: list[str] = []
+        for paragraph in self.GetBuffer().GetChildren():
+            parts: list[str] = []
+            for child in paragraph.GetChildren():
+                if isinstance(child, wx.richtext.RichTextImage):
+                    parts.append(child.GetProperties().GetPropertyString(MANA_SYMBOL_PROPERTY))
+                elif isinstance(child, wx.richtext.RichTextPlainText):
+                    parts.append(child.GetText())
+            paragraphs.append("".join(parts))
+        return "\n".join(paragraphs)
+
+    def _on_buffer_changed(self, evt: wx.CommandEvent) -> None:
+        evt.Skip()
+        if self._rendering or self.IsBeingDeleted():
+            return
+        text = self._buffer_plain_text()
+        if self._single_line and "\n" in text:
+            # A pasted line break: fold it into a space and redraw on one line.
+            self._plain_text = text.replace("\n", " ")
+            wx.CallAfter(self._rerender_if_alive)
+            return
+        self._plain_text = text
+
+    def _rerender_if_alive(self) -> None:
+        if self:
+            self._rerender()
 
     def _render_plain_text(self, text: str) -> None:
         pos = 0
@@ -132,6 +175,9 @@ class ManaRichTextInnerHandlersMixin:
             self._padded_image_cache[cache_key] = img
 
         self.WriteImage(img)
+        image = self.GetBuffer().GetLeafObjectAtPosition(self.GetInsertionPoint() - 1)
+        if isinstance(image, wx.richtext.RichTextImage):
+            image.GetProperties().SetProperty(MANA_SYMBOL_PROPERTY, symbol)
         self._symbol_list.append(symbol)
 
     def _emit_text_event(self) -> None:
@@ -217,6 +263,9 @@ class ManaRichTextInnerHandlersMixin:
             self._on_mana_key_down(evt)
             return
 
+        if self._is_line_break_key(evt):
+            return
+
         if kc == ord("C") and evt.ControlDown() and not evt.ShiftDown():
             self._copy_plain_text()
             return
@@ -230,17 +279,30 @@ class ManaRichTextInnerHandlersMixin:
         evt.Skip()
 
     def _on_copy_key_down(self, evt: wx.KeyEvent) -> None:
+        if self._is_line_break_key(evt):
+            return
         if evt.GetKeyCode() == ord("C") and evt.ControlDown() and not evt.ShiftDown():
             self._copy_plain_text()
             return
         evt.Skip()
 
+    def _on_single_line_char(self, evt: wx.KeyEvent) -> None:
+        # Backstop for a char event that arrives without its key-down having
+        # been refused (wxMSW only suppresses the char when key-down is eaten).
+        if self._is_line_break_key(evt):
+            return
+        evt.Skip()
+
+    def _is_line_break_key(self, evt: wx.KeyEvent) -> bool:
+        return self._single_line and evt.GetKeyCode() in _LINE_BREAK_KEYS
+
 
 class ManaSymbolRichCtrlHandlersMixin:
     """Event callbacks, frame painting, and public state setters for :class:`ManaSymbolRichCtrl`."""
 
-    # Attribute supplied by :class:`ManaSymbolRichCtrl`'s __init__.
+    # Attributes supplied by :class:`ManaSymbolRichCtrl`'s __init__.
     _inner: wx.richtext.RichTextCtrl
+    _clip: wx.Panel | None
 
     # ------------------------------------------------------------------
     # Frame painting + inner layout
@@ -253,12 +315,14 @@ class ManaSymbolRichCtrlHandlersMixin:
         if size.width <= 0 or size.height <= 0:
             return
         thick = self.FromDIP(_BORDER_DIP)
-        self._inner.SetSize(
-            thick,
-            thick,
-            max(0, size.width - 2 * thick),
-            max(0, size.height - 2 * thick),
-        )
+        width = max(0, size.width - 2 * thick)
+        height = max(0, size.height - 2 * thick)
+        if self._clip is None:
+            self._inner.SetSize(thick, thick, width, height)
+            return
+        scrollbar = wx.SystemSettings.GetMetric(wx.SYS_VSCROLL_X, self._inner)
+        self._clip.SetSize(thick, thick, width, height)
+        self._inner.SetSize(0, 0, width + scrollbar, height)
 
     def _on_size(self, evt: wx.SizeEvent) -> None:
         evt.Skip()

@@ -610,6 +610,65 @@ def test_get_decks_empty_cached_list_scrape_failure_returns_empty(
     assert result == []
 
 
+def test_get_decks_fetch_failure_keeps_expired_cached_decks(
+    archetype_cache_file, archetype_deck_cache_file, monkeypatch
+):
+    """An unreachable MTGGoldfish must not replace cached decks with an empty list.
+
+    The scraper used to return [] on a network error, and this path saved
+    ``[] + MTGO decks`` over the expired entry: one outage on 2026-09-17 emptied
+    234 archetypes in a real cache. Now the stale decks are served and the cache
+    file is left byte-for-byte alone. The failure is injected at the HTTP call so
+    the real scraper runs between it and the repository."""
+    repo = MetagameRepository(
+        cache_ttl=3600,
+        archetype_list_cache_file=archetype_cache_file,
+        archetype_decks_cache_file=archetype_deck_cache_file,
+    )
+    goldfish = {"name": "Burn", "number": "1", "date": "2026-09-10", "source": "mtggoldfish"}
+    mtgo = {"name": "Burn", "number": "2", "date": "2026-09-11", "source": "mtgo"}
+    _write_cache(
+        archetype_deck_cache_file,
+        {"modern-burn": {"timestamp": time.time() - 7200, "items": [goldfish, mtgo]}},
+    )
+    before = archetype_deck_cache_file.read_bytes()
+
+    def _offline(*_args, **_kwargs):
+        raise OSError("Could not resolve host: www.mtggoldfish.com")
+
+    monkeypatch.setattr("repositories.scrapers.mtggoldfish.requests.get", _offline)
+    monkeypatch.setattr(
+        "repositories.scrapers.mtggoldfish.ARCHETYPE_DECKS_CACHE_FILE", archetype_deck_cache_file
+    )
+
+    result = repo.get_decks_for_archetype({"href": "modern-burn", "name": "Burn"})
+
+    assert {deck["number"] for deck in result} == {"1", "2"}
+    assert archetype_deck_cache_file.read_bytes() == before
+
+
+def test_get_decks_fetch_failure_without_cache_returns_empty_and_writes_nothing(
+    archetype_cache_file, archetype_deck_cache_file, monkeypatch
+):
+    """With nothing cached, a failed fetch is still "no decks", not an error, and
+    nothing is cached for it, so the next call retries the scrape."""
+    from repositories.scrapers.mtggoldfish import DeckListFetchError
+
+    repo = MetagameRepository(
+        cache_ttl=3600,
+        archetype_list_cache_file=archetype_cache_file,
+        archetype_decks_cache_file=archetype_deck_cache_file,
+    )
+
+    def _offline(_href):
+        raise DeckListFetchError("offline")
+
+    monkeypatch.setattr("repositories.metagame_repository.get_archetype_decks", _offline)
+
+    assert repo.get_decks_for_archetype({"href": "modern-burn", "name": "Burn"}) == []
+    assert not archetype_deck_cache_file.exists()
+
+
 def test_get_decks_empty_cache_preserves_bundle_mtgo_entries(
     archetype_cache_file, archetype_deck_cache_file, monkeypatch
 ):

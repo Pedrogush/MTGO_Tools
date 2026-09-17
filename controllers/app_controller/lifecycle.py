@@ -87,6 +87,11 @@ class LifecycleMixin(_Base):
             # archetype list itself changed.
             if result and result[0] and callbacks:
                 callbacks.on_bundle_decks_ready()
+            if result and result[0]:
+                # New decklists and deck texts landed: refit the archetype
+                # model on them. The startup build may have read the caches
+                # before this hydration; the old model serves until then.
+                self._start_archetype_model_build()
             if surfaced_from_bundle:
                 # The bundle's archetypes for the current format were already
                 # handled during phase 1 by _surface_archetypes (surfaced if
@@ -103,6 +108,12 @@ class LifecycleMixin(_Base):
             logger.warning(f"Remote bundle apply failed: {exc}")
 
         self._worker.submit(_apply_bundle, on_success=_on_bundle_done, on_error=_on_bundle_error)
+
+        # Step 2: Build the game-log archetype model from the cached decklists.
+        # It costs ~0.46 s on a real cache -- over four times the 0.1 s a synchronous
+        # startup step may take -- so it runs on the worker; see
+        # services/archetype_model_service.py for the measurement.
+        self._start_archetype_model_build()
 
         # Step 3: Load collection from cache (background thread)
         def _load_collection():
@@ -162,6 +173,17 @@ class LifecycleMixin(_Base):
         # a passive status-bar note — so it can neither delay startup nor
         # interrupt the user, and being offline is a no-op.
         self.check_for_update()
+
+    def _start_archetype_model_build(self) -> None:
+        """(Re)build the archetype model on the controller's background worker.
+
+        Submitted through ``self._worker`` so shutdown joins it like every other
+        startup job; the build is bounded (a few file reads and a fit) and holds
+        no lock the UI thread takes.
+        """
+        from services.archetype_model_service import get_archetype_model_service
+
+        get_archetype_model_service().start_background_build(submit=self._worker.submit)
 
     def _start_cache_warmup(self) -> None:
         from controllers.app_controller.cache_warmer import CacheWarmer
