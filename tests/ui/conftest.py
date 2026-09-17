@@ -59,6 +59,38 @@ SAMPLE_CARDS = [
 ]
 
 
+# Captured at import, before any fixture patches it: the user's real config dir.
+_REAL_CONFIG_DIR = Path(constants.CONFIG_DIR)
+
+
+def _snapshot_files(directory: Path) -> dict[str, bytes]:
+    if not directory.is_dir():
+        return {}
+    return {path.name: path.read_bytes() for path in directory.iterdir() if path.is_file()}
+
+
+@pytest.fixture(scope="session", autouse=True)
+def real_config_untouched() -> Any:
+    """Fail the run if any UI test wrote to the user's real ``config/``.
+
+    ``ui_environment`` patches the path constants into tmp_path, but a test that
+    imports one at module level keeps the real path and writes straight past the
+    patch. test_notebook_tabs_fit did exactly that and silently overwrote
+    deck_selector_settings.json on every full run.
+    """
+    before = _snapshot_files(_REAL_CONFIG_DIR)
+    yield
+    after = _snapshot_files(_REAL_CONFIG_DIR)
+    changed = sorted(
+        name for name in before.keys() | after.keys() if before.get(name) != after.get(name)
+    )
+    assert not changed, (
+        f"UI tests modified the real config in {_REAL_CONFIG_DIR}: {changed}. A test is "
+        "writing through a path constant imported before ui_environment patched it. "
+        "(Running the app at the same time as the suite can also trip this.)"
+    )
+
+
 def _ensure_dirs(*dirs: Path) -> None:
     for directory in dirs:
         directory.mkdir(parents=True, exist_ok=True)
