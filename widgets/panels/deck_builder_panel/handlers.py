@@ -62,10 +62,56 @@ class DeckBuilderPanelHandlersMixin(_Base):
             return
         idx, _ = self.results_ctrl.HitTest(event.GetPosition())
         if idx != wx.NOT_FOUND and self.results_ctrl.IsSelected(idx):
-            self.clear_result_selection()
-            self._on_result_selected(None)
+            if self._result_drag is not None and self._can_drop_results():
+                # The selected row can be dragged too (#1033); whether this press
+                # is that or the click-to-deselect is only known once the pointer
+                # moves or the button comes up. See result_drag.
+                self._result_drag.prime(idx, event.GetPosition())
+                return
+            self._deselect_result()
             return
         event.Skip()
+
+    def _deselect_result(self, _idx: int | None = None) -> None:
+        self.clear_result_selection()
+        self._on_result_selected(None)
+
+    # ----- drag a result onto a deck zone (issue #1033) -----
+    def _can_drop_results(self) -> bool:
+        return self._on_drop_result is not None and not self.search_locked
+
+    def _on_results_begin_drag(self, event: wx.ListEvent) -> None:
+        """The native list saw a press on a row travel past the drag threshold."""
+        if self._result_drag is None or not self._can_drop_results():
+            return
+        self._result_drag.begin(event.GetIndex())
+
+    def _on_results_motion(self, event: wx.MouseEvent) -> None:
+        if self._result_drag is None or not self._result_drag.handle_motion(event):
+            event.Skip()
+
+    def _on_results_left_up(self, event: wx.MouseEvent) -> None:
+        if self._result_drag is None or not self._result_drag.handle_left_up(event):
+            event.Skip()
+
+    def _on_results_capture_lost(self, _event: wx.MouseCaptureLostEvent) -> None:
+        if self._result_drag is not None:
+            self._result_drag.cancel()
+
+    def _drop_zone_for_result(self, screen_point: wx.Point) -> str | None:
+        if self._drop_zone_at is None:
+            return None
+        return self._drop_zone_at(screen_point)
+
+    def _drop_result(self, name: str, screen_point: wx.Point) -> bool:
+        """Hand a released drag to the frame, which owns the zones and the lock.
+
+        Refused here as well while the panel is locked, like the panel's other
+        add routes; the frame's check is the one that has to hold.
+        """
+        if self.search_locked or self._on_drop_result is None:
+            return False
+        return self._on_drop_result(name, screen_point)
 
     def _on_result_activated(self, event: wx.ListEvent) -> None:
         idx = event.GetIndex()
@@ -77,6 +123,11 @@ class DeckBuilderPanelHandlersMixin(_Base):
             return
 
         key_code = event.GetKeyCode()
+
+        if key_code == wx.WXK_ESCAPE and self._result_drag is not None:
+            if self._result_drag.active or self._result_drag.primed:
+                self._result_drag.cancel()
+                return
 
         # "+" adds one copy to the active zone (legacy shortcut).
         if key_code == ord("+"):

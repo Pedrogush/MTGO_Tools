@@ -163,6 +163,9 @@ class _Panel(DeckBuilderPanelHandlersMixin):
         # Mirrors the panel's own state: every add route checks the record-mode
         # search lock (issue #1027), so the double has to carry it too.
         self.search_locked = False
+        # No drag-to-deck controller (issue #1033): the key handler's Escape
+        # branch reads it, and none of these tests has a drag in flight.
+        self._result_drag = None
         self.results_ctrl = _ResultsCtrl(first_selected)
         self.main_calls: list[tuple[str, int]] = []
         self.side_calls: list[tuple[str, int]] = []

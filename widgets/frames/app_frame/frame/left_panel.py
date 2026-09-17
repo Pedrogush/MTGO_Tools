@@ -110,6 +110,9 @@ class LeftPanelBuilderMixin(_Base):
             on_add_to_main=lambda name, count=1: self._add_search_card_to_zone("main", name, count),
             on_add_to_side=lambda name, count=1: self._add_search_card_to_zone("side", name, count),
             on_add_to_active_zone=self._add_search_card_to_active_zone,
+            # Drag a result onto the mainboard or sideboard (issue #1033).
+            on_drop_result=self._handle_search_drop,
+            drop_zone_at=self._zone_at_screen_point,
             on_prefetch_images=lambda names: self.controller.image_service.prefetch_card_images(
                 "search", names, priority=PRIORITY_RESEARCH_VISIBLE
             ),

@@ -107,6 +107,7 @@ class AutomationServer(
             "get_builder_top_item": self._handle_get_builder_top_item,
             "get_builder_list_metrics": self._handle_get_builder_list_metrics,
             "scroll_builder_results": self._handle_scroll_builder_results,
+            "drag_targets": self._handle_drag_targets,
             "open_widget": self._handle_open_widget,
             "menu": self._handle_menu,
             "refresh_collection": self._handle_refresh_collection,

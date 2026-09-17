@@ -13,6 +13,7 @@ from widgets.mode_switch import ModeSwitch
 
 if TYPE_CHECKING:
     from services.radar_service import RadarData
+    from widgets.panels.deck_builder_panel.result_drag import SearchResultDragController
 
 
 class DeckBuilderPanelProto(Protocol):
@@ -33,6 +34,9 @@ class DeckBuilderPanelProto(Protocol):
     _on_add_to_side: Callable[..., None] | None
     _on_add_to_active_zone: Callable[[str], None] | None
     _on_prefetch_images: Callable[[list[str]], None] | None
+    _on_drop_result: Callable[[str, wx.Point], bool] | None
+    _drop_zone_at: Callable[[wx.Point], str | None] | None
+    _result_drag: SearchResultDragController | None
 
     inputs: dict[str, wx.TextCtrl]
     mana_exact_cb: DarkCheckBox | None
@@ -70,3 +74,6 @@ class DeckBuilderPanelProto(Protocol):
     def get_selected_result(self) -> dict[str, Any] | None: ...
     def Enable(self, enable: bool = ...) -> bool: ...
     def _update_add_buttons(self) -> None: ...
+    def _deselect_result(self, _idx: int | None = ...) -> None: ...
+    def _drop_zone_for_result(self, screen_point: wx.Point) -> str | None: ...
+    def _drop_result(self, name: str, screen_point: wx.Point) -> bool: ...

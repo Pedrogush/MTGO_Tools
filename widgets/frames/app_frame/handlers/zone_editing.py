@@ -120,12 +120,13 @@ class ZoneEditingHandlers(_Base):
         One copy is moved per entry in ``names`` (the pile view repeats a name to
         move several copies). Routes through the normal zone-delta path so both
         zones' quantities — and the deck text / stats — update correctly (#781).
+        The drop target is resolved by ``_zone_at_screen_point``, the same test a
+        card dragged in from the search uses (#1033).
         """
         if source_zone not in {"main", "side"} or not names:
             return False
         dest_zone = "side" if source_zone == "main" else "main"
-        dest_table = self._get_table_for_zone(dest_zone)
-        if not dest_table or not dest_table.GetScreenRect().Contains(screen_point):
+        if self._zone_at_screen_point(screen_point) != dest_zone:
             return False
         for name in names:
             self._move_zone_copy(source_zone, dest_zone, name)

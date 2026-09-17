@@ -87,6 +87,67 @@ class BuilderMixin(_Base):
         results_ctrl.ScrollList(0, items * item_h)
         return {"scrolled": True, "items": items, "pixels": items * item_h}
 
+    def _handle_drag_targets(self, limit: int = 10) -> dict[str, Any]:
+        """Screen rectangles for a physical drag onto the deck zones (#1033).
+
+        A drag from the card search is only proven by a real mouse, and a real
+        mouse needs screen coordinates. Reports the visible search result rows,
+        the mainboard/sideboard panes (the rectangles a drop is hit-tested
+        against -- ``zone_at_centre`` says what the frame itself resolves at each
+        pane's centre), and the first ``limit`` grid-view cards of each zone for a
+        zone-to-zone drag (a scrolled view puts some of those outside its pane).
+        All rectangles are ``[x, y, width, height]`` in screen pixels.
+        """
+
+        def _rect(rect: wx.Rect) -> list[int]:
+            return [rect.x, rect.y, rect.width, rect.height]
+
+        result: dict[str, Any] = {"results": [], "zones": {}, "cards": {}}
+        panel = self.frame.builder_panel
+        results_ctrl = getattr(panel, "results_ctrl", None) if panel else None
+        if results_ctrl is not None and results_ctrl.IsShownOnScreen():
+            top = max(0, results_ctrl.GetTopItem())
+            end = min(results_ctrl.GetItemCount(), top + max(1, results_ctrl.GetCountPerPage()))
+            for index in range(top, min(end, top + limit)):
+                row = results_ctrl.GetItemRect(index)
+                origin = results_ctrl.ClientToScreen(row.GetTopLeft())
+                result["results"].append(
+                    {
+                        "index": index,
+                        "name": results_ctrl.GetItemText(index),
+                        "selected": results_ctrl.IsSelected(index),
+                        "rect": [origin.x, origin.y, row.width, row.height],
+                    }
+                )
+        for zone in ("main", "side"):
+            table = getattr(self.frame, f"{zone}_table", None)
+            if table is None:
+                continue
+            pane = table.GetScreenRect()
+            centre = wx.Point(pane.x + pane.width // 2, pane.y + pane.height // 2)
+            result["zones"][zone] = {
+                "rect": _rect(pane),
+                "shown": table.IsShownOnScreen(),
+                "view_mode": table.view_mode,
+                "zone_at_centre": self.frame._zone_at_screen_point(centre),
+            }
+            grid = getattr(table, "grid_view", None)
+            if table.view_mode != "grid" or grid is None or not grid.IsShownOnScreen():
+                continue
+            cards = []
+            for index, card in enumerate(grid._cards[:limit]):
+                logical = grid._card_rect(index)
+                client = grid.CalcScrolledPosition(logical.GetTopLeft())
+                origin = grid.ClientToScreen(client)
+                cards.append(
+                    {
+                        "name": card["name"],
+                        "rect": [origin.x, origin.y, logical.width, logical.height],
+                    }
+                )
+            result["cards"][zone] = cards
+        return result
+
     def _handle_get_builder_list_metrics(self) -> dict[str, Any]:
         """Report the results list's geometry: client width vs. total column width.
 

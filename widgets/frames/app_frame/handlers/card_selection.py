@@ -5,6 +5,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    import wx
+
     from widgets.frames.app_frame import AppFrame
     from widgets.frames.app_frame.protocol import AppFrameProto
     from widgets.panels.card_table_panel import CardTablePanel
@@ -76,6 +78,45 @@ class CardSelectionHandlers(_Base):
             return False
         self._handle_zone_delta(zone, name, count)
         return True
+
+    def _handle_search_drop(self: AppFrame, name: str, screen_point: wx.Point) -> bool:
+        """Add one copy of a search result dragged onto a deck zone (issue #1033).
+
+        The drop is resolved exactly the way a card dragged between the zones is
+        (``_zone_at_screen_point``), and the add goes through
+        ``_add_search_card_to_zone`` like every other route out of the search, so
+        a drop is refused while a sideboard guide is being recorded. Returns
+        whether a card was added: ``False`` for a release outside both zones or a
+        refused add.
+        """
+        zone = self._zone_at_screen_point(screen_point)
+        if zone is None:
+            return False
+        if not self._add_search_card_to_zone(zone, name):
+            return False
+        # The user just put a card in this zone, so it is the one later adds
+        # (double-click, '+') should target -- the same rule a zone-to-zone drop
+        # applies to its destination.
+        self._active_deck_zone = zone
+        self._focus_card_in_zone(zone, name)
+        return True
+
+    def _zone_at_screen_point(self: AppFrame, screen_point: wx.Point) -> str | None:
+        """The deck zone -- mainboard or sideboard -- whose pane is under ``screen_point``.
+
+        The drop-target test for every drag that lands on a zone: cards dragged
+        across from the other zone (#781) and search results dragged in (#1033).
+        A pane that is not on screen is never a target: its rectangle is still
+        where the notebook would put it, so with another workspace tab in front a
+        drop onto that tab would otherwise land in a zone the user cannot see.
+        """
+        for zone in ("main", "side"):
+            table = self._get_table_for_zone(zone)
+            if not table or not table.IsShownOnScreen():
+                continue
+            if table.GetScreenRect().Contains(screen_point):
+                return zone
+        return None
 
     def _show_deck_tables_tab(self: AppFrame) -> bool:
         """Bring the mainboard/sideboard page of the deck workspace to the front.
