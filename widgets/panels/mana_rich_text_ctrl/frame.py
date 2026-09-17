@@ -97,6 +97,7 @@ class _ManaRichTextInner(
         readonly: bool,
         mana_key_input: bool,
         ctrl_m_mana_mode: bool,
+        single_line: bool = False,
     ) -> None:
         style = wx.BORDER_NONE | wx.richtext.RE_MULTILINE
         if readonly:
@@ -114,6 +115,10 @@ class _ManaRichTextInner(
         self._held_keys: set[str] = set()
         self._chord_keys: set[str] = set()
         self._mana_mode_active = False
+        self._single_line = single_line
+        # Set while _rerender rebuilds the buffer, whose Clear/WriteText/
+        # WriteImage calls each fire wxEVT_TEXT over a half-built buffer.
+        self._rendering = False
 
         # theme_font(), not wx.SYS_DEFAULT_GUI_FONT: this control is created
         # under a parent that already carries the app's 10pt base, and asking
@@ -149,6 +154,21 @@ class _ManaRichTextInner(
         else:
             self.Bind(wx.EVT_KEY_DOWN, self._on_copy_key_down)
 
+        # Typing (outside mana mode), pasting, cutting and deleting a selection
+        # all edit the buffer natively, behind _plain_text's back; re-read it
+        # so GetValue() reports what is actually in the box (issue #1032).
+        self.Bind(wx.EVT_TEXT, self._on_buffer_changed)
+
+        if single_line:
+            # RE_MULTILINE is the only mode wxRichTextCtrl really supports, so a
+            # one-line field is a multiline buffer that refuses line breaks
+            # (see _is_line_break_key). Its vertical scrollbar is kept -- it is
+            # what scrolls a query too long for one line to the line the caret
+            # is on -- but always shown, so the text area never changes width,
+            # and the wrapper clips it out of sight (see ManaSymbolRichCtrl).
+            self.AlwaysShowScrollbars(False, True)
+            self.Bind(wx.EVT_CHAR, self._on_single_line_char)
+
         self.Bind(wx.EVT_SET_FOCUS, self._on_focus_gained)
         self.Bind(wx.EVT_KILL_FOCUS, self._on_focus_lost)
         self.Bind(wx.EVT_SIZE, self._on_size)
@@ -180,12 +200,23 @@ class ManaSymbolRichCtrl(
         self.SetBackgroundStyle(wx.BG_STYLE_PAINT)
         self.SetBackgroundColour(wx.Colour(*BORDER_STRONG))
 
+        # A one-line box puts its RichTextCtrl inside a borderless clip panel
+        # the size of the interior, and makes the control one scrollbar wider
+        # than that: the scrollbar hangs past the clip panel's right edge, so
+        # the up/down arrows it draws when a long query wraps are never on
+        # screen (issue #1032) while the scrolling they drive still works.
+        self._clip: wx.Panel | None = None
+        if not multiline:
+            self._clip = wx.Panel(self, style=wx.BORDER_NONE)
+            self._clip.SetBackgroundColour(wx.Colour(*DARK_ALT))
+
         self._inner = _ManaRichTextInner(
-            self,
+            self._clip or self,
             mana_icons,
             readonly=readonly,
             mana_key_input=mana_key_input,
             ctrl_m_mana_mode=ctrl_m_mana_mode,
+            single_line=not multiline,
         )
 
         if not multiline:
