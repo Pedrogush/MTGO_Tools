@@ -20,6 +20,7 @@ than the state at construction.
 
 from __future__ import annotations
 
+import os
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 
@@ -35,6 +36,11 @@ class Preference:
         the selected value and ``on_select`` receives the chosen value.
     ``toggle``
         A boolean. ``checked`` seeds it; ``on_toggle`` receives the new value.
+    ``path``
+        A folder, or nothing. ``value`` is the current folder (``""`` when
+        unset), ``placeholder`` is what to show when it is unset, and ``on_path``
+        receives the new folder -- ``""`` to clear it. ``browse_label`` and
+        ``clear_label`` caption the two buttons the dialog renders beside it.
 
     ``key`` is the stable, translation-independent name a script addresses the
     setting by -- ``label`` is translated and therefore cannot be one.
@@ -51,6 +57,15 @@ class Preference:
     on_select: Callable[[str], None] | None = None
     checked: bool = False
     on_toggle: Callable[[bool], None] | None = None
+    value: str = ""
+    placeholder: str = ""
+    on_path: Callable[[str], None] | None = None
+    browse_label: str = "Browse…"
+    clear_label: str = "Clear"
+
+
+#: Values a script can pass to clear a ``path`` preference.
+_CLEAR_PATH_VALUES = frozenset({"", "clear", "none", "unset"})
 
 
 @dataclass(frozen=True)
@@ -76,7 +91,9 @@ def apply_preference(groups: Sequence[PreferenceGroup], key: str, value: str) ->
     ``value`` for a ``choice`` matches either the option's value or its
     translated label -- a caller scripting the app knows the value, a caller
     reading ``describe`` sees the label. For a ``toggle`` it is one of
-    ``on/off/true/false/1/0``, or ``toggle`` to flip it.
+    ``on/off/true/false/1/0``, or ``toggle`` to flip it. For a ``path`` it is an
+    existing folder, or ``clear``/``none``/``""`` to unset it; a folder that does
+    not exist is refused rather than stored.
     """
     pref = find_preference(groups, key)
     if pref is None:
@@ -98,6 +115,14 @@ def apply_preference(groups: Sequence[PreferenceGroup], key: str, value: str) ->
         if lowered in ("off", "false", "0", "no"):
             pref.on_toggle(False)
             return True
+    if pref.kind == "path" and pref.on_path is not None:
+        stripped = value.strip()
+        if stripped.lower() in _CLEAR_PATH_VALUES:
+            pref.on_path("")
+            return True
+        if os.path.isdir(stripped):
+            pref.on_path(os.path.abspath(stripped))
+            return True
     return False
 
 
@@ -114,6 +139,8 @@ def describe(groups: Sequence[PreferenceGroup]) -> list[dict[str, object]]:
                 row["options"] = [label for _value, label in item.options]
                 row["values"] = [value for value, _label in item.options]
                 row["current"] = item.current
+            elif item.kind == "path":
+                row["value"] = item.value
             else:
                 row["checked"] = item.checked
             rows.append(row)

@@ -118,8 +118,26 @@ class DeckWorkflowService:
         format_name: str,
         deck: dict[str, Any] | None,
         deck_save_dir,
+        file_path=None,
+        archetype: str | None = None,
     ) -> tuple:
-        file_path = self.deck_repo.save_deck_to_file(deck_name, deck_content, deck_save_dir)
+        """Write the deck file and record it in the saved-decks database.
+
+        ``file_path`` is a path chosen in a Save As dialog and is written as-is;
+        without one the deck lands in ``deck_save_dir`` under a unique name.
+        ``archetype`` is the one the user assigned when saving; when it is not
+        given the record falls back to the source deck's own archetype name.
+        """
+        if file_path is not None:
+            file_path = self.deck_repo.write_deck_file(file_path, deck_content)
+        else:
+            file_path = self.deck_repo.save_deck_to_file(deck_name, deck_content, deck_save_dir)
+
+        if archetype is None:
+            archetype = deck.get("name") if deck else None
+        source = deck.get("source") if deck else None
+        if source not in {"mtggoldfish", "mtgo", "file"}:
+            source = "mtggoldfish" if deck else "manual"
 
         deck_id = None
         try:
@@ -127,10 +145,11 @@ class DeckWorkflowService:
                 deck_name=deck_name,
                 deck_content=deck_content,
                 format_type=format_name,
-                archetype=deck.get("name") if deck else None,
+                archetype=archetype or None,
                 player=deck.get("player") if deck else None,
-                source="mtggoldfish" if deck else "manual",
+                source=source,
                 metadata=deck or {},
+                file_path=file_path,
             )
         except Exception as exc:  # pragma: no cover - best effort
             logger.warning(f"Deck saved to file but not database: {exc}")

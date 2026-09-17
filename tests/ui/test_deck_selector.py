@@ -538,7 +538,7 @@ def test_on_save_clicked_empty_deck_warns_without_save(
 def test_on_save_clicked_round_trip(
     deck_selector_factory,
 ):
-    """A non-empty deck must be written via controller.save_deck under the entered name."""
+    """A non-empty deck is written via controller.save_deck under the chosen file's name."""
     frame = deck_selector_factory()
     try:
         frame.zone_cards = {
@@ -550,14 +550,23 @@ def test_on_save_clicked_round_trip(
 
         def fake_save_deck(**kwargs):
             save_calls.append(kwargs)
-            return ("C:/decks/saved_deck.txt", None)
+            return ("C:/decks/My Saved Deck.txt", None)
 
         frame.controller.save_deck = fake_save_deck  # type: ignore[assignment]
 
-        with patch("wx.TextEntryDialog") as dialog_cls, patch("wx.MessageBox"):
-            dialog = dialog_cls.return_value
+        details_path = "widgets.frames.app_frame.handlers.deck_content.SaveDeckDialog"
+        with (
+            patch(details_path) as details_cls,
+            patch("wx.FileDialog") as dialog_cls,
+            patch("wx.MessageBox"),
+        ):
+            details = details_cls.return_value
+            details.ShowModal.return_value = wx.ID_OK
+            details.selected_format.return_value = "Modern"
+            details.selected_archetype.return_value = ""
+            dialog = dialog_cls.return_value.__enter__.return_value
             dialog.ShowModal.return_value = wx.ID_OK
-            dialog.GetValue.return_value = "My Saved Deck"
+            dialog.GetPath.return_value = "C:/decks/My Saved Deck.txt"
             frame.on_save_clicked(None)
 
         assert len(save_calls) == 1

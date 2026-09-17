@@ -21,6 +21,7 @@ from controllers.app_controller import (
     reset_deck_selector_controller,
 )
 from repositories.card_repository import CardDataManager
+from repositories.deck_repository.database import DatabaseMixin
 from utils.constants import METAGAME_CACHE_TTL_SECONDS
 from widgets.frames.app_frame import AppFrame
 
@@ -112,6 +113,12 @@ def ui_environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     }
     for attr, value in replacements.items():
         monkeypatch.setattr(constants, attr, value, raising=False)
+
+    # The saved-decks SQLite database resolves its path from a module-level
+    # import of SAVED_DECKS_DB_FILE, which the constants patch above cannot reach,
+    # and Save/Load Deck now read and write it (#1034). Pin it per test.
+    saved_decks_db = cache / "saved_decks.db"
+    monkeypatch.setattr(DatabaseMixin, "_get_db_path", lambda _self: saved_decks_db)
 
     monkeypatch.setattr(card_images_schemas, "IMAGE_CACHE_DIR", image_cache, raising=False)
     monkeypatch.setattr(

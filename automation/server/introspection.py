@@ -310,6 +310,7 @@ class IntrospectionMixin(_Base):
             return {
                 "ok": True,
                 "menus": {title: describe(menu_bar.entries(title)) for title in menu_bar.titles()},
+                "actions": [title for title in menu_bar.titles() if menu_bar.is_action(title)],
             }
         parts = path.split("/") if isinstance(path, str) else list(path)
         if not parts:
@@ -317,6 +318,12 @@ class IntrospectionMixin(_Base):
         title, rest = parts[0], parts[1:]
         if title not in menu_bar.titles():
             return {"ok": False, "error": f"Menu not found: {title}"}
+        if not rest and menu_bar.is_action(title):
+            # An action title (``Save``/``Load``) has no items; the title is the
+            # item. Both open a modal dialog, so this does not return until it
+            # closes -- the same caveat as ``File/Preferences…``.
+            menu_bar.run_action(title)
+            return {"ok": True, "path": parts}
         if not rest:
             return {"ok": False, "error": f"No item given under {title!r}"}
         if invoke_entry(menu_bar.entries(title), rest):
