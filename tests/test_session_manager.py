@@ -522,3 +522,44 @@ def test_persist_config_swallows_oserror(tmp_path):
     # Should not raise even though the config file cannot be written.
     manager._persist_config()
     assert not config_file.exists()
+
+
+def test_default_deck_save_path_is_unset_by_default_and_round_trips(tmp_path):
+    settings_file = tmp_path / "settings.json"
+
+    def make():
+        return DeckSelectorSessionManager(
+            StubDeckRepo(),
+            settings_file=settings_file,
+            config_file=tmp_path / "config.json",
+            default_deck_dir=tmp_path / "decks",
+        )
+
+    manager = make()
+    assert manager.get_default_deck_save_path() == ""
+
+    manager.update_default_deck_save_path("  D:\\Decks  ")
+    manager.save(
+        current_format="Modern",
+        left_mode="research",
+        deck_data_source="both",
+        zone_cards={"main": [], "side": [], "out": []},
+    )
+    reread = make()
+    assert reread.get_default_deck_save_path() == "D:\\Decks"
+
+    reread.update_default_deck_save_path("")
+    assert reread.get_default_deck_save_path() == ""
+    assert "default_deck_save_path" not in reread.settings
+
+
+def test_default_deck_save_path_ignores_a_non_string(tmp_path):
+    settings_file = tmp_path / "settings.json"
+    settings_file.write_text(json.dumps({"default_deck_save_path": 42}), encoding="utf-8")
+    manager = DeckSelectorSessionManager(
+        StubDeckRepo(),
+        settings_file=settings_file,
+        config_file=tmp_path / "config.json",
+        default_deck_dir=tmp_path / "decks",
+    )
+    assert manager.get_default_deck_save_path() == ""

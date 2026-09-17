@@ -9,6 +9,7 @@ blocks on an external server's connection timeout.
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 from datetime import datetime
 from pathlib import Path
@@ -64,7 +65,19 @@ class DatabaseMixin(_Base):
             """)
         conn.execute("CREATE INDEX IF NOT EXISTS idx_decks_format ON decks(format)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_decks_archetype ON decks(archetype)")
+        # Added for #1034: the file a row was saved to, so loading that file back
+        # can find the format and archetype recorded with it. Databases created
+        # before the column existed gain it here, in place.
+        columns = {row[1] for row in conn.execute("PRAGMA table_info(decks)")}
+        if "file_path" not in columns:
+            conn.execute("ALTER TABLE decks ADD COLUMN file_path TEXT")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_decks_file_path ON decks(file_path)")
         conn.commit()
+
+    @staticmethod
+    def _normalize_file_path(file_path: str | Path) -> str:
+        """One spelling per file: absolute, and case-folded the way Windows compares."""
+        return os.path.normcase(os.path.abspath(os.fspath(file_path)))
 
     @staticmethod
     def _row_to_deck(row: sqlite3.Row) -> dict:
@@ -85,30 +98,94 @@ class DatabaseMixin(_Base):
         player: str | None = None,
         source: str = "manual",
         metadata: dict | None = None,
+        file_path: str | Path | None = None,
     ):
+        """Insert a saved deck, or refresh the row already recorded for ``file_path``.
+
+        A deck re-saved over the same file replaces that file's record instead of
+        adding a second one, so one file maps to exactly one format and archetype.
+        """
+        normalized_path = self._normalize_file_path(file_path) if file_path else None
+        now = datetime.now().isoformat()
         with self._connect() as conn:
-            cursor = conn.execute(
-                """
-                INSERT INTO decks
-                    (name, content, format, archetype, player, source, date_saved, metadata)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    deck_name,
-                    deck_content,
-                    format_type,
-                    archetype,
-                    player,
-                    source,
-                    datetime.now().isoformat(),
-                    json.dumps(metadata or {}),
-                ),
-            )
+            existing = None
+            if normalized_path is not None:
+                existing = conn.execute(
+                    "SELECT id FROM decks WHERE file_path = ? ORDER BY id DESC LIMIT 1",
+                    (normalized_path,),
+                ).fetchone()
+            if existing is not None:
+                deck_id = existing["id"]
+                conn.execute(
+                    """
+                    UPDATE decks
+                    SET name = ?, content = ?, format = ?, archetype = ?, player = ?,
+                        source = ?, date_modified = ?, metadata = ?
+                    WHERE id = ?
+                    """,
+                    (
+                        deck_name,
+                        deck_content,
+                        format_type,
+                        archetype,
+                        player,
+                        source,
+                        now,
+                        json.dumps(metadata or {}),
+                        deck_id,
+                    ),
+                )
+            else:
+                cursor = conn.execute(
+                    """
+                    INSERT INTO decks
+                        (name, content, format, archetype, player, source, date_saved,
+                         metadata, file_path)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        deck_name,
+                        deck_content,
+                        format_type,
+                        archetype,
+                        player,
+                        source,
+                        now,
+                        json.dumps(metadata or {}),
+                        normalized_path,
+                    ),
+                )
+                deck_id = cursor.lastrowid
             conn.commit()
-            deck_id = cursor.lastrowid
 
         logger.info(f"Saved deck '{deck_name}' to database with ID: {deck_id}")
         return deck_id
+
+    def find_saved_deck(
+        self,
+        file_path: str | Path | None = None,
+        deck_content: str | None = None,
+    ) -> dict | None:
+        """The saved-deck record for a deck file being loaded, or ``None``.
+
+        Matched by the file's path first. A file moved or copied since it was
+        saved no longer matches by path, so the deck text is the fallback: the
+        most recent record holding the same list.
+        """
+        with self._connect() as conn:
+            row = None
+            if file_path:
+                row = conn.execute(
+                    "SELECT * FROM decks WHERE file_path = ? ORDER BY id DESC LIMIT 1",
+                    (self._normalize_file_path(file_path),),
+                ).fetchone()
+            if row is None and deck_content and deck_content.strip():
+                text = deck_content.replace("\r\n", "\n")
+                row = conn.execute(
+                    "SELECT * FROM decks WHERE content IN (?, ?) ORDER BY id DESC LIMIT 1",
+                    (text, text.strip()),
+                ).fetchone()
+        return self._row_to_deck(row) if row is not None else None
 
     def get_decks(
         self,

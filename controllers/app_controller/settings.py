@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from loguru import logger
 
 from utils.i18n import normalize_locale, set_current_locale
+from utils.known_folders import documents_dir
 
 if TYPE_CHECKING:
     from controllers.app_controller.protocol import AppControllerProto
@@ -95,6 +97,32 @@ class SettingsMixin(_Base):
 
     def set_update_check_enabled(self, enabled: bool) -> None:
         self.session_manager.update_update_check_enabled(enabled)
+
+    def get_default_deck_save_path(self) -> str:
+        """The folder Save Deck / Load Deck open in, or ``""`` when not set (#1034)."""
+        return self.session_manager.get_default_deck_save_path()
+
+    def set_default_deck_save_path(self, path: str | None) -> None:
+        self.session_manager.update_default_deck_save_path(path)
+
+    def resolve_deck_dialog_dir(self) -> Path:
+        """Where the deck Save and Load dialogs should open.
+
+        The configured default deck folder when it is set and still exists;
+        otherwise the user's Documents folder, which is where Windows' own
+        dialogs send an application with no folder of its own. Passing no folder
+        to ``wx.FileDialog`` is *not* that: measured, wxMSW then opens in the
+        process's current directory whenever it holds a matching file -- the
+        source checkout, or the install folder -- and only falls back to
+        Documents otherwise.
+        """
+        configured = self.get_default_deck_save_path()
+        if configured:
+            path = Path(configured).expanduser()
+            if path.is_dir():
+                return path
+            logger.info(f"Default deck folder {configured!r} is missing; using Documents")
+        return documents_dir()
 
     def get_current_format(self) -> str:
         return self.current_format

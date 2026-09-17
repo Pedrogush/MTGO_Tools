@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -10,8 +11,10 @@ import wx
 from loguru import logger
 
 from repositories.scrapers.mtggoldfish_visual import DeckUnavailableError
+from utils.constants import FORMAT_OPTIONS
 from utils.deck import sanitize_filename
 from utils.perf import perf_phase
+from widgets.dialogs.save_deck_dialog import SaveDeckDialog
 from widgets.frames.app_frame.handlers.deck_formatting import format_deck_name
 
 if TYPE_CHECKING:
@@ -21,6 +24,14 @@ if TYPE_CHECKING:
     _Base = AppFrameProto
 else:
     _Base = object
+
+
+def _same_file(left: object, right: object) -> bool:
+    if not left or not right:
+        return False
+    return os.path.normcase(os.path.abspath(str(left))) == os.path.normcase(
+        os.path.abspath(str(right))
+    )
 
 
 class DeckContentHandlers(_Base):
@@ -57,14 +68,13 @@ class DeckContentHandlers(_Base):
         self._start_daily_average_build()
 
     def on_load_deck_clicked(self: AppFrame) -> None:
-        save_dir = self.controller.deck_save_dir
-        default_dir = str(save_dir) if save_dir.exists() else str(Path.home())
-        logger.info("Load Deck button clicked")
+        default_dir = self.controller.resolve_deck_dialog_dir()
+        logger.info(f"Load Deck clicked (opening in {default_dir})")
         with wx.FileDialog(
             self,
-            "Load Deck",
-            defaultDir=default_dir,
-            wildcard="Text files (*.txt)|*.txt|All files (*.*)|*.*",
+            self._t("deck_actions.load_deck"),
+            defaultDir=str(default_dir),
+            wildcard=self._t("deck_save.file_filter"),
             style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST,
         ) as dlg:
             if dlg.ShowModal() != wx.ID_OK:
@@ -74,14 +84,13 @@ class DeckContentHandlers(_Base):
 
         file_ref = Path(file_path)
         deck_key = sanitize_filename(file_ref.stem, fallback="manual").lower()
-        self.controller.deck_repo.set_current_deck(
-            {
-                "href": deck_key,
-                "name": file_ref.stem,
-                "path": str(file_ref),
-                "source": "file",
-            }
-        )
+        deck_record: dict[str, Any] = {
+            "href": deck_key,
+            "name": file_ref.stem,
+            "path": str(file_ref),
+            "source": "file",
+        }
+        self.controller.deck_repo.set_current_deck(deck_record)
         logger.info(f"Load Deck selected: {file_path} (deck_key={deck_key})")
 
         try:
@@ -91,7 +100,21 @@ class DeckContentHandlers(_Base):
             wx.MessageBox(f"Failed to read deck file:\n{exc}", "Load Deck", wx.OK | wx.ICON_ERROR)
             return
 
+        # The format and archetype chosen when this file was saved (#1034) live in
+        # the saved-decks database, keyed by the file's path.
+        saved = self.controller.find_saved_deck(file_ref, deck_text)
+        for field in ("format", "archetype"):
+            if saved and saved.get(field):
+                deck_record[field] = saved[field]
+
         self._on_deck_content_ready(deck_text, source="file")
+        if deck_record.get("archetype"):
+            self._set_status(
+                "app.status.deck_loaded_with_archetype",
+                name=file_ref.stem,
+                archetype=deck_record["archetype"],
+                format=deck_record.get("format") or self.current_format,
+            )
 
     def on_copy_clicked(self: AppFrame, _event: wx.CommandEvent) -> None:
         deck_content = self.controller.build_deck_text(self.zone_cards).strip()
@@ -107,38 +130,134 @@ class DeckContentHandlers(_Base):
         else:  # pragma: no cover
             wx.MessageBox("Could not access clipboard.", "Copy Deck", wx.OK | wx.ICON_WARNING)
 
-    def on_save_clicked(self: AppFrame, _event: wx.CommandEvent) -> None:
+    def on_save_clicked(self: AppFrame, _event: wx.CommandEvent | None = None) -> None:
+        """Save Deck: format and archetype first, then Windows' Save As (#1034)."""
         deck_content = self.controller.build_deck_text(self.zone_cards).strip()
         if not deck_content:
             wx.MessageBox("Load a deck first.", "Save Deck", wx.OK | wx.ICON_INFORMATION)
             return
-        default_name = "saved_deck"
         current_deck = self.controller.deck_repo.get_current_deck()
-        if current_deck:
-            default_name = format_deck_name(current_deck).replace(" | ", "_")
-        dlg = wx.TextEntryDialog(self, "Deck name:", "Save Deck", default_name)
-        if dlg.ShowModal() != wx.ID_OK:
-            dlg.Destroy()
-            return
-        deck_name = dlg.GetValue().strip() or default_name
-        dlg.Destroy()
+
+        details = SaveDeckDialog(
+            self,
+            formats=FORMAT_OPTIONS,
+            initial_format=self._initial_save_format(deck_content, current_deck),
+            initial_archetype=self._initial_save_archetype(current_deck),
+            load_archetypes=self.controller.load_archetype_names,
+            t=self._t,
+        )
+        try:
+            if details.ShowModal() != wx.ID_OK:
+                logger.info("Save Deck cancelled (details)")
+                return
+            format_name = details.selected_format() or self.current_format
+            archetype = details.selected_archetype()
+        finally:
+            details.Destroy()
+
+        default_dir = self.controller.resolve_deck_dialog_dir()
+        logger.info(f"Save Deck: opening Save As in {default_dir}")
+        with wx.FileDialog(
+            self,
+            self._t("deck_actions.save_deck"),
+            defaultDir=str(default_dir),
+            defaultFile=f"{self._default_save_file_name(current_deck)}.txt",
+            wildcard=self._t("deck_save.file_filter"),
+            style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT,
+        ) as dlg:
+            if dlg.ShowModal() != wx.ID_OK:
+                logger.info("Save Deck cancelled (file)")
+                return
+            file_path = Path(dlg.GetPath())
+        if not file_path.suffix:
+            file_path = file_path.with_suffix(".txt")
 
         try:
-            file_path, deck_id = self.controller.save_deck(
-                deck_name=deck_name,
+            saved_path, deck_id = self.controller.save_deck(
+                deck_name=file_path.stem,
                 deck_content=deck_content,
-                format_name=self.current_format,
+                format_name=format_name,
                 deck=current_deck,
+                file_path=file_path,
+                archetype=archetype,
             )
         except OSError as exc:  # pragma: no cover
             wx.MessageBox(f"Failed to write deck file:\n{exc}", "Save Deck", wx.OK | wx.ICON_ERROR)
             return
 
-        message = f"Deck saved to {file_path}"
+        if (
+            current_deck
+            and current_deck.get("source") == "file"
+            and _same_file(current_deck.get("path"), saved_path)
+        ):
+            # Saved back over the file it was loaded from: keep the in-memory
+            # record in step, so saving it again offers what was just chosen
+            # rather than what it was loaded with.
+            current_deck["format"] = format_name
+            if archetype:
+                current_deck["archetype"] = archetype
+            else:
+                current_deck.pop("archetype", None)
+
+        message = f"Deck saved to {saved_path}"
         if deck_id:
             message += f"\nDatabase ID: {deck_id}"
         wx.MessageBox(message, "Deck Saved", wx.OK | wx.ICON_INFORMATION)
         self._set_status("app.status.deck_saved")
+
+    def _initial_save_format(
+        self: AppFrame, deck_text: str, current_deck: dict[str, Any] | None
+    ) -> str:
+        """The format the save dialog opens on.
+
+        What is *known* beats what is guessed: a file saved with a format keeps
+        it, and a deck picked from the research list belongs to the format that
+        list was for. Anything else -- a builder list, an average, a pasted or
+        unrecorded file -- is detected from its cards, falling back to the
+        research panel's format when detection cannot decide.
+        """
+        deck = current_deck or {}
+        if deck.get("format"):
+            return str(deck["format"])
+        if deck.get("source") in {"mtggoldfish", "mtgo"} or deck.get("number"):
+            return self.current_format
+        try:
+            detected = self.controller.detect_deck_format(deck_text)
+        except Exception:  # noqa: BLE001 - a guess must never block a save
+            logger.exception("Format detection failed; using the current format")
+            detected = ""
+        return detected or self.current_format
+
+    def _initial_save_archetype(self: AppFrame, current_deck: dict[str, Any] | None) -> str:
+        """The archetype the save dialog preselects, or ``""``.
+
+        A loaded file carries the archetype it was saved with. A research deck
+        carries its archetype's *slug* in ``name``; that is resolved against the
+        archetype list to the display name the dropdown shows, and dropped when
+        it does not resolve rather than offered raw.
+        """
+        deck = current_deck or {}
+        if deck.get("archetype"):
+            return str(deck["archetype"])
+        if deck.get("source") == "file":
+            return ""
+        key = str(deck.get("name") or "").strip()
+        if not key:
+            return ""
+        for entry in self.controller.archetypes:
+            if key in (entry.get("href"), entry.get("name")):
+                return str(entry.get("name") or "")
+        return ""
+
+    @staticmethod
+    def _default_save_file_name(current_deck: dict[str, Any] | None) -> str:
+        if not current_deck:
+            return "saved_deck"
+        if current_deck.get("source") == "file" and current_deck.get("name"):
+            return sanitize_filename(str(current_deck["name"]), fallback="saved_deck")
+        return sanitize_filename(
+            format_deck_name(current_deck).replace(" | ", "_"), fallback="saved_deck"
+        )
 
     def _on_deck_download_error(self: AppFrame, error: Exception) -> None:
         self.copy_button.Disable()

@@ -52,7 +52,10 @@ class AppMenuBar(wx.Panel):
             # kind="flat" until pointed at, then "ghost" -- a menu title is not a
             # chip sitting on the window, it is a word that lights up.
             stylize_button(button, kind="flat", surface=_SURFACE)
-            button.Bind(wx.EVT_BUTTON, lambda _evt, t=spec.title: self.open_menu(t))
+            # Action titles (Save, Load) are built by this same loop, not by a
+            # widget of their own: same button, same styling, same hover. Only
+            # what a click does differs -- see activate().
+            button.Bind(wx.EVT_BUTTON, lambda _evt, t=spec.title: self.activate(t))
             button.Bind(wx.EVT_ENTER_WINDOW, lambda _evt, b=button: self._highlight(b, True))
             button.Bind(wx.EVT_LEAVE_WINDOW, lambda _evt, b=button: self._highlight(b, False))
             row.Add(button, 0, wx.RIGHT, SPACE_XS)
@@ -85,11 +88,49 @@ class AppMenuBar(wx.Panel):
         spec = self._menus.get(title)
         return spec.build() if spec else ()
 
+    def is_action(self, title: str) -> bool:
+        """Whether ``title`` is an action title (clicked, not opened)."""
+        spec = self._menus.get(title)
+        return spec is not None and spec.is_action
+
+    def activate(self, title: str) -> bool:
+        """What a click on a title does: open its menu, or run its action."""
+        spec = self._menus.get(title)
+        if spec is None:
+            return False
+        if spec.is_action:
+            return self.run_action(title)
+        return self.open_menu(title)
+
+    def run_action(self, title: str) -> bool:
+        """Run an action title's handler.
+
+        Save and Load open modal dialogs, so this blocks the same way
+        ``PopupMenu`` does, and the same lifetime rule applies afterwards: the
+        button is re-resolved rather than reused. The highlight then follows the
+        pointer instead of being dropped unconditionally -- after a popup the
+        pointer is wherever the chosen item was, but after a cancelled dialog it
+        is often still resting on the title that was clicked.
+        """
+        spec = self._menus.get(title)
+        if spec is None or spec.on_activate is None:
+            return False
+        spec.on_activate()
+        if not self:
+            return True
+        button = self._button_for(title)
+        if button is not None:
+            hovered = button.GetScreenRect().Contains(wx.GetMousePosition())
+            self._highlight(button, hovered)
+        return True
+
     def open_menu(self, title: str) -> bool:
         """Pop the named menu up under its title button."""
         spec = self._menus.get(title)
         if spec is None:
             return False
+        if spec.is_action:
+            return self.run_action(title)
         button = self._button_for(title)
         menu = build_menu(spec.build())
         anchor = button or self

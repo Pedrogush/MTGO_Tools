@@ -369,3 +369,47 @@ def test_build_deck_text_uses_zone_cards_when_needed(tmp_path):
     text = service.build_deck_text({"main": [{"name": "Card", "qty": 4}]})
 
     assert text == "4 Card"
+
+
+def test_save_deck_to_a_chosen_path_records_the_assigned_archetype(tmp_path):
+    """#1034: Save As picks the file; the archetype comes from the save dialog."""
+    repo = make_repo(tmp_path)
+    service = build_service(deck_repo=repo)
+    target = tmp_path / "chosen" / "Izzet.txt"
+    loaded_file = {"name": "Izzet", "path": str(target), "source": "file"}
+
+    file_path, deck_id = service.save_deck(
+        deck_name="Izzet",
+        deck_content="4 Murktide Regent",
+        format_name="Modern",
+        deck=loaded_file,
+        deck_save_dir=tmp_path / "unused",
+        file_path=target,
+        archetype="Izzet Murktide",
+    )
+
+    assert file_path == target
+    assert target.read_text(encoding="utf-8") == "4 Murktide Regent"
+    assert not (tmp_path / "unused").exists()
+    stored = repo.load_from_db(deck_id)
+    assert stored["archetype"] == "Izzet Murktide"
+    assert stored["source"] == "file"
+    assert repo.find_saved_deck(file_path=target)["id"] == deck_id
+
+
+def test_save_deck_with_a_blank_archetype_stores_none(tmp_path):
+    repo = make_repo(tmp_path)
+    service = build_service(deck_repo=repo)
+
+    _file_path, deck_id = service.save_deck(
+        deck_name="Brew",
+        deck_content="4 Island",
+        format_name="Modern",
+        deck={"name": "some-archetype-slug"},
+        deck_save_dir=tmp_path,
+        file_path=tmp_path / "Brew.txt",
+        archetype="",
+    )
+
+    # An explicit blank is the user's choice; it does not fall back to the slug.
+    assert repo.load_from_db(deck_id)["archetype"] is None

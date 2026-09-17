@@ -95,6 +95,10 @@ python -m automation.cli menu "Help/Show Tutorial"  # run a plain item
 automation socket being serviced for as long as the menu is open (§5.5 of the UI
 review). `list-widgets` reports the bar under `menu_bar`, with its titles.
 
+`Save` and `Load` on the bar are action titles, not menus: `menu Save` runs the
+action itself, and `--json menu` lists them under `actions`. Both open modal
+dialogs, so the same warning as below applies to them.
+
 **Do not `menu "File/Preferences…"` in a script.** It is the one entry that opens
 a modal dialog, and `ShowModal` starves this socket exactly the way `PopupMenu`
 does — the harness will appear dead until someone presses Escape.
@@ -113,8 +117,10 @@ python -m automation.cli prefs check_for_updates off     # on / off / toggle
 python -m automation.cli prefs average_hours 48
 ```
 
-Keys are `deck_data_source`, `language`, `average_method`, `average_hours` and
-`check_for_updates`. They are stable; the labels beside them are translated.
+Keys are `deck_data_source`, `default_deck_save_path`, `language`,
+`average_method`, `average_hours` and `check_for_updates`. They are stable; the
+labels beside them are translated. `default_deck_save_path` takes an existing
+folder, or `clear` to unset it (the deck dialogs then open in Documents).
 
 ### Inspecting the card inspector's art pager
 

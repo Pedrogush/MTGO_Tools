@@ -45,7 +45,7 @@ class AppFrameHandlersMixin(_Base):
 
     # ------------------------------------------------------------------ Menu bar ------------------------------------------------------------
     def menu_specs(self) -> list[MenuSpec]:
-        """The main window's three menus, in bar order.
+        """The main window's three menus and two action titles, in bar order.
 
         Phase 3b replaced six toolbar buttons and one unlabeled gear popup with
         this bar. The gear held twelve items mixing three taxonomies — bulk data
@@ -76,10 +76,28 @@ class AppFrameHandlersMixin(_Base):
             MenuSpec(self._t("menu.file"), self._file_menu_entries),
             MenuSpec(self._t("menu.tools"), self._tools_menu_entries),
             MenuSpec(self._t("menu.help"), self._help_menu_entries),
+            # #1034: two action titles after the menus -- the bar reads
+            # "File Tools Help Save Load". They are the same Save Deck / Load Deck
+            # as the File menu's first two items and the research panel's
+            # buttons, one click away from anywhere in the app, including the
+            # builder, where those buttons are not on screen.
+            MenuSpec(self._t("menu.save"), on_activate=lambda: self.on_save_clicked(None)),
+            MenuSpec(self._t("menu.load"), on_activate=self.on_load_deck_clicked),
         ]
 
     def _file_menu_entries(self) -> list[MenuEntry]:
         return [
+            MenuEntry(
+                label=self._t("menu.load_deck"),
+                help=self._t("deck_actions.tooltip.load_deck"),
+                on_activate=self.on_load_deck_clicked,
+            ),
+            MenuEntry(
+                label=self._t("menu.save_deck"),
+                help=self._t("deck_actions.tooltip.save_deck"),
+                on_activate=lambda: self.on_save_clicked(None),
+            ),
+            separator(),
             MenuEntry(
                 label=self._t("toolbar.load_collection"),
                 on_activate=lambda: self.controller.refresh_collection_from_bridge(force=True),
@@ -134,7 +152,7 @@ class AppFrameHandlersMixin(_Base):
         ]
 
     def preference_groups(self) -> list[PreferenceGroup]:
-        """The five settings, grouped by what they affect.
+        """The six settings, grouped by what they affect.
 
         Rebuilt on every open so the values are current, and addressable by the
         automation harness without the dialog existing — see
@@ -160,6 +178,17 @@ class AppFrameHandlersMixin(_Base):
                         ),
                         current=self.controller.get_deck_data_source(),
                         on_select=self._apply_deck_source,
+                    ),
+                    Preference(
+                        key="default_deck_save_path",
+                        kind="path",
+                        label=self._t("app.prefs.default_deck_save_path"),
+                        help=self._t("app.prefs.help.default_deck_save_path"),
+                        value=self.controller.get_default_deck_save_path(),
+                        placeholder=self._t("app.prefs.default_deck_save_path.not_set"),
+                        browse_label=self._t("app.prefs.browse"),
+                        clear_label=self._t("app.prefs.clear"),
+                        on_path=self._apply_default_deck_save_path,
                     ),
                 ),
             ),
@@ -245,6 +274,10 @@ class AppFrameHandlersMixin(_Base):
 
     def _apply_deck_source(self, source: str) -> None:
         self.controller.set_deck_data_source(source)
+        self._schedule_settings_save()
+
+    def _apply_default_deck_save_path(self, path: str) -> None:
+        self.controller.set_default_deck_save_path(path)
         self._schedule_settings_save()
 
     def _apply_language(self, locale: str) -> None:
