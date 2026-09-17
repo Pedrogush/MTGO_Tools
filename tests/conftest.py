@@ -51,13 +51,19 @@ def redirect_real_data_for_session(real_data_untouched, tmp_path_factory):
     roots = {key: root / key for key in REAL_DATA_DIRS}
     for directory in roots.values():
         directory.mkdir(parents=True, exist_ok=True)
-    with pytest.MonkeyPatch.context() as session_patch:
-        redirect_bound_paths(session_patch, roots)
-        session_data_dirs.update(roots)
-        try:
-            yield
-        finally:
-            session_data_dirs.clear()
+    session_patch = pytest.MonkeyPatch()
+    redirect_bound_paths(session_patch, roots)
+    session_data_dirs.update(roots)
+    yield
+    # Deliberately never undone. A worker a test left running goes on writing
+    # until the interpreter stops -- a deck download landing in the deck-text
+    # cache, the radar worker in its database -- and that is *after* every
+    # fixture has finished. Undoing this redirect at the end of the session put
+    # the real paths back in time for exactly those writes: a run of
+    # tests/ui/test_deck_selector.py alone created cache/deck_cache.db in an
+    # otherwise untouched data dir. Nothing runs after this point that wants
+    # the real paths back; the guard's snapshot reads REAL_DATA_DIRS, which
+    # this never patched.
 
 
 @pytest.fixture(autouse=True)

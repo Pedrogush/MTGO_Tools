@@ -109,6 +109,40 @@ def _synchronous_call_after(monkeypatch):
     monkeypatch.setattr(wx, "CallAfter", lambda func, *a, **k: func(*a, **k))
 ```
 
+### One window per module (`shared_frame`)
+
+Building an `AppFrame` costs about 1.2s, which was most of the UI suite's run
+time when every test built its own. `tests/ui/conftest.py` offers one window per
+**module** instead:
+
+- **`shared_frame`** — the module's `AppFrame`, reset before each test by
+  `SharedAppFrame.reset()`: the test doubles installed on the frame or the
+  controller are removed, the load flags and load-dedup memory go back to their
+  construction values, the research format and its filters and the builder's
+  filters are cleared, and the loaded deck (current deck, its text, the deck
+  list, the zones) is emptied. Use it for anything that needs *a* main window.
+- **`deck_selector_factory`** — a newly built window. Use it when the test is
+  about construction, startup, session restore, persistence across windows, or
+  anything that reads a file whose path came from this test's `ui_environment`
+  (the shared window's paths are the module's). `test_notes_persist_across_frames`
+  and `test_the_default_folder_option_persists_and_clears` are the shape of it.
+
+Scope is the module, never the session, so a window a test leaves in a state the
+reset does not cover can only affect its own file. If your test needs a
+precondition the reset does not give it, set it in the test (or in the file's own
+fixture) — that is ordinary test setup. **Check order independence** when you
+add to a shared-window file: run its node ids in a different order and they must
+still pass.
+
+### Waiting for the UI
+
+Never pump the event queue a fixed number of times, and never `sleep` a fixed
+slice of time: both are guesses about how much a machine gets done per pass, and
+both are how `test_match_history_filters` became flaky. Wait on the condition
+with `wait_until(wx_app, lambda: ...)` (`tests/ui/conftest.py`), which pumps
+until the condition holds and fails with a message if it never does. A generous
+timeout costs nothing when the condition is met.
+
 ## 5. Running the tests (WSL vs Windows) — CI is the source of truth
 
 `wx` is **not importable in the WSL dev environment**. Off-Windows runs therefore
@@ -119,6 +153,13 @@ pass. Validate on Windows before trusting a wx-touching change:
 # from WSL, against a checkout on the C: drive:
 cmd.exe /c "cd /d C:\Claude\MTGO_Tools && .venv\Scripts\python.exe -m pytest -q"
 ```
+
+CI runs the suite as two jobs: the non-UI tests across the runner's cores with
+`pytest-xdist`, and the UI tests serially in a job of their own. Locally,
+`python scripts/run_tests_fast.py` does the same split in one command; plain
+`pytest` still runs everything serially. A non-UI test therefore has to be
+safe to run beside any other — no fixed ports, no shared temp-file names outside
+`tmp_path`, no reliance on another test having run first.
 
 Tests, the Windows installer build, .NET build, type checking, and security scans
 are validated by **CI**, which is the authoritative gate for anything that can't run
