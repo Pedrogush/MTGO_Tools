@@ -338,7 +338,26 @@ def test_watch_worker_flushes_trailing_object_on_exit(tmp_path: Path) -> None:
 
 # --- BridgeWatcher lifecycle -------------------------------------------------
 
+#: How long ``stop()`` waits for the worker to exit on its own before it
+#: terminates it. Production waits 5s; these stubs stay silent for 30s, so the
+#: worker is always parked in ``readline`` and the wait always runs out -- the
+#: test would spend the whole grace period idle. The terminate path is the same
+#: at any length, so it is shortened here rather than sat through.
+_STOP_GRACE_SECONDS = 0.5
 
+
+@pytest.fixture
+def short_stop_grace(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Make ``BridgeWatcher.stop()``'s default grace period short (see above)."""
+    original_stop = bridge_watch.BridgeWatcher.stop
+
+    def stop(self: bridge_watch.BridgeWatcher, timeout: float | None = _STOP_GRACE_SECONDS):
+        return original_stop(self, timeout)
+
+    monkeypatch.setattr(bridge_watch.BridgeWatcher, "stop", stop)
+
+
+@pytest.mark.usefixtures("short_stop_grace")
 def test_bridge_watcher_streams_then_stops(tmp_path: Path) -> None:
     bridge = _write_executable_bridge(
         tmp_path,
@@ -360,6 +379,7 @@ def test_bridge_watcher_streams_then_stops(tmp_path: Path) -> None:
     assert not process.is_alive()
 
 
+@pytest.mark.usefixtures("short_stop_grace")
 def test_bridge_watcher_latest_nonblocking_empty_returns_none(tmp_path: Path) -> None:
     bridge = _write_executable_bridge(
         tmp_path,
@@ -373,6 +393,7 @@ def test_bridge_watcher_latest_nonblocking_empty_returns_none(tmp_path: Path) ->
         watcher.stop()
 
 
+@pytest.mark.usefixtures("short_stop_grace")
 def test_start_watch_helper_starts_streaming_watcher(tmp_path: Path) -> None:
     """``start_watch`` resolves the path, builds, and starts a live watcher."""
     bridge = _write_executable_bridge(

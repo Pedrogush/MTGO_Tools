@@ -43,10 +43,16 @@ import utils.constants as constants  # noqa: E402
 
 # Recorded when the root conftest imports this module, before any fixture patches
 # them: the user's real data dirs, and every path constant that points into them.
+#: ``logs`` and ``data`` are here because ``ensure_base_dirs()`` -- which every
+#: ``AppController`` runs -- creates them next to config/ and cache/. In a real
+#: checkout they already exist, so nothing noticed; under a fresh
+#: ``MTGO_TOOLS_BASE_DATA_DIR`` (what CI sees) the suite created both.
 REAL_DATA_DIRS: dict[str, Path] = {
     "config": Path(constants.CONFIG_DIR),
     "cache": Path(constants.CACHE_DIR),
     "decks": Path(constants.DECKS_DIR),
+    "logs": Path(constants.LOGS_DIR),
+    "data": Path(constants.CARD_DATA_DIR),
 }
 _REAL_PATH_CONSTANTS = {
     name: value for name in dir(constants) if isinstance(value := getattr(constants, name), Path)
@@ -61,9 +67,26 @@ session_data_dirs: dict[str, Path] = {}
 _real_path_sites: dict[str, list[tuple[Any, str]]] = {}
 
 
+def _path_key(path: Path) -> str:
+    """How ``Path`` equality sees *path*: its string, case-folded where the OS folds case."""
+    return os.path.normcase(os.fspath(path))
+
+
+def _is_at_or_under(value: Path, directory: Path) -> bool:
+    """``value == directory or directory in value.parents``, without building the parents.
+
+    It runs for every path site on every UI test, and ``Path.parents`` builds a
+    new ``Path`` per level each time. Comparing normalised strings answers the
+    same question for a fraction of the cost.
+    """
+    value_key = _path_key(value)
+    directory_key = _path_key(directory)
+    return value_key == directory_key or value_key.startswith(directory_key.rstrip(os.sep) + os.sep)
+
+
 def _under_real_data(value: object) -> bool:
     return isinstance(value, Path) and any(
-        value == real_dir or real_dir in value.parents for real_dir in REAL_DATA_DIRS.values()
+        _is_at_or_under(value, real_dir) for real_dir in REAL_DATA_DIRS.values()
     )
 
 
@@ -73,7 +96,7 @@ def rebase(value: object, roots: dict[str, Path]) -> object:
         return value
     for source_dirs in (REAL_DATA_DIRS, session_data_dirs):
         for key, source_dir in source_dirs.items():
-            if value == source_dir or source_dir in value.parents:
+            if _is_at_or_under(value, source_dir):
                 return roots[key] / value.relative_to(source_dir)
     return value
 

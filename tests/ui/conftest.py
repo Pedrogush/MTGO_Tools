@@ -93,8 +93,10 @@ def ui_environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     config = root / "config"
     cache = root / "cache"
     decks = root / "decks"
+    logs = root / "logs"
+    card_data = root / "data"
     image_cache = cache / "card_images"
-    _ensure_dirs(config, cache, decks, image_cache)
+    _ensure_dirs(config, cache, decks, logs, card_data, image_cache)
 
     replacements = {
         "CONFIG_DIR": config,
@@ -114,7 +116,10 @@ def ui_environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     }
     # Every real data path, wherever it is bound (see tests/data_isolation.py),
     # then the explicit names above, some of which differ from the real file name.
-    redirect_bound_paths(monkeypatch, {"config": config, "cache": cache, "decks": decks})
+    redirect_bound_paths(
+        monkeypatch,
+        {"config": config, "cache": cache, "decks": decks, "logs": logs, "data": card_data},
+    )
     for attr, value in replacements.items():
         monkeypatch.setattr(constants, attr, value, raising=False)
 

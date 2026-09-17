@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - develop
   # Deliberately unfiltered. `branches:` on a pull_request trigger filters by the
   # PR's *base*, so while this said `- main` the only PRs that ran CI were the
   # ones targeting main -- and a stack of PRs targeting each other ran none. All
@@ -13,39 +14,52 @@ on:
   pull_request:
   workflow_dispatch:
 
+# A new push to a PR supersedes the run already going for it. Pushes to
+# main/develop are never cancelled: each one is a state of a long-lived branch
+# worth a complete result.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
-  tests:
-    name: Tests (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [windows-latest]
-        python-version: ["3.11"]
+  # The suite runs as two concurrent jobs. UI tests build real wx windows and
+  # must run one at a time, in one process; everything else is independent and
+  # runs across the runner's cores with pytest-xdist. Together they run every
+  # test under tests/ exactly once -- tests/test_ci_guards.py pins the split.
+  #
+  # Test jobs install only what the tests import (requirements.txt plus the
+  # pytest pins from requirements-dev.txt). pyinstaller, mypy, bandit, pip-audit,
+  # pydeps and debugpy are for other jobs.
+  tests-non-ui:
+    name: Tests (non-UI, parallel)
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
       - name: Install test dependencies
+        shell: bash
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements-dev.txt
-      # Runs before the full suite so a design-system regression is named by a
-      # step rather than found somewhere in 2000+ results. These files are all in
-      # `tests/` and so run again below -- the full suite stays the authority;
-      # this step is for legibility and for failing fast. The set is pinned by
-      # tests/test_ci_guards.py, which fails if one of these paths stops
-      # existing.
+          pip install -r requirements.txt $(grep -E '^pytest(-[a-z]+)?==' requirements-dev.txt | tr -d '\r')
+      # Runs first so a design-system regression is named by a step rather than
+      # found somewhere in 3000 results. The run below --ignore's exactly these
+      # files, so each runs once. The set (here and in tests-ui) is pinned by
+      # tests/test_ci_guards.py, which fails if a path stops existing or the two
+      # lists drift apart.
       #
       # WHAT THIS PROTECTS (issue #962): every foreground/background pair in the
       # app against WCAG AA, the categorical chart palette against colour-vision
       # deficiency, the type and spacing scales, the ban on bare wx.StaticBox /
       # wx.Notebook / wx.StaticLine / wx.SplitterWindow / wx.TextCtrl, every
-      # button reaching the button system, the enforced window minimums in both
-      # locales, live layout overflow in both locales, card-view scroll
-      # snapping, and the WebView backend the deck-stats charts render on.
+      # button reaching the button system, and the WebView backend the
+      # deck-stats charts render on. The live-window half is in tests-ui.
       - name: Design-system guards (issue #962)
         run: >-
           pytest -q
@@ -65,6 +79,55 @@ jobs:
           tests/test_window_titles.py
           tests/test_automation_commands.py
           tests/test_console_encoding.py
+
+      - name: Run non-UI tests
+        # Default pytest config excludes `network`-marked tests via addopts.
+        # Live network tests can be run on demand via the `network-tests`
+        # job below (triggered with workflow_dispatch).
+        run: >-
+          pytest -n auto
+          --ignore=tests/ui
+          --ignore=tests/test_theme_contrast.py
+          --ignore=tests/test_widget_audit.py
+          --ignore=tests/test_stylize.py
+          --ignore=tests/test_section.py
+          --ignore=tests/test_notebook.py
+          --ignore=tests/test_checkbox.py
+          --ignore=tests/test_status_bar.py
+          --ignore=tests/test_native_dark.py
+          --ignore=tests/test_deck_stats_palette.py
+          --ignore=tests/test_visible_defects.py
+          --ignore=tests/test_webview_backend.py
+          --ignore=tests/test_menu_bar_spec.py
+          --ignore=tests/test_preferences_spec.py
+          --ignore=tests/test_window_titles.py
+          --ignore=tests/test_automation_commands.py
+          --ignore=tests/test_console_encoding.py
+
+  tests-ui:
+    name: Tests (UI, serial)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+      - name: Install test dependencies
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt $(grep -E '^pytest(-[a-z]+)?==' requirements-dev.txt | tr -d '\r')
+      # The live-window half of the design-system guards (see tests-non-ui):
+      # the enforced window minimums in both locales, live layout overflow in
+      # both locales, card-view scroll snapping, and the live widget audit.
+      - name: Design-system guards (issue #962, live windows)
+        run: >-
+          pytest -q
           tests/ui/test_live_widget_audit.py
           tests/ui/test_live_layout_overflow.py
           tests/ui/test_layout_minimums.py
@@ -72,11 +135,15 @@ jobs:
           tests/ui/test_clamp_to_display.py
           tests/ui/test_inspector_column.py
 
-      - name: Run pytest
-        # Default pytest config excludes `network`-marked tests via addopts.
-        # Live network tests can be run on demand via the `network-tests`
-        # job below (triggered with workflow_dispatch).
-        run: pytest
+      - name: Run UI tests
+        run: >-
+          pytest tests/ui
+          --ignore=tests/ui/test_live_widget_audit.py
+          --ignore=tests/ui/test_live_layout_overflow.py
+          --ignore=tests/ui/test_layout_minimums.py
+          --ignore=tests/ui/test_card_view_scroll_snap.py
+          --ignore=tests/ui/test_clamp_to_display.py
+          --ignore=tests/ui/test_inspector_column.py
 
   network-tests:
     name: Live Network Tests
@@ -91,10 +158,14 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
       - name: Install test dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements-dev.txt
+          pip install -r requirements.txt $(grep -E '^pytest(-[a-z]+)?==' requirements-dev.txt | tr -d '\r')
       - name: Run network-marked tests
         run: pytest -m network
 
@@ -108,13 +179,15 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
 
       - name: Install linting tools
-        # Install pinned ruff/black from requirements-dev.txt so local and CI
-        # versions stay in sync (see requirements-dev.txt for pins).
+        # Only ruff and black, at the versions pinned in requirements-dev.txt,
+        # so local and CI versions stay in sync without installing the app.
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements-dev.txt
+          pip install $(grep -E '^(ruff|black)==' requirements-dev.txt | tr -d '\r')
 
       - name: Run ruff linter
         run: ruff check .
@@ -134,6 +207,10 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
 
       - name: Install dependencies
         # mypy is pinned in requirements-dev.txt; install from there so local
@@ -190,11 +267,7 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install minimal dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements-dev.txt || true
-
+      # compileall is in the standard library; nothing to install.
       - name: Check Python syntax
         run: |
           python -m compileall -q . -x '/env/|/\.git/|/build/|/dist/' || exit 1
@@ -221,16 +294,64 @@ jobs:
       - name: Build MTGOBridge
         run: dotnet build dotnet/MTGOBridge/MTGOBridge.csproj -c Release --no-restore
 
+  # Decides whether this run builds the Windows installer. Pushes to main and
+  # develop and manual dispatches always do. A pull request does only when it
+  # touches what the build consumes directly: the packaging scripts and spec,
+  # the .NET bridge, pinned requirements, the bundled data trees (vendor/,
+  # assets/, help/), the entry point, the version file, or this workflow.
+  #
+  # The tradeoff: a PR that breaks the frozen build some other way (a module the
+  # spec cannot see, say) is caught on the push to develop after merge rather
+  # than on the PR. Run the workflow by hand on the branch (Actions -> CI -> Run
+  # workflow) to build the installer for any PR.
+  packaging-changes:
+    name: Detect packaging changes
+    runs-on: ubuntu-latest
+    outputs:
+      build: ${{ steps.decide.outputs.build }}
+    steps:
+      - uses: actions/checkout@v4
+        if: github.event_name == 'pull_request'
+        with:
+          fetch-depth: 0
+      - name: Decide whether to build the installer
+        id: decide
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if [ "$EVENT_NAME" != "pull_request" ]; then
+            echo "build=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          changed="$(git diff --name-only "$BASE_SHA...$HEAD_SHA")"
+          echo "Changed files:"
+          echo "$changed"
+          pattern='^(packaging/|dotnet/|vendor/|assets/|help/|requirements(-dev)?\.txt$|main\.py$|setup\.py$|pyproject\.toml$|VERSION$|\.github/workflows/ci\.yml$)'
+          if echo "$changed" | grep -qE "$pattern"; then
+            echo "build=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "build=false" >> "$GITHUB_OUTPUT"
+          fi
+
   build-windows:
     name: Build Windows Installer
     runs-on: windows-latest
-    needs: tests
+    # Not gated on the tests: it runs alongside them, so it never adds its ~5
+    # minutes after them. A test failure still fails the run.
+    needs: packaging-changes
+    if: needs.packaging-changes.outputs.build == 'true'
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
       - name: Install build dependencies
         run: |
           python -m pip install --upgrade pip
