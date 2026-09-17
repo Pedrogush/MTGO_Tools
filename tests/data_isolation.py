@@ -32,7 +32,14 @@ from typing import Any
 
 import pytest
 
-import utils.constants as constants
+# The root conftest imports this module before test_helpers, which is what used
+# to put the repo root on sys.path. Plain ``pytest`` (as CI runs it) does not add
+# the working directory the way ``python -m pytest`` does, so do it here too.
+_repo_root_dir = str(Path(__file__).resolve().parent.parent)
+if _repo_root_dir not in sys.path:
+    sys.path.insert(0, _repo_root_dir)
+
+import utils.constants as constants  # noqa: E402
 
 # Recorded when the root conftest imports this module, before any fixture patches
 # them: the user's real data dirs, and every path constant that points into them.
