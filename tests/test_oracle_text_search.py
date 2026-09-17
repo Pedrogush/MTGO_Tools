@@ -77,6 +77,17 @@ def test_exact_mode_needs_the_phrase_verbatim():
     assert not _matches("Indestructible. It gains flying.", "gains indestructible", "all")
 
 
+def test_exact_mode_anchors_the_phrase_to_a_word_start():
+    # "=" used to find "reach" inside "Treacherous", so Treacherous Terrain was
+    # the one card "=" returned for reach that "≈" did not (697 against 696).
+    text = "Treacherous Terrain deals damage to each opponent equal to the number of lands."
+    assert not _matches(text, "reach", "all")
+    assert not _matches("Breach the wall.", "reach", "all")
+    # Only the start is anchored: the phrase may run on into a longer word.
+    assert _matches("Up to two target creatures gain flying.", "target creature", "all")
+    assert _matches("{T}: Add {G}.", "{t}: add", "all")
+
+
 def test_exact_mode_ignores_repeated_spaces_in_the_query():
     assert _matches("Search your library for a card.", "search  your   library", "all")
 

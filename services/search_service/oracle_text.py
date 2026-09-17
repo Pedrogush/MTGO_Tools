@@ -4,9 +4,10 @@ The filter has two modes, picked by the ``=`` / ``≈`` choice next to the box:
 
 ``"all"`` (``=``, exact)
     The query, with its whitespace collapsed, must appear verbatim in the
-    card's oracle text: ``gains indestructible`` matches "…gains
-    indestructible until end of turn" and nothing that merely mentions both
-    words.
+    card's oracle text, starting where a word starts: ``gains
+    indestructible`` matches "…gains indestructible until end of turn" and
+    nothing that merely mentions both words, and ``reach`` does not match
+    "Treacherous Terrain".
 
 ``"any"`` (``≈``, words)
     Every word of the query must start a word somewhere in the oracle text, in
@@ -71,8 +72,8 @@ def _compile_query(query: str, mode: str) -> Callable[[str], bool]:
     if not words:
         return lambda _text: True
     if mode != TEXT_MODE_WORDS:
-        phrase = " ".join(words)
-        return lambda text: phrase in text
+        phrase = re.compile(_word_start_pattern(" ".join(words)))
+        return lambda text: phrase.search(text) is not None
     patterns = [re.compile(_word_pattern(word)) for word in words]
     return lambda text: all(pattern.search(text) for pattern in patterns)
 
@@ -80,10 +81,14 @@ def _compile_query(query: str, mode: str) -> Callable[[str], bool]:
 def _word_pattern(word: str) -> str:
     if word.isalpha():
         word = stem_word(word)
-    escaped = re.escape(word)
+    return _word_start_pattern(word)
+
+
+def _word_start_pattern(term: str) -> str:
+    escaped = re.escape(term)
     # Anchor to the start of a word only when the term itself starts with one;
     # "{t}:" or "+1/+1" have no word boundary in front of them to anchor to.
-    if word[0].isalnum():
+    if term[0].isalnum():
         return rf"(?<![{_WORD_CHARS}]){escaped}"
     return escaped
 

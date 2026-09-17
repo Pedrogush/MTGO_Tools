@@ -80,6 +80,12 @@ CARDS = [
     ),
     _card("Blood Moon Variant", "Nonbasic lands lose all land types and abilities."),
     _card("Giant Spider", "Reach"),
+    # "reach" inside "Treacherous" is not the word reach, in either mode.
+    _card(
+        "Treacherous Terrain",
+        "Treacherous Terrain deals damage to each opponent equal to the number of lands "
+        "that player controls.",
+    ),
     _card(
         "Monastery Swiftspear",
         "Haste\nProwess (Whenever you cast a noncreature spell, this creature gets +1/+1 "
