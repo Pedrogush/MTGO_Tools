@@ -77,8 +77,8 @@ class FakeDetailsDialog:
         return None
 
 
-@pytest.fixture(name="frame")
-def fixture_frame(deck_selector_factory, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+def _scene(frame, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """One deck loaded, both dialogs faked, no default folder set."""
     FakeFileDialog.instances = []
     FakeFileDialog.path = None
     FakeDetailsDialog.instances = []
@@ -87,21 +87,45 @@ def fixture_frame(deck_selector_factory, tmp_path: Path, monkeypatch: pytest.Mon
     documents.mkdir()
     # The Windows fallback, pinned so the test does not depend on the account.
     monkeypatch.setattr(controller_settings, "documents_dir", lambda: documents)
-    frame = deck_selector_factory()
     frame.test_documents = documents  # type: ignore[attr-defined]
+    # The option a previous test may have set; every test here starts unset.
+    frame.controller.set_default_deck_save_path(None)
     frame.controller.deck_repo.set_current_deck_text(DECK_TEXT)
     frame.zone_cards = {
         "main": [{"name": "Mountain", "qty": 4}, {"name": "Island", "qty": 4}],
         "side": [{"name": "Dispel", "qty": 2}],
         "out": [],
     }
+    with (
+        patch("wx.FileDialog", FakeFileDialog),
+        patch(DETAILS_CLS, FakeDetailsDialog),
+        patch("wx.MessageBox"),
+    ):
+        yield frame
+
+
+@pytest.fixture(name="frame")
+def fixture_frame(shared_frame, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """The module's window (see ``shared_app_frame``), with the scene set up again.
+
+    The saved-decks database is still per test -- ``ui_environment`` points
+    ``DatabaseMixin._get_db_path`` at this test's tmp cache, and the path is
+    resolved per call -- so a record one test saves is invisible to the next,
+    which is what the content-matching tests need.
+    """
+    yield from _scene(shared_frame, tmp_path, monkeypatch)
+
+
+@pytest.fixture(name="fresh_frame")
+def fixture_fresh_frame(deck_selector_factory, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """A newly built window, for the test that reads the settings file itself.
+
+    A settings file belongs to the session manager that opened it, and the
+    shared window's is the module's, not this test's ``ui_environment`` one.
+    """
+    frame = deck_selector_factory()
     try:
-        with (
-            patch("wx.FileDialog", FakeFileDialog),
-            patch(DETAILS_CLS, FakeDetailsDialog),
-            patch("wx.MessageBox"),
-        ):
-            yield frame
+        yield from _scene(frame, tmp_path, monkeypatch)
     finally:
         frame.Destroy()
 
@@ -307,9 +331,10 @@ def test_undetectable_format_falls_back_to_the_research_format(frame) -> None:
 # ---------------------------------------------------------------------------- the option
 
 
-def test_the_default_folder_option_persists_and_clears(frame, tmp_path: Path) -> None:
+def test_the_default_folder_option_persists_and_clears(fresh_frame, tmp_path: Path) -> None:
     import utils.constants as constants
 
+    frame = fresh_frame
     folder = tmp_path / "decks here"
     folder.mkdir()
     groups = frame.preference_groups()

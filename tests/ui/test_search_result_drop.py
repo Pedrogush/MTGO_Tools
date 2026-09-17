@@ -41,9 +41,17 @@ def _neutralise_capture(window: wx.Window) -> None:
 
 
 @pytest.fixture(name="frame")
-def fixture_frame(deck_selector_factory, wx_app):
-    """A shown frame: a deck in both zones, the builder's results on screen."""
-    frame = deck_selector_factory()
+def fixture_frame(shared_frame, wx_app):
+    """A shown frame: a deck in both zones, the builder's results on screen.
+
+    The window is the module's (see ``shared_app_frame``); every test starts
+    from this same scene rebuilt on it, which is what these tests are about --
+    none of them is about a freshly constructed window.
+    """
+    frame = shared_frame
+    # The record-mode lock some tests turn on; off again for the next one.
+    frame._guide_record = None
+    frame.builder_panel.set_search_locked(False)
     frame._on_deck_content_ready(_DECK_TEXT, source="automation")
     frame._show_left_panel("builder", force=True)
     frame._show_deck_tables_tab()
@@ -59,8 +67,6 @@ def fixture_frame(deck_selector_factory, wx_app):
         timer = getattr(frame, "_save_timer", None)
         if timer is not None and timer.IsRunning():
             timer.Stop()
-        frame.Hide()
-        frame.Destroy()
         pump_ui_events(wx_app)
 
 
