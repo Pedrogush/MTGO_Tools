@@ -150,7 +150,21 @@ def _save_cached_archetype_decks(archetype: str, items: list[dict]):
         atomic_write_json(ARCHETYPE_DECKS_CACHE_FILE, data, indent=2)
 
 
+class DeckListFetchError(RuntimeError):
+    """An archetype's deck list could not be fetched or read from MTGGoldfish.
+
+    Distinct from an archetype that genuinely has no decks. Callers used to get
+    ``[]`` for both, and the repository saved that ``[]`` over the cached list,
+    so a network outage wiped every expired archetype's decks it touched.
+    """
+
+
 def get_archetype_decks(archetype: str):
+    """Return *archetype*'s decks, from the cache or a live MTGGoldfish scrape.
+
+    Raises :class:`DeckListFetchError` when the page can't be fetched or has no
+    deck table (an error or challenge page), so nothing is cached for a failure.
+    """
     # Check cache first. An empty cached list counts as a miss: the remote
     # bundle hydrates empty MTGGoldfish deck lists for archetypes whose recent
     # results are MTGO-only, and honouring that [] here would keep the scrape
@@ -175,13 +189,13 @@ def get_archetype_decks(archetype: str):
         page.raise_for_status()
     except Exception as exc:
         logger.error(f"Failed to fetch decks for archetype {archetype}: {exc}")
-        return []
+        raise DeckListFetchError(f"Failed to fetch decks for archetype {archetype}") from exc
 
     soup = bs4.BeautifulSoup(page.text, "lxml")
     table = soup.select_one("table.table-striped")
     if not table:
         logger.warning(f"Deck table missing for archetype {archetype}")
-        return []
+        raise DeckListFetchError(f"Deck table missing for archetype {archetype}")
     trs: list[bs4.Tag] = table.find_all("tr")
     trs = trs[1:]
     decks = []
@@ -225,7 +239,15 @@ def _decks_for_archetype(archetype: dict) -> list[dict]:
             _load_cached_archetype_decks(archetype["href"], max_age=MTGGOLDFISH_STALE_CACHE_SECONDS)
             or []
         )
-    return get_archetype_decks(archetype["href"])
+    try:
+        return get_archetype_decks(archetype["href"])
+    except DeckListFetchError:
+        # Count from the last decks we had rather than report the archetype
+        # as having none just because MTGGoldfish was unreachable.
+        return (
+            _load_cached_archetype_decks(archetype["href"], max_age=MTGGOLDFISH_STALE_CACHE_SECONDS)
+            or []
+        )
 
 
 @timed

@@ -12,6 +12,7 @@ import pytest
 
 import repositories.scrapers.mtggoldfish as mtggoldfish
 from repositories.scrapers.mtggoldfish import (
+    DeckListFetchError,
     _load_cached_archetypes,
     _save_cached_archetypes,
     download_deck,
@@ -426,11 +427,10 @@ class TestGetArchetypeDecks:
 
     @patch("repositories.scrapers.mtggoldfish.requests.get")
     def test_get_archetype_decks_request_failure(self, mock_get, temp_cache_dir):
-        """Test that a request exception is caught and yields an empty result.
+        """A request exception raises DeckListFetchError and caches nothing.
 
-        Uses a fresh per-test cache file and a never-before-seen archetype so the
-        cache misses and the network path actually runs (the failure return at
-        mtggoldfish.py is what is being exercised here)."""
+        Returning [] here let the repository save an empty list over the cached
+        decks, so an outage wiped every expired archetype it touched."""
         mock_get.side_effect = Exception("Network error")
 
         fresh_cache = temp_cache_dir / "archetype_decks.json"
@@ -438,17 +438,15 @@ class TestGetArchetypeDecks:
             "repositories.scrapers.mtggoldfish.ARCHETYPE_DECKS_CACHE_FILE",
             fresh_cache,
         ):
-            result = get_archetype_decks("modern-request-failure-archetype")
+            with pytest.raises(DeckListFetchError):
+                get_archetype_decks("modern-request-failure-archetype")
 
         mock_get.assert_called()  # network path was taken (no cache short-circuit)
-        assert result == []
+        assert not fresh_cache.exists()
 
     @patch("repositories.scrapers.mtggoldfish.requests.get")
     def test_get_archetype_decks_missing_table(self, mock_get, temp_cache_dir):
-        """Test that missing deck table yields an empty result.
-
-        Uses a fresh per-test cache file and a never-before-seen archetype so the
-        cache misses and the missing-table return path actually runs."""
+        """A page without the deck table (error or challenge page) raises, caching nothing."""
         mock_response = Mock()
         mock_response.text = "<html><body>No table here</body></html>"
         mock_response.raise_for_status = Mock()
@@ -459,10 +457,11 @@ class TestGetArchetypeDecks:
             "repositories.scrapers.mtggoldfish.ARCHETYPE_DECKS_CACHE_FILE",
             fresh_cache,
         ):
-            result = get_archetype_decks("modern-missing-table-archetype")
+            with pytest.raises(DeckListFetchError):
+                get_archetype_decks("modern-missing-table-archetype")
 
         mock_get.assert_called()  # network path was taken (no cache short-circuit)
-        assert result == []
+        assert not fresh_cache.exists()
 
     @patch("repositories.scrapers.mtggoldfish.requests.get")
     def test_get_archetype_decks_uses_split_connect_read_timeout(
@@ -553,6 +552,53 @@ class TestGetArchetypeStats:
             assert entry["results"][two_days_ago] == 1
         # Cache file written.
         assert cache_file.exists()
+
+    def test_get_archetype_stats_counts_stale_decks_when_a_fetch_fails(self, temp_cache_dir):
+        """An archetype MTGGoldfish can't serve is counted from its last cached decks.
+
+        Before DeckListFetchError the failed fetch came back as [], and the stats
+        reported that archetype as having no decks for the day."""
+        archetypes = [
+            {"name": "Burn", "href": "modern-burn"},
+            {"name": "Amulet Titan", "href": "modern-amulet-titan"},
+        ]
+        today = datetime.now().strftime("%Y-%m-%d")
+        stale_burn = [{"date": today, "name": "Burn", "number": "1"}]
+        live_titan = [{"date": today, "name": "Amulet Titan", "number": "2"}]
+        decks_cache = temp_cache_dir / "archetype_decks.json"
+        # Past the fresh TTL, so the live fetch runs, but inside the stale window.
+        decks_cache.write_text(
+            json.dumps(
+                {
+                    "modern-burn": {
+                        "timestamp": time.time() - METAGAME_CACHE_TTL_SECONDS - 60,
+                        "items": stale_burn,
+                    }
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        real_get_archetype_decks = mtggoldfish.get_archetype_decks
+
+        def fake_get_archetype_decks(href):
+            if href == "modern-burn":
+                # The real scraper, with the request failing underneath it.
+                with patch.object(mtggoldfish.requests, "get", side_effect=OSError("offline")):
+                    return real_get_archetype_decks(href)
+            return live_titan
+
+        with (
+            patch.object(mtggoldfish, "get_archetypes", return_value=archetypes),
+            patch.object(mtggoldfish, "get_archetype_decks", side_effect=fake_get_archetype_decks),
+            patch.object(mtggoldfish, "ARCHETYPE_DECKS_CACHE_FILE", decks_cache),
+            patch.object(mtggoldfish, "ARCHETYPE_CACHE_FILE", temp_cache_dir / "stats.json"),
+        ):
+            stats = get_archetype_stats("modern")
+
+        assert stats["modern"]["Burn"]["decks"] == stale_burn
+        assert stats["modern"]["Burn"]["results"][today] == 1
+        assert stats["modern"]["Amulet Titan"]["decks"] == live_titan
 
     def test_get_archetype_stats_returns_fresh_cache_without_network(self, temp_cache_dir):
         """A recent cache entry (< ONE_DAY_SECONDS old) is returned directly without
