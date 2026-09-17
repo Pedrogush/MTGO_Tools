@@ -18,6 +18,8 @@ MESSAGES: dict[str, str] = {
     "menu.load": "Carregar",
     "menu.save_deck": "Salvar Deck…",
     "menu.load_deck": "Carregar Deck…",
+    "menu.check_for_updates": "Verificar Atualizações…",
+    "menu.check_for_updates.help": "Perguntar ao GitHub agora se uma versão mais nova foi publicada",
     "toolbar.load_collection": "Carregar Coleção",
     "toolbar.download_card_images": "Ativar Modo de Imagens Offline",
     "toolbar.update_card_database": "Atualizar Banco de Cartas",

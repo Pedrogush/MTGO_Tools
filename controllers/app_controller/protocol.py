@@ -77,6 +77,7 @@ class AppControllerProto(Protocol):
     frame: AppFrame | None
     _bulk_check_worker_active: bool
     _available_update: UpdateInfo | None
+    _update_check_in_flight: bool
     _update_installer: UpdateInstaller | None
 
     # Cross-mixin methods
