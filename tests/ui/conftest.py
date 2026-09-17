@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 import sys
 import time as time_module
 from pathlib import Path
@@ -59,41 +60,149 @@ SAMPLE_CARDS = [
 ]
 
 
-# Captured at import, before any fixture patches it: the user's real config dir.
+# Captured at import, before any fixture patches them: the user's real data dirs,
+# and every path constant that points into them.
 _REAL_CONFIG_DIR = Path(constants.CONFIG_DIR)
+_REAL_CACHE_DIR = Path(constants.CACHE_DIR)
+_REAL_DECKS_DIR = Path(constants.DECKS_DIR)
+_REAL_DATA_DIRS = {"config": _REAL_CONFIG_DIR, "cache": _REAL_CACHE_DIR, "decks": _REAL_DECKS_DIR}
+_REAL_PATH_CONSTANTS = {
+    name: value for name in dir(constants) if isinstance(value := getattr(constants, name), Path)
+}
+_REPO_ROOT = str(Path(__file__).resolve().parents[2])
+_THIS_FILE = str(Path(__file__).resolve())
 
 
-def _snapshot_files(directory: Path) -> dict[str, bytes]:
-    if not directory.is_dir():
-        return {}
-    return {path.name: path.read_bytes() for path in directory.iterdir() if path.is_file()}
+def _under_real_data(value: object) -> bool:
+    return isinstance(value, Path) and any(
+        value == real_dir or real_dir in value.parents for real_dir in _REAL_DATA_DIRS.values()
+    )
 
 
-@pytest.fixture(scope="session", autouse=True)
-def real_config_untouched() -> Any:
-    """Fail the run if any UI test wrote to the user's real ``config/``.
+# The session-wide tmp data dirs, once redirect_real_data_for_session has made them.
+_session_data_dirs: dict[str, Path] = {}
 
-    ``ui_environment`` patches the path constants into tmp_path, but a test that
-    imports one at module level keeps the real path and writes straight past the
-    patch. test_notebook_tabs_fit did exactly that and silently overwrote
-    deck_selector_settings.json on every full run.
+
+def _rebase(value: object, roots: dict[str, Path]) -> object:
+    """*value* moved from the real (or session) data dir it sits under into *roots*."""
+    if not isinstance(value, Path):
+        return value
+    for source_dirs in (_REAL_DATA_DIRS, _session_data_dirs):
+        for key, source_dir in source_dirs.items():
+            if value == source_dir or source_dir in value.parents:
+                return roots[key] / value.relative_to(source_dir)
+    return value
+
+
+def _redirected_paths(roots: dict[str, Path]) -> dict[str, Path]:
+    """Map every ``utils.constants`` path under the real config/, cache/ or deck folder into tmp."""
+    return {
+        name: _rebase(value, roots)
+        for name, value in _REAL_PATH_CONSTANTS.items()
+        if _under_real_data(value)
+    }
+
+
+def _default_sites(func: Any) -> list[tuple[Any, str]]:
+    sites = []
+    if func.__defaults__ and any(_under_real_data(value) for value in func.__defaults__):
+        sites.append((func, "__defaults__"))
+    if func.__kwdefaults__ and any(
+        _under_real_data(value) for value in func.__kwdefaults__.values()
+    ):
+        sites.append((func, "__kwdefaults__"))
+    return sites
+
+
+def _find_real_path_sites(module: Any) -> list[tuple[Any, str]]:
+    """Where *module* holds a real data path the constants patch can't reach.
+
+    Two kinds: a module attribute (``from utils.constants import NOTES_STORE``,
+    or an alias like ``DECK_CACHE_DB = DECK_CACHE_DB_FILE``), and a default
+    argument (``def __init__(self, db_path: Path = DECK_CACHE_DB_FILE)``), which
+    Python evaluates once, when the function is defined.
     """
-    before = _snapshot_files(_REAL_CONFIG_DIR)
-    yield
-    after = _snapshot_files(_REAL_CONFIG_DIR)
-    changed = sorted(
-        name for name in before.keys() | after.keys() if before.get(name) != after.get(name)
-    )
-    assert not changed, (
-        f"UI tests modified the real config in {_REAL_CONFIG_DIR}: {changed}. A test is "
-        "writing through a path constant imported before ui_environment patched it. "
-        "(Running the app at the same time as the suite can also trip this.)"
-    )
+    sites: list[tuple[Any, str]] = []
+    for name, value in list(vars(module).items()):
+        if _under_real_data(value):
+            sites.append((module, name))
+        elif getattr(value, "__module__", None) != module.__name__:
+            continue
+        elif inspect.isfunction(value):
+            sites += _default_sites(value)
+        elif inspect.isclass(value):
+            for member in list(vars(value).values()):
+                func = getattr(member, "__func__", member)
+                if inspect.isfunction(func):
+                    sites += _default_sites(func)
+    return sites
+
+
+# Module name -> its real-path sites, found the first time the module is seen.
+_real_path_sites: dict[str, list[tuple[Any, str]]] = {}
+
+
+def _redirect_bound_paths(monkeypatch: pytest.MonkeyPatch, roots: dict[str, Path]) -> None:
+    """Point every real data path bound in a project module at the test's tmp dirs.
+
+    Patching ``utils.constants`` alone missed these, and each one wrote to the
+    user's real files during UI tests: controller.py and metadata_store.py held
+    the real NOTES_STORE (test_notes_persist_across_frames cleared the deck
+    notes), and the metagame repository, deck-text cache and bundle client took
+    real paths as default arguments (a UI run wrote archetype_decks_cache.json
+    and deck_cache.db).
+    """
+    for module in list(sys.modules.values()):
+        module_file = getattr(module, "__file__", None) or ""
+        if (
+            module is constants
+            or not module_file.startswith(_REPO_ROOT)
+            or "site-packages" in module_file
+            or module_file == _THIS_FILE
+        ):
+            continue
+        sites = _real_path_sites.get(module.__name__)
+        if sites is None:
+            sites = _real_path_sites[module.__name__] = _find_real_path_sites(module)
+        for owner, attr in sites:
+            current = getattr(owner, attr)
+            if attr == "__defaults__":
+                patched: object = tuple(_rebase(value, roots) for value in current)
+            elif attr == "__kwdefaults__":
+                patched = {key: _rebase(value, roots) for key, value in current.items()}
+            else:
+                patched = _rebase(current, roots)
+            if patched != current:
+                monkeypatch.setattr(owner, attr, patched)
 
 
 def _ensure_dirs(*dirs: Path) -> None:
     for directory in dirs:
         directory.mkdir(parents=True, exist_ok=True)
+
+
+@pytest.fixture(scope="session", autouse=True)
+def redirect_real_data_for_session(tmp_path_factory: pytest.TempPathFactory) -> Any:
+    """Redirect the real data paths for the whole run, under the per-test redirect.
+
+    ``ui_environment`` undoes its patches when a test ends, but work a test
+    started on a thread can outlive it. A deck download left running by
+    test_format_change_reloads_decks_with_any_selected reached the deck-text
+    cache after that undo and opened the user's real deck_cache.db. With this
+    layer underneath, such late work lands in a session tmp dir instead.
+    """
+    root = tmp_path_factory.mktemp("mtgo-session")
+    roots = {key: root / key for key in _REAL_DATA_DIRS}
+    _ensure_dirs(*roots.values())
+    with pytest.MonkeyPatch.context() as session_patch:
+        for attr, value in _redirected_paths(roots).items():
+            session_patch.setattr(constants, attr, value)
+        _redirect_bound_paths(session_patch, roots)
+        _session_data_dirs.update(roots)
+        try:
+            yield
+        finally:
+            _session_data_dirs.clear()
 
 
 @pytest.fixture(scope="session", name="wx_app")
@@ -143,8 +252,12 @@ def ui_environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         "DECK_CACHE_FILE": cache / "deck_cache.json",
         "CURR_DECK_FILE": decks / "curr_deck.txt",
     }
-    for attr, value in replacements.items():
+    roots = {"config": config, "cache": cache, "decks": decks}
+    redirected = _redirected_paths(roots)
+    redirected.update(replacements)
+    for attr, value in redirected.items():
         monkeypatch.setattr(constants, attr, value, raising=False)
+    _redirect_bound_paths(monkeypatch, roots)
 
     # The saved-decks SQLite database resolves its path from a module-level
     # import of SAVED_DECKS_DB_FILE, which the constants patch above cannot reach,
