@@ -9,6 +9,7 @@ from services.search_service.mana_filters import (
     matches_mana_cost,
     matches_mana_value,
 )
+from services.search_service.oracle_text import card_oracle_text, matches_oracle_text
 
 if TYPE_CHECKING:
     from services.search_service.protocol import SearchServiceProto
@@ -109,11 +110,10 @@ class FilteringMixin(_Base):
         return matches_mana_value(card_value, target, comparator)
 
     def _matches_text_filter(self, card: dict[str, Any], query: str, mode: str = "all") -> bool:
-        # mode="all": full phrase match; mode="any": every word must appear somewhere
-        text = card.get("oracle_text", "") or card.get("text", "")
+        # mode="all" (the builder's "=" choice): the phrase, verbatim.
+        # mode="any" (the "≈" choice): every word, stemmed, in any order.
+        # See services/search_service/oracle_text.py.
+        text = card_oracle_text(card)
         if not text:
             return False
-        text_lower = text.lower()
-        if mode == "any":
-            return all(word in text_lower for word in query.lower().split())
-        return query.lower() in text_lower
+        return matches_oracle_text(text, query, mode)
