@@ -1,4 +1,4 @@
-"""Format detection (rarity for Pauper, legality data otherwise) and archetypes."""
+"""Format detection: Pauper by rarity, every other format by legality data."""
 
 from __future__ import annotations
 
@@ -187,63 +187,3 @@ def _detect_format_via_legalities(
             return _FORMAT_DISPLAY[fmt]
 
     return last_parsed_format
-
-
-def detect_archetype(cards: list[str]) -> str:
-    """Detect deck archetype from card list."""
-    if not cards or len(cards) < 5:
-        return "Unknown"
-
-    card_set = set(cards)
-
-    # Modern archetypes
-    archetype_signatures = {
-        "Murktide": ["Murktide Regent", "Dragon's Rage Channeler"],
-        "Hammer Time": ["Colossus Hammer", "Puresteel Paladin", "Sigarda's Aid"],
-        "Tron": ["Urza's Tower", "Urza's Mine", "Urza's Power Plant", "Karn Liberated"],
-        "Amulet Titan": ["Amulet of Vigor", "Primeval Titan"],
-        "Living End": ["Living End", "Violent Outburst"],
-        "Burn": ["Lightning Bolt", "Lava Spike", "Rift Bolt"],
-        "Death's Shadow": ["Death's Shadow", "Street Wraith"],
-        "Yawgmoth": ["Yawgmoth, Thran Physician", "Chord of Calling"],
-        "Scales": ["Hardened Scales", "Walking Ballista", "Arcbound Ravager"],
-        "Rhinos": ["Crashing Footfalls", "Shardless Agent"],
-        "Scam": ["Grief", "Undying Malice", "Ephemerate"],
-        "4C Omnath": ["Omnath, Locus of Creation", "Leyline Binding"],
-        "Domain Zoo": ["Leyline Binding", "Scion of Draco"],
-        "Elementals": ["Solitude", "Fury", "Risen Reef"],
-        "Affinity": ["Cranial Plating", "Ornithopter", "Mox Opal"],
-        "Infect": ["Glistener Elf", "Blighted Agent", "Inkmoth Nexus"],
-        "Storm": ["Grapeshot", "Gifts Ungiven", "Past in Flames"],
-        "Mill": ["Hedron Crab", "Archive Trap", "Visions of Beyond"],
-        "Control": ["Teferi, Hero of Dominaria", "Cryptic Command", "Supreme Verdict"],
-        "Jund": ["Tarmogoyf", "Dark Confidant", "Liliana of the Veil"],
-    }
-
-    # Check signatures (require at least 1 signature card)
-    matches = []
-    for archetype, signature in archetype_signatures.items():
-        signature_matches = sum(1 for card in signature if card in card_set)
-        if signature_matches > 0:
-            matches.append((archetype, signature_matches, len(signature)))
-
-    # Sort by match count, then by signature size (prefer specific archetypes)
-    if matches:
-        matches.sort(key=lambda x: (x[1], -x[2]), reverse=True)
-        best_match = matches[0]
-        if best_match[1] >= 1:  # At least 1 signature card
-            return best_match[0]
-
-    # Fallback: generic classification by card types
-    lands = sum(
-        1
-        for card in cards
-        if any(x in card for x in ["Plains", "Island", "Swamp", "Mountain", "Forest", "Land"])
-    )
-
-    if lands < 10:
-        return "Aggro"
-    elif lands > 25:
-        return "Control"
-    else:
-        return "Midrange"

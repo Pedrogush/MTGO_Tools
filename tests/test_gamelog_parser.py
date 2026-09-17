@@ -450,53 +450,72 @@ class TestParseTimestamp:
 
 
 # ---------------------------------------------------------------------------
-# Unit tests for detect_archetype
+# Archetypes in parsed matches (the classifier itself: test_archetype_model.py)
 # ---------------------------------------------------------------------------
 
 
-class TestDetectArchetype:
-    def test_returns_unknown_for_empty_list(self):
-        assert detect_archetype([]) == "Unknown"
+class TestMatchArchetypes:
+    """``parse_gamelog_file`` classifies each player's cards with the model it is given."""
 
-    def test_returns_unknown_below_five_cards(self):
-        # A signature card is present, but the deck has < 5 cards, so the
-        # early-return guard wins before any signature matching.
-        assert detect_archetype(["Murktide Regent", "Plains", "Island"]) == "Unknown"
+    @pytest.fixture(scope="class")
+    def model(self):
+        from archetype_model_fixtures import fixture_decks
 
-    def test_detects_known_signature(self):
-        cards = ["Murktide Regent", "Dragon's Rage Channeler", "Island", "Mountain", "Consider"]
-        assert detect_archetype(cards) == "Murktide"
+        from services.gamelog_service import ArchetypeModel
 
-    def test_tie_break_on_equal_match_count(self):
-        # Two archetypes each match exactly one signature card. The sort key is
-        # ``(match_count, -signature_len)`` with ``reverse=True``: among equal
-        # match counts the *smaller* signature wins (because ``-len`` is larger
-        # for a shorter signature and reverse=True takes the largest key first).
-        #   Burn signature len 3, Living End signature len 2 -> Living End wins.
-        cards = ["Lightning Bolt", "Living End", "Forest", "Island", "Swamp"]
-        assert detect_archetype(cards) == "Living End"
+        return ArchetypeModel.build(fixture_decks())
 
-    def test_higher_match_count_beats_signature_size(self):
-        # Match count dominates the sort: an archetype with two signature hits
-        # outranks one with a single hit regardless of signature size.
-        cards = ["Colossus Hammer", "Puresteel Paladin", "Lightning Bolt", "Plains", "Island"]
-        # Hammer Time matches 2 of 3; Burn matches 1 of 3 -> Hammer Time wins.
-        assert detect_archetype(cards) == "Hammer Time"
+    @staticmethod
+    def _log(tmp_path) -> str:
+        lines = [
+            "Wed Dec 04 14:23:10 PST 2024",
+            "@PAlice joined the game",
+            "@PBob joined the game",
+            "@PAlice chooses to play first",
+        ]
+        for card in ["Mountain", "Goblin Guide", "Lava Spike", "Lightning Bolt", "Arid Mesa"]:
+            lines.append(f"@PAlice casts {_card_ref(card)}")
+        for card in ["Island", "Murktide Regent", "Consider", "Scalding Tarn", "Counterspell"]:
+            lines.append(f"@PBob casts {_card_ref(card)}")
+        lines.append("@PAlice wins the match 1-0")
+        path = tmp_path / "Match_GameLog_42.dat"
+        path.write_text("\n".join(lines), encoding="latin1")
+        return str(path)
 
-    def test_land_count_fallback_aggro(self):
-        # No signature match, fewer than 10 lands -> Aggro.
-        cards = [f"Random Creature {i}" for i in range(20)]
-        assert detect_archetype(cards) == "Aggro"
+    def test_each_player_gets_their_own_archetype(self, tmp_path, model):
+        result = parse_gamelog_file(self._log(tmp_path), archetype_model=model)
+        assert result is not None
+        assert result["player1_archetype"] == "Boros Burn"
+        assert result["player2_archetype"] == "Izzet Murktide"
 
-    def test_land_count_fallback_control(self):
-        # No signature match, more than 25 lands -> Control.
-        cards = ["Island"] * 30
-        assert detect_archetype(cards) == "Control"
+    def test_without_a_model_archetypes_are_unknown(self, tmp_path):
+        result = parse_gamelog_file(self._log(tmp_path))
+        assert result is not None
+        assert result["player1_archetype"] == "Unknown"
+        assert result["player2_archetype"] == "Unknown"
 
-    def test_land_count_fallback_midrange(self):
-        # No signature match, 10..25 lands inclusive -> Midrange.
-        cards = ["Forest"] * 15 + [f"Random Creature {i}" for i in range(5)]
-        assert detect_archetype(cards) == "Midrange"
+    def test_the_detected_format_scopes_the_candidates(self, tmp_path, model, monkeypatch):
+        import services.gamelog_service.service as service_module
+
+        seen_formats = []
+
+        def fake_detect(cards, archetype_model, mtg_format):
+            seen_formats.append(mtg_format)
+            return detect_archetype(cards, archetype_model, mtg_format)
+
+        monkeypatch.setattr(service_module, "detect_format_from_cards", lambda *a, **k: "Pauper")
+        monkeypatch.setattr(service_module, "detect_archetype", fake_detect)
+        result = parse_gamelog_file(self._log(tmp_path), archetype_model=model)
+        assert seen_formats == ["Pauper", "Pauper"]
+        # Scoped to Pauper, Alice's burn spells read as Pauper Burn -- and the
+        # Murktide cards match nothing Pauper plays, so Bob is Unknown.
+        assert result["player1_archetype"] == "Burn"
+        assert result["player2_archetype"] == "Unknown"
+
+    def test_parse_all_gamelogs_forwards_the_model(self, tmp_path, model):
+        self._log(tmp_path)
+        (match,) = parse_all_gamelogs(str(tmp_path), archetype_model=model)
+        assert match["player2_archetype"] == "Izzet Murktide"
 
 
 # ---------------------------------------------------------------------------

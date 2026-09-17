@@ -19,6 +19,7 @@ from controllers.app_controller.ui_callbacks import UICallbacks
 from controllers.app_controller.updates import UpdateCheckMixin
 from controllers.session_manager import DeckSelectorSessionManager
 from services import mtgo_bridge_service
+from services.archetype_model_service import get_archetype_model_service
 from services.archetype_resolver import find_archetype_by_name
 from services.card_rarity_service import get_card_rarity_service
 from services.card_service import get_card_service
@@ -66,6 +67,11 @@ if TYPE_CHECKING:
     from services.update_installer import UpdateInstaller
     from services.update_service import UpdateInfo
     from widgets.frames.app_frame import AppFrame
+
+#: How long a match-history parse waits for the startup archetype-model build.
+#: The build measured ~0.5 s on a 2,700-deck cache, so this only bites when the
+#: history is opened in the first moments after launch or the disk is slow.
+ARCHETYPE_MODEL_WAIT_SECONDS = 5.0
 
 
 class AppController(
@@ -194,9 +200,20 @@ class AppController(
         Resolving both here, per call, is what makes the format real. Callers
         run this on a worker thread (Match History does), which is required:
         deriving the rarity index reads and decompresses the bulk file.
+
+        The archetype model is the third such source: it is built from the
+        cached decklists on a worker thread at startup (see
+        :meth:`LifecycleMixin.run_initial_loads`). A history opened in the first
+        second or so waits briefly for that build rather than labelling every
+        match "Unknown"; past the wait it proceeds without a model, those
+        matches read "Unknown", and the next refresh classifies them.
         """
         kwargs.setdefault("card_manager", self.card_service.get_card_manager())
         kwargs.setdefault("rarity_index", self._loaded_rarity_index())
+        if "archetype_model" not in kwargs:
+            kwargs["archetype_model"] = get_archetype_model_service().wait_until_ready(
+                ARCHETYPE_MODEL_WAIT_SECONDS
+            )
         return _parse_all_gamelogs(**kwargs)
 
     def _loaded_rarity_index(self):
