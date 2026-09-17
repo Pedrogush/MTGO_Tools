@@ -10,6 +10,9 @@ Public API:
 - :func:`get_update_service` — module-level singleton accessor.
 - :class:`UpdateService.check` — throttled network check; returns the newer
   release or ``None``.
+- :class:`UpdateService.check_result` — the same check, reporting which of the
+  three outcomes it reached (newer release / up to date / could not ask). What
+  *File ▸ Check for updates* is built on, with ``force=True`` to skip the stamp.
 - :func:`parse_version` — ``"v1.2.3"`` → ``(1, 2, 3)``, or ``None``.
 
 Four properties matter more than the feature itself:
@@ -137,6 +140,19 @@ class _NoRelease:
 NO_RELEASE = _NoRelease()
 
 
+#: :attr:`CheckResult.outcome` when the check completed and named a release
+#: newer than the running build.
+OUTCOME_UPDATE_AVAILABLE = "update_available"
+#: The check completed and the running build is the newest published one (or
+#: nothing at all is published, which is the same thing from the user's side).
+OUTCOME_UP_TO_DATE = "up_to_date"
+#: The request never got an answer -- offline, DNS failure, rate limit, 5xx.
+#: Distinct from :data:`OUTCOME_UP_TO_DATE` because "GitHub says you are current"
+#: and "GitHub did not say anything" are opposite things to tell a user who just
+#: asked, and because only the first of the two is stamped.
+OUTCOME_UNREACHABLE = "unreachable"
+
+
 @dataclass(frozen=True)
 class UpdateInfo:
     """A published release newer than the running build.
@@ -160,6 +176,39 @@ class UpdateInfo:
     installer_url: str | None = None
     checksum_url: str | None = None
     installer_name: str | None = None  # e.g. "MTGOTools_Setup_v1.0.3.exe"
+
+
+@dataclass(frozen=True)
+class CheckResult:
+    """What one call to :meth:`UpdateService.check_result` found.
+
+    :meth:`UpdateService.check` collapses this to ``info``, which is all the
+    automatic launch check ever needed: it surfaces an update and stays silent
+    otherwise, so "up to date" and "could not ask" are both just ``None``. A
+    user who picked *File ▸ Check for updates* is owed the difference (#1041),
+    which is the whole reason this type exists.
+
+    ``info`` can be set even when :attr:`outcome` is :data:`OUTCOME_UNREACHABLE`:
+    that is the previously stamped answer, which :meth:`UpdateService.check` has
+    always fallen back to on a failed request. The outcome still says the request
+    failed -- a caller reporting to the user leads with that rather than present
+    a cached answer as a fresh one.
+    """
+
+    outcome: str
+    info: UpdateInfo | None = None
+    #: The running version the check was made for, so a caller can say "you are
+    #: on v1.2.15" without reaching for :data:`utils.constants.APP_VERSION` and
+    #: risking a different answer than the one the service compared against.
+    current_version: str = ""
+
+    @property
+    def update_available(self) -> bool:
+        return self.outcome == OUTCOME_UPDATE_AVAILABLE
+
+    @property
+    def reachable(self) -> bool:
+        return self.outcome != OUTCOME_UNREACHABLE
 
 
 class _CheckStamp(msgspec.Struct):
@@ -297,7 +346,7 @@ class UpdateService:
         self.check_interval = check_interval
         self.request_timeout = request_timeout
 
-    def check(self) -> UpdateInfo | None:
+    def check(self, *, force: bool = False) -> UpdateInfo | None:
         """Return the newest published release when it is newer than this build.
 
         Answers from the on-disk stamp while it is still fresh, so the API is
@@ -306,14 +355,38 @@ class UpdateService:
         clock that ran fast and was then corrected would otherwise pin the
         cached answer permanently.
 
-        Setting :data:`FORCE_CHECK_ENV_VAR` skips the stamp entirely and asks
-        GitHub every launch. That is a development affordance, not a feature:
-        see the constant for why it is an env var.
+        ``force=True`` (or :data:`FORCE_CHECK_ENV_VAR`) skips the stamp entirely
+        and asks GitHub. See :meth:`check_result` for the three outcomes that
+        collapse into this method's ``UpdateInfo | None``.
+        """
+        return self.check_result(force=force).info
+
+    def check_result(self, *, force: bool = False) -> CheckResult:
+        """:meth:`check`, keeping "up to date" and "could not ask" apart.
+
+        ``force=True`` is *File ▸ Check for updates* (#1041): the user asked, so
+        the once-a-day stamp is not an answer to give them -- a release published
+        after the last check would otherwise stay invisible for up to a day, with
+        no way to re-ask short of deleting the stamp file by hand. It is one
+        request per click, which is why the throttle's reason for existing
+        (GitHub's 60-per-hour unauthenticated budget) survives it.
+
+        Setting :data:`FORCE_CHECK_ENV_VAR` does the same thing for *every*
+        check, launch included. That affordance predates this parameter and
+        stays: see the constant for why it is an env var, and note that it is
+        read here rather than passed in, so it keeps working for callers that
+        know nothing about ``force``.
+
+        A completed check replaces the stamp exactly as the automatic one does,
+        so asking by hand also resets the 24-hour clock rather than leaving the
+        next launch to re-ask. A *failed* one writes nothing -- a failed attempt
+        is not a completed check.
         """
         stamp = self._read_stamp()
-        forced = force_check_requested()
+        forced = force or force_check_requested()
         if forced:
-            logger.info(f"Update check: {FORCE_CHECK_ENV_VAR} is set, ignoring the cached result")
+            reason = "requested" if force else f"{FORCE_CHECK_ENV_VAR} is set"
+            logger.info(f"Update check: {reason}, ignoring the cached result")
         elif stamp is not None:
             if stamp.current_version != self.current_version:
                 # A different build wrote that answer, so it is not an answer to
@@ -335,7 +408,7 @@ class UpdateService:
                 )
             elif 0 <= (time.time() - stamp.checked_at) < self.check_interval:
                 logger.debug("Update check: cached result is still fresh")
-                return self._to_update_info(stamp)
+                return self._result(stamp)
 
         payload = self._fetch_latest_release()
         if payload is None:
@@ -343,7 +416,7 @@ class UpdateService:
             # a failed attempt is not a completed check, so the next launch
             # retries rather than sitting on missing information for a full
             # interval. The retry rate is bounded by launches, not by a timer.
-            return self._to_update_info(stamp)
+            return self._result(stamp, reachable=False)
 
         if payload is NO_RELEASE:
             # GitHub answered, and the answer is "nothing is published". That is
@@ -354,11 +427,22 @@ class UpdateService:
             # answer it should have discarded.
             stamp = _CheckStamp(checked_at=time.time(), current_version=self.current_version)
             self._write_stamp(stamp)
-            return self._to_update_info(stamp)
+            return self._result(stamp)
 
         stamp = self._stamp_from_payload(payload)
         self._write_stamp(stamp)
-        return self._to_update_info(stamp)
+        return self._result(stamp)
+
+    def _result(self, stamp: _CheckStamp | None, *, reachable: bool = True) -> CheckResult:
+        """Label a stamp with what it means for the caller that just asked."""
+        info = self._to_update_info(stamp)
+        if not reachable:
+            outcome = OUTCOME_UNREACHABLE
+        elif info is None:
+            outcome = OUTCOME_UP_TO_DATE
+        else:
+            outcome = OUTCOME_UPDATE_AVAILABLE
+        return CheckResult(outcome=outcome, info=info, current_version=self.current_version)
 
     # ------------------------------------------------------------------ network ------------------------------------------------------------------
     def _fetch_latest_release(self) -> dict[str, Any] | _NoRelease | None:
@@ -499,7 +583,11 @@ __all__ = [
     "INSTALLER_ASSET_SUFFIX",
     "LATEST_RELEASE_API_URL",
     "NO_RELEASE",
+    "OUTCOME_UNREACHABLE",
+    "OUTCOME_UPDATE_AVAILABLE",
+    "OUTCOME_UP_TO_DATE",
     "RELEASES_PAGE_URL",
+    "CheckResult",
     "UpdateInfo",
     "UpdateService",
     "get_update_service",

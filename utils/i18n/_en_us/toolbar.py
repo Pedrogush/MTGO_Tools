@@ -24,6 +24,8 @@ MESSAGES: dict[str, str] = {
     "menu.load": "Load",
     "menu.save_deck": "Save Deck…",
     "menu.load_deck": "Load Deck…",
+    "menu.check_for_updates": "Check for Updates…",
+    "menu.check_for_updates.help": "Ask GitHub right now whether a newer version has been published",
     "toolbar.load_collection": "Load Collection",
     "toolbar.download_card_images": "Enable Offline Images Mode",
     "toolbar.update_card_database": "Update Card Database",
