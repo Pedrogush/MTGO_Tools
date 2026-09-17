@@ -395,6 +395,11 @@ class AutomationClient:
         """Get the builder results list geometry (column widths vs. client width)."""
         return self._send_command("get_builder_list_metrics")
 
+    def drag_targets(self, limit: int = 10) -> dict[str, Any]:
+        """Screen rectangles of the search rows, the deck zone panes and their
+        grid cards -- the coordinates a physical drag onto a zone needs (#1033)."""
+        return self._send_command("drag_targets", limit=limit)
+
     def scroll_builder_results(self, items: int = 10) -> dict[str, Any]:
         """Scroll the builder results list by the given number of items."""
         return self._send_command("scroll_builder_results", items=items)

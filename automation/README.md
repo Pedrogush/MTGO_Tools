@@ -220,6 +220,30 @@ gesture is scheduled. Two notes from using it:
   priming a drag (the view's click-to-deselect), so a script that drags one card
   twice must pick up something else in between.
 
+## Dragging a search result onto a deck zone
+
+The card search's drag (#1033) starts inside the native list control --
+comctl32 decides when a press has travelled far enough to be a drag -- so posted
+wx events cannot prove it works; only real mouse input can. `drag-targets`
+supplies the screen coordinates that input needs:
+
+```bash
+python -m automation.cli --json drag-targets --limit 5
+```
+
+It reports the visible search result rows (`index`, `name`, `selected`,
+`rect`), each deck zone's pane (`rect`, `shown`, `view_mode`, and `zone_at_centre`
+-- what the frame's own drop test resolves at the pane's centre, `null` when the
+pane is hidden behind another workspace tab), and the first grid-view cards of
+each zone for a zone-to-zone drag. Every `rect` is `[x, y, width, height]` in
+screen pixels, ready for `SetCursorPos` + `mouse_event`. Read the zones back
+with `get-zone-cards`.
+
+Two things that look like bugs and are not: a grid card's `rect` can lie outside
+its pane when the view is scrolled (pressing there lands on whatever *is* on
+screen), and pressing the grid card that is already the only selection clears
+it instead of starting a drag.
+
 ## Driving the mainboard/sideboard sash
 
 The deck workspace's split (`widgets/splitter.DarkSplitter`, `SP_LIVE_UPDATE`) is
