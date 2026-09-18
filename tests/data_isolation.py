@@ -16,7 +16,10 @@ because three kinds of reference keep the real path:
 The root conftest applies it once for the whole run (so late threads land in a
 session tmp dir), and ``tests/ui/conftest.py`` layers a per-test redirect on top.
 :func:`snapshot_real_data` backs the guard that fails the run if anything still
-gets through.
+gets through, and :func:`real_paths_written_here` tells that guard which of the
+changed files this process actually wrote -- the app resolves its data dirs to
+the same checkout, so a developer running it alongside the suite otherwise fails
+the run with a write no test made.
 
 Import it as ``data_isolation`` (like ``test_helpers``), never ``tests.data_isolation``:
 a second copy would record the already-patched paths as the "real" ones.
@@ -150,6 +153,92 @@ def redirect_bound_paths(monkeypatch: pytest.MonkeyPatch, roots: dict[str, Path]
                 patched = rebase(current, roots)
             if patched != current:
                 monkeypatch.setattr(owner, attr, patched)
+
+
+# Real data paths *this* process opened for writing, recorded by the audit hook
+# below. The guard compares them against the paths that changed during the run,
+# because the run is not the only thing on the machine allowed to touch them:
+# the app itself resolves its data dirs to the primary worktree (see
+# ``utils/constants/paths``), so a developer running ``main.py --automation``
+# while the suite runs has a deck/card cache writing underneath it. Without
+# attribution the guard blames whichever test happened to be last.
+_own_real_writes: set[str] = set()
+
+# The audited events that can change a file. ``open`` covers ``builtins.open``,
+# ``io.open`` (so ``Path.write_text`` too) and ``os.open``; ``sqlite3.connect``
+# is separate because SQLite opens the database file in C, and it counts as a
+# write even for a read-only query (closing a WAL database checkpoints it).
+_WRITE_EVENTS = frozenset(
+    {
+        "open",
+        "sqlite3.connect",
+        "os.remove",
+        "os.rename",
+        "os.mkdir",
+        "os.rmdir",
+        "os.truncate",
+        "shutil.copyfile",
+        "shutil.move",
+    }
+)
+_TWO_PATH_EVENTS = frozenset({"os.rename", "shutil.copyfile", "shutil.move"})
+_WRITE_FLAGS = os.O_WRONLY | os.O_RDWR | os.O_CREAT | os.O_TRUNC | os.O_APPEND
+# Trailing separator so ``cache/`` does not also claim a sibling ``cache_old/``.
+_REAL_DIR_PREFIXES = tuple(
+    os.path.join(os.path.normcase(os.path.abspath(directory)), "")
+    for directory in REAL_DATA_DIRS.values()
+)
+
+
+def normalized(path: object) -> str:
+    """*path* as the absolute, case-folded string both sides of the guard compare."""
+    return os.path.normcase(os.path.abspath(os.fspath(path)))  # type: ignore[arg-type]
+
+
+def _note_write(path: object) -> None:
+    try:
+        target = normalized(path)
+    except (TypeError, ValueError):
+        return
+    if target.startswith(_REAL_DIR_PREFIXES):
+        _own_real_writes.add(target)
+
+
+def _audit_real_writes(event: str, args: tuple) -> None:
+    """Record real-data paths this process writes. Installed process-wide, once.
+
+    Runs for every audited event, so it does the cheapest possible check first
+    and never raises: an exception here would propagate into whatever the
+    interpreter was auditing.
+    """
+    if event not in _WRITE_EVENTS:
+        return
+    try:
+        if event == "open":
+            path, mode, flags = args
+            if isinstance(mode, str):
+                if not any(char in mode for char in "wxa+"):
+                    return
+            elif isinstance(flags, int) and not flags & _WRITE_FLAGS:
+                return
+            _note_write(path)
+        elif event in _TWO_PATH_EVENTS:
+            _note_write(args[0])
+            _note_write(args[1])
+        else:
+            _note_write(args[0])
+    except Exception:
+        # An audit hook must never raise: the exception would surface from the
+        # unrelated call the interpreter was auditing.
+        pass
+
+
+sys.addaudithook(_audit_real_writes)
+
+
+def real_paths_written_here() -> set[str]:
+    """The real data paths this process has opened for writing so far."""
+    return set(_own_real_writes)
 
 
 def snapshot_real_data() -> dict[str, tuple[int, int]]:

@@ -3,9 +3,14 @@
 This module provides fixtures that are available to all tests in the project.
 """
 
+import os
+import warnings
+
 import pytest
 from data_isolation import (
     REAL_DATA_DIRS,
+    normalized,
+    real_paths_written_here,
     redirect_bound_paths,
     session_data_dirs,
     snapshot_real_data,
@@ -24,6 +29,18 @@ def real_data_untouched():
     test_notes_persist_across_frames clearing deck_notes.json, and the radar,
     card-pool and image caches being created by repositories built with their
     real default paths.
+
+    A changed file is only the suite's fault if this process wrote it. The app
+    resolves its data dirs to the same checkout the suite runs from, so a
+    developer running ``main.py --automation`` (or a second worktree's suite)
+    keeps writing the deck and card caches while the run happens; blaming the
+    run for that produced an ``ERROR at teardown`` on whichever test happened to
+    be last, with a longer run being likelier to catch a write. So the assertion
+    covers the paths ``data_isolation``'s audit hook saw this process open for
+    writing, and anything else that moved is reported as a warning naming the
+    files. CI has no second writer, so there it stays a hard failure -- that is
+    also what still covers a write made by a subprocess the suite spawned, which
+    the audit hook cannot see.
     """
     before = snapshot_real_data()
     yield
@@ -31,11 +48,20 @@ def real_data_untouched():
     changed = sorted(
         path for path in before.keys() | after.keys() if before.get(path) != after.get(path)
     )
-    assert not changed, (
-        f"Tests modified the user's real data: {changed[:20]}. Something reached a real "
-        "path that tests/data_isolation.py did not redirect. (Running the app at the "
-        "same time as the suite also trips this.)"
+    written_here = real_paths_written_here()
+    ours = [path for path in changed if normalized(path) in written_here]
+    assert not ours, (
+        f"Tests modified the user's real data: {ours[:20]}. Something reached a real "
+        "path that tests/data_isolation.py did not redirect."
     )
+    if changed:  # Nothing here was written by this process; see the docstring.
+        message = (
+            f"{len(changed)} file(s) under the real data dirs changed during the run, but no "
+            f"test process wrote them: {changed[:20]}. Another process on this machine (the "
+            "app, or a second checkout's suite) is writing the shared data dirs."
+        )
+        assert not os.environ.get("CI"), message
+        warnings.warn(message, stacklevel=1)
 
 
 @pytest.fixture(scope="session", autouse=True)
