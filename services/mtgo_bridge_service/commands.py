@@ -150,28 +150,12 @@ def fetch_collection_snapshot_async(
     return submit_bridge_command("collection", bridge_path=bridge_path, context=context)
 
 
-def fetch_match_history_async(
-    *,
-    bridge_path: str | os.PathLike[str] | None = None,
-    context: mp.context.BaseContext | None = None,
-) -> BridgeCommandFuture:
-    return submit_bridge_command("history", bridge_path=bridge_path, context=context)
-
-
 def fetch_collection_snapshot(
     *,
     bridge_path: str | os.PathLike[str] | None = None,
     timeout: float | None = None,
 ) -> Mapping[str, Any]:
     return run_bridge_command("collection", bridge_path=bridge_path, timeout=timeout)
-
-
-def fetch_match_history(
-    *,
-    bridge_path: str | os.PathLike[str] | None = None,
-    timeout: float | None = None,
-) -> Mapping[str, Any]:
-    return run_bridge_command("history", bridge_path=bridge_path, timeout=timeout)
 
 
 def fetch_trade_snapshot(

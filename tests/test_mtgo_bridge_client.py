@@ -407,18 +407,6 @@ def test_fetch_collection_snapshot_invokes_collection_mode(tmp_path: Path) -> No
     assert payload == {"mode": "collection", "argv": ["collection"]}
 
 
-def test_fetch_match_history_invokes_history_mode(tmp_path: Path) -> None:
-    bridge = _write_executable_bridge(
-        tmp_path,
-        r"""
-        import json, sys
-        print(json.dumps({"argv": sys.argv[1:]}))
-        """,
-    )
-    payload = mtgo_bridge_client.fetch_match_history(bridge_path=str(bridge), timeout=30)
-    assert payload == {"argv": ["history"]}
-
-
 def test_fetch_trade_snapshot_passes_status_subcommand(tmp_path: Path) -> None:
     bridge = _write_executable_bridge(
         tmp_path,
@@ -468,20 +456,5 @@ def test_async_entry_point_returns_future_resolving_payload(tmp_path: Path) -> N
     future = mtgo_bridge_client.fetch_collection_snapshot_async(bridge_path=str(bridge))
     try:
         assert future.result(timeout=30) == {"argv": ["collection"]}
-    finally:
-        future.cancel()
-
-
-def test_history_async_entry_point_returns_future_resolving_payload(tmp_path: Path) -> None:
-    bridge = _write_executable_bridge(
-        tmp_path,
-        r"""
-        import json, sys
-        print(json.dumps({"argv": sys.argv[1:]}))
-        """,
-    )
-    future = mtgo_bridge_client.fetch_match_history_async(bridge_path=str(bridge))
-    try:
-        assert future.result(timeout=30) == {"argv": ["history"]}
     finally:
         future.cancel()
