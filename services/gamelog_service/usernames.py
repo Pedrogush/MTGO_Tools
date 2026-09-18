@@ -10,23 +10,64 @@ from loguru import logger
 from utils.constants import BRIDGE_PATH
 
 
-def get_current_username() -> str | None:
-    """Get current MTGO username via bridge."""
+# Measured against a live client: ~3.1s cold, ~4.4s when another bridge process
+# is attached (SDK reads serialise on MTGO's UI thread). 10s left little headroom.
+BRIDGE_USERNAME_TIMEOUT_SECONDS = 25.0
 
+
+def get_current_username() -> str | None:
+    """Get current MTGO username via bridge.
+
+    Returns None when the username cannot be determined, but never silently:
+    every failure mode logs at WARNING. The bridge exits 0 and prints
+    ``{"error": ...}`` when it cannot reach the client, so a plain
+    ``data.get("username")`` miss is a real failure, not a quiet no-op.
+    """
     try:
         result = subprocess.run(
-            [BRIDGE_PATH, "username"], capture_output=True, text=True, timeout=10
+            [BRIDGE_PATH, "username"],
+            capture_output=True,
+            text=True,
+            # text=True alone decodes with the Windows locale codec, which raises
+            # UnicodeDecodeError on a non-ASCII MTGO account name.
+            encoding="utf-8",
+            errors="replace",
+            timeout=BRIDGE_USERNAME_TIMEOUT_SECONDS,
         )  # nosec B603 - args are fixed for bridge helper
+    except subprocess.TimeoutExpired:
+        logger.warning(
+            "MTGO bridge 'username' timed out after {}s", BRIDGE_USERNAME_TIMEOUT_SECONDS
+        )
+        return None
+    except OSError as exc:
+        logger.warning("Could not run MTGO bridge 'username': {}", exc)
+        return None
 
-        if result.returncode == 0:
-            data = json.loads(result.stdout)
-            username = data.get("username")
-            if username:
-                logger.debug(f"Current MTGO user: {username}")
-                return username
-    except Exception as e:
-        logger.debug(f"Could not get username via bridge: {e}")
+    if result.returncode != 0:
+        logger.warning(
+            "MTGO bridge 'username' exited {}: {}",
+            result.returncode,
+            (result.stderr or "").strip()[:300],
+        )
+        return None
 
+    try:
+        data = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        logger.warning("MTGO bridge 'username' returned non-JSON: {!r}", result.stdout[:300])
+        return None
+
+    username = data.get("username") if isinstance(data, dict) else None
+    if username:
+        logger.debug("Current MTGO user: {}", username)
+        return username
+
+    # Previously this path returned None with no logging at any level, so a
+    # failing bridge was indistinguishable from "not logged in".
+    logger.warning(
+        "MTGO bridge could not determine username: {}",
+        (isinstance(data, dict) and data.get("error")) or "no 'username' field in response",
+    )
     return None
 
 
