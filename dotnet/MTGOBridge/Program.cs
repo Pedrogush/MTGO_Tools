@@ -681,7 +681,7 @@ static async Task RunWatchLoopAsync(
     TimeSpan? currencyInterval = null)
 {
     // The challenge-timer read is cheap and needs second-level freshness; the
-    // currency read scans the whole frozen collection (seconds, remote) and
+    // currency read takes one GetFrozenCollection round trip (~0.9-1.3s) and
     // changes slowly — leagues run well over an hour — so the two are split into
     // independent loops at very different cadences instead of one combined tick.
     timerInterval ??= TimeSpan.FromMilliseconds(500);
@@ -696,12 +696,16 @@ static async Task RunWatchLoopAsync(
     };
 
     // The SDK transport is concurrency-safe, but reads are marshalled onto MTGO's
-    // UI thread server-side, so a long currency scan blocks timer reads anyway
-    // (measured: a concurrent scan stalls the timer loop entirely). The lock keeps
-    // the timer loop responsive instead — it grabs the lock without blocking and
-    // reuses cached timers if the (rare, idle-only) currency scan holds it. The
-    // currency loop additionally pauses while a timer is active, so in steady state
-    // during an event the two never contend.
+    // UI thread server-side, so a concurrent currency scan delays timer reads
+    // anyway. The lock keeps the timer loop responsive — it grabs the lock without
+    // blocking and reuses cached timers if the currency scan holds it. The currency
+    // loop additionally pauses while a timer is active, so in steady state during
+    // an event the two never contend.
+    //
+    // The scan used to take ~150s because IsEventTicket read entry.Card per entry;
+    // it is now a single round trip, so this contention is far milder than when
+    // the machinery was written. It is kept because one round trip is still not
+    // free and the timer must stay at second-level freshness.
     using var sdkLock = new SemaphoreSlim(1, 1);
     var cache = new WatchCache();
 
@@ -807,7 +811,8 @@ static async Task<bool> TryAcquireAsync(SemaphoreSlim sdkLock, CancellationToken
 }
 
 // Refreshes the cached currency on a coarse cadence. Holds the SDK lock for the
-// duration of the (slow) scan; the timer loop keeps emitting meanwhile.
+// duration of the scan (one round trip, ~0.9-1.3s); the timer loop keeps
+// emitting meanwhile.
 static async Task RunCurrencyRefreshLoopAsync(
     SemaphoreSlim sdkLock,
     WatchCache cache,
@@ -910,16 +915,14 @@ static bool IsEventTicket(CardQuantityPair? entry)
         return false;
     }
 
-    var card = entry.Card;
-    if (card != null)
-    {
-        var isTicket = SafeGet<bool?>(card, "IsTicket", null);
-        if (isTicket == true)
-        {
-            return true;
-        }
-    }
-
+    // Do NOT read entry.Card here. GetFrozenCollection populates Id/Name/Quantity
+    // locally at zero IPC cost, but entry.Card forces a remote round trip per
+    // entry: CardDataManager.GetCardDefinitionForCatId (~54.8ms) followed by
+    // MagicEntityDefinition.get_IsTicket (~17.2ms). Measured against a
+    // 2,069-card collection that was ~150s per scan and 69% of all MTGOSDK IPC
+    // traffic in a 54-minute session, to produce three integers. The name match
+    // below already answers the question, and RunCurrencyRefreshLoopAsync runs
+    // this every 10 minutes while the user may be in a game.
     return MatchesName(entry.Name, "Event Ticket", "Event Tickets");
 }
 
@@ -1311,8 +1314,8 @@ sealed class WatchCache
 
     // True while at least one challenge timer is being tracked. The currency loop
     // watches this and pauses: the SDK serialises reads on MTGO's UI thread, so a
-    // multi-second currency scan would otherwise block fresh timer reads. Pausing
-    // gives the timer exclusive, uninterrupted access whenever an event is live.
+    // currency scan would otherwise delay fresh timer reads. Pausing gives the
+    // timer exclusive, uninterrupted access whenever an event is live.
     public bool HasActiveTimer
     {
         get => _hasActiveTimer;
