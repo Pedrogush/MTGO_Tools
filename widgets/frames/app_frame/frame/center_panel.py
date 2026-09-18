@@ -19,6 +19,7 @@ from utils.constants import (
 from utils.perf import timed
 from widgets.notebook import DEFAULT_AGW_STYLE, make_flat_notebook
 from widgets.panels.card_table_panel import CardTablePanel
+from widgets.panels.deck_goldfish_panel import DeckGoldfishPanel
 from widgets.panels.deck_notes_panel import DeckNotesPanel
 from widgets.panels.deck_stats_panel import DeckStatsPanel
 from widgets.panels.sideboard_guide_panel import SideboardGuidePanel
@@ -122,6 +123,19 @@ class CenterPanelBuilderMixin(_Base):
         )
         self.deck_notes_panel.SetToolTip(self._t("tabs.tooltip.deck_notes"))
         self.deck_tabs.AddPage(self.deck_notes_panel, self._t("tabs.deck_notes"))
+
+        # Goldfish (issue #1045), immediately left of Deck Stats as the issue
+        # asks. The two are neighbours for a reason: the stats tab answers "how
+        # often does this deck keep a two-lander" with a hypergeometric curve,
+        # and this one answers it by dealing the hand.
+        self.deck_goldfish_panel = DeckGoldfishPanel(
+            self.deck_tabs,
+            get_card_image=self.controller.get_card_image,
+            get_metadata=self.controller.card_repo.get_card_metadata,
+            locale=self.locale,
+        )
+        self.deck_goldfish_panel.SetToolTip(self._t("tabs.tooltip.goldfish"))
+        self.deck_tabs.AddPage(self.deck_goldfish_panel, self._t("tabs.goldfish"))
 
         # Phase 5: the stats panel is a real tab. It was constructed with
         # create_webview=False and immediately Hide()n, so a whole package

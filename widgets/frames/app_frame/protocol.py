@@ -12,6 +12,7 @@ from widgets.menu_bar import AppMenuBar, MenuEntry, MenuSpec
 from widgets.panels.card_inspector_panel import CardInspectorPanel
 from widgets.panels.card_panel import CardPanel
 from widgets.panels.card_table_panel import CardTablePanel
+from widgets.panels.deck_goldfish_panel import DeckGoldfishPanel
 from widgets.panels.deck_notes_panel import DeckNotesPanel
 from widgets.panels.deck_stats_panel import DeckStatsPanel
 from widgets.panels.sideboard_guide_panel import SideboardGuidePanel
@@ -68,6 +69,7 @@ class AppFrameProto(Protocol):
     main_table: CardTablePanel
     side_table: CardTablePanel
     card_inspector_panel: CardInspectorPanel
+    deck_goldfish_panel: DeckGoldfishPanel
     deck_stats_panel: DeckStatsPanel
     deck_notes_panel: DeckNotesPanel
     sideboard_guide_panel: SideboardGuidePanel
