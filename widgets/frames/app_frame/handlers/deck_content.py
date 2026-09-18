@@ -205,6 +205,72 @@ class DeckContentHandlers(_Base):
         wx.MessageBox(message, "Deck Saved", wx.OK | wx.ICON_INFORMATION)
         self._set_status("app.status.deck_saved")
 
+    def on_save_diff_clicked(self: AppFrame, _event: wx.CommandEvent | None = None) -> None:
+        """Save Collection Diff: the deck minus what you already own (#1044).
+
+        No format/archetype dialog: the result is a shopping list, not a deck to
+        register, so it goes straight to Save As with the deck's own file name
+        plus a suffix.
+        """
+        title = self._t("deck_diff.title")
+        deck_content = self.controller.build_deck_text(self.zone_cards).strip()
+        if not deck_content:
+            wx.MessageBox(self._t("deck_diff.no_deck"), title, wx.OK | wx.ICON_INFORMATION)
+            return
+
+        collection = self.controller.collection_service
+        if not collection.get_inventory():
+            # Without a collection every card reads as missing, which would
+            # silently hand back the deck itself. Say so instead.
+            wx.MessageBox(self._t("deck_diff.no_collection"), title, wx.OK | wx.ICON_INFORMATION)
+            return
+
+        diff = collection.build_collection_diff(deck_content)
+        if diff.is_empty:
+            wx.MessageBox(self._t("deck_diff.nothing_missing"), title, wx.OK | wx.ICON_INFORMATION)
+            return
+
+        current_deck = self.controller.deck_repo.get_current_deck()
+        stem = f"{self._default_save_file_name(current_deck)}_{self._t('deck_diff.file_suffix')}"
+        default_dir = self.controller.resolve_deck_dialog_dir()
+        logger.info(f"Save Collection Diff: opening Save As in {default_dir}")
+        with wx.FileDialog(
+            self,
+            title,
+            defaultDir=str(default_dir),
+            defaultFile=f"{stem}.txt",
+            wildcard=self._t("deck_save.file_filter"),
+            style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT,
+        ) as dlg:
+            if dlg.ShowModal() != wx.ID_OK:
+                logger.info("Save Collection Diff cancelled (file)")
+                return
+            file_path = Path(dlg.GetPath())
+        if not file_path.suffix:
+            file_path = file_path.with_suffix(".txt")
+
+        try:
+            # The deck repository's writer, not the full save_deck path: a diff
+            # is not a deck and has no business in the saved-decks database.
+            saved_path = self.controller.deck_repo.write_deck_file(file_path, diff.text)
+        except OSError as exc:  # pragma: no cover - filesystem failure
+            wx.MessageBox(
+                self._t("deck_diff.write_failed", error=exc), title, wx.OK | wx.ICON_ERROR
+            )
+            return
+
+        wx.MessageBox(
+            self._t(
+                "deck_diff.saved",
+                path=saved_path,
+                missing=diff.missing_total,
+                required=diff.required_total,
+            ),
+            title,
+            wx.OK | wx.ICON_INFORMATION,
+        )
+        self._set_status("app.status.deck_diff_saved", count=diff.missing_total)
+
     def _initial_save_format(
         self: AppFrame, deck_text: str, current_deck: dict[str, Any] | None
     ) -> str:

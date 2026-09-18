@@ -37,11 +37,13 @@ class ResultsSectionBuilderMixin(_Base):
             on_save=self._on_save,
             on_daily_average=self._on_daily_average,
             on_load=self._on_load,
+            on_save_diff=self._on_save_diff,
             labels={
                 "daily_average": self._labels.get("daily_average", "Today's Average"),
                 "copy": self._labels.get("copy", "Copy"),
                 "load_deck": self._labels.get("load_deck", "Load Deck"),
                 "save_deck": self._labels.get("save_deck", "Save Deck"),
+                "save_diff": self._labels.get("save_diff", "Save Collection Diff"),
                 "daily_average_tooltip": self._labels.get("daily_average_tooltip", ""),
                 "copy_tooltip": self._labels.get("copy_tooltip", ""),
                 "load_deck_tooltip": self._labels.get("load_deck_tooltip", ""),
