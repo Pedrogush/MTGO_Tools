@@ -67,6 +67,29 @@ DECK_CARD_TEMPLATE_BORDER_WIDTH = 2  # pen width for the template placeholder bo
 DECK_CARD_TEMPLATE_BORDER_ALPHA = 120  # alpha channel for the template placeholder border
 DECK_CARD_ACTIVE_BORDER_WIDTH = 3  # pen width for the active-selection highlight border
 
+# Goldfish tab card sizing (issue #1045).
+#
+# Smaller than the deck workspace's DECK_CARD_WIDTH/HEIGHT and for a different
+# reason: the grid shows one cell per *distinct* card and can scroll, while the
+# goldfish table shows every copy at once and must not. A seven-card hand plus a
+# played-out board has to fit inside one tab at the window's enforced minimum, so
+# the card is sized to the space rather than the space to the card. The ratio is
+# the 63x88mm Magic card's, rounded to whole pixels (100 / 0.7159 = 139.7).
+GOLDFISH_CARD_WIDTH = 100
+GOLDFISH_CARD_HEIGHT = 140
+# A tapped card is drawn rotated, so the row it sits in has to be wide enough for
+# its *long* edge; this is the side of the square that both orientations fit in.
+GOLDFISH_CARD_SPAN = GOLDFISH_CARD_HEIGHT
+# Cards in hand fan out left to right and start overlapping once the strip runs
+# out -- never closer than this, so every card keeps a readable sliver of title.
+GOLDFISH_HAND_MIN_STEP = 28
+# How far the pointer must travel with the button down before a click on a card
+# becomes a drag of it. Below this a tap-toggle would be impossible to hit.
+GOLDFISH_DRAG_THRESHOLD = 5
+# Auto-placement (a plain click, rather than a drag, from hand) walks a grid of
+# this many columns across the table so successive cards do not stack up.
+GOLDFISH_AUTO_PLACE_COLUMNS = 6
+
 # Deck Stats Panel — mana SVG icon sizing
 STATS_MANA_SVG_SOURCE_SIZE = 32  # original width/height in SVG files
 STATS_MANA_SVG_DISPLAY_SIZE = 18  # rendered width/height in the stats HTML
