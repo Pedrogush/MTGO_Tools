@@ -79,7 +79,9 @@ def test_null_username_still_reports_error(monkeypatch, captured_logs):
     """The bridge now always emits the key, so null + error must still warn."""
     _patch_run(
         monkeypatch,
-        _Completed(stdout=json.dumps({"username": None, "error": "TypeInitializationException: x"})),
+        _Completed(
+            stdout=json.dumps({"username": None, "error": "TypeInitializationException: x"})
+        ),
     )
     assert usernames_mod.get_current_username() is None
     assert any("TypeInitializationException" in m for lvl, m in captured_logs if lvl == "warning")

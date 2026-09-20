@@ -9,7 +9,6 @@ from loguru import logger
 
 from utils.constants import BRIDGE_PATH
 
-
 # Measured against a live client: ~3.1s cold, ~4.4s when another bridge process
 # is attached (SDK reads serialise on MTGO's UI thread). 10s left little headroom.
 BRIDGE_USERNAME_TIMEOUT_SECONDS = 25.0
