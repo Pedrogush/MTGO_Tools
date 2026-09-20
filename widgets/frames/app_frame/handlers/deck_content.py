@@ -108,6 +108,9 @@ class DeckContentHandlers(_Base):
                 deck_record[field] = saved[field]
 
         self._on_deck_content_ready(deck_text, source="file")
+        # The file may have been edited outside the app since it was last saved;
+        # its content is the only thing that can say so.
+        self._check_external_edit(file_ref, deck_text)
         if deck_record.get("archetype"):
             self._set_status(
                 "app.status.deck_loaded_with_archetype",
@@ -204,6 +207,9 @@ class DeckContentHandlers(_Base):
             message += f"\nDatabase ID: {deck_id}"
         wx.MessageBox(message, "Deck Saved", wx.OK | wx.ICON_INFORMATION)
         self._set_status("app.status.deck_saved")
+        # The save already committed a version (DeckWorkflowService.save_deck);
+        # this only brings the graph into step with it.
+        self.refresh_deck_history()
 
     def _initial_save_format(
         self: AppFrame, deck_text: str, current_deck: dict[str, Any] | None

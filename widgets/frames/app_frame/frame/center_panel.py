@@ -19,6 +19,7 @@ from utils.constants import (
 from utils.perf import timed
 from widgets.notebook import DEFAULT_AGW_STYLE, make_flat_notebook
 from widgets.panels.card_table_panel import CardTablePanel
+from widgets.panels.deck_history_panel import DeckHistoryPanel
 from widgets.panels.deck_notes_panel import DeckNotesPanel
 from widgets.panels.deck_stats_panel import DeckStatsPanel
 from widgets.panels.sideboard_guide_panel import SideboardGuidePanel
@@ -137,6 +138,19 @@ class CenterPanelBuilderMixin(_Base):
         self.deck_stats_panel.SetToolTip(self._t("tabs.tooltip.deck_stats"))
         self.deck_tabs.AddPage(self.deck_stats_panel, self._t("tabs.deck_stats"))
         self.stats_summary = self.deck_stats_panel.summary_label
+
+        # The version graph. It reads the deck's history rather than the loaded
+        # zones, so it is refreshed when the tab is shown and after any action
+        # that moves HEAD -- not on every card edit.
+        self.deck_history_panel = DeckHistoryPanel(
+            self.deck_tabs,
+            deck_repo=self.controller.deck_repo,
+            on_checkout=self._on_history_checkout,
+            on_status_update=self._set_status,
+            locale=self.locale,
+        )
+        self.deck_history_panel.SetToolTip(self._t("tabs.tooltip.deck_history"))
+        self.deck_tabs.AddPage(self.deck_history_panel, self._t("tabs.deck_history"))
         return section
 
     def _build_deck_tables_tab(self) -> None:
