@@ -19,6 +19,8 @@ Split by responsibility into internal modules mirroring
   (``DeckHistoryMixin``)
 - ``deck_patterns``: capability-explorer readout and turn selection
   (``DeckPatternsMixin``)
+- ``deck_baseline``: archetype-baseline computation, readout and root pinning
+  (``DeckBaselineMixin``)
 - ``zone_editing``: mainboard/sideboard/out zone editing (``ZoneEditingMixin``)
 - ``builder``: deck-builder search/filters/scrolling (``BuilderMixin``)
 - ``sash``: splitter sash reads + scripted live drags (``SashMixin``)
@@ -37,6 +39,7 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 from automation.server.builder import BuilderMixin
+from automation.server.deck_baseline import DeckBaselineMixin
 from automation.server.deck_history import DeckHistoryMixin
 from automation.server.deck_patterns import DeckPatternsMixin
 from automation.server.deck_research import DeckResearchMixin
@@ -66,6 +69,7 @@ class AutomationServer(
     DeckResearchMixin,
     DeckHistoryMixin,
     DeckPatternsMixin,
+    DeckBaselineMixin,
     ZoneEditingMixin,
     BuilderMixin,
     ManaRenderingMixin,
@@ -134,6 +138,12 @@ class AutomationServer(
             "deck_history_baseline": self._handle_deck_history_baseline,
             "deck_patterns": self._handle_deck_patterns,
             "deck_patterns_refresh": self._handle_deck_patterns_refresh,
+            "deck_baseline": self._handle_deck_baseline,
+            "deck_baseline_compute": self._handle_deck_baseline_compute,
+            "deck_baseline_root": self._handle_deck_baseline_root,
+            "deck_baseline_pin_root": self._handle_deck_baseline_pin_root,
+            "deck_baseline_save_deck": self._handle_deck_baseline_save_deck,
+            "deck_baseline_load_file": self._handle_deck_baseline_load_file,
             "close_app": self._handle_close_app,
             # Mana symbol rendering commands (issue #410)
             "set_mana_search": self._handle_set_mana_search,

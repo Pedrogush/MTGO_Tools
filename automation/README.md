@@ -252,6 +252,49 @@ Like `sash-drag`, it runs the burst on a worker thread and returns as soon as it
 is scheduled, so `start-video` can be recording while it runs. `wheel-scroll-start`
 covers the other half -- the wheel, which the views handle themselves.
 
+## Archetype baselines and the root commit
+
+`deck-baseline-compute` measures the archetype **currently selected in the
+research panel** -- the Baseline tab has no pickers of its own -- and
+`deck-baseline` reports the same numbers the tree is built from, so a script can
+assert the classification instead of trusting a screenshot of it.
+
+```bash
+python -m automation.cli --json deck-baseline-compute --threshold 0.9
+python -m automation.cli --json deck-baseline            # staples/partials/flex + slot counts
+```
+
+The compute runs on the background worker, so poll `deck-baseline` until
+`computed` is true rather than reading it straight after triggering.
+
+The other half is the root commit. `deck-baseline-save-deck` saves the loaded
+decklist through the same `controller.save_deck` call the Save dialogs end at,
+which is the path that roots a brand-new deck at its archetype baseline;
+`deck_history_save` deliberately does **not** go through it, so it cannot prove
+anything about rooting.
+
+```bash
+python -m automation.cli --json deck-baseline-save-deck --name "Test Deck"     --archetype "Izzet Prowess" --format-name modern
+python -m automation.cli --json deck-baseline-load-file --path "C:\...\Test Deck.txt"
+python -m automation.cli --json deck-baseline-root      # the deck's root + is_baseline_root
+python -m automation.cli deck-baseline-pin-root         # pin it as the History diff baseline
+```
+
+Two things that look like bugs and are not:
+
+- **Saving does not switch to the saved deck.** The real save handler leaves the
+  *scraped* deck loaded, so the History tab keeps showing that deck until the
+  new file is opened -- hence `deck-baseline-load-file`, which mirrors
+  `on_load_deck_clicked` after its `wx.FileDialog`.
+- **Every baseline root carries the same 2020-01-01 timestamp.** The root's sha
+  is deliberately deterministic, so two decks of one archetype share an
+  ancestor; a real clock in it would split roots that ought to coincide. The
+  date in the graph node is that pinned epoch, shown in local time.
+
+> The Baseline tab's own label is translated (`Base` in pt-BR), so
+> `switch-tab` must be given the rendered label -- and its `switched` flag
+> asserted. See the warning under "Driving the deck tabs".
+
 ## Pile-view columns and their drag-and-drop
 
 The pile view's entire interaction model is a mouse drag -- pick copies up, drop

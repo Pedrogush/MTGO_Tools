@@ -243,6 +243,48 @@ def cmd_deck_patterns_refresh(client: AutomationClient, args: argparse.Namespace
     return 0 if result.get("triggered") else 1
 
 
+def cmd_deck_baseline(client: AutomationClient, args: argparse.Namespace) -> int:
+    """Print the archetype baseline breakdown."""
+    result = client.deck_baseline()
+    print(format_output(result, args.json))
+    return 0 if "error" not in result else 1
+
+
+def cmd_deck_baseline_compute(client: AutomationClient, args: argparse.Namespace) -> int:
+    """Compute the baseline for the selected archetype."""
+    result = client.deck_baseline_compute(args.threshold)
+    print(format_output(result, args.json))
+    return 0 if result.get("triggered") else 1
+
+
+def cmd_deck_baseline_root(client: AutomationClient, args: argparse.Namespace) -> int:
+    """Print the deck's root commit."""
+    result = client.deck_baseline_root(args.deck_key)
+    print(format_output(result, args.json))
+    return 0 if "error" not in result else 1
+
+
+def cmd_deck_baseline_pin_root(client: AutomationClient, args: argparse.Namespace) -> int:
+    """Pin the diff baseline to the deck's root commit."""
+    result = client.deck_baseline_pin_root()
+    print(format_output(result, args.json))
+    return 0 if result.get("pinned") else 1
+
+
+def cmd_deck_baseline_save_deck(client: AutomationClient, args: argparse.Namespace) -> int:
+    """Save the loaded deck as a new deck, bypassing the Save dialogs."""
+    result = client.deck_baseline_save_deck(args.name, args.archetype, args.format_name)
+    print(format_output(result, args.json))
+    return 0 if result.get("saved") else 1
+
+
+def cmd_deck_baseline_load_file(client: AutomationClient, args: argparse.Namespace) -> int:
+    """Load a saved deck file, bypassing the Load Deck dialog."""
+    result = client.deck_baseline_load_file(args.path)
+    print(format_output(result, args.json))
+    return 0 if result.get("loaded") else 1
+
+
 def cmd_deck_history(client: AutomationClient, args: argparse.Namespace) -> int:
     """Print the deck's version graph."""
     result = client.deck_history()
@@ -663,6 +705,21 @@ Notes:
 
     subparsers.add_parser("deck-patterns-refresh", help="Recompute the Patterns tab")
 
+    subparsers.add_parser("deck-baseline", help="Print the archetype baseline breakdown")
+    p = subparsers.add_parser("deck-baseline-compute", help="Compute the archetype baseline")
+    p.add_argument("--threshold", type=float, default=None, help="Staple cut-off (e.g. 0.9)")
+    p = subparsers.add_parser("deck-baseline-root", help="Print the deck's root commit")
+    p.add_argument("--deck-key", dest="deck_key", default=None, help="Deck key (default: current)")
+    subparsers.add_parser(
+        "deck-baseline-pin-root", help="Pin the diff baseline to the deck's root commit"
+    )
+    p = subparsers.add_parser("deck-baseline-save-deck", help="Save the loaded deck as a new deck")
+    p.add_argument("--name", required=True, help="File name (without .txt)")
+    p.add_argument("--archetype", default=None, help="Archetype to record")
+    p.add_argument("--format-name", dest="format_name", default=None, help="Format to record")
+    p = subparsers.add_parser("deck-baseline-load-file", help="Load a saved deck file")
+    p.add_argument("--path", required=True, help="Path to the deck .txt")
+
     subparsers.add_parser("deck-history", help="Print the deck version graph")
 
     p = subparsers.add_parser("deck-history-save", help="Commit the loaded deck as a version")
@@ -969,6 +1026,12 @@ Notes:
         "load-deck": cmd_load_deck,
         "deck-patterns": cmd_deck_patterns,
         "deck-patterns-refresh": cmd_deck_patterns_refresh,
+        "deck-baseline": cmd_deck_baseline,
+        "deck-baseline-compute": cmd_deck_baseline_compute,
+        "deck-baseline-root": cmd_deck_baseline_root,
+        "deck-baseline-pin-root": cmd_deck_baseline_pin_root,
+        "deck-baseline-save-deck": cmd_deck_baseline_save_deck,
+        "deck-baseline-load-file": cmd_deck_baseline_load_file,
         "deck-history": cmd_deck_history,
         "deck-history-save": cmd_deck_history_save,
         "deck-history-select": cmd_deck_history_select,
