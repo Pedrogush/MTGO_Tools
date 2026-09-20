@@ -263,6 +263,15 @@ class AutomationClient:
         """
         return self._send_command("get_zone_cards", zone=zone)
 
+    # ------------------------------------------------------------------ deck patterns ------------------------------------------------------------------
+    def deck_patterns(self, turn: int | None = None) -> dict[str, Any]:
+        """The capability readout for a turn: land combinations and their plays."""
+        return self._send_command("deck_patterns", turn=turn)
+
+    def deck_patterns_refresh(self) -> dict[str, Any]:
+        """Force the Patterns tab to recompute the loaded deck."""
+        return self._send_command("deck_patterns_refresh")
+
     # ------------------------------------------------------------------ deck version history ------------------------------------------------------------------
     def deck_history(self) -> dict[str, Any]:
         """The version graph: nodes with row/lane placement, edges, branches."""

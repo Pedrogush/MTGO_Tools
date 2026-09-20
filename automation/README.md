@@ -172,6 +172,32 @@ Two things worth knowing when scripting against it:
   file, so diffing the `.txt` outside the app is a fair test that no version
   metadata leaked into it.
 
+## Reading the Patterns tab
+
+The tab paints a tree of land combinations, so a screenshot proves it rendered
+but not that the right combinations were enumerated. `deck-patterns` reports the
+structure the tree is built from -- the land groups, each combination and its
+maximal plays -- which is what a script asserts against a hand-checked
+expectation.
+
+```bash
+python -m automation.cli --json deck-patterns --turn 3
+python -m automation.cli deck-patterns-refresh      # recompute the loaded deck
+```
+
+The readout carries `truncated` (the §2.4 guardrail tripped and the results are
+partial) and `cache_hits`/`cache_misses` for the per-mana-profile search cache.
+
+> **The tab bar is translated.** `switch-tab` matches the *rendered* label, so
+> `switch-tab Patterns` selects nothing in a pt-BR session -- where the tab is
+> `Padrões` -- and silently leaves whatever tab was already open on screen.
+> A script that does not check `switched` will then screenshot the wrong tab and
+> get an identical image every time. Always assert the flag:
+>
+> ```bash
+> python -m automation.cli --json switch-tab "Padrões"   # {"switched": true, ...}
+> ```
+
 ## Exercising MTGO bridge features
 
 These commands drive the live MTGO bridge integration end-to-end (they require a

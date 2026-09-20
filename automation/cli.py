@@ -229,6 +229,20 @@ def cmd_load_deck(client: AutomationClient, args: argparse.Namespace) -> int:
     return 0 if result.get("loaded") else 1
 
 
+def cmd_deck_patterns(client: AutomationClient, args: argparse.Namespace) -> int:
+    """Print the capability readout for a turn."""
+    result = client.deck_patterns(args.turn)
+    print(format_output(result, args.json))
+    return 0 if "error" not in result else 1
+
+
+def cmd_deck_patterns_refresh(client: AutomationClient, args: argparse.Namespace) -> int:
+    """Force the Patterns tab to recompute."""
+    result = client.deck_patterns_refresh()
+    print(format_output(result, args.json))
+    return 0 if result.get("triggered") else 1
+
+
 def cmd_deck_history(client: AutomationClient, args: argparse.Namespace) -> int:
     """Print the deck's version graph."""
     result = client.deck_history()
@@ -644,6 +658,11 @@ Notes:
 
     # get-zone-cards
     # deck history
+    p = subparsers.add_parser("deck-patterns", help="Print the turn capability readout")
+    p.add_argument("--turn", "-t", type=int, default=None, help="Turn to select first")
+
+    subparsers.add_parser("deck-patterns-refresh", help="Recompute the Patterns tab")
+
     subparsers.add_parser("deck-history", help="Print the deck version graph")
 
     p = subparsers.add_parser("deck-history-save", help="Commit the loaded deck as a version")
@@ -948,6 +967,8 @@ Notes:
         "switch-tab": cmd_switch_tab,
         "wait": cmd_wait,
         "load-deck": cmd_load_deck,
+        "deck-patterns": cmd_deck_patterns,
+        "deck-patterns-refresh": cmd_deck_patterns_refresh,
         "deck-history": cmd_deck_history,
         "deck-history-save": cmd_deck_history_save,
         "deck-history-select": cmd_deck_history_select,
