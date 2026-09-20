@@ -11,6 +11,7 @@ from utils.i18n._en_us.history import MESSAGES as _HISTORY
 from utils.i18n._en_us.match import MESSAGES as _MATCH
 from utils.i18n._en_us.metagame import MESSAGES as _METAGAME
 from utils.i18n._en_us.notes import MESSAGES as _NOTES
+from utils.i18n._en_us.patterns import MESSAGES as _PATTERNS
 from utils.i18n._en_us.radar import MESSAGES as _RADAR
 from utils.i18n._en_us.research import MESSAGES as _RESEARCH
 from utils.i18n._en_us.rules_browser import MESSAGES as _RULES_BROWSER
@@ -31,6 +32,7 @@ MESSAGES: dict[str, str] = {
     **_DECK_RESULTS,
     **_GUIDE,
     **_HISTORY,
+    **_PATTERNS,
     **_MATCH,
     **_METAGAME,
     **_NOTES,

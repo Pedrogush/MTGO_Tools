@@ -793,3 +793,6 @@ class AppFrameHandlersMixin(_Base):
 
     def _update_stats(self, deck_text: str) -> None:
         self.deck_stats_panel.update_stats(deck_text, self.zone_cards)
+        # The Patterns tab reads the same zones. It defers the analysis until the
+        # tab is actually visible, so feeding it on every deck change is cheap.
+        self.deck_patterns_panel.set_zone_cards(self.zone_cards)

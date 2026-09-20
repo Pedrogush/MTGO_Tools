@@ -21,6 +21,7 @@ from widgets.notebook import DEFAULT_AGW_STYLE, make_flat_notebook
 from widgets.panels.card_table_panel import CardTablePanel
 from widgets.panels.deck_history_panel import DeckHistoryPanel
 from widgets.panels.deck_notes_panel import DeckNotesPanel
+from widgets.panels.deck_patterns_panel import DeckPatternsPanel
 from widgets.panels.deck_stats_panel import DeckStatsPanel
 from widgets.panels.sideboard_guide_panel import SideboardGuidePanel
 from widgets.section import SectionPanel
@@ -151,6 +152,18 @@ class CenterPanelBuilderMixin(_Base):
         )
         self.deck_history_panel.SetToolTip(self._t("tabs.tooltip.deck_history"))
         self.deck_tabs.AddPage(self.deck_history_panel, self._t("tabs.deck_history"))
+
+        # The capability explorer. It reads the loaded zones, so the frame feeds
+        # it on every deck change; the analysis itself runs on the controller's
+        # background worker rather than on this thread.
+        self.deck_patterns_panel = DeckPatternsPanel(
+            self.deck_tabs,
+            card_manager=self.controller.card_repo.get_card_manager(),
+            worker=getattr(self.controller, "_worker", None),
+            locale=self.locale,
+        )
+        self.deck_patterns_panel.SetToolTip(self._t("tabs.tooltip.deck_patterns"))
+        self.deck_tabs.AddPage(self.deck_patterns_panel, self._t("tabs.deck_patterns"))
         return section
 
     def _build_deck_tables_tab(self) -> None:
