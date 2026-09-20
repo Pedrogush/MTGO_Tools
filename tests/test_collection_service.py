@@ -651,9 +651,7 @@ def test_owned_count_matches_ascii_decklist_against_accented_bridge_name(collect
     the accented name while decklists spell it in ASCII, so a ``name.lower()``
     key never matched.
     """
-    collection_service.load_from_card_list(
-        [{"name": "Kíli the Resourceful", "quantity": 4}]
-    )
+    collection_service.load_from_card_list([{"name": "Kíli the Resourceful", "quantity": 4}])
 
     assert collection_service.get_owned_count("Kili the Resourceful") == 4
     assert collection_service.get_owned_count("Kíli the Resourceful") == 4
@@ -676,9 +674,7 @@ def test_owned_count_folds_legacy_unfolded_cached_keys(collection_service):
 
 def test_analyze_deck_ownership_counts_accented_card_as_owned(collection_service):
     """End to end: the deck analysis no longer reports the rented card as missing."""
-    collection_service.load_from_card_list(
-        [{"name": "Kíli the Resourceful", "quantity": 4}]
-    )
+    collection_service.load_from_card_list([{"name": "Kíli the Resourceful", "quantity": 4}])
 
     analysis = collection_service.analyze_deck_ownership("4 Kili the Resourceful")
 
@@ -687,9 +683,7 @@ def test_analyze_deck_ownership_counts_accented_card_as_owned(collection_service
     assert analysis["missing_cards"] == []
 
 
-def test_cached_collection_file_with_accented_names_is_folded_on_load(
-    collection_service, tmp_path
-):
+def test_cached_collection_file_with_accented_names_is_folded_on_load(collection_service, tmp_path):
     """Already-cached bridge exports are folded at load time, not only fresh fetches."""
     filepath = tmp_path / "collection_full_trade_20260918_073455.json"
     filepath.write_text(
