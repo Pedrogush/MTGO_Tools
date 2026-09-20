@@ -156,7 +156,26 @@ class DeckWorkflowService:
         else:
             logger.info(f"Deck saved to database: {deck_name} (ID: {deck_id})")
 
+        self._record_version(deck, file_path, deck_content)
+
         return file_path, deck_id
+
+    @staticmethod
+    def _record_version(deck: dict[str, Any] | None, file_path, deck_content: str) -> None:
+        """Commit this save into the deck's version history.
+
+        Best effort, like the database write above it: the deck file is already
+        on disk and a version-history problem must not be reported as a failed
+        save. The history is a record *of* the file, never a precondition for
+        writing it.
+        """
+        try:
+            from services.deck_vcs_service import deck_key_for, get_deck_vcs_service
+
+            service = get_deck_vcs_service()
+            service.record_save(deck_key_for(deck, file_path), deck_content)
+        except Exception as exc:  # noqa: BLE001 - the deck file is already saved
+            logger.warning(f"Deck saved but no version recorded: {exc}")
 
     # ------------------------------------------------------------------ averages ------------------------------------------------------------------
     def build_daily_average_buffer(
