@@ -1,6 +1,7 @@
 """English (United States) locale strings."""
 
 from utils.i18n._en_us.app import MESSAGES as _APP
+from utils.i18n._en_us.baseline import MESSAGES as _BASELINE
 from utils.i18n._en_us.builder import MESSAGES as _BUILDER
 from utils.i18n._en_us.bulk import MESSAGES as _BULK
 from utils.i18n._en_us.card_panel import MESSAGES as _CARD_PANEL
@@ -25,6 +26,7 @@ from utils.i18n._en_us.window import MESSAGES as _WINDOW
 
 MESSAGES: dict[str, str] = {
     **_APP,
+    **_BASELINE,
     **_BUILDER,
     **_BULK,
     **_CARD_PANEL,

@@ -111,6 +111,11 @@ class DeckContentHandlers(_Base):
         # The file may have been edited outside the app since it was last saved;
         # its content is the only thing that can say so.
         self._check_external_edit(file_ref, deck_text)
+        # The graph is keyed by deck, and the deck just changed. Nothing binds a
+        # page-changed event on the deck tabs, so a tab that is not repainted
+        # here keeps showing the *previous* deck's history until something else
+        # moves HEAD -- which reads as "this deck has no versions".
+        self.refresh_deck_history()
         if deck_record.get("archetype"):
             self._set_status(
                 "app.status.deck_loaded_with_archetype",

@@ -19,6 +19,7 @@ from utils.constants import (
 from utils.perf import timed
 from widgets.notebook import DEFAULT_AGW_STYLE, make_flat_notebook
 from widgets.panels.card_table_panel import CardTablePanel
+from widgets.panels.deck_baseline_panel import DeckBaselinePanel
 from widgets.panels.deck_history_panel import DeckHistoryPanel
 from widgets.panels.deck_notes_panel import DeckNotesPanel
 from widgets.panels.deck_patterns_panel import DeckPatternsPanel
@@ -164,7 +165,38 @@ class CenterPanelBuilderMixin(_Base):
         )
         self.deck_patterns_panel.SetToolTip(self._t("tabs.tooltip.deck_patterns"))
         self.deck_tabs.AddPage(self.deck_patterns_panel, self._t("tabs.deck_patterns"))
+
+        # The archetype baseline. It measures the *research* selection, not the
+        # loaded deck, so it reads that selection through providers rather than
+        # carrying a second pair of format/archetype pickers that could drift
+        # out of step with the ones in the research panel.
+        self.deck_baseline_panel = DeckBaselinePanel(
+            self.deck_tabs,
+            worker=getattr(self.controller, "_worker", None),
+            archetype_provider=self._selected_research_archetype,
+            format_provider=lambda: self.controller.current_format,
+            on_status_update=self._set_status,
+            locale=self.locale,
+        )
+        self.deck_baseline_panel.SetToolTip(self._t("tabs.tooltip.deck_baseline"))
+        self.deck_tabs.AddPage(self.deck_baseline_panel, self._t("tabs.deck_baseline"))
         return section
+
+    def _selected_research_archetype(self) -> dict | None:
+        """The archetype currently selected in the research panel, if any.
+
+        Index 0 is the "Any" row, which is a request for every cached deck
+        rather than an archetype -- there is no single archetype to measure
+        then, so it reads as no selection.
+        """
+        panel = getattr(self, "research_panel", None)
+        if panel is None:
+            return None
+        index = panel.get_selected_archetype_index()
+        archetypes = getattr(self, "filtered_archetypes", [])
+        if index <= 0 or index > len(archetypes):
+            return None
+        return archetypes[index - 1]
 
     def _build_deck_tables_tab(self) -> None:
         """Build the mainboard/sideboard zones as a single vertical split page.
