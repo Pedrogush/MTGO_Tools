@@ -229,6 +229,55 @@ def cmd_load_deck(client: AutomationClient, args: argparse.Namespace) -> int:
     return 0 if result.get("loaded") else 1
 
 
+def cmd_deck_history(client: AutomationClient, args: argparse.Namespace) -> int:
+    """Print the deck's version graph."""
+    result = client.deck_history()
+    print(format_output(result, args.json))
+    return 0 if "error" not in result else 1
+
+
+def cmd_deck_history_save(client: AutomationClient, args: argparse.Namespace) -> int:
+    """Commit the loaded decklist as a version."""
+    result = client.deck_history_save(args.message)
+    print(format_output(result, args.json))
+    return 0 if result.get("saved") else 1
+
+
+def cmd_deck_history_select(client: AutomationClient, args: argparse.Namespace) -> int:
+    """Select a version (preview only -- never checks out)."""
+    result = client.deck_history_select(args.sha, args.view)
+    print(format_output(result, args.json))
+    return 0 if "error" not in result else 1
+
+
+def cmd_deck_history_checkout(client: AutomationClient, args: argparse.Namespace) -> int:
+    """Check out a version, rewriting the deck file."""
+    result = client.deck_history_checkout(args.sha)
+    print(format_output(result, args.json))
+    return 0 if "error" not in result else 1
+
+
+def cmd_deck_history_branch(client: AutomationClient, args: argparse.Namespace) -> int:
+    """Create a branch at a version."""
+    result = client.deck_history_branch(args.sha, args.name)
+    print(format_output(result, args.json))
+    return 0 if "error" not in result else 1
+
+
+def cmd_deck_history_switch(client: AutomationClient, args: argparse.Namespace) -> int:
+    """Switch branches."""
+    result = client.deck_history_switch(args.name)
+    print(format_output(result, args.json))
+    return 0 if "error" not in result else 1
+
+
+def cmd_deck_history_baseline(client: AutomationClient, args: argparse.Namespace) -> int:
+    """Pin the diff baseline to a version."""
+    result = client.deck_history_baseline(args.sha)
+    print(format_output(result, args.json))
+    return 0 if "error" not in result else 1
+
+
 def cmd_get_zone_cards(client: AutomationClient, args: argparse.Namespace) -> int:
     """Get cards in a zone."""
     result = client.get_zone_cards(args.zone)
@@ -594,6 +643,33 @@ Notes:
     p.add_argument("--file", "-f", help="Path to deck text file")
 
     # get-zone-cards
+    # deck history
+    subparsers.add_parser("deck-history", help="Print the deck version graph")
+
+    p = subparsers.add_parser("deck-history-save", help="Commit the loaded deck as a version")
+    p.add_argument(
+        "--message", "-m", default=None, help="Commit message (default: auto diff summary)"
+    )
+
+    p = subparsers.add_parser("deck-history-select", help="Preview a version (no checkout)")
+    p.add_argument("sha", help="Version sha (short form accepted)")
+    p.add_argument(
+        "--view", choices=["decklist", "diff"], default=None, help="Preview page to show"
+    )
+
+    p = subparsers.add_parser("deck-history-checkout", help="Check out a version")
+    p.add_argument("sha", help="Version sha (short form accepted)")
+
+    p = subparsers.add_parser("deck-history-branch", help="Create a branch at a version")
+    p.add_argument("sha", help="Version sha (short form accepted)")
+    p.add_argument("--name", "-n", required=True, help="New branch name")
+
+    p = subparsers.add_parser("deck-history-switch", help="Switch to a branch")
+    p.add_argument("--name", "-n", required=True, help="Branch name")
+
+    p = subparsers.add_parser("deck-history-baseline", help="Pin the diff baseline")
+    p.add_argument("sha", nargs="?", default=None, help="Version sha, or omit to clear")
+
     p = subparsers.add_parser("get-zone-cards", help="Get cards in a zone")
     p.add_argument("--zone", "-z", default="main", help="Zone: main, side, or out (default: main)")
 
@@ -872,6 +948,13 @@ Notes:
         "switch-tab": cmd_switch_tab,
         "wait": cmd_wait,
         "load-deck": cmd_load_deck,
+        "deck-history": cmd_deck_history,
+        "deck-history-save": cmd_deck_history_save,
+        "deck-history-select": cmd_deck_history_select,
+        "deck-history-checkout": cmd_deck_history_checkout,
+        "deck-history-branch": cmd_deck_history_branch,
+        "deck-history-switch": cmd_deck_history_switch,
+        "deck-history-baseline": cmd_deck_history_baseline,
         "get-zone-cards": cmd_get_zone_cards,
         "add-card": cmd_add_card,
         "remove-card": cmd_remove_card,

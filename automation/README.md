@@ -138,6 +138,40 @@ Select a card first (the panel is populated by a deck-zone selection). Use
 `--limit`/`--offset` on cards with many printings: the transport does a single
 64 KB `recv`.
 
+## Driving the deck version history
+
+The History tab paints a commit graph, and a screenshot can show that something
+*looks* like a fork but not that the right commit forked. `deck-history` reports
+the same placement the canvas paints -- row, lane, branch labels, HEAD, and which
+edges change lane -- so a script asserts the shape and the screenshot is left to
+prove it rendered.
+
+```bash
+python -m automation.cli --json deck-history                       # the graph, as placed
+python -m automation.cli deck-history-save -m "cut Consider"       # commit the loaded list
+python -m automation.cli --json deck-history-select 1a2c7ca        # preview, no checkout
+python -m automation.cli deck-history-checkout 1a2c7ca             # rewrites the deck .txt
+python -m automation.cli deck-history-branch 1a2c7ca -n testing
+python -m automation.cli deck-history-switch -n main
+python -m automation.cli --json deck-history-baseline 055e71d      # pin the diff baseline
+```
+
+Short shas are accepted everywhere a sha is, like every other git tool.
+
+`deck-history-save` exists because the real Save flow opens two modal dialogs,
+and `ShowModal` starves this socket exactly the way `PopupMenu` does (see the
+menu-bar warning above). It calls the same service the dialog ends at, so the
+commit it produces is the one a real save produces.
+
+Two things worth knowing when scripting against it:
+
+- `deck-history-select` is the *preview* path and must never move `HEAD`; if a
+  test sees the checked-out branch change after a select, that is the bug.
+- `deck-history-checkout` rewrites the user's `.txt`. The repo behind the graph
+  lives in the app cache (`cache/deck_vcs/<deck_key>/`), never beside the deck
+  file, so diffing the `.txt` outside the app is a fair test that no version
+  metadata leaked into it.
+
 ## Exercising MTGO bridge features
 
 These commands drive the live MTGO bridge integration end-to-end (they require a

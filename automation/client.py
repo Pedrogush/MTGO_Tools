@@ -263,6 +263,39 @@ class AutomationClient:
         """
         return self._send_command("get_zone_cards", zone=zone)
 
+    # ------------------------------------------------------------------ deck version history ------------------------------------------------------------------
+    def deck_history(self) -> dict[str, Any]:
+        """The version graph: nodes with row/lane placement, edges, branches."""
+        return self._send_command("deck_history")
+
+    def deck_history_save(self, message: str | None = None) -> dict[str, Any]:
+        """Commit the loaded decklist as a version (no Save As dialog)."""
+        return self._send_command("deck_history_save", message=message)
+
+    def deck_history_select(self, sha: str, view: str | None = None) -> dict[str, Any]:
+        """Select a version and read back its decklist and diff (preview only).
+
+        ``view`` is ``"decklist"`` or ``"diff"``, bringing that preview page to
+        the front so a screenshot shows it.
+        """
+        return self._send_command("deck_history_select", sha=sha, view=view)
+
+    def deck_history_checkout(self, sha: str) -> dict[str, Any]:
+        """Check out a version, rewriting the user's deck file."""
+        return self._send_command("deck_history_checkout", sha=sha)
+
+    def deck_history_branch(self, sha: str, name: str) -> dict[str, Any]:
+        """Create a branch at a version."""
+        return self._send_command("deck_history_branch", sha=sha, name=name)
+
+    def deck_history_switch(self, name: str) -> dict[str, Any]:
+        """Switch to a branch, rewriting the user's deck file."""
+        return self._send_command("deck_history_switch", name=name)
+
+    def deck_history_baseline(self, sha: str | None = None) -> dict[str, Any]:
+        """Pin (or clear) the version diffs are taken against."""
+        return self._send_command("deck_history_baseline", sha=sha)
+
     def add_card_to_zone(self, zone: str, card_name: str, qty: int = 1) -> dict[str, Any]:
         """Add one or more copies of a card to a zone.
 
