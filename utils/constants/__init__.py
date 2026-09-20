@@ -109,6 +109,7 @@ from utils.constants.search import (
 )
 from utils.constants.storage import (
     ACTIVE_GUIDE_FILE,
+    ARCHETYPE_BASELINE_STORE,
     CARD_INSPECTOR_LOG,
     GUIDE_STORE,
     NOTES_STORE,
@@ -444,6 +445,7 @@ __all__ = [
     "ensure_base_dirs",
     "ACTIVE_GUIDE_FILE",
     "CARD_INSPECTOR_LOG",
+    "ARCHETYPE_BASELINE_STORE",
     "GUIDE_STORE",
     "NOTES_STORE",
     "OUTBOARD_STORE",

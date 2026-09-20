@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from repositories.deck_vcs_repository.baseline import BaselineMixin
 from repositories.deck_vcs_repository.branches import BranchesMixin
 from repositories.deck_vcs_repository.commits import CommitsMixin
 from repositories.deck_vcs_repository.diffs import DiffsMixin
@@ -15,6 +16,7 @@ class DeckVcsRepository(
     CommitsMixin,
     BranchesMixin,
     DiffsMixin,
+    BaselineMixin,
 ):
     """Git-backed version history for saved decks, one repo per deck."""
 

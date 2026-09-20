@@ -80,6 +80,9 @@ reset_deck_vcs_service = _optional_reset("services.deck_vcs_service", "reset_dec
 reset_deck_patterns_service = _optional_reset(
     "services.deck_patterns_service", "reset_deck_patterns_service"
 )
+reset_archetype_baseline_service = _optional_reset(
+    "services.archetype_baseline_service", "reset_archetype_baseline_service"
+)
 reset_format_card_pool_service = _optional_reset(
     "services.format_card_pool_service", "reset_format_card_pool_service"
 )
@@ -115,6 +118,7 @@ def reset_all_services() -> None:
     reset_deck_service()
     reset_deck_vcs_service()
     reset_deck_patterns_service()
+    reset_archetype_baseline_service()
     reset_format_card_pool_service()
     reset_metagame_service()
     reset_radar_service()
