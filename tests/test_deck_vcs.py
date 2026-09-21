@@ -494,3 +494,147 @@ class TestBaselineRootIsMarked:
         root = next(c for c in commits.values() if not c.parents)
         assert root.is_baseline is True
         assert commits["a real save"].is_baseline is False
+
+
+def _decklist(*lines: str) -> str:
+    """A decklist built without escape sequences, one card per line."""
+    return "".join(line + chr(10) for line in lines)
+
+
+class TestConsecutiveSavesStayInOneHistory:
+    """Saving one deck twice must extend its history, not start a second one.
+
+    The user hit this as "I edited two cards, saved again, and got no new
+    node": the two saves wrote two *different* files, so their commits were
+    keyed to two different repos and neither branch ever grew a second node.
+
+    What is asserted here is the outcome -- one repo, one branch, a second
+    commit carrying the edit -- rather than how the save flow picks its file
+    name. That mechanism is being replaced by an explicit, user-set deck name,
+    and this property has to hold across that change.
+    """
+
+    @staticmethod
+    def _scraped() -> dict:
+        return {
+            "href": "modern-affinity",
+            "name": "modern-affinity",
+            "source": "mtggoldfish",
+            "player": "pedronavaja",
+            "result": "17th",
+            "date": "2026-09-21",
+            "event": "Modern Challenge 32",
+        }
+
+    def test_the_second_save_adds_a_node_to_the_same_branch(self, tmp_path) -> None:
+        service = DeckVcsService(vcs_repo=DeckVcsRepository(tmp_path / "deck_vcs"))
+        deck_key = "pedronavaja, 17th, 2026-09-21_modern challenge 32"
+
+        before = _decklist("4 Mox Opal", "4 Pinnacle Emissary", "4 Urza's Saga")
+        after = _decklist("4 Mox Opal", "2 Pinnacle Emissary", "4 Urza's Saga")
+
+        first = service.record_save(deck_key, before)
+        branch_after_first = service.current_branch(deck_key)
+        second = service.record_save(deck_key, after)
+
+        assert second is not None and second != first
+        # One branch, two commits, the newer one parented on the older.
+        assert service.current_branch(deck_key) == branch_after_first
+        graph = service.build_graph(deck_key)
+        assert len(graph) == 2
+        tip = next(c for c in graph if c.sha == second)
+        assert tip.commit.parents == (first,)
+
+    def test_that_second_node_diffs_as_the_edit(self, tmp_path) -> None:
+        service = DeckVcsService(vcs_repo=DeckVcsRepository(tmp_path / "deck_vcs"))
+        deck_key = "one deck"
+
+        first = service.record_save(deck_key, _decklist("4 Mox Opal", "4 Pinnacle Emissary"))
+        second = service.record_save(deck_key, _decklist("4 Mox Opal", "2 Pinnacle Emissary"))
+
+        diff = service.diff(deck_key, first, second)
+        changes = {(c.name, c.before, c.after) for c in diff.changed}
+        assert ("Pinnacle Emissary", 4, 2) in changes
+
+    def test_only_one_repo_exists_for_the_deck(self, tmp_path) -> None:
+        root = tmp_path / "deck_vcs"
+        service = DeckVcsService(vcs_repo=DeckVcsRepository(root))
+        deck_key = "one deck"
+
+        service.record_save(deck_key, _decklist("4 Mox Opal", "4 Pinnacle Emissary"))
+        service.record_save(deck_key, _decklist("4 Mox Opal", "2 Pinnacle Emissary"))
+
+        assert [p.name for p in sorted(root.iterdir()) if p.is_dir()] == [deck_key]
+
+    def test_saving_as_a_new_name_still_forks_a_new_history(self, tmp_path) -> None:
+        """Choosing a different name is how a deck *should* start a new history."""
+        deck = self._scraped()
+        saved = tmp_path / "pedronavaja, 17th, 2026-09-21_Modern Challenge 32.txt"
+        deck["path"] = str(saved)
+        deck["source"] = "file"
+
+        chosen = tmp_path / "My Own Brew.txt"
+        assert deck_key_for(deck, chosen) != deck_key_for(deck, saved)
+
+    @pytest.mark.xfail(
+        strict=True,
+        reason=(
+            "Open defect, reproduced rather than hidden: once a save sets "
+            "source='file', the Save As default switches from the deck's "
+            "descriptive file name to its record 'name' (an archetype slug for "
+            "a scraped list), so the second save of one deck offers a different "
+            "file and forks its history. Being removed wholesale by the "
+            "explicit deck-name redesign, which drops the filename prompt."
+        ),
+    )
+    def test_both_saves_offer_the_same_file_and_key(self, tmp_path) -> None:
+        from widgets.frames.app_frame.handlers.deck_content import DeckContentHandlers
+
+        default_name = DeckContentHandlers._default_save_file_name
+
+        deck = self._scraped()
+        first_name = default_name(deck)
+        saved = tmp_path / (first_name + ".txt")
+        first_key = deck_key_for(deck, saved)
+
+        # What AppController._sync_saved_deck_record does after a save.
+        deck["path"] = str(saved)
+        deck["source"] = "file"
+
+        assert default_name(deck) == first_name
+        second = tmp_path / (default_name(deck) + ".txt")
+        assert deck_key_for(deck, second) == first_key
+
+
+class TestDiffShowsOnlyChangedLines:
+    """The diff pane drops unchanged context (it is read for what moved)."""
+
+    @staticmethod
+    def _filter(lines: list[str]) -> list[str]:
+        from widgets.panels.deck_history_panel.layout import changed_lines_only
+
+        return changed_lines_only(lines)
+
+    def test_context_and_hunk_headers_go_and_changes_stay(self) -> None:
+        from repositories.deck_vcs_repository.diffs import unified_lines
+
+        raw = unified_lines(
+            _decklist("4 Mox Opal", "4 Pinnacle Emissary", "4 Urza's Saga"),
+            _decklist("4 Mox Opal", "2 Pinnacle Emissary", "4 Urza's Saga"),
+            before_label="aaaaaaa",
+            after_label="bbbbbbb",
+        )
+        assert any(line.startswith(" ") for line in raw), "expected context to filter"
+
+        shown = self._filter(raw)
+        assert not any(line.startswith((" ", "@@")) for line in shown)
+        assert "-4 Pinnacle Emissary" in shown
+        assert "+2 Pinnacle Emissary" in shown
+
+    def test_the_file_header_survives(self) -> None:
+        shown = self._filter(["--- aaaaaaa", "+++ bbbbbbb", "@@ -1,3 +1,3 @@", " 4 Mox Opal"])
+        assert shown == ["--- aaaaaaa", "+++ bbbbbbb"]
+
+    def test_an_unchanged_diff_keeps_no_card_lines(self) -> None:
+        shown = self._filter(["--- a", "+++ b", "@@ -1 +1 @@", " 4 Mox Opal"])
+        assert [line for line in shown if not line.startswith(("---", "+++"))] == []
