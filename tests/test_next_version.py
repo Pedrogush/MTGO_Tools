@@ -13,6 +13,7 @@ orders and ranges commits, which a mock would simply assert away.
 
 from __future__ import annotations
 
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -90,15 +91,30 @@ def _run(repo: Path, *args: str) -> None:
     subprocess.run(["git", *args], cwd=repo, check=True, capture_output=True)
 
 
+@pytest.fixture(scope="session")
+def repo_template(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """The starting repo, built once per test process and copied for each test.
+
+    Every git-backed test starts from the same one-commit repo, and spawning
+    ``git`` is slow on Windows (this fixture was up to 2.7s of setup per test).
+    Tests only ever see their own copy; nothing writes to the template.
+    """
+    template = tmp_path_factory.mktemp("next-version-repo")
+    _run(template, "init", "-q", "-b", "main")
+    _run(template, "config", "user.email", "test@example.com")
+    _run(template, "config", "user.name", "test")
+    (template / "VERSION").write_text("1.1.5\n", encoding="utf-8")
+    # Tracked from the start, so ``_commit`` can stage and commit in one git call.
+    (template / "file.txt").write_text("", encoding="utf-8")
+    _run(template, "add", "VERSION", "file.txt")
+    _run(template, "commit", "-q", "-m", "chore: init")
+    return template
+
+
 @pytest.fixture
-def repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+def repo(repo_template: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """A throwaway git repo that ``next_version`` operates on."""
-    _run(tmp_path, "init", "-q", "-b", "main")
-    _run(tmp_path, "config", "user.email", "test@example.com")
-    _run(tmp_path, "config", "user.name", "test")
-    (tmp_path / "VERSION").write_text("1.1.5\n", encoding="utf-8")
-    _run(tmp_path, "add", "VERSION")
-    _run(tmp_path, "commit", "-q", "-m", "chore: init")
+    shutil.copytree(repo_template, tmp_path, dirs_exist_ok=True)
     monkeypatch.setattr(nv, "REPO_ROOT", tmp_path)
     monkeypatch.setattr(nv, "VERSION_FILE", tmp_path / "VERSION")
     return tmp_path
@@ -107,8 +123,7 @@ def repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 def _commit(repo: Path, message: str) -> None:
     marker = repo / "file.txt"
     marker.write_text(message, encoding="utf-8")
-    _run(repo, "add", "file.txt")
-    _run(repo, "commit", "-q", "-m", message)
+    _run(repo, "commit", "-q", "-m", message, "--", "file.txt")
 
 
 def _tag(repo: Path, tag: str) -> None:
