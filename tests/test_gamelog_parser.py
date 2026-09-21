@@ -1089,9 +1089,12 @@ class TestGamelogParserVsScreenshots:
     """
 
     @pytest.fixture(scope="class")
-    def parsed_matches(self):
-        files = find_gamelog_files(GAMELOG_DIR)
-        return [r for f in files if (r := parse_gamelog_file(f))]
+    def gamelog_files(self):
+        return find_gamelog_files(GAMELOG_DIR)
+
+    @pytest.fixture(scope="class")
+    def parsed_matches(self, gamelog_files):
+        return [r for f in gamelog_files if (r := parse_gamelog_file(f))]
 
     @pytest.fixture(scope="class")
     def inferred_username(self, parsed_matches):
@@ -1111,16 +1114,23 @@ class TestGamelogParserVsScreenshots:
         else:
             assert inferred_username == local_username
 
-    def test_parsed_count_in_expected_range(self, parsed_matches, truth):
-        """Total parsed matches should be at least as many as Modern entries in truth.
+    def test_parsed_count_in_expected_range(self, parsed_matches, gamelog_files):
+        """The parser should handle essentially every GameLog file on this machine.
 
-        The screenshots only cover a partial view of the history; gamelogs may also
-        include matches not visible in any screenshot (different session dates).
-        We just verify the parser isn't dramatically under-counting.
+        This previously asserted ``len(parsed_matches) >= len(modern_truth)`` — that
+        gamelogs are a superset of the screenshot fixture. That premise only holds
+        while the machine still retains every GameLog from the fixture's period
+        (Jan 2025), but MTGO prunes the folder over time, so on a pruned machine it
+        failed with e.g. ``assert 10 >= 271`` no matter how correct the parser was.
+
+        Under-counting is better measured against the files actually present, which
+        is also machine-independent: every file found should yield a parsed match.
         """
-        modern_truth = [t for t in truth if t["mtg_format"] in ("Modern", "Unknown")]
-        # Gamelogs ≥ Modern truth entries (screenshots may omit some periods)
-        assert len(parsed_matches) >= len(modern_truth)
+        assert gamelog_files, "no GameLog files found in the discovered directory"
+        assert len(parsed_matches) >= len(gamelog_files), (
+            f"parsed {len(parsed_matches)} matches from {len(gamelog_files)} GameLog "
+            "files — the parser is dropping files it should handle"
+        )
 
     def _build_parsed_by_opponent(self, parsed_matches, username):
         """Index parsed matches by opponent name (lower-case)."""
@@ -1209,6 +1219,17 @@ class TestGamelogParserVsScreenshots:
                     }
                 )
             checked += 1
+
+        # MTGO prunes GameLogs, so a machine can legitimately retain none of the
+        # matches the screenshot fixture covers. That makes this cross-check
+        # inapplicable rather than failing — distinct from the guard below, which
+        # catches candidates that exist but fail to line up.
+        if in_window_candidates == 0:
+            pytest.skip(
+                f"the {len(parsed_matches)} GameLog(s) on this machine share no "
+                f"opponent with the {len(truth)}-entry screenshot fixture, so there "
+                "is nothing to cross-reference"
+            )
 
         assert checked > 0, "No Modern matches were cross-referenced within the time window"
         # Guard against silent under-matching: if a parser/timestamp regression
