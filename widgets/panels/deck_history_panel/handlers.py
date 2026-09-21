@@ -14,8 +14,7 @@ from typing import TYPE_CHECKING
 import wx
 from loguru import logger
 
-from repositories.deck_vcs_repository.diffs import unified_lines
-from widgets.panels.deck_history_panel.layout import build_layout, changed_lines_only
+from widgets.panels.deck_history_panel.layout import build_layout, diff_lines
 
 if TYPE_CHECKING:
     from widgets.panels.deck_history_panel.protocol import DeckHistoryPanelProto
@@ -45,6 +44,7 @@ class DeckHistoryPanelHandlersMixin(_Base):
 
     def refresh_history(self) -> None:
         """Rebuild the graph from the deck's repo and repaint."""
+        self._refresh_deck_name()
         deck_key = self.current_deck_key()
         # A selection and a pinned baseline are shas in *one* deck's repo, so
         # carrying them across a deck change points them at commits that do not
@@ -67,6 +67,17 @@ class DeckHistoryPanelHandlersMixin(_Base):
             self._select_sha(head.sha)
         else:
             self._refresh_preview()
+
+    def _refresh_deck_name(self) -> None:
+        """Show the loaded deck's name, or the prompt when it has none.
+
+        Read from the record rather than cached, so this tab agrees with the
+        deck tables header without either knowing about the other.
+        """
+        from services.deck_name import deck_name_of
+
+        name = deck_name_of(self.deck_repo.get_current_deck())
+        self.set_deck_name_text(name or self._t("deck_name.unset"), named=bool(name))
 
     def _refresh_branches(self, deck_key: str) -> None:
         branches = self.vcs_service.list_branches(deck_key)
@@ -111,21 +122,21 @@ class DeckHistoryPanelHandlersMixin(_Base):
             self.baseline_label.SetLabel(self._t("history.baseline.none"))
             return
         try:
-            lines = unified_lines(
-                self.vcs_service.version_text(deck_key, base),
-                self.vcs_service.version_text(deck_key, sha),
-                before_label=base[:7],
-                after_label=sha[:7],
-            )
+            diff = self.vcs_service.diff(deck_key, base, sha)
         except Exception as exc:  # noqa: BLE001
             logger.warning(f"Could not diff {base[:7]}..{sha[:7]}: {exc}")
             return
-        # Only what moved: see :func:`changed_lines_only`. A diff whose every
-        # remaining line is a file header changed nothing the reader can act on,
-        # so it reads as identical rather than as two bare header lines.
-        lines = changed_lines_only(lines)
-        changed = [line for line in lines if not line.startswith(("---", "+++"))]
-        self.diff_text.SetValue("\n".join(lines) if changed else self._t("history.diff.identical"))
+        # Net card changes, not line changes: cutting a playset to two is one
+        # "-2", which is the change the player made. See :func:`diff_lines`.
+        lines = diff_lines(
+            diff,
+            before_label=base[:7],
+            after_label=sha[:7],
+            main_heading=self._t("history.diff.maindeck"),
+            sideboard_heading=self._t("history.diff.sideboard"),
+            identical=self._t("history.diff.identical"),
+        )
+        self.diff_text.SetValue("\n".join(lines))
         self.baseline_label.SetLabel(
             self._t("history.baseline.explicit", sha=base[:7])
             if self._baseline_sha

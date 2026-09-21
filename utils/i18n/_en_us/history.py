@@ -31,4 +31,14 @@ MESSAGES: dict[str, str] = {
     "app.status.deck_history_checked_out": "Checked out {sha} on branch {branch}",
     "app.status.deck_history_switched": "Switched to branch {branch}",
     "app.status.deck_version_saved": "Version saved: {summary}",
+    # The deck's name: shown in the deck tables header and this tab.
+    "deck_name.unset": "No name selected for this deck",
+    "deck_name.tooltip": "The deck's name — it names the file this deck is saved to, and the version history that file keeps. Click to change it.",
+    "deck_name.title": "Deck Name",
+    "deck_name.prompt": "Name this deck. The name becomes the file it is saved to, so renaming starts a separate version history and leaves the existing one untouched.",
+    "deck_name.rejected": "That name cannot be used as a file name. Try one with letters or numbers in it.",
+    "deck_name.no_deck": "Load a deck before naming it.",
+    "app.status.deck_renamed": "Deck renamed to {name}",
+    "history.diff.maindeck": "Maindeck",
+    "history.diff.sideboard": "Sideboard",
 }

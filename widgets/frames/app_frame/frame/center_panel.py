@@ -156,6 +156,7 @@ class CenterPanelBuilderMixin(_Base):
             deck_repo=self.controller.deck_repo,
             on_checkout=self._on_history_checkout,
             on_status_update=self._set_status,
+            on_rename=self.on_deck_name_clicked,
             locale=self.locale,
         )
         self.deck_history_panel.SetToolTip(self._t("tabs.tooltip.deck_history"))
@@ -324,6 +325,10 @@ class CenterPanelBuilderMixin(_Base):
             # All zones resolve a card's chosen printing image the same way so
             # board art tracks the inspector selection (issue #792, part 1).
             get_printing_image=self._get_printing_image,
+            # Only the mainboard carries the deck name: it names the deck, not
+            # the zone, and the sideboard header is the same row under the same
+            # width pressure.
+            on_deck_name_click=(self.on_deck_name_clicked if zone == "main" else None),
         )
 
     def _persist_deck_view_mode(self, zone: str, mode: str) -> None:

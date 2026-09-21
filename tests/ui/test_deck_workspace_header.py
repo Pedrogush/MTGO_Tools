@@ -99,12 +99,24 @@ def test_the_count_label_is_the_row_member_that_gives_way(deck_selector_factory)
     minimum is view-mode and locale dependent -- so the controls now wrap to a
     second line instead. The count label is still the flexible member of the row
     it is on, which is what this pins.
+
+    The deck name later joined it inside a single flexible slot, so the count is
+    now one level down. The property is unchanged -- it still carries a
+    proportion and still ellipsises -- and the slot holding the pair is itself
+    the row's flexible member, which is what keeps the row's minimum where it
+    was rather than adding a second claim on the width.
     """
     frame = deck_selector_factory()
     try:
         table = frame.main_table
         header = _header_sizer(table)
-        item = next(i for i in header.GetChildren() if i.GetWindow() is table.count_label)
+
+        identity = next(i for i in header.GetChildren() if i.IsSizer())
+        assert identity.GetProportion() == 1, "the name/count slot takes the row's slack"
+
+        item = next(
+            i for i in identity.GetSizer().GetChildren() if i.GetWindow() is table.count_label
+        )
         assert item.GetProportion() == 1
         assert not any(i.IsSpacer() and i.GetProportion() for i in header.GetChildren())
         style = table.count_label.GetWindowStyleFlag()

@@ -7,6 +7,7 @@ from typing import Any, ClassVar, Protocol
 
 import wx
 
+from widgets.deck_name_label import DeckNameLabel
 from widgets.panels.card_table_panel.grid_view import DeckGridView
 from widgets.panels.card_table_panel.pile_view import DeckPileView
 from widgets.panels.card_table_panel.table_view import DeckTableView
@@ -23,6 +24,8 @@ class CardTablePanelProto(Protocol):
     cards: list[dict[str, Any]]
     selected_name: str | None
     count_label: wx.StaticText
+    #: Only the zone given a click handler builds one (the mainboard).
+    deck_name_label: DeckNameLabel | None
     _content_book: wx.Simplebook
     _loading_state: wx.Panel
     _get_metadata: Callable[[str], dict[str, Any] | None]

@@ -20,8 +20,10 @@ from typing import TYPE_CHECKING, Any
 
 import wx
 
+from utils.constants import DECK_NAME_LABEL_MIN_WIDTH
 from utils.constants.theme import SPACE_SM, SPACE_XS, SURFACE_PANEL
 from utils.i18n import translate
+from widgets.deck_name_label import DeckNameLabel
 from widgets.input_frame import create_text_input
 from widgets.notebook import make_flat_notebook
 from widgets.panels.deck_history_panel.graph_canvas import DeckGraphCanvas
@@ -52,6 +54,7 @@ class DeckHistoryPanel(DeckHistoryPanelHandlersMixin, wx.Panel):
         deck_repo: Any = None,
         on_checkout: Callable[[str], None] | None = None,
         on_status_update: Callable[..., None] | None = None,
+        on_rename: Callable[[], None] | None = None,
         locale: str | None = None,
     ) -> None:
         super().__init__(parent)
@@ -71,6 +74,7 @@ class DeckHistoryPanel(DeckHistoryPanelHandlersMixin, wx.Panel):
         self.locale = locale
         self._on_checkout = on_checkout
         self._on_status_update = on_status_update
+        self._on_rename = on_rename
 
         self._graph = []
         self._baseline_sha: str | None = None
@@ -99,6 +103,18 @@ class DeckHistoryPanel(DeckHistoryPanelHandlersMixin, wx.Panel):
         self.branch_choice.Bind(wx.EVT_CHOICE, self.on_branch_chosen)
         self.branch_choice.SetToolTip(self._t("history.branch.tooltip"))
         row.Add(self.branch_choice, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, SPACE_SM)
+
+        # The deck's name, right of the branch picker: this tab is the one place
+        # the *history* is read, and the name is what the history is keyed by,
+        # so which deck is being looked at belongs in this row.
+        self.deck_name_label = DeckNameLabel(
+            self,
+            on_click=self._on_deck_name_click,
+            surface="panel",
+            tooltip=self._t("deck_name.tooltip"),
+        )
+        self.deck_name_label.SetMinSize((DECK_NAME_LABEL_MIN_WIDTH, -1))
+        row.Add(self.deck_name_label, 1, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, SPACE_SM)
 
         # No refresh button: nothing outside this app writes to a deck's repo,
         # so there is never state on disk the app has not just put there itself.
@@ -154,6 +170,15 @@ class DeckHistoryPanel(DeckHistoryPanelHandlersMixin, wx.Panel):
         font.SetFaceName(MONO_FACE)
         field.ctrl.SetFont(font)
         return field
+
+    def _on_deck_name_click(self) -> None:
+        """Hand the rename to the frame, which owns the deck record."""
+        if self._on_rename is not None:
+            self._on_rename()
+
+    def set_deck_name_text(self, text: str, *, named: bool) -> None:
+        """Show the deck's name in this tab's header."""
+        self.deck_name_label.set_name(text, named=named)
 
     # ------------------------------------------------------------------ context ------------------------------------------------------------------
     def _t(self, key: str, **kwargs: object) -> str:

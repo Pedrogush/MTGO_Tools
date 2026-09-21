@@ -11,6 +11,13 @@ import wx
 from loguru import logger
 
 from repositories.scrapers.mtggoldfish_visual import DeckUnavailableError
+from services.deck_name import (
+    adopt_file_name,
+    clean_deck_name,
+    deck_file_for,
+    has_deck_name,
+    set_deck_name,
+)
 from utils.constants import FORMAT_OPTIONS
 from utils.deck import sanitize_filename
 from utils.perf import perf_phase
@@ -90,6 +97,10 @@ class DeckContentHandlers(_Base):
             "path": str(file_ref),
             "source": "file",
         }
+        # A deck already on disk is named by the file it came from, which is the
+        # same stem its history was keyed by before names existed -- so decks
+        # saved by an older build keep the history they have, with no migration.
+        adopt_file_name(deck_record, file_ref)
         self.controller.deck_repo.set_current_deck(deck_record)
         logger.info(f"Load Deck selected: {file_path} (deck_key={deck_key})")
 
@@ -139,46 +150,41 @@ class DeckContentHandlers(_Base):
             wx.MessageBox("Could not access clipboard.", "Copy Deck", wx.OK | wx.ICON_WARNING)
 
     def on_save_clicked(self: AppFrame, _event: wx.CommandEvent | None = None) -> None:
-        """Save Deck: format and archetype first, then Windows' Save As (#1034)."""
+        """Save Deck: ask for name, format and archetype once, then write.
+
+        A named deck saves with no dialog at all. The details are collected on
+        the first save only, because the name they include decides the file,
+        and re-deciding the file per save is exactly what used to split one
+        deck's version history across two repos.
+        """
         deck_content = self.controller.build_deck_text(self.zone_cards).strip()
         if not deck_content:
             wx.MessageBox("Load a deck first.", "Save Deck", wx.OK | wx.ICON_INFORMATION)
             return
         current_deck = self.controller.deck_repo.get_current_deck()
 
-        details = SaveDeckDialog(
-            self,
-            formats=FORMAT_OPTIONS,
-            initial_format=self._initial_save_format(deck_content, current_deck),
-            initial_archetype=self._initial_save_archetype(current_deck),
-            load_archetypes=self.controller.load_archetype_names,
-            t=self._t,
-        )
-        try:
-            if details.ShowModal() != wx.ID_OK:
-                logger.info("Save Deck cancelled (details)")
+        if has_deck_name(current_deck):
+            format_name = str((current_deck or {}).get("format") or self.current_format)
+            archetype = str((current_deck or {}).get("archetype") or "") or None
+        else:
+            details = self._ask_save_details(deck_content, current_deck)
+            if details is None:
                 return
-            format_name = details.selected_format() or self.current_format
-            archetype = details.selected_archetype()
-        finally:
-            details.Destroy()
+            name, format_name, archetype = details
+            if current_deck is None:
+                # A deck built from scratch gets a record so its name has
+                # somewhere to live. Deliberately no ``name``/``href``: those
+                # hold the *source's* label, and ``save_deck`` falls back to
+                # ``name`` for the archetype, which would file this deck under
+                # its own title as an archetype nobody chose.
+                current_deck = {"source": "manual"}
+                self.controller.deck_repo.set_current_deck(current_deck)
+            set_deck_name(current_deck, name)
+            self.refresh_deck_name_displays()
 
-        default_dir = self.controller.resolve_deck_dialog_dir()
-        logger.info(f"Save Deck: opening Save As in {default_dir}")
-        with wx.FileDialog(
-            self,
-            self._t("deck_actions.save_deck"),
-            defaultDir=str(default_dir),
-            defaultFile=f"{self._default_save_file_name(current_deck)}.txt",
-            wildcard=self._t("deck_save.file_filter"),
-            style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT,
-        ) as dlg:
-            if dlg.ShowModal() != wx.ID_OK:
-                logger.info("Save Deck cancelled (file)")
-                return
-            file_path = Path(dlg.GetPath())
-        if not file_path.suffix:
-            file_path = file_path.with_suffix(".txt")
+        file_path = deck_file_for(current_deck, self.controller.resolve_deck_dialog_dir())
+        if file_path is None:  # pragma: no cover - guarded by has_deck_name above
+            return
 
         try:
             saved_path, deck_id = self.controller.save_deck(
@@ -196,14 +202,55 @@ class DeckContentHandlers(_Base):
         # The in-memory record is re-pointed at the saved file by
         # ``AppController.save_deck``, which every save path goes through.
 
-        message = f"Deck saved to {saved_path}"
-        if deck_id:
-            message += f"\nDatabase ID: {deck_id}"
-        wx.MessageBox(message, "Deck Saved", wx.OK | wx.ICON_INFORMATION)
+        # A save is now a single click with no dialog, so it reports in the
+        # status bar rather than with a modal the user has to dismiss every
+        # time. The path is in the log for anyone who needs it.
+        logger.info(f"Deck saved to {saved_path} (database ID: {deck_id})")
         self._set_status("app.status.deck_saved")
+        self.refresh_deck_name_displays()
         # The save already committed a version (DeckWorkflowService.save_deck);
         # this only brings the graph into step with it.
         self.refresh_deck_history()
+
+    def _ask_save_details(
+        self: AppFrame, deck_content: str, current_deck: dict[str, Any] | None
+    ) -> tuple[str, str, str | None] | None:
+        """Collect name, format and archetype for a deck being named.
+
+        Returns ``None`` when the user cancels. The name is pre-filled with the
+        descriptive label the deck already reads as in the research list, which
+        is what the Save As default used to offer.
+        """
+        details = SaveDeckDialog(
+            self,
+            formats=FORMAT_OPTIONS,
+            initial_format=self._initial_save_format(deck_content, current_deck),
+            initial_archetype=self._initial_save_archetype(current_deck),
+            initial_name=self._suggested_deck_name(current_deck),
+            load_archetypes=self.controller.load_archetype_names,
+            t=self._t,
+        )
+        try:
+            if details.ShowModal() != wx.ID_OK:
+                logger.info("Save Deck cancelled (details)")
+                return None
+            name = details.deck_name()
+            if not name:  # pragma: no cover - OK is disabled without one
+                return None
+            return (
+                name,
+                details.selected_format() or self.current_format,
+                (details.selected_archetype() or None),
+            )
+        finally:
+            details.Destroy()
+
+    @staticmethod
+    def _suggested_deck_name(current_deck: dict[str, Any] | None) -> str:
+        """What the name field opens on for a deck that has never been named."""
+        if not current_deck:
+            return ""
+        return clean_deck_name(format_deck_name(current_deck).replace(" | ", "_"))
 
     def _initial_save_format(
         self: AppFrame, deck_text: str, current_deck: dict[str, Any] | None
@@ -248,16 +295,6 @@ class DeckContentHandlers(_Base):
             if key in (entry.get("href"), entry.get("name")):
                 return str(entry.get("name") or "")
         return ""
-
-    @staticmethod
-    def _default_save_file_name(current_deck: dict[str, Any] | None) -> str:
-        if not current_deck:
-            return "saved_deck"
-        if current_deck.get("source") == "file" and current_deck.get("name"):
-            return sanitize_filename(str(current_deck["name"]), fallback="saved_deck")
-        return sanitize_filename(
-            format_deck_name(current_deck).replace(" | ", "_"), fallback="saved_deck"
-        )
 
     def _on_deck_download_error(self: AppFrame, error: Exception) -> None:
         self.copy_button.Disable()
@@ -361,6 +398,10 @@ class DeckContentHandlers(_Base):
                 [{"name": name, "qty": qty} for name, qty in stats["sideboard_cards"]],
                 key=lambda card: card["name"].lower(),
             )
+        # The name belongs to the deck that just arrived, so both of its views
+        # move with it -- including back to the placeholder for a scraped list,
+        # which has no name until the user gives it one.
+        self.refresh_deck_name_displays()
         with perf_phase("load outboard"):
             self.zone_cards["out"] = self._load_outboard_for_current()
         with perf_phase("main_table.set_cards"):

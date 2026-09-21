@@ -31,15 +31,27 @@ if TYPE_CHECKING:
 def deck_key_for(deck: dict | None, file_path: Path | None) -> str:
     """The history key for a deck, agreed on by every caller.
 
-    A deck that lives in a file is keyed by that file's stem, because the file
-    is the thing the user keeps and comes back to -- two sessions that open
-    ``Mono Red.txt`` must land on the same history. Only a deck with no file
-    behind it (a scraped list, an average) falls back to its record's ``href``,
-    which is what :meth:`DeckRepository.get_current_deck_key` uses throughout
-    the rest of the app.
+    The deck's **chosen name** decides this, because the name decides the file
+    and the file is the thing the user keeps and comes back to -- two sessions
+    that open ``Mono Red.txt`` must land on the same history. Reading the name
+    first is also what keeps one deck's saves in one history: the name is held
+    once and shown to the user, where the Save As dialog's default was
+    recomputed per save and could differ between two saves of one deck.
+
+    The two fallbacks are for decks that have not been named. A file still
+    keys by its stem -- which is the name such a deck acquires the moment
+    anything calls :func:`services.deck_name.adopt_file_name`, so the two agree
+    and decks saved before the name existed keep their history. A deck with no
+    file at all (a scraped list, an average) falls back to its record's
+    ``href``, which is what :meth:`DeckRepository.get_current_deck_key` uses
+    throughout the rest of the app.
     """
+    from services.deck_name import deck_name_of
     from utils.deck import sanitize_filename
 
+    name = deck_name_of(deck)
+    if name:
+        return sanitize_filename(name, fallback="manual").lower()
     if file_path is not None:
         return sanitize_filename(Path(file_path).stem, fallback="manual").lower()
     if deck:

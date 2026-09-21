@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from repositories.deck_vcs_repository.models import CardDelta, DeckDiff
 from services.deck_vcs_service import GraphCommit
 
 
@@ -166,22 +167,53 @@ def build_layout(commits: list[GraphCommit]) -> GraphLayout:
     )
 
 
-def changed_lines_only(lines: list[str]) -> list[str]:
-    """A unified diff with its unchanged context dropped.
+def _amount(value: float) -> str:
+    """A card count as a player writes it: ``2``, never ``2.0``."""
+    return str(int(value) if float(value).is_integer() else value)
 
-    A decklist diff is read for *what moved*, and a normalized list puts the
-    untouched cards in the same place in both versions, so the context lines a
-    unified diff carries are the bulk of the output and none of the answer. The
-    file header stays (it names the two versions being compared); the ``@@``
-    hunk ranges do not, because once the context is gone their line numbers
-    point at nothing the reader can see.
+
+def _delta_line(delta: CardDelta) -> str:
+    """One card's net change, signed: ``-2 Pinnacle Emissary``."""
+    sign = "+" if delta.delta > 0 else "-"
+    return f"{sign}{_amount(abs(delta.delta))} {delta.name}"
+
+
+def diff_lines(
+    diff: DeckDiff,
+    *,
+    before_label: str,
+    after_label: str,
+    main_heading: str,
+    sideboard_heading: str,
+    identical: str,
+) -> list[str]:
+    """A deck diff as **net card changes**, grouped by zone.
+
+    A unified text diff is correct and unreadable: cutting a playset to two
+    shows up as a removed line and an added line, which is git's answer to
+    "what changed in this file" rather than a player's answer to "what changed
+    in this deck". The card-level diff already computes the net, so ``4 -> 2``
+    is one ``-2`` line.
+
+    The zones are kept apart because the diff keys on ``(name, is_sideboard)``:
+    moving two copies to the sideboard is ``-2`` in one zone and ``+2`` in the
+    other, and collapsing by card name alone would cancel a real change into
+    nothing.
     """
-    kept: list[str] = []
-    for line in lines:
-        if line.startswith(("---", "+++")):
-            kept.append(line)
-        elif line.startswith("@@"):
+    header = [f"{before_label} -> {after_label}"]
+    if diff.is_empty:
+        return [*header, "", identical]
+
+    by_zone: dict[bool, list[CardDelta]] = {False: [], True: []}
+    for delta in (*diff.added, *diff.changed, *diff.removed):
+        by_zone[delta.is_sideboard].append(delta)
+
+    lines = list(header)
+    for is_sideboard, heading in ((False, main_heading), (True, sideboard_heading)):
+        zone = by_zone[is_sideboard]
+        if not zone:
             continue
-        elif line.startswith(("+", "-")):
-            kept.append(line)
-    return kept
+        zone.sort(key=lambda d: (-d.delta, d.name.casefold()))
+        lines.extend(("", heading))
+        lines.extend(_delta_line(delta) for delta in zone)
+    return lines

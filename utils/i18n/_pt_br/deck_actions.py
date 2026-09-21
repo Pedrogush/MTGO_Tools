@@ -19,4 +19,9 @@ MESSAGES: dict[str, str] = {
     "deck_save.continue": "Salvar…",
     "deck_save.cancel": "Cancelar",
     "deck_save.file_filter": "Arquivos de texto (*.txt)|*.txt|Todos os arquivos (*.*)|*.*",
+    # O nome é coletado uma vez, no primeiro salvamento.
+    "deck_save.name": "Nome do deck",
+    "deck_save.name_help": "Nomeia o arquivo em que este deck é salvo e o histórico de versões que ele mantém.",
+    "deck_save.name_required": "Dê um nome ao deck para salvá-lo.",
+    "deck_save.name_sanitized": "Será salvo como: {name}",
 }

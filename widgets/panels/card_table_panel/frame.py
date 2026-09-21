@@ -10,6 +10,7 @@ import wx
 from utils.constants import (
     DARK_PANEL,
     DECK_COUNT_LABEL_MIN_WIDTH,
+    DECK_NAME_LABEL_MIN_WIDTH,
     SPACE_SM,
     SPACE_XS,
     SUBDUED_TEXT,
@@ -18,6 +19,7 @@ from utils.constants import (
 )
 from utils.i18n import translate as _i18n_translate
 from utils.i18n import translate_plural as _i18n_translate_plural
+from widgets.deck_name_label import DeckNameLabel
 from widgets.mana_icon_factory import ManaIconFactory
 from widgets.panels.card_table_panel.grid_view import DeckGridView
 from widgets.panels.card_table_panel.handlers import CardTablePanelHandlersMixin
@@ -95,6 +97,7 @@ class CardTablePanel(
         on_printing_mode: Callable[[str, str | None], None] | None = None,
         get_printing_image: Callable[[str], Any] | None = None,
         on_activate: Callable[[str, str], None] | None = None,
+        on_deck_name_click: Callable[[], None] | None = None,
     ) -> None:
         super().__init__(parent)
         self.zone = zone
@@ -165,6 +168,29 @@ class CardTablePanel(
         # ``SetLabel`` otherwise resizes the control to its own text and it always
         # "fits". See :func:`widgets.stylize.create_status_label`, which is the
         # right-aligned version of the same three lines.
+        #
+        # The deck's name sits left of the count, on the zone that was given a
+        # click handler -- the name belongs to the deck, not to a zone, so
+        # showing it over both tables would be the same fact twice in one tab.
+        # Both live inside *one* flexible slot rather than taking a slot each,
+        # which is what keeps the row's minimum where it was: measured, giving
+        # the name a second proportion-1 slot with a 90px floor left the header
+        # 97px short of itself at the workspace's 353px floor, and the view
+        # controls clip before the label does. Sharing one slot means the pair
+        # contributes what the count alone used to, and the two of them split
+        # whatever slack the row actually has.
+        identity = wx.BoxSizer(wx.HORIZONTAL)
+        self.deck_name_label: DeckNameLabel | None = None
+        if on_deck_name_click is not None:
+            self.deck_name_label = DeckNameLabel(
+                self,
+                on_click=on_deck_name_click,
+                surface="panel",
+                tooltip=self._t("deck_name.tooltip"),
+            )
+            self.deck_name_label.SetMinSize((DECK_NAME_LABEL_MIN_WIDTH, -1))
+            identity.Add(self.deck_name_label, 1, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, SPACE_SM)
+
         self.count_label = wx.StaticText(
             self,
             label="0 cards",
@@ -172,7 +198,8 @@ class CardTablePanel(
         )
         self.count_label.SetForegroundColour(SUBDUED_TEXT)
         self.count_label.SetMinSize((DECK_COUNT_LABEL_MIN_WIDTH, -1))
-        header.Add(self.count_label, 1, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, SPACE_SM)
+        identity.Add(self.count_label, 1, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, SPACE_SM)
+        header.Add(identity, 1, wx.ALIGN_CENTER_VERTICAL)
 
         # F3: the three view toggles are a *group*, and until phase 7 nothing
         # said so — which is why the two menu buttons beside them read as a

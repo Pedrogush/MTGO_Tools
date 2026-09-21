@@ -576,65 +576,199 @@ class TestConsecutiveSavesStayInOneHistory:
         chosen = tmp_path / "My Own Brew.txt"
         assert deck_key_for(deck, chosen) != deck_key_for(deck, saved)
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "Open defect, reproduced rather than hidden: once a save sets "
-            "source='file', the Save As default switches from the deck's "
-            "descriptive file name to its record 'name' (an archetype slug for "
-            "a scraped list), so the second save of one deck offers a different "
-            "file and forks its history. Being removed wholesale by the "
-            "explicit deck-name redesign, which drops the filename prompt."
-        ),
-    )
-    def test_both_saves_offer_the_same_file_and_key(self, tmp_path) -> None:
-        from widgets.frames.app_frame.handlers.deck_content import DeckContentHandlers
+    def test_both_saves_write_the_same_file_and_key(self, tmp_path) -> None:
+        """The regression this redesign exists for.
 
-        default_name = DeckContentHandlers._default_save_file_name
+        The deck is named once; the second save must resolve to the same file
+        and the same history key even though the first save re-pointed the
+        record at the file it wrote (``source='file'``, ``path`` set), which is
+        what used to switch the Save As default to the record's archetype slug.
+        """
+        from services.deck_name import deck_file_for, set_deck_name
 
         deck = self._scraped()
-        first_name = default_name(deck)
-        saved = tmp_path / (first_name + ".txt")
-        first_key = deck_key_for(deck, saved)
+        set_deck_name(deck, "pedronavaja, 17th, 2026-09-21_Modern Challenge 32")
+
+        first_file = deck_file_for(deck, tmp_path)
+        first_key = deck_key_for(deck, first_file)
 
         # What AppController._sync_saved_deck_record does after a save.
-        deck["path"] = str(saved)
+        deck["path"] = str(first_file)
         deck["source"] = "file"
 
-        assert default_name(deck) == first_name
-        second = tmp_path / (default_name(deck) + ".txt")
-        assert deck_key_for(deck, second) == first_key
+        second_file = deck_file_for(deck, tmp_path)
+        assert second_file == first_file
+        assert deck_key_for(deck, second_file) == first_key
 
 
-class TestDiffShowsOnlyChangedLines:
-    """The diff pane drops unchanged context (it is read for what moved)."""
+class TestDeckName:
+    """The name is the deck's own state, and the only thing that picks its file."""
 
     @staticmethod
-    def _filter(lines: list[str]) -> list[str]:
-        from widgets.panels.deck_history_panel.layout import changed_lines_only
+    def _scraped() -> dict:
+        return {
+            "href": "modern-affinity",
+            "name": "modern-affinity",
+            "source": "mtggoldfish",
+            "player": "pedronavaja",
+            "result": "17th",
+            "date": "2026-09-21",
+            "event": "Modern Challenge 32",
+        }
 
-        return changed_lines_only(lines)
+    def test_a_fresh_deck_has_no_name(self) -> None:
+        from services.deck_name import deck_name_of, has_deck_name
 
-    def test_context_and_hunk_headers_go_and_changes_stay(self) -> None:
-        from repositories.deck_vcs_repository.diffs import unified_lines
+        deck = self._scraped()
+        assert deck_name_of(deck) == ""
+        assert not has_deck_name(deck)
 
-        raw = unified_lines(
-            _decklist("4 Mox Opal", "4 Pinnacle Emissary", "4 Urza's Saga"),
-            _decklist("4 Mox Opal", "2 Pinnacle Emissary", "4 Urza's Saga"),
+    def test_the_placeholder_is_never_stored_or_keyed(self) -> None:
+        """ "No name selected" is display text; storing it would key every
+        unnamed deck to one shared history."""
+        from services.deck_name import DECK_NAME_KEY, deck_name_of, set_deck_name
+
+        deck = self._scraped()
+        for rejected in ("", "   ", None):
+            assert set_deck_name(deck, rejected) == ""
+        assert DECK_NAME_KEY not in deck
+        assert deck_name_of(deck) == ""
+        # With no name it falls back to the record, never to placeholder text.
+        assert deck_key_for(deck, None) == "modern-affinity"
+
+    def test_an_unnamed_deck_has_no_file_to_save_to(self, tmp_path) -> None:
+        from services.deck_name import deck_file_for
+
+        assert deck_file_for(self._scraped(), tmp_path) is None
+
+    def test_a_name_is_sanitized_into_a_legal_stem(self) -> None:
+        from services.deck_name import set_deck_name
+
+        deck = self._scraped()
+        stored = set_deck_name(deck, 'Mono/Red: "Burn"?')
+        assert stored == deck["deck_name"]
+        assert not set(stored) & set('\\/:*?"<>|')
+
+    def test_the_name_decides_the_key_over_the_record(self) -> None:
+        from services.deck_name import set_deck_name
+
+        deck = self._scraped()
+        set_deck_name(deck, "My Own Brew")
+        assert deck_key_for(deck, None) == "my own brew"
+
+    def test_renaming_points_the_next_save_at_a_new_file(self, tmp_path) -> None:
+        from services.deck_name import deck_file_for, set_deck_name
+
+        deck = self._scraped()
+        set_deck_name(deck, "First Name")
+        first = deck_file_for(deck, tmp_path)
+        first_key = deck_key_for(deck, first)
+        deck["path"] = str(first)
+
+        set_deck_name(deck, "Second Name")
+        second = deck_file_for(deck, tmp_path)
+
+        # The new name wins over the file the deck is still pointing at, which
+        # is what makes the next save write a new file and start a new history.
+        assert second != first
+        assert deck_key_for(deck, second) != first_key
+        # ...and nothing moved or deleted the old one.
+        assert deck["path"] == str(first)
+
+    def test_a_deck_keeps_saving_where_it_was_opened_from(self, tmp_path) -> None:
+        """A list opened outside the deck folder goes on saving there."""
+        from services.deck_name import adopt_file_name, deck_file_for
+
+        elsewhere = tmp_path / "somewhere else" / "Mono Red.txt"
+        elsewhere.parent.mkdir()
+        deck = {"href": "x", "name": "Mono Red", "path": str(elsewhere), "source": "file"}
+        adopt_file_name(deck, elsewhere)
+
+        assert deck_file_for(deck, tmp_path / "deck folder") == elsewhere
+
+    def test_a_file_deck_keeps_the_key_it_had_before_names_existed(self, tmp_path) -> None:
+        """The no-migration guarantee, asserted rather than assumed."""
+        from services.deck_name import adopt_file_name
+
+        path = tmp_path / "Izzet Murktide.txt"
+        legacy_key = deck_key_for({"href": "whatever"}, path)
+
+        deck = {"href": "whatever", "name": path.stem, "path": str(path), "source": "file"}
+        adopt_file_name(deck, path)
+
+        assert deck_key_for(deck, path) == legacy_key
+        assert deck_key_for(deck, None) == legacy_key
+
+    def test_adopting_never_overwrites_a_chosen_name(self, tmp_path) -> None:
+        from services.deck_name import adopt_file_name, set_deck_name
+
+        deck = self._scraped()
+        set_deck_name(deck, "Chosen")
+        adopt_file_name(deck, tmp_path / "Something Else.txt")
+        assert deck["deck_name"] == "Chosen"
+
+
+class TestDiffShowsNetCardChanges:
+    """The diff pane reads as a player's change, not as a file's line changes."""
+
+    @staticmethod
+    def _render(before: str, after: str) -> list[str]:
+        from widgets.panels.deck_history_panel.layout import diff_lines
+
+        return diff_lines(
+            diff_decklists(before, after),
             before_label="aaaaaaa",
             after_label="bbbbbbb",
+            main_heading="Maindeck",
+            sideboard_heading="Sideboard",
+            identical="No card differences.",
         )
-        assert any(line.startswith(" ") for line in raw), "expected context to filter"
 
-        shown = self._filter(raw)
-        assert not any(line.startswith((" ", "@@")) for line in shown)
-        assert "-4 Pinnacle Emissary" in shown
-        assert "+2 Pinnacle Emissary" in shown
+    def test_a_trimmed_playset_is_one_net_line(self) -> None:
+        """The user's acceptance criterion: 4 -> 2 reads as -2, not -4 then +2."""
+        shown = self._render(
+            _decklist("4 Mox Opal", "4 Pinnacle Emissary"),
+            _decklist("4 Mox Opal", "2 Pinnacle Emissary"),
+        )
+        assert "-2 Pinnacle Emissary" in shown
+        assert "-4 Pinnacle Emissary" not in shown
+        assert "+2 Pinnacle Emissary" not in shown
 
-    def test_the_file_header_survives(self) -> None:
-        shown = self._filter(["--- aaaaaaa", "+++ bbbbbbb", "@@ -1,3 +1,3 @@", " 4 Mox Opal"])
-        assert shown == ["--- aaaaaaa", "+++ bbbbbbb"]
+    def test_a_card_that_appears_reads_as_plus(self) -> None:
+        shown = self._render(_decklist("4 Mox Opal"), _decklist("4 Mox Opal", "3 Emry"))
+        assert "+3 Emry" in shown
 
-    def test_an_unchanged_diff_keeps_no_card_lines(self) -> None:
-        shown = self._filter(["--- a", "+++ b", "@@ -1 +1 @@", " 4 Mox Opal"])
-        assert [line for line in shown if not line.startswith(("---", "+++"))] == []
+    def test_a_card_that_disappears_reads_as_minus(self) -> None:
+        shown = self._render(_decklist("4 Mox Opal", "3 Emry"), _decklist("4 Mox Opal"))
+        assert "-3 Emry" in shown
+
+    def test_a_move_to_the_sideboard_cancels_nothing(self) -> None:
+        """The one way collapsing by card name alone loses a real change."""
+        before = "4 Mox Opal\n2 Tormod's Crypt\n\nSideboard\n1 Pithing Needle\n"
+        after = "4 Mox Opal\n\nSideboard\n1 Pithing Needle\n2 Tormod's Crypt\n"
+
+        shown = self._render(before, after)
+        assert "-2 Tormod's Crypt" in shown
+        assert "+2 Tormod's Crypt" in shown
+        # ...and each on its own side of the zone headings.
+        main_at = shown.index("Maindeck")
+        side_at = shown.index("Sideboard")
+        assert main_at < shown.index("-2 Tormod's Crypt") < side_at
+        assert side_at < shown.index("+2 Tormod's Crypt")
+
+    def test_an_identical_pair_says_so(self) -> None:
+        same = _decklist("4 Mox Opal", "4 Urza's Saga")
+        shown = self._render(same, same)
+        assert shown[-1] == "No card differences."
+        assert not any(line.startswith(("+", "-")) for line in shown[1:])
+
+    def test_counts_render_as_integers(self) -> None:
+        shown = self._render(
+            _decklist("4 Mox Opal", "4 Pinnacle Emissary"),
+            _decklist("4 Mox Opal", "2 Pinnacle Emissary"),
+        )
+        assert not any(".0" in line for line in shown)
+
+    def test_the_header_names_both_versions(self) -> None:
+        shown = self._render(_decklist("4 Mox Opal"), _decklist("3 Mox Opal"))
+        assert shown[0] == "aaaaaaa -> bbbbbbb"
