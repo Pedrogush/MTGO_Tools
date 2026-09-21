@@ -47,21 +47,6 @@ def get_collection_snapshot(
     return collection
 
 
-def get_match_history(
-    bridge_path: str | None = None,
-    timeout: float | None = None,
-) -> Mapping[str, Any]:
-    """Return the match history payload from the bridge."""
-    payload = mtgo_bridge_client.run_bridge_command(
-        "history", bridge_path=bridge_path, timeout=timeout
-    )
-    history = payload.get("history") if isinstance(payload, dict) else None
-    if not isinstance(history, dict):
-        logger.debug("History payload missing or malformed; returning empty dict")
-        return {}
-    return history
-
-
 def get_trade_snapshot(
     bridge_path: str | None = None,
     timeout: float | None = None,
@@ -86,14 +71,6 @@ def fetch_collection_async(
     return mtgo_bridge_client.fetch_collection_snapshot_async(
         bridge_path=bridge_path, context=context
     )
-
-
-def fetch_history_async(
-    *,
-    bridge_path: str | None = None,
-    context=None,
-):
-    return mtgo_bridge_client.fetch_match_history_async(bridge_path=bridge_path, context=context)
 
 
 def start_watch(

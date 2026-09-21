@@ -77,17 +77,11 @@ var timings = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
 var totalStopwatch = Stopwatch.StartNew();
 
 CollectionSnapshot? collectionSnapshot = null;
-HistorySnapshot? historySnapshot = null;
 CurrencySnapshot? currencySnapshot = null;
 
 if (mode is ExecutionMode.Collection or ExecutionMode.All)
 {
     collectionSnapshot = Measure("collectionMs", GetCollectionSnapshot, timings);
-}
-
-if (mode is ExecutionMode.History or ExecutionMode.All)
-{
-    historySnapshot = Measure("historyMs", GetHistorySnapshot, timings);
 }
 
 if (mode is ExecutionMode.Currency or ExecutionMode.All)
@@ -102,15 +96,16 @@ var payload = new BridgePayload(
     DateTimeOffset.UtcNow,
     mode.ToString(),
     collectionSnapshot,
-    historySnapshot,
     currencySnapshot,
     timings
 );
 
 var serialized = JsonSerializer.Serialize(payload, jsonOptions);
 
-// Observed timings with ~2,290 cards and 270 matches (2024-xx-xx):
-// collectionMs ≈ 3_728, historyMs ≈ 17_280, totalMs ≈ 21_009
+// Observed timings with ~2,070 unique cards (2026-09-18): collectionMs ≈ 1_420 of
+// actual IPC, inside a ~9_000 ms process because ~7_200 ms of every invocation is
+// .NET startup plus the RemoteClient attach. The collection read itself is only 7
+// IPC calls — GetFrozenCollection returns Id/Name/Quantity locally.
 Console.WriteLine(serialized);
 
 static T Measure<T>(string key, Func<T> factory, IDictionary<string, long> timings)
@@ -304,347 +299,6 @@ static CurrencySnapshot GetCurrencySnapshot()
     {
         return new CurrencySnapshot(null, null, null, ex.Message);
     }
-}
-
-static HistorySnapshot GetHistorySnapshot()
-{
-    bool historyLoaded = false;
-
-    // ReadGameHistory() can throw from inside MTGOSDK (e.g. a RuntimeBinderException
-    // when the remote dynamic type drifts from the SDK's expectations). Guard it so a
-    // single failing snapshot returns a structured error instead of crashing the whole
-    // process and corrupting the JSON contract the Python side parses.
-    try
-    {
-        // ReadGameHistory() returns the full list - use it directly instead of accessing .Items!
-        var rawItems = HistoryManager.ReadGameHistory();
-        if (rawItems == null)
-        {
-            return new HistorySnapshot(historyLoaded, Array.Empty<HistoryEntry>(), "History items is null");
-        }
-
-        var items = rawItems
-            .Select(item => MapHistoryItem(item))
-            .Where(entry => entry != null)
-            .Cast<HistoryEntry>()
-            .ToList();
-        return new HistorySnapshot(historyLoaded, items, null);
-    }
-    catch (Exception ex)
-    {
-        return new HistorySnapshot(historyLoaded, Array.Empty<HistoryEntry>(), ex.Message);
-    }
-}
-
-static HistoryEntry? MapHistoryItem(object? item)
-{
-    if (item is null)
-    {
-        return null;
-    }
-
-    var type = item.GetType();
-    var typeName = type.Name;
-
-    // Extract basic properties using reflection - no type casting
-    var id = SafeGet<int>(item, "Id");
-    var startTime = SafeGet(item, "StartTime", DateTime.MinValue);
-
-    // Handle HistoricalMatch
-    if (typeName == "HistoricalMatch")
-    {
-        var opponents = ExtractOpponentNames(item);
-        var gameWins = SafeGet<int?>(item, "GameWins");
-        var gameLosses = SafeGet<int?>(item, "GameLosses");
-        var gameTies = SafeGet<int?>(item, "GameTies");
-        var gameIds = ExtractGameIds(item);
-        return new HistoryEntry(
-            "match",
-            id,
-            startTime,
-            opponents,
-            gameWins,
-            gameLosses,
-            gameTies,
-            gameIds,
-            null,
-            null,
-            null
-        );
-    }
-
-    // Handle HistoricalTournament
-    if (typeName == "HistoricalTournament")
-    {
-        var matches = ExtractTournamentMatches(item);
-        var matchWins = SafeGet<int?>(item, "MatchWins");
-        var matchLosses = SafeGet<int?>(item, "MatchLosses");
-        return new HistoryEntry(
-            "tournament",
-            id,
-            startTime,
-            Array.Empty<string>(),
-            null,
-            null,
-            null,
-            null,
-            matches,
-            matchWins,
-            matchLosses
-        );
-    }
-
-    // Default fallback
-    return new HistoryEntry(
-        typeName,
-        id,
-        startTime,
-        Array.Empty<string>(),
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null
-    );
-}
-
-static IReadOnlyList<string> ExtractOpponentNames(object match)
-{
-    var result = new List<string>();
-
-    if (match == null)
-    {
-        return result;
-    }
-
-    var type = match.GetType();
-
-    // STRATEGY 1: Access raw backing object before SDK converts to User objects
-    // HistoricalMatch has an internal "obj" field that contains the raw dynamic data
-    try
-    {
-        // Try to get the internal "obj" field (contains the raw dynamic object)
-        var objField = type.GetField("obj", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
-        if (objField != null)
-        {
-            var rawObj = objField.GetValue(match);
-            if (rawObj != null)
-            {
-                // Access Opponents on the raw dynamic object (should be strings, not User objects)
-                var rawType = rawObj.GetType();
-                var rawOpponentsProp = rawType.GetProperty("Opponents");
-                if (rawOpponentsProp != null)
-                {
-                    try
-                    {
-                        var rawOpponents = rawOpponentsProp.GetValue(rawObj);
-                        if (rawOpponents is IEnumerable rawEnum)
-                        {
-                            foreach (var item in rawEnum)
-                            {
-                                // The raw data might be strings directly
-                                if (item is string str && !string.IsNullOrWhiteSpace(str))
-                                {
-                                    result.Add(str.Trim());
-                                }
-                                // Or might be dynamic objects with string properties
-                                else if (item != null)
-                                {
-                                    // Try to get string representation or Name property
-                                    var itemType = item.GetType();
-                                    var nameProp = itemType.GetProperty("Name");
-                                    if (nameProp != null)
-                                    {
-                                        var nameValue = nameProp.GetValue(item);
-                                        if (nameValue is string name && !string.IsNullOrWhiteSpace(name))
-                                        {
-                                            result.Add(name.Trim());
-                                        }
-                                    }
-                                    else
-                                    {
-                                        // Fallback to ToString
-                                        var strVal = item.ToString();
-                                        if (!string.IsNullOrWhiteSpace(strVal))
-                                        {
-                                            result.Add(strVal.Trim());
-                                        }
-                                    }
-                                }
-                            }
-
-                            // If we got results from raw data, return them
-                            if (result.Count > 0)
-                            {
-                                return result;
-                            }
-                        }
-                    }
-                    catch
-                    {
-                        // Raw access failed, try other strategies
-                    }
-                }
-            }
-        }
-    }
-    catch
-    {
-        // Strategy 1 failed, continue to strategy 2
-    }
-
-    // STRATEGY 2: Try the SDK's Opponents property (might work if data is valid)
-    object? opponents = null;
-    try
-    {
-        var opponentsProp = type.GetProperty("Opponents", BindingFlags.Public | BindingFlags.Instance);
-        if (opponentsProp != null)
-        {
-            try
-            {
-                opponents = opponentsProp.GetValue(match);
-            }
-            catch (TargetInvocationException)
-            {
-                // SDK conversion failed - this is expected
-                opponents = null;
-            }
-            catch
-            {
-                opponents = null;
-            }
-        }
-    }
-    catch
-    {
-        // Property lookup failed
-    }
-
-    // If SDK property worked, extract User names
-    if (opponents != null && opponents is IEnumerable enumerable)
-    {
-        foreach (var opponent in enumerable)
-        {
-            if (opponent == null) continue;
-
-            string? name = null;
-            var opponentType = opponent.GetType();
-
-            // Try to get Name property
-            try
-            {
-                var nameProp = opponentType.GetProperty("Name", BindingFlags.Public | BindingFlags.Instance);
-                if (nameProp != null)
-                {
-                    var nameValue = nameProp.GetValue(opponent);
-                    name = nameValue as string;
-                }
-            }
-            catch
-            {
-                // Try method invocation
-                try
-                {
-                    var getName = opponentType.GetMethod("get_Name", BindingFlags.Public | BindingFlags.Instance);
-                    if (getName != null)
-                    {
-                        var nameValue = getName.Invoke(opponent, null);
-                        name = nameValue as string;
-                    }
-                }
-                catch
-                {
-                    continue;
-                }
-            }
-
-            if (!string.IsNullOrWhiteSpace(name))
-            {
-                result.Add(name.Trim());
-            }
-        }
-    }
-
-    return result;
-}
-
-static IReadOnlyList<int> ExtractGameIds(object match)
-{
-    var result = new List<int>();
-    try
-    {
-        var prop = match.GetType().GetProperty("GameIds");
-        if (prop == null) return result;
-
-        var value = prop.GetValue(match);
-        if (value == null) return result;
-
-        if (value is IEnumerable<int> intList)
-        {
-            result.AddRange(intList);
-        }
-        else if (value is IEnumerable enumerable)
-        {
-            foreach (var item in enumerable)
-            {
-                if (item is int id)
-                {
-                    result.Add(id);
-                }
-            }
-        }
-    }
-    catch
-    {
-        // Silently ignore errors
-    }
-    return result;
-}
-
-static IReadOnlyList<MatchSummary> ExtractTournamentMatches(object tournament)
-{
-    var result = new List<MatchSummary>();
-    try
-    {
-        var prop = tournament.GetType().GetProperty("Matches");
-        if (prop == null) return result;
-
-        var value = prop.GetValue(tournament);
-        if (value == null) return result;
-
-        if (value is IEnumerable matches)
-        {
-            foreach (var match in matches)
-            {
-                if (match == null) continue;
-
-                var id = SafeGet<int>(match, "Id");
-                var startTime = SafeGet(match, "StartTime", DateTime.MinValue);
-                var gameWins = SafeGet<int>(match, "GameWins");
-                var gameLosses = SafeGet<int>(match, "GameLosses");
-                var gameTies = SafeGet<int>(match, "GameTies");
-                var opponents = ExtractOpponentNames(match);
-                var gameIds = ExtractGameIds(match);
-
-                result.Add(new MatchSummary(
-                    id,
-                    startTime,
-                    gameWins,
-                    gameLosses,
-                    gameTies,
-                    opponents,
-                    gameIds
-                ));
-            }
-        }
-    }
-    catch
-    {
-        // Silently ignore errors
-    }
-    return result;
 }
 
 static T SafeGet<T>(object? target, string propertyName, T defaultValue = default!)
@@ -1041,7 +695,6 @@ static ExecutionMode ParseMode(string[] args)
     return token.ToLowerInvariant() switch
     {
         "collection" or "collect" => ExecutionMode.Collection,
-        "history" or "matches" => ExecutionMode.History,
         "all" or "both" => ExecutionMode.All,
         "currency" or "wallet" or "tickets" or "points" => ExecutionMode.Currency,
         "watch" or "monitor" => ExecutionMode.Watch,
@@ -1254,7 +907,6 @@ enum ExecutionMode
 {
     None = 0,
     Collection,
-    History,
     All,
     Currency,
     Watch,
@@ -1344,36 +996,6 @@ public sealed record CollectionSnapshot(
     string? Error
 );
 
-public sealed record MatchSummary(
-    int Id,
-    DateTime StartTime,
-    int GameWins,
-    int GameLosses,
-    int GameTies,
-    IReadOnlyList<string> Opponents,
-    IReadOnlyList<int> GameIds
-);
-
-public sealed record HistoryEntry(
-    string Kind,
-    int Id,
-    DateTime StartTime,
-    IReadOnlyList<string> Opponents,
-    int? GameWins,
-    int? GameLosses,
-    int? GameTies,
-    IReadOnlyList<int>? GameIds,
-    IReadOnlyList<MatchSummary>? Matches,
-    int? MatchWins,
-    int? MatchLosses
-);
-
-public sealed record HistorySnapshot(
-    bool HistoryLoaded,
-    IReadOnlyList<HistoryEntry> Items,
-    string? Error
-);
-
 public sealed record LogFilesSnapshot(
     IReadOnlyList<string> Files,
     string? Error
@@ -1388,7 +1010,6 @@ public sealed record BridgePayload(
     DateTimeOffset Timestamp,
     string Mode,
     CollectionSnapshot? Collection,
-    HistorySnapshot? History,
     CurrencySnapshot? Currency,
     IReadOnlyDictionary<string, long> Timings
 );
