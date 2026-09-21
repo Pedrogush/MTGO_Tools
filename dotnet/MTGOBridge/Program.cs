@@ -124,64 +124,86 @@ static T Measure<T>(string key, Func<T> factory, IDictionary<string, long> timin
 
 static UsernameSnapshot GetUsernameSnapshot()
 {
+    // Cheapest possible discriminator: without this, "MTGO isn't running" and
+    // "MTGO is running but the username lookup broke" both surfaced as the same
+    // opaque TargetInvocationException, which is what made this failure so hard
+    // to read from the app log.
+    if (Process.GetProcessesByName("MTGO").Length == 0)
+    {
+        return new UsernameSnapshot(null, "MTGO client is not running");
+    }
+
+    var errors = new List<string>();
+
+    // Strategy 1: Client.CurrentUser.
+    // Each strategy gets its own try/catch. Previously a single try wrapped all
+    // three, so strategy 1 throwing made 2 and 3 unreachable.
     try
     {
-        // Strategy 1: Try to get from Client.CurrentUser using reflection
         var clientType = Type.GetType("MTGOSDK.API.Client, MTGOSDK");
         if (clientType != null)
         {
-            var currentUserProp = clientType.GetProperty("CurrentUser", BindingFlags.Public | BindingFlags.Static);
-            if (currentUserProp != null)
+            // CurrentUser is static on MTGOSDK 0.8.5 but an instance property on
+            // 1.6.x (reached via the static Client.Current singleton). Probe both
+            // so an SDK bump doesn't silently turn this into a no-op.
+            var prop = clientType.GetProperty("CurrentUser", BindingFlags.Public | BindingFlags.Static)
+                    ?? clientType.GetProperty("CurrentUser", BindingFlags.Public | BindingFlags.Instance);
+            if (prop is null)
             {
-                var currentUser = currentUserProp.GetValue(null);
-                if (currentUser != null)
+                errors.Add("Client.CurrentUser not found");
+            }
+            else
+            {
+                object? target = prop.GetGetMethod()?.IsStatic == false
+                    ? clientType.GetProperty("Current", BindingFlags.Public | BindingFlags.Static)?.GetValue(null)
+                    : null;
+                var currentUser = prop.GetValue(target);
+                var name = SafeGet(currentUser, "Name", string.Empty);
+                if (!string.IsNullOrWhiteSpace(name))
                 {
-                    var name = SafeGet(currentUser, "Name", string.Empty);
-                    if (!string.IsNullOrWhiteSpace(name))
-                    {
-                        return new UsernameSnapshot(name, null);
-                    }
+                    return new UsernameSnapshot(name, null);
                 }
+                errors.Add("Client.CurrentUser returned no name");
             }
         }
-
-        // Strategy 2: Try UserManager.CurrentUser
-        var userManagerType = Type.GetType("MTGOSDK.API.Users.UserManager, MTGOSDK");
-        if (userManagerType != null)
+        else
         {
-            var currentUserProp = userManagerType.GetProperty("CurrentUser", BindingFlags.Public | BindingFlags.Static);
-            if (currentUserProp != null)
-            {
-                var currentUser = currentUserProp.GetValue(null);
-                if (currentUser != null)
-                {
-                    var name = SafeGet(currentUser, "Name", string.Empty);
-                    if (!string.IsNullOrWhiteSpace(name))
-                    {
-                        return new UsernameSnapshot(name, null);
-                    }
-                }
-            }
+            errors.Add("MTGOSDK.API.Client type not found");
         }
-
-        // Strategy 3: Get username from collection name
-        var collection = CollectionManager.Collection;
-        if (collection != null)
-        {
-            var collectionName = collection.Name;
-            if (!string.IsNullOrWhiteSpace(collectionName) && collectionName != "Collection")
-            {
-                // Collection name might be the username
-                return new UsernameSnapshot(collectionName, null);
-            }
-        }
-
-        return new UsernameSnapshot(null, "Could not determine current user");
     }
     catch (Exception ex)
     {
-        return new UsernameSnapshot(null, ex.Message);
+        errors.Add("Client.CurrentUser: " + Describe(ex));
     }
+
+    // Strategy 2: fall back to the collection's name, which MTGO sets to the
+    // account name. (An earlier UserManager.CurrentUser strategy lived here; that
+    // property exists on neither 0.8.5 nor 1.6.6, so it could never fire.)
+    try
+    {
+        var collectionName = CollectionManager.Collection?.Name;
+        if (!string.IsNullOrWhiteSpace(collectionName) && collectionName != "Collection")
+        {
+            return new UsernameSnapshot(collectionName, null);
+        }
+        errors.Add("Collection.Name was not a username");
+    }
+    catch (Exception ex)
+    {
+        errors.Add("Collection.Name: " + Describe(ex));
+    }
+
+    return new UsernameSnapshot(null, string.Join("; ", errors));
+}
+
+// Reflection wraps whatever a getter threw in TargetInvocationException, and an
+// SDK attach failure wraps again in TypeInitializationException. Reporting
+// ex.Message alone yielded the useless "Exception has been thrown by the target
+// of an invocation."; GetBaseException walks past both to the real cause.
+static string Describe(Exception ex)
+{
+    var baseEx = ex.GetBaseException();
+    return $"{baseEx.GetType().Name}: {baseEx.Message}";
 }
 
 static LogFilesSnapshot GetLogFilesSnapshot()
@@ -1002,7 +1024,11 @@ public sealed record LogFilesSnapshot(
 );
 
 public sealed record UsernameSnapshot(
-    string? Username,
+    // Always emit "username", even when null. The serializer's global
+    // WhenWritingNull policy otherwise omits the key entirely, and the Python
+    // caller's data.get("username") then can't tell "bridge failed" from
+    // "no username" — which is how this failure stayed silent.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? Username,
     string? Error
 );
 
