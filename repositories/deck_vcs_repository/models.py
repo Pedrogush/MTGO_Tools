@@ -22,6 +22,10 @@ class DeckCommit:
     branches: tuple[str, ...] = ()
     #: True for the commit ``HEAD`` currently resolves to.
     is_head: bool = False
+    #: True for an archetype-baseline root. Its timestamp is a fixed constant
+    #: (that is what makes two decks of one archetype share a root sha), so it
+    #: is not a moment in time and must not be shown as one.
+    is_baseline: bool = False
 
     @property
     def short_sha(self) -> str:

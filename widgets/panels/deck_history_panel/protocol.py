@@ -35,6 +35,7 @@ class DeckHistoryPanelProto(Protocol):
     _graph: list[GraphCommit]
     _baseline_sha: str | None
     _selected_sha: str | None
+    _last_deck_key: str | None
 
     _on_checkout: Callable[[str], None] | None
     _on_status_update: Callable[..., None] | None

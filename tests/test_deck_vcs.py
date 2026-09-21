@@ -435,3 +435,62 @@ class TestGraphLayout:
         layout = build_layout(service.build_graph("burn"))
         last = max(layout.nodes, key=lambda n: n.row)
         assert last.sha == first
+
+
+class TestSaveKeyAgreesWithTheHistoryPanel:
+    """A save and the History tab must key the same deck the same way (#1053).
+
+    The commit was written under the saved file's stem while the panel, for a
+    deck that had no file behind it, still keyed off the scraped record's
+    ``href`` -- so a Save As under any name but the deck's own committed to one
+    repo and displayed another, which read as "saving creates no history".
+    """
+
+    @staticmethod
+    def _scraped() -> dict:
+        return {
+            "href": "andyscwilson, 5-0, 2026-09-19_modern league",
+            "name": "AndysCwilson",
+            "source": "goldfish",
+        }
+
+    def test_scraped_deck_keys_diverge_before_the_record_is_updated(self, tmp_path) -> None:
+        from services.deck_vcs_service import deck_key_for
+
+        deck = self._scraped()
+        saved = tmp_path / "My Burn Deck.txt"
+
+        # What the save used, versus what the panel would have asked for.
+        assert deck_key_for(deck, saved) != deck_key_for(deck, None)
+
+    def test_pointing_the_record_at_the_saved_file_makes_them_agree(self, tmp_path) -> None:
+        from pathlib import Path
+
+        from services.deck_vcs_service import deck_key_for
+
+        deck = self._scraped()
+        saved = tmp_path / "My Burn Deck.txt"
+        save_key = deck_key_for(deck, saved)
+
+        # This is what the save handler now does to the in-memory record.
+        deck["path"] = str(saved)
+        deck["source"] = "file"
+
+        assert deck_key_for(deck, Path(deck["path"])) == save_key
+
+
+class TestBaselineRootIsMarked:
+    """A baseline root is flagged so the graph can omit its fixed timestamp."""
+
+    def test_baseline_root_is_flagged_and_ordinary_commits_are_not(self, tmp_path) -> None:
+        repo = DeckVcsRepository(tmp_path / "deck_vcs")
+        deck_key = "flagged"
+        repo.seed_baseline_root(
+            deck_key, "4 Lightning Bolt\n", archetype="Burn", mtg_format="Modern"
+        )
+        repo.commit_deck(deck_key, "4 Lightning Bolt\n2 Consider\n", message="a real save")
+
+        commits = {c.message: c for c in repo.list_commits(deck_key)}
+        root = next(c for c in commits.values() if not c.parents)
+        assert root.is_baseline is True
+        assert commits["a real save"].is_baseline is False

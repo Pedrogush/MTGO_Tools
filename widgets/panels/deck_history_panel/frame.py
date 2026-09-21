@@ -75,6 +75,7 @@ class DeckHistoryPanel(DeckHistoryPanelHandlersMixin, wx.Panel):
         self._graph = []
         self._baseline_sha: str | None = None
         self._selected_sha: str | None = None
+        self._last_deck_key: str | None = None
 
         sizer = wx.BoxSizer(wx.VERTICAL)
         sizer.Add(self._build_header(), 0, wx.EXPAND | wx.ALL, SPACE_XS)

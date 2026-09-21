@@ -229,8 +229,15 @@ class DeckGraphCanvas(wx.ScrolledWindow):
 
             dc.SetFont(caption_font)
             dc.SetTextForeground(wx.Colour(*TEXT_SECONDARY))
-            stamp = datetime.fromtimestamp(commit.commit.timestamp).strftime(TIMESTAMP_FORMAT)
-            dc.DrawText(f"{commit.short_sha}  ·  {stamp}", text_x, node.row * ROW_HEIGHT + META_TOP)
+            # A baseline root's timestamp is a fixed constant, not a moment the
+            # user's deck passed through, so showing it only ever reads as a
+            # wrong date (it renders as 2019-12-31 in this timezone).
+            if commit.commit.is_baseline:
+                meta = commit.short_sha
+            else:
+                stamp = datetime.fromtimestamp(commit.commit.timestamp).strftime(TIMESTAMP_FORMAT)
+                meta = f"{commit.short_sha}  ·  {stamp}"
+            dc.DrawText(meta, text_x, node.row * ROW_HEIGHT + META_TOP)
 
     def _draw_branch_chip(
         self, dc: wx.DC, font: wx.Font, branch: str, x: int, row: int, colour: wx.Colour

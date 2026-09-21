@@ -33,9 +33,26 @@ class DeckHistoryPanelHandlersMixin(_Base):
     """Graph refresh, node selection, and the version-moving actions."""
 
     # ------------------------------------------------------------------ refresh ------------------------------------------------------------------
+    def on_shown(self) -> None:
+        """Tab became visible: show the history of whatever deck is loaded now.
+
+        A save that happened while another tab was on screen, or a deck loaded
+        since this tab was last looked at, both leave the graph stale; rebuilding
+        on the way in is cheaper than trying to catch every path that could have
+        invalidated it.
+        """
+        self.refresh_history()
+
     def refresh_history(self) -> None:
         """Rebuild the graph from the deck's repo and repaint."""
         deck_key = self.current_deck_key()
+        # A selection and a pinned baseline are shas in *one* deck's repo, so
+        # carrying them across a deck change points them at commits that do not
+        # exist there.
+        if deck_key != self._last_deck_key:
+            self._last_deck_key = deck_key
+            self._selected_sha = None
+            self._baseline_sha = None
         try:
             self._graph = self.vcs_service.build_graph(deck_key)
         except Exception as exc:  # noqa: BLE001 - a broken repo must not kill the tab

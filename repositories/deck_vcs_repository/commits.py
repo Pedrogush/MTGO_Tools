@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
+from repositories.deck_vcs_repository.baseline import BASELINE_IDENTITY
 from repositories.deck_vcs_repository.models import DeckCommit
 from repositories.deck_vcs_repository.normalize import decklist_fingerprint, normalize_decklist
 from repositories.deck_vcs_repository.store import COMMITTER, DECK_FILENAME
@@ -112,6 +113,7 @@ class CommitsMixin(_Base):
                     timestamp=int(commit.commit_time),
                     branches=tuple(sorted(tips_by_sha.get(sha, ()))),
                     is_head=sha == head_sha,
+                    is_baseline=bytes(commit.author) == BASELINE_IDENTITY,
                 )
 
     def list_commits(self, deck_key: str) -> list[DeckCommit]:
