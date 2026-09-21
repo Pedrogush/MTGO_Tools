@@ -158,10 +158,31 @@ python -m automation.cli --json deck-history-baseline 055e71d      # pin the dif
 
 Short shas are accepted everywhere a sha is, like every other git tool.
 
-`deck-history-save` exists because the real Save flow opens two modal dialogs,
-and `ShowModal` starves this socket exactly the way `PopupMenu` does (see the
-menu-bar warning above). It calls the same service the dialog ends at, so the
+`deck-history-save` exists because the first Save of an *unnamed* deck opens a
+modal, and `ShowModal` starves this socket exactly the way `PopupMenu` does (see
+the menu-bar warning above). It calls the same service the dialog ends at, so the
 commit it produces is the one a real save produces.
+
+## Naming a deck, and saving without any dialog
+
+A deck's name decides its file, and the file decides which version history a save
+lands in. A named deck saves with **no dialog at all**, which is the path worth
+scripting: `deck-name` sets the name the way clicking the label does, and
+`deck-save` then runs the real `on_save_clicked`.
+
+```bash
+python -m automation.cli --json deck-name                     # read it
+python -m automation.cli --json deck-name "Izzet Murktide"    # set it (this is rename)
+python -m automation.cli --json deck-save                     # real Save, no dialog
+```
+
+`deck-save` refuses a deck with no name rather than hanging, because that is the
+one case that would open the details dialog and starve the socket. Name it first.
+
+An unnamed deck reports `"name": ""` and a `display` of the placeholder text —
+the placeholder is never stored, so a script must assert on `name`, not `display`.
+**Renaming forks:** the new name is a new file and therefore a new history, and
+the old file and its repo are left exactly as they were.
 
 Two things worth knowing when scripting against it:
 

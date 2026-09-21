@@ -25,6 +25,50 @@ class DeckHistoryMixin(_Base):
     def _history_panel(self) -> Any:
         return getattr(self.frame, "deck_history_panel", None)
 
+    def _handle_deck_name(self, name: str | None = None) -> dict[str, Any]:
+        """Read the deck's name, or set it the way clicking the label does.
+
+        Setting it here is the rename action without the text dialog, which is
+        also how a script gets a deck named without the first save's details
+        dialog -- and a modal starves this socket (see ``automation/README.md``).
+        """
+        from services.deck_name import deck_name_of, set_deck_name
+
+        deck = self.frame.controller.deck_repo.get_current_deck()
+        if name is not None:
+            if deck is None:
+                deck = {"source": "manual"}
+                self.frame.controller.deck_repo.set_current_deck(deck)
+            stored = set_deck_name(deck, name)
+            if not stored:
+                return {"named": False, "error": f"{name!r} is not a usable name"}
+            self.frame.refresh_deck_name_displays()
+            self.frame.refresh_deck_history()
+
+        return {
+            "named": bool(deck_name_of(deck)),
+            "name": deck_name_of(deck),
+            "display": self.frame.deck_name_display_text(),
+        }
+
+    def _handle_deck_save(self) -> dict[str, Any]:
+        """Save through the real ``on_save_clicked``.
+
+        A named deck takes the branch that opens no dialog, which is the whole
+        point of the flow under test; an unnamed one would open the details
+        dialog and starve the socket, so that is refused rather than hung.
+        """
+        from services.deck_name import deck_file_for, has_deck_name
+
+        controller = self.frame.controller
+        deck = controller.deck_repo.get_current_deck()
+        if not has_deck_name(deck):
+            return {"saved": False, "error": "Deck has no name; set one first"}
+
+        expected = deck_file_for(deck, controller.resolve_deck_dialog_dir())
+        self.frame.on_save_clicked(None)
+        return {"saved": True, "path": str(expected)}
+
     def _handle_deck_history(self) -> dict[str, Any]:
         """The version graph as the canvas has it placed."""
         from widgets.panels.deck_history_panel.layout import build_layout

@@ -292,6 +292,20 @@ def cmd_deck_history(client: AutomationClient, args: argparse.Namespace) -> int:
     return 0 if "error" not in result else 1
 
 
+def cmd_deck_name(client: AutomationClient, args: argparse.Namespace) -> int:
+    """Read or set the loaded deck's name."""
+    result = client.deck_name(args.name)
+    print(format_output(result, args.json))
+    return 0 if "error" not in result else 1
+
+
+def cmd_deck_save(client: AutomationClient, args: argparse.Namespace) -> int:
+    """Save the loaded deck through the real Save path."""
+    result = client.deck_save()
+    print(format_output(result, args.json))
+    return 0 if result.get("saved") else 1
+
+
 def cmd_deck_history_save(client: AutomationClient, args: argparse.Namespace) -> int:
     """Commit the loaded decklist as a version."""
     result = client.deck_history_save(args.message)
@@ -725,6 +739,11 @@ Notes:
 
     subparsers.add_parser("deck-history", help="Print the deck version graph")
 
+    p = subparsers.add_parser("deck-name", help="Read or set the loaded deck's name")
+    p.add_argument("name", nargs="?", default=None, help="New name (omit to read)")
+
+    subparsers.add_parser("deck-save", help="Save the loaded deck (it must be named)")
+
     p = subparsers.add_parser("deck-history-save", help="Commit the loaded deck as a version")
     p.add_argument(
         "--message", "-m", default=None, help="Commit message (default: auto diff summary)"
@@ -1036,6 +1055,8 @@ Notes:
         "deck-baseline-save-deck": cmd_deck_baseline_save_deck,
         "deck-baseline-load-file": cmd_deck_baseline_load_file,
         "deck-history": cmd_deck_history,
+        "deck-name": cmd_deck_name,
+        "deck-save": cmd_deck_save,
         "deck-history-save": cmd_deck_history_save,
         "deck-history-select": cmd_deck_history_select,
         "deck-history-checkout": cmd_deck_history_checkout,

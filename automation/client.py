@@ -308,6 +308,14 @@ class AutomationClient:
         """The version graph: nodes with row/lane placement, edges, branches."""
         return self._send_command("deck_history")
 
+    def deck_name(self, name: str | None = None) -> dict[str, Any]:
+        """Read the deck's name, or set it (the rename action, without a dialog)."""
+        return self._send_command("deck_name", name=name)
+
+    def deck_save(self) -> dict[str, Any]:
+        """Save through the real Save path. Requires the deck to be named."""
+        return self._send_command("deck_save")
+
     def deck_history_save(self, message: str | None = None) -> dict[str, Any]:
         """Commit the loaded decklist as a version (no Save As dialog)."""
         return self._send_command("deck_history_save", message=message)

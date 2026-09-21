@@ -307,6 +307,44 @@ def test_a_research_deck_opens_the_dialog_on_its_list_format_and_archetype(frame
     assert offered["initial_archetype"] == "Azorius Control"
 
 
+def test_the_name_field_opens_on_the_scraped_decks_own_label(frame) -> None:
+    """The one-time dialog pre-fills what the Save As default used to offer."""
+    frame.controller.deck_repo.set_current_deck(
+        {
+            "href": "modern-affinity",
+            "name": "modern-affinity",
+            "source": "mtggoldfish",
+            "player": "pedronavaja",
+            "result": "17th",
+            "date": "2026-09-21",
+            "event": "Modern Challenge 32",
+        }
+    )
+
+    _click_title(frame, "Save")
+
+    offered = FakeDetailsDialog.instances[0].kwargs
+    assert offered["initial_name"] == "pedronavaja, 17th, 2026-09-21_Modern Challenge 32"
+
+
+def test_a_named_deck_is_never_asked_again(frame, tmp_path: Path) -> None:
+    """Every save after the first writes silently to the same file."""
+    folder = tmp_path / "decks"
+    folder.mkdir()
+    frame.controller.set_default_deck_save_path(str(folder))
+    FakeDetailsDialog.name = "Already Named"
+
+    _click_title(frame, "Save")
+    assert len(FakeDetailsDialog.instances) == 1
+
+    _click_title(frame, "Save")
+    _click_title(frame, "Save")
+
+    assert len(FakeDetailsDialog.instances) == 1, "a named deck must not re-ask"
+    assert FakeFileDialog.instances == []
+    assert [p.name for p in folder.iterdir()] == ["Already Named.txt"]
+
+
 def test_an_unrecorded_deck_opens_the_dialog_on_the_detected_format(frame) -> None:
     frame.controller.deck_repo.set_current_deck(None)
     frame.controller.detect_deck_format = lambda _text: "Legacy"

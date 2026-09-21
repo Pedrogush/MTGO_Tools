@@ -129,6 +129,8 @@ class AutomationServer(
             "set_current_deck": self._handle_set_current_deck,
             "toggle_adv_filters": self._handle_toggle_adv_filters,
             # Deck version history
+            "deck_name": self._handle_deck_name,
+            "deck_save": self._handle_deck_save,
             "deck_history": self._handle_deck_history,
             "deck_history_save": self._handle_deck_history_save,
             "deck_history_select": self._handle_deck_history_select,
