@@ -83,6 +83,15 @@ class DeckParserMixin:
             "estimated_lands": estimated_lands,
         }
 
+    def iter_deck_entries(self, deck_text: str) -> Iterable[DeckEntry]:
+        """Yield every parsed line of *deck_text* in deck order, tagged by zone.
+
+        The public view of the parse that :meth:`analyze_deck` and
+        :meth:`deck_to_dictionary` build on, for callers that need the entries
+        themselves rather than an aggregate (the collection diff, #1044).
+        """
+        return self._iter_entries(deck_text, strip_input=True, ignore_trailing_empty=False)
+
     def _iter_entries(
         self, deck_text: str, *, strip_input: bool, ignore_trailing_empty: bool
     ) -> Iterable[DeckEntry]:

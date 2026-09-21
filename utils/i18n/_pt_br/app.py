@@ -17,6 +17,7 @@ MESSAGES: dict[str, str] = {
     "app.status.loading_deck": "Carregando deck {name}…",
     "app.status.deck_copied": "Deck copiado para a área de transferência.",
     "app.status.deck_saved": "Deck salvo com sucesso.",
+    "app.status.deck_diff_saved": "Faltantes salvos: ainda faltam {count} cartas.",
     "app.status.archetypes_error": "Erro: {error}",
     "app.status.decks_error": "Erro ao carregar decks: {error}",
     "app.status.deck_download_error": "Falha no download do deck: {error}",
