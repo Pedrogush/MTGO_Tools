@@ -231,7 +231,7 @@ def cmd_load_deck(client: AutomationClient, args: argparse.Namespace) -> int:
 
 def cmd_deck_patterns(client: AutomationClient, args: argparse.Namespace) -> int:
     """Print the capability readout for a turn."""
-    result = client.deck_patterns(args.turn)
+    result = client.deck_patterns(args.turn, limit=args.limit, offset=args.offset)
     print(format_output(result, args.json))
     return 0 if "error" not in result else 1
 
@@ -702,6 +702,8 @@ Notes:
     # deck history
     p = subparsers.add_parser("deck-patterns", help="Print the turn capability readout")
     p.add_argument("--turn", "-t", type=int, default=None, help="Turn to select first")
+    p.add_argument("--limit", type=int, default=None, help="Max land combinations to return")
+    p.add_argument("--offset", type=int, default=0, help="First land combination to return")
 
     subparsers.add_parser(
         "deck-patterns-refresh", help="Force a Patterns recompute (the tab also does it itself)"

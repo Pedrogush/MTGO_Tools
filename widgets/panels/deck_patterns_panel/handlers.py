@@ -54,7 +54,7 @@ class DeckPatternsPanelHandlersMixin(_Base):
         return index + 1
 
     # ------------------------------------------------------------------ events ------------------------------------------------------------------
-    def on_turn_changed(self, _event: wx.CommandEvent) -> None:
+    def on_turn_changed(self, _event: wx.CommandEvent | None = None) -> None:
         # Turns are computed on demand, so a turn being looked at for the first
         # time has to be asked for before it can be drawn.
         if self._result is None or self._result.turn(self.selected_turn()) is None:

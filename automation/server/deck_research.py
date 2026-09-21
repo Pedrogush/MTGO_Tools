@@ -133,6 +133,12 @@ class DeckResearchMixin(_Base):
             for i in range(notebook.GetPageCount()):
                 if notebook.GetPageText(i).lower() == tab_name.lower():
                     notebook.SetSelection(i)
+                    # SetSelection does not raise the page-changed event a real
+                    # click does, so the tab that just came up would never be
+                    # told it is visible and would sit there unpopulated.
+                    notify = getattr(self.frame, "notify_deck_tab_shown", None)
+                    if attr == "deck_tabs" and notify is not None:
+                        notify()
                     return {"switched": True, "tab": tab_name, "index": i, "notebook": attr}
 
         return {"switched": False, "error": f"Tab not found: {tab_name}"}

@@ -25,8 +25,15 @@ class DeckPatternsMixin(_Base):
     def _patterns_panel(self) -> Any:
         return getattr(self.frame, "deck_patterns_panel", None)
 
-    def _handle_deck_patterns(self, turn: int | None = None) -> dict[str, Any]:
-        """The selected turn's combinations and maximal plays, as computed."""
+    def _handle_deck_patterns(
+        self, turn: int | None = None, limit: int | None = None, offset: int = 0
+    ) -> dict[str, Any]:
+        """The selected turn's combinations and maximal plays, as computed.
+
+        ``limit``/``offset`` page the combinations. A wide mana base at turn 6
+        runs to thousands of plays, and the transport does a single 64 KB
+        ``recv`` -- without paging the reply is simply truncated mid-string.
+        """
         panel = self._patterns_panel()
         if panel is None:
             return {"error": "Patterns panel not built"}
@@ -36,7 +43,9 @@ class DeckPatternsMixin(_Base):
             if index < 0 or index >= panel.turn_choice.GetCount():
                 return {"error": f"Turn {turn} out of range"}
             panel.turn_choice.SetSelection(index)
-            panel.render()
+            # The same path the wx event takes, so a turn not computed yet is
+            # asked for rather than rendered empty.
+            panel.on_turn_changed(None)
 
         result = panel._result
         if result is None:
@@ -49,6 +58,9 @@ class DeckPatternsMixin(_Base):
 
         selected = panel.selected_turn()
         turn_result = result.turn(selected)
+        all_combinations = list(turn_result.combinations if turn_result else ())
+        start = max(0, int(offset))
+        window = all_combinations[start : start + int(limit)] if limit else all_combinations[start:]
         return {
             "pending": bool(panel._pending),
             "turn": selected,
@@ -66,13 +78,16 @@ class DeckPatternsMixin(_Base):
             ],
             "cache_hits": result.cache_hits,
             "cache_misses": result.cache_misses,
+            "combination_count": len(all_combinations),
+            "offset": start,
             "combinations": [
                 {
                     "lands": combination.label,
                     "mana": combination.combination.total_mana,
+                    "play_count": len(combination.plays),
                     "plays": [play.as_text() for play in combination.plays],
                 }
-                for combination in (turn_result.combinations if turn_result else ())
+                for combination in window
             ],
         }
 

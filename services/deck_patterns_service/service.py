@@ -106,11 +106,32 @@ class DeckPatternsService:
     _cache: PlaySearchCache | None = field(default=None, init=False, repr=False)
 
     # ------------------------------------------------------------------ card data ------------------------------------------------------------------
+    def _resolve_manager(self) -> Any:
+        """The card index, looked up late if it was not ready at construction.
+
+        The frame builds this tab during start-up, when the atomic-cards index
+        is still loading on a background thread, so whatever it passed in was
+        almost certainly ``None`` -- and capturing that once meant every card
+        looked unknown forever, which the tab reported as "no mana-producing
+        land" for every deck. Resolving on use picks the index up as soon as it
+        exists, and never forces the (expensive) load itself.
+        """
+        if self.card_manager is not None:
+            return self.card_manager
+        try:
+            from repositories.card_repository import get_card_repository
+
+            self.card_manager = get_card_repository().get_card_manager()
+        except Exception:  # noqa: BLE001 - card data is best-effort here
+            return None
+        return self.card_manager
+
     def _card(self, name: str) -> Any:
-        if self.card_manager is None:
+        manager = self._resolve_manager()
+        if manager is None:
             return None
         try:
-            return self.card_manager.get_card(name)
+            return manager.get_card(name)
         except Exception:  # noqa: BLE001 - card data is best-effort here
             return None
 

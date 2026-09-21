@@ -524,3 +524,46 @@ class TestLazyTurnComputation:
         started = time.perf_counter()
         service.analyse(_WIDE_DECK, turns=(6,))
         assert time.perf_counter() - started < 5.0
+
+
+class TestCardManagerResolvedLate:
+    """The tab is built before the card index exists (the #1053 "no lands" bug).
+
+    ``AppFrame`` constructs the Patterns tab during start-up and passes
+    ``card_repo.get_card_manager()``, which is ``None`` until the atomic-cards
+    index finishes loading on its background thread. Capturing that ``None``
+    made every card look unknown for the rest of the session, which the tab
+    reported as "no mana-producing land in the main deck" for every deck.
+    """
+
+    def test_a_service_built_without_a_manager_picks_one_up_later(self, monkeypatch) -> None:
+        import repositories.card_repository as card_repository
+
+        # The index is still loading, so the repository hands out nothing yet.
+        # Patched from the start: the real repository would reach the user's own
+        # card data, which the suite's real-data guard rightly objects to.
+        available: list = [None]
+        monkeypatch.setattr(
+            card_repository,
+            "get_card_repository",
+            lambda: type("_Repo", (), {"get_card_manager": staticmethod(lambda: available[0])})(),
+        )
+
+        service = DeckPatternsService(card_manager=None)
+        lands, playables = service.split_deck([{"name": "Mountain", "qty": 4}])
+        assert lands == {} and playables == ()
+
+        # The index finishes loading, and the repository starts handing it out.
+        available[0] = _FakeCardManager()
+
+        lands, playables = service.split_deck(
+            [{"name": "Mountain", "qty": 4}, {"name": "Lightning Bolt", "qty": 4}]
+        )
+        assert set(lands) == {"Mountain"}
+        assert [p.name for p in playables] == ["Lightning Bolt"]
+
+    def test_an_explicit_manager_is_never_replaced(self) -> None:
+        manager = _FakeCardManager()
+        service = DeckPatternsService(card_manager=manager)
+        service.split_deck([{"name": "Mountain", "qty": 4}])
+        assert service.card_manager is manager

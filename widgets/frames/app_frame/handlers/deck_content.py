@@ -193,23 +193,8 @@ class DeckContentHandlers(_Base):
             wx.MessageBox(f"Failed to write deck file:\n{exc}", "Save Deck", wx.OK | wx.ICON_ERROR)
             return
 
-        if current_deck is not None:
-            # Keep the in-memory record in step with what was just written, so
-            # saving again offers what was chosen rather than what it was loaded
-            # with.
-            current_deck["format"] = format_name
-            if archetype:
-                current_deck["archetype"] = archetype
-            else:
-                current_deck.pop("archetype", None)
-            # The deck now lives in this file, whatever it was loaded from, and
-            # the version history keys off that file's name. Leaving a scraped
-            # deck pointing at its href sent the commit to one key and the
-            # History tab looking at another, so a Save As under any name but
-            # the deck's own showed an empty graph.
-            if not _same_file(current_deck.get("path"), saved_path):
-                current_deck["path"] = str(saved_path)
-                current_deck["source"] = "file"
+        # The in-memory record is re-pointed at the saved file by
+        # ``AppController.save_deck``, which every save path goes through.
 
         message = f"Deck saved to {saved_path}"
         if deck_id:
