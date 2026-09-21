@@ -30,6 +30,26 @@ BULK_CACHE_MAX_AGE_DAYS = 365
 # MTGO bridge and background fetch timing
 MTGO_BRIDGE_USERNAME_TIMEOUT_SECONDS = 5.0
 MTGO_BRIDGE_SHUTDOWN_TIMEOUT_SECONDS = 10.0
+
+# Long-lived bridge session (``MTGOBridge.exe serve``).
+#
+# The ready banner is printed before the process touches MTGOSDK, so it costs
+# only .NET startup (~0.8s measured); 15s leaves room for a cold disk without
+# stranding the caller when the build is too old to answer at all.
+BRIDGE_SESSION_HANDSHAKE_TIMEOUT_SECONDS = 15.0
+# Ceiling for a single queued request. A cold attach (~3.1s) plus the slowest
+# supported scan has to fit, and requests behind it in the queue wait too.
+BRIDGE_SESSION_REQUEST_TIMEOUT_SECONDS = 180.0
+# Per stage of the close/terminate/kill ladder when shutting the session down.
+BRIDGE_SESSION_SHUTDOWN_TIMEOUT_SECONDS = 5.0
+# Default challenge-timer cadence of the session's watch stream; matches the
+# standalone ``watch`` mode.
+BRIDGE_SESSION_WATCH_INTERVAL_MS = 500
+# Bumped only on a breaking change to the serve stdin/stdout envelope; must stay
+# in sync with ``ServeProtocol.Version`` in dotnet/MTGOBridge/Program.cs.
+BRIDGE_SESSION_PROTOCOL_VERSION = 1
+# Escape hatch: set this to force every call back onto one-shot subprocesses.
+BRIDGE_SESSION_DISABLE_ENV = "MTGO_BRIDGE_NO_SESSION"
 MTGO_STATUS_POLL_SECONDS = 30
 MTGO_STATUS_MAX_FAILURES = 10
 

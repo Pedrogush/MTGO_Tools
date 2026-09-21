@@ -50,11 +50,48 @@ The executable accepts a mode argument:
 MTGOBridge.exe collection   # collection snapshot only
 MTGOBridge.exe history      # match history snapshot only
 MTGOBridge.exe all          # both snapshots in one run
+MTGOBridge.exe watch        # stream challenge-timer snapshots until stopped
+MTGOBridge.exe serve        # long-lived request/response mode (see below)
+MTGOBridge.exe ping         # liveness check; never touches MTGOSDK
 ```
 
 Running without arguments exits immediately.
 
 Each invocation prints a JSON object containing timing metrics; the full payload is kept in memory for downstream use by the Python side of the project.
+
+## 5. `serve` mode (long-lived)
+
+Every one-shot invocation pays ~0.8s of .NET startup plus ~3.1s of MTGOSDK
+`RemoteClient` attach before it does any work, and several bridge processes
+attached at once degrade per-call latency roughly 8x because MTGOSDK marshals
+all reads onto MTGO's UI thread. `serve` keeps one process — and one request
+queue — alive instead, so the attach is paid once and nothing contends.
+
+It reads one JSON request per line on stdin and writes one JSON message per line
+on stdout:
+
+```jsonc
+// -> requests
+{"id":"7","command":"collection","args":[]}
+{"id":"8","command":"trade","args":["status"]}
+{"id":"9","command":"watch","args":["start","500"]}   // then ["stop"]
+// <- responses (payload is byte-identical to the one-shot CLI output)
+{"id":"7","ok":true,"payload":{ /* ... */ }}
+{"id":"8","ok":false,"error":"..."}
+// <- unsolicited events
+{"event":"ready","payload":{"protocol":1,"pid":1234}}
+{"event":"watch","payload":{ /* WatchSnapshot */ }}
+{"event":"disconnected","payload":{"reason":"MTGO process exited"}}
+```
+
+`command` accepts every one-shot mode name. The `ready` banner is printed before
+MTGOSDK is touched, so a client can tell a build that supports `serve` from one
+that does not (the latter exits immediately). Closing stdin shuts the process
+down; it also exits on its own once the MTGO process it attached to is gone, so
+the client can respawn against a restarted client.
+
+The Python side drives this from `services/mtgo_bridge_service/session.py`.
+Setting `MTGO_BRIDGE_NO_SESSION=1` forces it back to one process per command.
 
 ## Troubleshooting
 
