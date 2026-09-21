@@ -15,7 +15,7 @@ import wx
 from loguru import logger
 
 from repositories.deck_vcs_repository.diffs import unified_lines
-from widgets.panels.deck_history_panel.layout import build_layout
+from widgets.panels.deck_history_panel.layout import build_layout, changed_lines_only
 
 if TYPE_CHECKING:
     from widgets.panels.deck_history_panel.protocol import DeckHistoryPanelProto
@@ -120,7 +120,12 @@ class DeckHistoryPanelHandlersMixin(_Base):
         except Exception as exc:  # noqa: BLE001
             logger.warning(f"Could not diff {base[:7]}..{sha[:7]}: {exc}")
             return
-        self.diff_text.SetValue("\n".join(lines) if lines else self._t("history.diff.identical"))
+        # Only what moved: see :func:`changed_lines_only`. A diff whose every
+        # remaining line is a file header changed nothing the reader can act on,
+        # so it reads as identical rather than as two bare header lines.
+        lines = changed_lines_only(lines)
+        changed = [line for line in lines if not line.startswith(("---", "+++"))]
+        self.diff_text.SetValue("\n".join(lines) if changed else self._t("history.diff.identical"))
         self.baseline_label.SetLabel(
             self._t("history.baseline.explicit", sha=base[:7])
             if self._baseline_sha

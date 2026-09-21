@@ -164,3 +164,24 @@ def build_layout(commits: list[GraphCommit]) -> GraphLayout:
         edges=tuple(edges),
         lane_count=max(lane_of.values()) + 1,
     )
+
+
+def changed_lines_only(lines: list[str]) -> list[str]:
+    """A unified diff with its unchanged context dropped.
+
+    A decklist diff is read for *what moved*, and a normalized list puts the
+    untouched cards in the same place in both versions, so the context lines a
+    unified diff carries are the bulk of the output and none of the answer. The
+    file header stays (it names the two versions being compared); the ``@@``
+    hunk ranges do not, because once the context is gone their line numbers
+    point at nothing the reader can see.
+    """
+    kept: list[str] = []
+    for line in lines:
+        if line.startswith(("---", "+++")):
+            kept.append(line)
+        elif line.startswith("@@"):
+            continue
+        elif line.startswith(("+", "-")):
+            kept.append(line)
+    return kept
