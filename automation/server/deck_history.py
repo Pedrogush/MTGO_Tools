@@ -50,6 +50,7 @@ class DeckHistoryMixin(_Base):
                     "message": node.graph_commit.label,
                     "branches": list(node.graph_commit.commit.branches),
                     "is_head": node.graph_commit.commit.is_head,
+                    "is_baseline": node.graph_commit.commit.is_baseline,
                     "parents": [p[:7] for p in node.graph_commit.commit.parents],
                 }
                 for node in sorted(layout.nodes, key=lambda n: n.row)

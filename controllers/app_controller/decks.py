@@ -70,6 +70,13 @@ class DeckManagementMixin(_Base):
             file_path=file_path,
             archetype=archetype,
         )
+        if deck is None:
+            # A deck with no record of its own -- built from scratch, or loaded
+            # as bare text -- acquires one by being saved. Without this it keeps
+            # falling back to the "manual" key, so its versions pile up in a
+            # history no deck ever looks at again.
+            deck = {"href": saved_path.stem, "name": saved_path.stem}
+            self.deck_repo.set_current_deck(deck)
         self._sync_saved_deck_record(deck, saved_path, format_name, archetype)
         return saved_path, deck_id
 
