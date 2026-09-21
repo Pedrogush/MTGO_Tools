@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import wx
+from loguru import logger
 from wx.lib.agw import flatnotebook as fnb
 
 from utils.constants import (
@@ -63,6 +64,12 @@ class CenterPanelBuilderMixin(_Base):
 
         self.deck_tabs = self._create_notebook(detail_box)
         section.sizer.Add(self.deck_tabs, 1, wx.EXPAND)
+        # A tab that defers work until it is visible needs telling when that
+        # happens. Nothing else in the app binds page-changed, so without this
+        # the Patterns tab never computes what it deferred and the Baseline tab
+        # never enables its button -- both of their ``on_shown`` methods were
+        # simply never called.
+        self.deck_tabs.Bind(fnb.EVT_FLATNOTEBOOK_PAGE_CHANGED, self._on_deck_tab_changed)
 
         # Mainboard and Sideboard as top-level tabs
         self._build_deck_tables_tab()
@@ -181,6 +188,43 @@ class CenterPanelBuilderMixin(_Base):
         self.deck_baseline_panel.SetToolTip(self._t("tabs.tooltip.deck_baseline"))
         self.deck_tabs.AddPage(self.deck_baseline_panel, self._t("tabs.deck_baseline"))
         return section
+
+    def _on_deck_tab_changed(self, event: wx.CommandEvent) -> None:
+        """Tell the newly selected deck tab that it is on screen.
+
+        Best effort and never blocking the tab change: a page that raises while
+        waking up must not leave the notebook wedged on the old tab.
+        """
+        event.Skip()
+        page = self.deck_tabs.GetPage(event.GetSelection())
+        on_shown = getattr(page, "on_shown", None)
+        if on_shown is None:
+            return
+        try:
+            on_shown()
+        except Exception as exc:  # noqa: BLE001 - a tab must not die on becoming visible
+            logger.warning(f"Deck tab failed to refresh on becoming visible: {exc}")
+
+    def notify_deck_tab_shown(self) -> None:
+        """Wake the deck tab that is currently on screen.
+
+        The page-changed event only fires when the *selection* moves, so state
+        that changes underneath an already-open tab (picking an archetype in the
+        research list while the Baseline tab is showing) needs this instead.
+        """
+        tabs = getattr(self, "deck_tabs", None)
+        if tabs is None:
+            return
+        selection = tabs.GetSelection()
+        if selection == wx.NOT_FOUND:
+            return
+        on_shown = getattr(tabs.GetPage(selection), "on_shown", None)
+        if on_shown is None:
+            return
+        try:
+            on_shown()
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(f"Deck tab failed to refresh: {exc}")
 
     def _selected_research_archetype(self) -> dict | None:
         """The archetype currently selected in the research panel, if any.

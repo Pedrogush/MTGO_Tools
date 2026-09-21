@@ -22,14 +22,13 @@ class DeckBaselinePanelProto(Protocol):
 
     # Widgets built by the panel.
     target_label: wx.StaticText
-    threshold_choice: wx.Choice
-    compute_button: wx.Button
     status_label: wx.StaticText
     tree: wx.TreeCtrl
 
     # Mutable run state, all initialized on the panel itself.
     _baseline: Any
     _pending: bool
+    _computed_for: tuple[str, str] | None
     _run_token: int
 
     # Supplied by the frame so the tab follows the app's own selection rather

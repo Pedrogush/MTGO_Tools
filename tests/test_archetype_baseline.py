@@ -30,8 +30,7 @@ from services.archetype_baseline_service import (
     deck_card_counts,
     pool_zone_sizes,
 )
-from services.archetype_baseline_service.classify import DEFAULT_STAPLE_THRESHOLD
-from services.archetype_baseline_service.service import MIN_POOL_SIZE
+from services.archetype_baseline_service import service as service_module
 
 
 def make_deck(*, bolt: int, consider: int, murktide: int = 0, ragavan: int = 0, island: int = 20):
@@ -141,7 +140,7 @@ class TestClassification:
         assert consider.fixed_count == 3
         assert consider.flex_above_floor == 1
 
-    def test_below_threshold_is_flex_and_fixes_nothing(self, pool):
+    def test_a_card_missing_from_one_deck_is_excluded_entirely(self, pool):
         baseline = build_baseline(pool, archetype="Izzet Murktide", mtg_format="modern")
         murktide = next(c for c in baseline.cards if c.name == "Murktide Regent")
         assert murktide.role is CardRole.FLEX
@@ -154,39 +153,42 @@ class TestClassification:
         assert abrade.role is CardRole.STAPLE
         assert abrade.fixed_count == 3
 
-    def test_threshold_is_tunable_and_changes_the_verdict(self, pool):
-        # Murktide is in 60% of the pool: flex at the default, a staple-family
-        # card once the cut-off drops below it.
-        strict = build_baseline(pool, archetype="A", mtg_format="modern", threshold=0.9)
-        loose = build_baseline(pool, archetype="A", mtg_format="modern", threshold=0.5)
-        assert next(c for c in strict.cards if c.name == "Murktide Regent").role is CardRole.FLEX
-        assert (
-            next(c for c in loose.cards if c.name == "Murktide Regent").role
-            is CardRole.PARTIAL_STAPLE
-        )
-
-    def test_threshold_of_one_demands_literally_every_deck(self):
-        # Nine decks run it, one does not: a staple at 0.9, nothing at 1.0.
+    def test_one_dissenting_deck_removes_the_card_outright(self):
+        # Nine decks run it, one does not. There is no cut-off to fall back on:
+        # the card's range across the pool starts at zero, so it is not baseline.
         decks = [make_deck(bolt=4, consider=4) for _ in range(9)]
         decks.append(make_deck(bolt=4, consider=0))
-        strict = build_baseline(decks, archetype="A", mtg_format="modern", threshold=1.0)
-        loose = build_baseline(decks, archetype="A", mtg_format="modern", threshold=0.9)
-        assert next(c for c in strict.cards if c.name == "Consider").role is CardRole.FLEX
-        assert next(c for c in loose.cards if c.name == "Consider").role is CardRole.STAPLE
+        baseline = build_baseline(decks, archetype="A", mtg_format="modern")
+
+        assert next(c for c in baseline.cards if c.name == "Consider").role is CardRole.FLEX
+        assert next(c for c in baseline.cards if c.name == "Consider").fixed_count == 0
+        # ...while the card every list runs stays fixed.
+        assert next(c for c in baseline.cards if c.name == "Lightning Bolt").fixed_count == 4
+
+    def test_the_floor_is_what_every_deck_can_afford(self):
+        # The user's own example: every deck plays 1-4 copies, so the baseline
+        # is one copy -- not the average, the mode, or the maximum.
+        decks = [
+            make_deck(bolt=1, consider=4),
+            make_deck(bolt=2, consider=4),
+            make_deck(bolt=4, consider=4),
+            make_deck(bolt=3, consider=4),
+        ]
+        baseline = build_baseline(decks, archetype="A", mtg_format="modern")
+        bolt = next(c for c in baseline.cards if c.name == "Lightning Bolt")
+        assert bolt.fixed_count == 1
+        assert bolt.role is CardRole.PARTIAL_STAPLE
 
     def test_classify_card_is_directly_callable(self):
         table = build_frequency_table([make_deck(bolt=4, consider=4)] * 3)
-        role, fixed = classify_card(table[("Lightning Bolt", False)], threshold=1.0)
+        role, fixed = classify_card(table[("Lightning Bolt", False)])
         assert (role, fixed) == (CardRole.STAPLE, 4)
 
-    def test_default_threshold_tolerates_one_rogue_list(self):
-        # Ten decks, one of which drops the card: still a staple by default.
-        decks = [make_deck(bolt=4, consider=4) for _ in range(9)]
-        decks.append(make_deck(bolt=4, consider=0))
-        baseline = build_baseline(
-            decks, archetype="A", mtg_format="modern", threshold=DEFAULT_STAPLE_THRESHOLD
-        )
-        assert next(c for c in baseline.cards if c.name == "Consider").role is CardRole.STAPLE
+    def test_baseline_may_total_fewer_than_a_legal_deck(self):
+        # An expected and correct outcome, not a shortfall to pad out.
+        decks = [make_deck(bolt=4, consider=4, island=0), make_deck(bolt=4, consider=0, island=0)]
+        baseline = build_baseline(decks, archetype="A", mtg_format="modern")
+        assert baseline.main.fixed < 60
 
 
 # ------------------------------------------------------------------ flex arithmetic ------------------------------------------------------------------
@@ -204,7 +206,7 @@ class TestFlexSlots:
         # A pool whose fixed slots exceed the median zone size must clamp
         # rather than report a negative number of free slots.
         decks = ["40 Island\n", "40 Island\n", "20 Island\n", "20 Island\n"]
-        baseline = build_baseline(decks, archetype="A", mtg_format="modern", threshold=0.9)
+        baseline = build_baseline(decks, archetype="A", mtg_format="modern")
         assert baseline.main.fixed == 20
         assert baseline.main.flex >= 0
 
@@ -365,7 +367,6 @@ class TestBaselineStore:
         loaded = store.get("Izzet Murktide", "modern")
         assert loaded is not None
         assert loaded.pool_size == baseline.pool_size
-        assert loaded.threshold == baseline.threshold
         assert loaded.decklist() == baseline.decklist()
         assert loaded.main.flex == baseline.main.flex
         assert [c.name for c in loaded.flex_candidates] == [
@@ -382,9 +383,9 @@ class TestBaselineStore:
 
     def test_recomputing_overwrites_the_entry(self, tmp_path, pool):
         store = BaselineStore(tmp_path / "baselines.json")
-        store.save(build_baseline(pool, archetype="A", mtg_format="modern", threshold=0.9))
-        store.save(build_baseline(pool, archetype="A", mtg_format="modern", threshold=0.5))
-        assert store.get("A", "modern").threshold == 0.5
+        store.save(build_baseline(pool, archetype="A", mtg_format="modern"))
+        store.save(build_baseline(pool, archetype="A", mtg_format="modern"))
+        assert store.get("A", "modern").pool_size == len(pool)
         assert store.keys() == ["modern::a"]
 
 
@@ -398,6 +399,16 @@ class _FakeMetagameRepo:
 
 
 class TestBaselineService:
+    @pytest.fixture(autouse=True)
+    def _small_pools_allowed(self, monkeypatch):
+        """Let the five-deck fixture through the minimum-pool guard.
+
+        These tests are about the service's plumbing (storing, sourcing, root
+        seeding), not about whether five lists are enough evidence -- that
+        judgement is :data:`MIN_POOL_SIZE`'s own, and it has its own test.
+        """
+        monkeypatch.setattr(service_module, "MIN_POOL_SIZE", 2)
+
     def _service(self, tmp_path, pool, numbers=None):
         numbers = numbers or [f"deck-{i}" for i in range(len(pool))]
         texts = dict(zip(numbers, pool, strict=False))
@@ -420,8 +431,11 @@ class TestBaselineService:
         baseline = service.compute({"name": "A"}, mtg_format="modern")
         assert len(baseline.sources) == 5
 
-    def test_pool_below_the_floor_returns_none(self, tmp_path, pool):
-        service = self._service(tmp_path, pool[: MIN_POOL_SIZE - 1])
+    def test_pool_below_the_floor_returns_none(self, tmp_path, pool, monkeypatch):
+        # Opts back out of the autouse relaxation above: this one is about the
+        # guard itself, so it needs a floor the fixture pool cannot clear.
+        monkeypatch.setattr(service_module, "MIN_POOL_SIZE", len(pool) + 1)
+        service = self._service(tmp_path, pool)
         assert service.compute({"name": "A"}, mtg_format="modern") is None
 
     def test_missing_decklists_are_skipped_not_counted(self, tmp_path, pool):

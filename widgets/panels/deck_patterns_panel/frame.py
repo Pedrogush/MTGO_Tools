@@ -26,7 +26,7 @@ from services.deck_patterns_service import (
 from utils.constants.theme import SPACE_SM, SPACE_XS, SURFACE_ALT, SURFACE_PANEL, TEXT_PRIMARY
 from utils.i18n import translate
 from widgets.panels.deck_patterns_panel.handlers import DeckPatternsPanelHandlersMixin
-from widgets.stylize import stylize_button, stylize_choice, stylize_label
+from widgets.stylize import stylize_choice, stylize_label
 
 if TYPE_CHECKING:
     from services.deck_patterns_service import DeckPatternsService
@@ -66,6 +66,7 @@ class DeckPatternsPanel(DeckPatternsPanelHandlersMixin, wx.Panel):
         self._pending = False
         self._dirty = True
         self._run_token = 0
+        self._dirty_deck = True
 
         sizer = wx.BoxSizer(wx.VERTICAL)
         sizer.Add(self._build_header(), 0, wx.EXPAND | wx.ALL, SPACE_XS)
@@ -100,10 +101,8 @@ class DeckPatternsPanel(DeckPatternsPanelHandlersMixin, wx.Panel):
         self.turn_choice.Bind(wx.EVT_CHOICE, self.on_turn_changed)
         row.Add(self.turn_choice, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, SPACE_SM)
 
-        self.refresh_button = wx.Button(self, label=self._t("patterns.refresh"))
-        stylize_button(self.refresh_button)
-        self.refresh_button.Bind(wx.EVT_BUTTON, self.on_refresh)
-        row.Add(self.refresh_button, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, SPACE_SM)
+        # No recalculate button: picking a turn, loading a deck or opening the
+        # tab each start the work on their own, on the background worker.
 
         self.status_label = wx.StaticText(self, label="")
         stylize_label(self.status_label, level="body", tone="secondary", surface="panel")

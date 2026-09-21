@@ -1,15 +1,21 @@
-"""Turning the frequency table into staples, partial staples and flex.
+"""Turning the frequency table into a baseline and the flex slots around it.
 
-The three-way split is the point of the whole feature. A modal decklist -- the
-most common list in the pool -- answers "what did one player register", which is
-not what a deck builder needs. The useful answer separates the slots the
-archetype has already decided (staples, and the floor of every partial staple)
-from the slots it has not (everything else), because the second set is where the
-player's own choices actually live.
+The baseline is the **strict intersection** of the pool, taken at each card's
+floor count: count every card in every deck, and if the minimum across the whole
+pool is at least one, the card is in the baseline at that minimum. A card that
+even one deck leaves out is not in the baseline at all -- its range is 0-to-N,
+and there is no defensible count to fix it at.
 
-The staple threshold is a parameter rather than a constant because pool size
-changes what "everyone runs it" can mean: in a pool of six decks a strict 100%
-cut-off turns a single rogue list into a veto over every card it dropped.
+There is deliberately **no threshold**. A cut-off would be an arbitrary choice
+about how much disagreement still counts as consensus, and the whole value of
+the answer is that it contains no such choice: every card here is one that every
+single list in the pool committed to, at a count every single list can afford.
+
+The consequence is that a baseline is normally **smaller than 60 main / 15
+side**, and that is the correct result rather than a shortfall to pad out. What
+is left over is reported as flex slots, with the cards that just missed ranked
+beside them -- that, not a modal decklist, is where the player's own choices
+live.
 """
 
 from __future__ import annotations
@@ -24,20 +30,20 @@ from services.archetype_baseline_service.models import (
     ZoneShape,
 )
 
-#: Default cut-off for "in (almost) every deck". Not 1.0: one incomplete scrape
-#: or one genuinely rogue list in an otherwise uniform pool should not be able
-#: to demote a card the archetype obviously always runs.
-DEFAULT_STAPLE_THRESHOLD = 0.9
 
-
-def classify_card(frequency: CardFrequency, *, threshold: float) -> tuple[CardRole, float]:
+def classify_card(frequency: CardFrequency) -> tuple[CardRole, float]:
     """``(role, fixed_count)`` for one measured card.
 
-    A card at or above the threshold is fixed at the count every deck shares, or
-    -- when the count moves -- at its floor, with the remainder left to flex.
-    Below the threshold nothing is fixed at all.
+    In every deck in the pool -> fixed at the floor count, which is what every
+    deck can afford. Missing from even one deck -> nothing is fixed, because the
+    card's range starts at zero.
+
+    The staple / partial-staple split that remains is purely descriptive -- same
+    count everywhere, or a count that moves above a shared floor -- and no longer
+    decides whether a card is in the baseline.
     """
-    if frequency.play_rate >= threshold and frequency.decks_with > 0:
+    in_every_deck = frequency.pool_size > 0 and frequency.decks_with == frequency.pool_size
+    if in_every_deck and frequency.floor_count >= 1:
         if frequency.is_uniform:
             return (CardRole.STAPLE, frequency.floor_count)
         return (CardRole.PARTIAL_STAPLE, frequency.floor_count)
@@ -93,7 +99,6 @@ def build_baseline(
     *,
     archetype: str,
     mtg_format: str,
-    threshold: float = DEFAULT_STAPLE_THRESHOLD,
     sources: tuple[str, ...] = (),
 ) -> ArchetypeBaseline:
     """Compute the baseline of the pool in ``deck_texts``."""
@@ -104,7 +109,7 @@ def build_baseline(
 
     cards: list[BaselineCard] = []
     for frequency in table.values():
-        role, fixed = classify_card(frequency, threshold=threshold)
+        role, fixed = classify_card(frequency)
         cards.append(
             BaselineCard(
                 name=frequency.name,
@@ -125,7 +130,6 @@ def build_baseline(
         archetype=archetype,
         mtg_format=mtg_format,
         pool_size=pool_size,
-        threshold=threshold,
         cards=ordered,
         flex_candidates=build_flex_candidates(ordered),
         main=ZoneShape(size=main_size, fixed=main_fixed),

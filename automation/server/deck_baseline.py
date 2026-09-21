@@ -68,7 +68,6 @@ class DeckBaselineMixin(_Base):
             "archetype": baseline.archetype,
             "format": baseline.mtg_format,
             "pool_size": baseline.pool_size,
-            "threshold": baseline.threshold,
             "main": {
                 "size": baseline.main.size,
                 "fixed": baseline.main.fixed,
@@ -95,31 +94,21 @@ class DeckBaselineMixin(_Base):
             "decklist": baseline.decklist(),
         }
 
-    def _handle_deck_baseline_compute(self, threshold: float | None = None) -> dict[str, Any]:
-        """Compute the baseline for the archetype selected in Research."""
+    def _handle_deck_baseline_compute(self) -> dict[str, Any]:
+        """Force a baseline computation for the archetype selected in Research.
+
+        The tab computes on its own when the selection changes; this is here so
+        a script can wait on a known-fresh run rather than racing that.
+        """
         panel = self._baseline_panel()
         if panel is None:
             return {"error": "Baseline panel not built"}
-
-        if threshold is not None:
-            from widgets.panels.deck_baseline_panel.handlers import THRESHOLD_CHOICES
-
-            wanted = float(threshold)
-            index = next(
-                (i for i, (_label, value) in enumerate(THRESHOLD_CHOICES) if value == wanted),
-                None,
-            )
-            if index is None:
-                allowed = [value for _label, value in THRESHOLD_CHOICES]
-                return {"error": f"Threshold {wanted} not one of {allowed}"}
-            panel.threshold_choice.SetSelection(index)
 
         panel.refresh_target()
         panel.compute()
         return {
             "triggered": True,
             "pending": bool(panel._pending),
-            "threshold": panel.selected_threshold(),
             "target": panel.target_label.GetLabel(),
         }
 

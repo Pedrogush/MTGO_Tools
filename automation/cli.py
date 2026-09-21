@@ -252,7 +252,7 @@ def cmd_deck_baseline(client: AutomationClient, args: argparse.Namespace) -> int
 
 def cmd_deck_baseline_compute(client: AutomationClient, args: argparse.Namespace) -> int:
     """Compute the baseline for the selected archetype."""
-    result = client.deck_baseline_compute(args.threshold)
+    result = client.deck_baseline_compute()
     print(format_output(result, args.json))
     return 0 if result.get("triggered") else 1
 
@@ -703,11 +703,12 @@ Notes:
     p = subparsers.add_parser("deck-patterns", help="Print the turn capability readout")
     p.add_argument("--turn", "-t", type=int, default=None, help="Turn to select first")
 
-    subparsers.add_parser("deck-patterns-refresh", help="Recompute the Patterns tab")
+    subparsers.add_parser(
+        "deck-patterns-refresh", help="Force a Patterns recompute (the tab also does it itself)"
+    )
 
     subparsers.add_parser("deck-baseline", help="Print the archetype baseline breakdown")
-    p = subparsers.add_parser("deck-baseline-compute", help="Compute the archetype baseline")
-    p.add_argument("--threshold", type=float, default=None, help="Staple cut-off (e.g. 0.9)")
+    subparsers.add_parser("deck-baseline-compute", help="Compute the archetype baseline")
     p = subparsers.add_parser("deck-baseline-root", help="Print the deck's root commit")
     p.add_argument("--deck-key", dest="deck_key", default=None, help="Deck key (default: current)")
     subparsers.add_parser(

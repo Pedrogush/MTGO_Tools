@@ -9,7 +9,6 @@ MESSAGES: dict[str, str] = {
     ),
     "patterns.turn": "Turno",
     "patterns.turn.tooltip": "Turno N significa N terrenos em jogo — cada turno é avaliado isoladamente",
-    "patterns.refresh": "Recalcular",
     "patterns.combination": "{lands} — {mana} de mana",
     "patterns.no_plays": "Nada conjurável com esta mana",
     "patterns.status.computing": "Calculando…",

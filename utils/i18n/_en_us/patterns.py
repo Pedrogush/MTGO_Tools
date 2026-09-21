@@ -10,7 +10,6 @@ MESSAGES: dict[str, str] = {
     ),
     "patterns.turn": "Turn",
     "patterns.turn.tooltip": "Turn N means N lands in play — each turn is evaluated on its own",
-    "patterns.refresh": "Recalculate",
     "patterns.combination": "{lands} — {mana} mana",
     "patterns.no_plays": "Nothing castable off this mana",
     "patterns.status.computing": "Calculating…",

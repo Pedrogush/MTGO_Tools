@@ -20,17 +20,23 @@ from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
-from services.archetype_baseline_service.classify import DEFAULT_STAPLE_THRESHOLD, build_baseline
+from services.archetype_baseline_service.classify import build_baseline
 from services.archetype_baseline_service.models import ArchetypeBaseline
 from services.archetype_baseline_service.store import BaselineStore
 
 if TYPE_CHECKING:
     from repositories.deck_vcs_repository import DeckVcsRepository
 
-#: Below this many decks a baseline is arithmetic rather than evidence -- every
-#: card in a two-deck pool is either a 100% staple or a 50% flex card, and the
-#: classification says nothing about the archetype.
-MIN_POOL_SIZE = 4
+#: Below this many decks a baseline is arithmetic rather than evidence.
+#:
+#: A strict intersection fails in the *opposite* direction to a threshold: it is
+#: small pools that produce implausibly *large* baselines, because a pool of one
+#: deck is its own intersection and reports all 60 cards as settled archetype
+#: consensus. Each additional list can only ever remove cards, so the number
+#: here is really "how many independent lists must agree before agreement means
+#: anything". Eight is the point where a baseline stops looking like one
+#: player's deck; it is a judgement call, not a derived constant.
+MIN_POOL_SIZE = 8
 
 
 class ArchetypeBaselineService:
@@ -118,7 +124,6 @@ class ArchetypeBaselineService:
         archetype: dict[str, Any],
         *,
         mtg_format: str,
-        threshold: float = DEFAULT_STAPLE_THRESHOLD,
         source_filter: str | None = None,
         limit: int | None = None,
         persist: bool = True,
@@ -138,7 +143,6 @@ class ArchetypeBaselineService:
             texts,
             archetype=name,
             mtg_format=mtg_format,
-            threshold=threshold,
             sources=tuple(numbers),
         )
         if persist:
@@ -217,7 +221,6 @@ def reset_archetype_baseline_service() -> None:
 
 
 __all__ = [
-    "DEFAULT_STAPLE_THRESHOLD",
     "MIN_POOL_SIZE",
     "ArchetypeBaselineService",
     "get_archetype_baseline_service",

@@ -1,8 +1,12 @@
 """UI construction for the Baseline tab.
 
-A header saying which archetype is being measured and at what cut-off, over a
-tree of the three groups: staples, partial staples with their floor, and the
-ranked flex candidates.
+A header saying which archetype is being measured, over a tree of the groups:
+the cards every list in the pool runs (at the count every list can afford), and
+the ranked candidates for the slots left over.
+
+There is no cut-off control and no compute button. The baseline is a strict
+intersection, so there is nothing to tune, and it computes itself on the
+background worker as soon as the selection changes.
 
 The tab deliberately has no format/archetype pickers of its own. The app
 already has one pair, in the research panel, and a second pair here would let
@@ -18,20 +22,14 @@ from typing import TYPE_CHECKING, Any
 
 import wx
 
-from utils.constants.theme import SPACE_SM, SPACE_XS, SURFACE_ALT, SURFACE_PANEL, TEXT_PRIMARY
+from utils.constants.theme import SPACE_XS, SURFACE_ALT, SURFACE_PANEL, TEXT_PRIMARY
 from utils.i18n import translate
-from widgets.panels.deck_baseline_panel.handlers import (
-    THRESHOLD_CHOICES,
-    DeckBaselinePanelHandlersMixin,
-)
-from widgets.stylize import stylize_button, stylize_choice, stylize_label
+from widgets.panels.deck_baseline_panel.handlers import DeckBaselinePanelHandlersMixin
+from widgets.stylize import stylize_label
 
 if TYPE_CHECKING:
     from services.archetype_baseline_service import ArchetypeBaselineService
     from utils.background_worker import BackgroundWorker
-
-#: Index of the default cut-off in :data:`THRESHOLD_CHOICES` (90%).
-DEFAULT_THRESHOLD_INDEX = 2
 
 
 class DeckBaselinePanel(DeckBaselinePanelHandlersMixin, wx.Panel):
@@ -67,6 +65,7 @@ class DeckBaselinePanel(DeckBaselinePanelHandlersMixin, wx.Panel):
         self._baseline: Any = None
         self._pending = False
         self._run_token = 0
+        self._computed_for: tuple[str, str] | None = None
 
         sizer = wx.BoxSizer(wx.VERTICAL)
         sizer.Add(self._build_header(), 0, wx.EXPAND | wx.ALL, SPACE_XS)
@@ -90,27 +89,10 @@ class DeckBaselinePanel(DeckBaselinePanelHandlersMixin, wx.Panel):
         stylize_label(self.target_label, level="body", surface="panel")
         header.Add(self.target_label, 0, wx.BOTTOM, SPACE_XS)
 
+        # No threshold picker and no compute button: the baseline is a strict
+        # intersection, so there is nothing to tune, and it recomputes itself in
+        # the background whenever the selected archetype changes.
         row = wx.BoxSizer(wx.HORIZONTAL)
-
-        threshold_label = wx.StaticText(self, label=self._t("baseline.threshold"))
-        stylize_label(threshold_label, level="body", surface="panel")
-        row.Add(threshold_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, SPACE_XS)
-
-        self.threshold_choice = wx.Choice(
-            self, choices=[label for label, _value in THRESHOLD_CHOICES]
-        )
-        self.threshold_choice.SetSelection(DEFAULT_THRESHOLD_INDEX)
-        self.threshold_choice.SetToolTip(self._t("baseline.threshold.tooltip"))
-        stylize_choice(self.threshold_choice)
-        self.threshold_choice.Bind(wx.EVT_CHOICE, self.on_threshold_changed)
-        row.Add(self.threshold_choice, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, SPACE_SM)
-
-        self.compute_button = wx.Button(self, label=self._t("baseline.compute"))
-        self.compute_button.SetToolTip(self._t("baseline.compute.tooltip"))
-        stylize_button(self.compute_button)
-        self.compute_button.Bind(wx.EVT_BUTTON, self.on_compute)
-        self.compute_button.Enable(False)
-        row.Add(self.compute_button, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, SPACE_SM)
 
         self.status_label = wx.StaticText(self, label="")
         stylize_label(self.status_label, level="body", tone="secondary", surface="panel")
@@ -131,4 +113,4 @@ class DeckBaselinePanel(DeckBaselinePanelHandlersMixin, wx.Panel):
         return self.tree
 
 
-__all__ = ["DEFAULT_THRESHOLD_INDEX", "DeckBaselinePanel"]
+__all__ = ["DeckBaselinePanel"]

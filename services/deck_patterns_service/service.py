@@ -14,7 +14,7 @@ profile, and run the maximal-play search once per distinct profile.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -156,8 +156,16 @@ class DeckPatternsService:
         *,
         options: PatternsOptions | None = None,
         should_cancel: Callable[[], bool] | None = None,
+        turns: Sequence[int] | None = None,
     ) -> PatternsResult:
-        """Compute turns 1..``max_turn`` for ``entries`` (main-deck rows)."""
+        """Compute turns for ``entries`` (main-deck rows).
+
+        ``turns`` selects which turns to compute; the default is all of
+        1..``max_turn``. The UI passes the one turn it is about to show, because
+        the cost of a turn climbs steeply with the number of land groups and
+        computing six turns nobody asked for is what made a big mana base lock
+        the tab up.
+        """
         options = options or PatternsOptions()
         lands, playables = self.split_deck(entries)
         groups = group_lands(lands)
@@ -165,14 +173,25 @@ class DeckPatternsService:
         cache = PlaySearchCache(node_budget=options.node_budget, max_plays=options.max_plays)
         self._cache = cache
 
-        turns: list[TurnResult] = []
-        for turn in range(1, max(1, options.max_turn) + 1):
+        wanted = (
+            tuple(range(1, max(1, options.max_turn) + 1))
+            if turns is None
+            else tuple(t for t in turns if t >= 1)
+        )
+
+        computed: list[TurnResult] = []
+        for turn in wanted:
             if should_cancel is not None and should_cancel():
                 break
-            turns.append(self._analyse_turn(turn, groups, playables, cache, options))
+            computed.append(
+                self._analyse_turn(
+                    turn, groups, playables, cache, options, should_cancel=should_cancel
+                )
+            )
+        turns_result = computed
 
         return PatternsResult(
-            turns=tuple(turns),
+            turns=tuple(turns_result),
             land_groups=groups,
             max_turn=options.max_turn,
             cache_hits=cache.hits,
@@ -186,12 +205,18 @@ class DeckPatternsService:
         playables: tuple[Playable, ...],
         cache: PlaySearchCache,
         options: PatternsOptions,
+        should_cancel: Callable[[], bool] | None = None,
     ) -> TurnResult:
         results: list[CombinationResult] = []
         truncated = False
 
         for combination in enumerate_combinations(groups, turn):
             if len(results) >= options.max_combinations:
+                truncated = True
+                break
+            # A superseded run abandons the turn part-way rather than finishing
+            # an answer nobody is waiting for.
+            if should_cancel is not None and should_cancel():
                 truncated = True
                 break
             search = cache.get(combination.profile, playables)

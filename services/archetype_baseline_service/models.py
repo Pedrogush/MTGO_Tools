@@ -123,7 +123,6 @@ class ArchetypeBaseline:
     archetype: str
     mtg_format: str
     pool_size: int
-    threshold: float
     cards: tuple[BaselineCard, ...]
     flex_candidates: tuple[FlexCandidate, ...]
     main: ZoneShape

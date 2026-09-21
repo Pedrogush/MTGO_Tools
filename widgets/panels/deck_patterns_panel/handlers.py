@@ -36,6 +36,9 @@ class DeckPatternsPanelHandlersMixin(_Base):
         """Take a new decklist. Recomputes only while the tab is visible."""
         self.zone_cards = zone_cards or {}
         self._dirty = True
+        # A new decklist invalidates every turn computed for the old one.
+        self._dirty_deck = True
+        self._result = None
         if self.IsShownOnScreen():
             self.recompute()
 
@@ -52,11 +55,12 @@ class DeckPatternsPanelHandlersMixin(_Base):
 
     # ------------------------------------------------------------------ events ------------------------------------------------------------------
     def on_turn_changed(self, _event: wx.CommandEvent) -> None:
+        # Turns are computed on demand, so a turn being looked at for the first
+        # time has to be asked for before it can be drawn.
+        if self._result is None or self._result.turn(self.selected_turn()) is None:
+            self.recompute()
+            return
         self.render()
-
-    def on_refresh(self, _event: wx.CommandEvent) -> None:
-        self._dirty = True
-        self.recompute()
 
     # ------------------------------------------------------------------ compute ------------------------------------------------------------------
     def recompute(self) -> None:
@@ -74,13 +78,28 @@ class DeckPatternsPanelHandlersMixin(_Base):
         self.status_label.SetLabel(self._t("patterns.status.computing"))
 
         options = self.options
+        turn = self.selected_turn()
+
+        def superseded() -> bool:
+            # Checked inside the search, so a run the user has already moved on
+            # from stops burning CPU instead of racing to be discarded.
+            return token != self._run_token
 
         def work() -> PatternsResult:
-            return self.patterns_service.analyse(entries, options=options)
+            return self.patterns_service.analyse(
+                entries, options=options, turns=(turn,), should_cancel=superseded
+            )
 
         def done(result: PatternsResult) -> None:
             if token != self._run_token:
                 return  # a newer run has started; this answer is stale
+            # Keep turns computed earlier for this same decklist, so stepping
+            # back to one already seen is instant rather than another run.
+            if self._result is not None and not self._dirty_deck:
+                merged = {t.turn: t for t in self._result.turns}
+                merged.update({t.turn: t for t in result.turns})
+                result.turns = tuple(sorted(merged.values(), key=lambda t: t.turn))
+            self._dirty_deck = False
             self._result = result
             self._pending = False
             self._dirty = False
@@ -128,19 +147,26 @@ class DeckPatternsPanelHandlersMixin(_Base):
             self.status_label.SetLabel(self._t("patterns.status.no_lands"))
             return
 
-        for combination in turn.combinations:
-            label = self._t(
-                "patterns.combination",
-                lands=combination.label,
-                mana=combination.combination.total_mana,
-            )
-            node = self.tree.AppendItem(root, label)
-            if not combination.plays:
-                self.tree.AppendItem(node, self._t("patterns.no_plays"))
-                continue
-            for play in combination.plays:
-                self.tree.AppendItem(node, play.as_text())
-            self.tree.Expand(node)
+        # A wide mana base reaches a couple of thousand rows here, and inserting
+        # them one at a time on a live control relayouts on every insert --
+        # which is the other half of what made a big deck lock the window up.
+        self.tree.Freeze()
+        try:
+            for combination in turn.combinations:
+                label = self._t(
+                    "patterns.combination",
+                    lands=combination.label,
+                    mana=combination.combination.total_mana,
+                )
+                node = self.tree.AppendItem(root, label)
+                if not combination.plays:
+                    self.tree.AppendItem(node, self._t("patterns.no_plays"))
+                    continue
+                for play in combination.plays:
+                    self.tree.AppendItem(node, play.as_text())
+                self.tree.Expand(node)
+        finally:
+            self.tree.Thaw()
 
         self.status_label.SetLabel(self._summary(turn))
 

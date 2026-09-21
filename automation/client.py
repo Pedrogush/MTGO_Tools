@@ -277,9 +277,9 @@ class AutomationClient:
         """The archetype baseline breakdown, as the Baseline tab computed it."""
         return self._send_command("deck_baseline")
 
-    def deck_baseline_compute(self, threshold: float | None = None) -> dict[str, Any]:
+    def deck_baseline_compute(self) -> dict[str, Any]:
         """Compute the baseline for the archetype selected in Research."""
-        return self._send_command("deck_baseline_compute", threshold=threshold)
+        return self._send_command("deck_baseline_compute")
 
     def deck_baseline_root(self, deck_key: str | None = None) -> dict[str, Any]:
         """The deck's root commit and whether it is an archetype baseline."""

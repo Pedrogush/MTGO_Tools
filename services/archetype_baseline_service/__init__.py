@@ -24,7 +24,6 @@ Nothing in this package imports wx, so the analysis is unit-testable directly.
 from __future__ import annotations
 
 from services.archetype_baseline_service.classify import (
-    DEFAULT_STAPLE_THRESHOLD,
     build_baseline,
     classify_card,
 )
@@ -50,7 +49,6 @@ from services.archetype_baseline_service.service import (
 from services.archetype_baseline_service.store import BaselineStore, baseline_key
 
 __all__ = [
-    "DEFAULT_STAPLE_THRESHOLD",
     "MIN_POOL_SIZE",
     "ArchetypeBaseline",
     "ArchetypeBaselineService",

@@ -29,11 +29,11 @@ class DeckPatternsPanelProto(Protocol):
     turn_choice: wx.Choice
     status_label: wx.StaticText
     ceiling_label: wx.StaticText
-    refresh_button: wx.Button
 
     _result: PatternsResult | None
     _pending: bool
     _dirty: bool
+    _dirty_deck: bool
     _run_token: int
     _on_status_update: Callable[..., None] | None
 

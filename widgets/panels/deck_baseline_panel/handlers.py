@@ -16,7 +16,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-import wx
 from loguru import logger
 
 from services.archetype_baseline_service import ArchetypeBaseline, CardRole
@@ -27,15 +26,6 @@ if TYPE_CHECKING:
     _Base = DeckBaselinePanelProto
 else:
     _Base = object
-
-#: Selectable staple cut-offs, as (label percentage, fraction).
-THRESHOLD_CHOICES: tuple[tuple[str, float], ...] = (
-    ("100%", 1.0),
-    ("95%", 0.95),
-    ("90%", 0.9),
-    ("75%", 0.75),
-    ("50%", 0.5),
-)
 
 
 class DeckBaselinePanelHandlersMixin(_Base):
@@ -64,25 +54,22 @@ class DeckBaselinePanelHandlersMixin(_Base):
             logger.debug(f"Baseline tab could not read the current format: {exc}")
             return ""
 
-    def selected_threshold(self) -> float:
-        index = self.threshold_choice.GetSelection()
-        if index == wx.NOT_FOUND:
-            return THRESHOLD_CHOICES[2][1]
-        return THRESHOLD_CHOICES[index][1]
-
     # ------------------------------------------------------------------ events ------------------------------------------------------------------
     def on_shown(self) -> None:
-        """Tab became visible: show what the current selection points at."""
+        """Tab became visible, or the selection under it changed.
+
+        Nothing here waits for a click: if the archetype on screen has no
+        baseline yet, computing it starts now, on the background worker.
+        """
         self.refresh_target()
-
-    def on_threshold_changed(self, _event: wx.CommandEvent) -> None:
-        # A threshold change only means something once there is a pool to apply
-        # it to, so it recomputes rather than re-filtering a stored result: the
-        # classification itself is what the threshold decides.
-        if self._baseline is not None:
-            self.compute()
-
-    def on_compute(self, _event: wx.CommandEvent) -> None:
+        if self._pending:
+            return
+        archetype = self.current_archetype()
+        if not archetype or not self.current_format():
+            return
+        target = (str(archetype.get("name") or ""), self.current_format())
+        if self._baseline is not None and target == self._computed_for:
+            return
         self.compute()
 
     def refresh_target(self) -> None:
@@ -93,18 +80,17 @@ class DeckBaselinePanelHandlersMixin(_Base):
 
         if not name:
             self.target_label.SetLabel(self._t("baseline.target.none"))
-            self.compute_button.Enable(False)
             return
 
         self.target_label.SetLabel(
             self._t("baseline.target", archetype=name, format=mtg_format or "?")
         )
-        self.compute_button.Enable(True)
 
         if self._baseline is None and mtg_format:
             stored = self.baseline_service.stored(name, mtg_format)
             if stored is not None:
                 self._baseline = stored
+                self._computed_for = (name, mtg_format)
                 self.render()
 
     # ------------------------------------------------------------------ compute ------------------------------------------------------------------
@@ -121,11 +107,11 @@ class DeckBaselinePanelHandlersMixin(_Base):
         self._pending = True
         self.status_label.SetLabel(self._t("baseline.status.computing"))
 
-        threshold = self.selected_threshold()
+        self._computed_for = (str(archetype.get("name") or ""), mtg_format)
         service = self.baseline_service
 
         def work() -> ArchetypeBaseline | None:
-            return service.compute(archetype, mtg_format=mtg_format, threshold=threshold)
+            return service.compute(archetype, mtg_format=mtg_format)
 
         def done(result: ArchetypeBaseline | None) -> None:
             if token != self._run_token:

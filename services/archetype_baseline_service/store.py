@@ -66,7 +66,6 @@ def baseline_to_dict(baseline: ArchetypeBaseline) -> dict[str, Any]:
         "archetype": baseline.archetype,
         "mtg_format": baseline.mtg_format,
         "pool_size": baseline.pool_size,
-        "threshold": baseline.threshold,
         "main": {"size": baseline.main.size, "fixed": baseline.main.fixed},
         "sideboard": {"size": baseline.sideboard.size, "fixed": baseline.sideboard.fixed},
         "sources": list(baseline.sources),
@@ -98,7 +97,6 @@ def baseline_from_dict(data: dict[str, Any]) -> ArchetypeBaseline:
         archetype=data["archetype"],
         mtg_format=data["mtg_format"],
         pool_size=int(data["pool_size"]),
-        threshold=float(data["threshold"]),
         cards=tuple(
             BaselineCard(
                 name=card["name"],
