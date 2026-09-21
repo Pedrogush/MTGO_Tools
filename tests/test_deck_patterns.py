@@ -434,3 +434,93 @@ def test_every_turn_reports_combinations_summing_to_the_turn_number(turn: int) -
     assert reported is not None
     for combination in reported.combinations:
         assert sum(combination.combination.counts) == turn
+
+
+class TestZeroCostCards:
+    """A ``{0}`` card must not erase the play list (the #1053 smoke-test bug).
+
+    A free card is castable off any mana at all, so ``can_extend`` could always
+    add one -- which made *every* selection look non-maximal and left the search
+    reporting nothing at all. Any deck running Mishra's Bauble, Summoner's Pact
+    or Urza's Saga hit this, i.e. most of Modern.
+    """
+
+    @staticmethod
+    def _bolt(quantity: int = 4) -> Playable:
+        return Playable("Lightning Bolt", parse_mana_cost("{R}"), quantity)
+
+    @staticmethod
+    def _free(quantity: int = 4) -> Playable:
+        return Playable("Mishra's Bauble", parse_mana_cost("{0}"), quantity)
+
+    def test_a_free_card_does_not_empty_the_play_list(self) -> None:
+        units = (frozenset({"R"}),)
+        assert maximal_plays(units, (self._bolt(),)).plays, "sanity: paid-only still works"
+
+        plays = maximal_plays(units, (self._bolt(), self._free())).plays
+        assert plays, "a deck with a {0} card reported no plays at all"
+
+    def test_every_play_includes_all_copies_of_a_free_card(self) -> None:
+        # Holding a free card back is always dominated, so maximality means all
+        # four copies appear in every play.
+        units = (frozenset({"R"}), frozenset({"R"}))
+        plays = maximal_plays(units, (self._bolt(), self._free())).plays
+
+        assert plays
+        for play in plays:
+            assert ("Mishra's Bauble", 4) in play.cards
+
+    def test_free_cards_alone_are_still_a_play(self) -> None:
+        # Nothing to spend mana on, but casting the free cards is a real play.
+        plays = maximal_plays((frozenset({"R"}),), (self._free(),)).plays
+        assert [p.as_text() for p in plays] == ["4 Mishra's Bauble"]
+
+    def test_paid_cards_are_still_maximised_alongside_free_ones(self) -> None:
+        # Three red mana: the Bolts must still scale to three, not be crowded
+        # out by the free card riding along.
+        units = tuple(frozenset({"R"}) for _ in range(3))
+        plays = maximal_plays(units, (self._bolt(), self._free())).plays
+
+        assert [p.as_text() for p in plays] == ["4 Mishra's Bauble, 3 Lightning Bolt"]
+
+
+_WIDE_DECK = [
+    {"name": "Mountain", "qty": 4},
+    {"name": "Island", "qty": 4},
+    {"name": "Wastes", "qty": 2},
+    {"name": "Ancient Tomb", "qty": 4},
+    {"name": "Steam Vents", "qty": 4},
+    {"name": "Lightning Bolt", "qty": 4},
+    {"name": "Consider", "qty": 4},
+    {"name": "Counterspell", "qty": 4},
+    {"name": "Karn", "qty": 4},
+]
+
+
+class TestLazyTurnComputation:
+    """Only the turns asked for get computed (the Amulet Titan freeze)."""
+
+    def test_analyse_computes_only_the_requested_turns(self) -> None:
+        service = DeckPatternsService(card_manager=_FakeCardManager())
+        result = service.analyse(_WIDE_DECK, turns=(3,))
+
+        assert [t.turn for t in result.turns] == [3]
+        assert result.turn(3) is not None
+        assert result.turn(1) is None
+
+    def test_analyse_still_computes_every_turn_by_default(self) -> None:
+        service = DeckPatternsService(card_manager=_FakeCardManager())
+        result = service.analyse(_WIDE_DECK)
+
+        assert [t.turn for t in result.turns] == list(range(1, result.max_turn + 1))
+
+    def test_one_turn_of_a_wide_mana_base_stays_quick(self) -> None:
+        # A bounded-time assertion rather than a benchmark: the point is that a
+        # single turn cannot wander into the multi-second range that froze the
+        # tab when all seven were computed up front.
+        import time
+
+        service = DeckPatternsService(card_manager=_FakeCardManager())
+        started = time.perf_counter()
+        service.analyse(_WIDE_DECK, turns=(6,))
+        assert time.perf_counter() - started < 5.0

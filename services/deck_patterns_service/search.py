@@ -115,16 +115,30 @@ def maximal_plays(
     if not available or not playables:
         return PlaySearchResult()
 
+    # A card that costs nothing is castable off any mana at all, so holding a
+    # copy back is always dominated by playing it: every maximal play contains
+    # *all* copies of *every* free card. There is therefore no branch to take
+    # here, and taking one is worse than pointless -- a free card makes
+    # ``can_extend`` true for every selection, so if these were left among the
+    # candidates nothing would ever be recorded as maximal (a deck running
+    # Mishra's Bauble or Summoner's Pact reported no plays at all).
+    free = tuple(
+        sorted((p for p in playables if p.total == 0 and p.quantity > 0), key=lambda p: p.name)
+    )
+    free_prefix = tuple((p.name, p.quantity) for p in free)
+
     # Only cards that could ever be cast off this much mana are worth branching
     # on, and cheap-first ordering makes the mana prune bite sooner.
     candidates = tuple(
         sorted(
-            (p for p in playables if p.total <= available and p.quantity > 0),
+            (p for p in playables if 0 < p.total <= available and p.quantity > 0),
             key=lambda p: (p.total, p.name),
         )
     )
     if not candidates:
-        return PlaySearchResult()
+        # Nothing to spend mana on, but the free cards are still a play.
+        plays = (Play(cards=free_prefix),) if free_prefix else ()
+        return PlaySearchResult(plays=plays)
 
     state = {"nodes": 0, "truncated": False}
     found: list[tuple[tuple[str, int], ...]] = []
@@ -156,9 +170,12 @@ def maximal_plays(
         return False
 
     def record(selection: list[tuple[Playable, int]], spent: int) -> None:
-        if not selection:
+        # The free cards ride along on every play, including the one that spends
+        # no mana at all -- which is why an empty ``selection`` is still worth
+        # recording when the deck runs something free.
+        key = free_prefix + tuple((p.name, c) for p, c in selection)
+        if not key:
             return
-        key = tuple((p.name, c) for p, c in selection)
         if key in seen:
             return
         if can_extend(selection, spent):
@@ -179,7 +196,9 @@ def maximal_plays(
 
         candidate = candidates[index]
         headroom = available - spent
-        take_max = min(candidate.quantity, headroom // candidate.total) if candidate.total else 0
+        # Every candidate costs at least one mana (the free ones were taken out
+        # above), so this division is always safe.
+        take_max = min(candidate.quantity, headroom // candidate.total)
 
         for take in range(take_max, -1, -1):
             if take:
