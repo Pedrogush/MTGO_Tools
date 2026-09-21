@@ -10,7 +10,6 @@ MESSAGES: dict[str, str] = {
     "history.branch.tooltip": "Switch to another branch — this rewrites the deck file on disk",
     "history.branch.title": "Create Branch",
     "history.branch.prompt": "Name the new branch",
-    "history.refresh": "Refresh",
     "history.tab.decklist": "Decklist",
     "history.tab.diff": "Diff",
     "history.diff.no_baseline": "This is the first version — there is nothing to compare it against.",

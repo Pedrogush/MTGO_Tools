@@ -27,7 +27,7 @@ from widgets.notebook import make_flat_notebook
 from widgets.panels.deck_history_panel.graph_canvas import DeckGraphCanvas
 from widgets.panels.deck_history_panel.handlers import DeckHistoryPanelHandlersMixin
 from widgets.splitter import DarkSplitter
-from widgets.stylize import stylize_button, stylize_choice, stylize_label, type_font
+from widgets.stylize import stylize_choice, stylize_label, type_font
 
 if TYPE_CHECKING:
     from services.deck_vcs_service import DeckVcsService
@@ -100,11 +100,10 @@ class DeckHistoryPanel(DeckHistoryPanelHandlersMixin, wx.Panel):
         self.branch_choice.SetToolTip(self._t("history.branch.tooltip"))
         row.Add(self.branch_choice, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, SPACE_SM)
 
-        refresh = wx.Button(self, label=self._t("history.refresh"))
-        stylize_button(refresh, "secondary", surface="panel")
-        refresh.Bind(wx.EVT_BUTTON, lambda _e: self.refresh_history())
-        row.Add(refresh, 0, wx.ALIGN_CENTER_VERTICAL)
-
+        # No refresh button: nothing outside this app writes to a deck's repo,
+        # so there is never state on disk the app has not just put there itself.
+        # The graph is repainted by the actions that can change it -- a save, a
+        # checkout, a deck load, the tab becoming visible.
         row.AddStretchSpacer()
         self.baseline_label = wx.StaticText(self, label=self._t("history.baseline.none"))
         stylize_label(self.baseline_label, level="caption", surface="panel")
