@@ -176,17 +176,9 @@ class DeckBaselinePanelHandlersMixin(_Base):
             self.tree.AppendItem(partial_node, self._partial_label(card))
         self.tree.Expand(partial_node)
 
-        flex_node = self.tree.AppendItem(
-            root,
-            self._t("baseline.group.flex", count=len(baseline.flex_candidates)),
-        )
-        for candidate in baseline.flex_candidates:
-            self.tree.AppendItem(flex_node, self._candidate_label(candidate))
-        self.tree.Expand(flex_node)
-
-        # Rejecting a deck changes every number above it, so the rejections are
-        # shown rather than logged. Collapsed by default: it is evidence for the
-        # answer, not part of it.
+        # Above the flex candidates, which routinely run to fifty-odd rows and
+        # would bury this. Rejecting a deck changes every number in the groups
+        # above, so it has to be somewhere the reader lands without scrolling.
         membership = baseline.membership
         if membership.filtered_anything:
             excluded_node = self.tree.AppendItem(
@@ -199,6 +191,15 @@ class DeckBaselinePanelHandlersMixin(_Base):
             )
             for deck in membership.excluded:
                 self.tree.AppendItem(excluded_node, self._excluded_label(deck))
+            self.tree.Expand(excluded_node)
+
+        flex_node = self.tree.AppendItem(
+            root,
+            self._t("baseline.group.flex", count=len(baseline.flex_candidates)),
+        )
+        for candidate in baseline.flex_candidates:
+            self.tree.AppendItem(flex_node, self._candidate_label(candidate))
+        self.tree.Expand(flex_node)
 
         # Expanding the flex group (often 40+ rows) scrolls it into view, which
         # pushes the staples off the top -- so the tab would open on its least
