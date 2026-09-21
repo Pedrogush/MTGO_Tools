@@ -104,6 +104,56 @@ class FlexCandidate:
 
 
 @dataclass(frozen=True)
+class ExcludedDeck:
+    """A pool deck the membership filter rejected, and how atypical it was.
+
+    Kept so the exclusion can be shown rather than merely logged: dropping a
+    deck changes the answer, and a number the user cannot see is a number they
+    cannot disagree with.
+    """
+
+    #: The deck number it was drawn from, or ``#<index>`` when the pool was
+    #: passed without identifiers (tests, direct calls).
+    source: str
+    #: Its mean pairwise Jaccard against the rest of the pool.
+    similarity: float
+
+
+@dataclass(frozen=True)
+class PoolMembership:
+    """Which decks in a labelled pool were treated as the archetype.
+
+    See :mod:`services.archetype_baseline_service.membership` for what the
+    scores mean. An empty instance -- no decks examined -- is the right value
+    for a baseline built before this existed or read back from a store that
+    predates it.
+    """
+
+    #: Indices into the *original* pool that were kept, in pool order.
+    kept_indices: tuple[int, ...] = ()
+    excluded: tuple[ExcludedDeck, ...] = ()
+    #: Every deck's score, indexed like the original pool.
+    scores: tuple[float, ...] = ()
+    threshold: float = 0.0
+
+    @property
+    def examined(self) -> int:
+        return len(self.scores)
+
+    @property
+    def kept_count(self) -> int:
+        return len(self.kept_indices)
+
+    @property
+    def excluded_count(self) -> int:
+        return len(self.excluded)
+
+    @property
+    def filtered_anything(self) -> bool:
+        return bool(self.excluded)
+
+
+@dataclass(frozen=True)
 class ZoneShape:
     """How many slots a zone has, and how many the baseline has spent."""
 
@@ -127,8 +177,12 @@ class ArchetypeBaseline:
     flex_candidates: tuple[FlexCandidate, ...]
     main: ZoneShape
     sideboard: ZoneShape
-    #: Deck numbers the pool was drawn from, so a baseline can say what it saw.
+    #: Deck numbers the baseline was actually computed from -- the pool *after*
+    #: membership filtering, so it names what it measured rather than what it
+    #: was offered.
     sources: tuple[str, ...] = ()
+    #: Who was kept, who was rejected as not this archetype, and by how much.
+    membership: PoolMembership = field(default_factory=PoolMembership)
 
     def by_role(self, role: CardRole, *, is_sideboard: bool | None = None) -> list[BaselineCard]:
         return [

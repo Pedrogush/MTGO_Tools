@@ -32,12 +32,21 @@ from services.archetype_baseline_service.frequency import (
     deck_card_counts,
     pool_zone_sizes,
 )
+from services.archetype_baseline_service.membership import (
+    MEMBERSHIP_THRESHOLD,
+    jaccard,
+    maindeck_names,
+    partition_pool,
+    similarity_scores,
+)
 from services.archetype_baseline_service.models import (
     ArchetypeBaseline,
     BaselineCard,
     CardFrequency,
     CardRole,
+    ExcludedDeck,
     FlexCandidate,
+    PoolMembership,
     ZoneShape,
 )
 from services.archetype_baseline_service.service import (
@@ -49,6 +58,7 @@ from services.archetype_baseline_service.service import (
 from services.archetype_baseline_service.store import BaselineStore, baseline_key
 
 __all__ = [
+    "MEMBERSHIP_THRESHOLD",
     "MIN_POOL_SIZE",
     "ArchetypeBaseline",
     "ArchetypeBaselineService",
@@ -56,7 +66,9 @@ __all__ = [
     "BaselineStore",
     "CardFrequency",
     "CardRole",
+    "ExcludedDeck",
     "FlexCandidate",
+    "PoolMembership",
     "ZoneShape",
     "baseline_key",
     "build_baseline",
@@ -64,6 +76,10 @@ __all__ = [
     "classify_card",
     "deck_card_counts",
     "get_archetype_baseline_service",
+    "jaccard",
+    "maindeck_names",
+    "partition_pool",
     "pool_zone_sizes",
     "reset_archetype_baseline_service",
+    "similarity_scores",
 ]

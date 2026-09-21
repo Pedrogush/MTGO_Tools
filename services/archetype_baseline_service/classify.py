@@ -21,6 +21,7 @@ live.
 from __future__ import annotations
 
 from services.archetype_baseline_service.frequency import CardKey, build_frequency_table
+from services.archetype_baseline_service.membership import MEMBERSHIP_THRESHOLD, partition_pool
 from services.archetype_baseline_service.models import (
     ArchetypeBaseline,
     BaselineCard,
@@ -100,11 +101,25 @@ def build_baseline(
     archetype: str,
     mtg_format: str,
     sources: tuple[str, ...] = (),
+    membership_threshold: float = MEMBERSHIP_THRESHOLD,
 ) -> ArchetypeBaseline:
-    """Compute the baseline of the pool in ``deck_texts``."""
+    """Compute the baseline of the pool in ``deck_texts``.
+
+    Decks that are not actually of this archetype are dropped first (see
+    :mod:`~services.archetype_baseline_service.membership`). That has to happen
+    before anything is counted: the intersection is unforgiving, so one deck
+    from a different archetype takes the whole baseline to zero rather than
+    merely skewing it.
+    """
     from services.archetype_baseline_service.frequency import pool_zone_sizes
 
-    table: dict[CardKey, CardFrequency] = build_frequency_table(deck_texts)
+    membership = partition_pool(deck_texts, sources=sources, threshold=membership_threshold)
+    pool = [deck_texts[index] for index in membership.kept_indices]
+    kept_sources = tuple(
+        str(sources[index]) for index in membership.kept_indices if index < len(sources)
+    )
+
+    table: dict[CardKey, CardFrequency] = build_frequency_table(pool)
     pool_size = next(iter(table.values())).pool_size if table else 0
 
     cards: list[BaselineCard] = []
@@ -122,7 +137,7 @@ def build_baseline(
     cards.sort(key=_sort_key)
     ordered = tuple(cards)
 
-    main_size, side_size = pool_zone_sizes(deck_texts)
+    main_size, side_size = pool_zone_sizes(pool)
     main_fixed = sum(c.fixed_count for c in ordered if not c.is_sideboard)
     side_fixed = sum(c.fixed_count for c in ordered if c.is_sideboard)
 
@@ -134,5 +149,6 @@ def build_baseline(
         flex_candidates=build_flex_candidates(ordered),
         main=ZoneShape(size=main_size, fixed=main_fixed),
         sideboard=ZoneShape(size=side_size, fixed=side_fixed),
-        sources=sources,
+        sources=kept_sources,
+        membership=membership,
     )

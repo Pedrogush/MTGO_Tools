@@ -145,6 +145,25 @@ class ArchetypeBaselineService:
             mtg_format=mtg_format,
             sources=tuple(numbers),
         )
+
+        # The floor applies to the decks that survived membership filtering, not
+        # to the decks the label offered. A pool that is mostly other archetypes
+        # would otherwise clear the guard on its size and then produce a
+        # baseline from the handful of lists that happened to agree.
+        membership = baseline.membership
+        if membership.filtered_anything:
+            logger.info(
+                f"Baseline pool for {name}: kept {membership.kept_count} of "
+                f"{membership.examined}, dropped {membership.excluded_count} below "
+                f"{membership.threshold:.2f} similarity"
+            )
+        if baseline.pool_size < MIN_POOL_SIZE:
+            logger.info(
+                f"Baseline for {name}: only {baseline.pool_size} of {len(texts)} lists are "
+                f"this archetype, below {MIN_POOL_SIZE}"
+            )
+            return None
+
         if persist:
             self.store.save(baseline)
         return baseline

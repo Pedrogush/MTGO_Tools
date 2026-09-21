@@ -184,20 +184,50 @@ class DeckBaselinePanelHandlersMixin(_Base):
             self.tree.AppendItem(flex_node, self._candidate_label(candidate))
         self.tree.Expand(flex_node)
 
+        # Rejecting a deck changes every number above it, so the rejections are
+        # shown rather than logged. Collapsed by default: it is evidence for the
+        # answer, not part of it.
+        membership = baseline.membership
+        if membership.filtered_anything:
+            excluded_node = self.tree.AppendItem(
+                root,
+                self._t(
+                    "baseline.group.excluded",
+                    count=membership.excluded_count,
+                    threshold=_render_percent(membership.threshold),
+                ),
+            )
+            for deck in membership.excluded:
+                self.tree.AppendItem(excluded_node, self._excluded_label(deck))
+
         # Expanding the flex group (often 40+ rows) scrolls it into view, which
         # pushes the staples off the top -- so the tab would open on its least
         # important group every time. Put the first group back on screen.
         self.tree.EnsureVisible(staple_node)
         self.tree.ScrollTo(staple_node)
 
-        self.status_label.SetLabel(
-            self._t(
-                "baseline.status.summary",
-                pool=baseline.pool_size,
-                flex=_render_number(baseline.flex_slots),
-                fixed=_render_number(baseline.main.fixed + baseline.sideboard.fixed),
+        fixed = _render_number(baseline.main.fixed + baseline.sideboard.fixed)
+        flex = _render_number(baseline.flex_slots)
+        if membership.filtered_anything:
+            self.status_label.SetLabel(
+                self._t(
+                    "baseline.status.summary_filtered",
+                    pool=baseline.pool_size,
+                    examined=membership.examined,
+                    excluded=membership.excluded_count,
+                    flex=flex,
+                    fixed=fixed,
+                )
             )
-        )
+        else:
+            self.status_label.SetLabel(
+                self._t(
+                    "baseline.status.summary",
+                    pool=baseline.pool_size,
+                    flex=flex,
+                    fixed=fixed,
+                )
+            )
 
     def _card_label(self, card: Any) -> str:
         return self._t(
@@ -226,6 +256,13 @@ class DeckBaselinePanelHandlersMixin(_Base):
             zone=self._zone_name(candidate.is_sideboard),
         )
 
+    def _excluded_label(self, deck: Any) -> str:
+        return self._t(
+            "baseline.card.excluded",
+            source=deck.source,
+            similarity=_render_percent(deck.similarity),
+        )
+
     def _zone_name(self, is_sideboard: bool) -> str:
         return self._t("baseline.zone.sideboard" if is_sideboard else "baseline.zone.main")
 
@@ -236,3 +273,7 @@ class DeckBaselinePanelHandlersMixin(_Base):
 
 def _render_number(value: float) -> str:
     return str(int(value)) if float(value).is_integer() else f"{value:.1f}"
+
+
+def _render_percent(value: float) -> str:
+    return f"{value * 100:.0f}%"

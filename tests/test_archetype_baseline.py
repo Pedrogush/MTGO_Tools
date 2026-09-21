@@ -9,6 +9,7 @@ than at a fixture nobody can check.
 
 from __future__ import annotations
 
+import random
 import tempfile
 from pathlib import Path
 
@@ -21,6 +22,7 @@ from repositories.deck_vcs_repository.baseline import (
 )
 from repositories.deck_vcs_repository.repository import DeckVcsRepository
 from services.archetype_baseline_service import (
+    MEMBERSHIP_THRESHOLD,
     ArchetypeBaselineService,
     BaselineStore,
     CardRole,
@@ -28,9 +30,14 @@ from services.archetype_baseline_service import (
     build_frequency_table,
     classify_card,
     deck_card_counts,
+    jaccard,
+    maindeck_names,
+    partition_pool,
     pool_zone_sizes,
+    similarity_scores,
 )
 from services.archetype_baseline_service import service as service_module
+from services.archetype_baseline_service.store import baseline_from_dict, baseline_to_dict
 
 
 def make_deck(*, bolt: int, consider: int, murktide: int = 0, ragavan: int = 0, island: int = 20):
@@ -492,3 +499,282 @@ class TestBaselineService:
         service = self._service(tmp_path, pool)
         assert service.root_sha("nothing") is None
         assert service.has_baseline_root("nothing") is False
+
+
+# ------------------------------------------------------------------ membership ------------------------------------------------------------------
+def affinity_like(extra: str = "", *, saga: int = 4) -> str:
+    """A list from one archetype: a shared core plus an optional private card."""
+    lines = [
+        f"{saga} Urza's Saga",
+        "4 Mox Opal",
+        "4 Mishra's Bauble",
+        "4 Kappa Cannoneer",
+        "4 Thought Monitor",
+        "16 Darksteel Citadel",
+    ]
+    if extra:
+        lines.append(f"1 {extra}")
+    return "\n".join(lines) + "\n\nSideboard\n4 Consign to Memory\n"
+
+
+def alien_deck() -> str:
+    """A deck sharing nothing with :func:`affinity_like` -- a different archetype."""
+    return (
+        "4 Tarmogoyf\n4 Thoughtseize\n4 Fatal Push\n"
+        "4 Verdant Catacombs\n20 Swamp\n\nSideboard\n4 Duress\n"
+    )
+
+
+class TestPoolMembership:
+    def test_jaccard_is_shared_over_either(self):
+        left = frozenset({"a", "b", "c", "d", "e"})
+        right = frozenset({"a", "b", "c", "d", "e", "f", "g"})
+        # 5 shared, 7 in either.
+        assert jaccard(left, right) == pytest.approx(5 / 7)
+
+    def test_jaccard_of_a_hand_checked_pair(self):
+        # The shape of the real Affinity-vs-Hammer pair: 5 shared of 37 names.
+        shared = {f"shared{i}" for i in range(5)}
+        left = frozenset(shared | {f"l{i}" for i in range(15)})
+        right = frozenset(shared | {f"r{i}" for i in range(17)})
+        assert jaccard(left, right) == pytest.approx(5 / 37)
+        assert jaccard(left, right) == pytest.approx(0.135, abs=0.001)
+
+    def test_jaccard_is_symmetric(self):
+        left, right = frozenset({"a", "b"}), frozenset({"b", "c", "d"})
+        assert jaccard(left, right) == jaccard(right, left)
+
+    def test_identical_lists_score_one(self):
+        names = frozenset({"a", "b", "c"})
+        assert jaccard(names, names) == 1.0
+
+    def test_counts_are_ignored(self):
+        # Same cards, different ratios -> the same deck, as far as membership goes.
+        assert maindeck_names(affinity_like(saga=4)) == maindeck_names(affinity_like(saga=1))
+
+    def test_sideboard_is_not_part_of_the_comparison(self):
+        names = maindeck_names(affinity_like())
+        assert "Consign to Memory" not in names
+        assert "Mox Opal" in names
+
+    def test_a_zero_count_card_is_not_a_card_the_deck_runs(self):
+        assert "Consider" not in maindeck_names("4 Lightning Bolt\n0 Consider\n")
+
+    def test_the_alien_deck_is_excluded(self):
+        pool = [affinity_like(f"Card {i}") for i in range(9)] + [alien_deck()]
+        result = partition_pool(pool)
+        assert result.excluded_count == 1
+        assert result.kept_count == 9
+        # It is the impostor that went, not an arbitrary victim.
+        assert 9 not in result.kept_indices
+
+    def test_a_variant_build_is_kept(self):
+        # Shares the core, differs in one slot: a build, not another archetype.
+        pool = [affinity_like(f"Card {i}") for i in range(9)]
+        assert partition_pool(pool).excluded_count == 0
+
+    def test_excluded_decks_are_named_by_their_source(self):
+        pool = [affinity_like() for _ in range(5)] + [alien_deck()]
+        sources = ("a", "b", "c", "d", "e", "the-impostor")
+        result = partition_pool(pool, sources=sources)
+        assert [deck.source for deck in result.excluded] == ["the-impostor"]
+
+    def test_excluded_decks_fall_back_to_an_index_without_sources(self):
+        pool = [affinity_like() for _ in range(5)] + [alien_deck()]
+        assert [deck.source for deck in partition_pool(pool).excluded] == ["#5"]
+
+
+class TestMembershipProtectsTheBaseline:
+    def test_no_single_deck_can_flatten_the_baseline(self):
+        """The user's rule: one impostor must not take the baseline to zero."""
+        clean = [affinity_like(f"Card {i}") for i in range(9)]
+        contaminated = clean + [alien_deck()]
+
+        expected = build_baseline(clean, archetype="Affinity", mtg_format="modern")
+        actual = build_baseline(contaminated, archetype="Affinity", mtg_format="modern")
+
+        assert expected.main.fixed > 0
+        assert [(c.name, c.fixed_count) for c in actual.cards if c.fixed_count] == [
+            (c.name, c.fixed_count) for c in expected.cards if c.fixed_count
+        ]
+        assert actual.main.fixed == expected.main.fixed
+
+    def test_without_the_guard_one_deck_would_have_flattened_it(self):
+        # The failure the filter exists to prevent, pinned so the premise cannot
+        # quietly stop being true.
+        contaminated = [affinity_like(f"Card {i}") for i in range(9)] + [alien_deck()]
+        unguarded = build_baseline(
+            contaminated, archetype="Affinity", mtg_format="modern", membership_threshold=0.0
+        )
+        assert unguarded.main.fixed == 0
+
+    def test_every_position_for_the_impostor_is_survivable(self):
+        clean = [affinity_like(f"Card {i}") for i in range(9)]
+        for position in range(len(clean) + 1):
+            pool = clean[:position] + [alien_deck()] + clean[position:]
+            baseline = build_baseline(pool, archetype="A", mtg_format="modern")
+            assert baseline.main.fixed > 0, f"flattened with the impostor at {position}"
+
+    def test_kept_sources_name_only_the_survivors(self):
+        pool = [affinity_like() for _ in range(5)] + [alien_deck()]
+        sources = ("a", "b", "c", "d", "e", "impostor")
+        baseline = build_baseline(pool, archetype="A", mtg_format="modern", sources=sources)
+        assert baseline.sources == ("a", "b", "c", "d", "e")
+        assert baseline.pool_size == 5
+
+
+class TestMembershipIsOrderIndependent:
+    """The property the measure was chosen for."""
+
+    def _pool(self) -> list[str]:
+        return [affinity_like(f"Card {i}") for i in range(8)] + [alien_deck()]
+
+    def test_shuffling_the_pool_rejects_the_same_decks(self):
+        pool = self._pool()
+        sources = tuple(f"deck-{i}" for i in range(len(pool)))
+        expected = set(partition_pool(pool, sources=sources).excluded)
+
+        for seed in range(6):
+            order = list(range(len(pool)))
+            random.Random(seed).shuffle(order)
+            result = partition_pool(
+                [pool[i] for i in order], sources=tuple(sources[i] for i in order)
+            )
+            assert set(result.excluded) == expected, f"differed at seed {seed}"
+
+    def test_shuffling_the_pool_gives_an_identical_baseline(self):
+        pool = self._pool()
+        expected = build_baseline(pool, archetype="A", mtg_format="modern").decklist()
+
+        for seed in range(6):
+            shuffled = list(pool)
+            random.Random(seed).shuffle(shuffled)
+            actual = build_baseline(shuffled, archetype="A", mtg_format="modern").decklist()
+            assert actual == expected, f"differed at seed {seed}"
+
+    def test_scores_do_not_depend_on_position(self):
+        pool = self._pool()
+        forward = similarity_scores([maindeck_names(text) for text in pool])
+        backward = similarity_scores([maindeck_names(text) for text in reversed(pool)])
+        assert forward == pytest.approx(list(reversed(backward)))
+
+
+class TestMembershipThresholdGap:
+    def test_the_same_split_across_the_empty_gap(self):
+        """The shipped threshold is not a knife edge: the gap is wide."""
+        pool = [affinity_like(f"Card {i}") for i in range(9)] + [alien_deck()]
+        splits = {
+            partition_pool(pool, threshold=t).kept_indices for t in (0.27, 0.30, 0.35, 0.40, 0.45)
+        }
+        assert len(splits) == 1
+
+    def test_a_threshold_of_zero_keeps_everything(self):
+        pool = [affinity_like() for _ in range(5)] + [alien_deck()]
+        assert partition_pool(pool, threshold=0.0).excluded_count == 0
+
+    def test_the_shipped_threshold_sits_between_the_two_groups(self):
+        pool = [affinity_like(f"Card {i}") for i in range(9)] + [alien_deck()]
+        result = partition_pool(pool)
+        kept = [result.scores[i] for i in result.kept_indices]
+        dropped = [deck.similarity for deck in result.excluded]
+        assert max(dropped) < MEMBERSHIP_THRESHOLD <= min(kept)
+
+
+class TestMembershipDegeneratePools:
+    def test_empty_pool(self):
+        result = partition_pool([])
+        assert (result.kept_count, result.excluded_count, result.examined) == (0, 0, 0)
+
+    def test_a_single_deck_is_kept(self):
+        # It cannot be atypical of a pool it is the whole of.
+        result = partition_pool([alien_deck()])
+        assert result.kept_indices == (0,)
+        assert result.excluded == ()
+
+    def test_all_identical_decks_are_all_kept(self):
+        result = partition_pool([affinity_like() for _ in range(6)])
+        assert result.excluded_count == 0
+        assert set(result.scores) == {1.0}
+
+    def test_a_pool_of_mutual_strangers_keeps_nobody(self):
+        pool = [f"4 Card{i}A\n4 Card{i}B\n20 Land{i}\n" for i in range(6)]
+        result = partition_pool(pool)
+        assert result.kept_count == 0
+        assert result.excluded_count == 6
+
+    def test_a_pool_of_blank_texts_keeps_nobody(self):
+        assert partition_pool(["", "   ", ""]).kept_count == 0
+
+    def test_the_measure_finds_the_minority_not_the_wrong_label(self):
+        """A documented limit, pinned so it cannot surprise anyone later.
+
+        Membership is relative to the pool. Three real lists drowned by nine
+        copies of something else makes the *real* lists the outliers, and no
+        amount of similarity arithmetic can say which group wears the label
+        correctly. This guards against contamination, not against a pool that
+        is mostly the wrong archetype.
+        """
+        pool = [affinity_like() for _ in range(3)] + [alien_deck() for _ in range(9)]
+        result = partition_pool(pool)
+        assert result.kept_count == 9
+        assert result.excluded_count == 3
+
+    def test_a_contaminated_pool_yields_no_baseline_from_the_survivors(self, tmp_path):
+        """Fewer members than the floor is 'no answer', not a small answer."""
+        # Six related lists, each with its own flavour card, plus six decks that
+        # resemble nothing at all -- so the members survive but are too few.
+        pool = [affinity_like(f"Card {i}") for i in range(6)] + [
+            f"4 Card{i}A\n4 Card{i}B\n20 Land{i}\n" for i in range(6)
+        ]
+        numbers = [f"deck-{i}" for i in range(len(pool))]
+        texts = dict(zip(numbers, pool, strict=False))
+        service = ArchetypeBaselineService(
+            metagame_repo=_FakeMetagameRepo(numbers),
+            vcs_repo=DeckVcsRepository(tmp_path / "deck_vcs"),
+            store=BaselineStore(tmp_path / "baselines.json"),
+            text_provider=lambda wanted: {n: texts[n] for n in wanted if n in texts},
+        )
+        # The raw pool of 12 clears MIN_POOL_SIZE; only the filtered six do not.
+        assert len(pool) >= service_module.MIN_POOL_SIZE
+        assert service.compute({"name": "A"}, mtg_format="modern") is None
+        assert service.stored("A", "modern") is None
+
+
+class TestMembershipIsReported:
+    def test_the_baseline_carries_what_it_rejected(self):
+        pool = [affinity_like() for _ in range(5)] + [alien_deck()]
+        sources = ("a", "b", "c", "d", "e", "impostor")
+        baseline = build_baseline(pool, archetype="A", mtg_format="modern", sources=sources)
+        assert baseline.membership.excluded_count == 1
+        assert baseline.membership.excluded[0].source == "impostor"
+        assert baseline.membership.examined == 6
+        assert baseline.membership.kept_count == 5
+
+    def test_a_clean_pool_reports_no_filtering(self):
+        baseline = build_baseline(
+            [affinity_like() for _ in range(5)], archetype="A", mtg_format="modern"
+        )
+        assert baseline.membership.filtered_anything is False
+
+    def test_membership_survives_the_store_round_trip(self, tmp_path):
+        pool = [affinity_like() for _ in range(5)] + [alien_deck()]
+        sources = ("a", "b", "c", "d", "e", "impostor")
+        baseline = build_baseline(pool, archetype="A", mtg_format="modern", sources=sources)
+        store = BaselineStore(tmp_path / "baselines.json")
+        store.save(baseline)
+
+        read_back = store.get("A", "modern")
+        assert read_back is not None
+        assert read_back.membership.excluded_count == 1
+        assert read_back.membership.excluded[0].source == "impostor"
+        assert read_back.membership.threshold == baseline.membership.threshold
+        assert read_back.membership.kept_indices == baseline.membership.kept_indices
+
+    def test_a_stored_baseline_without_membership_still_reads(self):
+        # Entries written before the filter existed must not break on load.
+        baseline = build_baseline(
+            [affinity_like() for _ in range(3)], archetype="A", mtg_format="modern"
+        )
+        data = baseline_to_dict(baseline)
+        del data["membership"]
+        assert baseline_from_dict(data).membership.examined == 0

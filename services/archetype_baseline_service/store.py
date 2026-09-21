@@ -29,7 +29,9 @@ from services.archetype_baseline_service.models import (
     BaselineCard,
     CardFrequency,
     CardRole,
+    ExcludedDeck,
     FlexCandidate,
+    PoolMembership,
     ZoneShape,
 )
 from utils.atomic_io import atomic_write_json, locked_path
@@ -69,6 +71,15 @@ def baseline_to_dict(baseline: ArchetypeBaseline) -> dict[str, Any]:
         "main": {"size": baseline.main.size, "fixed": baseline.main.fixed},
         "sideboard": {"size": baseline.sideboard.size, "fixed": baseline.sideboard.fixed},
         "sources": list(baseline.sources),
+        "membership": {
+            "kept_indices": list(baseline.membership.kept_indices),
+            "scores": list(baseline.membership.scores),
+            "threshold": baseline.membership.threshold,
+            "excluded": [
+                {"source": deck.source, "similarity": deck.similarity}
+                for deck in baseline.membership.excluded
+            ],
+        },
         "cards": [
             {
                 "name": card.name,
@@ -126,6 +137,22 @@ def baseline_from_dict(data: dict[str, Any]) -> ArchetypeBaseline:
             fixed=float(data["sideboard"]["fixed"]),
         ),
         sources=tuple(data.get("sources", ())),
+        membership=_membership_from_dict(data.get("membership")),
+    )
+
+
+def _membership_from_dict(data: dict[str, Any] | None) -> PoolMembership:
+    """Read back a stored membership, tolerating entries written without one."""
+    if not data:
+        return PoolMembership()
+    return PoolMembership(
+        kept_indices=tuple(int(index) for index in data.get("kept_indices", ())),
+        excluded=tuple(
+            ExcludedDeck(source=str(deck["source"]), similarity=float(deck["similarity"]))
+            for deck in data.get("excluded", ())
+        ),
+        scores=tuple(float(score) for score in data.get("scores", ())),
+        threshold=float(data.get("threshold", 0.0)),
     )
 
 

@@ -79,6 +79,15 @@ class DeckBaselineMixin(_Base):
                 "flex": baseline.sideboard.flex,
             },
             "flex_slots": baseline.flex_slots,
+            "membership": {
+                "examined": baseline.membership.examined,
+                "kept": baseline.membership.kept_count,
+                "threshold": baseline.membership.threshold,
+                "excluded": [
+                    {"source": deck.source, "similarity": round(deck.similarity, 4)}
+                    for deck in baseline.membership.excluded
+                ],
+            },
             "staples": cards(CardRole.STAPLE),
             "partial_staples": cards(CardRole.PARTIAL_STAPLE),
             "flex_candidates": [
