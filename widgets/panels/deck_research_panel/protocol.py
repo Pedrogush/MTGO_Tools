@@ -29,6 +29,7 @@ class DeckResearchPanelProto(Protocol):
     _on_deck_selected: Callable[[], None] | None
     _on_copy: Callable[[], None] | None
     _on_save: Callable[[], None] | None
+    _on_save_diff: Callable[[], None] | None
     _on_daily_average: Callable[[], None] | None
     _on_load: Callable[[], None] | None
     _on_event_type_filter: Callable[[], None] | None

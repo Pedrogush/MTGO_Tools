@@ -8,7 +8,7 @@ from collections.abc import Callable
 
 import wx
 
-from utils.constants import SPACE_MD, SPACE_SM
+from utils.constants import MENU_CARET, SPACE_MD, SPACE_SM
 from widgets.buttons.deck_action_buttons.handlers import DeckActionButtonsHandlersMixin
 from widgets.buttons.deck_action_buttons.properties import DeckActionButtonsPropertiesMixin
 from widgets.stylize import stylize_button
@@ -24,6 +24,7 @@ class DeckActionButtons(DeckActionButtonsHandlersMixin, DeckActionButtonsPropert
         on_save: Callable[[], None] | None = None,
         on_daily_average: Callable[[], None] | None = None,
         on_load: Callable[[], None] | None = None,
+        on_save_diff: Callable[[], None] | None = None,
         labels: dict[str, str] | None = None,
     ):
         super().__init__(parent)
@@ -32,6 +33,7 @@ class DeckActionButtons(DeckActionButtonsHandlersMixin, DeckActionButtonsPropert
         self.on_save = on_save
         self.on_daily_average = on_daily_average
         self.on_load = on_load
+        self.on_save_diff = on_save_diff
         self._labels = labels or {}
 
         self._build_ui()
@@ -58,7 +60,12 @@ class DeckActionButtons(DeckActionButtonsHandlersMixin, DeckActionButtonsPropert
         self.load_button.Bind(wx.EVT_BUTTON, self._on_load_clicked)
         row1.Add(self.load_button, 1, wx.RIGHT, SPACE_SM)
 
-        self.save_button = wx.Button(self, label=self._labels.get("save_deck", "Save Deck"))
+        # #1044: Save is no longer one action. It opens a menu -- save the deck,
+        # or save the deck-minus-collection diff -- so the caret marks it as a
+        # dropdown rather than something that fires on click.
+        self.save_button = wx.Button(
+            self, label=f"{self._labels.get('save_deck', 'Save Deck')} {MENU_CARET}"
+        )
         stylize_button(self.save_button, kind="secondary")
         if tip := self._labels.get("save_deck_tooltip"):
             self.save_button.SetToolTip(tip)

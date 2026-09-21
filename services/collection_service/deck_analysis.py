@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from services.collection_service.diff import CollectionDiff, build_collection_diff
+
 if TYPE_CHECKING:
     from services.collection_service.protocol import CollectionServiceProto
 
@@ -66,6 +68,15 @@ class DeckAnalysisMixin(_Base):
             "missing_cards": missing_cards,
             "ownership_percentage": ownership_percentage,
         }
+
+    def build_collection_diff(self, deck_text: str) -> CollectionDiff:
+        """The decklist of what *deck_text* still needs, for saving as a .txt (#1044).
+
+        Unlike :meth:`get_missing_cards_list` this keeps the deck's own order and
+        its mainboard/sideboard split, and spends one shared pool of owned copies
+        across both zones -- see :mod:`services.collection_service.diff`.
+        """
+        return build_collection_diff(deck_text, self.get_owned_count)
 
     def get_missing_cards_list(self, deck_text: str) -> list[tuple[str, int]]:
         analysis = self.analyze_deck_ownership(deck_text)

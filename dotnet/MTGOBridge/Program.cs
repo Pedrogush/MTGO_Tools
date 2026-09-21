@@ -47,8 +47,12 @@ if (mode == ExecutionMode.Serve)
     return;
 }
 
-// Observed timings with ~2,290 cards and 270 matches (2024-xx-xx):
-// collectionMs ≈ 3_728, historyMs ≈ 17_280, totalMs ≈ 21_009
+// Observed timings with ~2,070 unique cards (2026-09-18): collectionMs ≈ 1_420 of
+// actual IPC, inside a ~9_000 ms process because ~7_200 ms of every invocation is
+// .NET startup plus the RemoteClient attach. The collection read itself is only 7
+// IPC calls — GetFrozenCollection returns Id/Name/Quantity locally. `serve` mode
+// amortises that startup+attach across every request instead of paying it once
+// per command.
 Console.WriteLine(JsonSerializer.Serialize(BuildPayload(mode, args), jsonOptions));
 
 // Builds the payload a single CLI invocation prints. `serve` mode calls the same
@@ -75,17 +79,11 @@ static object BuildPayload(ExecutionMode mode, string[] args)
     var totalStopwatch = Stopwatch.StartNew();
 
     CollectionSnapshot? collectionSnapshot = null;
-    HistorySnapshot? historySnapshot = null;
     CurrencySnapshot? currencySnapshot = null;
 
     if (mode is ExecutionMode.Collection or ExecutionMode.All)
     {
         collectionSnapshot = Measure("collectionMs", GetCollectionSnapshot, timings);
-    }
-
-    if (mode is ExecutionMode.History or ExecutionMode.All)
-    {
-        historySnapshot = Measure("historyMs", GetHistorySnapshot, timings);
     }
 
     if (mode is ExecutionMode.Currency or ExecutionMode.All)
@@ -100,7 +98,6 @@ static object BuildPayload(ExecutionMode mode, string[] args)
         DateTimeOffset.UtcNow,
         mode.ToString(),
         collectionSnapshot,
-        historySnapshot,
         currencySnapshot,
         timings
     );
@@ -122,64 +119,86 @@ static T Measure<T>(string key, Func<T> factory, IDictionary<string, long> timin
 
 static UsernameSnapshot GetUsernameSnapshot()
 {
+    // Cheapest possible discriminator: without this, "MTGO isn't running" and
+    // "MTGO is running but the username lookup broke" both surfaced as the same
+    // opaque TargetInvocationException, which is what made this failure so hard
+    // to read from the app log.
+    if (Process.GetProcessesByName("MTGO").Length == 0)
+    {
+        return new UsernameSnapshot(null, "MTGO client is not running");
+    }
+
+    var errors = new List<string>();
+
+    // Strategy 1: Client.CurrentUser.
+    // Each strategy gets its own try/catch. Previously a single try wrapped all
+    // three, so strategy 1 throwing made 2 and 3 unreachable.
     try
     {
-        // Strategy 1: Try to get from Client.CurrentUser using reflection
         var clientType = Type.GetType("MTGOSDK.API.Client, MTGOSDK");
         if (clientType != null)
         {
-            var currentUserProp = clientType.GetProperty("CurrentUser", BindingFlags.Public | BindingFlags.Static);
-            if (currentUserProp != null)
+            // CurrentUser is static on MTGOSDK 0.8.5 but an instance property on
+            // 1.6.x (reached via the static Client.Current singleton). Probe both
+            // so an SDK bump doesn't silently turn this into a no-op.
+            var prop = clientType.GetProperty("CurrentUser", BindingFlags.Public | BindingFlags.Static)
+                    ?? clientType.GetProperty("CurrentUser", BindingFlags.Public | BindingFlags.Instance);
+            if (prop is null)
             {
-                var currentUser = currentUserProp.GetValue(null);
-                if (currentUser != null)
+                errors.Add("Client.CurrentUser not found");
+            }
+            else
+            {
+                object? target = prop.GetGetMethod()?.IsStatic == false
+                    ? clientType.GetProperty("Current", BindingFlags.Public | BindingFlags.Static)?.GetValue(null)
+                    : null;
+                var currentUser = prop.GetValue(target);
+                var name = SafeGet(currentUser, "Name", string.Empty);
+                if (!string.IsNullOrWhiteSpace(name))
                 {
-                    var name = SafeGet(currentUser, "Name", string.Empty);
-                    if (!string.IsNullOrWhiteSpace(name))
-                    {
-                        return new UsernameSnapshot(name, null);
-                    }
+                    return new UsernameSnapshot(name, null);
                 }
+                errors.Add("Client.CurrentUser returned no name");
             }
         }
-
-        // Strategy 2: Try UserManager.CurrentUser
-        var userManagerType = Type.GetType("MTGOSDK.API.Users.UserManager, MTGOSDK");
-        if (userManagerType != null)
+        else
         {
-            var currentUserProp = userManagerType.GetProperty("CurrentUser", BindingFlags.Public | BindingFlags.Static);
-            if (currentUserProp != null)
-            {
-                var currentUser = currentUserProp.GetValue(null);
-                if (currentUser != null)
-                {
-                    var name = SafeGet(currentUser, "Name", string.Empty);
-                    if (!string.IsNullOrWhiteSpace(name))
-                    {
-                        return new UsernameSnapshot(name, null);
-                    }
-                }
-            }
+            errors.Add("MTGOSDK.API.Client type not found");
         }
-
-        // Strategy 3: Get username from collection name
-        var collection = CollectionManager.Collection;
-        if (collection != null)
-        {
-            var collectionName = collection.Name;
-            if (!string.IsNullOrWhiteSpace(collectionName) && collectionName != "Collection")
-            {
-                // Collection name might be the username
-                return new UsernameSnapshot(collectionName, null);
-            }
-        }
-
-        return new UsernameSnapshot(null, "Could not determine current user");
     }
     catch (Exception ex)
     {
-        return new UsernameSnapshot(null, ex.Message);
+        errors.Add("Client.CurrentUser: " + Describe(ex));
     }
+
+    // Strategy 2: fall back to the collection's name, which MTGO sets to the
+    // account name. (An earlier UserManager.CurrentUser strategy lived here; that
+    // property exists on neither 0.8.5 nor 1.6.6, so it could never fire.)
+    try
+    {
+        var collectionName = CollectionManager.Collection?.Name;
+        if (!string.IsNullOrWhiteSpace(collectionName) && collectionName != "Collection")
+        {
+            return new UsernameSnapshot(collectionName, null);
+        }
+        errors.Add("Collection.Name was not a username");
+    }
+    catch (Exception ex)
+    {
+        errors.Add("Collection.Name: " + Describe(ex));
+    }
+
+    return new UsernameSnapshot(null, string.Join("; ", errors));
+}
+
+// Reflection wraps whatever a getter threw in TargetInvocationException, and an
+// SDK attach failure wraps again in TypeInitializationException. Reporting
+// ex.Message alone yielded the useless "Exception has been thrown by the target
+// of an invocation."; GetBaseException walks past both to the real cause.
+static string Describe(Exception ex)
+{
+    var baseEx = ex.GetBaseException();
+    return $"{baseEx.GetType().Name}: {baseEx.Message}";
 }
 
 static LogFilesSnapshot GetLogFilesSnapshot()
@@ -299,347 +318,6 @@ static CurrencySnapshot GetCurrencySnapshot()
     }
 }
 
-static HistorySnapshot GetHistorySnapshot()
-{
-    bool historyLoaded = false;
-
-    // ReadGameHistory() can throw from inside MTGOSDK (e.g. a RuntimeBinderException
-    // when the remote dynamic type drifts from the SDK's expectations). Guard it so a
-    // single failing snapshot returns a structured error instead of crashing the whole
-    // process and corrupting the JSON contract the Python side parses.
-    try
-    {
-        // ReadGameHistory() returns the full list - use it directly instead of accessing .Items!
-        var rawItems = HistoryManager.ReadGameHistory();
-        if (rawItems == null)
-        {
-            return new HistorySnapshot(historyLoaded, Array.Empty<HistoryEntry>(), "History items is null");
-        }
-
-        var items = rawItems
-            .Select(item => MapHistoryItem(item))
-            .Where(entry => entry != null)
-            .Cast<HistoryEntry>()
-            .ToList();
-        return new HistorySnapshot(historyLoaded, items, null);
-    }
-    catch (Exception ex)
-    {
-        return new HistorySnapshot(historyLoaded, Array.Empty<HistoryEntry>(), ex.Message);
-    }
-}
-
-static HistoryEntry? MapHistoryItem(object? item)
-{
-    if (item is null)
-    {
-        return null;
-    }
-
-    var type = item.GetType();
-    var typeName = type.Name;
-
-    // Extract basic properties using reflection - no type casting
-    var id = SafeGet<int>(item, "Id");
-    var startTime = SafeGet(item, "StartTime", DateTime.MinValue);
-
-    // Handle HistoricalMatch
-    if (typeName == "HistoricalMatch")
-    {
-        var opponents = ExtractOpponentNames(item);
-        var gameWins = SafeGet<int?>(item, "GameWins");
-        var gameLosses = SafeGet<int?>(item, "GameLosses");
-        var gameTies = SafeGet<int?>(item, "GameTies");
-        var gameIds = ExtractGameIds(item);
-        return new HistoryEntry(
-            "match",
-            id,
-            startTime,
-            opponents,
-            gameWins,
-            gameLosses,
-            gameTies,
-            gameIds,
-            null,
-            null,
-            null
-        );
-    }
-
-    // Handle HistoricalTournament
-    if (typeName == "HistoricalTournament")
-    {
-        var matches = ExtractTournamentMatches(item);
-        var matchWins = SafeGet<int?>(item, "MatchWins");
-        var matchLosses = SafeGet<int?>(item, "MatchLosses");
-        return new HistoryEntry(
-            "tournament",
-            id,
-            startTime,
-            Array.Empty<string>(),
-            null,
-            null,
-            null,
-            null,
-            matches,
-            matchWins,
-            matchLosses
-        );
-    }
-
-    // Default fallback
-    return new HistoryEntry(
-        typeName,
-        id,
-        startTime,
-        Array.Empty<string>(),
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null
-    );
-}
-
-static IReadOnlyList<string> ExtractOpponentNames(object match)
-{
-    var result = new List<string>();
-
-    if (match == null)
-    {
-        return result;
-    }
-
-    var type = match.GetType();
-
-    // STRATEGY 1: Access raw backing object before SDK converts to User objects
-    // HistoricalMatch has an internal "obj" field that contains the raw dynamic data
-    try
-    {
-        // Try to get the internal "obj" field (contains the raw dynamic object)
-        var objField = type.GetField("obj", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
-        if (objField != null)
-        {
-            var rawObj = objField.GetValue(match);
-            if (rawObj != null)
-            {
-                // Access Opponents on the raw dynamic object (should be strings, not User objects)
-                var rawType = rawObj.GetType();
-                var rawOpponentsProp = rawType.GetProperty("Opponents");
-                if (rawOpponentsProp != null)
-                {
-                    try
-                    {
-                        var rawOpponents = rawOpponentsProp.GetValue(rawObj);
-                        if (rawOpponents is IEnumerable rawEnum)
-                        {
-                            foreach (var item in rawEnum)
-                            {
-                                // The raw data might be strings directly
-                                if (item is string str && !string.IsNullOrWhiteSpace(str))
-                                {
-                                    result.Add(str.Trim());
-                                }
-                                // Or might be dynamic objects with string properties
-                                else if (item != null)
-                                {
-                                    // Try to get string representation or Name property
-                                    var itemType = item.GetType();
-                                    var nameProp = itemType.GetProperty("Name");
-                                    if (nameProp != null)
-                                    {
-                                        var nameValue = nameProp.GetValue(item);
-                                        if (nameValue is string name && !string.IsNullOrWhiteSpace(name))
-                                        {
-                                            result.Add(name.Trim());
-                                        }
-                                    }
-                                    else
-                                    {
-                                        // Fallback to ToString
-                                        var strVal = item.ToString();
-                                        if (!string.IsNullOrWhiteSpace(strVal))
-                                        {
-                                            result.Add(strVal.Trim());
-                                        }
-                                    }
-                                }
-                            }
-
-                            // If we got results from raw data, return them
-                            if (result.Count > 0)
-                            {
-                                return result;
-                            }
-                        }
-                    }
-                    catch
-                    {
-                        // Raw access failed, try other strategies
-                    }
-                }
-            }
-        }
-    }
-    catch
-    {
-        // Strategy 1 failed, continue to strategy 2
-    }
-
-    // STRATEGY 2: Try the SDK's Opponents property (might work if data is valid)
-    object? opponents = null;
-    try
-    {
-        var opponentsProp = type.GetProperty("Opponents", BindingFlags.Public | BindingFlags.Instance);
-        if (opponentsProp != null)
-        {
-            try
-            {
-                opponents = opponentsProp.GetValue(match);
-            }
-            catch (TargetInvocationException)
-            {
-                // SDK conversion failed - this is expected
-                opponents = null;
-            }
-            catch
-            {
-                opponents = null;
-            }
-        }
-    }
-    catch
-    {
-        // Property lookup failed
-    }
-
-    // If SDK property worked, extract User names
-    if (opponents != null && opponents is IEnumerable enumerable)
-    {
-        foreach (var opponent in enumerable)
-        {
-            if (opponent == null) continue;
-
-            string? name = null;
-            var opponentType = opponent.GetType();
-
-            // Try to get Name property
-            try
-            {
-                var nameProp = opponentType.GetProperty("Name", BindingFlags.Public | BindingFlags.Instance);
-                if (nameProp != null)
-                {
-                    var nameValue = nameProp.GetValue(opponent);
-                    name = nameValue as string;
-                }
-            }
-            catch
-            {
-                // Try method invocation
-                try
-                {
-                    var getName = opponentType.GetMethod("get_Name", BindingFlags.Public | BindingFlags.Instance);
-                    if (getName != null)
-                    {
-                        var nameValue = getName.Invoke(opponent, null);
-                        name = nameValue as string;
-                    }
-                }
-                catch
-                {
-                    continue;
-                }
-            }
-
-            if (!string.IsNullOrWhiteSpace(name))
-            {
-                result.Add(name.Trim());
-            }
-        }
-    }
-
-    return result;
-}
-
-static IReadOnlyList<int> ExtractGameIds(object match)
-{
-    var result = new List<int>();
-    try
-    {
-        var prop = match.GetType().GetProperty("GameIds");
-        if (prop == null) return result;
-
-        var value = prop.GetValue(match);
-        if (value == null) return result;
-
-        if (value is IEnumerable<int> intList)
-        {
-            result.AddRange(intList);
-        }
-        else if (value is IEnumerable enumerable)
-        {
-            foreach (var item in enumerable)
-            {
-                if (item is int id)
-                {
-                    result.Add(id);
-                }
-            }
-        }
-    }
-    catch
-    {
-        // Silently ignore errors
-    }
-    return result;
-}
-
-static IReadOnlyList<MatchSummary> ExtractTournamentMatches(object tournament)
-{
-    var result = new List<MatchSummary>();
-    try
-    {
-        var prop = tournament.GetType().GetProperty("Matches");
-        if (prop == null) return result;
-
-        var value = prop.GetValue(tournament);
-        if (value == null) return result;
-
-        if (value is IEnumerable matches)
-        {
-            foreach (var match in matches)
-            {
-                if (match == null) continue;
-
-                var id = SafeGet<int>(match, "Id");
-                var startTime = SafeGet(match, "StartTime", DateTime.MinValue);
-                var gameWins = SafeGet<int>(match, "GameWins");
-                var gameLosses = SafeGet<int>(match, "GameLosses");
-                var gameTies = SafeGet<int>(match, "GameTies");
-                var opponents = ExtractOpponentNames(match);
-                var gameIds = ExtractGameIds(match);
-
-                result.Add(new MatchSummary(
-                    id,
-                    startTime,
-                    gameWins,
-                    gameLosses,
-                    gameTies,
-                    opponents,
-                    gameIds
-                ));
-            }
-        }
-    }
-    catch
-    {
-        // Silently ignore errors
-    }
-    return result;
-}
-
 static T SafeGet<T>(object? target, string propertyName, T defaultValue = default!)
 {
     if (target is null)
@@ -674,7 +352,7 @@ static async Task RunWatchLoopAsync(
     TimeSpan? currencyInterval = null)
 {
     // The challenge-timer read is cheap and needs second-level freshness; the
-    // currency read scans the whole frozen collection (seconds, remote) and
+    // currency read takes one GetFrozenCollection round trip (~0.9-1.3s) and
     // changes slowly — leagues run well over an hour — so the two are split into
     // independent loops at very different cadences instead of one combined tick.
     timerInterval ??= TimeSpan.FromMilliseconds(500);
@@ -689,12 +367,16 @@ static async Task RunWatchLoopAsync(
     };
 
     // The SDK transport is concurrency-safe, but reads are marshalled onto MTGO's
-    // UI thread server-side, so a long currency scan blocks timer reads anyway
-    // (measured: a concurrent scan stalls the timer loop entirely). The lock keeps
-    // the timer loop responsive instead — it grabs the lock without blocking and
-    // reuses cached timers if the (rare, idle-only) currency scan holds it. The
-    // currency loop additionally pauses while a timer is active, so in steady state
-    // during an event the two never contend.
+    // UI thread server-side, so a concurrent currency scan delays timer reads
+    // anyway. The lock keeps the timer loop responsive — it grabs the lock without
+    // blocking and reuses cached timers if the currency scan holds it. The currency
+    // loop additionally pauses while a timer is active, so in steady state during
+    // an event the two never contend.
+    //
+    // The scan used to take ~150s because IsEventTicket read entry.Card per entry;
+    // it is now a single round trip, so this contention is far milder than when
+    // the machinery was written. It is kept because one round trip is still not
+    // free and the timer must stay at second-level freshness.
     using var sdkLock = new SemaphoreSlim(1, 1);
 
     await RunWatchTasksAsync(
@@ -823,7 +505,8 @@ static async Task<bool> TryAcquireAsync(SemaphoreSlim sdkLock, CancellationToken
 }
 
 // Refreshes the cached currency on a coarse cadence. Holds the SDK lock for the
-// duration of the (slow) scan; the timer loop keeps emitting meanwhile.
+// duration of the scan (one round trip, ~0.9-1.3s); the timer loop keeps
+// emitting meanwhile.
 static async Task RunCurrencyRefreshLoopAsync(
     SemaphoreSlim sdkLock,
     WatchCache cache,
@@ -1228,16 +911,14 @@ static bool IsEventTicket(CardQuantityPair? entry)
         return false;
     }
 
-    var card = entry.Card;
-    if (card != null)
-    {
-        var isTicket = SafeGet<bool?>(card, "IsTicket", null);
-        if (isTicket == true)
-        {
-            return true;
-        }
-    }
-
+    // Do NOT read entry.Card here. GetFrozenCollection populates Id/Name/Quantity
+    // locally at zero IPC cost, but entry.Card forces a remote round trip per
+    // entry: CardDataManager.GetCardDefinitionForCatId (~54.8ms) followed by
+    // MagicEntityDefinition.get_IsTicket (~17.2ms). Measured against a
+    // 2,069-card collection that was ~150s per scan and 69% of all MTGOSDK IPC
+    // traffic in a 54-minute session, to produce three integers. The name match
+    // below already answers the question, and RunCurrencyRefreshLoopAsync runs
+    // this every 10 minutes while the user may be in a game.
     return MatchesName(entry.Name, "Event Ticket", "Event Tickets");
 }
 
@@ -1359,7 +1040,6 @@ static ExecutionMode ParseMode(string[] args)
     return token.ToLowerInvariant() switch
     {
         "collection" or "collect" => ExecutionMode.Collection,
-        "history" or "matches" => ExecutionMode.History,
         "all" or "both" => ExecutionMode.All,
         "currency" or "wallet" or "tickets" or "points" => ExecutionMode.Currency,
         "watch" or "monitor" => ExecutionMode.Watch,
@@ -1574,7 +1254,6 @@ enum ExecutionMode
 {
     None = 0,
     Collection,
-    History,
     All,
     Currency,
     Watch,
@@ -1665,8 +1344,8 @@ sealed class WatchCache
 
     // True while at least one challenge timer is being tracked. The currency loop
     // watches this and pauses: the SDK serialises reads on MTGO's UI thread, so a
-    // multi-second currency scan would otherwise block fresh timer reads. Pausing
-    // gives the timer exclusive, uninterrupted access whenever an event is live.
+    // currency scan would otherwise delay fresh timer reads. Pausing gives the
+    // timer exclusive, uninterrupted access whenever an event is live.
     public bool HasActiveTimer
     {
         get => _hasActiveTimer;
@@ -1698,43 +1377,17 @@ public sealed record CollectionSnapshot(
     string? Error
 );
 
-public sealed record MatchSummary(
-    int Id,
-    DateTime StartTime,
-    int GameWins,
-    int GameLosses,
-    int GameTies,
-    IReadOnlyList<string> Opponents,
-    IReadOnlyList<int> GameIds
-);
-
-public sealed record HistoryEntry(
-    string Kind,
-    int Id,
-    DateTime StartTime,
-    IReadOnlyList<string> Opponents,
-    int? GameWins,
-    int? GameLosses,
-    int? GameTies,
-    IReadOnlyList<int>? GameIds,
-    IReadOnlyList<MatchSummary>? Matches,
-    int? MatchWins,
-    int? MatchLosses
-);
-
-public sealed record HistorySnapshot(
-    bool HistoryLoaded,
-    IReadOnlyList<HistoryEntry> Items,
-    string? Error
-);
-
 public sealed record LogFilesSnapshot(
     IReadOnlyList<string> Files,
     string? Error
 );
 
 public sealed record UsernameSnapshot(
-    string? Username,
+    // Always emit "username", even when null. The serializer's global
+    // WhenWritingNull policy otherwise omits the key entirely, and the Python
+    // caller's data.get("username") then can't tell "bridge failed" from
+    // "no username" — which is how this failure stayed silent.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? Username,
     string? Error
 );
 
@@ -1742,7 +1395,6 @@ public sealed record BridgePayload(
     DateTimeOffset Timestamp,
     string Mode,
     CollectionSnapshot? Collection,
-    HistorySnapshot? History,
     CurrencySnapshot? Currency,
     IReadOnlyDictionary<string, long> Timings
 );

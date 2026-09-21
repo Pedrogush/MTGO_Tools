@@ -69,7 +69,19 @@ ruff check --fix .
 
 # Or, from Windows directly
 pytest
+
+# The fast way: non-UI tests across the cores, UI tests alongside them
+python scripts/run_tests_fast.py
 ```
+
+`pytest` on its own still runs everything, serially, as before. The two halves
+split the way CI splits them: everything outside `tests/ui/` is independent and
+runs under `pytest-xdist` (`pytest -n auto --ignore=tests/ui`), while the wx UI
+tests create real top-level windows and run one at a time in one process
+(`pytest tests/ui`). `scripts/run_tests_fast.py` runs both at once and prints
+each half's result. Don't start the app, or a second UI run, while it is going:
+the UI tests need the desktop to themselves, and the real-data guard fails the
+run if the app writes to `config/` or `cache/` meanwhile.
 
 CI installs the same pinned `black`, `ruff`, and `mypy` versions used locally
 by reading `requirements-dev.txt`, so `pip install -r requirements-dev.txt`

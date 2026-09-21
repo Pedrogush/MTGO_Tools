@@ -17,6 +17,7 @@ MESSAGES: dict[str, str] = {
     "menu.save": "Salvar",
     "menu.load": "Carregar",
     "menu.save_deck": "Salvar Deck…",
+    "menu.save_diff": "Salvar Faltantes da Coleção…",
     "menu.load_deck": "Carregar Deck…",
     "toolbar.load_collection": "Carregar Coleção",
     "toolbar.download_card_images": "Ativar Modo de Imagens Offline",

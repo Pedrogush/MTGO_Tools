@@ -48,9 +48,12 @@ The executable accepts a mode argument:
 
 ```powershell
 MTGOBridge.exe collection   # collection snapshot only
-MTGOBridge.exe history      # match history snapshot only
-MTGOBridge.exe all          # both snapshots in one run
-MTGOBridge.exe watch        # stream challenge-timer snapshots until stopped
+MTGOBridge.exe currency      # event tickets / play points / treasure chests
+MTGOBridge.exe all          # collection + currency in one run
+MTGOBridge.exe username     # logged-in MTGO account name
+MTGOBridge.exe logfiles     # GameLog file paths
+MTGOBridge.exe trade status # active trade snapshot
+MTGOBridge.exe watch        # streaming challenge timers + currency
 MTGOBridge.exe serve        # long-lived request/response mode (see below)
 MTGOBridge.exe ping         # liveness check; never touches MTGOSDK
 ```
@@ -102,7 +105,7 @@ Ensure you're using .NET 9.0 SDK and have internet access to NuGet.org.
 Make sure MTGO is installed on your system. The MTGOSDK requires MTGO to be present.
 
 ### Runtime errors
-MTGO must be running when you execute the bridge for collection or history exports.
+MTGO must be running when you execute the bridge for collection or currency exports.
 
 ---
 

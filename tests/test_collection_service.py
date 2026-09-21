@@ -609,6 +609,93 @@ def test_build_inventory_drops_zero_quantity():
     assert inventory == {"mountain": 1}
 
 
+def test_build_inventory_folds_accents_like_the_card_index():
+    """Bridge names keep their diacritics; the key folds them (parsing.py:23).
+
+    ``CollectionSnapshot.Items`` from the MTGO bridge carries the
+    typographically correct name, so the inventory must key on the same folded
+    form ``utils.card_names.fold_card_name`` gives the card index.
+    """
+    cards = [
+        {"name": "Kíli the Resourceful", "quantity": 4},
+        {"name": "Galadriel of Lothlórien", "quantity": 1},
+        {"name": "Sméagol, Helpful Guide", "quantity": 2},
+    ]
+
+    inventory = build_inventory(cards)
+
+    assert inventory == {
+        "kili the resourceful": 4,
+        "galadriel of lothlorien": 1,
+        "smeagol, helpful guide": 2,
+    }
+
+
+def test_build_inventory_merges_accented_and_ascii_spellings():
+    """The same card spelled both ways accumulates into one entry, not two."""
+    cards = [
+        {"name": "Kíli the Resourceful", "quantity": 3},
+        {"name": "Kili the Resourceful", "quantity": 1},
+    ]
+
+    assert build_inventory(cards) == {"kili the resourceful": 4}
+
+
+# ============= Diacritic Ownership Tests (bridge vs. decklist spelling) =============
+
+
+def test_owned_count_matches_ascii_decklist_against_accented_bridge_name(collection_service):
+    """A deck line "4 Kili the Resourceful" finds the bridge's "Kíli ..." copies.
+
+    Root cause of the "rented card shows as unowned" report: the bridge exports
+    the accented name while decklists spell it in ASCII, so a ``name.lower()``
+    key never matched.
+    """
+    collection_service.load_from_card_list([{"name": "Kíli the Resourceful", "quantity": 4}])
+
+    assert collection_service.get_owned_count("Kili the Resourceful") == 4
+    assert collection_service.get_owned_count("Kíli the Resourceful") == 4
+    assert collection_service.owns_card("Kili the Resourceful", 4) is True
+
+
+def test_owned_count_matches_accented_deck_name_against_ascii_collection(collection_service):
+    """The reverse asymmetry (ASCII collection, accented decklist) also matches."""
+    collection_service.load_from_card_list([{"name": "Kili the Resourceful", "quantity": 4}])
+
+    assert collection_service.get_owned_count("Kíli the Resourceful") == 4
+
+
+def test_owned_count_folds_legacy_unfolded_cached_keys(collection_service):
+    """An inventory built before the fix (accented keys) still resolves (ownership.py)."""
+    collection_service.set_inventory({"Kíli the Resourceful": 4})
+
+    assert collection_service.get_owned_count("Kili the Resourceful") == 4
+
+
+def test_analyze_deck_ownership_counts_accented_card_as_owned(collection_service):
+    """End to end: the deck analysis no longer reports the rented card as missing."""
+    collection_service.load_from_card_list([{"name": "Kíli the Resourceful", "quantity": 4}])
+
+    analysis = collection_service.analyze_deck_ownership("4 Kili the Resourceful")
+
+    assert analysis["fully_owned"] == 1
+    assert analysis["not_owned"] == 0
+    assert analysis["missing_cards"] == []
+
+
+def test_cached_collection_file_with_accented_names_is_folded_on_load(collection_service, tmp_path):
+    """Already-cached bridge exports are folded at load time, not only fresh fetches."""
+    filepath = tmp_path / "collection_full_trade_20260918_073455.json"
+    filepath.write_text(
+        json.dumps([{"id": 153948, "name": "Kíli the Resourceful", "quantity": 4}]),
+        encoding="utf-8",
+    )
+
+    collection_service.load_from_cached_file(tmp_path)
+
+    assert collection_service.get_owned_count("Kili the Resourceful") == 4
+
+
 def test_build_inventory_preserves_casing_when_not_normalizing():
     """normalize_names=False keeps the original key casing (parsing.py:23)."""
     cards = [{"name": "Lightning Bolt", "quantity": 4}]

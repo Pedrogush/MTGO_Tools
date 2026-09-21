@@ -58,6 +58,13 @@ STATUS_LABEL_MIN_WIDTH = 120
 VIEW_TOGGLE_HEIGHT = 26
 VIEW_TOGGLE_PADDING_X = 10
 
+#: Appended to a button that opens a menu rather than acting immediately (F3).
+#: The deck-workspace header's pile-sort key and printing selector sat in the run
+#: of view-toggle chips looking exactly like them, which is what made them read as
+#: a fourth and fifth view mode. The deck-action Save button carries it too since
+#: #1044 gave it a choice of the deck or the collection diff.
+MENU_CARET = "▾"
+
 # F3/F7 made the deck-workspace header row wider: it gained a "View" caption, a
 # pile-sort button labelled with the current grouping key rather than "...", and
 # a caret on the printing button. Measured in pt-BR at the window's 1200px
