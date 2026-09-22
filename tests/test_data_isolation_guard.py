@@ -18,6 +18,7 @@ config/" for real is the accident this guard exists to prevent.
 
 from __future__ import annotations
 
+import importlib
 import os
 import re
 import subprocess
@@ -31,6 +32,7 @@ from data_isolation import (
     REAL_DATA_DIRS,
     normalized,
     real_paths_written_here,
+    redirect_bound_paths,
 )
 
 #: The opt-out, spelled out rather than imported: its name is the contract a
@@ -268,3 +270,19 @@ def test_the_per_test_guard_ignores_writes_from_before_it_started(
 
     next(guard, None)
 
+
+@pytest.mark.parametrize("module_name", ["utils.deck", "repositories.deck_repository.filesystem"])
+def test_the_legacy_curr_deck_path_is_redirected(module_name, tmp_path, monkeypatch):
+    """Both modules' legacy curr_deck.txt must be absolute to be redirectable.
+
+    They held ``Path("cache") / "curr_deck.txt"``, which ``_under_real_data``
+    compares against absolute roots and never matches, so the sweep skipped it
+    and the loader read whatever the developer last had loaded -- through the
+    pytest working directory, into the real cache/.
+    """
+    module = importlib.import_module(module_name)
+    roots = {key: tmp_path / key for key in REAL_DATA_DIRS}
+
+    redirect_bound_paths(monkeypatch, roots)
+
+    assert module.LEGACY_CURR_DECK_CACHE == roots["cache"] / "curr_deck.txt"

@@ -5,7 +5,10 @@ from loguru import logger
 from utils import constants
 from utils.atomic_io import atomic_write_text, locked_path
 
-LEGACY_CURR_DECK_CACHE = Path("cache") / "curr_deck.txt"
+# Absolute: as a relative path this resolved against the working directory,
+# which put it in the real cache/ even when the tests had redirected every
+# other data path.
+LEGACY_CURR_DECK_CACHE = constants.CACHE_DIR / "curr_deck.txt"
 LEGACY_CURR_DECK_ROOT = Path("curr_deck.txt")
 
 
