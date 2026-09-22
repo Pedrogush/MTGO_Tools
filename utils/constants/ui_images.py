@@ -67,6 +67,43 @@ DECK_CARD_TEMPLATE_BORDER_WIDTH = 2  # pen width for the template placeholder bo
 DECK_CARD_TEMPLATE_BORDER_ALPHA = 120  # alpha channel for the template placeholder border
 DECK_CARD_ACTIVE_BORDER_WIDTH = 3  # pen width for the active-selection highlight border
 
+# Goldfish tab card sizing (issue #1045).
+#
+# Unlike DECK_CARD_WIDTH/HEIGHT these are not a size, they are the rule that
+# derives one: the goldfish card is measured from the panel it is drawn in, so
+# the hand fills the tab's width instead of sitting as a small centred fan with
+# unresolved space either side of it. ``layout.card_metrics`` does the deriving.
+#
+# The ratio is the real 63x88mm card's, and it is the *only* place a goldfish
+# card's height comes from -- width is chosen, height follows, so nothing here
+# can stretch a card.
+GOLDFISH_CARD_ASPECT = 88 / 63
+# The hand size the card is scaled to: at seven cards the fan runs edge to edge
+# with the cards just touching. Fewer and they spread out, more and they overlap
+# (see GOLDFISH_HAND_MIN_STEP) -- either way the fan still spans the full width.
+GOLDFISH_HAND_REFERENCE = 7
+# Floor and ceiling on that derived width. The floor keeps a card readable in a
+# tab dragged narrow; the ceiling stops a wide window growing cards so tall that
+# the hand strip crowds out the table they are meant to be played onto.
+GOLDFISH_CARD_MIN_WIDTH = 68
+GOLDFISH_CARD_MAX_WIDTH = 190
+# Share of the panel's height the hand strip may take before the card stops
+# growing. The table is the point of the tab; the hand is the smaller half.
+GOLDFISH_HAND_HEIGHT_PCT = 40
+# Art is decoded once at this width and scaled down to whatever the panel
+# currently asks for, so resizing the tab re-scales cached images instead of
+# going back to disk. Above GOLDFISH_CARD_MAX_WIDTH so scaling only ever shrinks.
+GOLDFISH_ART_DECODE_WIDTH = 220
+# Cards in hand fan out left to right and start overlapping once the strip runs
+# out -- never closer than this, so every card keeps a readable sliver of title.
+GOLDFISH_HAND_MIN_STEP = 28
+# How far the pointer must travel with the button down before a click on a card
+# becomes a drag of it. Below this a tap-toggle would be impossible to hit.
+GOLDFISH_DRAG_THRESHOLD = 5
+# Auto-placement (a plain click, rather than a drag, from hand) walks a grid of
+# this many columns across the table so successive cards do not stack up.
+GOLDFISH_AUTO_PLACE_COLUMNS = 6
+
 # Deck Stats Panel — mana SVG icon sizing
 STATS_MANA_SVG_SOURCE_SIZE = 32  # original width/height in SVG files
 STATS_MANA_SVG_DISPLAY_SIZE = 18  # rendered width/height in the stats HTML

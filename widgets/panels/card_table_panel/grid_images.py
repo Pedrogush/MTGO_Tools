@@ -39,6 +39,7 @@ from utils.constants import (
 from utils.image_effects import composite_rounded_on_background
 from widgets.panels.card_table_panel.card_render import (
     build_image_name_candidates,
+    load_card_face,
     resolve_card_color,
 )
 from widgets.panels.card_table_panel.grid_layout import _CARD_HEIGHT, _CARD_WIDTH
@@ -99,10 +100,7 @@ class GridImagesMixin:
             wx.CallAfter(self._image_loaded, name, gen, None)
             return
         try:
-            img = PilImage.open(str(image_path)).convert("RGB")
-            w, h = img.size
-            scale = min(_CARD_WIDTH / w, _CARD_HEIGHT / h)
-            img = img.resize((max(1, int(w * scale)), max(1, int(h * scale))), PilImage.LANCZOS)
+            img = load_card_face(image_path, _CARD_WIDTH, _CARD_HEIGHT)
             wx.CallAfter(self._image_loaded, name, gen, img)
         except Exception:
             wx.CallAfter(self._image_loaded, name, gen, None)

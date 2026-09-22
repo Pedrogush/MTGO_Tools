@@ -13,6 +13,7 @@ from widgets.panels.card_inspector_panel import CardInspectorPanel
 from widgets.panels.card_panel import CardPanel
 from widgets.panels.card_table_panel import CardTablePanel
 from widgets.panels.deck_baseline_panel import DeckBaselinePanel
+from widgets.panels.deck_goldfish_panel import DeckGoldfishPanel
 from widgets.panels.deck_history_panel import DeckHistoryPanel
 from widgets.panels.deck_notes_panel import DeckNotesPanel
 from widgets.panels.deck_stats_panel import DeckStatsPanel
@@ -70,6 +71,7 @@ class AppFrameProto(Protocol):
     main_table: CardTablePanel
     side_table: CardTablePanel
     card_inspector_panel: CardInspectorPanel
+    deck_goldfish_panel: DeckGoldfishPanel
     deck_stats_panel: DeckStatsPanel
     deck_notes_panel: DeckNotesPanel
     deck_baseline_panel: DeckBaselinePanel

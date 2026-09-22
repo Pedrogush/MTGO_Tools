@@ -864,3 +864,8 @@ class AppFrameHandlersMixin(_Base):
 
     def _update_stats(self, deck_text: str) -> None:
         self.deck_stats_panel.update_stats(deck_text, self.zone_cards)
+        # The goldfish rides the same push (issue #1045) rather than a second
+        # one: every site that has a new decklist to show already calls this.
+        # It only re-points the table -- no shuffle, no deal, no art decode --
+        # so it costs a parse the deck-render block can afford.
+        self.deck_goldfish_panel.set_deck(deck_text)

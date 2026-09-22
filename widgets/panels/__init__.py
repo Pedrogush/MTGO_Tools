@@ -9,6 +9,7 @@ _EXPORTS = {
     "CardInspectorPanel": "widgets.panels.card_inspector_panel",
     "CardTablePanel": "widgets.panels.card_table_panel",
     "DeckBuilderPanel": "widgets.panels.deck_builder_panel",
+    "DeckGoldfishPanel": "widgets.panels.deck_goldfish_panel",
     "DeckNotesPanel": "widgets.panels.deck_notes_panel",
     "DeckResearchPanel": "widgets.panels.deck_research_panel",
     "DeckStatsPanel": "widgets.panels.deck_stats_panel",

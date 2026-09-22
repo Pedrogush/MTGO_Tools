@@ -55,6 +55,7 @@ from utils.constants import (
 from utils.i18n import current_locale, t, translate_plural
 from utils.image_effects import apply_rounded_corner_alpha
 from widgets.panels.card_table_panel import edge_fade, scroll_perf, scroll_snap
+from widgets.panels.card_table_panel.card_render import load_card_face
 from widgets.panels.card_table_panel.marquee import RUBBER_AUTOSCROLL_PX, MarqueeController
 from widgets.panels.card_table_panel.scrolling import scroll_by_wheel
 from widgets.panels.card_table_panel.sorting import (
@@ -502,10 +503,7 @@ class DeckPileView(wx.ScrolledWindow):
             if not path or not path.exists():
                 wx.CallAfter(self._image_loaded, name, None)
                 return
-            img = PilImage.open(str(path)).convert("RGB")
-            w, h = img.size
-            scale = min(_CARD_WIDTH / w, _CARD_HEIGHT / h)
-            img = img.resize((max(1, int(w * scale)), max(1, int(h * scale))), PilImage.LANCZOS)
+            img = load_card_face(path, _CARD_WIDTH, _CARD_HEIGHT)
             wx.CallAfter(self._image_loaded, name, img)
         except Exception:
             wx.CallAfter(self._image_loaded, name, None)
