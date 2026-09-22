@@ -525,6 +525,94 @@ def alien_deck() -> str:
     )
 
 
+# --- the partly-overlapping pool, built so its scores can be worked out by hand ---
+#
+# ``affinity_like`` and ``alien_deck`` share *zero* maindeck names, so every
+# score they produce is 0.0 or >= 0.667 and any threshold in (0.182, 0.667]
+# splits them identically -- including 0.20 and 0.65, both of which would
+# misclassify the real pool membership.py's docstring describes. The pool below
+# has the partial overlap the real one has, and its two bands are 4/17 and
+# 58/119, so the shipped 0.30 is the only kind of value that splits it.
+
+#: The eight names every member of :func:`shell_sharing_member` runs.
+SHARED_CORE = (
+    "Urza's Saga",
+    "Mox Opal",
+    "Springleaf Drum",
+    "Metallic Rebuke",
+    "Mishra's Bauble",
+    "Thought Monitor",
+    "Kappa Cannoneer",
+    "Darksteel Citadel",
+)
+
+#: The four of them the impostor also runs -- the artifact-mana shell that
+#: membership.py's docstring names as the whole of what Affinity and Hammer
+#: Time have in common.
+SHARED_SHELL = SHARED_CORE[:4]
+
+#: Three names of its own per member, all twelve distinct, so a member's list is
+#: eight core + three private = eleven names.
+MEMBER_PRIVATE_CARDS = (
+    ("Nettlecyst", "Patchwork Automaton", "Seat of the Synod"),
+    ("Emry, Lurker of the Loch", "Vault of Whispers", "Thoughtcast"),
+    ("Master of Etherium", "Tree of Tales", "Galvanic Blast"),
+    ("Cranial Plating", "Ancient Den", "Frogmite"),
+)
+
+
+def shell_sharing_member(index: int) -> str:
+    """Member ``index`` of the partly-overlapping pool: the core plus its own three."""
+    lines = [f"4 {name}" for name in SHARED_CORE]
+    lines += [f"2 {name}" for name in MEMBER_PRIVATE_CARDS[index]]
+    return "\n".join(lines) + "\n\nSideboard\n4 Consign to Memory\n"
+
+
+def shell_sharing_impostor() -> str:
+    """A different archetype that runs the same artifact-mana shell and nothing else.
+
+    Four of the core's eight names plus six of its own -- ten names in all.
+    """
+    lines = [f"4 {name}" for name in SHARED_SHELL]
+    lines += [
+        "4 Colossus Hammer",
+        "4 Sigarda's Aid",
+        "4 Puresteel Paladin",
+        "4 Stoneforge Mystic",
+        "4 Giver of Runes",
+        "4 Inkmoth Nexus",
+    ]
+    return "\n".join(lines) + "\n\nSideboard\n4 Path to Exile\n"
+
+
+@pytest.fixture
+def partly_overlapping_pool() -> list[str]:
+    """Four members and one impostor that shares half their mana base.
+
+    Worked out from the definitions above, using |A n B| / |A u B| on maindeck
+    names only:
+
+    - member vs. member: 8 shared, 8 + 3 + 3 = 14 in either -> **8/14 = 4/7**
+    - member vs. impostor: 4 shared, 11 + 10 - 4 = 17 in either -> **4/17**
+
+    Each deck's score is the mean over the other four:
+
+    - a member: (3 * 4/7 + 4/17) / 4 = (12/7 + 4/17) / 4 = (232/119) / 4
+      = **58/119 = 0.4874**
+    - the impostor: (4 * 4/17) / 4 = **4/17 = 0.2353**
+
+    Both land in the bands membership.py's docstring measured on the real
+    60-deck pool -- kept 0.462-0.638, rejected 0.093-0.266 -- which is what
+    makes this pool able to tell a wrong threshold from the shipped one.
+    """
+    return [shell_sharing_member(i) for i in range(4)] + [shell_sharing_impostor()]
+
+
+#: The two hand-computed scores the fixture above produces.
+MEMBER_SCORE = 58 / 119
+IMPOSTOR_SCORE = 4 / 17
+
+
 class TestPoolMembership:
     def test_jaccard_is_shared_over_either(self):
         left = frozenset({"a", "b", "c", "d", "e"})
@@ -678,6 +766,121 @@ class TestMembershipThresholdGap:
         kept = [result.scores[i] for i in result.kept_indices]
         dropped = [deck.similarity for deck in result.excluded]
         assert max(dropped) < MEMBERSHIP_THRESHOLD <= min(kept)
+
+
+class TestScoresAreHandComputable:
+    """``similarity_scores`` against arithmetic done on paper, not against itself.
+
+    Every other test in this file reads a *split* rather than a number, and a
+    split survives a measure that is wrong by a constant factor -- or that
+    returns all zeros, which reversal symmetry cannot tell from a real answer.
+    These name the numbers.
+    """
+
+    def test_three_sets_worked_out_by_hand(self):
+        # A = {a,b,c,d}  B = {a,b,e,f}  C = {a,g,h,i}
+        #   J(A,B) = 2 shared / 6 in either = 1/3
+        #   J(A,C) = 1 shared / 7 in either = 1/7
+        #   J(B,C) = 1 shared / 7 in either = 1/7
+        # Each score is the mean over the *other* two:
+        #   A: (1/3 + 1/7) / 2 = (10/21) / 2 = 5/21
+        #   B: (1/3 + 1/7) / 2 = 5/21
+        #   C: (1/7 + 1/7) / 2 = 1/7
+        first = frozenset({"a", "b", "c", "d"})
+        second = frozenset({"a", "b", "e", "f"})
+        third = frozenset({"a", "g", "h", "i"})
+        assert similarity_scores([first, second, third]) == pytest.approx([5 / 21, 5 / 21, 1 / 7])
+
+    def test_a_deck_shares_the_credit_for_every_pair_it_is_in(self):
+        # Two identical lists and one stranger: the identical pair scores 1.0,
+        # both strangers' pairs score 0.0.
+        #   identical deck: (1.0 + 0.0) / 2 = 0.5
+        #   the stranger:   (0.0 + 0.0) / 2 = 0.0
+        twin = frozenset({"a", "b"})
+        stranger = frozenset({"y", "z"})
+        assert similarity_scores([twin, twin, stranger]) == pytest.approx([0.5, 0.5, 0.0])
+
+    def test_the_partly_overlapping_pool_scores_as_worked_out(self, partly_overlapping_pool):
+        """The fixture's own derivation, read back off ``partition_pool``.
+
+        See :func:`partly_overlapping_pool` for the arithmetic: members sit at
+        58/119 and the impostor at 4/17.
+        """
+        result = partition_pool(partly_overlapping_pool)
+        assert result.scores == pytest.approx(
+            [MEMBER_SCORE, MEMBER_SCORE, MEMBER_SCORE, MEMBER_SCORE, IMPOSTOR_SCORE]
+        )
+        assert result.scores[0] == pytest.approx(0.4874, abs=0.0001)
+        assert result.scores[4] == pytest.approx(0.2353, abs=0.0001)
+
+    def test_the_pairs_behind_those_scores(self, partly_overlapping_pool):
+        """The premise: the pool really is 4/7 within the group and 4/17 across it."""
+        names = [maindeck_names(text) for text in partly_overlapping_pool]
+        assert [len(deck) for deck in names] == [11, 11, 11, 11, 10]
+        assert jaccard(names[0], names[1]) == pytest.approx(8 / 14)
+        assert jaccard(names[0], names[4]) == pytest.approx(4 / 17)
+
+
+class TestTheShippedThresholdIsPinned:
+    """0.30 itself, not merely "some number between nothing and everything".
+
+    The alien-deck pools cannot do this: sharing zero names, they score 0.0 or
+    >= 0.667, so anything in (0.182, 0.667] splits them the same way. These use
+    :func:`partly_overlapping_pool`, whose two bands are 0.2353 and 0.4874, so
+    the split moves the moment the constant leaves (0.2353, 0.4874].
+    """
+
+    def test_the_shipped_threshold_splits_the_partly_overlapping_pool(
+        self, partly_overlapping_pool
+    ):
+        result = partition_pool(partly_overlapping_pool)
+        assert result.kept_indices == (0, 1, 2, 3)
+        assert [deck.source for deck in result.excluded] == ["#4"]
+
+    def test_the_constant_lies_between_this_pools_two_bands(self):
+        assert IMPOSTOR_SCORE < MEMBERSHIP_THRESHOLD <= MEMBER_SCORE
+
+    def test_the_constant_lies_in_the_gap_the_real_pool_measured(self):
+        """membership.py documents kept 0.462-0.638, rejected 0.093-0.266.
+
+        A threshold outside that gap misclassifies the pool the constant was
+        chosen on, whatever the fixtures here happen to say.
+        """
+        assert 0.266 < MEMBERSHIP_THRESHOLD <= 0.462
+
+    def test_a_looser_threshold_keeps_the_impostor(self, partly_overlapping_pool):
+        """Why 0.30 may not drift down: at 0.20 the impostor is a member."""
+        loose = partition_pool(partly_overlapping_pool, threshold=0.20)
+        assert loose.excluded_count == 0
+        # ...and it takes most of the baseline with it: the intersection is
+        # unforgiving, so the eight shared core cards (4 copies each, 32 slots)
+        # collapse to the four the impostor happens to share.
+        loosened = build_baseline(
+            partly_overlapping_pool,
+            archetype="A",
+            mtg_format="modern",
+            membership_threshold=0.20,
+        )
+        assert {card.name for card in loosened.cards if card.fixed_count} == set(SHARED_SHELL)
+        assert loosened.main.fixed == 16
+
+    def test_a_tighter_threshold_throws_the_whole_archetype_away(self, partly_overlapping_pool):
+        """Why 0.30 may not drift up: at 0.65 four honest lists are impostors."""
+        tight = partition_pool(partly_overlapping_pool, threshold=0.65)
+        assert tight.kept_count == 0
+        assert tight.excluded_count == 5
+
+    def test_the_shipped_threshold_keeps_the_members_and_their_core(self, partly_overlapping_pool):
+        """The conclusion the two bands exist for: the eight core cards survive."""
+        baseline = build_baseline(
+            partly_overlapping_pool, archetype="Affinity", mtg_format="modern"
+        )
+        assert baseline.pool_size == 4
+        main_fixed = {
+            card.name for card in baseline.cards if card.fixed_count and not card.is_sideboard
+        }
+        assert main_fixed == set(SHARED_CORE)
+        assert baseline.main.fixed == 32  # eight cards, four copies each
 
 
 class TestMembershipDegeneratePools:
