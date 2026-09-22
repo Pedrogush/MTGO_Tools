@@ -116,6 +116,11 @@ class DeckHistoryPanelHandlersMixin(_Base):
         """Put a history that has already been read on screen. wx only."""
         with perf_phase("deck history paint (ui)"):
             self._paint_snapshot(snapshot)
+        # The rail beside the deck tables shows the same versions. It is handed
+        # this snapshot rather than reading its own, so a deck's history is read
+        # once however many views are looking at it.
+        if self._on_snapshot is not None:
+            self._on_snapshot(snapshot)
 
     def _paint_snapshot(self, snapshot: HistorySnapshot) -> None:
         self._graph = list(snapshot.graph)
@@ -262,18 +267,18 @@ class DeckHistoryPanelHandlersMixin(_Base):
     def checkout_version(self, sha: str) -> None:
         """Move onto ``sha``, rewriting the user's decklist file.
 
-        This is the one action here that touches the file the user keeps, so it
-        asks first -- and it says what it will do to it.
+        Asked no confirmation. Moving between versions is the feature, and a
+        modal on every move makes it cost two clicks instead of one; the version
+        being left is still a node on the graph, so the move is undone by making
+        the opposite one. The status bar says where the deck landed.
+
+        What a confirmation *would* protect is unsaved work: the zones are
+        rewritten from the version, so edits never committed are gone. Saving is
+        a single click and makes a version of its own, which is the answer to
+        that rather than a dialog in front of every checkout.
         """
         deck_key = self.current_deck_key()
         deck_file = self.current_deck_file()
-        confirm = wx.MessageBox(
-            self._t("history.checkout.confirm", sha=sha[:7]),
-            self._t("history.checkout.title"),
-            wx.YES_NO | wx.ICON_QUESTION,
-        )
-        if confirm != wx.YES:
-            return
         try:
             branch, text = self.vcs_service.checkout(deck_key, sha, deck_file=deck_file)
         except Exception as exc:  # noqa: BLE001
