@@ -14,8 +14,8 @@ This project incorporates ideas, techniques, and code patterns from various open
 
 **License:** None published (no `LICENSE` file in the upstream repo as of
 2026-05). Under default copyright this means "all rights reserved" and we
-treat the upstream source as **non-reusable**. See
-`docs/license_audit.md` for the full audit.
+treat the upstream source as **non-reusable**. The per-source verdicts are
+collected under [License Compatibility](#license-compatibility) below.
 
 **What we use:**
 - Conceptual understanding of the MTGO `GameLog.txt` binary format
@@ -201,7 +201,7 @@ repo root). We have audited adapted code and dependencies:
   permissive licenses (MIT, BSD, Apache-2.0, PSF).
 - **cderickson/MTGO-Tracker**: No published license. Treated as
   non-reusable; only factual observations about the MTGO log format
-  were used (see entry above and `docs/license_audit.md`).
+  were used (see the entry under Code Adaptations above).
 - **MTGGoldfish data**: Scraped per `robots.txt`; not redistributed.
 
 ---
