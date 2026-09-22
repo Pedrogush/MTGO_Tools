@@ -75,7 +75,20 @@ ruff check --fix .
 
 # Or, from Windows directly
 pytest
+
+# The fast way: non-UI tests across the cores, UI tests alongside them
+python scripts/run_tests_fast.py
 ```
+
+O `pytest` sozinho continua rodando tudo em série, como sempre. As duas metades
+se dividem do mesmo jeito que o CI divide: tudo que está fora de `tests/ui/` é
+independente e roda sob `pytest-xdist` (`pytest -n auto --ignore=tests/ui`),
+enquanto os testes de UI do wx criam janelas de verdade e rodam um de cada vez,
+num processo só (`pytest tests/ui`). O `scripts/run_tests_fast.py` dispara as
+duas ao mesmo tempo e imprime o resultado de cada uma. Não abra o app, nem uma
+segunda rodada de UI, enquanto isso estiver acontecendo: os testes de UI
+precisam da área de trabalho só para eles, e a proteção de dados reais quebra a
+rodada se o app escrever em `config/` ou `cache/` nesse meio-tempo.
 
 O CI instala as mesmas versões fixadas de `black`, `ruff` e `mypy` usadas
 localmente, lendo o `requirements-dev.txt` — ou seja, `pip install -r
