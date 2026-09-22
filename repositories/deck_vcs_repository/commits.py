@@ -149,6 +149,19 @@ class CommitsMixin(_Base):
     def list_commits(self, deck_key: str) -> list[DeckCommit]:
         return list(self.iter_commits(deck_key))
 
+    def has_commits(self, deck_key: str) -> bool:
+        """Does this deck have any history at all?
+
+        Answered from the refs, without decoding a single commit object. The two
+        callers that ask -- the baseline root guard, and the check in front of it
+        one layer up -- run on every save of every deck, and both used to ask by
+        starting a walk and stopping after the first commit.
+        """
+        if not self.has_repo(deck_key):
+            return False
+        with self._open(deck_key) as repo:
+            return any(ref.startswith(b"refs/heads/") for ref in repo.refs.as_dict())
+
     def head_sha(self, deck_key: str) -> str | None:
         """What ``HEAD`` points at, without walking the history to find it.
 

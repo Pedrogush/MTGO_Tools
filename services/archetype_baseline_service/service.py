@@ -188,9 +188,9 @@ class ArchetypeBaselineService:
         """
         if not archetype or not mtg_format:
             return None
-        if self.vcs_repo.has_repo(deck_key) and any(
-            True for _ in self.vcs_repo.iter_commits(deck_key)
-        ):
+        # Asked from the refs rather than by walking: this runs on every save of
+        # every deck, and all but the first save of a deck answers "yes" here.
+        if self.vcs_repo.has_commits(deck_key):
             return None
 
         baseline = self.stored(archetype, mtg_format)

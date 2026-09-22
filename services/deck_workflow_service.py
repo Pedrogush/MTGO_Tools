@@ -201,6 +201,14 @@ class DeckWorkflowService:
         name-shaped key takes it over. This is the only place that knows both
         keys for the same deck, and it runs before the baseline seed so that an
         adopted history keeps the root it already has.
+
+        Why a failure here is logged and not shown. The user is told at the
+        moment it is actionable rather than at the moment it happens: the deck
+        file is on disk and intact, and because it is now a decklist the history
+        has never seen, the next time it is opened ``_check_external_edit``
+        recognises it as unattributed and offers to record it. Reporting it on
+        the save would interrupt a one-click action with a problem the user
+        cannot act on and that the app is already going to offer to fix.
         """
         try:
             from services.deck_vcs_service import (
@@ -226,6 +234,11 @@ class DeckWorkflowService:
         Separately guarded from the save commit above it: a deck with no stored
         baseline for its archetype is an ordinary deck whose history starts at
         its first save, and that is not a failure worth surfacing.
+
+        This runs on every save but reads the baseline store on almost none of
+        them: ``seed_root_for_new_deck`` answers "does this deck already have
+        history?" from the repo's refs first, and every save after a deck's
+        first stops there.
         """
         if not archetype or not format_name:
             return
