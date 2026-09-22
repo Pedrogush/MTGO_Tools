@@ -1135,3 +1135,94 @@ class TestNormalizationReadsWhatTheUserActuallyWrote:
         two = "22222222-2222-2222-2222-222222222222"
         text = normalize_decklist(f"2 Lightning Bolt {two}\n2 Lightning Bolt {one}\n")
         assert text == f"2 Lightning Bolt {one}\n2 Lightning Bolt {two}\n"
+
+
+class TestBranchNamesGitWillActuallyAccept:
+    """The point of ``sanitize_branch_name`` is that the ref can then be created.
+
+    The name comes from a text field the user types into
+    (``deck_history_panel/handlers.py::create_branch_at``), so every rule in
+    ``git-check-ref-format`` is reachable from the keyboard. Two of those rules
+    are about sequences rather than characters and so survive a per-character
+    scan; each case here creates the branch for real, because "the string looks
+    reduced" is not the property the function exists for.
+    """
+
+    @pytest.mark.parametrize(
+        ("raw", "expected"),
+        [
+            ("wip@{0}", "wip-0}"),
+            ("main@{yesterday}", "main-yesterday}"),
+            ("@{", "branch"),
+            ("wip.lock", "wip"),
+            ("wip.lock.lock", "wip"),
+            ("feature/wip.lock", "feature/wip"),
+            ("feature/.lock", "feature"),
+            (".lock", "lock"),
+        ],
+    )
+    def test_the_rules_a_character_scan_cannot_see(self, raw, expected):
+        assert sanitize_branch_name(raw) == expected
+
+    @pytest.mark.parametrize(
+        "raw",
+        ["wip@{0}", "main@{yesterday}", "wip.lock", "feature/wip.lock", "@{", "feature/.lock"],
+    )
+    def test_a_sanitized_name_is_a_ref_the_repo_accepts(self, vcs, raw):
+        """Before the fix these reached dulwich intact and it refused the ref."""
+        sha = vcs.commit_deck("burn", DECK_V1, "v1")
+
+        created = vcs.create_branch("burn", raw, sha)
+
+        assert created in vcs.list_branches("burn")
+        assert vcs.branch_tips("burn")[created] == sha
+
+
+class TestMovingOntoSomethingThatIsNotThere:
+    """The two ways a move can be asked for a version the deck does not have."""
+
+    def test_switching_to_a_branch_that_does_not_exist_says_which(self, vcs):
+        vcs.commit_deck("burn", DECK_V1, "v1")
+
+        with pytest.raises(KeyError, match="No such deck branch"):
+            vcs.switch_branch("burn", "never-created")
+
+    def test_a_refused_switch_leaves_head_where_it_was(self, vcs):
+        """The mirror's working file must not be rewritten by a move that failed."""
+        vcs.commit_deck("burn", DECK_V1, "v1")
+
+        with pytest.raises(KeyError):
+            vcs.switch_branch("burn", "never-created")
+
+        assert vcs.current_branch("burn") == "main"
+
+    def test_checking_out_a_sha_the_deck_does_not_have_raises(self, vcs):
+        vcs.commit_deck("burn", DECK_V1, "v1")
+
+        with pytest.raises(KeyError):
+            vcs.checkout("burn", "0" * 40)
+
+    def test_a_refused_checkout_leaves_no_branch_behind(self, vcs):
+        """checkout branches *before* it switches, so a failure could litter."""
+        vcs.commit_deck("burn", DECK_V1, "v1")
+
+        with pytest.raises(KeyError):
+            vcs.checkout("burn", "0" * 40)
+
+        assert vcs.list_branches("burn") == ["main"]
+
+    def test_a_shared_tip_checks_out_the_alphabetically_first_branch(self, vcs):
+        """Several branches on one commit have to resolve the same way every time.
+
+        The refs do not come back sorted, so without the tie-break this lands on
+        whichever branch dulwich happens to list first -- and the version rail
+        would name a different branch from one refresh to the next.
+        """
+        sha = vcs.commit_deck("burn", DECK_V1, "v1")
+        for name in ("zulu", "mike", "aardvark"):
+            vcs.create_branch("burn", name, sha)
+
+        branch, _text = vcs.checkout("burn", sha)
+
+        assert branch == "aardvark"
+        assert vcs.current_branch("burn") == "aardvark"

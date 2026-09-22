@@ -41,18 +41,46 @@ _ILLEGAL_REF_CHARS = frozenset(chr(code) for code in range(0x21)) | frozenset(
     "~^:?*[]" + chr(0x5C) + chr(0x7F)
 )
 
+#: git reserves this for the reflog syntax (``main@{yesterday}``) and refuses any
+#: ref name containing it, whatever the rest of the name looks like.
+_REFLOG_MARKER = "@{"
+
+#: git's own lock file for a ref is ``<ref>.lock``, so no path component of a ref
+#: may end in it -- ``wip.lock`` is a legal filename and an illegal branch.
+_LOCK_SUFFIX = ".lock"
+
+
+def _collapse_slashes(name: str) -> str:
+    while "//" in name:
+        name = name.replace("//", "/")
+    return name
+
+
+def _without_lock_suffix(component: str) -> str:
+    while component.endswith(_LOCK_SUFFIX):
+        component = component[: -len(_LOCK_SUFFIX)]
+    return component
+
 
 def sanitize_branch_name(name: str, fallback: str = "branch") -> str:
-    """``name`` reduced to something git will accept as a branch name."""
+    """``name`` reduced to something git will accept as a branch name.
+
+    The character scan above is not the whole of ``git-check-ref-format``: two
+    of its rules are about sequences rather than characters, and a name that
+    breaks either one survives every substitution here and is only rejected when
+    the ref is created, by which point the user has typed a name and lost it.
+    """
     cleaned = "".join("-" if ch in _ILLEGAL_REF_CHARS else ch for ch in name.strip())
+    cleaned = cleaned.replace(_REFLOG_MARKER, "-")
     while ".." in cleaned:
         cleaned = cleaned.replace("..", "-")
-    while "//" in cleaned:
-        cleaned = cleaned.replace("//", "/")
     while "--" in cleaned:
         cleaned = cleaned.replace("--", "-")
-    cleaned = cleaned.strip("/.-")
-    return cleaned or fallback
+    cleaned = _collapse_slashes(cleaned).strip("/.-")
+    # Last, so that a trailing dot stripped just above cannot expose a ".lock"
+    # again -- and first-in-reverse, since dropping one can empty a component.
+    cleaned = "/".join(_without_lock_suffix(part) for part in cleaned.split("/"))
+    return _collapse_slashes(cleaned).strip("/.-") or fallback
 
 
 class BranchesMixin(_Base):
