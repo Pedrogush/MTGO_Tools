@@ -104,8 +104,13 @@ class TestCommits:
         assert vcs.list_branches("burn") == ["main"]
 
     def test_committed_text_reads_back_normalized(self, vcs):
-        """What goes into a commit is the canonical form, not what was handed in."""
-        sha = vcs.commit_deck("burn", "2 Consider\n4 Lightning Bolt\n", "v1")
+        """What goes into a commit is the canonical form, not what was handed in.
+
+        The text handed in is deliberately *not* already sorted, so removing the
+        ``normalize_decklist`` call in ``commit_deck`` fails here rather than
+        leaving the invariant's only test green.
+        """
+        sha = vcs.commit_deck("burn", "4 Lightning Bolt\n2 Consider\n", "v1")
         assert vcs.read_commit_text("burn", sha) == "2 Consider\n4 Lightning Bolt\n"
 
     def test_history_is_newest_first_and_linked(self, vcs):
