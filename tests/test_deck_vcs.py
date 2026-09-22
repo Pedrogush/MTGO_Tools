@@ -20,7 +20,7 @@ import pytest
 
 from repositories.deck_vcs_repository import DeckVcsRepository
 from repositories.deck_vcs_repository.branches import sanitize_branch_name
-from repositories.deck_vcs_repository.diffs import diff_decklists
+from repositories.deck_vcs_repository.diffs import diff_decklists, unified_lines
 from repositories.deck_vcs_repository.normalize import (
     decklist_fingerprint,
     normalize_decklist,
@@ -1226,3 +1226,174 @@ class TestMovingOntoSomethingThatIsNotThere:
 
         assert branch == "aardvark"
         assert vcs.current_branch("burn") == "aardvark"
+
+
+class TestOneRepoPerDeckKey:
+    """Which keys share a repo, since sharing one merges two decks' histories."""
+
+    def test_keys_differing_only_in_case_are_one_history(self, vcs):
+        """``repo_path`` lowercases, so "Burn" and "burn" are the same deck.
+
+        Pinned rather than argued with: the repos sit in one flat directory on a
+        case-insensitive filesystem, so two of them could not coexist there
+        anyway, and a key scheme that stopped folding case would have to answer
+        for that. What matters is that it is a decision and not an accident.
+        """
+        first = vcs.commit_deck("Burn", DECK_V1, "v1")
+        second = vcs.commit_deck("burn", DECK_V2, "v2")
+
+        # Compared as text: two ``Path``s differing only in case are equal on
+        # Windows whether or not the key was folded, which would prove nothing.
+        assert str(vcs.repo_path("Burn")) == str(vcs.repo_path("burn"))
+        assert vcs.repo_path("BURN").name == "burn"
+        assert vcs.has_repo("BURN")
+        assert [c.sha for c in vcs.list_commits("Burn")] == [second, first]
+
+    def test_two_different_keys_do_not_share_a_history(self, vcs):
+        burn = vcs.commit_deck("burn", DECK_V1, "v1")
+        vcs.commit_deck("tron", DECK_V3, "v1")
+
+        assert vcs.repo_path("burn") != vcs.repo_path("tron")
+        assert [c.sha for c in vcs.list_commits("burn")] == [burn]
+
+    def test_every_repo_is_one_directory_under_the_root(self, vcs):
+        """A scraped key is a URL fragment; it must not dig a tree of folders."""
+        vcs.commit_deck("archetype/modern/burn", DECK_V1, "v1")
+
+        assert [p.name for p in vcs._vcs_root.iterdir()] == ["archetype_modern_burn"]
+
+
+class TestAHistoryOutlivesTheObjectThatWroteIt:
+    """Nothing else reopens a store from disk, so nothing proved it was on disk.
+
+    A repository built over the same root by a later process -- which is what
+    every run after the one that saved is -- has to see the same commits, the
+    same text, the same branch and the same tip.
+    """
+
+    def test_the_commits_are_still_there(self, tmp_path):
+        root = tmp_path / "deck_vcs"
+        first = DeckVcsRepository(root).commit_deck("burn", DECK_V1, "v1")
+        second = DeckVcsRepository(root).commit_deck("burn", DECK_V2, "v2")
+
+        reopened = DeckVcsRepository(root)
+
+        assert [c.sha for c in reopened.list_commits("burn")] == [second, first]
+        assert reopened.head_sha("burn") == second
+
+    def test_the_decklist_reads_back_byte_for_byte(self, tmp_path):
+        root = tmp_path / "deck_vcs"
+        sha = DeckVcsRepository(root).commit_deck("burn", DECK_V1, "v1")
+
+        assert DeckVcsRepository(root).read_commit_text("burn", sha) == normalize_decklist(DECK_V1)
+
+    def test_the_branch_the_deck_was_left_on_is_where_it_reopens(self, tmp_path):
+        root = tmp_path / "deck_vcs"
+        writer = DeckVcsRepository(root)
+        first = writer.commit_deck("burn", DECK_V1, "v1")
+        writer.commit_deck("burn", DECK_V2, "v2")
+        writer.checkout("burn", first)
+
+        reopened = DeckVcsRepository(root)
+
+        assert reopened.current_branch("burn") == f"branch-from-{first[:7]}"
+        assert sorted(reopened.list_branches("burn")) == [f"branch-from-{first[:7]}", "main"]
+
+    def test_a_deck_saved_by_one_object_extends_under_another(self, tmp_path):
+        """The next run appends to the history rather than starting one."""
+        root = tmp_path / "deck_vcs"
+        first = DeckVcsRepository(root).commit_deck("burn", DECK_V1, "v1")
+
+        second = DeckVcsRepository(root).commit_deck("burn", DECK_V2, "v2")
+
+        assert DeckVcsRepository(root).list_commits("burn")[0].parents == (first,)
+        assert second != first
+
+
+class TestCommitFingerprints:
+    """The content hash that answers "is this file a version I already have?"."""
+
+    def test_a_commits_fingerprint_is_its_decklists(self, vcs):
+        sha = vcs.commit_deck("burn", DECK_V1, "v1")
+        assert vcs.commit_fingerprint("burn", sha) == decklist_fingerprint(DECK_V1)
+
+    def test_two_versions_of_a_deck_fingerprint_apart(self, vcs):
+        first = vcs.commit_deck("burn", DECK_V1, "v1")
+        second = vcs.commit_deck("burn", DECK_V2, "v2")
+        assert vcs.commit_fingerprint("burn", first) != vcs.commit_fingerprint("burn", second)
+
+    def test_a_reordered_copy_fingerprints_the_same(self, vcs):
+        sha = vcs.commit_deck("burn", DECK_V1, "v1")
+        shuffled = "2 Consider\n4 Lightning Bolt\n\nSideboard\n2 Abrade\n"
+        assert vcs.commit_fingerprint("burn", sha) == decklist_fingerprint(shuffled)
+
+    def test_the_same_decklist_in_two_repos_fingerprints_the_same(self, tmp_path):
+        """It is a hash of content, not a sha: comparable across decks and runs."""
+        one = DeckVcsRepository(tmp_path / "one")
+        two = DeckVcsRepository(tmp_path / "two")
+        here = one.commit_deck("burn", DECK_V1, "v1")
+        there = two.commit_deck(
+            "aggro", "2 Consider\n4 Lightning Bolt\n\nSideboard\n2 Abrade\n", ""
+        )
+
+        assert here != there
+        assert one.commit_fingerprint("burn", here) == two.commit_fingerprint("aggro", there)
+
+
+class TestDiffingACommitAgainstTextInHand:
+    """``diff_against_text`` and the root-commit case of ``diff_from_parent``."""
+
+    def test_a_commit_against_a_decklist_that_was_never_committed(self, vcs):
+        first = vcs.commit_deck("burn", DECK_V1, "v1")
+
+        diff = vcs.diff_against_text("burn", first, DECK_V3)
+
+        assert [d.name for d in diff.added] == ["Fable of the Mirror-Breaker"]
+        assert [(d.name, d.before, d.after) for d in diff.changed] == [("Consider", 2.0, 4.0)]
+
+    def test_text_that_only_reorders_the_commit_is_no_change(self, vcs):
+        """The same normalization both sides, or every reorder reads as an edit."""
+        first = vcs.commit_deck("burn", DECK_V1, "v1")
+        shuffled = "2 Consider\n4 Lightning Bolt\n\nSideboard\n2 Abrade\n"
+
+        assert vcs.diff_against_text("burn", first, shuffled).is_empty
+
+    def test_a_root_commit_diffs_against_nothing(self, vcs):
+        """The first version has no parent, so all of it is an addition."""
+        root = vcs.commit_deck("burn", DECK_V1, "v1")
+
+        diff = vcs.diff_from_parent("burn", root, None)
+
+        assert [d.name for d in diff.added] == ["Consider", "Lightning Bolt", "Abrade"]
+        assert diff.removed == ()
+        assert diff.changed == ()
+
+    def test_a_later_commit_diffs_against_its_parent(self, vcs):
+        first = vcs.commit_deck("burn", DECK_V1, "v1")
+        second = vcs.commit_deck("burn", DECK_V3, "v2")
+
+        diff = vcs.diff_from_parent("burn", second, first)
+
+        assert [d.name for d in diff.added] == ["Fable of the Mirror-Breaker"]
+
+
+class TestUnifiedDiffLabels:
+    """The labels are the only thing ``unified_lines`` adds over a plain diff."""
+
+    def test_the_headers_name_the_two_commits(self, vcs):
+        first = vcs.commit_deck("burn", DECK_V1, "v1")
+        third = vcs.commit_deck("burn", DECK_V3, "v3")
+
+        lines = vcs.unified_diff("burn", first, third)
+
+        assert lines[0] == f"--- {first[:7]}"
+        assert lines[1] == f"+++ {third[:7]}"
+
+    def test_the_labels_are_whatever_the_caller_named_them(self):
+        lines = unified_lines(DECK_V1, DECK_V3, before_label="before", after_label="after")
+        assert lines[:2] == ["--- before", "+++ after"]
+
+    def test_a_reorder_produces_no_lines_at_all(self):
+        """Both sides are normalized first, so there is not even a header."""
+        shuffled = "2 Consider\n4 Lightning Bolt\n\nSideboard\n2 Abrade\n"
+        assert unified_lines(DECK_V1, shuffled, before_label="a", after_label="b") == []
