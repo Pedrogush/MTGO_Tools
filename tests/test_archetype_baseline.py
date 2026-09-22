@@ -28,6 +28,7 @@ from services.archetype_baseline_service import (
     BaselineStore,
     CardFrequency,
     CardRole,
+    ZoneShape,
     build_baseline,
     build_frequency_table,
     classify_card,
@@ -365,16 +366,42 @@ class TestFlexSlots:
         assert baseline.main.fixed == 27
         assert baseline.main.size == 32
         assert baseline.main.flex == 5
+        # Every list runs the same three Abrade, so the sideboard commits every
+        # slot it has and the whole pool's free space is the maindeck's five.
+        assert baseline.sideboard.size == 3
         assert baseline.sideboard.fixed == 3
-        assert baseline.flex_slots == baseline.main.flex + baseline.sideboard.flex
+        assert baseline.sideboard.flex == 0
+        assert baseline.flex_slots == 5
 
     def test_flex_is_never_negative(self):
-        # A pool whose fixed slots exceed the median zone size must clamp
-        # rather than report a negative number of free slots.
+        """The clamp on the type, because the pipeline above cannot reach it.
+
+        Nothing ``build_baseline`` can be handed makes ``max(0.0, ...)`` fire: a
+        card is fixed at its floor across the pool, so the fixed total is
+        bounded by the smallest deck's zone, which is never above the median.
+        (The comment this replaces claimed the opposite, on a pool whose median
+        is 30 against a fixed of 20 -- see the test below.) The guard is still
+        worth keeping, since ``ZoneShape`` is a public dataclass anyone may
+        build, so it is tested where it lives rather than through a pool that
+        cannot produce it.
+        """
+        assert ZoneShape(size=20.0, fixed=27.0).flex == 0.0
+        # ...and it is a clamp, not a floor applied to everything.
+        assert ZoneShape(size=60.0, fixed=27.0).flex == 33.0
+
+    def test_the_fixed_total_is_bounded_by_the_smallest_deck_in_the_pool(self):
+        """Two 40-card lists and two 20-card ones: the median is 30, the floor 20.
+
+        The number that matters is ``fixed``, which is what every deck in the
+        pool can afford -- so the two small lists cap it at 20 even though half
+        the pool has twice the room. The ten slots between that and the median
+        are the pool's disagreement about how big the deck is, reported as flex.
+        """
         decks = ["40 Island\n", "40 Island\n", "20 Island\n", "20 Island\n"]
         baseline = build_baseline(decks, archetype="A", mtg_format="modern")
+        assert baseline.main.size == 30
         assert baseline.main.fixed == 20
-        assert baseline.main.flex >= 0
+        assert baseline.main.flex == 10
 
     def test_flex_candidates_are_ranked_by_play_rate(self, pool):
         baseline = build_baseline(pool, archetype="Izzet Murktide", mtg_format="modern")
