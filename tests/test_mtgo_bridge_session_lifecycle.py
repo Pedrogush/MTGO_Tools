@@ -24,6 +24,8 @@ from typing import Any
 import pytest
 from test_mtgo_bridge_session import _write_executable_bridge
 
+from controllers.app_controller import lifecycle
+from controllers.app_controller.lifecycle import LifecycleMixin
 from services.mtgo_bridge_service import session as bridge_session
 
 # A bridge that stays silent until GATE_PATH exists, then behaves normally. The
@@ -56,6 +58,7 @@ for line in sys.stdin:
     req = json.loads(line)
     emit({"id": req["id"], "ok": True, "payload": {"argv": [req["command"]] + req.get("args", [])}})
 """
+
 
 def _deferred_ready_bridge(tmp_path: Path, gate: Path, protocol: int = 1) -> Path:
     body = _DEFERRED_READY_STUB.replace("GATE_PATH", str(gate).replace("\\", "\\\\"))
@@ -205,3 +208,45 @@ def test_a_stale_reader_cannot_poison_the_respawn(tmp_path: Path, session_factor
     # The sticky part: if the verdict had stuck, every later call would refuse.
     assert session.request("collection", timeout=30) == {"argv": ["collection"]}
     assert held_reader.finished.wait(30), "the stale reader never finished"
+
+
+# --- A2: the app shuts the bridge down, atexit is only the backstop ----------
+
+
+def test_app_shutdown_closes_the_bridge_session(monkeypatch):
+    """``LifecycleMixin.shutdown`` must close the session, not leave it to atexit."""
+    order: list[str] = []
+
+    class _StubImageService:
+        def shutdown(self):
+            order.append("images")
+
+    class _StubWorker:
+        def shutdown(self, timeout=None):
+            order.append("worker")
+
+    class _Controller(LifecycleMixin):
+        def __init__(self):
+            self.image_service = _StubImageService()
+            self._worker = _StubWorker()
+
+    monkeypatch.setattr(
+        lifecycle.mtgo_bridge_service, "shutdown_session", lambda: order.append("bridge")
+    )
+
+    _Controller().shutdown(timeout=0.1)
+
+    # After the worker join: the worker is what issues bridge commands, so
+    # closing the session first would push its last calls onto one-shot spawns.
+    assert order == ["images", "worker", "bridge"]
+
+
+def test_shutting_down_without_a_session_is_free():
+    """Exiting before anything touched the bridge must cost nothing and not raise.
+
+    Also covers the double call the atexit backstop makes after a normal app
+    shutdown has already closed the session.
+    """
+    bridge_session.shutdown_session()
+    bridge_session.shutdown_session()
+    assert bridge_session._session is None

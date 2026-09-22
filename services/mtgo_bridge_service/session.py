@@ -571,6 +571,9 @@ def shutdown_session() -> None:
         session.stop()
 
 
-# Windows does not reap grandchildren when a parent dies, so make the normal
-# interpreter exit path close the pipe explicitly.
+# Backstop only: ``LifecycleMixin.shutdown`` closes the session while the app is
+# still up, which is where the teardown belongs. This covers the exits that never
+# get there — Windows does not reap grandchildren when a parent dies, so the
+# interpreter exit path has to close the pipe explicitly too. Calling it twice is
+# free; the second call finds no session.
 atexit.register(shutdown_session)
