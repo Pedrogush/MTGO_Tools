@@ -12,25 +12,30 @@ a { color: #1a5fa0; }
 </head>
 <body>
 <h1>Opponent Tracker</h1>
-<p>The <strong>Opponent Tracker</strong> is a floating window opened from the toolbar. It detects
+<p>The <strong>Opponent Tracker</strong> is a floating window opened from the <strong>Tools</strong>
+menu. It detects
 your current opponent&rsquo;s username from the MTGO window title and looks up which archetypes
 they most commonly play.</p>
 
 <h2>Opening the tracker</h2>
-<p>Click <strong>Opponent Tracker</strong> in the toolbar. The window can remain open throughout
-your MTGO session.</p>
+<p>Choose <strong>Tools &#9656; Opponent Tracker</strong> on the menu bar. The window can remain open
+throughout your MTGO session.</p>
 
 <h2>How detection works</h2>
-<p>The tracker reads the active MTGO window title, which MTGO updates to include the opponent&rsquo;s
-username during a match. No MTGO SDK or API key is required &mdash; only the window title is read.</p>
+<p>The tracker scans the titles of the windows open on your desktop for one containing
+<code>vs.</code> &mdash; which is how MTGO writes a match &mdash; and takes the name after it. No
+MTGO SDK or API key is required, and nothing is read from MTGO itself; the window title is all of
+it.</p>
 
 <h2>Results</h2>
 <p>Once an opponent is detected, the tracker shows:</p>
 <ul>
   <li>The opponent&rsquo;s username.</li>
-  <li>A list of archetypes associated with that player, based on scraped tournament results.</li>
+  <li>The most recent deck that player was seen on in each format, read from their MTGGoldfish
+      player page.</li>
   <li>A compact sideboard guide preview if you have a guide entry for any of their likely archetypes.</li>
-  <li>A radar chart summarising the most common cards across their known archetypes.</li>
+  <li>A radar chart of the most common cards in one of those archetypes &mdash; the first format
+      with a known deck, not a summary across all of them.</li>
 </ul>
 
 <h2>Limitations</h2>
