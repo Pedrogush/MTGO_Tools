@@ -59,9 +59,54 @@ for line in sys.stdin:
     emit({"id": req["id"], "ok": True, "payload": {"argv": [req["command"]] + req.get("args", [])}})
 """
 
+# Shaped like the real serve loop: one thread reads the pipe, one worker runs
+# requests strictly one at a time (the C# side's sdkLock), so a "slow" command
+# genuinely holds up everything queued behind it while stdin EOF still ends the
+# process immediately -- which matters, because the launcher is a shell script
+# and the session's terminate() would otherwise only reach the shell.
+_SERIAL_STUB = r"""
+import json, os, queue, sys, threading, time
+
+work = queue.Queue()
+
+
+def emit(obj):
+    sys.stdout.write(json.dumps(obj) + "\n")
+    sys.stdout.flush()
+
+
+def worker():
+    while True:
+        req = work.get()
+        if req["command"] == "slow":
+            time.sleep(SLOW_SECONDS)
+        emit({
+            "id": req["id"],
+            "ok": True,
+            "payload": {"argv": [req["command"]] + req.get("args", [])},
+        })
+
+
+threading.Thread(target=worker, daemon=True).start()
+
+emit({"event": "ready", "payload": {"protocol": PROTOCOL, "pid": 0}})
+
+for line in sys.stdin:
+    line = line.strip()
+    if line:
+        work.put(json.loads(line))
+
+os._exit(0)
+"""
+
 
 def _deferred_ready_bridge(tmp_path: Path, gate: Path, protocol: int = 1) -> Path:
     body = _DEFERRED_READY_STUB.replace("GATE_PATH", str(gate).replace("\\", "\\\\"))
+    return _write_executable_bridge(tmp_path, body.replace("PROTOCOL", str(protocol)))
+
+
+def _serial_bridge(tmp_path: Path, slow_seconds: float, protocol: int = 1) -> Path:
+    body = _SERIAL_STUB.replace("SLOW_SECONDS", repr(slow_seconds))
     return _write_executable_bridge(tmp_path, body.replace("PROTOCOL", str(protocol)))
 
 
@@ -250,3 +295,46 @@ def test_shutting_down_without_a_session_is_free():
     bridge_session.shutdown_session()
     bridge_session.shutdown_session()
     assert bridge_session._session is None
+
+
+# --- A7: the request timeout is a per-command budget ------------------------
+
+
+def test_a_queued_request_does_not_tear_down_the_shared_session(tmp_path: Path, session_factory):
+    """A caller must not be executed for the time an earlier command spent running.
+
+    The bridge runs requests one at a time, so a command can sit in the queue for
+    the whole of the one ahead of it. Charging that to the waiting caller made
+    its expiry drop the shared process -- taking the challenge timer's watch
+    stream and every other in-flight caller with it -- for the offence of being
+    second in line.
+    """
+    session = session_factory(_serial_bridge(tmp_path, slow_seconds=3.0))
+    assert session.request("collection", timeout=30) == {"argv": ["collection"]}
+    process = session._process
+
+    slow = _BackgroundCall(lambda: session.request("slow", timeout=30))
+    _wait_until(lambda: bool(session._pending), "the slow command was never queued")
+
+    # Half a second is nowhere near enough for a request behind a three-second
+    # command -- but the budget does not start until the bridge can run it.
+    assert session.request("queued", timeout=0.5) == {"argv": ["queued"]}
+    assert session._process is process, "a queued caller's expiry killed the shared bridge"
+    assert slow.join().result == {"argv": ["slow"]}
+
+
+def test_a_wedged_command_still_drops_the_process(tmp_path: Path, session_factory):
+    """The budget still bites once the caller's own command is the one running.
+
+    The per-command budget must not turn into no budget: when nothing older is
+    outstanding, an expiry means a wedged SDK call, which cannot be cancelled
+    remotely, so the process has to go.
+    """
+    session = session_factory(_serial_bridge(tmp_path, slow_seconds=10.0))
+    assert session.request("collection", timeout=30) == {"argv": ["collection"]}
+    process = session._process
+
+    with pytest.raises(bridge_session.BridgeSessionUnavailable, match="did not answer within"):
+        session.request("slow", timeout=0.5)
+
+    assert process.poll() is not None, "the wedged bridge process was left running"

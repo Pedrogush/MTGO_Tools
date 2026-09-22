@@ -169,24 +169,50 @@ class BridgeSession:
         raise BridgeSessionUnavailable(last_error)
 
     def _exchange(self, command: str, args: Sequence[str], timeout: float) -> tuple[str, Any]:
+        """Send one request and wait for its answer, re-arming while it queues.
+
+        ``timeout`` is a budget for the command, not for the wait: the bridge
+        runs requests strictly one at a time, so the clock is restarted for as
+        long as an older request is still outstanding and this one therefore
+        cannot have started yet. Only when nothing older is left — this request
+        is the one the bridge is chewing on — does an expiry mean a wedged SDK
+        call, and only then is the process dropped. See
+        ``BRIDGE_SESSION_REQUEST_TIMEOUT_SECONDS`` for why.
+        """
         request_id = str(next(self._ids))
         slot: queue.Queue = queue.Queue(maxsize=1)
         with self._pending_lock:
             self._pending[request_id] = slot
         try:
             self._write({"id": request_id, "command": command, "args": [str(a) for a in args]})
-            try:
-                return slot.get(timeout=timeout)
-            except queue.Empty as exc:
-                # A wedged SDK call cannot be cancelled remotely; drop the process
-                # so the next caller gets a clean attach instead of queueing behind it.
-                self._teardown()
-                raise BridgeSessionUnavailable(
-                    f"Bridge command {command!r} did not answer within {timeout} seconds."
-                ) from exc
+            while True:
+                try:
+                    return slot.get(timeout=timeout)
+                except queue.Empty as exc:
+                    if not self._is_at_the_head(request_id):
+                        continue
+                    # A wedged SDK call cannot be cancelled remotely; drop the process
+                    # so the next caller gets a clean attach instead of queueing behind it.
+                    self._teardown()
+                    raise BridgeSessionUnavailable(
+                        f"Bridge command {command!r} did not answer within {timeout} seconds."
+                    ) from exc
         finally:
             with self._pending_lock:
                 self._pending.pop(request_id, None)
+
+    def _is_at_the_head(self, request_id: str) -> bool:
+        """True when no request older than ``request_id`` is still outstanding.
+
+        Request ids come from one ``itertools.count``, so "older" is just a
+        smaller id. That is the order callers got in line, which is not quite the
+        order they reached the pipe — two threads can take their ids and then
+        write in the opposite order. The approximation costs nothing: it only
+        decides *which* of two callers pulls the trigger on a genuinely wedged
+        bridge, and either way exactly one of them does.
+        """
+        with self._pending_lock:
+            return all(int(pending_id) >= int(request_id) for pending_id in self._pending)
 
     # ------------------------------------------------------------------ watch stream
     def subscribe_watch(self, sink: queue.Queue, interval_ms: int) -> None:
