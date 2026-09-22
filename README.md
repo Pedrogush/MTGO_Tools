@@ -116,13 +116,19 @@ anything touching a live game.
 
 ### Versioning
 
-Versions follow [semver](https://semver.org) and are derived automatically from
-[Conventional Commit](https://www.conventionalcommits.org) messages — `feat:` →
-minor, `fix:`/`perf:` → patch, `!`/`BREAKING CHANGE` → major. The repo-root
-`VERSION` file is the single source of truth: a CI workflow computes the bump and
-commits it onto the PR branch, and merging to `main` publishes a GitHub Release
-with the built installer. Write conventional-commit subjects and the number takes
-care of itself. Full details in [`docs/VERSIONING.md`](docs/VERSIONING.md).
+Versions follow [semver](https://semver.org) and are computed **after the merge
+lands on `main`**, never on a PR branch. The release workflow takes the newest
+`vX.Y.Z` tag as its base, reads the commits since that tag, writes the resulting
+number into the repo-root `VERSION` file — the single source of truth — and then
+tags and publishes a GitHub Release with the built installer.
+
+Inference on its own never proposes more than a patch, so anything bigger is
+something you ask for: a `Version-Bump: minor` (or `Release-As: 2.4.0`) git
+trailer on any commit in the range, including the merge commit. Writing
+[Conventional Commit](https://www.conventionalcommits.org) subjects is still
+what makes a release happen at all — `feat:`, `fix:` and `perf:` release, the
+rest do not. [`docs/VERSIONING.md`](docs/VERSIONING.md) has the full rules and
+the published-history bugs that shaped them.
 
 ### Automation CLI
 

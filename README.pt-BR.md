@@ -120,14 +120,21 @@ uma partida de verdade.
 
 ### Versionamento
 
-As versões seguem [semver](https://semver.org) e são derivadas automaticamente
-das mensagens de [Conventional Commit](https://www.conventionalcommits.org) —
-`feat:` → minor, `fix:`/`perf:` → patch, `!`/`BREAKING CHANGE` → major. O arquivo
-`VERSION` na raiz do repositório é a única fonte da verdade: um workflow de CI
-calcula o incremento e comita ele no branch do PR, e o merge na `main` publica um
-GitHub Release com o instalador já construído. Escreva os títulos dos commits no
-padrão conventional commits e o número se resolve sozinho. Detalhes completos em
-[`docs/VERSIONING.md`](docs/VERSIONING.md).
+As versões seguem [semver](https://semver.org) e são calculadas **depois que o
+merge entra na `main`**, nunca no branch do PR. O workflow de release pega a tag
+`vX.Y.Z` mais nova como base, lê os commits que vieram depois dela, escreve o
+número resultante no arquivo `VERSION` da raiz do repositório — a única fonte da
+verdade — e então cria a tag e publica um GitHub Release com o instalador já
+construído.
+
+A inferência sozinha nunca propõe mais do que um patch, então qualquer coisa
+maior é você que pede: um trailer de git `Version-Bump: minor` (ou
+`Release-As: 2.4.0`) em qualquer commit do intervalo, inclusive no commit de
+merge. Escrever os títulos no padrão
+[Conventional Commit](https://www.conventionalcommits.org) continua sendo o que
+faz sair release: `feat:`, `fix:` e `perf:` geram release, o resto não. O
+[`docs/VERSIONING.md`](docs/VERSIONING.md) tem as regras completas e os problemas
+no histórico publicado que levaram a elas.
 
 ### CLI de automação
 
