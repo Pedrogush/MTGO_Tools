@@ -48,43 +48,37 @@ def _header_windows(panel: wx.Window) -> list[wx.Window]:
 
 @pytest.mark.usefixtures("wx_app")
 def test_the_pile_sort_button_is_labelled_with_the_current_grouping_key(
-    deck_selector_factory,
+    shared_frame,
 ) -> None:
-    frame = deck_selector_factory()
-    try:
-        table = frame.main_table
-        table.set_pile_sort(PILE_SORT_MV, persist=False)
-        assert table._t("tabs.view.pile_sort.mv") in table.pile_sort_button.GetLabel()
-        table.set_pile_sort(PILE_SORT_COLOR, persist=False)
-        assert table._t("tabs.view.pile_sort.color") in table.pile_sort_button.GetLabel()
-    finally:
-        frame.Destroy()
+    frame = shared_frame
+    table = frame.main_table
+    table.set_pile_sort(PILE_SORT_MV, persist=False)
+    assert table._t("tabs.view.pile_sort.mv") in table.pile_sort_button.GetLabel()
+    table.set_pile_sort(PILE_SORT_COLOR, persist=False)
+    assert table._t("tabs.view.pile_sort.color") in table.pile_sort_button.GetLabel()
 
 
 @pytest.mark.usefixtures("wx_app")
 def test_the_menu_buttons_sit_after_the_divider_not_inside_the_toggle_group(
-    deck_selector_factory,
+    shared_frame,
 ) -> None:
-    frame = deck_selector_factory()
-    try:
-        table = frame.main_table
-        windows = _header_windows(table)
-        divider_index = windows.index(table.header_divider)
-        for chip in table._view_mode_buttons.values():
-            assert windows.index(chip) < divider_index
-        assert windows.index(table.pile_sort_button) > divider_index
-        if table.printing_button is not None:
-            assert windows.index(table.printing_button) > divider_index
-        # ...and the caption naming the group is in front of the chips.
-        assert windows.index(table.view_label) < min(
-            windows.index(chip) for chip in table._view_mode_buttons.values()
-        )
-    finally:
-        frame.Destroy()
+    frame = shared_frame
+    table = frame.main_table
+    windows = _header_windows(table)
+    divider_index = windows.index(table.header_divider)
+    for chip in table._view_mode_buttons.values():
+        assert windows.index(chip) < divider_index
+    assert windows.index(table.pile_sort_button) > divider_index
+    if table.printing_button is not None:
+        assert windows.index(table.printing_button) > divider_index
+    # ...and the caption naming the group is in front of the chips.
+    assert windows.index(table.view_label) < min(
+        windows.index(chip) for chip in table._view_mode_buttons.values()
+    )
 
 
 @pytest.mark.usefixtures("wx_app")
-def test_the_count_label_is_the_row_member_that_gives_way(deck_selector_factory) -> None:
+def test_the_count_label_is_the_row_member_that_gives_way(shared_frame) -> None:
     """A row of fixed controls overflows silently and clips only its *last* item.
 
     Measured in pt-BR at the 1200px floor: the row wanted 551px in a 506px panel,
@@ -99,17 +93,24 @@ def test_the_count_label_is_the_row_member_that_gives_way(deck_selector_factory)
     minimum is view-mode and locale dependent -- so the controls now wrap to a
     second line instead. The count label is still the flexible member of the row
     it is on, which is what this pins.
+
+    The deck name later joined it inside a single flexible slot, so the count is
+    now one level down. The property is unchanged -- it still carries a
+    proportion and still ellipsises -- and the slot holding the pair is itself
+    the row's flexible member, which is what keeps the row's minimum where it
+    was rather than adding a second claim on the width.
     """
-    frame = deck_selector_factory()
-    try:
-        table = frame.main_table
-        header = _header_sizer(table)
-        item = next(i for i in header.GetChildren() if i.GetWindow() is table.count_label)
-        assert item.GetProportion() == 1
-        assert not any(i.IsSpacer() and i.GetProportion() for i in header.GetChildren())
-        style = table.count_label.GetWindowStyleFlag()
-        assert style & wx.ST_ELLIPSIZE_END
-        assert style & wx.ST_NO_AUTORESIZE
-        assert table.count_label.GetMinSize().GetWidth() > 0
-    finally:
-        frame.Destroy()
+    frame = shared_frame
+    table = frame.main_table
+    header = _header_sizer(table)
+
+    identity = next(i for i in header.GetChildren() if i.IsSizer())
+    assert identity.GetProportion() == 1, "the name/count slot takes the row's slack"
+
+    item = next(i for i in identity.GetSizer().GetChildren() if i.GetWindow() is table.count_label)
+    assert item.GetProportion() == 1
+    assert not any(i.IsSpacer() and i.GetProportion() for i in header.GetChildren())
+    style = table.count_label.GetWindowStyleFlag()
+    assert style & wx.ST_ELLIPSIZE_END
+    assert style & wx.ST_NO_AUTORESIZE
+    assert table.count_label.GetMinSize().GetWidth() > 0

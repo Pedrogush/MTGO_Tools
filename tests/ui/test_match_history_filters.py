@@ -21,7 +21,7 @@ from typing import Any
 import pytest
 import wx
 
-from tests.ui.conftest import pump_ui_events
+from tests.ui.conftest import pump_ui_events, wait_until
 from widgets.frames.match_history.frame import MatchHistoryFrame
 
 USERNAME = "MockPilot"
@@ -112,11 +112,14 @@ def fixture_frame(wx_app: wx.App) -> Iterator[MatchHistoryFrame]:
     frame = MatchHistoryFrame(controller=_StubController())
     frame.Show()
     # The history is loaded on a worker thread and applied through wx.CallAfter,
-    # so the queue has to drain before anything is on screen.
-    for _ in range(40):
-        pump_ui_events(wx_app)
-        if frame.history_items:
-            break
+    # so the queue has to drain before anything is on screen. Waited on as a
+    # condition rather than as a fixed number of passes: the fixed count was
+    # this file's flakiness.
+    wait_until(
+        wx_app,
+        lambda: bool(frame.history_items),
+        message="the match history never reached the window",
+    )
     try:
         yield frame
     finally:

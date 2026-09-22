@@ -24,6 +24,7 @@ likely way to reintroduce this bug.
 from __future__ import annotations
 
 import ast
+import functools
 from pathlib import Path
 
 import pytest
@@ -104,12 +105,16 @@ def _literal_key_sites(source: str) -> list[tuple[int, str, bool]]:
     return sites
 
 
-def _requested_keys() -> list[tuple[str, int, str]]:
+@functools.cache
+def _requested_keys() -> tuple[tuple[str, int, str], ...]:
     """``(relative path, lineno, key)`` for every key the app asks for by name.
 
     A plural call site expands to the two keys ``translate_plural`` actually
     looks up, since a base with only ``.other`` defined fails on exactly one
     count and is otherwise invisible.
+
+    Scanned once per test process: it parses the whole source tree, and the
+    tests below only read the result.
     """
     requested: list[tuple[str, int, str]] = []
     for path in _source_files():
@@ -119,7 +124,7 @@ def _requested_keys() -> list[tuple[str, int, str]]:
                 requested.extend((rel, lineno, f"{key}.{c}") for c in PLURAL_CATEGORIES)
             else:
                 requested.append((rel, lineno, key))
-    return requested
+    return tuple(requested)
 
 
 def test_the_scan_finds_the_call_sites_it_claims_to_cover() -> None:

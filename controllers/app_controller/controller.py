@@ -180,6 +180,12 @@ class AppController(
         self._bulk_check_worker_active = False
         self._cache_warmer: CacheWarmer | None = None
         self._available_update: UpdateInfo | None = None
+        # True while a user-requested release check is in flight, so a second
+        # click on File > Check for updates is dropped rather than starting a
+        # second request; see UpdateCheckMixin.check_for_update_now. Read and
+        # written on the UI thread only (BackgroundWorker marshals its callbacks
+        # through wx.CallAfter), so it needs no lock.
+        self._update_check_in_flight = False
         # Set only while an in-app update is downloading, so shutdown() can stop
         # it; see UpdateCheckMixin.apply_available_update.
         self._update_installer: UpdateInstaller | None = None

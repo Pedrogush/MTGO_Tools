@@ -15,6 +15,10 @@ Split by responsibility into internal modules mirroring
 - ``introspection``: ping/status/window-info/click/wait/open/close
   (``IntrospectionMixin``)
 - ``deck_research``: format/archetype/deck-list/tab handlers (``DeckResearchMixin``)
+- ``deck_history``: version-graph readout and checkout/branch driving
+  (``DeckHistoryMixin``)
+- ``deck_baseline``: archetype-baseline computation, readout and root pinning
+  (``DeckBaselineMixin``)
 - ``zone_editing``: mainboard/sideboard/out zone editing (``ZoneEditingMixin``)
 - ``builder``: deck-builder search/filters/scrolling (``BuilderMixin``)
 - ``sash``: splitter sash reads + scripted live drags (``SashMixin``)
@@ -33,6 +37,8 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 from automation.server.builder import BuilderMixin
+from automation.server.deck_baseline import DeckBaselineMixin
+from automation.server.deck_history import DeckHistoryMixin
 from automation.server.deck_research import DeckResearchMixin
 from automation.server.introspection import IntrospectionMixin
 from automation.server.mana_rendering import ManaRenderingMixin
@@ -58,6 +64,8 @@ class AutomationServer(
     ScreenshotMixin,
     IntrospectionMixin,
     DeckResearchMixin,
+    DeckHistoryMixin,
+    DeckBaselineMixin,
     ZoneEditingMixin,
     BuilderMixin,
     ManaRenderingMixin,
@@ -116,6 +124,22 @@ class AutomationServer(
             "get_deck_notes": self._handle_get_deck_notes,
             "set_current_deck": self._handle_set_current_deck,
             "toggle_adv_filters": self._handle_toggle_adv_filters,
+            # Deck version history
+            "deck_name": self._handle_deck_name,
+            "deck_save": self._handle_deck_save,
+            "deck_history": self._handle_deck_history,
+            "deck_history_save": self._handle_deck_history_save,
+            "deck_history_select": self._handle_deck_history_select,
+            "deck_history_checkout": self._handle_deck_history_checkout,
+            "deck_history_branch": self._handle_deck_history_branch,
+            "deck_history_switch": self._handle_deck_history_switch,
+            "deck_history_baseline": self._handle_deck_history_baseline,
+            "deck_baseline": self._handle_deck_baseline,
+            "deck_baseline_compute": self._handle_deck_baseline_compute,
+            "deck_baseline_root": self._handle_deck_baseline_root,
+            "deck_baseline_pin_root": self._handle_deck_baseline_pin_root,
+            "deck_baseline_save_deck": self._handle_deck_baseline_save_deck,
+            "deck_baseline_load_file": self._handle_deck_baseline_load_file,
             "close_app": self._handle_close_app,
             # Mana symbol rendering commands (issue #410)
             "set_mana_search": self._handle_set_mana_search,

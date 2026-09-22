@@ -59,6 +59,9 @@ def _optional_reset(module_path: str, attr_name: str):
 
 reset_card_repository = _optional_reset("repositories.card_repository", "reset_card_repository")
 reset_deck_repository = _optional_reset("repositories.deck_repository", "reset_deck_repository")
+reset_deck_vcs_repository = _optional_reset(
+    "repositories.deck_vcs_repository", "reset_deck_vcs_repository"
+)
 reset_format_card_pool_repository = _optional_reset(
     "repositories.format_card_pool_repository", "reset_format_card_pool_repository"
 )
@@ -73,6 +76,10 @@ reset_bundle_snapshot_client = _optional_reset(
     "services.bundle_snapshot_client", "reset_bundle_snapshot_client"
 )
 reset_deck_service = _optional_reset("services.deck_service", "reset_deck_service")
+reset_deck_vcs_service = _optional_reset("services.deck_vcs_service", "reset_deck_vcs_service")
+reset_archetype_baseline_service = _optional_reset(
+    "services.archetype_baseline_service", "reset_archetype_baseline_service"
+)
 reset_format_card_pool_service = _optional_reset(
     "services.format_card_pool_service", "reset_format_card_pool_service"
 )
@@ -106,6 +113,8 @@ def reset_all_services() -> None:
     reset_collection_service()
     reset_comp_rules_service()
     reset_deck_service()
+    reset_deck_vcs_service()
+    reset_archetype_baseline_service()
     reset_format_card_pool_service()
     reset_metagame_service()
     reset_radar_service()
@@ -118,6 +127,7 @@ def reset_all_repositories() -> None:
     """Reset all global repository instances."""
     reset_card_repository()
     reset_deck_repository()
+    reset_deck_vcs_repository()
     reset_deck_cache()
     reset_format_card_pool_repository()
     reset_metagame_repository()

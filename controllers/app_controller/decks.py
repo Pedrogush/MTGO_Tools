@@ -61,7 +61,7 @@ class DeckManagementMixin(_Base):
         file_path: Path | None = None,
         archetype: str | None = None,
     ) -> tuple[Path, int | None]:
-        return self.workflow_service.save_deck(
+        saved_path, deck_id = self.workflow_service.save_deck(
             deck_name=deck_name,
             deck_content=deck_content,
             format_name=format_name,
@@ -70,6 +70,41 @@ class DeckManagementMixin(_Base):
             file_path=file_path,
             archetype=archetype,
         )
+        if deck is None:
+            # A deck with no record of its own -- built from scratch, or loaded
+            # as bare text -- acquires one by being saved. Without this it keeps
+            # falling back to the "manual" key, so its versions pile up in a
+            # history no deck ever looks at again.
+            deck = {"href": saved_path.stem, "name": saved_path.stem}
+            self.deck_repo.set_current_deck(deck)
+        self._sync_saved_deck_record(deck, saved_path, format_name, archetype)
+        return saved_path, deck_id
+
+    @staticmethod
+    def _sync_saved_deck_record(
+        deck: dict[str, Any] | None,
+        saved_path: Path,
+        format_name: str,
+        archetype: str | None,
+    ) -> None:
+        """Point the in-memory deck record at what was just written.
+
+        Every save path ends here, which is the reason this lives on the
+        controller rather than in the Save dialog's handler: the version history
+        keys a deck by the file behind it, so a record still pointing at a
+        scraped ``href`` (or at the file it was *loaded* from, after a Save As
+        under a new name) sends the commit to one history and every reader to
+        another -- which read as "saving creates no version at all".
+        """
+        if deck is None:
+            return
+        deck["format"] = format_name
+        if archetype:
+            deck["archetype"] = archetype
+        else:
+            deck.pop("archetype", None)
+        deck["path"] = str(saved_path)
+        deck["source"] = "file"
 
     def find_saved_deck(self, file_path: Path, deck_text: str) -> dict[str, Any] | None:
         """The saved-deck record (format, archetype, ...) for a deck file, if any.

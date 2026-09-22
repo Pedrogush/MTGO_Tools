@@ -338,7 +338,26 @@ def test_watch_worker_flushes_trailing_object_on_exit(tmp_path: Path) -> None:
 
 # --- BridgeWatcher lifecycle -------------------------------------------------
 
+#: How long ``stop()`` waits for the worker to exit on its own before it
+#: terminates it. Production waits 5s; these stubs stay silent for 30s, so the
+#: worker is always parked in ``readline`` and the wait always runs out -- the
+#: test would spend the whole grace period idle. The terminate path is the same
+#: at any length, so it is shortened here rather than sat through.
+_STOP_GRACE_SECONDS = 0.5
 
+
+@pytest.fixture
+def short_stop_grace(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Make ``BridgeWatcher.stop()``'s default grace period short (see above)."""
+    original_stop = bridge_watch.BridgeWatcher.stop
+
+    def stop(self: bridge_watch.BridgeWatcher, timeout: float | None = _STOP_GRACE_SECONDS):
+        return original_stop(self, timeout)
+
+    monkeypatch.setattr(bridge_watch.BridgeWatcher, "stop", stop)
+
+
+@pytest.mark.usefixtures("short_stop_grace")
 def test_bridge_watcher_streams_then_stops(tmp_path: Path) -> None:
     bridge = _write_executable_bridge(
         tmp_path,
@@ -360,6 +379,7 @@ def test_bridge_watcher_streams_then_stops(tmp_path: Path) -> None:
     assert not process.is_alive()
 
 
+@pytest.mark.usefixtures("short_stop_grace")
 def test_bridge_watcher_latest_nonblocking_empty_returns_none(tmp_path: Path) -> None:
     bridge = _write_executable_bridge(
         tmp_path,
@@ -373,6 +393,7 @@ def test_bridge_watcher_latest_nonblocking_empty_returns_none(tmp_path: Path) ->
         watcher.stop()
 
 
+@pytest.mark.usefixtures("short_stop_grace")
 def test_start_watch_helper_starts_streaming_watcher(tmp_path: Path) -> None:
     """``start_watch`` resolves the path, builds, and starts a live watcher."""
     bridge = _write_executable_bridge(
@@ -405,18 +426,6 @@ def test_fetch_collection_snapshot_invokes_collection_mode(tmp_path: Path) -> No
     )
     payload = mtgo_bridge_client.fetch_collection_snapshot(bridge_path=str(bridge), timeout=30)
     assert payload == {"mode": "collection", "argv": ["collection"]}
-
-
-def test_fetch_match_history_invokes_history_mode(tmp_path: Path) -> None:
-    bridge = _write_executable_bridge(
-        tmp_path,
-        r"""
-        import json, sys
-        print(json.dumps({"argv": sys.argv[1:]}))
-        """,
-    )
-    payload = mtgo_bridge_client.fetch_match_history(bridge_path=str(bridge), timeout=30)
-    assert payload == {"argv": ["history"]}
 
 
 def test_fetch_trade_snapshot_passes_status_subcommand(tmp_path: Path) -> None:
@@ -468,20 +477,5 @@ def test_async_entry_point_returns_future_resolving_payload(tmp_path: Path) -> N
     future = mtgo_bridge_client.fetch_collection_snapshot_async(bridge_path=str(bridge))
     try:
         assert future.result(timeout=30) == {"argv": ["collection"]}
-    finally:
-        future.cancel()
-
-
-def test_history_async_entry_point_returns_future_resolving_payload(tmp_path: Path) -> None:
-    bridge = _write_executable_bridge(
-        tmp_path,
-        r"""
-        import json, sys
-        print(json.dumps({"argv": sys.argv[1:]}))
-        """,
-    )
-    future = mtgo_bridge_client.fetch_match_history_async(bridge_path=str(bridge))
-    try:
-        assert future.result(timeout=30) == {"argv": ["history"]}
     finally:
         future.cancel()

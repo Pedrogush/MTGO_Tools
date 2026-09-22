@@ -156,7 +156,62 @@ class DeckWorkflowService:
         else:
             logger.info(f"Deck saved to database: {deck_name} (ID: {deck_id})")
 
+        self._record_version(deck, file_path, deck_content, archetype, format_name)
+
         return file_path, deck_id
+
+    @staticmethod
+    def _record_version(
+        deck: dict[str, Any] | None,
+        file_path,
+        deck_content: str,
+        archetype: str | None = None,
+        format_name: str | None = None,
+    ) -> None:
+        """Commit this save into the deck's version history.
+
+        Best effort, like the database write above it: the deck file is already
+        on disk and a version-history problem must not be reported as a failed
+        save. The history is a record *of* the file, never a precondition for
+        writing it.
+
+        A deck getting its history for the first time is rooted at its
+        archetype's baseline when one has been computed, so that every later
+        version has the archetype as an ancestor and "diff vs. baseline" needs
+        no separate pointer. That root is a frozen snapshot: it is written here,
+        once, and the repository layer refuses to rewrite it afterwards.
+        """
+        try:
+            from services.deck_vcs_service import deck_key_for, get_deck_vcs_service
+
+            deck_key = deck_key_for(deck, file_path)
+            DeckWorkflowService._seed_baseline_root(deck_key, archetype, format_name)
+            service = get_deck_vcs_service()
+            service.record_save(deck_key, deck_content)
+        except Exception as exc:  # noqa: BLE001 - the deck file is already saved
+            logger.warning(f"Deck saved but no version recorded: {exc}")
+
+    @staticmethod
+    def _seed_baseline_root(deck_key: str, archetype: str | None, format_name: str | None) -> None:
+        """Root a brand-new deck's history at its archetype baseline, if any.
+
+        Separately guarded from the save commit above it: a deck with no stored
+        baseline for its archetype is an ordinary deck whose history starts at
+        its first save, and that is not a failure worth surfacing.
+        """
+        if not archetype or not format_name:
+            return
+        try:
+            from services.archetype_baseline_service import get_archetype_baseline_service
+
+            sha = get_archetype_baseline_service().seed_root_for_new_deck(
+                deck_key, archetype=archetype, mtg_format=format_name
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.debug(f"No baseline root for {deck_key}: {exc}")
+            return
+        if sha:
+            logger.info(f"Deck {deck_key} rooted at archetype baseline {sha[:7]}")
 
     # ------------------------------------------------------------------ averages ------------------------------------------------------------------
     def build_daily_average_buffer(
