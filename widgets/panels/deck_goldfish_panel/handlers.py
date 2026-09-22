@@ -10,8 +10,13 @@ decoding card art, is already off-thread in
 Note what :meth:`set_deck` does *not* do: deal. It is called from the app
 frame's ``_update_stats`` on every deck load, and the deck-render block already
 runs ~315-385 ms synchronously (``docs/perf/deck-load-profile.md``). A tab the
-user may never open must not add to it, so loading a deck only re-points the
-table and the first hand is dealt when the player asks for one.
+user may never open must not add to it.
+
+:meth:`on_shown` is where the deal happens instead. Opening the Goldfish tab
+*is* asking for a hand -- there is nothing else on the tab to come for -- so
+making the player click "New hand" to see one was a button in front of the
+feature. Deferring to the moment the tab is first shown keeps the deck-load path
+free and still costs the player nothing.
 """
 
 from __future__ import annotations
@@ -46,6 +51,20 @@ class DeckGoldfishPanelHandlersMixin(_Base):
     def clear(self) -> None:
         """No deck is loaded any more."""
         self.set_deck("")
+
+    def on_shown(self) -> None:
+        """The tab just became visible: deal, if there is a deck and no hand yet.
+
+        Called by the deck workspace's page-changed handler (see
+        ``CenterPanelBuilderMixin._on_deck_tab_changed``), which is also how the
+        Baseline and History tabs defer their work off the deck-load path.
+
+        Only the *first* look at a deck deals. Coming back to the tab after
+        playing half the hand out must not sweep the board -- the player left it
+        that way on purpose, and there is a New hand button for the other case.
+        """
+        if self.table.deck_size > 0 and not self.table.has_dealt:
+            self._deal(self.table.new_hand)
 
     # ----- toolbar -----
     def _on_new_hand(self, _event: wx.CommandEvent) -> None:

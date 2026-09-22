@@ -29,7 +29,7 @@ MESSAGES: dict[str, str] = {
     "tabs.goldfish.empty": "Deal a hand to start goldfishing.",
     "tabs.goldfish.status": "Library {library}  |  Hand {hand}",
     "tabs.goldfish.status.mulligans": "  |  Mulligans {mulligans} (bottom {bottom})",
-    "tabs.goldfish.hint": "Click a card in hand to put it on the table, or drag it where you want it. Click a card on the table to tap it; right-click to take it back.",
+    "tabs.goldfish.hint": "Click a card in hand to put it on the table, or drag it where you want it. Click a card on the table to tap it; drag it back down to the hand, or right-click it, to take it back.",
     "tabs.stats.curve": "Mana Curve",
     "tabs.stats.colors": "Color Share",
     "tabs.stats.types": "Card Types",

@@ -28,7 +28,7 @@ MESSAGES: dict[str, str] = {
     "tabs.goldfish.empty": "Compre uma mão para começar o goldfish.",
     "tabs.goldfish.status": "Grimório {library}  |  Mão {hand}",
     "tabs.goldfish.status.mulligans": "  |  Mulligans {mulligans} (fundo {bottom})",
-    "tabs.goldfish.hint": "Clique em uma carta da mão para baixá-la na mesa, ou arraste-a para onde quiser. Clique em uma carta na mesa para virá-la; clique com o botão direito para devolvê-la à mão.",
+    "tabs.goldfish.hint": "Clique em uma carta da mão para baixá-la na mesa, ou arraste-a para onde quiser. Clique em uma carta na mesa para virá-la; arraste-a de volta para a mão, ou clique com o botão direito, para devolvê-la.",
     "tabs.stats.curve": "Curva de Mana",
     "tabs.stats.colors": "Participação de Cores",
     "tabs.stats.types": "Tipos de Carta",

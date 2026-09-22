@@ -13,7 +13,10 @@ test, it is a wrong one, and a distributional assertion would let it through.
 clicks land. Hit-testing is the half of a drag-and-drop surface that has no
 visible failure mode until the user notices they are tapping the wrong card, and
 "topmost wins" in particular is only observable where two cards overlap -- which
-in a fanned hand is everywhere.
+in a fanned hand is everywhere. The sizing is here for a related reason: "the
+cards fill the tab's width" and "the cards are not stretched" are both claims
+about arithmetic, and checking them by eye means checking them at one window
+size and hoping.
 """
 
 from __future__ import annotations
@@ -26,15 +29,16 @@ from services.deck_service.goldfish import (
     build_library,
 )
 from utils.constants import (
-    GOLDFISH_CARD_HEIGHT,
-    GOLDFISH_CARD_SPAN,
-    GOLDFISH_CARD_WIDTH,
+    GOLDFISH_CARD_ASPECT,
+    GOLDFISH_CARD_MAX_WIDTH,
+    GOLDFISH_CARD_MIN_WIDTH,
     GOLDFISH_HAND_MIN_STEP,
-    SPACE_SM,
+    GOLDFISH_HAND_REFERENCE,
 )
 from widgets.panels.deck_goldfish_panel.layout import (
     Box,
     auto_place_fraction,
+    card_metrics,
     card_size,
     drop_fraction,
     hand_boxes,
@@ -299,53 +303,95 @@ def test_loading_another_deck_ends_the_game_in_progress() -> None:
 # ---------------------------------------------------------------------------
 # Layout
 # ---------------------------------------------------------------------------
+PANEL = (1200, 700)
+#: The metrics most of the layout tests below measure against.
+METRICS = card_metrics(*PANEL)
+
+
+@pytest.mark.parametrize("panel", [(640, 420), (900, 600), (1200, 700), (2560, 1400)])
+def test_a_card_keeps_the_proportions_of_a_real_one_at_every_window_size(panel) -> None:
+    """Width is chosen and height follows. Nothing in the layout may stretch a
+    card, at any panel size -- including the ones where the min/max clamp is
+    what picks the width."""
+    metrics = card_metrics(*panel)
+    assert metrics.height == round(metrics.width * GOLDFISH_CARD_ASPECT)
+    assert GOLDFISH_CARD_MIN_WIDTH <= metrics.width <= GOLDFISH_CARD_MAX_WIDTH
+
+
+def test_cards_are_sized_so_a_full_hand_fills_the_panel_width() -> None:
+    """The correction the review asked for: a seven-card hand that stops short of
+    both edges reads as unresolved space, so the card is measured from the panel
+    rather than fixed."""
+    narrow, wide = card_metrics(700, 900), card_metrics(1400, 900)
+    assert wide.width > narrow.width, "a wider tab must draw wider cards"
+    assert narrow.width * GOLDFISH_HAND_REFERENCE <= 700
+
+
 def test_the_hand_strip_sits_along_the_bottom_and_the_table_takes_the_rest() -> None:
-    table_region, hand_region = split_regions(900, 600)
+    table_region, hand_region = split_regions(*PANEL, METRICS)
     assert table_region.y == 0
     assert hand_region.y == table_region.height
-    assert table_region.height + hand_region.height == 600
-    assert hand_region.height > GOLDFISH_CARD_HEIGHT
+    assert table_region.height + hand_region.height == PANEL[1]
+    assert hand_region.height > METRICS.height
+    assert table_region.height > hand_region.height, "the table is the bigger half"
 
 
 def test_a_panel_too_short_for_a_card_still_splits_in_two() -> None:
     """Dragging the tab short shows less of both zones, not none of one."""
-    table_region, hand_region = split_regions(900, 120)
+    table_region, hand_region = split_regions(900, 120, card_metrics(900, 120))
     assert hand_region.height == 60
     assert table_region.height == 60
 
 
-def test_a_hand_that_fits_is_laid_out_at_full_card_width() -> None:
-    boxes = hand_boxes(7, Box(0, 0, 1200, 160))
-    assert len(boxes) == 7
-    assert all(box.width == GOLDFISH_CARD_WIDTH for box in boxes)
-    steps = {b.x - a.x for a, b in zip(boxes, boxes[1:])}
-    assert steps == {GOLDFISH_CARD_WIDTH + SPACE_SM}
+def test_a_full_hand_spans_the_strip_from_edge_to_edge() -> None:
+    region = Box(0, 0, PANEL[0], METRICS.strip_height)
+    boxes = hand_boxes(GOLDFISH_HAND_REFERENCE, region, METRICS)
+    assert len(boxes) == GOLDFISH_HAND_REFERENCE
+    assert all(box.width == METRICS.width for box in boxes)
+    # Both edges, within the rounding that integer division leaves behind.
+    assert boxes[0].x - region.x <= GOLDFISH_HAND_REFERENCE
+    assert (region.x + region.width) - (boxes[-1].x + boxes[-1].width) <= GOLDFISH_HAND_REFERENCE
+
+
+def test_a_short_hand_spreads_out_instead_of_huddling_in_the_middle() -> None:
+    """Half a hand left after playing four cards still reaches both edges."""
+    region = Box(0, 0, PANEL[0], METRICS.strip_height)
+    boxes = hand_boxes(3, region, METRICS)
+    assert boxes[0].x == region.x
+    assert boxes[-1].x + boxes[-1].width == region.x + region.width
+
+
+def test_one_card_left_is_centred_because_there_is_no_fan_to_span() -> None:
+    region = Box(0, 0, PANEL[0], METRICS.strip_height)
+    (box,) = hand_boxes(1, region, METRICS)
+    assert box.x + box.width // 2 == pytest.approx(region.x + region.width // 2, abs=1)
 
 
 def test_a_hand_that_does_not_fit_overlaps_rather_than_running_off_the_edge() -> None:
     """The normal case, not the edge one: nothing stops a goldfish drawing."""
-    region = Box(0, 0, 600, 160)
-    boxes = hand_boxes(16, region)
+    metrics = card_metrics(600, 400)
+    region = Box(0, 0, 600, metrics.strip_height)
+    boxes = hand_boxes(16, region, metrics)
     step = boxes[1].x - boxes[0].x
-    assert step < GOLDFISH_CARD_WIDTH, "cards must overlap once the strip is full"
+    assert step < metrics.width, "cards must overlap once the strip is full"
     assert step >= GOLDFISH_HAND_MIN_STEP, "but never so far that no title shows"
     assert boxes[0].x >= region.x
 
 
 def test_an_empty_hand_lays_out_nothing() -> None:
-    assert hand_boxes(0, Box(0, 0, 900, 160)) == []
+    assert hand_boxes(0, Box(0, 0, 900, 160), METRICS) == []
 
 
 def test_a_tapped_card_is_the_same_card_turned_ninety_degrees() -> None:
-    assert card_size(False) == (GOLDFISH_CARD_WIDTH, GOLDFISH_CARD_HEIGHT)
-    assert card_size(True) == (GOLDFISH_CARD_HEIGHT, GOLDFISH_CARD_WIDTH)
+    assert card_size(False, METRICS) == (METRICS.width, METRICS.height)
+    assert card_size(True, METRICS) == (METRICS.height, METRICS.width)
 
 
 def test_tapping_a_card_rotates_it_about_its_own_centre() -> None:
     """Anchored anywhere else, a card would jump sideways as it taps."""
     region = Box(0, 0, 800, 400)
-    upright = table_box(0.4, 0.6, False, region)
-    tapped = table_box(0.4, 0.6, True, region)
+    upright = table_box(0.4, 0.6, False, region, METRICS)
+    tapped = table_box(0.4, 0.6, True, region, METRICS)
     assert upright.x + upright.width // 2 == tapped.x + tapped.width // 2
     assert upright.y + upright.height // 2 == tapped.y + tapped.height // 2
 
@@ -354,7 +400,7 @@ def test_a_card_in_either_corner_stays_on_the_table_either_way_round() -> None:
     region = Box(0, 0, 800, 400)
     for x, y in ((0.0, 0.0), (1.0, 1.0)):
         for tapped in (False, True):
-            box = table_box(x, y, tapped, region)
+            box = table_box(x, y, tapped, region, METRICS)
             assert box.x >= region.x
             assert box.y >= region.y
             assert box.x + box.width <= region.x + region.width
@@ -367,18 +413,18 @@ def test_dropping_a_card_where_it_is_drawn_leaves_it_where_it_is(position) -> No
     the pointer must not move the card."""
     region = Box(0, 0, 900, 500)
     x, y = position
-    box = table_box(x, y, False, region)
+    box = table_box(x, y, False, region, METRICS)
     centre_x = box.x + box.width // 2
     centre_y = box.y + box.height // 2
-    round_tripped = drop_fraction(centre_x, centre_y, region)
+    round_tripped = drop_fraction(centre_x, centre_y, region, METRICS)
     assert round_tripped[0] == pytest.approx(x, abs=0.01)
     assert round_tripped[1] == pytest.approx(y, abs=0.01)
 
 
 def test_a_table_smaller_than_one_card_does_not_divide_by_zero() -> None:
-    tiny = Box(0, 0, GOLDFISH_CARD_SPAN // 2, GOLDFISH_CARD_SPAN // 2)
-    assert table_box(0.5, 0.5, False, tiny) is not None
-    assert drop_fraction(10, 10, tiny) is not None
+    tiny = Box(0, 0, METRICS.span // 2, METRICS.span // 2)
+    assert table_box(0.5, 0.5, False, tiny, METRICS) is not None
+    assert drop_fraction(10, 10, tiny, METRICS) is not None
 
 
 def test_click_placed_cards_walk_a_grid_instead_of_stacking_up() -> None:
@@ -389,13 +435,13 @@ def test_click_placed_cards_walk_a_grid_instead_of_stacking_up() -> None:
 
 
 def test_a_click_finds_the_card_under_it() -> None:
-    boxes = hand_boxes(4, Box(0, 0, 1200, 160))
+    boxes = hand_boxes(4, Box(0, 0, 1200, METRICS.strip_height), METRICS)
     third = boxes[2]
     assert hit_test(boxes, third.x + 5, third.y + 5) == 2
 
 
 def test_a_click_on_nothing_finds_nothing() -> None:
-    boxes = hand_boxes(3, Box(0, 200, 1200, 160))
+    boxes = hand_boxes(3, Box(0, 200, 1200, METRICS.strip_height), METRICS)
     assert hit_test(boxes, 5, 5) is None
     assert hit_test([], 100, 100) is None
 

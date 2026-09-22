@@ -69,17 +69,31 @@ DECK_CARD_ACTIVE_BORDER_WIDTH = 3  # pen width for the active-selection highligh
 
 # Goldfish tab card sizing (issue #1045).
 #
-# Smaller than the deck workspace's DECK_CARD_WIDTH/HEIGHT and for a different
-# reason: the grid shows one cell per *distinct* card and can scroll, while the
-# goldfish table shows every copy at once and must not. A seven-card hand plus a
-# played-out board has to fit inside one tab at the window's enforced minimum, so
-# the card is sized to the space rather than the space to the card. The ratio is
-# the 63x88mm Magic card's, rounded to whole pixels (100 / 0.7159 = 139.7).
-GOLDFISH_CARD_WIDTH = 100
-GOLDFISH_CARD_HEIGHT = 140
-# A tapped card is drawn rotated, so the row it sits in has to be wide enough for
-# its *long* edge; this is the side of the square that both orientations fit in.
-GOLDFISH_CARD_SPAN = GOLDFISH_CARD_HEIGHT
+# Unlike DECK_CARD_WIDTH/HEIGHT these are not a size, they are the rule that
+# derives one: the goldfish card is measured from the panel it is drawn in, so
+# the hand fills the tab's width instead of sitting as a small centred fan with
+# unresolved space either side of it. ``layout.card_metrics`` does the deriving.
+#
+# The ratio is the real 63x88mm card's, and it is the *only* place a goldfish
+# card's height comes from -- width is chosen, height follows, so nothing here
+# can stretch a card.
+GOLDFISH_CARD_ASPECT = 88 / 63
+# The hand size the card is scaled to: at seven cards the fan runs edge to edge
+# with the cards just touching. Fewer and they spread out, more and they overlap
+# (see GOLDFISH_HAND_MIN_STEP) -- either way the fan still spans the full width.
+GOLDFISH_HAND_REFERENCE = 7
+# Floor and ceiling on that derived width. The floor keeps a card readable in a
+# tab dragged narrow; the ceiling stops a wide window growing cards so tall that
+# the hand strip crowds out the table they are meant to be played onto.
+GOLDFISH_CARD_MIN_WIDTH = 68
+GOLDFISH_CARD_MAX_WIDTH = 190
+# Share of the panel's height the hand strip may take before the card stops
+# growing. The table is the point of the tab; the hand is the smaller half.
+GOLDFISH_HAND_HEIGHT_PCT = 40
+# Art is decoded once at this width and scaled down to whatever the panel
+# currently asks for, so resizing the tab re-scales cached images instead of
+# going back to disk. Above GOLDFISH_CARD_MAX_WIDTH so scaling only ever shrinks.
+GOLDFISH_ART_DECODE_WIDTH = 220
 # Cards in hand fan out left to right and start overlapping once the strip runs
 # out -- never closer than this, so every card keeps a readable sliver of title.
 GOLDFISH_HAND_MIN_STEP = 28

@@ -9,9 +9,16 @@ needs and the deck grid does not:
   and puts the count in a badge; a goldfish hand holds four Lightning Bolts as
   four cards. The cache is still keyed by name, so those four share one decode.
 * **a tapped card is the same card rotated**, so each name is cached in both
-  orientations. The rotation is done once per card at decode time rather than in
-  the paint handler, because the paint handler runs on every mouse move during a
-  drag.
+  orientations. The rotation is done when a card is first asked for at a size
+  rather than in the paint handler, because the paint handler runs on every
+  mouse move during a drag.
+* **the card has no fixed size.** It is measured from the panel (see
+  ``layout.card_metrics``), so art is decoded *once* at
+  :data:`GOLDFISH_ART_DECODE_WIDTH` -- wider than a card is ever drawn -- and
+  scaled down from that source into whatever the current panel asks for.
+  Resizing the tab therefore re-scales images already in memory rather than
+  going back to disk, and scaling only ever shrinks, which is the direction that
+  looks good.
 
 Corners are left transparent (``apply_rounded_corner_alpha``) rather than
 flattened onto the surface colour the way the grid's are: cards on a table
@@ -34,8 +41,8 @@ from utils.constants import (
     DECK_CARD_BADGE_PADDING,
     DECK_CARD_CORNER_RADIUS,
     DECK_CARD_TEMPLATE_BORDER_WIDTH,
-    GOLDFISH_CARD_HEIGHT,
-    GOLDFISH_CARD_WIDTH,
+    GOLDFISH_ART_DECODE_WIDTH,
+    GOLDFISH_CARD_ASPECT,
 )
 from utils.constants.theme import SURFACE_BASE, TEXT_ON_FILL
 from utils.image_effects import apply_rounded_corner_alpha
@@ -43,7 +50,13 @@ from widgets.panels.card_table_panel.card_render import (
     build_image_name_candidates,
     resolve_card_color,
 )
+from widgets.panels.deck_goldfish_panel.layout import CardMetrics
 from widgets.stylize import type_font
+
+#: The size every source image is held at. Corners are cut and names drawn at
+#: this size too, so both scale with the card instead of being re-rendered.
+_SOURCE_WIDTH = GOLDFISH_ART_DECODE_WIDTH
+_SOURCE_HEIGHT = round(GOLDFISH_ART_DECODE_WIDTH * GOLDFISH_CARD_ASPECT)
 
 #: Shared with nothing: the grid's pool is sized for a 40-cell deck load, this
 #: one is sized for the dozen or so distinct names a goldfish ever shows at once.
@@ -53,7 +66,7 @@ atexit.register(_DECODE_POOL.shutdown, wait=False, cancel_futures=True)
 
 
 class GoldfishArtCache:
-    """Name -> ``(upright, tapped)`` bitmaps, with a placeholder until art lands.
+    """Name -> card face at the panel's current size, upright or turned.
 
     :param get_card_image: ``(name, size) -> Path | None``; the controller's
         image-cache lookup. Runs on a decode thread, so it must only read.
@@ -72,22 +85,40 @@ class GoldfishArtCache:
         self._get_card_image = get_card_image
         self._get_metadata = get_metadata
         self._on_ready = on_ready
-        self._upright: dict[str, wx.Bitmap] = {}
-        self._tapped: dict[str, wx.Bitmap] = {}
+        #: Name -> the upright face at source size: real art once it lands, the
+        #: placeholder until then. Everything drawn is scaled down from here.
+        self._source: dict[str, wx.Image] = {}
+        #: ``(name, tapped)`` -> the face scaled to ``self._width``. Thrown away
+        #: whole when the panel resizes: keying by size instead would quietly
+        #: keep a copy of every card at every width the window was dragged
+        #: through, and only the current one is ever drawn.
+        self._scaled: dict[tuple[str, bool], wx.Bitmap] = {}
+        self._width = 0
         #: Names whose art has arrived, so a second prefetch does not re-decode.
         self._loaded: set[str] = set()
         #: Names with a decode in flight, for the same reason.
         self._in_flight: set[str] = set()
 
-    def bitmap(self, name: str, *, tapped: bool = False) -> wx.Bitmap:
-        """This card's face, building the placeholder and queuing art if needed."""
-        cache = self._tapped if tapped else self._upright
-        cached = cache.get(name)
+    def bitmap(self, name: str, metrics: CardMetrics, *, tapped: bool = False) -> wx.Bitmap:
+        """This card's face at ``metrics``, queuing art if it is not here yet."""
+        if metrics.width != self._width:
+            self._scaled.clear()
+            self._width = metrics.width
+        cached = self._scaled.get((name, tapped))
         if cached is not None:
             return cached
-        self._store(name, self._placeholder(name))
-        self.prefetch([name])
-        return (self._tapped if tapped else self._upright)[name]
+        source = self._source.get(name)
+        if source is None:
+            source = self._placeholder(name)
+            self._source[name] = source
+            self.prefetch([name])
+        scaled = source.Scale(metrics.width, metrics.height, wx.IMAGE_QUALITY_HIGH)
+        if tapped:
+            # Clockwise: that is the way a card taps, on a table and in MTGO.
+            scaled = scaled.Rotate90(True)
+        bitmap = scaled.ConvertToBitmap()
+        self._scaled[(name, tapped)] = bitmap
+        return bitmap
 
     def prefetch(self, names: list[str]) -> None:
         """Start decoding any of ``names`` whose art is not cached or in flight."""
@@ -113,7 +144,7 @@ class GoldfishArtCache:
             return
         try:
             image = PilImage.open(str(path)).convert("RGB")
-            image = image.resize((GOLDFISH_CARD_WIDTH, GOLDFISH_CARD_HEIGHT), PilImage.LANCZOS)
+            image = image.resize((_SOURCE_WIDTH, _SOURCE_HEIGHT), PilImage.LANCZOS)
             wx.CallAfter(self._decoded, name, image)
         except Exception:
             # A truncated or unreadable file is a cache problem, not a reason to
@@ -124,44 +155,46 @@ class GoldfishArtCache:
         self._in_flight.discard(name)
         if image is None:
             return
-        wx_image = wx.Image(GOLDFISH_CARD_WIDTH, GOLDFISH_CARD_HEIGHT)
+        wx_image = wx.Image(_SOURCE_WIDTH, _SOURCE_HEIGHT)
         wx_image.SetData(image.tobytes())
-        self._store(name, apply_rounded_corner_alpha(wx_image, DECK_CARD_CORNER_RADIUS))
+        self._source[name] = apply_rounded_corner_alpha(wx_image, DECK_CARD_CORNER_RADIUS)
+        # The placeholder's scaled copies are now wrong in both orientations.
+        self._scaled.pop((name, False), None)
+        self._scaled.pop((name, True), None)
         self._loaded.add(name)
         self._on_ready(name)
-
-    def _store(self, name: str, image: wx.Image) -> None:
-        self._upright[name] = image.ConvertToBitmap()
-        # Clockwise: that is the way a card taps, on a table and in MTGO.
-        self._tapped[name] = image.Rotate90(True).ConvertToBitmap()
 
     # ----- placeholder -----
     def _placeholder(self, name: str) -> wx.Image:
         """A card-coloured plate with the card's name on it, drawn once per name.
 
         The same stand-in the deck grid draws while art loads, minus the mana
-        badge: at 100px wide the cost glyphs collide with the title, and the
-        goldfish is about *which* cards are in the hand.
+        badge: the cost glyphs collide with the title at the width a goldfish
+        card is drawn at, and the goldfish is about *which* cards are in hand.
+
+        Drawn at source size like real art, so it scales with the panel by the
+        same path instead of needing a redraw on every resize.
         """
         meta = self._get_metadata(name) or {}
-        bitmap = wx.Bitmap(GOLDFISH_CARD_WIDTH, GOLDFISH_CARD_HEIGHT)
+        bitmap = wx.Bitmap(_SOURCE_WIDTH, _SOURCE_HEIGHT)
         dc = wx.MemoryDC(bitmap)
         dc.SetBackground(wx.Brush(wx.Colour(*resolve_card_color(meta))))
         dc.Clear()
         dc.SetPen(wx.Pen(wx.Colour(*SURFACE_BASE), DECK_CARD_TEMPLATE_BORDER_WIDTH))
         dc.SetBrush(wx.TRANSPARENT_BRUSH)
-        dc.DrawRoundedRectangle(
-            0, 0, GOLDFISH_CARD_WIDTH, GOLDFISH_CARD_HEIGHT, DECK_CARD_CORNER_RADIUS
-        )
+        dc.DrawRoundedRectangle(0, 0, _SOURCE_WIDTH, _SOURCE_HEIGHT, DECK_CARD_CORNER_RADIUS)
         dc.SetTextForeground(wx.Colour(*TEXT_ON_FILL))
-        dc.SetFont(type_font("caption", bold=True))
+        # "body" rather than the grid's "caption": this plate is drawn at source
+        # size and then scaled down with the card, so caption would arrive on
+        # screen smaller than caption.
+        dc.SetFont(type_font("body", bold=True))
         self._draw_name(dc, name)
         dc.SelectObject(wx.NullBitmap)
         return apply_rounded_corner_alpha(bitmap.ConvertToImage(), DECK_CARD_CORNER_RADIUS)
 
     @staticmethod
     def _draw_name(dc: wx.DC, name: str) -> None:
-        max_width = GOLDFISH_CARD_WIDTH - DECK_CARD_BADGE_PADDING * 2
+        max_width = _SOURCE_WIDTH - DECK_CARD_BADGE_PADDING * 2
         lines: list[str] = []
         current = ""
         for word in name.split() or [name]:
@@ -174,7 +207,7 @@ class GoldfishArtCache:
         if current:
             lines.append(current)
         line_height = dc.GetTextExtent("Ag")[1]
-        y = (GOLDFISH_CARD_HEIGHT - line_height * len(lines)) // 2
+        y = (_SOURCE_HEIGHT - line_height * len(lines)) // 2
         for line in lines:
-            dc.DrawText(line, (GOLDFISH_CARD_WIDTH - dc.GetTextExtent(line)[0]) // 2, y)
+            dc.DrawText(line, (_SOURCE_WIDTH - dc.GetTextExtent(line)[0]) // 2, y)
             y += line_height
