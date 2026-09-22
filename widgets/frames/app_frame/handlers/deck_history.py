@@ -108,14 +108,7 @@ class DeckHistoryHandlers(_Base):
         def failed(exc: Exception) -> None:  # the file itself already loaded
             logger.warning(f"Could not identify deck version for {file_path}: {exc}")
 
-        worker = getattr(self.controller, "_worker", None)
-        if worker is None:
-            try:
-                done(work())
-            except Exception as exc:  # noqa: BLE001
-                failed(exc)
-            return
-        worker.submit(work, on_success=done, on_error=failed)
+        self.controller.worker.submit(work, on_success=done, on_error=failed)
 
     def _offer_to_record(
         self: AppFrame, service: DeckVcsService, deck_key: str, deck_text: str

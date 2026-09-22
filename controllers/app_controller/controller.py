@@ -239,6 +239,31 @@ class AppController(
             return None
         return rarity_service
 
+    @property
+    def worker(self) -> BackgroundWorker:
+        """The app's background worker, for code outside the controller package.
+
+        ``_worker`` is private and was read from the widget layer by name, with
+        a ``None`` default (``getattr(controller, "_worker", None)``) -- so a
+        rename here would not have failed anywhere. It would have handed the
+        History and Baseline panels a ``None``, and both fall back to reading on
+        the calling thread, which is the UI thread: the three-second stall
+        b8f85591 exists to remove, returning silently and only for users with
+        long histories.
+
+        A ``submit_background(...)`` method would be the tighter boundary, and
+        is what the review proposed. It is not what fits: two of the three
+        callers *hand the worker on* to a panel that stores it
+        (``DeckHistoryPanel(worker=...)``), because the panels own the stale-
+        token guard around their own submissions and have to be constructible
+        without a controller at all -- they take ``worker=None`` and read
+        inline, which is how their tests drive them. A method would have those
+        call sites passing ``controller.submit_background`` as a bound callable,
+        which is the same reach-through wearing a different name. The attribute
+        is the thing being shared, so the attribute is what is published.
+        """
+        return self._worker
+
     # ----- Backward-compat repository accessors -----
     # Widgets, handlers, and a few tests still reach for ``controller.card_repo``,
     # ``controller.deck_repo`` and ``controller.metagame_repo``. Cleaning those

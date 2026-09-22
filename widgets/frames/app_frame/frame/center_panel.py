@@ -171,7 +171,7 @@ class CenterPanelBuilderMixin(_Base):
             on_status_update=self._set_status,
             on_rename=self.on_deck_name_clicked,
             on_snapshot=self._on_history_snapshot,
-            worker=getattr(self.controller, "_worker", None),
+            worker=self.controller.worker,
             locale=self.locale,
         )
         self.deck_history_panel.SetToolTip(self._t("tabs.tooltip.deck_history"))
@@ -182,7 +182,7 @@ class CenterPanelBuilderMixin(_Base):
         # a second selection to keep in step with the research panel's.
         self.deck_baseline_panel = DeckBaselinePanel(
             self.deck_tabs,
-            worker=getattr(self.controller, "_worker", None),
+            worker=self.controller.worker,
             archetype_provider=self._baseline_archetype,
             format_provider=lambda: self.controller.current_format,
             on_status_update=self._set_status,
