@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from data_isolation import redirect_bound_paths
+from data_isolation import REAL_DATA_DIRS, redirect_bound_paths
 
 if sys.platform != "win32":
     pytest.skip("wxPython UI tests must run on Windows", allow_module_level=True)
@@ -100,13 +100,14 @@ def install_ui_environment(monkeypatch: pytest.MonkeyPatch, root: Path) -> None:
     Per test, through :func:`ui_environment`; per module, through
     :func:`shared_app_frame`, whose window outlives any one test's patches.
     """
-    config = root / "config"
-    cache = root / "cache"
-    decks = root / "decks"
-    logs = root / "logs"
-    card_data = root / "data"
+    # One directory per real data dir, named after it. Built from
+    # REAL_DATA_DIRS rather than listed, because ``rebase`` looks a real path's
+    # key up in here: a data dir added there and not here is a KeyError on the
+    # first UI test, not a path that quietly escapes.
+    roots = {key: root / key for key in REAL_DATA_DIRS}
+    config, cache, decks = roots["config"], roots["cache"], roots["decks"]
     image_cache = cache / "card_images"
-    _ensure_dirs(config, cache, decks, logs, card_data, image_cache)
+    _ensure_dirs(*roots.values(), image_cache)
 
     replacements = {
         "CONFIG_DIR": config,
@@ -126,17 +127,14 @@ def install_ui_environment(monkeypatch: pytest.MonkeyPatch, root: Path) -> None:
     }
     # Every real data path, wherever it is bound (see tests/data_isolation.py),
     # then the explicit names above, some of which differ from the real file name.
-    redirect_bound_paths(
-        monkeypatch,
-        {"config": config, "cache": cache, "decks": decks, "logs": logs, "data": card_data},
-    )
+    redirect_bound_paths(monkeypatch, roots)
     for attr, value in replacements.items():
         monkeypatch.setattr(constants, attr, value, raising=False)
 
     # The saved-decks SQLite database resolves its path from a module-level
     # import of SAVED_DECKS_DB_FILE, which the constants patch above cannot reach,
     # and Save/Load Deck now read and write it (#1034). Pin it per test.
-    saved_decks_db = cache / "saved_decks.db"
+    saved_decks_db = roots["deck_records"] / "saved_decks.db"
     monkeypatch.setattr(DatabaseMixin, "_get_db_path", lambda _self: saved_decks_db)
 
     monkeypatch.setattr(card_images_schemas, "IMAGE_CACHE_DIR", image_cache, raising=False)
