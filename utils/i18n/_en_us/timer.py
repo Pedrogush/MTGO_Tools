@@ -3,11 +3,13 @@
 MESSAGES: dict[str, str] = {
     "timer.section.thresholds": "Alert Thresholds",
     "timer.section.challenge": "Active Challenge Timer",
+    "timer.hint.threshold_format": "Enter time in MM:SS format (e.g., 05:00 for 5 minutes)",
     "timer.label.sound": "Alert Sound",
     "timer.label.check_interval": "Check interval (ms)",
     "timer.label.repeat_interval": "Repeat interval (seconds)",
     "timer.check.start_alert": "Alert when timer starts counting down",
     "timer.check.repeat_alarm": "Repeat alarm at interval",
+    "timer.btn.add_threshold": "+ Add Another Threshold",
     "timer.btn.start": "Start Monitoring",
     "timer.btn.stop": "Stop",
     "timer.btn.test": "Test Alert",
