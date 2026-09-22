@@ -1052,10 +1052,13 @@ class TestReadHistoryPicksAVersionToShow:
             assert vcs._active_session("deck") is not None
 
         snapshot = service.read_history("deck")
-
-        assert snapshot.graph == ()
         assert snapshot.branches == ()
         assert snapshot.preview is None
         assert vcs._active_session("deck") is None
-        # A handle left open by the failed read raises PermissionError here.
-        shutil.rmtree(repo_path)
+
+        # The packfile index is the handle that leaks, and Windows will not let
+        # go of it: if the failed read kept one, this raises PermissionError.
+        for index in (objects / "pack").glob("*.idx"):
+            index.unlink()
+
+        assert service.read_history("deck").graph == ()
