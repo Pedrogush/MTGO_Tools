@@ -156,6 +156,7 @@ class CenterPanelBuilderMixin(_Base):
             on_checkout=self._on_history_checkout,
             on_status_update=self._set_status,
             on_rename=self.on_deck_name_clicked,
+            worker=getattr(self.controller, "_worker", None),
             locale=self.locale,
         )
         self.deck_history_panel.SetToolTip(self._t("tabs.tooltip.deck_history"))

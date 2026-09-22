@@ -55,6 +55,7 @@ class DeckHistoryPanel(DeckHistoryPanelHandlersMixin, wx.Panel):
         on_checkout: Callable[[str], None] | None = None,
         on_status_update: Callable[..., None] | None = None,
         on_rename: Callable[[], None] | None = None,
+        worker: Any = None,
         locale: str | None = None,
     ) -> None:
         super().__init__(parent)
@@ -71,6 +72,7 @@ class DeckHistoryPanel(DeckHistoryPanelHandlersMixin, wx.Panel):
 
         self.vcs_service = vcs_service
         self.deck_repo = deck_repo
+        self.worker = worker
         self.locale = locale
         self._on_checkout = on_checkout
         self._on_status_update = on_status_update
@@ -80,6 +82,8 @@ class DeckHistoryPanel(DeckHistoryPanelHandlersMixin, wx.Panel):
         self._baseline_sha: str | None = None
         self._selected_sha: str | None = None
         self._last_deck_key: str | None = None
+        #: Bumped per refresh so a slow read cannot paint over a newer one.
+        self._run_token = 0
 
         sizer = wx.BoxSizer(wx.VERTICAL)
         sizer.Add(self._build_header(), 0, wx.EXPAND | wx.ALL, SPACE_XS)

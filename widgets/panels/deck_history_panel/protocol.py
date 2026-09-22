@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from pathlib import Path
-from typing import Protocol
+from typing import Any, Protocol
 
 import wx
 
@@ -22,6 +22,7 @@ class DeckHistoryPanelProto(Protocol):
 
     vcs_service: DeckVcsService
     deck_repo: object
+    worker: Any
     locale: str | None
 
     graph_canvas: DeckGraphCanvas
@@ -36,6 +37,7 @@ class DeckHistoryPanelProto(Protocol):
     _baseline_sha: str | None
     _selected_sha: str | None
     _last_deck_key: str | None
+    _run_token: int
 
     _on_checkout: Callable[[str], None] | None
     _on_status_update: Callable[..., None] | None
@@ -47,3 +49,9 @@ class DeckHistoryPanelProto(Protocol):
     def current_deck_file(self) -> Path | None: ...
 
     def refresh_history(self) -> None: ...
+
+    def set_deck_name_text(self, text: str, *, named: bool) -> None: ...
+
+    def Freeze(self) -> None: ...
+
+    def Thaw(self) -> None: ...

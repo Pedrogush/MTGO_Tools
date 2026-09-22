@@ -5,15 +5,25 @@ reads a blob out of the object store and fills the preview -- nothing on disk
 changes. Checkout, branch creation and branch switching all rewrite the user's
 decklist file, so each is an explicit menu action with its own confirmation
 path, never a consequence of a click.
+
+Reading the history is disk work and runs on the app's background worker, behind
+the same stale-token guard the Baseline tab uses: the graph, the branches and
+the opening preview arrive together as one :class:`HistorySnapshot`, and only
+applying it touches wx. It used to run inline, which put a deck's whole history
+on the UI thread on every save, every deck load and every visit to this tab --
+over three seconds for a deck with a hundred versions.
 """
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
 import wx
 from loguru import logger
 
+from services.deck_vcs_service import HistorySnapshot, VersionPreview
+from utils.perf import perf_phase
 from widgets.panels.deck_history_panel.layout import build_layout, diff_lines
 
 if TYPE_CHECKING:
@@ -43,7 +53,7 @@ class DeckHistoryPanelHandlersMixin(_Base):
         self.refresh_history()
 
     def refresh_history(self) -> None:
-        """Rebuild the graph from the deck's repo and repaint."""
+        """Read the deck's history on the worker, then repaint from the answer."""
         self._refresh_deck_name()
         deck_key = self.current_deck_key()
         # A selection and a pinned baseline are shas in *one* deck's repo, so
@@ -53,20 +63,61 @@ class DeckHistoryPanelHandlersMixin(_Base):
             self._last_deck_key = deck_key
             self._selected_sha = None
             self._baseline_sha = None
-        try:
-            self._graph = self.vcs_service.build_graph(deck_key)
-        except Exception as exc:  # noqa: BLE001 - a broken repo must not kill the tab
+
+        self._run_token += 1
+        token = self._run_token
+        service = self.vcs_service
+        selected = self._selected_sha
+        baseline = self._baseline_sha
+
+        def work() -> HistorySnapshot:
+            # Timed on both sides of the hand-off: this one is allowed to be
+            # slow and the paint below is not, so a regression that moves work
+            # back onto the UI thread shows up as the second number growing.
+            with perf_phase("deck history read (worker)"):
+                return service.read_history(deck_key, selected_sha=selected, baseline_sha=baseline)
+
+        def done(snapshot: HistorySnapshot) -> None:
+            if token != self._run_token:
+                return  # a newer refresh has started; this answer is stale
+            self._apply_snapshot(snapshot)
+
+        def failed(exc: Exception) -> None:
+            if token != self._run_token:
+                return
             logger.warning(f"Could not read deck history for {deck_key}: {exc}")
-            self._graph = []
+            self._apply_snapshot(HistorySnapshot())
 
-        self.graph_canvas.set_layout(build_layout(self._graph))
-        self._refresh_branches(deck_key)
+        if self.worker is None:
+            # No worker (tests, or a standalone panel): read inline.
+            try:
+                done(work())
+            except Exception as exc:  # noqa: BLE001
+                failed(exc)
+            return
 
-        if self._selected_sha is None and self._graph:
-            head = next((g for g in self._graph if g.commit.is_head), self._graph[0])
-            self._select_sha(head.sha)
-        else:
-            self._refresh_preview()
+        self.worker.submit(work, on_success=done, on_error=failed)
+
+    def _apply_snapshot(self, snapshot: HistorySnapshot) -> None:
+        """Put a history that has already been read on screen. wx only."""
+        with perf_phase("deck history paint (ui)"):
+            self._paint_snapshot(snapshot)
+
+    def _paint_snapshot(self, snapshot: HistorySnapshot) -> None:
+        self._graph = list(snapshot.graph)
+        self._selected_sha = snapshot.selected_sha
+
+        # Frozen for the same reason the Baseline tree is: every one of these
+        # repaints on its own otherwise, and a long history is a lot of them.
+        self.Freeze()
+        try:
+            self.graph_canvas.set_layout(build_layout(self._graph))
+            if self._selected_sha is not None:
+                self.graph_canvas.select(self._selected_sha)
+            self._apply_branches(snapshot.branches, snapshot.current_branch)
+            self._apply_preview(snapshot.preview)
+        finally:
+            self.Thaw()
 
     def _refresh_deck_name(self) -> None:
         """Show the loaded deck's name, or the prompt when it has none.
@@ -79,9 +130,8 @@ class DeckHistoryPanelHandlersMixin(_Base):
         name = deck_name_of(self.deck_repo.get_current_deck())
         self.set_deck_name_text(name or self._t("deck_name.unset"), named=bool(name))
 
-    def _refresh_branches(self, deck_key: str) -> None:
-        branches = self.vcs_service.list_branches(deck_key)
-        current = self.vcs_service.current_branch(deck_key)
+    def _apply_branches(self, branches: Sequence[str], current: str | None) -> None:
+        branches = list(branches)
         self.branch_choice.Set(branches)
         if current in branches:
             self.branch_choice.SetSelection(branches.index(current))
@@ -103,35 +153,42 @@ class DeckHistoryPanelHandlersMixin(_Base):
         self._select_sha(sha)
 
     def _refresh_preview(self) -> None:
+        """Re-read the selected version. Two blob reads against a graph in hand.
+
+        Kept inline rather than deferred: the graph is already read, so this is
+        one session and two small reads, and a click on a node should fill the
+        panes now rather than a frame later.
+        """
         sha = self._selected_sha
         if sha is None:
+            self._apply_preview(None)
+            return
+        self._apply_preview(
+            self.vcs_service.read_preview(
+                self.current_deck_key(), self._graph, sha, self._baseline_sha
+            )
+        )
+
+    def _apply_preview(self, preview: VersionPreview | None) -> None:
+        """Put a preview that has already been read on screen. wx only."""
+        if preview is None:
             self.preview_text.SetValue("")
             self.diff_text.SetValue("")
-            return
-        deck_key = self.current_deck_key()
-        try:
-            self.preview_text.SetValue(self.vcs_service.version_text(deck_key, sha))
-        except Exception as exc:  # noqa: BLE001
-            logger.warning(f"Could not read version {sha[:7]}: {exc}")
-            self.preview_text.SetValue("")
-            return
-
-        base = self._baseline_sha or self._parent_of(sha)
-        if base is None or base == sha:
-            self.diff_text.SetValue(self._t("history.diff.no_baseline"))
             self.baseline_label.SetLabel(self._t("history.baseline.none"))
             return
-        try:
-            diff = self.vcs_service.diff(deck_key, base, sha)
-        except Exception as exc:  # noqa: BLE001
-            logger.warning(f"Could not diff {base[:7]}..{sha[:7]}: {exc}")
+
+        self.preview_text.SetValue(preview.text)
+        base = preview.base_sha
+        if base is None or preview.diff is None:
+            self.diff_text.SetValue(self._t("history.diff.no_baseline"))
+            self.baseline_label.SetLabel(self._t("history.baseline.none"))
             return
         # Net card changes, not line changes: cutting a playset to two is one
         # "-2", which is the change the player made. See :func:`diff_lines`.
         lines = diff_lines(
-            diff,
+            preview.diff,
             before_label=base[:7],
-            after_label=sha[:7],
+            after_label=preview.sha[:7],
             main_heading=self._t("history.diff.maindeck"),
             sideboard_heading=self._t("history.diff.sideboard"),
             identical=self._t("history.diff.identical"),
@@ -142,12 +199,6 @@ class DeckHistoryPanelHandlersMixin(_Base):
             if self._baseline_sha
             else self._t("history.baseline.parent", sha=base[:7])
         )
-
-    def _parent_of(self, sha: str) -> str | None:
-        entry = next((g for g in self._graph if g.sha == sha), None)
-        if entry is None or not entry.commit.parents:
-            return None
-        return entry.commit.parents[0]
 
     # ------------------------------------------------------------------ context menu ------------------------------------------------------------------
     def on_node_context(self, sha: str, position: wx.Point) -> None:

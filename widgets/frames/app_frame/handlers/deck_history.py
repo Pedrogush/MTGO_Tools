@@ -21,6 +21,8 @@ import wx
 from loguru import logger
 
 from services.deck_vcs_service import (
+    DeckVcsService,
+    ExternalEdit,
     ExternalEditStatus,
     deck_key_for,
     get_deck_vcs_service,
@@ -60,19 +62,40 @@ class DeckHistoryHandlers(_Base):
 
         Only asks when there *is* a history to compare against: a deck being
         opened for the first time is not an "external edit", it is just a deck.
+
+        The identification reads and fingerprints a blob per commit, so it runs
+        on the background worker: a deck with a long history used to hold the
+        load up while every version was hashed. The deck is on screen by the
+        time the answer arrives, and only the prompt needs the UI thread.
         """
         deck_key = deck_key_for(self.controller.deck_repo.get_current_deck(), file_path)
         service = get_deck_vcs_service()
-        try:
-            verdict = service.identify(deck_key, deck_text)
-        except Exception as exc:  # noqa: BLE001 - the file itself already loaded
+
+        def work() -> ExternalEdit:
+            return service.identify(deck_key, deck_text)
+
+        def done(verdict: ExternalEdit) -> None:
+            if verdict.status is not ExternalEditStatus.UNATTRIBUTED:
+                logger.info(f"Loaded deck matches history: {deck_key} ({verdict.status.value})")
+                return
+            self._offer_to_record(service, deck_key, deck_text)
+
+        def failed(exc: Exception) -> None:  # the file itself already loaded
             logger.warning(f"Could not identify deck version for {file_path}: {exc}")
-            return
 
-        if verdict.status is not ExternalEditStatus.UNATTRIBUTED:
-            logger.info(f"Loaded deck matches history: {deck_key} ({verdict.status.value})")
+        worker = getattr(self.controller, "_worker", None)
+        if worker is None:
+            try:
+                done(work())
+            except Exception as exc:  # noqa: BLE001
+                failed(exc)
             return
+        worker.submit(work, on_success=done, on_error=failed)
 
+    def _offer_to_record(
+        self: AppFrame, service: DeckVcsService, deck_key: str, deck_text: str
+    ) -> None:
+        """Ask whether an unrecognised decklist should become a version."""
         answer = wx.MessageBox(
             self._t("history.external.prompt"),
             self._t("history.external.title"),
