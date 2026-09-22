@@ -249,8 +249,12 @@ class TestLoadingADeckRefreshesTheOpenTab:
         assert panel.current_deck_key() == "second deck"
         assert len(panel._graph) == 1
 
-    def test_a_hidden_tab_is_left_alone_until_it_is_shown(self, shared_frame, tmp_path):
-        """Waking only the visible tab is what keeps a load off the slow path."""
+    def test_the_history_is_read_even_with_the_tab_hidden(self, shared_frame, tmp_path):
+        """The rail beside the deck tables shows it, and the rail is never hidden.
+
+        The tab being closed is no longer a reason to skip the read: something
+        on screen is always showing this deck's versions.
+        """
         frame = shared_frame
         panel = self._history_panel_over(frame, tmp_path)
         tabs = frame.deck_tabs
@@ -259,8 +263,79 @@ class TestLoadingADeckRefreshesTheOpenTab:
 
         frame.controller.deck_repo.set_current_deck({"deck_name": "first deck"})
         frame._on_deck_content_ready(DECK_V1, source="file")
-        assert panel._graph == []
 
-        # ...and it catches up the moment it is looked at.
-        panel.on_shown()
         assert len(panel._graph) == 2
+
+    def test_the_history_is_read_once_per_load_not_twice(self, shared_frame, tmp_path):
+        """The tab is refreshed by the load; waking it again would repeat it."""
+        frame = shared_frame
+        panel = self._history_panel_over(frame, tmp_path)
+        self._open_history_tab(frame)
+
+        reads: list[str] = []
+        original = panel.vcs_service.read_history
+
+        def counting(deck_key, **kwargs):
+            reads.append(deck_key)
+            return original(deck_key, **kwargs)
+
+        panel.vcs_service.read_history = counting  # type: ignore[method-assign]
+        frame.controller.deck_repo.set_current_deck({"deck_name": "first deck"})
+        frame._on_deck_content_ready(DECK_V1, source="file")
+
+        assert reads == ["first deck"]
+
+
+@pytest.mark.usefixtures("wx_app")
+class TestCheckingOutDoesNotAskFirst:
+    """Moving between versions is the feature, so it costs one action.
+
+    It used to raise a yes/no modal on every checkout, warning that the deck
+    file would be rewritten. What that protects against is thin: the version
+    being left is still a node on the graph, so the move is undone by making the
+    opposite one. What it cost was doubling the price of the thing the whole
+    view exists to do.
+    """
+
+    def test_no_dialog_stands_between_the_action_and_the_move(
+        self, history_panel, tmp_path, monkeypatch
+    ):
+        panel = history_panel
+        panel.refresh_history()
+        panel.worker_double.run_next()
+        oldest = panel._graph[-1].sha
+
+        asked: list[object] = []
+        monkeypatch.setattr(wx, "MessageBox", lambda *a, **k: asked.append(a))
+        panel.checkout_version(oldest)
+
+        assert asked == [], "a confirmation was raised"
+
+    def test_the_deck_actually_moves(self, history_panel):
+        panel = history_panel
+        panel.refresh_history()
+        panel.worker_double.run_next()
+        oldest = panel._graph[-1].sha
+
+        loaded: list[str] = []
+        panel._on_checkout = loaded.append
+        panel.checkout_version(oldest)
+
+        assert len(loaded) == 1
+        assert "2 Consider" in loaded[0], "the older version's decklist came back"
+
+    def test_a_failed_checkout_still_reports(self, history_panel, monkeypatch):
+        """Dropping the confirmation must not drop the error path with it."""
+        panel = history_panel
+        panel.refresh_history()
+        panel.worker_double.run_next()
+
+        def boom(*_args, **_kwargs):
+            raise OSError("the deck file is read-only")
+
+        monkeypatch.setattr(panel.vcs_service, "checkout", boom)
+        shown: list[object] = []
+        monkeypatch.setattr(wx, "MessageBox", lambda *a, **k: shown.append(a))
+        panel.checkout_version(panel._graph[-1].sha)
+
+        assert len(shown) == 1

@@ -56,6 +56,7 @@ from widgets.mana_icon_factory import ManaIconFactory
 from widgets.menu_bar import AppMenuBar
 from widgets.panels.card_table_panel import CardTablePanel
 from widgets.panels.deck_builder_panel import DeckBuilderPanel
+from widgets.panels.deck_history_rail import DeckHistoryRail
 from widgets.panels.deck_research_panel import DeckResearchPanel
 from widgets.status_bar import ThemedStatusBar
 from widgets.stylize import init_top_level_window, strip_native_button_frame
@@ -322,6 +323,17 @@ class AppFrame(
         # collapsed via the gutter button to hand its width to the workspace.
         deck_workspace = self._build_deck_workspace(right_panel)
         content_split.Add(deck_workspace, 1, wx.EXPAND | wx.RIGHT, SPACE_SM)
+
+        # The version rail, between the deck tables and the inspector. Fixed
+        # width (proportion 0), so the strip it costs comes out of the window's
+        # chrome once rather than growing with it, and the tables keep every
+        # pixel the window gains.
+        self.deck_history_rail = DeckHistoryRail(
+            right_panel,
+            on_checkout=self.checkout_deck_version,
+            locale=self.locale,
+        )
+        content_split.Add(self.deck_history_rail, 0, wx.EXPAND | wx.RIGHT, SPACE_SM)
 
         self.inspector_toggle_btn = self._build_collapse_toggle(
             right_panel,

@@ -501,13 +501,16 @@ class DeckContentHandlers(_Base):
             self.deck_notes_panel.load_notes_for_current()
         with perf_phase("load_guide_for_current"):
             self._load_guide_for_current()
-        # Every per-deck tab is refreshed above; the two that read more than the
-        # decklist -- the version history and the archetype baseline -- are woken
-        # here instead, and only when one of them is the tab on screen. A hidden
-        # one refreshes when it is next shown, so nothing pays for a tab nobody
-        # is looking at. Without this a deck opened from Research left the
-        # History tab showing the *previous* deck's commits.
-        self.notify_deck_tab_shown()
+        # Every per-deck tab is refreshed above. The version history is read
+        # here whether or not its tab is open, because the rail beside the deck
+        # tables shows it too and is never hidden -- one read feeds both. Without
+        # this a deck opened from Research left the History tab showing the
+        # *previous* deck's commits.
+        self.refresh_deck_history()
+        # The Baseline tab reads the loaded deck's archetype, and only matters
+        # when it is the tab on screen. The history panel is refreshed above, so
+        # waking it again here would read the same history twice.
+        self.notify_deck_tab_shown(skip=getattr(self, "deck_history_panel", None))
         self._set_status("app.status.deck_ready", source=source)
         self._schedule_settings_save()
 

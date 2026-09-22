@@ -7,9 +7,12 @@ on a :class:`wx.ScrolledWindow`. The placement it paints comes from
 question "did the fork land in the right lane?" is answered by a unit test, and
 this module only has to be right about pixels.
 
-Clicking a node selects it and nothing more. Checking out is a separate action
-in the node's context menu, because a checkout rewrites the user's decklist file
-and looking at a version must never do that.
+Clicking a node here selects it and nothing more: this canvas sits beside a
+preview pane, so a click means "show me that version", and checking out is the
+node's context menu. The rail's canvas
+(:mod:`widgets.panels.deck_history_rail.canvas`) makes the opposite choice for
+the opposite reason -- it has nothing to preview *into*, so a click there is the
+move itself.
 """
 
 from __future__ import annotations

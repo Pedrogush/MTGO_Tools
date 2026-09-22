@@ -156,6 +156,7 @@ class CenterPanelBuilderMixin(_Base):
             on_checkout=self._on_history_checkout,
             on_status_update=self._set_status,
             on_rename=self.on_deck_name_clicked,
+            on_snapshot=self._on_history_snapshot,
             worker=getattr(self.controller, "_worker", None),
             locale=self.locale,
         )
@@ -193,12 +194,15 @@ class CenterPanelBuilderMixin(_Base):
         except Exception as exc:  # noqa: BLE001 - a tab must not die on becoming visible
             logger.warning(f"Deck tab failed to refresh on becoming visible: {exc}")
 
-    def notify_deck_tab_shown(self) -> None:
+    def notify_deck_tab_shown(self, *, skip: wx.Window | None = None) -> None:
         """Wake the deck tab that is currently on screen.
 
         The page-changed event only fires when the *selection* moves, so state
         that changes underneath an already-open tab (picking an archetype in the
         research list while the Baseline tab is showing) needs this instead.
+
+        ``skip`` is for a caller that has already refreshed one tab by another
+        route, so waking it again would repeat the work it just did.
         """
         tabs = getattr(self, "deck_tabs", None)
         if tabs is None:
@@ -206,7 +210,10 @@ class CenterPanelBuilderMixin(_Base):
         selection = tabs.GetSelection()
         if selection == wx.NOT_FOUND:
             return
-        on_shown = getattr(tabs.GetPage(selection), "on_shown", None)
+        page = tabs.GetPage(selection)
+        if skip is not None and page is skip:
+            return
+        on_shown = getattr(page, "on_shown", None)
         if on_shown is None:
             return
         try:

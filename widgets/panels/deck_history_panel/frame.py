@@ -55,6 +55,7 @@ class DeckHistoryPanel(DeckHistoryPanelHandlersMixin, wx.Panel):
         on_checkout: Callable[[str], None] | None = None,
         on_status_update: Callable[..., None] | None = None,
         on_rename: Callable[[], None] | None = None,
+        on_snapshot: Callable[[Any], None] | None = None,
         worker: Any = None,
         locale: str | None = None,
     ) -> None:
@@ -77,6 +78,7 @@ class DeckHistoryPanel(DeckHistoryPanelHandlersMixin, wx.Panel):
         self._on_checkout = on_checkout
         self._on_status_update = on_status_update
         self._on_rename = on_rename
+        self._on_snapshot = on_snapshot
 
         self._graph = []
         self._baseline_sha: str | None = None

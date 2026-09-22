@@ -42,6 +42,7 @@ class DeckHistoryPanelProto(Protocol):
 
     _on_checkout: Callable[[str], None] | None
     _on_status_update: Callable[..., None] | None
+    _on_snapshot: Callable[[Any], None] | None
 
     def _t(self, key: str, **kwargs: object) -> str: ...
 

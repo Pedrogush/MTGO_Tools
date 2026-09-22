@@ -50,6 +50,28 @@ class DeckHistoryHandlers(_Base):
         """
         self._on_deck_content_ready(deck_text, source="file")
 
+    def _on_history_snapshot(self: AppFrame, snapshot: object) -> None:
+        """Hand the history the tab just read to the rail beside the tables."""
+        rail = getattr(self, "deck_history_rail", None)
+        if rail is None:
+            return
+        try:
+            rail.set_snapshot(snapshot)
+        except Exception as exc:  # noqa: BLE001 - a rail problem is not a deck problem
+            logger.warning(f"Could not repaint the version rail: {exc}")
+
+    def checkout_deck_version(self: AppFrame, sha: str) -> None:
+        """Load a version, from the rail's click.
+
+        Routed through the History tab's own checkout so there is one
+        implementation of what moving version means -- it writes the user's
+        ``.txt``, reloads the workspace from it, and repaints both views.
+        """
+        panel = getattr(self, "deck_history_panel", None)
+        if panel is None:
+            return
+        panel.checkout_version(sha)
+
     def refresh_deck_history(self: AppFrame) -> None:
         """Repaint the version graph, if the tab has been built."""
         panel = getattr(self, "deck_history_panel", None)

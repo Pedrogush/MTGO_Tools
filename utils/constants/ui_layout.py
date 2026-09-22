@@ -90,6 +90,12 @@ DECK_COUNT_LABEL_MIN_WIDTH = 48
 #: is what would force the row wider.
 DECK_NAME_LABEL_MIN_WIDTH = 0
 
+# The version rail beside the deck tables. Wide enough for the widest branch
+# fork the lane assignment produces in practice (three lanes) plus a short sha,
+# and fixed rather than proportional: it is a strip taken out of the card
+# tables' width, so it must not grow when the window does.
+DECK_HISTORY_RAIL_WIDTH = 104
+
 #: What the deck-name label *wants* beside the view controls, as opposed to what
 #: it demands. Read only by ``_reflow_header``: when the row cannot give the name
 #: this much alongside the controls, the controls drop to their own line instead
