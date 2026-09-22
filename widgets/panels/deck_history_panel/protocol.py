@@ -38,6 +38,7 @@ class DeckHistoryPanelProto(Protocol):
     _selected_sha: str | None
     _last_deck_key: str | None
     _run_token: int
+    _refresh_pending: bool
 
     _on_checkout: Callable[[str], None] | None
     _on_status_update: Callable[..., None] | None

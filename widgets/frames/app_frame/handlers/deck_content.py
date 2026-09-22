@@ -124,11 +124,6 @@ class DeckContentHandlers(_Base):
         # The file may have been edited outside the app since it was last saved;
         # its content is the only thing that can say so.
         self._check_external_edit(file_ref, deck_text)
-        # The graph is keyed by deck, and the deck just changed. Nothing binds a
-        # page-changed event on the deck tabs, so a tab that is not repainted
-        # here keeps showing the *previous* deck's history until something else
-        # moves HEAD -- which reads as "this deck has no versions".
-        self.refresh_deck_history()
         if deck_record.get("archetype"):
             self._set_status(
                 "app.status.deck_loaded_with_archetype",
@@ -506,6 +501,13 @@ class DeckContentHandlers(_Base):
             self.deck_notes_panel.load_notes_for_current()
         with perf_phase("load_guide_for_current"):
             self._load_guide_for_current()
+        # Every per-deck tab is refreshed above; the two that read more than the
+        # decklist -- the version history and the archetype baseline -- are woken
+        # here instead, and only when one of them is the tab on screen. A hidden
+        # one refreshes when it is next shown, so nothing pays for a tab nobody
+        # is looking at. Without this a deck opened from Research left the
+        # History tab showing the *previous* deck's commits.
+        self.notify_deck_tab_shown()
         self._set_status("app.status.deck_ready", source=source)
         self._schedule_settings_save()
 

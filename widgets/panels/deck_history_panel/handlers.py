@@ -80,11 +80,13 @@ class DeckHistoryPanelHandlersMixin(_Base):
         def done(snapshot: HistorySnapshot) -> None:
             if token != self._run_token:
                 return  # a newer refresh has started; this answer is stale
+            self._refresh_pending = False
             self._apply_snapshot(snapshot)
 
         def failed(exc: Exception) -> None:
             if token != self._run_token:
                 return
+            self._refresh_pending = False
             logger.warning(f"Could not read deck history for {deck_key}: {exc}")
             self._apply_snapshot(HistorySnapshot())
 
@@ -96,7 +98,19 @@ class DeckHistoryPanelHandlersMixin(_Base):
                 failed(exc)
             return
 
+        self._refresh_pending = True
         self.worker.submit(work, on_success=done, on_error=failed)
+
+    @property
+    def refresh_pending(self) -> bool:
+        """Whether a read is still on its way to the canvas.
+
+        The graph is read on a worker, so what is painted lags a refresh by a
+        few hundred milliseconds. A caller that has to read the *settled* graph
+        -- the automation harness does, since its readouts are asserted against
+        -- waits on this rather than racing it.
+        """
+        return self._refresh_pending
 
     def _apply_snapshot(self, snapshot: HistorySnapshot) -> None:
         """Put a history that has already been read on screen. wx only."""

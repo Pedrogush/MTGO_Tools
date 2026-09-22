@@ -43,9 +43,12 @@ class DeckHistoryHandlers(_Base):
     """Frame-side reactions to version-history actions."""
 
     def _on_history_checkout(self: AppFrame, deck_text: str) -> None:
-        """Load a checked-out version's decklist into the deck workspace."""
+        """Load a checked-out version's decklist into the deck workspace.
+
+        The graph is repainted by the load itself, which wakes whichever deck
+        tab is on screen -- and after a checkout that is this one.
+        """
         self._on_deck_content_ready(deck_text, source="file")
-        self.refresh_deck_history()
 
     def refresh_deck_history(self: AppFrame) -> None:
         """Repaint the version graph, if the tab has been built."""

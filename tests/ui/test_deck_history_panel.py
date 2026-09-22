@@ -179,3 +179,88 @@ class TestTheGraphIsPaintedInOneGo:
         panel.worker_double.run_next()
 
         assert events == ["freeze", "paint", "thaw"]
+
+
+@pytest.mark.usefixtures("wx_app")
+class TestLoadingADeckRefreshesTheOpenTab:
+    """A deck load has to reach the tabs that read more than the decklist.
+
+    Notes, Stats and the Sideboard Guide are refreshed by the load itself. The
+    History tab was not: it was repainted only by the file-dialog path, so a
+    deck opened from Research left it showing the *previous* deck's commits
+    while its header named the new one.
+    """
+
+    @staticmethod
+    def _history_panel_over(frame, tmp_path):
+        """Point the frame's History tab at a repo holding two decks."""
+        service = DeckVcsService(vcs_repo=DeckVcsRepository(tmp_path / "deck_vcs"))
+        service.record_save("first deck", DECK_V1)
+        service.record_save("first deck", DECK_V2)
+        service.record_save("second deck", DECK_V1)
+
+        panel = frame.deck_history_panel
+        panel.vcs_service = service
+        # Inline, so the assertion reads the answer rather than a race.
+        panel.worker = None
+        # ``shared_frame`` hands back one panel per module, so clear what an
+        # earlier test painted -- these assert on what a load *did*, which is
+        # only readable against a known starting state.
+        panel._graph = []
+        panel._last_deck_key = None
+        panel._selected_sha = None
+        return panel
+
+    @staticmethod
+    def _open_history_tab(frame) -> None:
+        tabs = frame.deck_tabs
+        for index in range(tabs.GetPageCount()):
+            if tabs.GetPage(index) is frame.deck_history_panel:
+                tabs.SetSelection(index)
+                return
+        raise AssertionError("the History tab is not in the deck notebook")
+
+    def test_a_deck_opened_from_research_repaints_the_graph(self, shared_frame, tmp_path):
+        frame = shared_frame
+        panel = self._history_panel_over(frame, tmp_path)
+        self._open_history_tab(frame)
+
+        frame.controller.deck_repo.set_current_deck({"deck_name": "first deck"})
+        panel.refresh_history()
+        assert len(panel._graph) == 2
+
+        # A deck arriving from anywhere -- Research, an average, the clipboard --
+        # lands in _on_deck_content_ready, which is the path that was missing.
+        frame.controller.deck_repo.set_current_deck({"deck_name": "second deck"})
+        frame._on_deck_content_ready(DECK_V1, source="mtggoldfish")
+
+        assert len(panel._graph) == 1, "the graph still shows the previous deck"
+
+    def test_the_tab_header_and_the_graph_name_the_same_deck(self, shared_frame, tmp_path):
+        frame = shared_frame
+        panel = self._history_panel_over(frame, tmp_path)
+        self._open_history_tab(frame)
+
+        frame.controller.deck_repo.set_current_deck({"deck_name": "first deck"})
+        panel.refresh_history()
+        frame.controller.deck_repo.set_current_deck({"deck_name": "second deck"})
+        frame._on_deck_content_ready(DECK_V1, source="file")
+
+        assert panel.current_deck_key() == "second deck"
+        assert len(panel._graph) == 1
+
+    def test_a_hidden_tab_is_left_alone_until_it_is_shown(self, shared_frame, tmp_path):
+        """Waking only the visible tab is what keeps a load off the slow path."""
+        frame = shared_frame
+        panel = self._history_panel_over(frame, tmp_path)
+        tabs = frame.deck_tabs
+        tabs.SetSelection(0)  # the deck tables, not History
+        assert tabs.GetPage(tabs.GetSelection()) is not panel
+
+        frame.controller.deck_repo.set_current_deck({"deck_name": "first deck"})
+        frame._on_deck_content_ready(DECK_V1, source="file")
+        assert panel._graph == []
+
+        # ...and it catches up the moment it is looked at.
+        panel.on_shown()
+        assert len(panel._graph) == 2

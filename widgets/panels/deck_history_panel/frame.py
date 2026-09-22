@@ -84,6 +84,8 @@ class DeckHistoryPanel(DeckHistoryPanelHandlersMixin, wx.Panel):
         self._last_deck_key: str | None = None
         #: Bumped per refresh so a slow read cannot paint over a newer one.
         self._run_token = 0
+        #: True between handing a read to the worker and painting its answer.
+        self._refresh_pending = False
 
         sizer = wx.BoxSizer(wx.VERTICAL)
         sizer.Add(self._build_header(), 0, wx.EXPAND | wx.ALL, SPACE_XS)

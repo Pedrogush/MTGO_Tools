@@ -11,6 +11,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+import wx
+
 if TYPE_CHECKING:
     from automation.server.protocol import AutomationServerProto
 
@@ -43,7 +45,9 @@ class DeckHistoryMixin(_Base):
             if not stored:
                 return {"named": False, "error": f"{name!r} is not a usable name"}
             self.frame.refresh_deck_name_displays()
-            self.frame.refresh_deck_history()
+            panel = self._history_panel()
+            if panel is not None:
+                self._refresh_and_settle(panel)
 
         return {
             "named": bool(deck_name_of(deck)),
@@ -69,6 +73,29 @@ class DeckHistoryMixin(_Base):
         self.frame.on_save_clicked(None)
         return {"saved": True, "path": str(expected)}
 
+    @staticmethod
+    def _settle(panel: Any, timeout: float = 10.0) -> bool:
+        """Pump until the panel's pending read has been painted.
+
+        The graph is read on a background worker, so ``refresh_history`` returns
+        before the answer exists. Every readout here is asserted against by the
+        scripts that call it, so they have to see the settled graph rather than
+        whatever the previous deck left behind. This handler already runs on the
+        UI thread (``transport`` marshals it there), so yielding is what lets
+        the worker's ``wx.CallAfter`` land.
+        """
+        import time
+
+        deadline = time.monotonic() + timeout
+        while panel.refresh_pending and time.monotonic() < deadline:
+            wx.Yield()
+            time.sleep(0.005)
+        return not panel.refresh_pending
+
+    def _refresh_and_settle(self, panel: Any) -> bool:
+        panel.refresh_history()
+        return self._settle(panel)
+
     def _handle_deck_history(self) -> dict[str, Any]:
         """The version graph as the canvas has it placed."""
         from widgets.panels.deck_history_panel.layout import build_layout
@@ -76,11 +103,12 @@ class DeckHistoryMixin(_Base):
         panel = self._history_panel()
         if panel is None:
             return {"error": "History panel not built"}
-        panel.refresh_history()
+        settled = self._refresh_and_settle(panel)
         layout = build_layout(panel._graph)
         deck_key = panel.current_deck_key()
         return {
             "deck_key": deck_key,
+            "settled": settled,
             "branch": panel.vcs_service.current_branch(deck_key),
             "branches": panel.vcs_service.list_branches(deck_key),
             "selected": panel._selected_sha,
@@ -135,7 +163,7 @@ class DeckHistoryMixin(_Base):
             from utils.atomic_io import atomic_write_text
 
             atomic_write_text(Path(deck_file), normalize_decklist(deck_text))
-        panel.refresh_history()
+        self._refresh_and_settle(panel)
         return {"saved": sha is not None, "sha": (sha or "")[:7], "deck_key": deck_key}
 
     #: Preview notebook page order, as ``_build_body`` adds them.
@@ -189,7 +217,7 @@ class DeckHistoryMixin(_Base):
         if full is None:
             return {"error": f"No such version: {sha}"}
         created = panel.vcs_service.create_branch(panel.current_deck_key(), name, full)
-        panel.refresh_history()
+        self._refresh_and_settle(panel)
         return {"created": created, "at": full[:7]}
 
     def _handle_deck_history_switch(self, name: str) -> dict[str, Any]:

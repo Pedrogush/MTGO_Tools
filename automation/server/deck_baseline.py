@@ -244,8 +244,13 @@ class DeckBaselineMixin(_Base):
             if saved and saved.get(field):
                 deck_record[field] = saved[field]
 
+        # The load wakes whichever deck tab is on screen; when that is the
+        # History tab its read is on a worker, so settle before reporting.
         self.frame._on_deck_content_ready(deck_text, source="file")
-        self.frame.refresh_deck_history()
+        history = getattr(self.frame, "deck_history_panel", None)
+        if history is not None:
+            history.refresh_history()
+            self._settle(history)
         return {
             "loaded": True,
             "path": str(file_ref),

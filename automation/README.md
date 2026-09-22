@@ -188,6 +188,10 @@ Two things worth knowing when scripting against it:
 
 - `deck-history-select` is the *preview* path and must never move `HEAD`; if a
   test sees the checked-out branch change after a select, that is the bug.
+- **The graph is read on a background thread.** `deck-history` waits for that
+  read before reporting, and says so in `settled`; a script that sees
+  `"settled": false` timed out waiting and is looking at a stale graph, not an
+  empty history. Nothing else needs to sleep for it.
 - `deck-history-checkout` rewrites the user's `.txt`. The repo behind the graph
   lives in the app cache (`cache/deck_vcs/<deck_key>/`), never beside the deck
   file, so diffing the `.txt` outside the app is a fair test that no version
