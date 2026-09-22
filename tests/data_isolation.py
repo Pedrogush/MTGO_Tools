@@ -264,6 +264,46 @@ def real_paths_written_here() -> set[str]:
     return set(_own_real_writes)
 
 
+#: Set to ``1`` by a developer who knows something else on this machine is
+#: writing the shared data dirs -- ``main.py --automation`` in another window, or
+#: a second worktree's suite. Only that case is allowed to end in a warning; see
+#: ``real_data_untouched`` in the root conftest for why it is not the default.
+ALLOW_CONCURRENT_APP_ENV = "MTGO_TOOLS_ALLOW_CONCURRENT_APP"
+
+
+def guard_verdict(changed: list[str], written_here: set[str]) -> tuple[str, bool] | None:
+    """``(message, fatal)`` for the real-data files in *changed*, or ``None`` if none are.
+
+    *written_here* is :func:`real_paths_written_here`. A path in it was opened for
+    writing by *this* process, so the suite is unambiguously to blame and the run
+    fails. Anything else is either a subprocess the suite spawned -- the audit
+    hook is per-process, so it cannot see those -- or another program; both are
+    fatal unless the developer has said which it is via
+    :data:`ALLOW_CONCURRENT_APP_ENV`.
+    """
+    ours = [path for path in changed if normalized(path) in written_here]
+    if ours:
+        return (
+            f"Tests modified the user's real data: {ours[:20]}. Something reached a real "
+            "path that tests/data_isolation.py did not redirect.",
+            True,
+        )
+    if not changed:
+        return None
+    message = (
+        f"{len(changed)} file(s) under the real data dirs changed during the run, but no "
+        f"write to them came from this process: {changed[:20]}. Either a subprocess the "
+        "suite spawned wrote them (the audit hook only sees this process), or another "
+        "program is writing the shared data dirs -- the app resolves its data dirs to "
+        f"this same checkout. If it is the app, re-run with {ALLOW_CONCURRENT_APP_ENV}=1 "
+        "to accept that and have this reported as a warning instead."
+    )
+    # The opt-out is a developer's statement about their own machine; CI has no
+    # second writer, so an environment that sets both is still held to the rule.
+    excused = bool(os.environ.get(ALLOW_CONCURRENT_APP_ENV)) and not os.environ.get("CI")
+    return message, not excused
+
+
 def snapshot_real_data() -> dict[str, tuple[int, int]]:
     """``{path: (size, mtime_ns)}`` for every file under the real data dirs.
 
