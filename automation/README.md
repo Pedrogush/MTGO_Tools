@@ -295,8 +295,9 @@ Two things that look like bugs and are not:
   `on_load_deck_clicked` after its `wx.FileDialog`.
 - **Every baseline root carries the same 2020-01-01 timestamp.** The root's sha
   is deliberately deterministic, so two decks of one archetype share an
-  ancestor; a real clock in it would split roots that ought to coincide. The
-  date in the graph node is that pinned epoch, shown in local time.
+  ancestor; a real clock in it would split roots that ought to coincide. That
+  pinned epoch is not a moment the deck passed through, so the graph node shows
+  the sha alone for a baseline root -- only real saves carry a date.
 
 > The Baseline tab's own label is translated (`Base` in pt-BR), so
 > `switch-tab` must be given the rendered label -- and its `switched` flag
