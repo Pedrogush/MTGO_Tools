@@ -11,7 +11,6 @@ MESSAGES: dict[str, str] = {
     "research.date": "Data",
     "research.info": "Pesquisa de deck: busque decks de MTG por propriedade",
     "research.search_hint": "Buscar arquétipos...",
-    "research.reload_archetypes": "Recarregar Arquétipos",
     "research.loading_archetypes": "Carregando...",
     "research.failed_archetypes": "Falha ao carregar arquétipos.",
     "research.no_archetypes": "Nenhum arquétipo encontrado.",

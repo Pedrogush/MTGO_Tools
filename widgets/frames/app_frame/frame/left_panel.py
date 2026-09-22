@@ -45,7 +45,6 @@ class LeftPanelBuilderMixin(_Base):
             on_format_changed=self.on_format_changed,
             on_archetype_filter=self.on_archetype_filter,
             on_archetype_selected=self.on_archetype_selected,
-            on_reload_archetypes=lambda: self.fetch_archetypes(force=True),
             on_switch_to_builder=lambda: self._show_left_panel("builder"),
             on_deck_selected=self.on_deck_selected,
             on_copy=lambda: self.on_copy_clicked(None),

@@ -392,7 +392,7 @@ def build_app_frame(wx_app: wx.App) -> AppFrame:
             },
         ]
 
-    def fetch_archetypes_sync(force: bool = False) -> None:  # noqa: ARG001
+    def fetch_archetypes_sync() -> None:
         frame._on_archetypes_loaded(local_archetypes)
 
     def load_decks_sync(

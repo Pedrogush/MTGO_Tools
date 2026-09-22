@@ -35,7 +35,6 @@ class DeckResearchPanel(
         on_format_changed: Callable[[], None],
         on_archetype_filter: Callable[[], None],
         on_archetype_selected: Callable[[], None],
-        on_reload_archetypes: Callable[[], None] | None = None,
         on_switch_to_builder: Callable[[], None] | None = None,
         on_deck_selected: Callable[[], None] | None = None,
         on_copy: Callable[[], None] | None = None,
