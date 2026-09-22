@@ -264,8 +264,9 @@ It does not launder anything else:
 So if you set it and the run still fails, the write came from the suite, and you
 have a real bug: find the path that escaped the redirect and give it a seam. Set
 it per run, from the shell, for the reason above — never export it permanently and
-never add it to a config file. The failure it silences is the one that has caught
-every real leak we have had.
+never add it to a config file. The case it downgrades is precisely the one the
+guard cannot tell apart from a subprocess the suite spawned, and a subprocess
+wiping `config/` is a leak, not a neighbour.
 
 If you would rather the question could not arise, `MTGO_TOOLS_BASE_DATA_DIR`
 moves `config/`, `cache/`, `logs/` and `data/` somewhere else for a process that
