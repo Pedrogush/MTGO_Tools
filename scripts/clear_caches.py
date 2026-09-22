@@ -1,23 +1,39 @@
 #!/usr/bin/env python3
-"""Clear all caches except card images."""
+"""Clear all caches except card images.
+
+This is the dev-checkout twin of what the uninstaller does to
+``%LOCALAPPDATA%/MTGO Tools/cache`` ([UninstallDelete] in
+packaging/installer.iss): everything under ``cache/`` is regenerable, so the
+whole directory goes. Anything a person authored therefore must not live here --
+deck version history is kept in ``DECK_HISTORY_DIR`` beside ``config/`` for
+exactly that reason.
+
+``deck_vcs`` is preserved anyway. It is where history lived before the root
+moved, and a developer checkout can still hold one; a cache clear is not the
+place to find out that the move missed a copy.
+"""
+
+from __future__ import annotations
 
 import shutil
 from pathlib import Path
 
 CACHE_DIR = Path("cache")
-PRESERVE = {"card_images"}
+#: ``card_images`` is regenerable but expensive (thousands of downloads);
+#: ``deck_vcs`` is a leftover history root that nothing can regenerate at all.
+PRESERVE = {"card_images", "deck_vcs"}
 
 
-def clear_caches():
-    """Remove all cache files and directories except card images."""
-    if not CACHE_DIR.exists():
+def clear_caches(cache_dir: Path = CACHE_DIR) -> int:
+    """Remove all cache files and directories except :data:`PRESERVE`; count removals."""
+    if not cache_dir.exists():
         print("No cache directory found")
-        return
+        return 0
 
     removed_count = 0
     preserved_count = 0
 
-    for item in CACHE_DIR.iterdir():
+    for item in cache_dir.iterdir():
         if item.name in PRESERVE:
             preserved_count += 1
             print(f"Preserving: {item}")
@@ -33,6 +49,7 @@ def clear_caches():
             removed_count += 1
 
     print(f"\nCleared {removed_count} items, preserved {preserved_count} items")
+    return removed_count
 
 
 if __name__ == "__main__":

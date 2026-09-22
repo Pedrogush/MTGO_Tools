@@ -193,9 +193,10 @@ Two things worth knowing when scripting against it:
   `"settled": false` timed out waiting and is looking at a stale graph, not an
   empty history. Nothing else needs to sleep for it.
 - `deck-history-checkout` rewrites the user's `.txt`. The repo behind the graph
-  lives in the app cache (`cache/deck_vcs/<deck_key>/`), never beside the deck
-  file, so diffing the `.txt` outside the app is a fair test that no version
-  metadata leaked into it.
+  lives in the app's own data directory (`deck_history/<deck_key>/`, beside
+  `config/`), never beside the deck file, so diffing the `.txt` outside the app
+  is a fair test that no version metadata leaked into it. `<deck_key>` is the
+  deck's stable id, not its name, so a renamed deck keeps the same directory.
 
 ## Driving the deck tabs
 

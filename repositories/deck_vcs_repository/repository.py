@@ -20,9 +20,14 @@ class DeckVcsRepository(
 ):
     """Git-backed version history for saved decks, one repo per deck."""
 
-    def __init__(self, vcs_root: Path | None = None):
+    def __init__(self, vcs_root: Path | None = None, legacy_root: Path | None = None):
         if vcs_root is None:
+            from utils.constants import DECK_HISTORY_DIR
+
+            vcs_root = Path(DECK_HISTORY_DIR)
+        if legacy_root is None:
             from utils.constants import CACHE_DIR
 
-            vcs_root = Path(CACHE_DIR) / "deck_vcs"
+            legacy_root = Path(CACHE_DIR) / "deck_vcs"
         self._vcs_root = Path(vcs_root)
+        self._legacy_root = Path(legacy_root)

@@ -56,6 +56,9 @@ REAL_DATA_DIRS: dict[str, Path] = {
     "decks": Path(constants.DECKS_DIR),
     "logs": Path(constants.LOGS_DIR),
     "data": Path(constants.CARD_DATA_DIR),
+    #: Every saved version of every deck. Nothing can rebuild it, which is why
+    #: it is not under cache/ and why a test must never be able to reach it.
+    "deck_history": Path(constants.DECK_HISTORY_DIR),
 }
 _REAL_PATH_CONSTANTS = {
     name: value for name in dir(constants) if isinstance(value := getattr(constants, name), Path)

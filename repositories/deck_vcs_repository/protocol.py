@@ -17,11 +17,14 @@ class DeckVcsRepositoryProto(Protocol):
     """Cross-mixin ``self`` surface for ``DeckVcsRepository``."""
 
     _vcs_root: Path
+    _legacy_root: Path
 
     # ``store`` contributes these; the other mixins all go through them.
     def repo_path(self, deck_key: str) -> Path: ...
 
     def has_repo(self, deck_key: str) -> bool: ...
+
+    def adopt_legacy_repo(self, deck_key: str, legacy_key: str) -> bool: ...
 
     def _open(self, deck_key: str, *, create: bool = False) -> AbstractContextManager[Any]: ...
 

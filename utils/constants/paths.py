@@ -178,12 +178,20 @@ DECKS_DIR = Path.home() / "Documents" / "mtgo_decks"
 DECK_SAVE_DIR = DECKS_DIR
 LOGS_DIR = BASE_DATA_DIR / "logs"
 CARD_DATA_DIR = BASE_DATA_DIR / "data"
+# Per-deck version history (one git repo per deck). A sibling of config/ rather
+# than a child of cache/ because it is the user's own work and nothing can
+# rebuild it: cache/, logs/ and data/ are swept wholesale by the uninstaller
+# ([UninstallDelete] in packaging/installer.iss) and by scripts/clear_caches.py,
+# under a promise that what the user made is preserved. It is not in DECKS_DIR
+# either -- see repositories/deck_vcs_repository/store.py for why the repos may
+# not sit beside the .txt files they mirror.
+DECK_HISTORY_DIR = BASE_DATA_DIR / "deck_history"
 
 
 def ensure_base_dirs() -> None:
     """Ensure base config/cache/deck/log directories exist without importing side effects."""
     BASE_DATA_DIR.mkdir(parents=True, exist_ok=True)
-    for path in (CONFIG_DIR, CACHE_DIR, DECKS_DIR, LOGS_DIR, CARD_DATA_DIR):
+    for path in (CONFIG_DIR, CACHE_DIR, DECKS_DIR, LOGS_DIR, CARD_DATA_DIR, DECK_HISTORY_DIR):
         path.mkdir(parents=True, exist_ok=True)
 
 
