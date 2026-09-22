@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING
 
 from loguru import logger
 
-from repositories.deck_vcs_repository import DeckCommit, DeckDiff
+from repositories.deck_vcs_repository import CardDelta, DeckCommit, DeckDiff
 from repositories.deck_vcs_repository.normalize import normalize_decklist
 from utils.atomic_io import atomic_write_text
 
@@ -425,3 +425,29 @@ def reset_deck_vcs_service() -> None:
     """Reset the global deck-VCS service (use in tests for isolation)."""
     global _default_service
     _default_service = None
+
+
+#: Written out because three of these names are only here to be re-exported.
+#: ``CardDelta``, ``DeckCommit`` and ``DeckDiff`` are the repository's own
+#: dataclasses, and this module is where the rest of the app is meant to reach
+#: them: a widget that has been handed a :class:`DeckDiff` by this service has
+#: to be able to name its parts without importing a repository package, which
+#: would put the widget layer one import away from git. Re-exporting them here
+#: costs nothing -- the service already returns them -- and keeps the layering
+#: readable from the import line alone.
+__all__ = [
+    "CardDelta",
+    "DeckCommit",
+    "DeckDiff",
+    "DeckVcsService",
+    "ExternalEdit",
+    "ExternalEditStatus",
+    "GraphCommit",
+    "HistorySnapshot",
+    "VersionPreview",
+    "adoptable_legacy_key",
+    "deck_key_for",
+    "get_deck_vcs_service",
+    "legacy_deck_key_for",
+    "reset_deck_vcs_service",
+]
