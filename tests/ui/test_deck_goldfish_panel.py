@@ -164,6 +164,19 @@ class TestCardsFillTheWidthWithoutStretching:
 
         assert (bitmap.GetWidth(), bitmap.GetHeight()) == (metrics.width, metrics.height)
 
+    def test_a_face_is_never_scaled_up_from_a_smaller_decode(self, goldfish_panel) -> None:
+        """The blur this replaced: a face decoded once at a fixed width and
+        rescaled to the panel's. A size change must re-decode, not re-scale."""
+        art = GoldfishArtCache(lambda _n, _s: None, lambda _n: None, lambda _n: None)
+        small = card_metrics(700, 500)
+
+        art.bitmap("Colossus Hammer", small)
+        generation = art._generation
+        art.bitmap("Colossus Hammer", card_metrics(1600, 1000))
+
+        assert art._generation > generation, "a size change must start a new decode"
+        assert art._loaded == set(), "nothing is 'loaded' at the new size yet"
+
     def test_a_tapped_card_is_the_same_card_on_its_side(self, goldfish_panel) -> None:
         """Not a separately sized card: the tapped face's edges are the upright
         one's, swapped. Anything else would be a stretched card."""

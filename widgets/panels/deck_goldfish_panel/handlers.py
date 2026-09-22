@@ -81,9 +81,8 @@ class DeckGoldfishPanelHandlersMixin(_Base):
     def _deal(self, deal) -> None:
         with perf_phase("goldfish: shuffle + deal"):
             deal()
-        # Every card in the fresh hand is a decode candidate; queueing them all
-        # at once lets the pool work while the player is still reading the first.
-        self._art.prefetch(list(self.table.hand))
+        # The art is queued by ``refresh_table``, which is the only place that
+        # knows what size to decode at -- the card is measured from the panel.
         self._view.refresh_table()
         self._refresh_status()
 

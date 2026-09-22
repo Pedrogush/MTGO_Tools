@@ -105,10 +105,14 @@ class GoldfishTableView(wx.Panel):
 
     # ----- public API -----
     def refresh_table(self) -> None:
-        """Repaint after the panel changed the table under us (a deal, a draw)."""
+        """Repaint after the panel changed the table under us (a deal, a draw).
+
+        Every card in the new hand is a decode candidate; queueing them all here
+        lets the pool work while the player is still reading the first.
+        """
         self._auto_placed = 0
         self._reset_press()
-        self._art.prefetch(list(self._table.hand))
+        self._art.prefetch(list(self._table.hand), self._metrics())
         self.Refresh()
 
     def on_art_ready(self, _name: str) -> None:
@@ -177,7 +181,16 @@ class GoldfishTableView(wx.Panel):
     def _draw_card(
         self, dc: wx.DC, box: Box, name: str, metrics: CardMetrics, *, tapped: bool = False
     ) -> None:
-        dc.DrawBitmap(self._art.bitmap(name, metrics, tapped=tapped), box.x, box.y, True)
+        # Centred in the box rather than pinned to its corner: a card face is
+        # scaled to *fit* the box, so a source whose proportions differ from the
+        # layout's by a pixel arrives a pixel short of one edge.
+        bitmap = self._art.bitmap(name, metrics, tapped=tapped)
+        dc.DrawBitmap(
+            bitmap,
+            box.x + (box.width - bitmap.GetWidth()) // 2,
+            box.y + (box.height - bitmap.GetHeight()) // 2,
+            True,
+        )
         if tapped:
             # A rotated card is only obviously rotated next to an upright one, and
             # a board of all-tapped cards has no such neighbour. The accent frame
