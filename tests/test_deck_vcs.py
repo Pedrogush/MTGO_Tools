@@ -14,6 +14,8 @@ The invariants under test are the ones the design rests on:
 
 from __future__ import annotations
 
+import shutil
+
 import pytest
 
 from repositories.deck_vcs_repository import DeckVcsRepository
@@ -1021,13 +1023,39 @@ class TestReadHistoryPicksAVersionToShow:
         assert snapshot.branches == ()
         assert snapshot.preview is None
 
-    def test_an_unreadable_repo_reads_as_empty_rather_than_raising(self, service, monkeypatch):
-        """A broken history must not take the tab down with it."""
+    def test_an_unreadable_repo_reads_as_empty_rather_than_raising(self, service, vcs):
+        """A broken history must not take the tab down with it, or keep its handle.
+
+        The repo is corrupted for real: its objects are repacked so the store is
+        a packfile -- the case ``store.py`` warns about, because Windows will not
+        delete a file another handle still holds -- and the packfile is then
+        overwritten with junk. The ``.git`` directory and the refs survive, so
+        the repo still *opens*: the read fails partway through a live
+        ``read_session``, which is the only place the handle can leak from.
+        """
+        from dulwich import porcelain
+
         service.record_save("deck", DECK_V1)
+        service.record_save("deck", DECK_V2)
+        repo_path = vcs.repo_path("deck")
 
-        def boom(*_args, **_kwargs):
-            raise OSError("object store is gone")
+        porcelain.repack(str(repo_path))
+        objects = repo_path / ".git" / "objects"
+        for loose in (d for d in objects.iterdir() if d.is_dir() and d.name != "pack"):
+            shutil.rmtree(loose)
+        for pack in (objects / "pack").glob("*.pack"):
+            pack.write_bytes(b"PACK this is not a packfile")
 
-        monkeypatch.setattr(service, "build_graph", boom)
+        # The corruption is deep enough to break a read and shallow enough that
+        # the session still opens -- otherwise this would prove nothing.
+        with vcs.read_session("deck"):
+            assert vcs._active_session("deck") is not None
 
-        assert service.read_history("deck").graph == ()
+        snapshot = service.read_history("deck")
+
+        assert snapshot.graph == ()
+        assert snapshot.branches == ()
+        assert snapshot.preview is None
+        assert vcs._active_session("deck") is None
+        # A handle left open by the failed read raises PermissionError here.
+        shutil.rmtree(repo_path)
