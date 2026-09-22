@@ -21,6 +21,7 @@ from services.deck_service.printing import PRINTING_MODES
 from utils.constants import (
     DECK_COUNT_LABEL_MIN_WIDTH,
     DECK_NAME_LABEL_WRAP_RESERVE,
+    MENU_CARET,
     SPACE_SM,
     VIEW_TOGGLE_HEIGHT,
     VIEW_TOGGLE_PADDING_X,
@@ -41,11 +42,8 @@ else:
     _Base = object
 
 
-#: Appended to a button that opens a menu rather than acting immediately (F3).
-#: The two controls it marks -- the pile-sort key and the printing selector --
-#: sat in the run of view-toggle chips looking exactly like them, which is what
-#: made them read as a fourth and fifth view mode.
-MENU_CARET = "\u25be"
+# MENU_CARET is imported rather than defined here since #1044 gave the Save
+# button a dropdown too; it stays importable from this module for frame.py.
 
 
 class CardTablePanelToolbarMixin(_Base):

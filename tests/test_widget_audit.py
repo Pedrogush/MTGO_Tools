@@ -36,6 +36,7 @@ literals).
 from __future__ import annotations
 
 import ast
+import functools
 import re
 from pathlib import Path
 
@@ -243,8 +244,47 @@ def _is_styling_call(name: str) -> bool:
     return bool(_STYLING_CALL_RE.match(name)) or name in _EXTRA_STYLING_CALLS
 
 
+@functools.cache
+def _module_paths() -> tuple[Path, ...]:
+    return tuple(sorted(WIDGETS.rglob("*.py")))
+
+
 def _modules() -> list[Path]:
-    return sorted(WIDGETS.rglob("*.py"))
+    """Every module under ``widgets/``, enumerated once per test process.
+
+    The sources are read and parsed once too (:func:`_source`, :func:`_tree`):
+    every guard below walks the whole tree, and re-reading ~200 files per test
+    was most of this file's run time. Nothing mutates a cached tree -- the
+    guards only ``ast.walk``/``ast.unparse`` it.
+    """
+    return list(_module_paths())
+
+
+@functools.cache
+def _source(path: Path) -> str:
+    return path.read_text(encoding="utf-8")
+
+
+@functools.cache
+def _tree(path: Path) -> ast.Module:
+    return ast.parse(_source(path))
+
+
+_WALKS: dict[int, tuple[ast.Module, tuple[ast.AST, ...]]] = {}
+
+
+def _walk(tree: ast.Module) -> tuple[ast.AST, ...]:
+    """``ast.walk(tree)``, same nodes in the same order, materialised once per tree.
+
+    Walking every module is the expensive part of every guard here (~700k
+    nodes visited per full sweep), and the trees are cached, so their walks are
+    too. Keyed by identity and checked, so a tree that is not the cached one
+    can never be handed another tree's nodes.
+    """
+    entry = _WALKS.get(id(tree))
+    if entry is None or entry[0] is not tree:
+        entry = _WALKS[id(tree)] = (tree, tuple(ast.walk(tree)))
+    return entry[1]
 
 
 def _rel(path: Path) -> str:
@@ -262,13 +302,13 @@ def _styled_names(tree: ast.Module, *, via: frozenset[str] | None = None) -> set
       ``up`` and ``down`` through the loop variable.
     """
     styled: set[str] = set()
-    for node in ast.walk(tree):
+    for node in _walk(tree):
         if isinstance(node, ast.Call) and (
             _callee(node) in via if via is not None else _is_styling_call(_callee(node))
         ):
             for arg in [*node.args, *(kw.value for kw in node.keywords)]:
                 styled.add(ast.unparse(arg))
-    loops = [n for n in ast.walk(tree) if isinstance(n, ast.For)]
+    loops = [n for n in _walk(tree) if isinstance(n, ast.For)]
     changed = True
     while changed:
         changed = False
@@ -288,7 +328,7 @@ def _styled_names(tree: ast.Module, *, via: frozenset[str] | None = None) -> set
 def _constructions(tree: ast.Module, classes: frozenset[str]) -> list[tuple[int, str, str | None]]:
     """``(lineno, class, assigned name)`` for every construction of ``classes``."""
     assigned: dict[int, str] = {}
-    for node in ast.walk(tree):
+    for node in _walk(tree):
         value = getattr(node, "value", None)
         if not isinstance(value, ast.Call):
             continue
@@ -297,7 +337,7 @@ def _constructions(tree: ast.Module, classes: frozenset[str]) -> list[tuple[int,
         elif isinstance(node, ast.AnnAssign):
             assigned[id(value)] = ast.unparse(node.target)
     out = []
-    for node in ast.walk(tree):
+    for node in _walk(tree):
         if isinstance(node, ast.Call) and (name := _dotted(node.func)) in classes:
             out.append((node.lineno, name, assigned.get(id(node))))
     return out
@@ -317,7 +357,7 @@ def _unrouted(classes: frozenset[str], *, via: frozenset[str] | None = None) -> 
         rel = _rel(path)
         if rel in DELIBERATELY_UNSTYLED:
             continue
-        tree = ast.parse(path.read_text(encoding="utf-8"))
+        tree = _tree(path)
         styled = _styled_names(tree, via=via)
         for lineno, cls, target in _constructions(tree, classes):
             if f"{rel}:{lineno}" in ROUTED_ELSEWHERE:
@@ -406,8 +446,7 @@ def test_no_bare_text_input_survives_in_the_widget_tree() -> None:
     offenders = [
         _rel(path)
         for path in _modules()
-        if "wx.TextCtrl(" in path.read_text(encoding="utf-8")
-        and _rel(path) not in TEXT_INPUT_FACTORIES
+        if "wx.TextCtrl(" in _source(path) and _rel(path) not in TEXT_INPUT_FACTORIES
     ]
     assert offenders == [], (
         "a bare wx.TextCtrl has no border wx can colour, so it renders as a "
@@ -421,7 +460,7 @@ def test_every_text_input_factory_exception_still_builds_one(name: str) -> None:
     """An allowlist entry that has outlived its construction silences the guard."""
     path = WIDGETS.parent / name
     assert path.exists(), f"{name} no longer exists"
-    assert "wx.TextCtrl(" in path.read_text(encoding="utf-8"), (
+    assert "wx.TextCtrl(" in _source(path), (
         f"{name} no longer constructs a wx.TextCtrl, so its exception is now "
         "covering whatever gets written there next"
     )
@@ -442,9 +481,7 @@ def test_no_static_line_survives_in_the_widget_tree() -> None:
     horizontals alone. :func:`widgets.stylize.create_divider` is a 1px
     ``wx.Panel``, whose background *is* honoured.
     """
-    offenders = [
-        _rel(path) for path in _modules() if "wx.StaticLine(" in path.read_text(encoding="utf-8")
-    ]
+    offenders = [_rel(path) for path in _modules() if "wx.StaticLine(" in _source(path)]
     assert offenders == [], (
         "wx.StaticLine ignores SetForegroundColour and SetBackgroundColour and "
         f"draws in the native etched colour; use create_divider. Found in: {offenders}"
@@ -468,8 +505,7 @@ def test_no_bare_splitter_survives_in_the_widget_tree() -> None:
     offenders = [
         _rel(path)
         for path in _modules()
-        if "wx.SplitterWindow(" in path.read_text(encoding="utf-8")
-        and _rel(path) != "widgets/splitter.py"
+        if "wx.SplitterWindow(" in _source(path) and _rel(path) != "widgets/splitter.py"
     ]
     assert offenders == [], (
         "wx.SplitterWindow draws a near-white 3-D sash that SetBackgroundColour, "
@@ -512,7 +548,7 @@ def test_no_bare_spin_control_survives_in_the_widget_tree() -> None:
         f"{_rel(path)} ({cls.rstrip('(')})"
         for path in _modules()
         for cls in SPIN_CLASSES
-        if cls in path.read_text(encoding="utf-8") and _rel(path) != "widgets/spin_ctrl.py"
+        if cls in _source(path) and _rel(path) != "widgets/spin_ctrl.py"
     ]
     assert offenders == [], (
         "a wx.SpinCtrl's arrows are a separate msctls_updown32 HWND that no "
@@ -559,7 +595,7 @@ def _is_colour_literal_call(node: ast.AST) -> bool:
 
 def _docstring_ids(tree: ast.Module) -> set[int]:
     ids = set()
-    for node in ast.walk(tree):
+    for node in _walk(tree):
         if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
             if node.body and isinstance(node.body[0], ast.Expr) and ast.get_docstring(node):
                 ids.add(id(node.body[0].value))
@@ -598,9 +634,9 @@ def test_no_colour_literal_reaches_a_widget_outside_the_allowlist() -> None:
         rel = _rel(path)
         if rel in COLOUR_LITERAL_EXCEPTIONS:
             continue
-        tree = ast.parse(path.read_text(encoding="utf-8"))
+        tree = _tree(path)
         docstrings = _docstring_ids(tree)
-        for node in ast.walk(tree):
+        for node in _walk(tree):
             if _is_colour_literal_call(node):
                 offenders.append(f"{rel}:{node.lineno} {ast.unparse(node)[:60]}")
             elif (
@@ -659,8 +695,8 @@ def test_no_font_is_built_or_resized_outside_the_ladder() -> None:
         rel = _rel(path)
         if rel in FONT_EXCEPTIONS:
             continue
-        tree = ast.parse(path.read_text(encoding="utf-8"))
-        for node in ast.walk(tree):
+        tree = _tree(path)
+        for node in _walk(tree):
             if not isinstance(node, ast.Call):
                 continue
             dotted = _dotted(node.func)
@@ -696,13 +732,12 @@ def test_bold_only_comes_from_the_ladder_or_a_selection_state() -> None:
         rel = _rel(path)
         if rel in FONT_EXCEPTIONS:
             continue
-        source = path.read_text(encoding="utf-8")
-        tree = ast.parse(source)
+        tree = _tree(path)
         selected_lines: set[int] = set()
-        for node in ast.walk(tree):
+        for node in _walk(tree):
             if isinstance(node, ast.If) and "selected" in ast.unparse(node.test).lower():
                 selected_lines.update(range(node.lineno, (node.end_lineno or node.lineno) + 1))
-        for node in ast.walk(tree):
+        for node in _walk(tree):
             if (
                 isinstance(node, ast.Call)
                 and isinstance(node.func, ast.Attribute)
@@ -729,8 +764,8 @@ def test_no_call_site_uses_the_deprecated_multiline_font_bump() -> None:
     """
     offenders: list[str] = []
     for path in _modules():
-        tree = ast.parse(path.read_text(encoding="utf-8"))
-        for node in ast.walk(tree):
+        tree = _tree(path)
+        for node in _walk(tree):
             if not (isinstance(node, ast.Call) and _callee(node) == "stylize_textctrl"):
                 continue
             positional_multiline = len(node.args) > 1
@@ -763,10 +798,7 @@ def test_the_sweep_actually_sees_the_tree() -> None:
     """
     modules = _modules()
     assert len(modules) > 150, f"only {len(modules)} modules under widgets/"
-    buttons = sum(
-        len(_constructions(ast.parse(p.read_text(encoding="utf-8")), BUTTON_CLASSES))
-        for p in modules
-    )
+    buttons = sum(len(_constructions(_tree(p), BUTTON_CLASSES)) for p in modules)
     assert buttons > 50, f"the sweep found only {buttons} button constructions"
 
 
@@ -776,7 +808,7 @@ def test_routed_elsewhere_entries_still_point_at_a_construction(name: str) -> No
     rel, lineno = name.rsplit(":", 1)
     path = WIDGETS.parent / rel
     assert path.exists(), f"{rel} no longer exists"
-    tree = ast.parse(path.read_text(encoding="utf-8"))
+    tree = _tree(path)
     lines = {ln for ln, _cls, _t in _constructions(tree, BUTTON_CLASSES | NATIVE_THEMED_CLASSES)}
     assert int(lineno) in lines, (
         f"{name} no longer names a widget construction -- the line moved, so "

@@ -39,9 +39,14 @@ a deck to load it into the <a href="deck_workspace.html">Deck Workspace</a>.</p>
           (e.g. <code>4 Lightning Bolt</code>). You can paste this directly into MTGO.</td></tr>
   <tr><td><strong>Load Deck</strong></td>
       <td>Opens a file browser to load a deck from a local <code>.dek</code> or plain-text file.</td></tr>
-  <tr><td><strong>Save Deck</strong></td>
-      <td>Saves the current deck to a file and optionally to the local MongoDB database (if configured).
-          The saved deck persists across sessions.</td></tr>
+  <tr><td><strong>Save &#9662;</strong></td>
+      <td>Opens a menu with two options.
+          <strong>Save Deck</strong> saves the current deck to a file and optionally to the local
+          MongoDB database (if configured); the saved deck persists across sessions.
+          <strong>Save Collection Diff</strong> saves only the cards you are still missing, as a
+          plain-text decklist &mdash; if your collection has 3 Lightning Bolt and the deck plays 4,
+          the file gets <code>1 Lightning Bolt</code>. Paste it into a bot, rental or trade post to
+          acquire exactly the gap. Requires a loaded collection.</td></tr>
 </table>
 
 <h2>See also</h2>

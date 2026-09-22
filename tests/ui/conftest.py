@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import gc
 import sys
 import time as time_module
+from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import Any
 
@@ -89,12 +91,22 @@ def fixture_wx_app() -> wx.App:
 @pytest.fixture(autouse=True)
 def ui_environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Isolate filesystem paths and make background workers deterministic."""
-    root = tmp_path / "mtgo"
+    install_ui_environment(monkeypatch, tmp_path / "mtgo")
+
+
+def install_ui_environment(monkeypatch: pytest.MonkeyPatch, root: Path) -> None:
+    """Point every data path under *root* and stub the network-facing seams.
+
+    Per test, through :func:`ui_environment`; per module, through
+    :func:`shared_app_frame`, whose window outlives any one test's patches.
+    """
     config = root / "config"
     cache = root / "cache"
     decks = root / "decks"
+    logs = root / "logs"
+    card_data = root / "data"
     image_cache = cache / "card_images"
-    _ensure_dirs(config, cache, decks, image_cache)
+    _ensure_dirs(config, cache, decks, logs, card_data, image_cache)
 
     replacements = {
         "CONFIG_DIR": config,
@@ -114,7 +126,10 @@ def ui_environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     }
     # Every real data path, wherever it is bound (see tests/data_isolation.py),
     # then the explicit names above, some of which differ from the real file name.
-    redirect_bound_paths(monkeypatch, {"config": config, "cache": cache, "decks": decks})
+    redirect_bound_paths(
+        monkeypatch,
+        {"config": config, "cache": cache, "decks": decks, "logs": logs, "data": card_data},
+    )
     for attr, value in replacements.items():
         monkeypatch.setattr(constants, attr, value, raising=False)
 
@@ -255,8 +270,6 @@ def ui_environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         raising=False,
     )
 
-    yield
-
 
 def pump_ui_events(app: wx.App, *, max_passes: int = 25) -> None:
     """Drain the wx event queue AND the idle loop.
@@ -297,92 +310,263 @@ def pump_ui_events(app: wx.App, *, max_passes: int = 25) -> None:
         time_module.sleep(0)
 
 
+def wait_until(
+    app: wx.App,
+    condition: Callable[[], bool],
+    *,
+    timeout: float = 15.0,
+    message: str = "",
+) -> None:
+    """Pump the event queue until *condition* holds, or fail after *timeout*.
+
+    The alternative -- pumping a fixed number of times -- is a guess about how
+    much work a machine gets done per pass, and it is the reason
+    test_match_history_filters was flaky: 40 passes was enough for the history
+    to load here and not always enough on a loaded CI runner, and the test then
+    failed on an assertion about labels rather than saying what it was waiting
+    for. The timeout is generous because it is only ever paid by a failure.
+    """
+    deadline = time_module.monotonic() + timeout
+    while True:
+        pump_ui_events(app)
+        if condition():
+            return
+        if time_module.monotonic() >= deadline:
+            raise AssertionError(
+                message or f"timed out after {timeout}s waiting for the UI to settle"
+            )
+        time_module.sleep(0.01)
+
+
 @pytest.fixture
 def deck_selector_factory(wx_app) -> AppFrame:
     def _factory() -> AppFrame:
-        # Drain wx events and force GC of the prior controller before resetting.
-        # The previous test's frame.Destroy() schedules async cleanup; without
-        # pumping, those Destroy events plus queued wx.CallAfter callbacks
-        # accumulate. By the last UI test, wx fails to back new windows with
-        # HWNDs and Layout()/SetScrollRate() asserts inside the C++ layer.
-        import gc
-
-        pump_ui_events(wx_app)
-        gc.collect()
-        pump_ui_events(wx_app)
-
-        reset_deck_selector_controller()
-        controller = get_deck_selector_controller()
-        controller.attach_frame(AppFrame(controller=controller))
-        frame = controller.frame
-        # Expose controller-backed repos/services for legacy tests
-        frame.card_repo = controller.card_repo
-        frame.deck_repo = controller.deck_repo
-        frame.metagame_repo = controller.metagame_repo
-        # Prevent the first-run tutorial dialog from hanging tests.
-        # Introduced in PR #301 (commit 273ae4d): _restore_session_state queues
-        # wx.CallAfter(self._open_tutorial) when is_tutorial_shown() returns False.
-        # In a fresh temp-dir environment there is no saved config, so
-        # is_tutorial_shown() always returns False. When pump_ui_events() processes
-        # the queued callback it runs show_tutorial() → dlg.ShowModal(), which blocks
-        # indefinitely waiting for user input and hangs the entire test session.
-        # Marking the tutorial shown here updates the in-memory settings dict so that
-        # _restore_session_state (which fires later via wx.CallAfter) skips the dialog.
-        controller.session_manager.mark_tutorial_shown()
-
-        # Make archetype/deck loading synchronous for tests
-        local_archetypes = [
-            {"name": "Mono Red Aggro", "href": "mono-red-aggro"},
-            {"name": "Azorius Control", "href": "azorius-control"},
-        ]
-
-        def fake_archetype_decks(archetype: str):
-            return [
-                {
-                    "name": archetype,
-                    "number": "1",
-                    "player": "TestPilot",
-                    "event": "Test Event",
-                    "result": "2-1",
-                    "date": "2024-10-01",
-                },
-            ]
-
-        def fetch_archetypes_sync(force: bool = False) -> None:  # noqa: ARG001
-            frame._on_archetypes_loaded(local_archetypes)
-
-        def load_decks_sync(
-            *,
-            scope: str,
-            archetype: dict[str, Any] | None = None,
-        ) -> None:
-            if scope == "all":
-                frame._on_decks_loaded("Any", [])
-                return
-            assert archetype is not None
-            decks = fake_archetype_decks(archetype.get("href", ""))
-            frame._on_decks_loaded(archetype.get("name", "Unknown"), decks)
-
-        frame.fetch_archetypes = fetch_archetypes_sync  # type: ignore[assignment]
-        frame._load_decks = load_decks_sync  # type: ignore[assignment]
-        controller.fetch_archetypes = lambda **kwargs: kwargs["on_success"](local_archetypes)  # type: ignore[assignment]
-        controller.load_decks = lambda scope, on_success, archetype=None, **_: on_success(
-            "Any" if scope == "all" else archetype.get("name", "Unknown"),
-            [] if scope == "all" else fake_archetype_decks(archetype.get("href", "")),
-        )  # type: ignore[assignment]
-        controller.check_and_download_bulk_data = lambda *_, **__: None  # type: ignore[assignment]
-        controller.run_initial_loads = lambda *_, **__: None  # type: ignore[assignment]
-
-        fake_deck_text = "4 Mountain\n4 Island\nSideboard\n2 Dispel\n"
-
-        def fake_download_deck_text(deck_number, on_success, on_error, on_status):  # noqa: ARG001
-            on_status("Downloading deck…")
-            on_success(fake_deck_text)
-
-        controller.download_deck_text = fake_download_deck_text  # type: ignore[assignment]
-        return frame
+        return build_app_frame(wx_app)
 
     return _factory
+
+
+def build_app_frame(wx_app: wx.App) -> AppFrame:
+    """A fresh AppFrame on a fresh controller, with loading made synchronous."""
+    # Drain wx events and force GC of the prior controller before resetting.
+    # The previous test's frame.Destroy() schedules async cleanup; without
+    # pumping, those Destroy events plus queued wx.CallAfter callbacks
+    # accumulate. By the last UI test, wx fails to back new windows with
+    # HWNDs and Layout()/SetScrollRate() asserts inside the C++ layer.
+    pump_ui_events(wx_app)
+    gc.collect()
+    pump_ui_events(wx_app)
+
+    reset_deck_selector_controller()
+    controller = get_deck_selector_controller()
+    controller.attach_frame(AppFrame(controller=controller))
+    frame = controller.frame
+    # Expose controller-backed repos/services for legacy tests
+    frame.card_repo = controller.card_repo
+    frame.deck_repo = controller.deck_repo
+    frame.metagame_repo = controller.metagame_repo
+    # Prevent the first-run tutorial dialog from hanging tests.
+    # Introduced in PR #301 (commit 273ae4d): _restore_session_state queues
+    # wx.CallAfter(self._open_tutorial) when is_tutorial_shown() returns False.
+    # In a fresh temp-dir environment there is no saved config, so
+    # is_tutorial_shown() always returns False. When pump_ui_events() processes
+    # the queued callback it runs show_tutorial() → dlg.ShowModal(), which blocks
+    # indefinitely waiting for user input and hangs the entire test session.
+    # Marking the tutorial shown here updates the in-memory settings dict so that
+    # _restore_session_state (which fires later via wx.CallAfter) skips the dialog.
+    controller.session_manager.mark_tutorial_shown()
+
+    # Make archetype/deck loading synchronous for tests
+    local_archetypes = [
+        {"name": "Mono Red Aggro", "href": "mono-red-aggro"},
+        {"name": "Azorius Control", "href": "azorius-control"},
+    ]
+
+    def fake_archetype_decks(archetype: str):
+        return [
+            {
+                "name": archetype,
+                "number": "1",
+                "player": "TestPilot",
+                "event": "Test Event",
+                "result": "2-1",
+                "date": "2024-10-01",
+            },
+        ]
+
+    def fetch_archetypes_sync(force: bool = False) -> None:  # noqa: ARG001
+        frame._on_archetypes_loaded(local_archetypes)
+
+    def load_decks_sync(
+        *,
+        scope: str,
+        archetype: dict[str, Any] | None = None,
+    ) -> None:
+        if scope == "all":
+            frame._on_decks_loaded("Any", [])
+            return
+        assert archetype is not None
+        decks = fake_archetype_decks(archetype.get("href", ""))
+        frame._on_decks_loaded(archetype.get("name", "Unknown"), decks)
+
+    frame.fetch_archetypes = fetch_archetypes_sync  # type: ignore[assignment]
+    frame._load_decks = load_decks_sync  # type: ignore[assignment]
+    controller.fetch_archetypes = lambda **kwargs: kwargs["on_success"](local_archetypes)  # type: ignore[assignment]
+    controller.load_decks = lambda scope, on_success, archetype=None, **_: on_success(
+        "Any" if scope == "all" else archetype.get("name", "Unknown"),
+        [] if scope == "all" else fake_archetype_decks(archetype.get("href", "")),
+    )  # type: ignore[assignment]
+    controller.check_and_download_bulk_data = lambda *_, **__: None  # type: ignore[assignment]
+    controller.run_initial_loads = lambda *_, **__: None  # type: ignore[assignment]
+
+    fake_deck_text = "4 Mountain\n4 Island\nSideboard\n2 Dispel\n"
+
+    def fake_download_deck_text(deck_number, on_success, on_error, on_status):  # noqa: ARG001
+        on_status("Downloading deck…")
+        on_success(fake_deck_text)
+
+    controller.download_deck_text = fake_download_deck_text  # type: ignore[assignment]
+    return frame
+
+
+# ---------------------------------------------------------------------------
+# One AppFrame per test module
+# ---------------------------------------------------------------------------
+#
+# Building an AppFrame costs ~1.2s, and most UI tests only need *a* main window
+# in a known state, not a newly constructed one. The app itself is one
+# long-lived window whose state accumulates, so a window reused across a
+# module's tests is, if anything, closer to real use. Tests that are *about*
+# construction, startup, session restore or what a second window reads back
+# keep using ``deck_selector_factory`` for a fresh one.
+#
+# Scope is the module, never the session: a test that leaves the window in a
+# state the reset below does not cover can only disturb its own file.
+
+
+def _stop_timers(*owners: Any) -> None:
+    """Stop every ``wx.Timer`` held directly on *owners*.
+
+    A one-shot timer still running when its owner is destroyed fires into freed
+    memory the next time a live loop dispatches WM_TIMER.
+    """
+    for owner in owners:
+        for value in list(vars(owner).values()):
+            if isinstance(value, wx.Timer):
+                value.Stop()
+
+
+def _instance_overrides(obj: Any) -> dict[str, Any]:
+    """Instance attributes that shadow a callable defined on the class.
+
+    That is exactly the shape of a test double installed on an object --
+    ``frame._load_decks = recording_load_decks`` -- and of the synchronous stubs
+    :func:`build_app_frame` installs.
+    """
+    cls = type(obj)
+    return {
+        name: value
+        for name, value in vars(obj).items()
+        if callable(value) and callable(getattr(cls, name, None))
+    }
+
+
+class SharedAppFrame:
+    """A module's AppFrame plus the state each of its tests starts from."""
+
+    #: Plain attributes restored before every test: the load re-entrancy flags
+    #: and the dedup/debounce memory of the previous test's loads, which would
+    #: otherwise swallow the next test's first load of the same target.
+    FRAME_STATE = (
+        "loading_archetypes",
+        "loading_decks",
+        "loading_daily_average",
+        "_last_archetype_reload_sig",
+        "_last_deck_load_sig",
+        "_last_deck_load_time",
+    )
+
+    def __init__(self, frame: AppFrame, wx_app: wx.App) -> None:
+        self.frame = frame
+        self.wx_app = wx_app
+        self.controller = frame.controller
+        self._overrides = {
+            "frame": _instance_overrides(frame),
+            "controller": _instance_overrides(self.controller),
+        }
+        self._state = {name: getattr(frame, name) for name in self.FRAME_STATE}
+        self._format = frame.research_panel.get_selected_format()
+
+    def _restore_overrides(self, obj: Any, baseline: dict[str, Any]) -> None:
+        for name, value in _instance_overrides(obj).items():
+            if name not in baseline:
+                delattr(obj, name)
+            elif value is not baseline[name]:
+                setattr(obj, name, baseline[name])
+        for name, value in baseline.items():
+            if vars(obj).get(name) is not value:
+                setattr(obj, name, value)
+
+    def reset(self) -> AppFrame:
+        """Put the window back into the state a test may assume, and return it."""
+        frame = self.frame
+        pump_ui_events(self.wx_app)
+        self._restore_overrides(frame, self._overrides["frame"])
+        self._restore_overrides(self.controller, self._overrides["controller"])
+        with frame._loading_lock:
+            for name, value in self._state.items():
+                setattr(frame, name, value)
+        if frame.research_panel.get_selected_format() != self._format:
+            frame.research_panel.format_choice.SetStringSelection(self._format)
+        frame.current_format = self._format
+        panel = frame.research_panel
+        panel.reset_event_type_filter()
+        panel.reset_placement_filter()
+        panel.reset_player_name_filter()
+        panel.reset_date_filter()
+        # The deck builder's own filter set, via the Clear button's handler: a
+        # format or colour left selected silently narrows the next test's search
+        # (a "Legacy" left over from a format-change test filters out every card
+        # in the sample database, which are all Modern-legal).
+        frame.builder_panel.clear_filters()
+        # The loaded deck: what "nothing is loaded yet" means to the window.
+        # ``build_deck_text`` answers from the repository's deck *text* first,
+        # so a deck a previous test rendered would still be there to copy/save.
+        frame.deck_repo.set_current_deck(None)
+        frame.deck_repo.set_current_deck_text("")
+        frame.deck_repo.clear_decks_list()
+        frame.zone_cards = {"main": [], "side": [], "out": []}
+        return frame
+
+
+@pytest.fixture(scope="module")
+def shared_app_frame(
+    wx_app: wx.App, tmp_path_factory: pytest.TempPathFactory
+) -> Iterator[SharedAppFrame]:
+    """One AppFrame for the whole module, under its own module-scoped data dirs.
+
+    The window's controller, repositories and stores bind their paths when they
+    are built, so they get a module tmp dir of their own rather than the first
+    test's, which that test's teardown would pull out from under them. Each test
+    still gets ``ui_environment``'s per-test redirect on top.
+    """
+    with pytest.MonkeyPatch.context() as module_patch:
+        install_ui_environment(module_patch, tmp_path_factory.mktemp("mtgo-module") / "mtgo")
+        frame = build_app_frame(wx_app)
+        shared = SharedAppFrame(frame, wx_app)
+        try:
+            yield shared
+        finally:
+            _stop_timers(frame)
+            frame.Destroy()
+            pump_ui_events(wx_app)
+            reset_deck_selector_controller()
+
+
+@pytest.fixture
+def shared_frame(shared_app_frame: SharedAppFrame) -> AppFrame:
+    """The module's shared AppFrame, reset to the state a test may assume."""
+    return shared_app_frame.reset()
 
 
 def prepare_card_manager(frame: AppFrame) -> None:

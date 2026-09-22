@@ -25,6 +25,7 @@ from typing import Any
 import pytest
 import wx
 
+import widgets.panels.deck_builder_panel.handlers as builder_handlers
 from repositories.card_repository import CardDataManager
 from tests.ui.conftest import pump_ui_events
 
@@ -176,9 +177,21 @@ def _run_event_loop(until: Callable[[], bool], timeout: float) -> None:
 
 
 @pytest.fixture(name="builder")
-def fixture_builder(wx_app, deck_selector_factory) -> Iterator[Any]:
-    """An AppFrame showing the deck builder over the ``CARDS`` database."""
-    frame = deck_selector_factory()
+def fixture_builder(wx_app, shared_frame, monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
+    """The module's AppFrame (see ``shared_app_frame``) showing the deck builder
+    over the ``CARDS`` database.
+
+    The box, its mode and the results are cleared between tests by
+    ``SharedAppFrame.reset`` (through the panel's own Clear handler), and the
+    card database is re-installed here, so each test types into an empty box
+    over the same data a fresh window would have given it.
+    """
+    # The debounce still runs -- these tests drive the box the way a user does,
+    # and the search they then read really is started by the panel's timer --
+    # but production's 300ms settle is a wait per keystroke burst and nothing
+    # here is about its length. 3ms keeps the timer, the wait and the ordering.
+    monkeypatch.setattr(builder_handlers, "BUILDER_SEARCH_DEBOUNCE_MS", 3)
+    frame = shared_frame
     manager = CardDataManager()
     manager._cards = CARDS
     manager._cards_by_name = {card["name_lower"]: card for card in CARDS}
@@ -196,16 +209,14 @@ def fixture_builder(wx_app, deck_selector_factory) -> Iterator[Any]:
     try:
         yield frame.builder_panel
     finally:
-        # A one-shot wx.Timer still running when its owner is destroyed fires
-        # into freed memory the next time a live loop dispatches WM_TIMER --
-        # the frame's 600ms settings-save timer, started by the initial layout,
-        # is usually still pending this soon. Stop them all first.
+        # A one-shot wx.Timer left running goes on firing into the next test (or,
+        # at the end of the module, into a destroyed window). The frame's 600ms
+        # settings-save timer, started by the initial layout, is usually still
+        # pending this soon. Stop them all.
         for owner in (frame, frame.builder_panel):
             for value in list(vars(owner).values()):
                 if isinstance(value, wx.Timer):
                     value.Stop()
-        frame.Destroy()
-        _run_event_loop(lambda: False, timeout=0.2)
         pump_ui_events(wx_app)
 
 
@@ -338,7 +349,7 @@ def _show_advanced_filters(panel: Any) -> None:
     evt = wx.CommandEvent(wx.wxEVT_BUTTON, button.GetId())
     evt.SetEventObject(button)
     button.GetEventHandler().ProcessEvent(evt)
-    _run_event_loop(lambda: False, timeout=0.2)
+    _run_event_loop(panel._adv_panel.IsShown, timeout=5.0)
 
 
 def _scrollbar_strip_is_clipped(box: wx.Window) -> bool:
@@ -356,7 +367,10 @@ def test_long_oracle_query_scrolls_without_showing_arrows(builder):
     box = _oracle_box(builder)
     query = "target creature gains indestructible until end of turn " * 4
     _type(box, query)
-    _run_event_loop(lambda: False, timeout=0.3)
+    # Wait for the box to have scrolled rather than for a fixed slice of time:
+    # the caret's wrapped line being out of view is what puts the scrollbar on
+    # screen, which is what the assertions below are about.
+    _run_event_loop(lambda: box.GetFirstVisiblePosition() > 0, timeout=5.0)
 
     assert _scrollbar_strip_is_clipped(box)
     # The hidden scrollbar still scrolls the caret's wrapped line into view.
@@ -369,7 +383,7 @@ def test_mana_cost_box_keeps_scrollbar_arrows_off_screen(builder):
     box.SetFocus()
     for _ in range(40):
         _press(box, ord("G"), ord("g"))
-    _run_event_loop(lambda: False, timeout=0.3)
+    _run_event_loop(lambda: builder.inputs["mana"].GetValue() == "{G}" * 40, timeout=5.0)
 
     assert builder.inputs["mana"].GetValue() == "{G}" * 40
     assert _scrollbar_strip_is_clipped(box)

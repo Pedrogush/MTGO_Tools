@@ -74,9 +74,15 @@ _DECK = [
 ]
 
 
-def _deck_tables_frame(deck_selector_factory, wx_app):
-    """A frame at its own enforced floor with the Deck Tables split in front."""
-    frame = deck_selector_factory()
+def _deck_tables_frame(shared_frame, wx_app):
+    """The module's frame at its own enforced floor, Deck Tables split in front.
+
+    Rebuilt on the shared window (see ``shared_app_frame``) rather than on a new
+    one: nothing here is about a freshly constructed frame, and each test sets
+    the scene it needs -- the cards, the size, the visible tab, the view mode --
+    before it looks at anything.
+    """
+    frame = shared_frame
     frame.main_table.set_cards([{"name": name, "qty": 4} for name in _DECK])
     frame.side_table.set_cards([{"name": name, "qty": 2} for name in _DECK])
     pump_ui_events(wx_app)
@@ -227,32 +233,29 @@ def test_widening_is_limited_to_paints_that_follow_a_viewport_move() -> None:
     reason to touch, because a fade cannot go stale where nothing moved.
     """
     frame = wx.Frame(None, size=(*_PROBE_SIZE,))
-    try:
-        window = wx.ScrolledWindow(frame)
-        window.SetScrollRate(1, 1)
-        window.SetVirtualSize((_PROBE_SIZE[0], _PROBE_CONTENT_H))
-        frame.Show()
+    window = wx.ScrolledWindow(frame)
+    window.SetScrollRate(1, 1)
+    window.SetVirtualSize((_PROBE_SIZE[0], _PROBE_CONTENT_H))
+    frame.Show()
 
-        assert edge_fade.begin_viewport_paint(window) is True, (
-            "the first paint of a window has no previous viewport to compare "
-            "against, so it must be treated as a move"
-        )
-        assert edge_fade.begin_viewport_paint(window) is False, (
-            "a second paint at the same view start and client size cannot have "
-            "stranded anything, so it must not be widened"
-        )
-        window.Scroll(0, 64)
-        assert edge_fade.begin_viewport_paint(window) is True, (
-            "a scroll moves the viewport out from under the fade, so the paint "
-            "that follows it has to cover the whole client"
-        )
-        window.SetSize(_PROBE_SIZE[0], _PROBE_SIZE[1] // 2)
-        assert edge_fade.begin_viewport_paint(window) is True, (
-            "a resize moves the edge the fade is anchored to just as a scroll "
-            "does, so the paint that follows it has to cover the whole client"
-        )
-    finally:
-        frame.Destroy()
+    assert edge_fade.begin_viewport_paint(window) is True, (
+        "the first paint of a window has no previous viewport to compare "
+        "against, so it must be treated as a move"
+    )
+    assert edge_fade.begin_viewport_paint(window) is False, (
+        "a second paint at the same view start and client size cannot have "
+        "stranded anything, so it must not be widened"
+    )
+    window.Scroll(0, 64)
+    assert edge_fade.begin_viewport_paint(window) is True, (
+        "a scroll moves the viewport out from under the fade, so the paint "
+        "that follows it has to cover the whole client"
+    )
+    window.SetSize(_PROBE_SIZE[0], _PROBE_SIZE[1] // 2)
+    assert edge_fade.begin_viewport_paint(window) is True, (
+        "a resize moves the edge the fade is anchored to just as a scroll "
+        "does, so the paint that follows it has to cover the whole client"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -442,9 +445,7 @@ def test_scroll_viewport_keeps_the_blit_off_the_screen(wx_app) -> None:
 @pytest.mark.parametrize("zone", ["main", "side"])
 @pytest.mark.parametrize("mode", ["grid", "pile"])
 @pytest.mark.usefixtures("wx_app")
-def test_every_scroll_on_a_view_is_blit_free(
-    deck_selector_factory, wx_app, monkeypatch, zone, mode
-) -> None:
+def test_every_scroll_on_a_view_is_blit_free(shared_frame, wx_app, monkeypatch, zone, mode) -> None:
     """``Scroll`` itself must route through the blit-free path (#983).
 
     The callers that move a view's origin are spread wide -- the wheel, the
@@ -455,60 +456,52 @@ def test_every_scroll_on_a_view_is_blit_free(
     band that a screen capture duly caught. Owning ``Scroll`` on the view is
     what makes that class of mistake unrepresentable.
     """
-    frame = _deck_tables_frame(deck_selector_factory, wx_app)
-    try:
-        view = _view(frame, zone, mode)
-        pump_ui_events(wx_app)
+    frame = _deck_tables_frame(shared_frame, wx_app)
+    view = _view(frame, zone, mode)
+    pump_ui_events(wx_app)
 
-        routed: list[tuple[int, int]] = []
-        monkeypatch.setattr(
-            scroll_snap, "scroll_viewport", lambda window, x, y: routed.append((x, y))
-        )
-        view.Scroll(0, 64)
-        assert routed == [(0, 64)], (
-            f"the {zone} {mode} view's Scroll did not go through "
-            f"scroll_viewport (routed {routed}); wx's scroll blit then reaches "
-            "the screen and strands the edge fade"
-        )
-    finally:
-        frame.Destroy()
+    routed: list[tuple[int, int]] = []
+    monkeypatch.setattr(scroll_snap, "scroll_viewport", lambda window, x, y: routed.append((x, y)))
+    view.Scroll(0, 64)
+    assert routed == [(0, 64)], (
+        f"the {zone} {mode} view's Scroll did not go through "
+        f"scroll_viewport (routed {routed}); wx's scroll blit then reaches "
+        "the screen and strands the edge fade"
+    )
 
 
 @pytest.mark.parametrize("zone", ["main", "side"])
 @pytest.mark.parametrize("mode", ["grid", "pile"])
 @pytest.mark.usefixtures("wx_app")
 def test_a_wheel_notch_goes_through_scroll_viewport(
-    deck_selector_factory, wx_app, monkeypatch, zone, mode
+    shared_frame, wx_app, monkeypatch, zone, mode
 ) -> None:
     """The wheel is the gesture that reported #983; it must not call ``Scroll``."""
-    frame = _deck_tables_frame(deck_selector_factory, wx_app)
-    try:
-        view = _view(frame, zone, mode)
-        view.Scroll(0, 0)
-        pump_ui_events(wx_app)
+    frame = _deck_tables_frame(shared_frame, wx_app)
+    view = _view(frame, zone, mode)
+    view.Scroll(0, 0)
+    pump_ui_events(wx_app)
 
-        routed: list[tuple[int, int]] = []
-        monkeypatch.setattr(
-            scroll_snap,
-            "scroll_viewport",
-            lambda window, x, y: routed.append((x, y)),
-        )
-        monkeypatch.setattr(
-            view,
-            "Scroll",
-            lambda *args, **kwargs: pytest.fail(
-                f"the {zone} {mode} view's wheel called Scroll directly; wx's "
-                "scroll blit then reaches the screen and strands the edge fade"
-            ),
-        )
-        inject_wheel_notches(view, 1, up=False)
+    routed: list[tuple[int, int]] = []
+    monkeypatch.setattr(
+        scroll_snap,
+        "scroll_viewport",
+        lambda window, x, y: routed.append((x, y)),
+    )
+    monkeypatch.setattr(
+        view,
+        "Scroll",
+        lambda *args, **kwargs: pytest.fail(
+            f"the {zone} {mode} view's wheel called Scroll directly; wx's "
+            "scroll blit then reaches the screen and strands the edge fade"
+        ),
+    )
+    inject_wheel_notches(view, 1, up=False)
 
-        assert routed, (
-            f"a wheel notch on the {zone} {mode} view moved the origin without "
-            "going through scroll_viewport"
-        )
-    finally:
-        frame.Destroy()
+    assert routed, (
+        f"a wheel notch on the {zone} {mode} view moved the origin without "
+        "going through scroll_viewport"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -517,7 +510,7 @@ def test_a_wheel_notch_goes_through_scroll_viewport(
 
 @pytest.mark.parametrize("zone", ["main", "side"])
 @pytest.mark.usefixtures("wx_app")
-def test_a_height_only_resize_keeps_the_cached_canvas(deck_selector_factory, wx_app, zone) -> None:
+def test_a_height_only_resize_keeps_the_cached_canvas(shared_frame, wx_app, zone) -> None:
     """A sash drag must not make the grid rebuild its full-content bitmap (#983).
 
     The grid's column count and virtual size both follow the **width**, so a
@@ -534,33 +527,30 @@ def test_a_height_only_resize_keeps_the_cached_canvas(deck_selector_factory, wx_
     left when painting could not keep up. It is also the single largest cost in
     the whole gesture, so this guard is as much about the smear as about speed.
     """
-    frame = _deck_tables_frame(deck_selector_factory, wx_app)
-    try:
-        view = _view(frame, zone, "grid")
-        pump_ui_events(wx_app)
-        canvas = view._ensure_canvas()
-        assert canvas is not None, (
-            "the grid built no cached canvas, so this test would pass for the " "wrong reason"
-        )
+    frame = _deck_tables_frame(shared_frame, wx_app)
+    view = _view(frame, zone, "grid")
+    pump_ui_events(wx_app)
+    canvas = view._ensure_canvas()
+    assert canvas is not None, (
+        "the grid built no cached canvas, so this test would pass for the " "wrong reason"
+    )
 
-        width, height = view.GetSize()
-        view.SetSize(width, height - 40)
-        pump_ui_events(wx_app)
+    width, height = view.GetSize()
+    view.SetSize(width, height - 40)
+    pump_ui_events(wx_app)
 
-        assert view._ensure_canvas() is canvas, (
-            "a height-only resize rebuilt the grid's cached full-content "
-            "bitmap. Every mouse-move of a live sash drag does that, and the "
-            "rebuild is ~60x more expensive than the paint it is feeding, so "
-            "the view stops keeping up and the pane smears"
-        )
-    finally:
-        frame.Destroy()
+    assert view._ensure_canvas() is canvas, (
+        "a height-only resize rebuilt the grid's cached full-content "
+        "bitmap. Every mouse-move of a live sash drag does that, and the "
+        "rebuild is ~60x more expensive than the paint it is feeding, so "
+        "the view stops keeping up and the pane smears"
+    )
 
 
 @pytest.mark.parametrize("zone", ["main", "side"])
 @pytest.mark.parametrize("mode", ["grid", "pile"])
 @pytest.mark.usefixtures("wx_app")
-def test_the_card_views_repaint_fully_on_resize(deck_selector_factory, wx_app, zone, mode) -> None:
+def test_the_card_views_repaint_fully_on_resize(shared_frame, wx_app, zone, mode) -> None:
     """Both views must be on wx's redraw-on-resize window class (#983).
 
     A live sash drag resizes a pane faster than it can repaint. Without this
@@ -568,13 +558,10 @@ def test_the_card_views_repaint_fully_on_resize(deck_selector_factory, wx_app, z
     skipped repaint leaves another fade band behind -- which is why the sash
     drag reads as a solid dark wash rather than as separate stripes.
     """
-    frame = _deck_tables_frame(deck_selector_factory, wx_app)
-    try:
-        view = _view(frame, zone, mode)
-        assert view.GetWindowStyleFlag() & wx.FULL_REPAINT_ON_RESIZE, (
-            f"the {zone} {mode} view does not carry wx.FULL_REPAINT_ON_RESIZE, "
-            "so wxMSW preserves its pixels across a resize and a sash drag "
-            "stacks stale edge fades over the card art"
-        )
-    finally:
-        frame.Destroy()
+    frame = _deck_tables_frame(shared_frame, wx_app)
+    view = _view(frame, zone, mode)
+    assert view.GetWindowStyleFlag() & wx.FULL_REPAINT_ON_RESIZE, (
+        f"the {zone} {mode} view does not carry wx.FULL_REPAINT_ON_RESIZE, "
+        "so wxMSW preserves its pixels across a resize and a sash drag "
+        "stacks stale edge fades over the card art"
+    )

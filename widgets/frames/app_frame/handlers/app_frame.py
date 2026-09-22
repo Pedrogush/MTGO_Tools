@@ -97,6 +97,14 @@ class AppFrameHandlersMixin(_Base):
                 help=self._t("deck_actions.tooltip.save_deck"),
                 on_activate=lambda: self.on_save_clicked(None),
             ),
+            # The research panel's Save dropdown offers this too (#1044); it is
+            # here as well so the builder, where that panel is off screen, can
+            # reach it the same way it reaches Save Deck.
+            MenuEntry(
+                label=self._t("menu.save_diff"),
+                help=self._t("deck_diff.title"),
+                on_activate=lambda: self.on_save_diff_clicked(None),
+            ),
             separator(),
             MenuEntry(
                 label=self._t("toolbar.load_collection"),
