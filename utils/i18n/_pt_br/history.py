@@ -33,9 +33,9 @@ MESSAGES: dict[str, str] = {
     "app.status.deck_version_saved": "Versão salva: {summary}",
     # O nome do deck: mostrado no cabecalho das tabelas e nesta aba.
     "deck_name.unset": "Nenhum nome selecionado para este deck",
-    "deck_name.tooltip": "O nome do deck — nomeia o arquivo em que ele é salvo e o histórico de versões desse arquivo. Clique para alterar.",
+    "deck_name.tooltip": "O nome do deck — nomeia o arquivo em que ele é salvo. O histórico de versões acompanha o deck, não o nome. Clique para alterar.",
     "deck_name.title": "Nome do Deck",
-    "deck_name.prompt": "Dê um nome a este deck. O nome vira o arquivo em que ele é salvo, então renomear inicia um histórico de versões separado e mantém o existente intacto.",
+    "deck_name.prompt": "Dê um nome a este deck. O nome vira o arquivo em que ele é salvo, então renomear inicia um novo arquivo e mantém o antigo intacto. O histórico de versões acompanha o deck.",
     "deck_name.rejected": "Esse nome não pode ser usado como nome de arquivo. Tente um com letras ou números.",
     "deck_name.no_deck": "Carregue um deck antes de nomeá-lo.",
     "app.status.deck_renamed": "Deck renomeado para {name}",

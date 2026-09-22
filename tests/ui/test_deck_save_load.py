@@ -59,8 +59,8 @@ class FakeDetailsDialog:
 
     instances: list[FakeDetailsDialog] = []
     answer: tuple[str, str] = ("Modern", "")
-    #: The name the user types. The deck's file and its version history both
-    #: follow from it, so the fake has to supply one like the real dialog does.
+    #: The name the user types. The deck's file follows from it, so the fake
+    #: has to supply one like the real dialog does.
     name: str = "Saved Deck"
 
     def __init__(self, parent, **kwargs: Any) -> None:

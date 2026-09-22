@@ -98,11 +98,14 @@ class DeckManagementMixin(_Base):
         """Point the in-memory deck record at what was just written.
 
         Every save path ends here, which is the reason this lives on the
-        controller rather than in the Save dialog's handler: the version history
-        keys a deck by the file behind it, so a record still pointing at a
-        scraped ``href`` (or at the file it was *loaded* from, after a Save As
-        under a new name) sends the commit to one history and every reader to
-        another -- which read as "saving creates no version at all".
+        controller rather than in the Save dialog's handler. The version history
+        follows the deck's stable id now, so a stale ``path`` no longer splits
+        one deck's commits across two repos -- but it is still the file a
+        checkout is allowed to rewrite, and it is how the *next* session finds
+        the saved-decks row that hands the deck its id back. A record left
+        pointing at a scraped ``href`` (or at the file it was *loaded* from,
+        after a Save As under a new name) therefore loses the deck its versions
+        the next time it is opened.
         """
         if deck is None:
             return
