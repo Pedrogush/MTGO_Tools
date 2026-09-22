@@ -20,6 +20,11 @@ Um aplicativo desktop para jogadores de Magic: The Gathering Online (MTGO) com a
 - **Guias de Sideboard**: crie e gerencie planos de sideboard por matchup, salvos por configuração de deck.
 - **Gerenciamento de Coleção**: importe sua coleção do MTGO pelo .NET Bridge e veja quais cartas você tem ou está faltando para qualquer deck.
 - **Alerta de Challenge**: avisa quando os challenges do MTGO estão prestes a começar.
+- **Histórico de Versões**: cada vez que você salva um deck vira uma versão. Uma trilha ao lado das cartas lista todas elas, e a aba Histórico mostra o grafo, a diferença entre duas versões quaisquer e traz uma versão antiga de volta para a tela.
+- **Baseline do Arquétipo**: uma aba Baseline para o deck que está na tela, separando o arquétipo entre as cartas que toda lista joga, as contagens que variam e os slots que são de fato seus, com os candidatos a flex ordenados por taxa de uso.
+- **Goldfish**: compre uma mão inicial do mainboard, tome mulligan, compre cartas e baixe elas numa mesa.
+- **Diferença para a Coleção**: salve o que o deck precisa e a sua coleção não tem como um arquivo de decklist, pronto para colar onde você compra, troca ou aluga cartas.
+- **Checagem de Atualização**: Arquivo ▸ Procurar atualizações busca uma versão mais nova, confere o instalador contra o checksum publicado junto com ela e instala.
 
 ![Janela de Análise de Metagame: um gráfico de barras horizontais da participação no metagame de Modern nos últimos 5 dias, liderado por Goryo's Vengeance com 8,7%, ao lado do painel Mudanças de Metagame listando os arquétipos que ganharam ou perderam participação em relação ao período anterior](docs/images/pt-BR/metagame-analysis.png)
 
@@ -200,16 +205,20 @@ precisa comitar a saída deles em um branch de feature.
 │   ├── gamelog_service/               # Descoberta e parsing dos game logs do MTGO
 │   ├── mtgo_bridge_service/           # Fachada Python + transporte para o bridge .NET
 │   ├── bundle_snapshot_client/        # Cliente HTTP do snapshot remoto de bundle
+│   ├── archetype_baseline_service/    # Staples, staples parciais e slots flex do arquétipo
 │   ├── format_card_pool_service.py    # Cache do pool de cartas do formato
 │   ├── archetype_resolver.py          # Normalização dos nomes de arquétipo
 │   ├── card_service.py                # Fachada de consulta de cartas
 │   ├── deck_workflow_service.py       # Fluxo de salvar/carregar deck
+│   ├── deck_vcs_service.py            # Histórico de versões: o que um save registra
+│   ├── deck_name.py                   # O nome do deck, e o histórico que ele indexa
 │   ├── metagame_service.py            # Consultas de metagame
 │   ├── comp_rules_service.py          # Texto das regras completas
 │   └── store_service.py               # Persistência do estado do app
 ├── repositories/                      # Acesso a dados
 │   ├── card_repository/               # MTGJSON atomic-cards + arquivos de coleção
 │   ├── deck_repository/               # Banco de decks + filesystem + estado da UI
+│   ├── deck_vcs_repository/           # Versões, branches e diffs de deck em git
 │   ├── metagame_repository/           # Cache de arquétipos/decks (JSON)
 │   ├── radar_repository/              # Snapshots do radar (SQLite)
 │   ├── format_card_pool_repository/   # Pools de formato (SQLite)
@@ -245,6 +254,13 @@ cd dotnet/MTGOBridge && dotnet build
 ```
 
 O MTGO precisa estar aberto para usar os recursos de importação de coleção.
+
+O app mantém um processo do bridge vivo durante a sessão e manda os comandos
+para ele pela stdin, em vez de abrir um a cada comando: anexar ao cliente do
+MTGO custa vários segundos toda vez, e vários bridges anexados ao mesmo tempo
+atrapalham uns aos outros. Definir `MTGO_BRIDGE_NO_SESSION=1` volta para o
+caminho antigo, de um processo por comando. O `dotnet/MTGOBridge/README.md`
+documenta o protocolo.
 
 ## Fontes de dados
 

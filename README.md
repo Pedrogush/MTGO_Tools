@@ -20,6 +20,11 @@ A desktop application for Magic: The Gathering Online (MTGO) players providing m
 - **Sideboard Guides**: Create and manage matchup-specific sideboarding plans, stored per deck configuration.
 - **Collection Management**: Import your MTGO collection via the .NET Bridge and see what cards you own or are missing for any deck.
 - **Challenge Timer**: Alerts when MTGO challenge events are about to start.
+- **Deck Version History**: Every save of a deck is recorded as a version. A rail beside the cards lists them, and a History tab shows the graph, the diff between any two, and puts an older version back on screen.
+- **Archetype Baseline**: A Baseline tab for the deck on screen, splitting its archetype into the cards every list runs, the counts that move, and the slots that are actually yours, with the flex candidates ranked by play rate.
+- **Goldfish**: Deal an opening hand off the mainboard, mulligan, draw, and play the cards out on a table.
+- **Collection Diff**: Save what a deck needs and your collection does not have as a decklist file, ready to paste wherever you buy, trade, or rent cards.
+- **Update Check**: File ▸ Check for updates looks for a newer release, verifies the installer against the checksum published with it, and installs it.
 
 ![Metagame Analysis window: a horizontal bar chart of Modern metagame share over the last 5 days, led by Goryo's Vengeance at 8.7%, beside a Metagame Changes panel listing archetypes that gained or lost share against the previous period](docs/images/metagame-analysis.png)
 
@@ -207,16 +212,20 @@ need to commit their output in a feature branch.
 │   ├── gamelog_service/               # MTGO game log discovery + parsing
 │   ├── mtgo_bridge_service/           # Python facade + transport for the .NET bridge
 │   ├── bundle_snapshot_client/        # Remote bundle snapshot HTTP client
+│   ├── archetype_baseline_service/    # Archetype staples, partial staples, flex slots
 │   ├── format_card_pool_service.py    # Format card pool cache
 │   ├── archetype_resolver.py          # Archetype name normalization
 │   ├── card_service.py                # Card lookup facade
 │   ├── deck_workflow_service.py       # Deck save/load workflow
+│   ├── deck_vcs_service.py            # Deck version history: what a save records
+│   ├── deck_name.py                   # The deck's name, and the history it keys
 │   ├── metagame_service.py            # Metagame queries
 │   ├── comp_rules_service.py          # Comprehensive rules text
 │   └── store_service.py               # App state persistence
 ├── repositories/                      # Data access
 │   ├── card_repository/               # MTGJSON atomic-cards + collection files
 │   ├── deck_repository/               # Deck DB + filesystem + UI state
+│   ├── deck_vcs_repository/           # Git-backed deck versions, branches, diffs
 │   ├── metagame_repository/           # Archetype/deck cache (JSON)
 │   ├── radar_repository/              # Radar snapshots (SQLite)
 │   ├── format_card_pool_repository/   # Format pools (SQLite)
@@ -252,6 +261,12 @@ cd dotnet/MTGOBridge && dotnet build
 ```
 
 MTGO must be running when using collection import features.
+
+The app keeps one bridge process alive for the session and sends it commands
+over stdin, instead of starting one per command: attaching to the MTGO client
+costs several seconds every time, and several bridges attached at once slow one
+another down. Setting `MTGO_BRIDGE_NO_SESSION=1` forces the old one-process-per-
+command path. `dotnet/MTGOBridge/README.md` documents the protocol.
 
 ## Data Sources
 
