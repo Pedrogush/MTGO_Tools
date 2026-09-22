@@ -75,6 +75,33 @@ MENU_CARET = "▾"
 # here rather than at its natural ~111px.
 DECK_COUNT_LABEL_MIN_WIDTH = 48
 
+#: Floor for the deck-name label beside it: **zero**, deliberately.
+#:
+#: The header's minimum is already spoken for -- at the deck workspace's own
+#: 353px floor the view controls want 254 and the count's floor takes 48, which
+#: with the row's borders leaves about a pixel. A label given any real floor
+#: there does not get one, it makes the sizer short of its own contents and the
+#: controls clip instead (measured: a 90px floor left the row 97px short).
+#:
+#: So the name is the row's *second* graceful degrader, beside the count: it
+#: takes slack through proportion 1 and ellipsises rather than pushing anything
+#: off the panel. A ``wx.StaticText`` reports its own text as its best size, so
+#: the floor has to be set explicitly to get underneath it -- leaving it unset
+#: is what would force the row wider.
+DECK_NAME_LABEL_MIN_WIDTH = 0
+
+# The version rail beside the deck tables. Wide enough for the widest branch
+# fork the lane assignment produces in practice (three lanes) plus a short sha,
+# and fixed rather than proportional: it is a strip taken out of the card
+# tables' width, so it must not grow when the window does.
+DECK_HISTORY_RAIL_WIDTH = 104
+
+#: What the deck-name label *wants* beside the view controls, as opposed to what
+#: it demands. Read only by ``_reflow_header``: when the row cannot give the name
+#: this much alongside the controls, the controls drop to their own line instead
+#: of the name ellipsising away to nothing.
+DECK_NAME_LABEL_WRAP_RESERVE = 120
+
 # §4.5. The left column is added to the root sizer with **proportion 0**, so it
 # is always exactly its own minimum width -- at every window size, not only at
 # the floor. Every pixel of that minimum is therefore a pixel the deck workspace

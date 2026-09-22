@@ -99,6 +99,12 @@ hiddenimports = ["debugpy", "wx._xml", "wx._html", "wx._adv"]
 for _pkg in ("widgets", "services", "repositories", "controllers", "utils", "automation"):
     hiddenimports += collect_submodules(_pkg)
 
+# dulwich backs the deck version history. Its porcelain layer reaches several
+# submodules through late/conditional imports (compat shims, the optional C
+# object-store accelerators), so static analysis alone under-collects it and the
+# first deck save in a packaged build would be the place that found out.
+hiddenimports += collect_submodules("dulwich")
+
 a = Analysis(
     [str(entry_point)],
     pathex=[str(project_root)],

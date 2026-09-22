@@ -68,11 +68,17 @@ class DeckResearchHandlers(_Base):
         if idx == 0:  # "Any" — load all cached decks sorted by date
             self.card_panel.update_archetype(None)
             self._load_decks(scope="all")
+            # "Any" is not an archetype, so a tab reading this selection needs
+            # telling it went away just as much as it needs telling it arrived.
+            self.notify_deck_tab_shown()
             return
         archetype = self.filtered_archetypes[idx - 1]
         self.card_panel.update_archetype(archetype, radar_data=None)
         self._load_decks(scope="archetype", archetype=archetype)
         self._load_radar_in_background(archetype)
+        # The Baseline tab measures whatever is selected here; if it is already
+        # open, the selection changing underneath it is its only cue.
+        self.notify_deck_tab_shown()
 
     def on_bundle_decks_ready(self: AppFrame) -> None:
         """Refresh the deck list after the remote bundle hydrates the caches.

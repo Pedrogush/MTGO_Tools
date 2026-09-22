@@ -446,7 +446,7 @@ def test_on_save_clicked_empty_deck_warns_without_save(shared_frame):
 
 @pytest.mark.usefixtures("wx_app")
 def test_on_save_clicked_round_trip(shared_frame):
-    """A non-empty deck is written via controller.save_deck under the chosen file's name."""
+    """A non-empty deck is written via controller.save_deck under the name given."""
     frame = shared_frame
     frame.zone_cards = {
         "main": [{"name": "Mountain", "qty": 4}],
@@ -469,12 +469,13 @@ def test_on_save_clicked_round_trip(shared_frame):
     ):
         details = details_cls.return_value
         details.ShowModal.return_value = wx.ID_OK
+        details.deck_name.return_value = "My Saved Deck"
         details.selected_format.return_value = "Modern"
         details.selected_archetype.return_value = ""
-        dialog = dialog_cls.return_value.__enter__.return_value
-        dialog.ShowModal.return_value = wx.ID_OK
-        dialog.GetPath.return_value = "C:/decks/My Saved Deck.txt"
         frame.on_save_clicked(None)
+
+    # The name is the whole answer now: no Save As dialog is opened.
+    dialog_cls.assert_not_called()
 
     assert len(save_calls) == 1
     assert save_calls[0]["deck_name"] == "My Saved Deck"

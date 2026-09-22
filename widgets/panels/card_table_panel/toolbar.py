@@ -20,6 +20,7 @@ from services.deck_service.printing import DATE_MODES as PRINTING_DATE_MODES
 from services.deck_service.printing import PRINTING_MODES
 from utils.constants import (
     DECK_COUNT_LABEL_MIN_WIDTH,
+    DECK_NAME_LABEL_WRAP_RESERVE,
     MENU_CARET,
     SPACE_SM,
     VIEW_TOGGLE_HEIGHT,
@@ -72,6 +73,15 @@ class CardTablePanelToolbarMixin(_Base):
         if controls is None:
             return
         needed = controls.CalcMin().GetWidth() + DECK_COUNT_LABEL_MIN_WIDTH + SPACE_SM + SPACE_SM
+        # The deck name asks for a readable share on top of that, and the
+        # mainboard is the zone that has one. Its *floor* is zero on purpose
+        # (see DECK_NAME_LABEL_MIN_WIDTH) so it can never make this row short of
+        # itself; the reserve here is what it wants rather than what it demands,
+        # and the row wrapping one step earlier is how it gets it. Without this
+        # the name would simply ellipsise to nothing at the workspace's floor,
+        # which defeats having it in the header at all.
+        if getattr(self, "deck_name_label", None) is not None:
+            needed += DECK_NAME_LABEL_WRAP_RESERVE + SPACE_SM
         wrapped = self.GetClientSize().GetWidth() < needed
         if wrapped == self._header_wrapped:
             return
