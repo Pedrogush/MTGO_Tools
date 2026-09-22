@@ -17,8 +17,6 @@ Split by responsibility into internal modules mirroring
 - ``deck_research``: format/archetype/deck-list/tab handlers (``DeckResearchMixin``)
 - ``deck_history``: version-graph readout and checkout/branch driving
   (``DeckHistoryMixin``)
-- ``deck_patterns``: capability-explorer readout and turn selection
-  (``DeckPatternsMixin``)
 - ``deck_baseline``: archetype-baseline computation, readout and root pinning
   (``DeckBaselineMixin``)
 - ``zone_editing``: mainboard/sideboard/out zone editing (``ZoneEditingMixin``)
@@ -41,7 +39,6 @@ from typing import TYPE_CHECKING, Any
 from automation.server.builder import BuilderMixin
 from automation.server.deck_baseline import DeckBaselineMixin
 from automation.server.deck_history import DeckHistoryMixin
-from automation.server.deck_patterns import DeckPatternsMixin
 from automation.server.deck_research import DeckResearchMixin
 from automation.server.introspection import IntrospectionMixin
 from automation.server.mana_rendering import ManaRenderingMixin
@@ -68,7 +65,6 @@ class AutomationServer(
     IntrospectionMixin,
     DeckResearchMixin,
     DeckHistoryMixin,
-    DeckPatternsMixin,
     DeckBaselineMixin,
     ZoneEditingMixin,
     BuilderMixin,
@@ -138,8 +134,6 @@ class AutomationServer(
             "deck_history_branch": self._handle_deck_history_branch,
             "deck_history_switch": self._handle_deck_history_switch,
             "deck_history_baseline": self._handle_deck_history_baseline,
-            "deck_patterns": self._handle_deck_patterns,
-            "deck_patterns_refresh": self._handle_deck_patterns_refresh,
             "deck_baseline": self._handle_deck_baseline,
             "deck_baseline_compute": self._handle_deck_baseline_compute,
             "deck_baseline_root": self._handle_deck_baseline_root,

@@ -102,8 +102,8 @@ class DeckBaselinePanel(DeckBaselinePanelHandlersMixin, wx.Panel):
         return header
 
     def _build_tree(self) -> wx.Window:
-        # NO_BORDER for the same reason as the Patterns tree: the native sunken
-        # client edge is the one part of the control no colour call reaches.
+        # NO_BORDER because the native sunken client edge is the one part of
+        # the control no colour call reaches.
         self.tree = wx.TreeCtrl(
             self,
             style=wx.TR_HAS_BUTTONS | wx.TR_HIDE_ROOT | wx.TR_LINES_AT_ROOT | wx.NO_BORDER,

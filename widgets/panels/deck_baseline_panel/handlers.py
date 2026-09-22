@@ -2,7 +2,7 @@
 
 The computation reads a pool of decklists out of the text cache and counts
 cards, which is fast but not instant on a large archetype, so it runs on the
-app's background worker with the same stale-token guard the Patterns tab uses.
+app's background worker, behind a stale-token guard.
 
 What the tree shows is ordered by how much of the deck is already decided:
 staples first, then the partial staples with their floor, then the ranked flex

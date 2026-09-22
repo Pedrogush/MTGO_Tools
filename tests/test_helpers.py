@@ -77,9 +77,6 @@ reset_bundle_snapshot_client = _optional_reset(
 )
 reset_deck_service = _optional_reset("services.deck_service", "reset_deck_service")
 reset_deck_vcs_service = _optional_reset("services.deck_vcs_service", "reset_deck_vcs_service")
-reset_deck_patterns_service = _optional_reset(
-    "services.deck_patterns_service", "reset_deck_patterns_service"
-)
 reset_archetype_baseline_service = _optional_reset(
     "services.archetype_baseline_service", "reset_archetype_baseline_service"
 )
@@ -117,7 +114,6 @@ def reset_all_services() -> None:
     reset_comp_rules_service()
     reset_deck_service()
     reset_deck_vcs_service()
-    reset_deck_patterns_service()
     reset_archetype_baseline_service()
     reset_format_card_pool_service()
     reset_metagame_service()

@@ -23,7 +23,6 @@ from widgets.panels.card_table_panel import CardTablePanel
 from widgets.panels.deck_baseline_panel import DeckBaselinePanel
 from widgets.panels.deck_history_panel import DeckHistoryPanel
 from widgets.panels.deck_notes_panel import DeckNotesPanel
-from widgets.panels.deck_patterns_panel import DeckPatternsPanel
 from widgets.panels.deck_stats_panel import DeckStatsPanel
 from widgets.panels.sideboard_guide_panel import SideboardGuidePanel
 from widgets.section import SectionPanel
@@ -66,8 +65,8 @@ class CenterPanelBuilderMixin(_Base):
         section.sizer.Add(self.deck_tabs, 1, wx.EXPAND)
         # A tab that defers work until it is visible needs telling when that
         # happens. Nothing else in the app binds page-changed, so without this
-        # the Patterns tab never computes what it deferred and the Baseline tab
-        # never enables its button -- both of their ``on_shown`` methods were
+        # the Baseline tab never starts its computation and the History tab
+        # keeps showing a stale graph -- both of their ``on_shown`` methods were
         # simply never called.
         self.deck_tabs.Bind(fnb.EVT_FLATNOTEBOOK_PAGE_CHANGED, self._on_deck_tab_changed)
 
@@ -161,18 +160,6 @@ class CenterPanelBuilderMixin(_Base):
         )
         self.deck_history_panel.SetToolTip(self._t("tabs.tooltip.deck_history"))
         self.deck_tabs.AddPage(self.deck_history_panel, self._t("tabs.deck_history"))
-
-        # The capability explorer. It reads the loaded zones, so the frame feeds
-        # it on every deck change; the analysis itself runs on the controller's
-        # background worker rather than on this thread.
-        self.deck_patterns_panel = DeckPatternsPanel(
-            self.deck_tabs,
-            card_manager=self.controller.card_repo.get_card_manager(),
-            worker=getattr(self.controller, "_worker", None),
-            locale=self.locale,
-        )
-        self.deck_patterns_panel.SetToolTip(self._t("tabs.tooltip.deck_patterns"))
-        self.deck_tabs.AddPage(self.deck_patterns_panel, self._t("tabs.deck_patterns"))
 
         # The archetype baseline. It measures the *research* selection, not the
         # loaded deck, so it reads that selection through providers rather than

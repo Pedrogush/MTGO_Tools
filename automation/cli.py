@@ -229,20 +229,6 @@ def cmd_load_deck(client: AutomationClient, args: argparse.Namespace) -> int:
     return 0 if result.get("loaded") else 1
 
 
-def cmd_deck_patterns(client: AutomationClient, args: argparse.Namespace) -> int:
-    """Print the capability readout for a turn."""
-    result = client.deck_patterns(args.turn, limit=args.limit, offset=args.offset)
-    print(format_output(result, args.json))
-    return 0 if "error" not in result else 1
-
-
-def cmd_deck_patterns_refresh(client: AutomationClient, args: argparse.Namespace) -> int:
-    """Force the Patterns tab to recompute."""
-    result = client.deck_patterns_refresh()
-    print(format_output(result, args.json))
-    return 0 if result.get("triggered") else 1
-
-
 def cmd_deck_baseline(client: AutomationClient, args: argparse.Namespace) -> int:
     """Print the archetype baseline breakdown."""
     result = client.deck_baseline()
@@ -712,17 +698,7 @@ Notes:
     p.add_argument("--text", "-t", help="Deck text inline")
     p.add_argument("--file", "-f", help="Path to deck text file")
 
-    # get-zone-cards
-    # deck history
-    p = subparsers.add_parser("deck-patterns", help="Print the turn capability readout")
-    p.add_argument("--turn", "-t", type=int, default=None, help="Turn to select first")
-    p.add_argument("--limit", type=int, default=None, help="Max land combinations to return")
-    p.add_argument("--offset", type=int, default=0, help="First land combination to return")
-
-    subparsers.add_parser(
-        "deck-patterns-refresh", help="Force a Patterns recompute (the tab also does it itself)"
-    )
-
+    # archetype baseline
     subparsers.add_parser("deck-baseline", help="Print the archetype baseline breakdown")
     subparsers.add_parser("deck-baseline-compute", help="Compute the archetype baseline")
     p = subparsers.add_parser("deck-baseline-root", help="Print the deck's root commit")
@@ -737,6 +713,7 @@ Notes:
     p = subparsers.add_parser("deck-baseline-load-file", help="Load a saved deck file")
     p.add_argument("--path", required=True, help="Path to the deck .txt")
 
+    # deck history
     subparsers.add_parser("deck-history", help="Print the deck version graph")
 
     p = subparsers.add_parser("deck-name", help="Read or set the loaded deck's name")
@@ -768,6 +745,7 @@ Notes:
     p = subparsers.add_parser("deck-history-baseline", help="Pin the diff baseline")
     p.add_argument("sha", nargs="?", default=None, help="Version sha, or omit to clear")
 
+    # get-zone-cards
     p = subparsers.add_parser("get-zone-cards", help="Get cards in a zone")
     p.add_argument("--zone", "-z", default="main", help="Zone: main, side, or out (default: main)")
 
@@ -1046,8 +1024,6 @@ Notes:
         "switch-tab": cmd_switch_tab,
         "wait": cmd_wait,
         "load-deck": cmd_load_deck,
-        "deck-patterns": cmd_deck_patterns,
-        "deck-patterns-refresh": cmd_deck_patterns_refresh,
         "deck-baseline": cmd_deck_baseline,
         "deck-baseline-compute": cmd_deck_baseline_compute,
         "deck-baseline-root": cmd_deck_baseline_root,

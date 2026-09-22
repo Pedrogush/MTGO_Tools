@@ -15,7 +15,6 @@ from widgets.panels.card_table_panel import CardTablePanel
 from widgets.panels.deck_baseline_panel import DeckBaselinePanel
 from widgets.panels.deck_history_panel import DeckHistoryPanel
 from widgets.panels.deck_notes_panel import DeckNotesPanel
-from widgets.panels.deck_patterns_panel import DeckPatternsPanel
 from widgets.panels.deck_stats_panel import DeckStatsPanel
 from widgets.panels.sideboard_guide_panel import SideboardGuidePanel
 from widgets.preferences import PreferenceGroup
@@ -75,7 +74,6 @@ class AppFrameProto(Protocol):
     deck_notes_panel: DeckNotesPanel
     deck_baseline_panel: DeckBaselinePanel
     deck_history_panel: DeckHistoryPanel
-    deck_patterns_panel: DeckPatternsPanel
     sideboard_guide_panel: SideboardGuidePanel
     card_panel: CardPanel
     collection_status_label: wx.StaticText
