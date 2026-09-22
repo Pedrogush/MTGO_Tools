@@ -44,6 +44,9 @@ UI_JOB = "tests-ui"
 #: The job that turns the two halves' data files into one number.
 COVERAGE_JOB = "coverage"
 
+#: The one check a repository is likely to require by name in branch protection.
+SUMMARY_JOB = "validation-summary"
+
 
 def _workflow() -> str:
     assert CI.exists(), f"{CI} is missing"
@@ -207,6 +210,35 @@ def test_the_two_test_jobs_cover_the_whole_suite_between_them() -> None:
     ), f"`{UI_JOB}` must run the tests/ui directory"
     assert all(not path.startswith("tests/ui/") for path in _guard_paths_of(NON_UI_JOB))
     assert all(path.startswith("tests/ui/") for path in _guard_paths_of(UI_JOB))
+
+
+def test_the_validation_summary_waits_for_the_tests_and_reads_their_result() -> None:
+    """A failing test must block a merge even when only this check is required.
+
+    Branch protection requires status checks one at a time, by name, so
+    "Validation Summary" is the one a repository is likely to pick -- it reads
+    as the whole verdict. While it listed neither test job in ``needs``, it did
+    not wait for them and did not look at them: it went green beside a red test
+    job, and the required check said the merge was fine. The workflow run was
+    red the whole time, which is exactly what made it easy to miss.
+
+    Listing them is not enough on its own -- ``if: always()`` means this job
+    runs whatever they did -- so the result has to be read as well.
+    """
+    job = _without_comments(_job(SUMMARY_JOB))
+    needs = re.search(r"needs:\s*\[([^\]]*)\]", job)
+    assert needs is not None, f"`{SUMMARY_JOB}` declares no `needs:`"
+    declared = {name.strip() for name in needs.group(1).split(",")}
+    missing = {NON_UI_JOB, UI_JOB} - declared
+    assert not missing, (
+        f"`{SUMMARY_JOB}` does not wait for {sorted(missing)}. Required as a "
+        "branch-protection check on its own, it would pass a PR whose tests failed."
+    )
+    for job_id in (NON_UI_JOB, UI_JOB):
+        assert re.search(rf'needs\.{re.escape(job_id)}\.result[^\n]*!=\s*"success"', job), (
+            f"`{SUMMARY_JOB}` waits for `{job_id}` but never fails on its "
+            "result, and `if: always()` means it runs however that job ended."
+        )
 
 
 def test_ui_tests_never_run_in_parallel() -> None:
