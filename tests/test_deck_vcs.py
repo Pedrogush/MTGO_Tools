@@ -24,6 +24,7 @@ from repositories.deck_vcs_repository.diffs import diff_decklists
 from repositories.deck_vcs_repository.normalize import (
     decklist_fingerprint,
     normalize_decklist,
+    parse_entries,
 )
 from services.deck_vcs_service import (
     DeckVcsService,
@@ -1059,3 +1060,78 @@ class TestReadHistoryPicksAVersionToShow:
         assert vcs._active_session("deck") is None
         # A handle left open by the failed read raises PermissionError here.
         shutil.rmtree(repo_path)
+
+
+class TestNormalizationReadsWhatTheUserActuallyWrote:
+    """The parse itself, on the text shapes an externally edited .txt arrives in.
+
+    ``TestNormalization`` covers the canonical *output*. These cover the input
+    side -- zone detection, the zero-count filter and card names that are not
+    ASCII -- because every one of them decides which zone a card lands in or
+    whether two spellings are one card, and both of those change the fingerprint
+    that makes an edited file recognisable.
+    """
+
+    def test_a_blank_first_line_does_not_open_the_sideboard(self):
+        """A file that merely starts with an empty line is not an all-sideboard deck.
+
+        The zone marker is a blank line *between* the zones. Treating a leading
+        one as a separator read the whole maindeck as a sideboard, which changes
+        the fingerprint and so makes an already-committed file unrecognisable.
+        """
+        assert normalize_decklist("\n4 Lightning Bolt\n") == "4 Lightning Bolt\n"
+
+    def test_leading_blank_lines_do_not_move_the_maindeck(self):
+        assert normalize_decklist("\n\n  \n" + DECK_V1) == normalize_decklist(DECK_V1)
+
+    def test_a_header_before_the_cards_is_not_a_separator_either(self):
+        """A comment line and the blank after it are a preamble, not the sideboard."""
+        assert normalize_decklist("// Modern Burn\n\n4 Lightning Bolt\n") == "4 Lightning Bolt\n"
+
+    def test_a_blank_line_between_the_zones_still_separates_them(self):
+        """The rule the leading-blank fix must not break."""
+        text = normalize_decklist("4 Lightning Bolt\n\n2 Abrade\n")
+        assert text == "4 Lightning Bolt\n\nSideboard\n2 Abrade\n"
+
+    def test_a_leading_blank_line_leaves_the_fingerprint_alone(self):
+        """This is the consequence: a committed file otherwise stops being recognised."""
+        assert decklist_fingerprint("\n" + DECK_V1) == decklist_fingerprint(DECK_V1)
+
+    def test_parse_entries_tags_each_card_with_its_zone(self):
+        """The public parse the archetype baseline reads every pool deck through."""
+        entries = parse_entries("2 Consider\n4 Lightning Bolt\n\nSideboard\n2 Abrade\n")
+        assert [(e.name, e.count, e.is_sideboard) for e in entries] == [
+            ("Consider", 2.0, False),
+            ("Lightning Bolt", 4.0, False),
+            ("Abrade", 2.0, True),
+        ]
+
+    def test_a_zero_count_card_is_not_a_card(self):
+        """A count of zero is a slot the user emptied, not a line to keep."""
+        assert normalize_decklist("0 Consider\n4 Lightning Bolt\n") == "4 Lightning Bolt\n"
+        assert parse_entries("0 Consider\n") == []
+
+    def test_diacritics_survive_a_commit_untouched(self, vcs):
+        """Accented card names are common enough that folding one is a silent data loss."""
+        deck = "4 Jötun Grunt\n1 Lim-Dûl the Necromancer\n"
+        sha = vcs.commit_deck("odd-names", deck, "v1")
+        assert (
+            vcs.read_commit_text("odd-names", sha) == "4 Jötun Grunt\n1 Lim-Dûl the Necromancer\n"
+        )
+
+    def test_two_spellings_of_one_name_are_two_cards(self):
+        """Nothing here folds accents, so the fingerprint must not pretend it does."""
+        assert decklist_fingerprint("4 Jötun Grunt\n") != decklist_fingerprint("4 Jotun Grunt\n")
+        assert len(parse_entries("4 Jötun Grunt\n4 Jotun Grunt\n")) == 2
+
+    def test_two_case_spellings_sort_together_and_deterministically(self):
+        """Case folds for the sort, then the exact name breaks the tie."""
+        entries = parse_entries("2 brazen borrower\n2 Brazen Borrower\n2 Abrade\n")
+        assert [e.name for e in entries] == ["Abrade", "Brazen Borrower", "brazen borrower"]
+
+    def test_the_same_card_under_two_printings_stays_two_lines(self):
+        """The printing id is part of the name here, unlike in the collection diff."""
+        one = "11111111-1111-1111-1111-111111111111"
+        two = "22222222-2222-2222-2222-222222222222"
+        text = normalize_decklist(f"2 Lightning Bolt {two}\n2 Lightning Bolt {one}\n")
+        assert text == f"2 Lightning Bolt {one}\n2 Lightning Bolt {two}\n"

@@ -52,14 +52,20 @@ def parse_entries(deck_text: str) -> list[NormalizedEntry]:
     main: dict[str, float] = {}
     side: dict[str, float] = {}
     is_sideboard = False
+    seen_a_card = False
 
     for raw_line in deck_text.split("\n"):
         line = raw_line.strip()
         if not line:
             # The app's own writer separates the zones with a blank line, so a
             # blank line starts the sideboard exactly as the analysis parser
-            # treats it (services/deck_service/parser.py::_iter_entries).
-            is_sideboard = True
+            # treats it (services/deck_service/parser.py::_iter_entries) --
+            # which strips the text first, so a blank line before the first card
+            # separates nothing there. It has to separate nothing here too: a
+            # file that merely opens with an empty line was otherwise read as a
+            # deck with no maindeck and its whole contents in the sideboard.
+            if seen_a_card:
+                is_sideboard = True
             continue
         if line.lower() == SIDEBOARD_MARKER.lower():
             is_sideboard = True
@@ -77,6 +83,7 @@ def parse_entries(deck_text: str) -> list[NormalizedEntry]:
         name = match.group(2)
         target = side if is_sideboard else main
         target[name] = target.get(name, 0.0) + count
+        seen_a_card = True
 
     return [
         *(_entries_for(main, is_sideboard=False)),
