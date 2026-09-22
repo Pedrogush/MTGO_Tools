@@ -203,7 +203,17 @@ and the packaging/installer pipeline all target Windows. Linting, formatting,
 type-checking, and most non-wx tests work in either environment, but the full
 pytest suite is intended to run against the Windows-side Python interpreter
 (where `wx` is installed) — from WSL this is invoked via the Windows interop
-shim (`/init /mnt/c/Windows/System32/cmd.exe /c "pytest ..."`). CI runs the
-test job on `windows-latest` and lint/type/security/compile jobs on
-`ubuntu-latest`; see `.github/workflows/ci.yml` and
-`.github/VALIDATION_QUICKSTART.md`.
+shim (`/init /mnt/c/Windows/System32/cmd.exe /c "pytest ..."`).
+`scripts/run_tests_fast.py` runs the same split locally.
+
+CI splits the suite across two `windows-latest` jobs so that every test runs
+exactly once: **Tests (non-UI, parallel)** takes everything outside `tests/ui/`
+across the runner's cores with `pytest-xdist` (`pytest -n auto`), and **Tests
+(UI, serial)** takes the wx tests, which build real top-level windows and have
+to run one at a time in one process. Each job runs the design-system guards of
+issue #962 as a named first step and `--ignore`s exactly those files in its main
+run; `tests/test_ci_guards.py` pins the two lists so they cannot drift apart. A
+third job, **Live Network Tests**, hits real external services and runs only on
+`workflow_dispatch`. The .NET build is also on `windows-latest`; lint, type
+check, security scan and the compile check run on `ubuntu-latest`. See
+`.github/workflows/ci.yml` and `.github/VALIDATION_QUICKSTART.md`.
