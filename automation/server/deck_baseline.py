@@ -197,7 +197,9 @@ class DeckBaselineMixin(_Base):
         from services.archetype_baseline_service import get_archetype_baseline_service
         from services.deck_vcs_service import deck_key_for
 
-        deck_key = deck_key_for(None, saved_path)
+        # After the save, the loaded record carries the deck's stable id, which
+        # is what the history was just written under.
+        deck_key = deck_key_for(controller.deck_repo.get_current_deck(), saved_path)
         service = get_archetype_baseline_service()
         return {
             "saved": True,
@@ -222,19 +224,22 @@ class DeckBaselineMixin(_Base):
         """
         from pathlib import Path
 
+        from services.deck_identity import deck_id_of, set_deck_id
+        from services.deck_name import adopt_file_name
+        from services.deck_vcs_service import deck_key_for
         from utils.deck import sanitize_filename
 
         file_ref = Path(path)
         if not file_ref.exists():
             return {"loaded": False, "error": f"No such deck file: {path}"}
 
-        deck_key = sanitize_filename(file_ref.stem, fallback="manual").lower()
         deck_record: dict[str, Any] = {
-            "href": deck_key,
+            "href": sanitize_filename(file_ref.stem, fallback="manual").lower(),
             "name": file_ref.stem,
             "path": str(file_ref),
             "source": "file",
         }
+        adopt_file_name(deck_record, file_ref)
         controller = self.frame.controller
         controller.deck_repo.set_current_deck(deck_record)
 
@@ -243,6 +248,8 @@ class DeckBaselineMixin(_Base):
         for field in ("format", "archetype"):
             if saved and saved.get(field):
                 deck_record[field] = saved[field]
+        set_deck_id(deck_record, deck_id_of(saved))
+        deck_key = deck_key_for(deck_record, file_ref)
 
         # The load wakes whichever deck tab is on screen; when that is the
         # History tab its read is on a worker, so settle before reporting.

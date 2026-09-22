@@ -8,7 +8,8 @@ a checkout is allowed to rewrite.
 The last of those is the constraint the whole feature lives under. The user's
 decklist is a plain ``.txt`` that MTGO and Manatraders import, so no version
 metadata may ever enter it. A checkout therefore writes exactly the decklist and
-nothing else, and the git side of it stays in the mirror under ``cache/``.
+nothing else, and the git side of it stays in the mirror under
+``DECK_HISTORY_DIR``.
 """
 
 from __future__ import annotations
@@ -32,20 +33,37 @@ if TYPE_CHECKING:
 def deck_key_for(deck: dict | None, file_path: Path | None) -> str:
     """The history key for a deck, agreed on by every caller.
 
-    The deck's **chosen name** decides this, because the name decides the file
-    and the file is the thing the user keeps and comes back to -- two sessions
-    that open ``Mono Red.txt`` must land on the same history. Reading the name
-    first is also what keeps one deck's saves in one history: the name is held
-    once and shown to the user, where the Save As dialog's default was
-    recomputed per save and could differ between two saves of one deck.
+    The deck's **stable id** decides this, and nothing else does. The id is
+    stamped on the record the first time the deck is saved and never changes
+    again, so a rename keeps the whole version graph and two decks that happen
+    to share a name keep two histories -- see :mod:`services.deck_identity` for
+    why the name could not go on doing this job.
 
-    The two fallbacks are for decks that have not been named. A file still
-    keys by its stem -- which is the name such a deck acquires the moment
-    anything calls :func:`services.deck_name.adopt_file_name`, so the two agree
-    and decks saved before the name existed keep their history. A deck with no
-    file at all (a scraped list, an average) falls back to its record's
-    ``href``, which is what :meth:`DeckRepository.get_current_deck_key` uses
-    throughout the rest of the app.
+    A deck that has never been saved has no id yet, and falls back to
+    :func:`legacy_deck_key_for` -- the name-shaped key this used to return. That
+    deck has no history to find either, so the fallback only has to be stable
+    for the length of a session; what it is really for is reading a history
+    written by a build that predates the id, which the first save then adopts
+    onto the id (:meth:`DeckVcsRepository.adopt_legacy_repo`).
+    """
+    from services.deck_identity import deck_id_of
+
+    deck_id = deck_id_of(deck)
+    if deck_id:
+        return deck_id
+    return legacy_deck_key_for(deck, file_path)
+
+
+def adoptable_legacy_key(deck: dict | None, file_path: Path | None) -> str:
+    """The old name-shaped key, but only when it named *this* deck alone.
+
+    A repo under the old key may be adopted onto a deck's id, which moves one
+    user's history onto the deck it belongs to. That is only safe for a key
+    derived from the deck's own name or its own file: the remaining fallbacks
+    are shared -- a scraped deck's ``href`` is an archetype slug every deck of
+    that archetype answers to, and ``"manual"`` is every unnamed, file-less
+    deck there has ever been -- so adopting one of those would hand a deck a
+    history some other deck wrote. Returns ``""`` for those.
     """
     from services.deck_name import deck_name_of
     from utils.deck import sanitize_filename
@@ -55,6 +73,18 @@ def deck_key_for(deck: dict | None, file_path: Path | None) -> str:
         return sanitize_filename(name, fallback="manual").lower()
     if file_path is not None:
         return sanitize_filename(Path(file_path).stem, fallback="manual").lower()
+    return ""
+
+
+def legacy_deck_key_for(deck: dict | None, file_path: Path | None) -> str:
+    """How a deck was keyed before it had an id: by name, else file stem, else record.
+
+    Kept because it is the name of any repo written by an earlier build, and
+    because a deck with no id yet still has to be asked about by *something*.
+    """
+    key = adoptable_legacy_key(deck, file_path)
+    if key:
+        return key
     if deck:
         return str(deck.get("href") or deck.get("name", "manual")).lower()
     return "manual"

@@ -566,8 +566,13 @@ class TestConsecutiveSavesStayInOneHistory:
 
         assert [p.name for p in sorted(root.iterdir()) if p.is_dir()] == [deck_key]
 
-    def test_saving_as_a_new_name_still_forks_a_new_history(self, tmp_path) -> None:
-        """Choosing a different name is how a deck *should* start a new history."""
+    def test_a_deck_with_no_id_yet_is_keyed_by_the_file_it_is_saved_to(self, tmp_path) -> None:
+        """Before its first save a deck has no id, and the file is what tells two apart.
+
+        Once it has one the file stops mattering: the same deck saved somewhere
+        else is the same deck, which is what
+        ``TestHistoryFollowsTheDeckAndNotItsName`` covers.
+        """
         deck = self._scraped()
         saved = tmp_path / "pedronavaja, 17th, 2026-09-21_Modern Challenge 32.txt"
         deck["path"] = str(saved)
@@ -662,16 +667,15 @@ class TestDeckName:
         deck = self._scraped()
         set_deck_name(deck, "First Name")
         first = deck_file_for(deck, tmp_path)
-        first_key = deck_key_for(deck, first)
         deck["path"] = str(first)
 
         set_deck_name(deck, "Second Name")
         second = deck_file_for(deck, tmp_path)
 
         # The new name wins over the file the deck is still pointing at, which
-        # is what makes the next save write a new file and start a new history.
+        # is what makes the next save write a new file. The history is not
+        # affected either way -- it is keyed by the deck's id, not its name.
         assert second != first
-        assert deck_key_for(deck, second) != first_key
         # ...and nothing moved or deleted the old one.
         assert deck["path"] == str(first)
 
@@ -687,7 +691,7 @@ class TestDeckName:
         assert deck_file_for(deck, tmp_path / "deck folder") == elsewhere
 
     def test_a_file_deck_keeps_the_key_it_had_before_names_existed(self, tmp_path) -> None:
-        """The no-migration guarantee, asserted rather than assumed."""
+        """A deck with no id yet still reads the history its file already has."""
         from services.deck_name import adopt_file_name
 
         path = tmp_path / "Izzet Murktide.txt"
@@ -1026,3 +1030,142 @@ class TestReadHistoryPicksAVersionToShow:
         monkeypatch.setattr(service, "build_graph", boom)
 
         assert service.read_history("deck").graph == ()
+
+
+class TestHistoryFollowsTheDeckAndNotItsName:
+    """A6: the history is keyed on the deck's stable id, not on what it is called.
+
+    Both tests drive the real save path (``DeckWorkflowService.save_deck``) and
+    then read the history back the way the History tab does, because the bug was
+    never in either half on its own -- it was that the save and the later read
+    computed the same key from something the user is free to change.
+
+    The global deck-VCS service is pointed at ``tmp_path`` rather than reset,
+    since the save path reaches it through :func:`get_deck_vcs_service` and the
+    point of the test is to read back exactly what that save wrote.
+    """
+
+    @staticmethod
+    def _workflow(tmp_path):
+        from repositories.deck_repository.repository import DeckRepository
+        from services.deck_service.averager import DeckAverager
+        from services.deck_workflow_service import DeckWorkflowService
+
+        return DeckWorkflowService(
+            deck_repo=DeckRepository(db_path=tmp_path / "decks.sqlite"),
+            deck_service=DeckAverager(),
+            metagame_repo=object(),
+        )
+
+    @staticmethod
+    def _history_on(tmp_path, monkeypatch) -> DeckVcsService:
+        from services import deck_vcs_service as module
+
+        service = DeckVcsService(vcs_repo=DeckVcsRepository(tmp_path / "deck_history"))
+        monkeypatch.setattr(module, "_default_service", service)
+        return service
+
+    def test_renaming_a_deck_keeps_the_versions_it_already_has(self, tmp_path, monkeypatch):
+        """The user's report: rename the deck, and the version graph is empty."""
+        from services.deck_name import deck_file_for, set_deck_name
+
+        history = self._history_on(tmp_path, monkeypatch)
+        deck = {"href": "modern-burn", "name": "modern-burn", "source": "mtggoldfish"}
+        set_deck_name(deck, "Kiki Chord")
+
+        saved_path, _deck_id = self._workflow(tmp_path).save_deck(
+            deck_name="Kiki Chord",
+            deck_content=DECK_V1,
+            format_name="Modern",
+            deck=deck,
+            deck_save_dir=tmp_path,
+        )
+        deck["path"] = str(saved_path)
+        deck["source"] = "file"
+        before = [node.sha for node in history.build_graph(deck_key_for(deck, saved_path))]
+        assert len(before) == 1
+
+        set_deck_name(deck, "Kiki Chord But Better")
+        renamed = deck_file_for(deck, tmp_path)
+
+        after = [node.sha for node in history.build_graph(deck_key_for(deck, renamed))]
+        assert after == before
+
+    def test_two_decks_called_the_same_thing_keep_two_histories(self, tmp_path, monkeypatch):
+        """Two ``Mono Red.txt`` in two folders are two decks, not one deck twice."""
+        from services.deck_name import set_deck_name
+
+        history = self._history_on(tmp_path, monkeypatch)
+        workflow = self._workflow(tmp_path)
+        folders = [tmp_path / "league", tmp_path / "challenge"]
+        for folder in folders:
+            folder.mkdir()
+
+        keys = []
+        for folder, content in zip(folders, (DECK_V1, DECK_V3)):
+            deck = {"href": "modern-burn", "name": "modern-burn", "source": "mtggoldfish"}
+            set_deck_name(deck, "Mono Red")
+            saved_path, _deck_id = workflow.save_deck(
+                deck_name="Mono Red",
+                deck_content=content,
+                format_name="Modern",
+                deck=deck,
+                deck_save_dir=folder,
+            )
+            keys.append(deck_key_for(deck, saved_path))
+
+        assert keys[0] != keys[1]
+        # One save each: neither deck's list was appended to the other's branch.
+        for key, content in zip(keys, (DECK_V1, DECK_V3)):
+            graph = history.build_graph(key)
+            assert len(graph) == 1
+            assert history.version_text(key, graph[0].sha) == normalize_decklist(content)
+
+
+class TestAHistoryWrittenBeforeDecksHadIdsIsAdopted:
+    """The old name-keyed repos are moved onto the deck's id by its next save.
+
+    Deck history has never shipped, so this is not a migration owed to anyone --
+    it is for a checkout that already holds repos under the old root, and it is
+    asserted here because the alternative (a save silently starting an empty
+    history next to a full one) would look exactly like the bug this replaced.
+    """
+
+    def test_the_next_save_moves_the_old_repo_onto_the_deck_id(self, tmp_path):
+        from services.deck_identity import ensure_deck_id
+        from services.deck_vcs_service import adoptable_legacy_key
+
+        legacy_root = tmp_path / "cache" / "deck_vcs"
+        repo = DeckVcsRepository(tmp_path / "deck_history", legacy_root=legacy_root)
+        legacy = DeckVcsService(vcs_repo=DeckVcsRepository(legacy_root))
+        old_sha = legacy.record_save("mono red", DECK_V1)
+
+        deck = {"deck_name": "Mono Red"}
+        deck_key = ensure_deck_id(deck)
+        adopted = repo.adopt_legacy_repo(deck_key, adoptable_legacy_key(deck, None))
+
+        assert adopted is True
+        assert [c.sha for c in DeckVcsService(vcs_repo=repo).build_graph(deck_key)] == [old_sha]
+        assert not (legacy_root / "mono red").exists()
+
+    def test_a_deck_that_already_has_a_history_is_never_overwritten(self, tmp_path):
+        legacy_root = tmp_path / "cache" / "deck_vcs"
+        repo = DeckVcsRepository(tmp_path / "deck_history", legacy_root=legacy_root)
+        DeckVcsService(vcs_repo=DeckVcsRepository(legacy_root)).record_save("mono red", DECK_V1)
+        service = DeckVcsService(vcs_repo=repo)
+        mine = service.record_save("a-deck-id", DECK_V2)
+
+        assert repo.adopt_legacy_repo("a-deck-id", "mono red") is False
+        assert [c.sha for c in service.build_graph("a-deck-id")] == [mine]
+
+    def test_a_shared_fallback_key_is_never_adopted(self, tmp_path):
+        """``href`` is an archetype slug and ``manual`` is everyone; neither is a deck."""
+        from services.deck_vcs_service import adoptable_legacy_key
+
+        scraped = {"href": "modern-affinity", "name": "modern-affinity"}
+
+        assert adoptable_legacy_key(scraped, None) == ""
+        assert adoptable_legacy_key(None, None) == ""
+        # ...while the deck's own name and its own file still are.
+        assert adoptable_legacy_key({"deck_name": "Mono Red"}, None) == "mono red"
+        assert adoptable_legacy_key(None, tmp_path / "Mono Red.txt") == "mono red"
