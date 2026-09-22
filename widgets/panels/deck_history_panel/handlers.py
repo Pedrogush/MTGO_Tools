@@ -78,12 +78,29 @@ class DeckHistoryPanelHandlersMixin(_Base):
                 return service.read_history(deck_key, selected_sha=selected, baseline_sha=baseline)
 
         def done(snapshot: HistorySnapshot) -> None:
+            # Reached from wx.CallAfter on the worker, so the tab may have been
+            # destroyed since the read started -- and both branches below end in
+            # wx calls (Freeze, the canvas, the labels) on a dead window. The
+            # stale-token check cannot stand in for this: a panel torn down with
+            # its only read in flight has a token that still matches.
+            # ``bool(widget)`` is the liveness test that does not itself touch
+            # the C++ object; it raises once the wrapper is gone.
+            try:
+                if not self:
+                    return
+            except RuntimeError:
+                return
             if token != self._run_token:
                 return  # a newer refresh has started; this answer is stale
             self._refresh_pending = False
             self._apply_snapshot(snapshot)
 
         def failed(exc: Exception) -> None:
+            try:
+                if not self:  # same race as done(); the empty paint is wx too
+                    return
+            except RuntimeError:
+                return
             if token != self._run_token:
                 return
             self._refresh_pending = False
