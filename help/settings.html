@@ -96,11 +96,26 @@ they affect, and each takes effect as you change it &mdash; there is no OK butto
 <h2>Check for updates</h2>
 <p>When enabled (the default), MTGO Tools asks GitHub once a day whether a newer version has been
 released. If one has, an <strong>Update available</strong> note appears at the right-hand end of the
-status bar and a <strong>Get MTGO Tools v&hellip;</strong> entry appears at the top of this menu;
-clicking either opens the release page in your browser, where you can download the installer.</p>
-<p>The check runs in the background and never interrupts you. If you are offline it does nothing at
-all. Nothing is downloaded or installed automatically &mdash; updating is still a matter of running
-the installer yourself. Untick <strong>Check for updates</strong> to switch the check off entirely.</p>
+status bar and a <strong>Get MTGO Tools v&hellip;</strong> entry appears at the end of the
+<strong>Help</strong> menu. The check runs in the background and never interrupts you &mdash; there
+is no dialog on launch &mdash; and if you are offline it does nothing at all. Untick
+<strong>Check for updates</strong> in Preferences to switch the automatic check off;
+<strong>File &#9656; Check for Updates&hellip;</strong> still works when it is off.</p>
+<p>Clicking the status-bar note or the Help-menu entry opens the updater. It names the version you
+are running and the one available, and waits: nothing is downloaded until you choose
+<strong>Update now</strong>. From there MTGO Tools downloads the installer published with the
+release, showing progress as it goes, checks the downloaded file against the SHA-256 checksum
+published beside it, then closes itself, runs the installer, and reopens on the new version when it
+is done. <strong>Release notes</strong> opens the release page if you want to read what changed
+first, and <strong>Later</strong> just closes the dialog &mdash; the status-bar note stays until you
+use it.</p>
+<p>An installer whose checksum does not match the one the release published is deleted and never
+run. Every failure &mdash; a download that did not finish, a checksum that did not match, a release
+pulled while you were looking at it &mdash; installs nothing and leaves the copy you are running
+untouched, and the dialog says which of them happened.</p>
+<p>Some releases publish no installer and checksum pair &mdash; a hand-made release, or one from
+before the checksums existed. For those the same click opens the release page in your browser, where
+you can download the installer and run it yourself.</p>
 
 <h2>Session state</h2>
 <p>The following are saved automatically and restored on the next launch:</p>
