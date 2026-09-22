@@ -26,6 +26,8 @@ MESSAGES: dict[str, str] = {
     "history.checkout.title": "Carregar Versão",
     "history.external.title": "Deck Editado Fora do Aplicativo",
     "history.external.prompt": "Esta decklist não é uma versão do histórico do deck — parece que o arquivo foi editado fora do aplicativo.\n\nRegistrar como uma nova versão?",
+    "history.external.record": "Registrar versão",
+    "history.external.dismiss": "Agora não",
     "app.status.deck_history_baseline": "Referência de comparação definida como {sha}",
     "app.status.deck_history_branched": "Branch {branch} criado",
     "app.status.deck_history_checked_out": "Versão {sha} carregada no branch {branch}",

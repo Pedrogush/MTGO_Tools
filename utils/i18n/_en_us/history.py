@@ -28,6 +28,8 @@ MESSAGES: dict[str, str] = {
     # tab that touches the deck the user keeps.
     "history.external.title": "Deck Edited Outside the App",
     "history.external.prompt": "This decklist is not a version in the deck's history — it looks like the file was edited outside the app.\n\nRecord it as a new version?",
+    "history.external.record": "Record version",
+    "history.external.dismiss": "Not now",
     "app.status.deck_history_baseline": "Diff baseline set to {sha}",
     "app.status.deck_history_branched": "Created branch {branch}",
     "app.status.deck_history_checked_out": "Checked out {sha} on branch {branch}",
