@@ -21,6 +21,8 @@ size and hoping.
 
 from __future__ import annotations
 
+import random
+
 import pytest
 
 from services.deck_service.goldfish import (
@@ -114,6 +116,76 @@ def test_the_same_seed_deals_the_same_hand() -> None:
     assert first == second
 
 
+def test_seed_7_deals_this_hand() -> None:
+    """The exact hand this module's docstring has always promised.
+
+    Every assertion above holds for a shuffle that does nothing, or that
+    rotates the library by the seed: "seven cards", "the same twice" and "two
+    seeds differ" are all satisfied by a deal that is not a shuffle. Only the
+    cards themselves say the library was really permuted.
+
+    The number is stable. ``random.Random(seed)`` is CPython's Mersenne
+    Twister seeded from the integer alone -- no OS entropy, no hash
+    randomisation, no floats -- and ``Random.shuffle`` is a plain Fisher-Yates
+    over ``_randbelow``. Verified identical on CPython 3.11 (what CI runs),
+    3.12 and 3.14. If this ever fails, the interpreter's RNG changed and that
+    is worth knowing.
+    """
+    assert GoldfishTable(DECK_TEXT, seed=7).new_hand() == (
+        "Giver of Runes",
+        "Puresteel Paladin",
+        "Esper Sentinel",
+        "Plains",
+        "Colossus Hammer",
+        "Sigarda's Aid",
+        "Plains",
+    )
+
+
+def test_seed_1045_deals_a_six_land_hand() -> None:
+    """A second exact hand, and one worth goldfishing: six Plains and a Hammer.
+
+    Named as well as counted -- a shuffle that only ever dealt the top of the
+    decklist could not produce this one, since Plains are its last twenty
+    entries.
+    """
+    assert GoldfishTable(DECK_TEXT, seed=1045).new_hand() == (
+        *(("Plains",) * 6),
+        "Colossus Hammer",
+    )
+
+
+def test_cards_are_dealt_off_the_top_of_the_shuffled_library() -> None:
+    """The one exact hand that does not rest on the interpreter's RNG at all.
+
+    ``GoldfishTable`` takes its RNG by injection precisely so a test can make
+    the shuffle knowable. Reversing the library is the simplest permutation
+    that is obviously not the identity, and ``draw`` pops from the end -- so
+    the hand is the decklist's own first seven cards, in order. That pins both
+    halves at once: the library really is the shuffled deck, and the seven come
+    off its top rather than off its bottom or out of the deck itself.
+    """
+
+    class ReversingRandom(random.Random):
+        def shuffle(self, x):  # type: ignore[override]
+            x.reverse()
+
+    table = GoldfishTable(DECK_TEXT, rng=ReversingRandom())
+    assert table.new_hand() == (
+        "Colossus Hammer",
+        "Colossus Hammer",
+        "Colossus Hammer",
+        "Colossus Hammer",
+        "Sigarda's Aid",
+        "Sigarda's Aid",
+        "Sigarda's Aid",
+    )
+    assert build_library(DECK_TEXT)[:OPENING_HAND_SIZE] == list(table.hand)
+    # The rest of the library is what is left, bottom card first.
+    assert table.library_size == MAINBOARD_SIZE - OPENING_HAND_SIZE
+    assert table.draw() == ("Sigarda's Aid",)
+
+
 def test_different_seeds_deal_different_hands() -> None:
     """A guard against a 'shuffle' that does not.
 
@@ -131,6 +203,72 @@ def test_nothing_is_dealt_until_asked() -> None:
     assert table.hand == ()
     assert table.library_size == 0
     assert not table.has_dealt
+
+
+def test_dealing_is_what_flips_has_dealt() -> None:
+    """The flag was only ever asserted false, so a stub returning False passed.
+
+    It is what the panel shows a prompt instead of a table for, and "the hand
+    is empty" cannot stand in for it: a player who has put all seven cards down
+    has an empty hand too. That case is the last assertion here.
+    """
+    table = GoldfishTable(DECK_TEXT, seed=2)
+    assert table.has_dealt is False
+
+    table.new_hand()
+    assert table.has_dealt is True
+
+    table.mulligan()
+    assert table.has_dealt is True
+
+    for _ in range(OPENING_HAND_SIZE):
+        table.play(0)
+    assert table.hand == ()
+    assert table.has_dealt is True
+
+
+def test_a_mulligan_deals_even_from_an_undealt_table() -> None:
+    """The panel's Mulligan button does not require New Hand first."""
+    table = GoldfishTable(DECK_TEXT, seed=6)
+    hand = table.mulligan()
+    assert len(hand) == OPENING_HAND_SIZE
+    assert table.has_dealt is True
+    assert table.mulligans == 1
+
+
+# ---------------------------------------------------------------------------
+# Decks smaller than a hand
+# ---------------------------------------------------------------------------
+def test_a_deck_of_fewer_than_seven_cards_deals_all_of_them() -> None:
+    """Reachable: ``build_library`` rounds fractional counts down, so an
+    averaged decklist of 0.4-of-everything expands to almost nothing -- and a
+    player can open the tab on a deck they have three cards into."""
+    table = GoldfishTable("2 Plains\n1 Island\n", seed=1)
+    assert table.deck_size == 3
+
+    hand = table.new_hand()
+    assert sorted(hand) == ["Island", "Plains", "Plains"]
+    assert table.library_size == 0
+    assert table.has_dealt is True
+    # Nothing left to draw, and asking is not an error.
+    assert table.draw() == ()
+
+
+def test_a_deck_that_rounds_away_to_nothing_deals_nothing() -> None:
+    table = GoldfishTable("0.4 Plains\n0.6 Island\n", seed=1)
+    assert table.deck_size == 0
+    assert table.new_hand() == ()
+    # It was dealt: the panel shows an empty table, not the "deal a hand" prompt.
+    assert table.has_dealt is True
+    assert table.cards_to_bottom == 0
+
+
+def test_a_short_deck_still_mulligans_and_counts() -> None:
+    table = GoldfishTable("2 Plains\n1 Island\n", seed=8)
+    table.new_hand()
+    assert len(table.mulligan()) == 3
+    assert table.mulligans == 1
+    assert table.cards_to_bottom == 1  # the London count is reported, not enforced
 
 
 def test_a_new_hand_shuffles_played_cards_back_in() -> None:

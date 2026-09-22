@@ -2,8 +2,9 @@
 
 Pure-function tests over the real :class:`DeckParser`; the only thing injected is
 the collection lookup, which is the one seam the diff has (tests/README.md Â§1).
-The last two tests run the same arithmetic through a real ``CollectionService``
-so the mixin method and its ``get_owned_count`` wiring are covered too.
+The tests under "Through the service" run the same arithmetic through a real
+``CollectionService`` so the mixin method and its ``get_owned_count`` wiring are
+covered too.
 """
 
 from __future__ import annotations
@@ -13,6 +14,7 @@ from unittest.mock import Mock
 import pytest
 
 from services.collection_service import CollectionService, build_collection_diff
+from utils.card_names import fold_card_name
 
 
 def _owned(inventory: dict[str, int]):
@@ -132,6 +134,34 @@ def test_junk_lines_are_skipped_rather_than_written_out() -> None:
     assert diff.text == "4 Lightning Bolt"
 
 
+def test_two_spellings_of_one_card_share_one_budget() -> None:
+    """diff.py's own worked example, and the reason it folds the budget key.
+
+    MTGO writes ``Kili the Resourceful``; Scryfall and the bridge write
+    ``Kíli``. A deck can carry both spellings across its two zones, and they
+    are the same four pieces of cardboard.
+
+    The premise first, because it is what makes the conclusion mean anything:
+    the lookup here knows only the accented spelling, so a second budget entry
+    would be opened at zero and the sideboard would ask for both copies. It
+    asks for one, because the maindeck's three already spent three of the four.
+    """
+    inventory = {"Kíli the Resourceful": 4}
+    owned = _owned(inventory)
+    assert owned("Kíli the Resourceful") == 4
+    assert owned("Kili the Resourceful") == 0  # the premise
+
+    diff = build_collection_diff(
+        "3 Kíli the Resourceful\n\nSideboard\n2 Kili the Resourceful", owned
+    )
+
+    assert diff.mainboard == []
+    assert diff.sideboard == [("Kili the Resourceful", 1)]
+    assert (diff.required_total, diff.missing_total) == (5, 1)
+    # The output keeps the deck's own spelling of the line it is short on.
+    assert diff.text == "Sideboard\n1 Kili the Resourceful"
+
+
 @pytest.mark.parametrize("owned", [0, -3])
 def test_a_negative_owned_count_is_treated_as_zero(owned: int) -> None:
     """A miscounted inventory must never inflate the requirement above the deck."""
@@ -169,3 +199,21 @@ def test_service_diff_of_an_empty_collection_is_the_whole_deck(
     diff = service.build_collection_diff("4 Lightning Bolt")
 
     assert diff.text == "4 Lightning Bolt"
+
+
+def test_service_folds_both_spellings_onto_the_one_inventory_entry(
+    service: CollectionService,
+) -> None:
+    """The whole path: a folded inventory key, two deck spellings, one budget.
+
+    ``build_inventory`` normalizes with ``fold_card_name``, so this is the key
+    shape a real collection load produces (#469).
+    """
+    service.set_inventory({fold_card_name("Kíli the Resourceful"): 4})
+
+    diff = service.build_collection_diff(
+        "3 Kíli the Resourceful\n\nSideboard\n2 Kili the Resourceful"
+    )
+
+    assert diff.mainboard == []
+    assert diff.sideboard == [("Kili the Resourceful", 1)]
