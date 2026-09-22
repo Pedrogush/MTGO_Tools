@@ -29,13 +29,13 @@ browse competitive archetypes for any supported MTGO format, using data fetched 
   <tr><td><strong>Archetype list</strong></td>
       <td>Displays the archetypes available for the selected format. Click an entry to load its decklists
           into the <a href="deck_results.html">Deck Results</a> panel.</td></tr>
-  <tr><td><strong>Reload Archetypes</strong></td>
-      <td>Forces a fresh fetch from MTGGoldfish, bypassing the local cache.</td></tr>
 </table>
 
 <h2>Data source</h2>
-<p>Archetype data is sourced from MTGGoldfish and cached locally. Whether the app also shows decks
-from MTGO.com is set by <strong>Deck data source</strong> in
+<p>Archetype data is sourced from MTGGoldfish and cached locally for an hour. There is no reload
+button: the app re-fetches whenever it needs the list and the cached copy is older than that, which
+is at startup and every time you change format. Whether the app also shows decks from MTGO.com is
+set by <strong>Deck data source</strong> in
 <a href="settings.html">File &#9656; Preferences&hellip;</a>, which is on <strong>Both</strong> by
 default.</p>
 
