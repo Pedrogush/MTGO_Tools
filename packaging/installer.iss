@@ -193,11 +193,15 @@ Type: filesandordirs; Name: "{app}\mtgo_integration"
 ; keep them:
 ;   %LOCALAPPDATA%\{#MyAppName}\config        - user settings
 ;   %LOCALAPPDATA%\{#MyAppName}\deck_history  - every saved version of every deck
+;   %LOCALAPPDATA%\{#MyAppName}\deck_records  - the saved-deck records, and the
+;                                               deck id each history is keyed by
 ;   %USERPROFILE%\Documents\mtgo_decks        - the saved decks themselves
-; deck_history used to live under cache\deck_vcs, i.e. inside the first entry
+; Both of the first two used to live under cache\, i.e. inside the first entry
 ; below, so an uninstall deleted a user's whole edit history while leaving the
-; .txt files it promised to keep. Adding a directory under cache\ that a person
-; authored re-opens that hole; put it beside config instead.
+; .txt files it promised to keep -- and deleting deck_records alone was enough,
+; because the id that reaches a history is stored only there. Adding a directory
+; under cache\ that a person authored re-opens that hole; put it beside config
+; instead.
 Type: filesandordirs; Name: "{localappdata}\{#MyAppName}\cache"
 Type: filesandordirs; Name: "{localappdata}\{#MyAppName}\logs"
 Type: filesandordirs; Name: "{localappdata}\{#MyAppName}\data"

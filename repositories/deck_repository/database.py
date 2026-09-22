@@ -1,9 +1,16 @@
 """SQLite CRUD operations for saved decks.
 
-Saved decks live in a single local SQLite database under ``cache/`` alongside
-the other SQLite-backed caches (deck text, format card pool, radar, images).
-This replaces the previous MongoDB backend so optional deck persistence never
-blocks on an external server's connection timeout.
+Saved decks live in a single local SQLite database, in its own directory beside
+``config/`` (``DECK_RECORDS_DIR``). It replaces the previous MongoDB backend so
+optional deck persistence never blocks on an external server's connection
+timeout.
+
+It used to sit under ``cache/`` with the other SQLite-backed caches (deck text,
+format card pool, radar, images), which is where a database of *regenerable*
+data belongs. These rows are not regenerable, and each one carries the
+``deck_uuid`` that reaches the deck's version history, so a cache sweep took
+both. :mod:`repositories.deck_repository.migration` moves a database left at the
+old path.
 """
 
 from __future__ import annotations
@@ -17,7 +24,9 @@ from typing import TYPE_CHECKING
 
 from loguru import logger
 
+from repositories.deck_repository.migration import migrate_saved_decks_database
 from utils.constants import (
+    LEGACY_SAVED_DECKS_DB_FILE,
     SAVED_DECKS_DB_FILE,
     SQLITE_BUSY_TIMEOUT_MS,
     SQLITE_CONNECTION_TIMEOUT_SECONDS,
@@ -36,6 +45,10 @@ class DatabaseMixin(_Base):
 
     def _get_db_path(self) -> Path:
         if self._db_path is None:
+            # Only on the way to the default path. A caller that named a
+            # database owns it, and must not have a file from cache/ moved
+            # on top of it; a test with its own tmp path is the usual one.
+            migrate_saved_decks_database(SAVED_DECKS_DB_FILE, LEGACY_SAVED_DECKS_DB_FILE)
             self._db_path = SAVED_DECKS_DB_FILE
         return self._db_path
 

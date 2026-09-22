@@ -186,12 +186,27 @@ CARD_DATA_DIR = BASE_DATA_DIR / "data"
 # either -- see repositories/deck_vcs_repository/store.py for why the repos may
 # not sit beside the .txt files they mirror.
 DECK_HISTORY_DIR = BASE_DATA_DIR / "deck_history"
+# The saved-deck records: one row per deck the user has saved, holding its name,
+# format, archetype, and the ``deck_uuid`` its version history is keyed by. Here
+# rather than under cache/ for the same reason as DECK_HISTORY_DIR, and for one
+# more: the uuid lives in this database and nowhere else, so sweeping it away
+# also makes every history under deck_history/ unreachable -- the directories
+# survive with nothing left that can name them.
+DECK_RECORDS_DIR = BASE_DATA_DIR / "deck_records"
 
 
 def ensure_base_dirs() -> None:
     """Ensure base config/cache/deck/log directories exist without importing side effects."""
     BASE_DATA_DIR.mkdir(parents=True, exist_ok=True)
-    for path in (CONFIG_DIR, CACHE_DIR, DECKS_DIR, LOGS_DIR, CARD_DATA_DIR, DECK_HISTORY_DIR):
+    for path in (
+        CONFIG_DIR,
+        CACHE_DIR,
+        DECKS_DIR,
+        LOGS_DIR,
+        CARD_DATA_DIR,
+        DECK_HISTORY_DIR,
+        DECK_RECORDS_DIR,
+    ):
         path.mkdir(parents=True, exist_ok=True)
 
 
@@ -210,7 +225,11 @@ DECK_TEXT_CACHE_FILE = CACHE_DIR / "deck_text_cache.json"  # Individual deck con
 ARCHETYPE_DECKS_CACHE_FILE = CACHE_DIR / "archetype_decks_cache.json"  # Deck lists per archetype
 FORMAT_CARD_POOL_DB_FILE = CACHE_DIR / "format_card_pool.db"
 RADAR_CACHE_DB_FILE = CACHE_DIR / "radar_cache.db"
-SAVED_DECKS_DB_FILE = CACHE_DIR / "saved_decks.db"
+SAVED_DECKS_DB_FILE = DECK_RECORDS_DIR / "saved_decks.db"
+# Where the database was until it moved out of the swept cache/ directory.
+# repositories/deck_repository/migration.py moves a shipped build's database off
+# this path on first use; nothing else may read it, and once moved it is gone.
+LEGACY_SAVED_DECKS_DB_FILE = CACHE_DIR / "saved_decks.db"
 DECK_CACHE_FILE = DECK_TEXT_CACHE_FILE
 CURR_DECK_FILE = DECKS_DIR / "curr_deck.txt"
 

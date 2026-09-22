@@ -59,6 +59,10 @@ REAL_DATA_DIRS: dict[str, Path] = {
     #: Every saved version of every deck. Nothing can rebuild it, which is why
     #: it is not under cache/ and why a test must never be able to reach it.
     "deck_history": Path(constants.DECK_HISTORY_DIR),
+    #: The saved-deck records, including the id each of those histories is keyed
+    #: by. It is the developer's own deck list: a test reaching it would edit the
+    #: decks they have saved, and it moved out of cache/ so nothing sweeps it.
+    "deck_records": Path(constants.DECK_RECORDS_DIR),
 }
 _REAL_PATH_CONSTANTS = {
     name: value for name in dir(constants) if isinstance(value := getattr(constants, name), Path)

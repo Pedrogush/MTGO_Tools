@@ -5,12 +5,13 @@ This is the dev-checkout twin of what the uninstaller does to
 ``%LOCALAPPDATA%/MTGO Tools/cache`` ([UninstallDelete] in
 packaging/installer.iss): everything under ``cache/`` is regenerable, so the
 whole directory goes. Anything a person authored therefore must not live here --
-deck version history is kept in ``DECK_HISTORY_DIR`` beside ``config/`` for
-exactly that reason.
+deck version history is kept in ``DECK_HISTORY_DIR`` and the saved-deck records
+in ``DECK_RECORDS_DIR``, both beside ``config/``, for exactly that reason.
 
-``deck_vcs`` is preserved anyway. It is where history lived before the root
-moved, and a developer checkout can still hold one; a cache clear is not the
-place to find out that the move missed a copy.
+Their old locations are preserved anyway. A developer checkout can still hold a
+``deck_vcs`` directory or a ``saved_decks.db`` from before they moved, and the
+records file moves itself only when the app next opens it; a cache clear is not
+the place to find out that the move has not happened yet.
 """
 
 from __future__ import annotations
@@ -19,9 +20,20 @@ import shutil
 from pathlib import Path
 
 CACHE_DIR = Path("cache")
-#: ``card_images`` is regenerable but expensive (thousands of downloads);
-#: ``deck_vcs`` is a leftover history root that nothing can regenerate at all.
-PRESERVE = {"card_images", "deck_vcs"}
+#: ``card_images`` is regenerable but expensive (thousands of downloads). The
+#: other two are leftovers of the user's own work that nothing can regenerate at
+#: all: a history root, and a records database still waiting to be migrated.
+#: SQLite's sidecars are named too. They are normally transient, but a writer
+#: that died mid-transaction leaves a *hot* journal, and a database kept without
+#: the journal that rolls it back is a database kept corrupt.
+PRESERVE = {
+    "card_images",
+    "deck_vcs",
+    "saved_decks.db",
+    "saved_decks.db-journal",
+    "saved_decks.db-wal",
+    "saved_decks.db-shm",
+}
 
 
 def clear_caches(cache_dir: Path = CACHE_DIR) -> int:
