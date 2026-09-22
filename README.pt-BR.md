@@ -178,20 +178,25 @@ configuração delas fica no `pyproject.toml`.
 
 ### Relatórios do repositório
 
-Dois relatórios ficam comitados na raiz do repositório e em `docs/diagrams/`:
+Dois relatórios são gerados a partir da árvore de código inteira:
 
 ```bash
 python scripts/generate_loc_report.py            # writes LOC_REPORT.md
 python scripts/generate_dependency_diagrams.py   # writes docs/diagrams/graph.json + dependencies_level_*.svg
 ```
 
-Como eles são gerados a partir da árvore de código inteira, **não** entram como
-checagem no CI dos PRs (senão todo PR daria conflito neles e quebraria a
-verificação de atualidade). Em vez disso, o workflow `Refresh Generated Reports`
-(`.github/workflows/refresh-reports.yml`) regenera e comita os dois uma vez por
-dia, e pode ser disparado sob demanda pela aba Actions. Você ainda pode rodar os
-scripts localmente (os dois aceitam `--check` para detectar defasagem), mas não
-precisa comitar a saída deles em um branch de feature.
+Nenhum dos dois é versionado na `main` nem na `develop`. Comitar eles fazia todo
+branch dar conflito e quebrar a verificação de atualidade, então eles moram num
+branch só deles: o workflow `Refresh Generated Reports`
+(`.github/workflows/refresh-reports.yml`) reconstrói o `automated/reports` a
+partir do branch padrão atual, regenera os dois relatórios em cima dele e
+força o push — uma vez por dia, e sob demanda pela aba Actions. Nada volta por
+merge, então é no `automated/reports` que você lê os relatórios: ele é sempre a
+`main` mais os relatórios da última rodada.
+
+Rode os scripts localmente quando quiser (os dois aceitam `--check` para
+detectar defasagem), mas deixe a saída sem comitar — esses arquivos são do
+workflow.
 
 ## Estrutura do projeto
 

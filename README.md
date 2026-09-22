@@ -171,20 +171,24 @@ in `pyproject.toml`.
 
 ### Repo Reports
 
-Two reports are committed under the repo root and `docs/diagrams/`:
+Two reports are generated from the whole source tree:
 
 ```bash
 python scripts/generate_loc_report.py            # writes LOC_REPORT.md
 python scripts/generate_dependency_diagrams.py   # writes docs/diagrams/graph.json + dependencies_level_*.svg
 ```
 
-Because these are generated from the whole source tree, they are **not** gated
-in PR CI (every PR would otherwise conflict on them and fail a freshness
-check). Instead the `Refresh Generated Reports` workflow
-(`.github/workflows/refresh-reports.yml`) regenerates and commits them once a
-day, and can be run on demand from the Actions tab. You can still run the
-scripts locally (both support `--check` for drift detection), but you do not
-need to commit their output in a feature branch.
+Neither is tracked on `main` or `develop`. Committing them meant every branch
+conflicted on them and failed a freshness check, so they live on a branch of
+their own instead: the `Refresh Generated Reports` workflow
+(`.github/workflows/refresh-reports.yml`) rebuilds `automated/reports` from the
+current default branch, regenerates both reports on top of it, and force-pushes
+it — daily, and on demand from the Actions tab. Nothing is merged back, so
+`automated/reports` is where you read them: it is always `main` plus the reports
+as of the last run.
+
+Run the scripts locally whenever you want (both support `--check` for drift
+detection), but leave the output uncommitted — the workflow owns those files.
 
 ## Project Structure
 
