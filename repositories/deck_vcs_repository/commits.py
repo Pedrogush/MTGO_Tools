@@ -60,9 +60,19 @@ class CommitsMixin(_Base):
         Reads the blob straight out of the object store, so previewing a version
         never touches the working tree -- looking at a node in the graph must not
         be a checkout.
+
+        Inside a :meth:`~repositories.deck_vcs_repository.store.StoreMixin.read_session`
+        the text is memoized, which is what stops a history walk reading every
+        blob twice: each commit is both its own "after" and the next one's
+        "before".
         """
+        cached = self._session_blob(deck_key, sha)
+        if cached is not None:
+            return cached
         with self._open(deck_key) as repo:
-            return _blob_text(repo, sha)
+            text = _blob_text(repo, sha)
+        self._remember_blob(deck_key, sha, text)
+        return text
 
     def commit_fingerprint(self, deck_key: str, sha: str) -> str:
         return decklist_fingerprint(self.read_commit_text(deck_key, sha))
@@ -77,9 +87,13 @@ class CommitsMixin(_Base):
         if not self.has_repo(deck_key):
             return None
         target = decklist_fingerprint(deck_text)
-        for commit in self.iter_commits(deck_key):
-            if decklist_fingerprint(self.read_commit_text(deck_key, commit.sha)) == target:
-                return commit.sha
+        # One handle for the whole scan: this reads a blob per commit, and
+        # re-opening the repo for each one is what made loading a deck with a
+        # long history stall.
+        with self.read_session(deck_key):
+            for commit in self.iter_commits(deck_key):
+                if decklist_fingerprint(self.read_commit_text(deck_key, commit.sha)) == target:
+                    return commit.sha
         return None
 
     def iter_commits(self, deck_key: str) -> Iterator[DeckCommit]:
@@ -118,6 +132,18 @@ class CommitsMixin(_Base):
 
     def list_commits(self, deck_key: str) -> list[DeckCommit]:
         return list(self.iter_commits(deck_key))
+
+    def head_sha(self, deck_key: str) -> str | None:
+        """What ``HEAD`` points at, without walking the history to find it.
+
+        ``list_commits`` decodes every commit object in the deck's history; a
+        caller that only wants the current tip -- the unchanged check on a save,
+        for one -- was paying for the whole walk to read one ref.
+        """
+        if not self.has_repo(deck_key):
+            return None
+        with self._open(deck_key) as repo:
+            return _head_sha(repo)
 
 
 def _blob_text(repo: Any, sha: str) -> str:

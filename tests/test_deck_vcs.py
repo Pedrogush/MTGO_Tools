@@ -772,3 +772,257 @@ class TestDiffShowsNetCardChanges:
     def test_the_header_names_both_versions(self) -> None:
         shown = self._render(_decklist("4 Mox Opal"), _decklist("3 Mox Opal"))
         assert shown[0] == "aaaaaaa -> bbbbbbb"
+
+
+# --------------------------------------------------------------------------- read sessions
+class TestReadSessionsHoldOneHandle:
+    """Reading a history must not re-open the repo once per commit.
+
+    Building the graph for a hundred-version deck opened the repo two hundred
+    times and read every blob twice, and spent 98% of its time doing that rather
+    than comparing anything. These pin the shape of the fix, not its speed: the
+    counts are what regress silently, and a timing assertion would be flaky.
+    """
+
+    @staticmethod
+    def _count_opens(monkeypatch) -> list[int]:
+        """Count ``Repo`` constructions for the duration of a test."""
+        from dulwich.repo import Repo
+
+        calls = [0]
+        original = Repo.__init__
+
+        def counting_init(self, *args, **kwargs):
+            calls[0] += 1
+            return original(self, *args, **kwargs)
+
+        monkeypatch.setattr(Repo, "__init__", counting_init)
+        return calls
+
+    @staticmethod
+    def _history(service, deck_key: str, saves: int) -> None:
+        for i in range(saves):
+            service.record_save(deck_key, _decklist(f"{1 + i % 4} Mox Opal", "4 Urza's Saga"))
+
+    def test_building_the_graph_opens_the_repo_once(self, service, monkeypatch):
+        self._history(service, "deck", 6)
+        opens = self._count_opens(monkeypatch)
+
+        graph = service.build_graph("deck")
+
+        assert len(graph) == 6
+        assert opens[0] == 1, "one handle for the whole walk, not two per commit"
+
+    def test_reading_the_whole_view_opens_the_repo_once(self, service, monkeypatch):
+        """Graph, branches, current branch and the opening preview: one trip."""
+        self._history(service, "deck", 5)
+        opens = self._count_opens(monkeypatch)
+
+        snapshot = service.read_history("deck")
+
+        assert len(snapshot.graph) == 5
+        assert snapshot.branches == ("main",)
+        assert snapshot.current_branch == "main"
+        assert snapshot.preview is not None
+        assert opens[0] == 1
+
+    def test_each_blob_is_read_once_per_session(self, service, monkeypatch):
+        """A walk wants every commit's text and its parent's -- the same blobs.
+
+        Counted at the object store, not at ``read_commit_text``: the caller
+        still asks twice, and the point is that the second ask is answered from
+        the session rather than by opening the blob again.
+        """
+        self._history(service, "deck", 5)
+
+        from repositories.deck_vcs_repository import commits as commits_module
+
+        reads = []
+        original = commits_module._blob_text
+
+        def recording(repo, sha):
+            reads.append(sha)
+            return original(repo, sha)
+
+        monkeypatch.setattr(commits_module, "_blob_text", recording)
+        graph = service.build_graph("deck")
+
+        assert len(reads) == len(graph), "one blob read per commit, no more"
+        assert len(reads) == len(set(reads))
+
+    def test_identifying_a_file_opens_the_repo_once(self, service, monkeypatch):
+        """The fingerprint scan reads a blob per commit; it may not re-open."""
+        self._history(service, "deck", 6)
+        opens = self._count_opens(monkeypatch)
+
+        verdict = service.identify("deck", _decklist("3 Black Lotus"))
+
+        assert verdict.status is ExternalEditStatus.UNATTRIBUTED
+        assert opens[0] == 1
+
+    def test_recording_a_save_never_walks_the_history(self, service, vcs, monkeypatch):
+        """A save wants the tip, which is a ref -- not every commit object.
+
+        It asked three times over: once for the unchanged check, once more for
+        the auto summary, and each of those decoded the whole history to find
+        the commit that ``HEAD`` already named.
+        """
+        self._history(service, "deck", 3)
+        walks = []
+        original = vcs.list_commits
+
+        def recording(deck_key):
+            walks.append(deck_key)
+            return original(deck_key)
+
+        monkeypatch.setattr(vcs, "list_commits", recording)
+        sha = service.record_save("deck", _decklist("4 Mox Opal", "2 Urza's Saga"))
+
+        assert sha is not None
+        assert walks == [], "the history was walked to find a commit HEAD already names"
+
+    def test_an_unchanged_save_records_nothing(self, service):
+        """The short-circuit still has to hold now that it reads a ref."""
+        deck = _decklist("4 Mox Opal", "4 Urza's Saga")
+        service.record_save("deck", deck)
+
+        assert service.record_save("deck", deck) is None
+        assert len(service.build_graph("deck")) == 1
+
+    def test_a_reorder_is_still_not_a_save(self, service):
+        service.record_save("deck", _decklist("4 Mox Opal", "4 Urza's Saga"))
+
+        assert service.record_save("deck", _decklist("4 Urza's Saga", "4 Mox Opal")) is None
+
+
+class TestReadSessionsAreSafeToCache:
+    """A session's blob cache may never outlive the operation that opened it."""
+
+    def test_a_commit_made_after_a_session_is_visible(self, service):
+        service.record_save("deck", DECK_V1)
+        first = service.build_graph("deck")
+
+        service.record_save("deck", DECK_V2)
+        second = service.build_graph("deck")
+
+        assert len(first) == 1
+        assert len(second) == 2
+        assert second[0].commit.message == diff_decklists(DECK_V1, DECK_V2).summary()
+
+    def test_the_text_a_later_session_reads_is_the_current_one(self, service, vcs):
+        service.record_save("deck", DECK_V1)
+        head = vcs.list_commits("deck")[0].sha
+
+        with vcs.read_session("deck"):
+            first = vcs.read_commit_text("deck", head)
+        assert normalize_decklist(first) == normalize_decklist(DECK_V1)
+
+        service.record_save("deck", DECK_V2)
+        with vcs.read_session("deck"):
+            new_head = vcs.list_commits("deck")[0].sha
+            latest = vcs.read_commit_text("deck", new_head)
+        assert normalize_decklist(latest) == normalize_decklist(DECK_V2)
+
+    def test_a_deck_with_no_history_is_not_an_error(self, vcs):
+        """``read_session`` on a repo that does not exist yet simply does nothing."""
+        with vcs.read_session("never-saved"):
+            assert vcs.list_commits("never-saved") == []
+
+    def test_sessions_do_not_leak_between_threads(self, service, vcs):
+        """The repository is a singleton; two threads must not share a handle."""
+        import threading
+
+        service.record_save("deck", DECK_V1)
+        seen: list[object] = []
+
+        def other_thread() -> None:
+            seen.append(vcs._active_session("deck"))
+
+        with vcs.read_session("deck"):
+            assert vcs._active_session("deck") is not None
+            thread = threading.Thread(target=other_thread)
+            thread.start()
+            thread.join()
+
+        assert seen == [None]
+
+    def test_a_session_may_be_opened_inside_another(self, service, vcs):
+        """Nesting is re-entrant: the inner block must not close the handle."""
+        service.record_save("deck", DECK_V1)
+        with vcs.read_session("deck"):
+            outer = vcs._active_session("deck")
+            with vcs.read_session("deck"):
+                assert vcs._active_session("deck") is outer
+            assert vcs._active_session("deck") is outer
+        assert vcs._active_session("deck") is None
+
+
+class TestReadHistoryPicksAVersionToShow:
+    """What the view opens on, decided where the history is read."""
+
+    def test_it_opens_on_head_when_nothing_is_selected(self, service):
+        service.record_save("deck", DECK_V1)
+        service.record_save("deck", DECK_V2)
+
+        snapshot = service.read_history("deck")
+
+        head = next(g for g in snapshot.graph if g.commit.is_head)
+        assert snapshot.selected_sha == head.sha
+
+    def test_a_selection_from_another_deck_falls_back_to_head(self, service):
+        """The selection survives a deck change otherwise, pointing nowhere."""
+        service.record_save("deck", DECK_V1)
+
+        snapshot = service.read_history("deck", selected_sha="0" * 40)
+
+        assert snapshot.selected_sha == snapshot.graph[0].sha
+
+    def test_the_preview_diffs_against_the_parent_by_default(self, service):
+        service.record_save("deck", DECK_V1)
+        service.record_save("deck", DECK_V2)
+
+        snapshot = service.read_history("deck")
+
+        assert snapshot.preview is not None
+        assert snapshot.preview.base_sha == snapshot.graph[0].commit.parents[0]
+        assert snapshot.preview.diff is not None
+        assert "Consider" in snapshot.preview.diff.summary()
+
+    def test_a_pinned_baseline_wins_over_the_parent(self, service):
+        service.record_save("deck", DECK_V1)
+        service.record_save("deck", DECK_V2)
+        service.record_save("deck", DECK_V3)
+        graph = service.build_graph("deck")
+        root = graph[-1].sha
+
+        snapshot = service.read_history("deck", baseline_sha=root)
+
+        assert snapshot.preview is not None
+        assert snapshot.preview.base_sha == root
+
+    def test_a_root_commit_previews_with_no_diff(self, service):
+        service.record_save("deck", DECK_V1)
+
+        snapshot = service.read_history("deck")
+
+        assert snapshot.preview is not None
+        assert snapshot.preview.base_sha is None
+        assert snapshot.preview.diff is None
+
+    def test_a_deck_with_no_history_reads_as_empty(self, service):
+        snapshot = service.read_history("never-saved")
+
+        assert snapshot.graph == ()
+        assert snapshot.branches == ()
+        assert snapshot.preview is None
+
+    def test_an_unreadable_repo_reads_as_empty_rather_than_raising(self, service, monkeypatch):
+        """A broken history must not take the tab down with it."""
+        service.record_save("deck", DECK_V1)
+
+        def boom(*_args, **_kwargs):
+            raise OSError("object store is gone")
+
+        monkeypatch.setattr(service, "build_graph", boom)
+
+        assert service.read_history("deck").graph == ()

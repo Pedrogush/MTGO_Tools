@@ -13,6 +13,7 @@ nothing else, and the git side of it stays in the mirror under ``cache/``.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
@@ -102,6 +103,37 @@ class GraphCommit:
         return self.commit.message or self.diff.summary() or self.commit.short_sha
 
 
+@dataclass(frozen=True)
+class VersionPreview:
+    """One version's decklist and its change against a chosen baseline."""
+
+    sha: str
+    text: str
+    #: What ``diff`` is taken against -- the pinned baseline, else the parent.
+    base_sha: str | None = None
+    diff: DeckDiff | None = None
+
+
+@dataclass(frozen=True)
+class HistorySnapshot:
+    """Everything the history view shows, read in one pass.
+
+    The view needs the graph, the branch list, which branch ``HEAD`` is on, and
+    the selected version's decklist and diff. Read separately those are four
+    trips into the repo; gathered here they are one, which is what lets the
+    whole read happen on a background thread and arrive as a single answer.
+    """
+
+    graph: tuple[GraphCommit, ...] = ()
+    branches: tuple[str, ...] = ()
+    current_branch: str | None = None
+    preview: VersionPreview | None = None
+
+    @property
+    def selected_sha(self) -> str | None:
+        return self.preview.sha if self.preview is not None else None
+
+
 class DeckVcsService:
     """Version-control operations for decks, decoupled from wx UI."""
 
@@ -126,12 +158,19 @@ class DeckVcsService:
         if not deck_text.strip():
             return None
 
-        tip_text = self.current_version_text(deck_key)
-        if tip_text is not None and normalize_decklist(tip_text) == normalize_decklist(deck_text):
-            logger.debug(f"Deck unchanged, no version recorded: {deck_key}")
-            return None
+        # The tip is read once and reused: the unchanged check and the auto
+        # summary both want it, and each read walked the whole history.
+        with self.vcs_repo.read_session(deck_key):
+            tip_text = self.current_version_text(deck_key)
+            if tip_text is not None and normalize_decklist(tip_text) == normalize_decklist(
+                deck_text
+            ):
+                logger.debug(f"Deck unchanged, no version recorded: {deck_key}")
+                return None
+            resolved = message or self._summarize(tip_text, deck_text)
 
-        resolved = message or self.describe_change(deck_key, deck_text)
+        # Outside the session: a commit must not reuse a view of the object
+        # store taken before it.
         return self.vcs_repo.commit_deck(deck_key, deck_text, resolved)
 
     def describe_change(self, deck_key: str, deck_text: str) -> str:
@@ -141,7 +180,12 @@ class DeckVcsService:
         commit message for every save -- the node says "+2 Fable, -2 Consider"
         rather than "save 14".
         """
-        tip_text = self.current_version_text(deck_key)
+        with self.vcs_repo.read_session(deck_key):
+            return self._summarize(self.current_version_text(deck_key), deck_text)
+
+    @staticmethod
+    def _summarize(tip_text: str | None, deck_text: str) -> str:
+        """The auto summary, against a tip the caller has already read."""
         if tip_text is None:
             return "Initial version"
         from repositories.deck_vcs_repository.diffs import diff_decklists
@@ -160,32 +204,113 @@ class DeckVcsService:
         return self.vcs_repo.list_branches(deck_key)
 
     def current_version_text(self, deck_key: str) -> str | None:
-        """The decklist at the current ``HEAD``, or ``None`` with no history."""
-        commits = self.vcs_repo.list_commits(deck_key)
-        head = next((c for c in commits if c.is_head), None)
-        if head is None:
+        """The decklist at the current ``HEAD``, or ``None`` with no history.
+
+        Reads the ref rather than walking the history for the commit that
+        matches it: every save asks this, and the walk decodes every commit
+        object the deck has.
+        """
+        sha = self.vcs_repo.head_sha(deck_key)
+        if sha is None:
             return None
-        return self.vcs_repo.read_commit_text(deck_key, head.sha)
+        return self.vcs_repo.read_commit_text(deck_key, sha)
 
     def version_text(self, deck_key: str, sha: str) -> str:
         """The decklist stored in one version. Never touches the user's file."""
         return self.vcs_repo.read_commit_text(deck_key, sha)
 
     def build_graph(self, deck_key: str) -> list[GraphCommit]:
-        """Every version of the deck, newest first, with its change summary."""
+        """Every version of the deck, newest first, with its change summary.
+
+        The whole walk runs under one read session, which is what makes it
+        affordable: it reads a blob per commit rather than re-opening the repo
+        twice per commit and reading every blob twice.
+        """
         graph: list[GraphCommit] = []
-        for commit in self.vcs_repo.list_commits(deck_key):
-            parent = commit.parents[0] if commit.parents else None
-            graph.append(
-                GraphCommit(
-                    commit=commit,
-                    diff=self.vcs_repo.diff_from_parent(deck_key, commit.sha, parent),
+        with self.vcs_repo.read_session(deck_key):
+            for commit in self.vcs_repo.list_commits(deck_key):
+                parent = commit.parents[0] if commit.parents else None
+                graph.append(
+                    GraphCommit(
+                        commit=commit,
+                        diff=self.vcs_repo.diff_from_parent(deck_key, commit.sha, parent),
+                    )
                 )
-            )
         return graph
 
     def diff(self, deck_key: str, base_sha: str, target_sha: str) -> DeckDiff:
         return self.vcs_repo.diff_commits(deck_key, base_sha, target_sha)
+
+    def read_history(
+        self,
+        deck_key: str,
+        *,
+        selected_sha: str | None = None,
+        baseline_sha: str | None = None,
+    ) -> HistorySnapshot:
+        """The whole history view in one read, safe to call off the UI thread.
+
+        ``selected_sha`` is the version to preview; it falls back to ``HEAD``
+        when it is ``None`` or names a commit this deck's history does not have
+        -- which is what happens when the loaded deck changes under a selection.
+        A repo that cannot be read at all comes back empty rather than raising,
+        because a broken history must not take the tab down with it.
+        """
+        try:
+            with self.vcs_repo.read_session(deck_key):
+                graph = self.build_graph(deck_key)
+                branches = tuple(self.list_branches(deck_key))
+                current = self.current_branch(deck_key)
+                preview = self._read_preview(deck_key, graph, selected_sha, baseline_sha)
+        except Exception as exc:  # noqa: BLE001 - a broken repo must not kill the tab
+            logger.warning(f"Could not read deck history for {deck_key}: {exc}")
+            return HistorySnapshot()
+        return HistorySnapshot(
+            graph=tuple(graph),
+            branches=branches,
+            current_branch=current,
+            preview=preview,
+        )
+
+    def read_preview(
+        self,
+        deck_key: str,
+        graph: Sequence[GraphCommit],
+        sha: str | None,
+        baseline_sha: str | None = None,
+    ) -> VersionPreview | None:
+        """One version's decklist and diff, against a graph already in hand."""
+        try:
+            with self.vcs_repo.read_session(deck_key):
+                return self._read_preview(deck_key, graph, sha, baseline_sha)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(f"Could not read version {(sha or '?')[:7]}: {exc}")
+            return None
+
+    def _read_preview(
+        self,
+        deck_key: str,
+        graph: Sequence[GraphCommit],
+        sha: str | None,
+        baseline_sha: str | None,
+    ) -> VersionPreview | None:
+        """Assumes a read session is already open."""
+        if not graph:
+            return None
+        entry = next((g for g in graph if g.sha == sha), None)
+        if entry is None:
+            entry = next((g for g in graph if g.commit.is_head), graph[0])
+
+        text = self.version_text(deck_key, entry.sha)
+        base = baseline_sha or (entry.commit.parents[0] if entry.commit.parents else None)
+        if base is None or base == entry.sha:
+            return VersionPreview(sha=entry.sha, text=text)
+        return VersionPreview(
+            sha=entry.sha,
+            text=text,
+            base_sha=base,
+            diff=self.diff(deck_key, base, entry.sha),
+        )
 
     def unified_diff(self, deck_key: str, base_sha: str, target_sha: str) -> list[str]:
         return self.vcs_repo.unified_diff(deck_key, base_sha, target_sha)
@@ -233,7 +358,8 @@ class DeckVcsService:
         """
         if not self.vcs_repo.has_repo(deck_key):
             return ExternalEdit(status=ExternalEditStatus.NO_HISTORY)
-        sha = self.vcs_repo.find_commit_by_text(deck_key, deck_text)
+        with self.vcs_repo.read_session(deck_key):
+            sha = self.vcs_repo.find_commit_by_text(deck_key, deck_text)
         if sha is not None:
             return ExternalEdit(status=ExternalEditStatus.KNOWN, sha=sha)
         return ExternalEdit(status=ExternalEditStatus.UNATTRIBUTED)
@@ -248,10 +374,9 @@ class DeckVcsService:
         is reachable from a ref the moment it exists.
         """
         if as_branch:
-            commits = self.vcs_repo.list_commits(deck_key)
-            head = next((c for c in commits if c.is_head), None)
+            head = self.vcs_repo.head_sha(deck_key)
             if head is not None:
-                created = self.vcs_repo.create_branch(deck_key, as_branch, head.sha)
+                created = self.vcs_repo.create_branch(deck_key, as_branch, head)
                 self.vcs_repo.switch_branch(deck_key, created)
         return self.vcs_repo.commit_deck(deck_key, deck_text, "Edited outside the app")
 

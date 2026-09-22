@@ -9,16 +9,32 @@ deck folder is. Keying per-deck state into ``cache/`` instead is what this repo
 already does for notes, outboard and sideboard guides
 (:mod:`repositories.deck_repository.metadata_store`).
 
-Handles are opened per operation rather than cached. A deck's history is a
-handful of tiny objects, so there is nothing to gain by holding one, and an open
-:class:`~dulwich.repo.Repo` keeps packfile handles that would stop the cache
-directory being cleaned up on Windows.
+Handles are opened per operation, and a caller that is about to do a *batch* of
+reads wraps them in :meth:`StoreMixin.read_session` to share one. Opening is not
+free: :class:`~dulwich.repo.Repo` re-reads ``.git/config`` and rescans the pack
+directory every time, which measured at roughly 2 ms per open. Building the
+graph for a 100-version deck opened the repo 200 times -- twice per commit --
+and spent 98% of its time on that rather than on any comparison.
+
+A session is **read-only and short-lived by contract**. It holds the handle open
+and memoizes the decklist blob behind each sha, so a walk that wants every
+commit's text and its parent's reads each blob once instead of twice. Nothing
+inside a session may write, because a commit made through another handle would
+leave the session's view of the object store behind. Sessions are thread-local:
+this repository is a process-wide singleton, and the graph is built on a
+background thread while the UI thread may be reading the same deck.
+
+An open handle keeps packfile handles that would stop the cache directory being
+cleaned up on Windows, which is why a session is scoped to one operation rather
+than held for the life of the app.
 """
 
 from __future__ import annotations
 
+import threading
 from collections.abc import Iterator
 from contextlib import contextmanager
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -46,6 +62,29 @@ COMMITTER = b"MTGO Tools <mtgo-tools@localhost>"
 #: is set explicitly so branch names shown in the graph do not depend on which
 #: dulwich version is installed.
 DEFAULT_BRANCH = "main"
+
+
+@dataclass
+class _ReadSession:
+    """One open handle, and the blobs read through it, for a batch of reads."""
+
+    repo: Repo
+    #: Re-entrancy count, so a session may be opened inside another.
+    depth: int = 1
+    #: Decklist text by commit sha, memoized for this session only.
+    blobs: dict[str, str] = field(default_factory=dict)
+
+
+#: Active read sessions for the calling thread, keyed by repo path.
+_sessions = threading.local()
+
+
+def _session_map() -> dict[str, _ReadSession]:
+    active = getattr(_sessions, "by_path", None)
+    if active is None:
+        active = {}
+        _sessions.by_path = active
+    return active
 
 
 class StoreMixin(_Base):
@@ -88,8 +127,20 @@ class StoreMixin(_Base):
 
     @contextmanager
     def _open(self, deck_key: str, *, create: bool = False) -> Iterator[Repo]:
-        """Open ``deck_key``'s repo for the duration of one operation."""
+        """Open ``deck_key``'s repo for the duration of one operation.
+
+        Inside a :meth:`read_session` this yields that session's handle instead
+        of opening another. ``create=True`` always takes its own handle: a
+        session is read-only, and a write must not reuse a view of the object
+        store that predates it.
+        """
         from dulwich.repo import Repo
+
+        if not create:
+            session = self._active_session(deck_key)
+            if session is not None:
+                yield session.repo
+                return
 
         if create:
             self.create_repo(deck_key)
@@ -101,3 +152,55 @@ class StoreMixin(_Base):
             yield repo
         finally:
             repo.close()
+
+    # ------------------------------------------------------------------ read sessions ------------------------------------------------------------------
+    def _active_session(self, deck_key: str) -> _ReadSession | None:
+        """This thread's open session for ``deck_key``, if any."""
+        active = getattr(_sessions, "by_path", None)
+        if not active:
+            return None
+        return active.get(str(self.repo_path(deck_key)))
+
+    @contextmanager
+    def read_session(self, deck_key: str) -> Iterator[None]:
+        """Share one open handle, and one blob cache, across a batch of reads.
+
+        Read-only: nothing inside may commit, branch or check out. A deck with
+        no repo yet is not an error -- the block runs with no session, and the
+        reads inside it fail or come back empty exactly as they would alone.
+        """
+        path = self.repo_path(deck_key)
+        if not (path / ".git").exists():
+            yield
+            return
+
+        active = _session_map()
+        key = str(path)
+        existing = active.get(key)
+        if existing is not None:
+            existing.depth += 1
+            try:
+                yield
+            finally:
+                existing.depth -= 1
+            return
+
+        from dulwich.repo import Repo
+
+        session = _ReadSession(repo=Repo(key))
+        active[key] = session
+        try:
+            yield
+        finally:
+            active.pop(key, None)
+            session.repo.close()
+
+    def _session_blob(self, deck_key: str, sha: str) -> str | None:
+        """A blob this session has already read, or ``None``."""
+        session = self._active_session(deck_key)
+        return None if session is None else session.blobs.get(sha)
+
+    def _remember_blob(self, deck_key: str, sha: str, text: str) -> None:
+        session = self._active_session(deck_key)
+        if session is not None:
+            session.blobs[sha] = text
