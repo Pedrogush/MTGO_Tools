@@ -41,6 +41,9 @@ GUARD_STEP = "Design-system guards"
 NON_UI_JOB = "tests-non-ui"
 UI_JOB = "tests-ui"
 
+#: The job that turns the two halves' data files into one number.
+COVERAGE_JOB = "coverage"
+
 
 def _workflow() -> str:
     assert CI.exists(), f"{CI} is missing"
@@ -101,6 +104,17 @@ def _main_run(job_id: str) -> str:
 
 def _ignored(job_id: str) -> list[str]:
     return re.findall(r"--ignore=(\S+)", _main_run(job_id))
+
+
+def _without_comments(text: str) -> str:
+    """``text`` with its ``#`` comment lines dropped.
+
+    The job splitter hands a job every line up to the next job's key, so a
+    block comment written above the *following* job -- and every ``#`` note
+    inside a ``run:`` block -- reads as part of this one. A check on what a job
+    *does* has to look past what it says about itself.
+    """
+    return "\n".join(line for line in text.splitlines() if not line.lstrip().startswith("#"))
 
 
 def _trigger_block(name: str) -> list[str]:
@@ -200,3 +214,101 @@ def test_ui_tests_never_run_in_parallel() -> None:
     ui_steps = [_main_run(UI_JOB), *_guard_steps(UI_JOB)]
     for step in ui_steps:
         assert not re.search(r"(^|\s)(-n|--numprocesses)(\s|=)", step), step
+
+
+# ---------------------------------------------------------------- coverage ----------------------------------------------------------------
+# pytest-cov has been pinned in requirements-dev.txt since before this split and
+# was never passed to pytest: no report, no artifact, no number. These pin the
+# three ways the wiring can come undone without anything going red -- a pytest
+# run that stops measuring, a second run in the same job that overwrites the
+# first's data instead of appending to it, and a combine job that reads only one
+# half of a suite that runs as two.
+
+
+@pytest.mark.parametrize("job_id", [NON_UI_JOB, UI_JOB])
+def test_every_pytest_run_measures_coverage(job_id: str) -> None:
+    """Both steps of both test jobs, or the combined number is silently partial."""
+    for step in (*_guard_steps(job_id), _main_run(job_id)):
+        assert re.search(r"(^|\s)--cov(\s|=)", _without_comments(step)), (
+            f"`{job_id}` has a pytest step that does not pass --cov. Coverage is "
+            "combined from every run of both jobs, so a step that stops "
+            "measuring does not fail anything -- it just reports its files as "
+            f"untested.\n{step}"
+        )
+
+
+@pytest.mark.parametrize("job_id", [NON_UI_JOB, UI_JOB])
+def test_the_second_run_in_a_job_appends_instead_of_overwriting(job_id: str) -> None:
+    """Two pytest runs, one ``.coverage`` file.
+
+    The guard step runs first and writes the data file; the main run has to
+    ``--cov-append`` onto it. Without that it starts a fresh file, and the
+    guards' ~16 files silently report as uncovered -- which is exactly the
+    failure mode of a design-system guard that runs but is not counted.
+    """
+    assert "--cov-append" in _without_comments(_main_run(job_id)), (
+        f"`{job_id}`'s main pytest run must --cov-append onto the guard step's "
+        "data file, or it overwrites it."
+    )
+    assert "--cov-append" not in _without_comments("".join(_guard_steps(job_id))), (
+        f"`{job_id}`'s guard step runs first and owns the data file; appending "
+        "there would carry a previous run's measurements into this one."
+    )
+
+
+@pytest.mark.parametrize("job_id", [NON_UI_JOB, UI_JOB])
+def test_each_test_job_uploads_its_coverage_data(job_id: str) -> None:
+    job = _without_comments(_job(job_id))
+    assert "actions/upload-artifact" in job and "path: .coverage" in job, (
+        f"`{job_id}` measures coverage but does not upload the data file, so "
+        f"the `{COVERAGE_JOB}` job has nothing to combine."
+    )
+    assert "include-hidden-files: true" in job, (
+        "`.coverage` is a dotfile and upload-artifact@v4 skips hidden files by "
+        "default -- the upload would succeed and contain nothing."
+    )
+
+
+def test_the_coverage_job_combines_both_halves() -> None:
+    """One number, from both jobs. Either half alone is a misleading figure."""
+    job = _without_comments(_job(COVERAGE_JOB))
+    needs = re.search(r"needs:\s*\[([^\]]*)\]", job)
+    assert needs is not None, f"`{COVERAGE_JOB}` declares no `needs:`"
+    assert sorted(name.strip() for name in needs.group(1).split(",")) == sorted(
+        [NON_UI_JOB, UI_JOB]
+    )
+    assert "coverage combine" in job
+    assert "coverage report" in job
+
+
+def test_coverage_paths_are_stored_relative_so_the_two_halves_combine() -> None:
+    """The test jobs run on Windows and the combine on Linux.
+
+    ``coverage combine`` matches data files by the path each one recorded. With
+    absolute paths a ``D:\\a\\...`` measurement and a ``/home/runner/...`` one
+    are different files, and the combined report would show the whole app as
+    untested rather than fail.
+    """
+    config = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    assert "[tool.coverage.run]" in config, "coverage has no configuration to read"
+    assert "relative_files = true" in config
+
+
+def test_a_coverage_floor_belongs_on_the_combined_number_only() -> None:
+    """Neither half of a suite that runs as two jobs may gate on the whole app.
+
+    ``--cov-fail-under`` on ``tests-ui`` would measure every service the UI job
+    never imports and fail a green run; on ``tests-non-ui`` it would do the same
+    for every window. When a floor is set -- it is not yet, deliberately: see
+    the comment above the ``coverage`` job -- it goes on the combined report.
+    """
+    for job_id in (NON_UI_JOB, UI_JOB):
+        steps = _without_comments("\n".join(_named_steps(job_id).values()))
+        assert "fail-under" not in steps, (
+            f"`{job_id}` gates on its own partial coverage. The floor belongs on "
+            f"the `{COVERAGE_JOB}` job, which reads both halves."
+        )
+    combined = _without_comments("\n".join(_named_steps(COVERAGE_JOB).values()))
+    floors = re.findall(r"--fail-under[= ](\d+)", combined)
+    assert len(floors) <= 1, "one floor, on one step"
+    assert all(0 < int(floor) <= 100 for floor in floors)
