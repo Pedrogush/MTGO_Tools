@@ -107,9 +107,7 @@ def test_the_count_label_is_the_row_member_that_gives_way(shared_frame) -> None:
     identity = next(i for i in header.GetChildren() if i.IsSizer())
     assert identity.GetProportion() == 1, "the name/count slot takes the row's slack"
 
-    item = next(
-        i for i in identity.GetSizer().GetChildren() if i.GetWindow() is table.count_label
-    )
+    item = next(i for i in identity.GetSizer().GetChildren() if i.GetWindow() is table.count_label)
     assert item.GetProportion() == 1
     assert not any(i.IsSpacer() and i.GetProportion() for i in header.GetChildren())
     style = table.count_label.GetWindowStyleFlag()

@@ -12,9 +12,11 @@ from loguru import logger
 
 from repositories.scrapers.mtggoldfish_visual import DeckUnavailableError
 from services.deck_name import (
+    NAME_FALLBACK,
     adopt_file_name,
     clean_deck_name,
     deck_file_for,
+    deck_name_of,
     has_deck_name,
     set_deck_name,
 )
@@ -251,6 +253,18 @@ class DeckContentHandlers(_Base):
         if not current_deck:
             return ""
         return clean_deck_name(format_deck_name(current_deck).replace(" | ", "_"))
+
+    def _default_save_file_name(self: AppFrame, current_deck: dict[str, Any] | None) -> str:
+        """The stem a Save As opens on for a file that is *about* this deck.
+
+        Save Deck no longer asks -- the deck's name decides its file. Save
+        Collection Diff still does, because a diff is not the deck, so it needs
+        the answer the old default gave: the chosen name once there is one, and
+        the descriptive label the deck reads as in the research list before that.
+        """
+        return (
+            deck_name_of(current_deck) or self._suggested_deck_name(current_deck) or NAME_FALLBACK
+        )
 
     def on_save_diff_clicked(self: AppFrame, _event: wx.CommandEvent | None = None) -> None:
         """Save Collection Diff: the deck minus what you already own (#1044).
