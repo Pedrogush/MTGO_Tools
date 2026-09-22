@@ -80,8 +80,6 @@ class _ReadSession:
     """One open handle, and the blobs read through it, for a batch of reads."""
 
     repo: Repo
-    #: Re-entrancy count, so a session may be opened inside another.
-    depth: int = 1
     #: Decklist text by commit sha, memoized for this session only.
     blobs: dict[str, str] = field(default_factory=dict)
 
@@ -223,11 +221,12 @@ class StoreMixin(_Base):
         key = str(path)
         existing = active.get(key)
         if existing is not None:
-            existing.depth += 1
-            try:
-                yield
-            finally:
-                existing.depth -= 1
+            # A nested session is a no-op: the handle and the blob cache belong
+            # to the outermost block, which is also the one that closes them.
+            # No depth counter -- an inner block that closed the handle on the
+            # way out would leave the outer one reading through a closed repo,
+            # so there is nothing for a count to decide.
+            yield
             return
 
         from dulwich.repo import Repo
