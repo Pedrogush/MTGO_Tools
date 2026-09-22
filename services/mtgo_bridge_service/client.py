@@ -1,9 +1,19 @@
-"""Multiprocessing-based helpers for interacting with the MTGO bridge CLI.
+"""One process per command: the MTGO bridge's fallback transport.
+
+**This is the fallback, not the default.** Every call now goes through the one
+long-lived ``MTGOBridge.exe serve`` process in :mod:`.session`, which pays
+MTGOSDK's ~3.1s attach once instead of once per call; the facade in
+:mod:`services.mtgo_bridge_service` drops back to this module only when a
+session cannot be established -- most often an older bridge build with no
+``serve`` mode -- or when ``MTGO_BRIDGE_NO_SESSION=1`` is set. It is kept
+complete rather than trimmed to a stub precisely so that fallback is a change
+of transport and nothing else.
 
 This module runs the compiled ``MTGOBridge.exe`` and exposes:
 
 * ``submit_bridge_command`` / ``BridgeCommandFuture`` for one-shot commands
-  (collection, history, all) without blocking the caller thread.
+  (collection, currency, all, username, logfiles, trade, ping) without blocking
+  the caller thread.
 * ``BridgeWatcher`` for streaming challenge timer / opponent snapshots using
   the bridge ``watch`` mode in a background process.
 
