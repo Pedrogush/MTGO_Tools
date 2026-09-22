@@ -73,25 +73,49 @@ class DeckBaselinePanelHandlersMixin(_Base):
         self.compute()
 
     def refresh_target(self) -> None:
-        """Update the "baseline for …" line and load any stored baseline."""
+        """Update the "baseline for …" line and load any stored baseline.
+
+        The target moves with the deck on screen, so what is drawn can belong
+        to an archetype that is no longer the subject. That is cleared here
+        rather than left up while a new measurement runs: a tree showing the
+        previous deck's staples under the new deck's heading is worse than an
+        empty one.
+        """
         archetype = self.current_archetype()
         mtg_format = self.current_format()
         name = str(archetype.get("name")) if archetype else ""
 
         if not name:
             self.target_label.SetLabel(self._t("baseline.target.none"))
+            self._forget_baseline()
+            self.status_label.SetLabel(self._t("baseline.status.none"))
             return
 
         self.target_label.SetLabel(
             self._t("baseline.target", archetype=name, format=mtg_format or "?")
         )
 
+        target = (name, mtg_format)
+        if self._computed_for is not None and self._computed_for != target:
+            self._forget_baseline()
+
         if self._baseline is None and mtg_format:
             stored = self.baseline_service.stored(name, mtg_format)
             if stored is not None:
                 self._baseline = stored
-                self._computed_for = (name, mtg_format)
+                self._computed_for = target
                 self.render()
+
+    def _forget_baseline(self) -> None:
+        """Drop what is on screen, and any measurement still on its way to it."""
+        if self._baseline is None and self._computed_for is None and not self._pending:
+            return
+        self._baseline = None
+        self._computed_for = None
+        # Any run in flight is for the archetype we just stopped looking at.
+        self._run_token += 1
+        self._pending = False
+        self.tree.DeleteAllItems()
 
     # ------------------------------------------------------------------ compute ------------------------------------------------------------------
     def compute(self) -> None:

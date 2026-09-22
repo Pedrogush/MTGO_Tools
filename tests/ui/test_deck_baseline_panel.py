@@ -130,3 +130,155 @@ class TestTheTreeIsBuiltInOneGo:
 
         # staples, partial staples, flex — every card in the baseline.
         assert groups == [12, 10, 40]
+
+
+@pytest.mark.usefixtures("wx_app")
+class TestTheTabMeasuresTheDeckOnScreen:
+    """Which archetype the tab is about.
+
+    It read the Research list's selection and nothing else, so with a deck of
+    that archetype open in front of the player it still said "select an
+    archetype in Research" -- a tab in the middle of the workspace asking for a
+    second, separate choice when the first one already answered it. Every other
+    tab in that notebook describes the deck on screen; so does this one now.
+    """
+
+    ARCHETYPES = [
+        {"name": "Boros Energy", "href": "boros-energy"},
+        {"name": "Amulet Titan", "href": "amulet-titan"},
+    ]
+
+    @staticmethod
+    def _frame_with_archetypes(frame, archetypes, *, selected_index=0):
+        """The research list as the frame really fills it: "Any", then the rest.
+
+        ``selected_index`` is an index into that list, so 0 is "Any" -- which
+        is a request for every cached deck, not an archetype.
+        """
+        frame.controller.archetypes = list(archetypes)
+        frame.filtered_archetypes = list(archetypes)
+        frame.research_panel.populate_archetypes(["Any"] + [a["name"] for a in archetypes])
+        frame.research_panel.archetype_list.SetSelection(selected_index)
+        return frame
+
+    def test_a_saved_deck_is_measured_by_the_archetype_it_records(self, shared_frame):
+        frame = self._frame_with_archetypes(shared_frame, self.ARCHETYPES)
+        frame.controller.deck_repo.set_current_deck(
+            {"deck_name": "my boros", "source": "file", "archetype": "Boros Energy"}
+        )
+
+        assert frame._baseline_archetype() == self.ARCHETYPES[0]
+
+    def test_a_scraped_deck_is_measured_by_the_slug_it_carries(self, shared_frame):
+        """A research deck holds its archetype's slug in ``name``."""
+        frame = self._frame_with_archetypes(shared_frame, self.ARCHETYPES)
+        frame.controller.deck_repo.set_current_deck(
+            {"name": "amulet-titan", "source": "mtggoldfish"}
+        )
+
+        assert frame._baseline_archetype() == self.ARCHETYPES[1]
+
+    def test_the_deck_wins_over_the_research_selection(self, shared_frame):
+        """Both are set and they disagree: the deck in front of the player wins."""
+        frame = self._frame_with_archetypes(shared_frame, self.ARCHETYPES, selected_index=2)
+        frame.controller.deck_repo.set_current_deck(
+            {"deck_name": "my boros", "source": "file", "archetype": "Boros Energy"}
+        )
+
+        assert frame._baseline_archetype() == self.ARCHETYPES[0]
+
+    def test_with_no_deck_it_falls_back_to_what_research_is_pointing_at(self, shared_frame):
+        """Browsing with nothing loaded is still a reasonable thing to measure."""
+        frame = self._frame_with_archetypes(shared_frame, self.ARCHETYPES, selected_index=2)
+        frame.controller.deck_repo.set_current_deck(None)
+
+        assert frame._baseline_archetype() == self.ARCHETYPES[1]
+
+    def test_an_archetype_outside_the_format_reads_as_unresolved(self, shared_frame):
+        """No entry means no pool, so it is not offered as a target."""
+        frame = self._frame_with_archetypes(shared_frame, self.ARCHETYPES, selected_index=0)
+        frame.controller.deck_repo.set_current_deck(
+            {"deck_name": "legacy thing", "source": "file", "archetype": "Reanimator"}
+        )
+
+        assert frame._baseline_archetype() is None
+
+    def test_a_deck_with_no_archetype_at_all_reads_as_unresolved(self, shared_frame):
+        frame = self._frame_with_archetypes(shared_frame, self.ARCHETYPES, selected_index=0)
+        frame.controller.deck_repo.set_current_deck({"deck_name": "brew", "source": "file"})
+
+        assert frame._baseline_archetype() is None
+
+
+@pytest.mark.usefixtures("wx_app")
+class TestTheTreeNeverDescribesTheWrongArchetype:
+    """The target moves with the deck, so what is drawn can go out of date."""
+
+    def test_switching_archetype_clears_the_previous_one(self, wx_app):
+        target = {"name": "Boros Energy"}
+        frame = wx.Frame(None)
+        try:
+            panel = DeckBaselinePanel(
+                frame,
+                worker=None,
+                archetype_provider=lambda: target,
+                format_provider=lambda: "Modern",
+            )
+            panel._baseline = _baseline()
+            panel._computed_for = ("Boros Energy", "Modern")
+            panel.render()
+            assert panel.tree.GetCount() > 0
+
+            target = {"name": "Amulet Titan"}
+            panel.refresh_target()
+
+            assert panel._baseline is None
+            assert panel._computed_for is None
+            assert panel.tree.GetCount() == 0
+        finally:
+            frame.Destroy()
+
+    def test_losing_the_archetype_empties_the_tab(self, wx_app):
+        target: dict | None = {"name": "Boros Energy"}
+        frame = wx.Frame(None)
+        try:
+            panel = DeckBaselinePanel(
+                frame,
+                worker=None,
+                archetype_provider=lambda: target,
+                format_provider=lambda: "Modern",
+            )
+            panel._baseline = _baseline()
+            panel._computed_for = ("Boros Energy", "Modern")
+            panel.render()
+
+            target = None
+            panel.refresh_target()
+
+            assert panel._baseline is None
+            assert panel.tree.GetCount() == 0
+            assert "deck on screen" in panel.target_label.GetLabel()
+        finally:
+            frame.Destroy()
+
+    def test_the_same_archetype_keeps_what_is_drawn(self, wx_app):
+        """Only a *change* clears; a redundant refresh must not flicker."""
+        frame = wx.Frame(None)
+        try:
+            panel = DeckBaselinePanel(
+                frame,
+                worker=None,
+                archetype_provider=lambda: {"name": "Boros Energy"},
+                format_provider=lambda: "Modern",
+            )
+            panel._baseline = _baseline()
+            panel._computed_for = ("Boros Energy", "Modern")
+            panel.render()
+            before = panel.tree.GetCount()
+
+            panel.refresh_target()
+
+            assert panel._baseline is not None
+            assert panel.tree.GetCount() == before
+        finally:
+            frame.Destroy()

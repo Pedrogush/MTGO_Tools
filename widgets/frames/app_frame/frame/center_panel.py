@@ -162,14 +162,13 @@ class CenterPanelBuilderMixin(_Base):
         self.deck_history_panel.SetToolTip(self._t("tabs.tooltip.deck_history"))
         self.deck_tabs.AddPage(self.deck_history_panel, self._t("tabs.deck_history"))
 
-        # The archetype baseline. It measures the *research* selection, not the
-        # loaded deck, so it reads that selection through providers rather than
-        # carrying a second pair of format/archetype pickers that could drift
-        # out of step with the ones in the research panel.
+        # The archetype baseline. It reads what to measure through providers
+        # rather than carrying its own format/archetype pickers, which would be
+        # a second selection to keep in step with the research panel's.
         self.deck_baseline_panel = DeckBaselinePanel(
             self.deck_tabs,
             worker=getattr(self.controller, "_worker", None),
-            archetype_provider=self._selected_research_archetype,
+            archetype_provider=self._baseline_archetype,
             format_provider=lambda: self.controller.current_format,
             on_status_update=self._set_status,
             locale=self.locale,
@@ -214,6 +213,40 @@ class CenterPanelBuilderMixin(_Base):
             on_shown()
         except Exception as exc:  # noqa: BLE001
             logger.warning(f"Deck tab failed to refresh: {exc}")
+
+    def _baseline_archetype(self) -> dict | None:
+        """The archetype the Baseline tab measures: the one on screen.
+
+        This tab sits beside Stats, Notes and the Sideboard Guide, all of which
+        describe the deck currently loaded, so it describes that deck's
+        archetype rather than asking for a second, separate choice. Asking the
+        player to "select an archetype in Research" while a deck of that
+        archetype is open in front of them is the tab talking about itself.
+
+        The research selection is the fallback, not the source: it is what the
+        player is pointing at while browsing with no deck loaded yet.
+        """
+        entry = self._archetype_entry_for(self.controller.deck_repo.get_current_deck())
+        return entry or self._selected_research_archetype()
+
+    def _archetype_entry_for(self, deck: dict | None) -> dict | None:
+        """The archetype list entry a loaded deck belongs to, if it names one.
+
+        Resolved against the *current format's* list, which is where the
+        baseline's pool comes from -- an archetype that is not in it has no
+        pool to measure, so it reads as unresolved rather than being offered.
+        A saved deck records its archetype's display name; a scraped one
+        carries the slug in ``name`` (see ``_initial_save_archetype``).
+        """
+        deck = deck or {}
+        keys = [str(deck.get("archetype") or "").strip()]
+        if deck.get("source") != "file":
+            keys.append(str(deck.get("name") or "").strip())
+        for key in (k for k in keys if k):
+            for entry in self.controller.archetypes:
+                if key in (entry.get("href"), entry.get("name")):
+                    return entry
+        return None
 
     def _selected_research_archetype(self) -> dict | None:
         """The archetype currently selected in the research panel, if any.
