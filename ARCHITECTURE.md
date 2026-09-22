@@ -22,6 +22,10 @@ graph TB
         CTP[CardTablePanel]
         CIP[CardInspectorPanel]
         SGP[SideboardGuidePanel]
+        DHP[DeckHistoryPanel<br/>History tab + graph]
+        DHR[DeckHistoryRail<br/>versions beside the cards]
+        DBLP[DeckBaselinePanel<br/>Baseline tab]
+        DGP[DeckGoldfishPanel<br/>Goldfish tab]
         RP[RadarPanel]
         ODS[MTGOpponentDeckSpy<br/>Overlay Tracker]
         MH[MatchHistory]
@@ -37,6 +41,8 @@ graph TB
         RS[RadarService]
         FCPS[FormatCardPoolService]
         DWS[DeckWorkflowService]
+        DVS[DeckVcsService<br/>deck version control]
+        ABS[ArchetypeBaselineService]
         BSC[BundleSnapshotClient]
         MBS[MtgoBridgeService<br/>session + one-shot fallback]
     end
@@ -44,6 +50,7 @@ graph TB
     subgraph "Repositories Layer"
         CR[CardRepository<br/>+ CardDataManager / MTGJson]
         DR[DeckRepository]
+        DVR[DeckVcsRepository<br/>one git repo per deck<br/>dulwich]
         DTC[DeckTextCache<br/>SQLite]
         MR[MetagameRepository]
         RR[RadarRepository<br/>SQLite]
@@ -78,6 +85,10 @@ graph TB
     AF --> CTP
     AF --> CIP
     AF --> SGP
+    AF --> DHP
+    AF --> DHR
+    AF --> DBLP
+    AF --> DGP
     AF --> RP
     AC --> ODS
     AC --> MH
@@ -90,6 +101,16 @@ graph TB
     AC --> RS
     DS --> DR
     DS --> CR
+    DHP --> DVS
+    DHR --> DVS
+    DBLP --> ABS
+    DGP --> DS
+    DWS --> DVS
+    DWS --> ABS
+    DVS --> DVR
+    ABS --> DVR
+    ABS --> MR
+    ABS --> DTC
     SS --> CR
     SS --> FCPS
     CS --> CR
@@ -114,9 +135,9 @@ graph TB
     classDef external fill:#ffff99,stroke:#333,stroke-width:2px
 
     class AC,SM controller
-    class DS,CS,SS,IS,StS,RS,FCPS,DWS,BSC,MBS service
-    class CR,DR,DTC,MR,RR,FCPR,MTG_GF,RSC repo
-    class AF,DRP,DBP,CTP,CIP,SGP,RP,ODS,MH,TA ui
+    class DS,CS,SS,IS,StS,RS,FCPS,DWS,DVS,ABS,BSC,MBS service
+    class CR,DR,DVR,DTC,MR,RR,FCPR,MTG_GF,RSC repo
+    class AF,DRP,DBP,CTP,CIP,SGP,DHP,DHR,DBLP,DGP,RP,ODS,MH,TA ui
     class DECK,AIO,BW,LOG util
     class SCRYFALL,MTGJSON,GOLDFISH,MTGO_CLIENT,BRIDGE external
 ```
@@ -125,11 +146,11 @@ graph TB
 
 **Controllers**: Central coordination and state management via `AppController`. The controller is a package (`controllers/app_controller/`) composed of eight focused mixins (`card_data`, `archetypes`, `decks`, `collection`, `bulk_data`, `settings`, `updates`, `lifecycle`) plus a small `SessionManager` for per-run state and the non-mixin helpers beside them (`ui_callbacks`, `cache_warmer`). Each mixin owns one subsystem to keep the composed controller class lean.
 
-**Services**: Business logic. Image, collection, and deck services are each Python packages whose main class inherits from (or composes) focused mixins/helpers. For example `services/collection_service/` contains `cache`, `parsing`, `ownership`, `deck_analysis`, `stats`, `bridge_refresh`, and `exporter` modules; `services/image_service/` splits into `bulk_data`, `metadata`, `printing_index`, `cache`, and `download_queue`; `services/deck_service/` contains `parser`, `averager`, and `text_builder`. Radar, format card pool, and deck workflow each have their own service. `services/card_rarity_service.py` answers one question -- has this card name ever been printed at common? -- by deriving it from the Scryfall bulk file the image service already caches, because that is the only per-printing rarity source on disk and it is what `services/gamelog_service/formats.py` needs to recognise Pauper (the one MTGO format defined by rarity rather than by a card list, and therefore the one that legality data structurally cannot name). `services/archetype_model_service.py` builds the model `services/gamelog_service/archetypes.py` uses to name the archetype behind the few cards a game log shows: it joins the cached archetype list, deck index and deck texts, clusters per-archetype card profiles (merging labels the two naming sources spell differently) and scores samples against them, on a background worker at startup and again whenever the remote bundle refreshes the deck caches. `services/mtgo_bridge_service/` wraps the external CLI bridge, and its package facade exposes collection and trade snapshots, trade acceptance, and the challenge watcher. The transport underneath is `session.py`: one `MTGOBridge.exe serve` process kept alive for the life of the app, spoken to in newline-delimited JSON over stdin/stdout with request-id correlation, serialising every caller through one pipe and respawning transparently when the bridge dies or MTGO restarts. That exists because MTGOSDK's `RemoteClient` attach cost ~3.1s on top of ~0.8s of .NET startup *per command*, and because several bridge processes attached at once degraded per-call latency roughly 8x — MTGOSDK marshals every remote read onto MTGO's UI thread. `client.py` is the fallback, not the default: the one-shot subprocess transport the facade drops back to when no session can be established, most often an older bridge build with no `serve` mode, so behaviour is unchanged where a session is impossible. Setting `MTGO_BRIDGE_NO_SESSION` (`BRIDGE_SESSION_DISABLE_ENV`) to a truthy value disables the long-lived mode outright and puts every call back on the one-shot path.
+**Services**: Business logic. Image, collection, and deck services are each Python packages whose main class inherits from (or composes) focused mixins/helpers. For example `services/collection_service/` contains `cache`, `parsing`, `ownership`, `deck_analysis`, `stats`, `bridge_refresh`, and `exporter` modules; `services/image_service/` splits into `bulk_data`, `metadata`, `printing_index`, `cache`, and `download_queue`; `services/deck_service/` contains `parser`, `averager`, and `text_builder`. Radar, format card pool, and deck workflow each have their own service. `services/deck_vcs_service.py` owns the decisions around deck version control — what a save is called in the history, when a decklist edited outside the app counts as a version already held, and which file on disk a checkout may rewrite — leaving git itself to `repositories/deck_vcs_repository/`; `DeckWorkflowService.save_deck` calls into it on every save, best effort, because the deck file is already on disk by then and a history problem must not be reported as a failed save. `services/deck_name.py` holds the deck's name as explicit state (empty means unset, and a name is always a legal file stem) rather than recomputing it per save from the deck record. `services/archetype_baseline_service/` measures what an archetype always runs: `membership` drops labelled decks that are not actually the archetype (mean pairwise Jaccard over card names, `MEMBERSHIP_THRESHOLD = 0.30`), `frequency` counts cards in one pass per deck, `classify` takes the strict intersection at each card's floor count with no tolerance at all, and `service` seeds a new deck's history with that baseline as a deterministic root commit, so "diff against the archetype" is an ordinary diff against an ancestor rather than a second concept. `services/collection_service/diff.py` answers the other half of ownership — the decklist of what is still missing, drawn against a per-name budget with mainboard before sideboard — and `services/deck_service/goldfish.py` holds the wx-free shuffling, mulligan bookkeeping and table state behind the Goldfish tab. `services/card_rarity_service.py` answers one question -- has this card name ever been printed at common? -- by deriving it from the Scryfall bulk file the image service already caches, because that is the only per-printing rarity source on disk and it is what `services/gamelog_service/formats.py` needs to recognise Pauper (the one MTGO format defined by rarity rather than by a card list, and therefore the one that legality data structurally cannot name). `services/archetype_model_service.py` builds the model `services/gamelog_service/archetypes.py` uses to name the archetype behind the few cards a game log shows: it joins the cached archetype list, deck index and deck texts, clusters per-archetype card profiles (merging labels the two naming sources spell differently) and scores samples against them, on a background worker at startup and again whenever the remote bundle refreshes the deck caches. `services/mtgo_bridge_service/` wraps the external CLI bridge, and its package facade exposes collection and trade snapshots, trade acceptance, and the challenge watcher. The transport underneath is `session.py`: one `MTGOBridge.exe serve` process kept alive for the life of the app, spoken to in newline-delimited JSON over stdin/stdout with request-id correlation, serialising every caller through one pipe and respawning transparently when the bridge dies or MTGO restarts. That exists because MTGOSDK's `RemoteClient` attach cost ~3.1s on top of ~0.8s of .NET startup *per command*, and because several bridge processes attached at once degraded per-call latency roughly 8x — MTGOSDK marshals every remote read onto MTGO's UI thread. `client.py` is the fallback, not the default: the one-shot subprocess transport the facade drops back to when no session can be established, most often an older bridge build with no `serve` mode, so behaviour is unchanged where a session is impossible. Setting `MTGO_BRIDGE_NO_SESSION` (`BRIDGE_SESSION_DISABLE_ENV`) to a truthy value disables the long-lived mode outright and puts every call back on the one-shot path.
 
-**Repositories**: Data access with caching. `DeckRepository` and `MetagameRepository` use JSON file caches. `RadarRepository`, `FormatCardPoolRepository`, and `DeckTextCache` use SQLite. `CardRepository` is a single package that combines the collection-file repo with `CardDataManager`, owning the MTGJSON AtomicCards download, on-disk index format, and in-memory query API (`builder`, `remote`, `storage`, `schemas`, `card_data_manager`). `repositories/scrapers/` (`mtggoldfish.py`, `mtggoldfish_visual.py`) is the source side of `MetagameRepository` and `DeckTextCache`, and `repositories/remote_snapshot_client/` provides remote-bundle archetype/stats snapshots as a source for `MetagameRepository` — these data sources live under `repositories/` because owning a data source and shaping it into domain records is a repository's job, not a service's.
+**Repositories**: Data access with caching. `DeckRepository` and `MetagameRepository` use JSON file caches. `RadarRepository`, `FormatCardPoolRepository`, and `DeckTextCache` use SQLite. `CardRepository` is a single package that combines the collection-file repo with `CardDataManager`, owning the MTGJSON AtomicCards download, on-disk index format, and in-memory query API (`builder`, `remote`, `storage`, `schemas`, `card_data_manager`). `repositories/deck_vcs_repository/` is the only part of the app that touches git: one repo per deck under `DECK_HISTORY_DIR` (`BASE_DATA_DIR/deck_history`, a sibling of `config/` rather than a child of `cache/`, because the uninstaller and `scripts/clear_caches.py` both sweep `cache/` wholesale and a deck's edit history is the user's own work that nothing can rebuild), driven through `dulwich` and split into `store` (where a repo lives, and how a handle is opened and shared across a batch of reads), `commits`, `branches`, `diffs` and `baseline`. Three rules shape it: the user's real `.txt` never gains a `.git` neighbour — the repo is a mirror holding one normalized `deck.txt` — `HEAD` is never detached, so checking out a commit that is not already a branch tip creates a branch there first and no save can land unreachable, and there is no merging at all, which leaves the history a tree of chains and the graph layout with no rejoining edges to place. A deck's repo is found by the stable `deck_uuid` stamped onto its record the first time it is saved, so renaming a deck keeps its history and two decks that happen to share a name keep separate ones. `repositories/scrapers/` (`mtggoldfish.py`, `mtggoldfish_visual.py`) is the source side of `MetagameRepository` and `DeckTextCache`, and `repositories/remote_snapshot_client/` provides remote-bundle archetype/stats snapshots as a source for `MetagameRepository` — these data sources live under `repositories/` because owning a data source and shaping it into domain records is a repository's job, not a service's.
 
-**UI/Widgets**: wxPython panels in `widgets/panels/`, dialogs in `widgets/dialogs/`, and standalone overlay windows (`MTGOpponentDeckSpy`, `MatchHistory`, `TimerAlert`).
+**UI/Widgets**: wxPython panels in `widgets/panels/`, dialogs in `widgets/dialogs/`, and standalone overlay windows (`MTGOpponentDeckSpy`, `MatchHistory`, `TimerAlert`). The deck workspace's tabs are panels of their own: `deck_history_panel/` paints the version graph (its lane assignment lives in a wx-free `layout` module, so the fork case is answered by a unit test rather than by a screenshot) beside a decklist and diff view, `deck_baseline_panel/` renders the archetype baseline as a tree, and `deck_goldfish_panel/` draws the hand and the table. `deck_history_rail/` is the same history a second time, as a narrow always-visible column between the deck tables and the inspector — the frame reads a deck's history once and hands the same snapshot to both, and the two differ only in what a click means: select in the tab, check out in the rail.
 
 **Utils**: Cross-cutting helpers only — atomic I/O (`atomic_io.py`), deck text parsing (`deck.py`), background workers (`background_worker.py`), logging setup (`logging_config.py`), JSON helpers, perf timers, runtime flags, diagnostics, image effects, math, constants, and i18n. Single-consumer modules have been colocated with their callers: search filter helpers live in `services/search_service/`, image worker entrypoints and Scryfall bulk image downloading in `services/image_service/`, deck-results filtering in `widgets/panels/deck_research_panel/results_filter.py`, wx styling helpers in `widgets/stylize.py`, mana icon rendering in `widgets/mana_icon_factory/`, and small widget-specific helpers inside their respective `widgets/.../` packages. The MTGJSON atomic-cards dataset is owned by `repositories/card_repository/`, gamelog parsing by `services/gamelog_service/`, the deck-text SQLite cache by `repositories/deck_text_cache.py`, the MTGGoldfish scrapers by `repositories/scrapers/`, and the MTGO CLI bridge by `services/mtgo_bridge_service/`.
 
@@ -171,6 +192,8 @@ The rules for adding one, as the existing code applies them: one subsystem per m
 - **Collection sync**: MTGO Bridge → `MtgoBridgeService` → `CollectionService` → ownership marking across UI
 - **Card images**: Scryfall bulk data + CDN → `ImageService` caching → display
 - **Radar analysis**: Cached deck lists → `RadarService` aggregation → `RadarRepository` (SQLite) → `RadarPanel`
+- **Deck version history**: Save deck → `DeckWorkflowService` writes the `.txt` → `DeckVcsService` commits it into that deck's git repo under `DECK_HISTORY_DIR/<deck_uuid>/` (`DeckVcsRepository`, dulwich) → `DeckHistoryPanel`'s graph and the `DeckHistoryRail` beside the cards. A checkout runs the other way: the repository hands back a version's text, the service writes it to the user's `.txt`, and the workspace reloads from that file.
+- **Archetype baseline**: `MetagameRepository` deck records + `DeckTextCache` decklists → `ArchetypeBaselineService` (drop the decks that are not the archetype, count cards, take the strict intersection) → `DeckBaselinePanel`, and as the root commit a new deck's history is seeded with
 
 ## Development Environment
 
