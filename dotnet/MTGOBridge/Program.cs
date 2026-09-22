@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -40,73 +41,67 @@ if (mode == ExecutionMode.Watch)
     return;
 }
 
-if (mode == ExecutionMode.LogFiles)
+if (mode == ExecutionMode.Serve)
 {
-    var logFilesPayload = GetLogFilesSnapshot();
-    var logFilesSerialized = JsonSerializer.Serialize(logFilesPayload, jsonOptions);
-    Console.WriteLine(logFilesSerialized);
+    RunServeLoop(jsonOptions);
     return;
 }
-
-if (mode == ExecutionMode.Username)
-{
-    var usernamePayload = GetUsernameSnapshot();
-    var usernameSerialized = JsonSerializer.Serialize(usernamePayload, jsonOptions);
-    Console.WriteLine(usernameSerialized);
-    return;
-}
-
-if (mode == ExecutionMode.Trade)
-{
-    var tradeCommand = ParseTradeCommand(args);
-    if (tradeCommand == TradeCommand.Accept)
-    {
-        var acceptPayload = AcceptTradeSnapshot();
-        var acceptSerialized = JsonSerializer.Serialize(acceptPayload, jsonOptions);
-        Console.WriteLine(acceptSerialized);
-        return;
-    }
-
-    var tradePayload = GetTradeStatusSnapshot();
-    var tradeSerialized = JsonSerializer.Serialize(tradePayload, jsonOptions);
-    Console.WriteLine(tradeSerialized);
-    return;
-}
-
-var timings = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
-var totalStopwatch = Stopwatch.StartNew();
-
-CollectionSnapshot? collectionSnapshot = null;
-CurrencySnapshot? currencySnapshot = null;
-
-if (mode is ExecutionMode.Collection or ExecutionMode.All)
-{
-    collectionSnapshot = Measure("collectionMs", GetCollectionSnapshot, timings);
-}
-
-if (mode is ExecutionMode.Currency or ExecutionMode.All)
-{
-    currencySnapshot = Measure("currencyMs", GetCurrencySnapshot, timings);
-}
-
-totalStopwatch.Stop();
-timings["totalMs"] = totalStopwatch.ElapsedMilliseconds;
-
-var payload = new BridgePayload(
-    DateTimeOffset.UtcNow,
-    mode.ToString(),
-    collectionSnapshot,
-    currencySnapshot,
-    timings
-);
-
-var serialized = JsonSerializer.Serialize(payload, jsonOptions);
 
 // Observed timings with ~2,070 unique cards (2026-09-18): collectionMs ≈ 1_420 of
 // actual IPC, inside a ~9_000 ms process because ~7_200 ms of every invocation is
 // .NET startup plus the RemoteClient attach. The collection read itself is only 7
-// IPC calls — GetFrozenCollection returns Id/Name/Quantity locally.
-Console.WriteLine(serialized);
+// IPC calls — GetFrozenCollection returns Id/Name/Quantity locally. `serve` mode
+// amortises that startup+attach across every request instead of paying it once
+// per command.
+Console.WriteLine(JsonSerializer.Serialize(BuildPayload(mode, args), jsonOptions));
+
+// Builds the payload a single CLI invocation prints. `serve` mode calls the same
+// function per request, so a request over the long-lived pipe and a one-shot
+// `MTGOBridge.exe <mode>` return byte-identical JSON and the Python side can
+// parse both with one code path.
+static object BuildPayload(ExecutionMode mode, string[] args)
+{
+    switch (mode)
+    {
+        case ExecutionMode.Ping:
+            return new PingSnapshot(true, DateTimeOffset.UtcNow);
+        case ExecutionMode.LogFiles:
+            return GetLogFilesSnapshot();
+        case ExecutionMode.Username:
+            return GetUsernameSnapshot();
+        case ExecutionMode.Trade:
+            return ParseTradeCommand(args) == TradeCommand.Accept
+                ? AcceptTradeSnapshot()
+                : (object)GetTradeStatusSnapshot();
+    }
+
+    var timings = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+    var totalStopwatch = Stopwatch.StartNew();
+
+    CollectionSnapshot? collectionSnapshot = null;
+    CurrencySnapshot? currencySnapshot = null;
+
+    if (mode is ExecutionMode.Collection or ExecutionMode.All)
+    {
+        collectionSnapshot = Measure("collectionMs", GetCollectionSnapshot, timings);
+    }
+
+    if (mode is ExecutionMode.Currency or ExecutionMode.All)
+    {
+        currencySnapshot = Measure("currencyMs", GetCurrencySnapshot, timings);
+    }
+
+    totalStopwatch.Stop();
+    timings["totalMs"] = totalStopwatch.ElapsedMilliseconds;
+
+    return new BridgePayload(
+        DateTimeOffset.UtcNow,
+        mode.ToString(),
+        collectionSnapshot,
+        currencySnapshot,
+        timings
+    );
+}
 
 static T Measure<T>(string key, Func<T> factory, IDictionary<string, long> timings)
 {
@@ -383,22 +378,46 @@ static async Task RunWatchLoopAsync(
     // the machinery was written. It is kept because one round trip is still not
     // free and the timer must stay at second-level freshness.
     using var sdkLock = new SemaphoreSlim(1, 1);
+
+    await RunWatchTasksAsync(
+        sdkLock,
+        snapshot => Console.WriteLine(JsonSerializer.Serialize(snapshot, options)),
+        timerInterval.Value,
+        currencyInterval.Value,
+        cts.Token);
+}
+
+// The watch loops themselves, decoupled from how their snapshots leave the
+// process and from who owns the SDK lock. Standalone `watch` mode writes each
+// snapshot straight to stdout; `serve` mode wraps it in a push event and shares
+// its one SDK lock with in-flight requests, so a watch subscription and a
+// collection refresh never contend across two attached processes.
+static async Task RunWatchTasksAsync(
+    SemaphoreSlim sdkLock,
+    Action<WatchSnapshot> emit,
+    TimeSpan timerInterval,
+    TimeSpan currencyInterval,
+    CancellationToken ct)
+{
     var cache = new WatchCache();
+    // Linked so that one loop dying (cancellation or fatal error) tears the other
+    // down instead of leaving it spinning against a half-dead SDK attach.
+    using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+    var token = cts.Token;
 
     // Task.Run so each loop gets its own thread: the SDK reads are synchronous
     // blocking calls, and SemaphoreSlim.WaitAsync completes synchronously on a
     // free lock, so without this the first loop would run inline (through its
     // slow first scan) before the second ever started.
     var currencyTask = Task.Run(
-        () => RunCurrencyRefreshLoopAsync(sdkLock, cache, currencyInterval.Value, cts.Token),
-        cts.Token);
+        () => RunCurrencyRefreshLoopAsync(sdkLock, cache, currencyInterval, token),
+        token);
     var timerTask = Task.Run(
-        () => RunChallengeTimerLoopAsync(options, sdkLock, cache, timerInterval.Value, cts.Token),
-        cts.Token);
+        () => RunChallengeTimerLoopAsync(emit, sdkLock, cache, timerInterval, token),
+        token);
 
     try
     {
-        // If either loop exits (cancellation or fatal error), tear the other down.
         await Task.WhenAny(currencyTask, timerTask);
     }
     finally
@@ -420,7 +439,7 @@ static async Task RunWatchLoopAsync(
 // acquisition so a long currency scan never stalls timer output: if the lock is
 // busy it reuses the previous timer reading for that tick.
 static async Task RunChallengeTimerLoopAsync(
-    JsonSerializerOptions options,
+    Action<WatchSnapshot> emit,
     SemaphoreSlim sdkLock,
     WatchCache cache,
     TimeSpan interval,
@@ -458,8 +477,7 @@ static async Task RunChallengeTimerLoopAsync(
             }
         }
 
-        var snapshot = new WatchSnapshot(DateTimeOffset.UtcNow, cache.Timers, cache.Currency, error);
-        Console.WriteLine(JsonSerializer.Serialize(snapshot, options));
+        emit(new WatchSnapshot(DateTimeOffset.UtcNow, cache.Timers, cache.Currency, error));
 
         try
         {
@@ -551,6 +569,308 @@ static async Task RunCurrencyRefreshLoopAsync(
             break;
         }
     }
+}
+
+// ---------------------------------------------------------------- serve mode
+//
+// One long-lived process that answers newline-delimited JSON requests on stdin
+// with newline-delimited JSON on stdout. Motivation (measured against a live
+// client): a one-shot invocation pays ~0.8s of .NET startup plus ~3.1s of
+// RemoteClient attach *before* it does any work, so a three-command probe cycle
+// spent ~90% of its wall time on overhead; and several bridge processes attached
+// at once degrade per-call latency ~8x, because MTGOSDK marshals every read onto
+// MTGO's UI thread. Keeping one process with one request queue pays the attach
+// once and removes the cross-process contention structurally.
+//
+// Protocol (one JSON object per line, both directions):
+//   ->  {"id":"7","command":"collection","args":[]}
+//   <-  {"id":"7","ok":true,"payload":{...}}            // payload == CLI output
+//   <-  {"id":"7","ok":false,"error":"..."}
+//   <-  {"event":"ready","payload":{"protocol":1,"pid":1234}}
+//   <-  {"event":"watch","payload":{...WatchSnapshot...}}
+//   <-  {"event":"disconnected","payload":{"reason":"..."}}
+// Closing stdin shuts the process down; an older build without this mode exits
+// immediately without a ready banner, which is how the client detects it.
+static void RunServeLoop(JsonSerializerOptions options)
+{
+    Console.OutputEncoding = Encoding.UTF8;
+
+    var stdoutLock = new object();
+    void Emit(object payload)
+    {
+        var line = JsonSerializer.Serialize(payload, options);
+        lock (stdoutLock)
+        {
+            // Write the newline separately: WriteLine would emit "\r\n" on
+            // Windows and the client splits strictly on "\n".
+            Console.Out.Write(line);
+            Console.Out.Write('\n');
+            Console.Out.Flush();
+        }
+    }
+
+    using var cts = new CancellationTokenSource();
+    // One lock, one queue: every SDK touch in this process — requests and the
+    // watch loops alike — is serialised through here, which is the whole point.
+    using var sdkLock = new SemaphoreSlim(1, 1);
+    using var requests = new BlockingCollection<ServeRequest>(new ConcurrentQueue<ServeRequest>());
+
+    var worker = new Thread(() => RunServeWorker(requests, sdkLock, Emit, cts.Token))
+    {
+        IsBackground = true,
+        Name = "bridge-serve-worker",
+    };
+    worker.Start();
+
+    var watchdog = new Thread(() => RunMtgoWatchdog(Emit, cts.Token))
+    {
+        IsBackground = true,
+        Name = "bridge-mtgo-watchdog",
+    };
+    watchdog.Start();
+
+    Emit(new ServeEvent(
+        "ready",
+        new ServeReadyPayload(ServeProtocol.Version, Environment.ProcessId)));
+
+    string? line;
+    while ((line = Console.In.ReadLine()) != null)
+    {
+        if (string.IsNullOrWhiteSpace(line))
+        {
+            continue;
+        }
+
+        var (request, id, error) = ParseServeRequest(line);
+        if (request is null)
+        {
+            Emit(new ServeResponse(id, false, null, error));
+            continue;
+        }
+
+        requests.Add(request);
+    }
+
+    // stdin closed: the supervising client is gone (or asked us to stop). Give
+    // the worker a moment to unwind, then fall off the end — the remaining
+    // threads are background threads, so the process exits. Nothing is buffered
+    // that needs flushing, and one-shot invocations already exit mid-attach.
+    requests.CompleteAdding();
+    cts.Cancel();
+    worker.Join(TimeSpan.FromSeconds(2));
+}
+
+// Executes queued requests strictly one at a time. Watch start/stop is handled
+// here too, so the subscription's lifetime needs no extra synchronisation.
+static void RunServeWorker(
+    BlockingCollection<ServeRequest> requests,
+    SemaphoreSlim sdkLock,
+    Action<object> emit,
+    CancellationToken ct)
+{
+    CancellationTokenSource? watchCts = null;
+    Task? watchTask = null;
+
+    // Cancelling is instant; joining is not, because a loop blocked inside a
+    // synchronous SDK read cannot observe the token until that read returns.
+    // So `watch stop` only signals — the answer goes out immediately — and the
+    // join is deferred to the next `watch start`, which is rare.
+    void CancelWatchTasks() => watchCts?.Cancel();
+
+    void ReapWatchTasks()
+    {
+        if (watchCts is null)
+        {
+            return;
+        }
+
+        watchCts.Cancel();
+        try
+        {
+            watchTask?.Wait(TimeSpan.FromSeconds(5));
+        }
+        catch (AggregateException)
+        {
+            // Cancellation surfaces here; nothing to report.
+        }
+
+        watchCts.Dispose();
+        watchCts = null;
+        watchTask = null;
+    }
+
+    try
+    {
+        foreach (var request in requests.GetConsumingEnumerable())
+        {
+            try
+            {
+                if (request.Mode == ExecutionMode.Watch)
+                {
+                    if (ParseWatchCommand(request.Argv) == WatchCommand.Stop)
+                    {
+                        CancelWatchTasks();
+                        emit(new ServeResponse(request.Id, true, new ServeAck("watch.stopped"), null));
+                        continue;
+                    }
+
+                    ReapWatchTasks();
+                    watchCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                    watchTask = RunWatchTasksAsync(
+                        sdkLock,
+                        snapshot => emit(new ServeEvent("watch", snapshot)),
+                        TimeSpan.FromMilliseconds(ParseWatchIntervalMs(request.Argv)),
+                        TimeSpan.FromMinutes(10),
+                        watchCts.Token);
+                    emit(new ServeResponse(request.Id, true, new ServeAck("watch.started"), null));
+                    continue;
+                }
+
+                sdkLock.Wait(ct);
+                try
+                {
+                    emit(new ServeResponse(
+                        request.Id,
+                        true,
+                        BuildPayload(request.Mode, request.Argv),
+                        null));
+                }
+                finally
+                {
+                    sdkLock.Release();
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
+            catch (Exception ex)
+            {
+                emit(new ServeResponse(request.Id, false, null, ex.GetBaseException().Message));
+            }
+        }
+    }
+    finally
+    {
+        CancelWatchTasks();
+    }
+}
+
+// MTGO can exit and restart underneath a long-lived attach, and MTGOSDK gives no
+// usable signal for that. Polling the local process list costs nothing (no IPC),
+// so the daemon simply stops once the client it attached to is gone: the Python
+// supervisor sees the event plus EOF and respawns against the new MTGO.
+static void RunMtgoWatchdog(Action<object> emit, CancellationToken ct)
+{
+    var seenRunning = false;
+    while (!ct.IsCancellationRequested)
+    {
+        var processes = Process.GetProcessesByName("MTGO");
+        var running = processes.Length > 0;
+        foreach (var process in processes)
+        {
+            process.Dispose();
+        }
+
+        if (running)
+        {
+            seenRunning = true;
+        }
+        else if (seenRunning)
+        {
+            emit(new ServeEvent(
+                "disconnected",
+                new ServeReasonPayload("MTGO process exited")));
+            // stdin is blocked in ReadLine on the main thread and cannot be
+            // interrupted, so exit outright. The banner above has already been
+            // flushed, and the client treats EOF as "respawn on next request".
+            Environment.Exit(0);
+        }
+
+        ct.WaitHandle.WaitOne(TimeSpan.FromSeconds(5));
+    }
+}
+
+// Returns the parsed request, or the id (when recoverable) plus an error string.
+static (ServeRequest? Request, string? Id, string? Error) ParseServeRequest(string line)
+{
+    string? id = null;
+    try
+    {
+        using var document = JsonDocument.Parse(line);
+        var root = document.RootElement;
+        if (root.ValueKind != JsonValueKind.Object)
+        {
+            return (null, null, "Request must be a JSON object.");
+        }
+
+        if (root.TryGetProperty("id", out var idElement) && idElement.ValueKind == JsonValueKind.String)
+        {
+            id = idElement.GetString();
+        }
+
+        if (!root.TryGetProperty("command", out var commandElement)
+            || commandElement.ValueKind != JsonValueKind.String)
+        {
+            return (null, id, "Request is missing a string 'command'.");
+        }
+
+        var command = commandElement.GetString() ?? string.Empty;
+        var argv = new List<string> { command };
+        if (root.TryGetProperty("args", out var argsElement)
+            && argsElement.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var arg in argsElement.EnumerateArray())
+            {
+                argv.Add(arg.ValueKind == JsonValueKind.String
+                    ? arg.GetString() ?? string.Empty
+                    : arg.ToString());
+            }
+        }
+
+        var mode = ParseMode(argv.ToArray());
+        if (mode == ExecutionMode.None)
+        {
+            return (null, id, $"Unknown command '{command}'.");
+        }
+
+        if (mode == ExecutionMode.Serve)
+        {
+            return (null, id, "'serve' cannot be nested inside a serve session.");
+        }
+
+        return (new ServeRequest(id, mode, argv.ToArray()), id, null);
+    }
+    catch (JsonException ex)
+    {
+        return (null, id, $"Invalid JSON request: {ex.Message}");
+    }
+}
+
+static WatchCommand ParseWatchCommand(string[] argv)
+{
+    if (argv.Length <= 1)
+    {
+        return WatchCommand.Start;
+    }
+
+    var token = (argv[1] ?? string.Empty).Trim().TrimStart('-', '/').ToLowerInvariant();
+    return token is "stop" or "cancel" ? WatchCommand.Stop : WatchCommand.Start;
+}
+
+// ``watch [start] [intervalMs]`` — falls back to the standalone mode's cadence.
+static int ParseWatchIntervalMs(string[] argv)
+{
+    foreach (var token in argv.Skip(1))
+    {
+        if (int.TryParse(token, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value)
+            && value > 0)
+        {
+            return Math.Max(value, 100);
+        }
+    }
+
+    return 500;
 }
 
 static IReadOnlyList<ChallengeTimerSnapshot> GetChallengeTimers()
@@ -726,6 +1046,8 @@ static ExecutionMode ParseMode(string[] args)
         "logfiles" or "logs" => ExecutionMode.LogFiles,
         "username" or "user" or "name" => ExecutionMode.Username,
         "trade" or "trades" => ExecutionMode.Trade,
+        "serve" or "daemon" => ExecutionMode.Serve,
+        "ping" => ExecutionMode.Ping,
         _ => ExecutionMode.None,
     };
 }
@@ -938,6 +1260,8 @@ enum ExecutionMode
     LogFiles,
     Username,
     Trade,
+    Serve,
+    Ping,
 }
 
 enum TradeCommand
@@ -945,6 +1269,38 @@ enum TradeCommand
     Status = 0,
     Accept,
 }
+
+enum WatchCommand
+{
+    Start = 0,
+    Stop,
+}
+
+static class ServeProtocol
+{
+    // Bumped only on a breaking change to the stdin/stdout envelope; the client
+    // refuses a version it does not know and falls back to one-shot commands.
+    public const int Version = 1;
+}
+
+sealed record ServeRequest(string? Id, ExecutionMode Mode, string[] Argv);
+
+public sealed record ServeResponse(
+    string? Id,
+    bool Ok,
+    object? Payload,
+    string? Error
+);
+
+public sealed record ServeEvent(string Event, object? Payload);
+
+public sealed record ServeReadyPayload(int Protocol, int Pid);
+
+public sealed record ServeReasonPayload(string Reason);
+
+public sealed record ServeAck(string Status);
+
+public sealed record PingSnapshot(bool Ok, DateTimeOffset Timestamp);
 
 public sealed record ChallengeTimerSnapshot(
     string? EventId,
