@@ -24,7 +24,7 @@ Um aplicativo desktop para jogadores de Magic: The Gathering Online (MTGO) com a
 - **Baseline do Arquétipo**: uma aba Baseline para o deck que está na tela, separando o arquétipo entre as cartas que toda lista joga, as contagens que variam e os slots que são de fato seus, com os candidatos a flex ordenados por taxa de uso.
 - **Goldfish**: compre uma mão inicial do mainboard, tome mulligan, compre cartas e baixe elas numa mesa.
 - **Diferença para a Coleção**: salve o que o deck precisa e a sua coleção não tem como um arquivo de decklist, pronto para colar onde você compra, troca ou aluga cartas.
-- **Checagem de Atualização**: Arquivo ▸ Procurar atualizações busca uma versão mais nova, confere o instalador contra o checksum publicado junto com ela e instala.
+- **Checagem de Atualização**: Arquivo ▸ Verificar atualizações busca uma versão mais nova, confere o instalador contra o checksum publicado junto com ela e instala.
 
 ![Janela de Análise de Metagame: um gráfico de barras horizontais da participação no metagame de Modern nos últimos 5 dias, liderado por Goryo's Vengeance com 8,7%, ao lado do painel Mudanças de Metagame listando os arquétipos que ganharam ou perderam participação em relação ao período anterior](docs/images/pt-BR/metagame-analysis.png)
 
