@@ -45,6 +45,11 @@ from .discovery import _require_bridge_path
 
 _TRUTHY = {"1", "true", "yes", "on"}
 
+#: The id the watch-stream re-arm goes out under. Request ids are otherwise
+#: numbers from a counter, so this cannot collide with one, and its answer is
+#: the one answer nobody is waiting for.
+RESUME_WATCH_REQUEST_ID = "resume-watch"
+
 
 class BridgeSessionError(RuntimeError):
     """A request was delivered to a live bridge session and came back failed."""
@@ -311,7 +316,15 @@ class BridgeSession:
         self._resume_watch_locked()
 
     def _resume_watch_locked(self) -> None:
-        """Re-arm the watch stream after a respawn so subscribers keep receiving."""
+        """Re-arm the watch stream after a respawn so subscribers keep receiving.
+
+        Fire and forget: the stream itself arrives as events, and nobody waits
+        on the acknowledgement, so this registers no pending slot. It goes out
+        under :data:`RESUME_WATCH_REQUEST_ID` rather than a number from the
+        counter, because an unclaimed numbered answer is indistinguishable from
+        the bridge answering something we never asked -- which is a real symptom
+        and has to stay loud.
+        """
         with self._watch_lock:
             if not (self._watch_armed and self._watch_queues):
                 return
@@ -319,7 +332,7 @@ class BridgeSession:
         try:
             self._write(
                 {
-                    "id": str(next(self._ids)),
+                    "id": RESUME_WATCH_REQUEST_ID,
                     "command": "watch",
                     "args": ["start", str(interval_ms)],
                 }
@@ -371,7 +384,10 @@ class BridgeSession:
         with self._pending_lock:
             slot = self._pending.get(str(request_id))
         if slot is None:
-            logger.debug("Bridge session answered unknown request id {}", request_id)
+            if str(request_id) == RESUME_WATCH_REQUEST_ID:
+                logger.debug("Bridge session re-armed the watch stream: ok={}", message.get("ok"))
+            else:
+                logger.debug("Bridge session answered unknown request id {}", request_id)
             return
         if message.get("ok"):
             _queue_replace(slot, ("ok", message.get("payload")))
