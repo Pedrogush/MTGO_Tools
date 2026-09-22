@@ -1,8 +1,15 @@
-"""Helpers for building deck text from card zones."""
+"""Helpers for building deck text from card zones.
+
+The format itself is :func:`utils.deck_text.render_deck_text`, shared with the
+deck-VCS normalizer and the collection diff. What is here is the mapping from
+the zone-editor's dictionaries onto it.
+"""
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
+
+from utils.deck_text import render_deck_text
 
 if TYPE_CHECKING:
     from services.deck_service.protocol import DeckServiceProto
@@ -16,17 +23,10 @@ class DeckTextBuilderMixin(_Base):
     """Construct deck list text from zone dictionaries."""
 
     def build_deck_text_from_zones(self, zone_cards: dict[str, list[dict[str, Any]]]) -> str:
-        if not zone_cards.get("main") and not zone_cards.get("side"):
-            return ""
-        lines: list[str] = []
-        for entry in zone_cards.get("main", []):
-            lines.append(f"{entry['qty']} {entry['name']}")
-        if zone_cards.get("side"):
-            lines.append("")
-            lines.append("Sideboard")
-            for entry in zone_cards["side"]:
-                lines.append(f"{entry['qty']} {entry['name']}")
-        return "\n".join(lines).strip()
+        return render_deck_text(
+            [(entry["qty"], entry["name"]) for entry in zone_cards.get("main", [])],
+            [(entry["qty"], entry["name"]) for entry in zone_cards.get("side", [])],
+        )
 
     def build_deck_text(self, zones: dict[str, list[dict[str, Any]]]) -> str:
         lines: list[str] = []
