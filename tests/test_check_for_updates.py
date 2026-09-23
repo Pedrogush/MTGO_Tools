@@ -93,6 +93,18 @@ def _stamp(tmp_path: Path) -> dict[str, Any]:
     return json.loads((tmp_path / "update_check.json").read_text(encoding="utf-8"))
 
 
+@pytest.fixture(autouse=True)
+def no_forced_check(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Nothing here may be forced by the environment it runs in.
+
+    ``MTGO_TOOLS_FORCE_UPDATE_CHECK`` is documented, so a developer testing the
+    update path has it set -- and it turns every throttle assertion below into
+    a failure about their own shell. ``tests/test_update_service.py`` already
+    clears it this way.
+    """
+    monkeypatch.delenv(FORCE_CHECK_ENV_VAR, raising=False)
+
+
 # ---------------------------------------------------------------------------
 # The service: forcing, stamping, and the interval that must survive both
 # ---------------------------------------------------------------------------

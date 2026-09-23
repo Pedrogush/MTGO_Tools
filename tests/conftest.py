@@ -3,13 +3,12 @@
 This module provides fixtures that are available to all tests in the project.
 """
 
-import os
 import warnings
 
 import pytest
 from data_isolation import (
     REAL_DATA_DIRS,
-    normalized,
+    guard_verdict,
     real_paths_written_here,
     redirect_bound_paths,
     session_data_dirs,
@@ -30,17 +29,26 @@ def real_data_untouched():
     card-pool and image caches being created by repositories built with their
     real default paths.
 
-    A changed file is only the suite's fault if this process wrote it. The app
-    resolves its data dirs to the same checkout the suite runs from, so a
-    developer running ``main.py --automation`` (or a second worktree's suite)
-    keeps writing the deck and card caches while the run happens; blaming the
-    run for that produced an ``ERROR at teardown`` on whichever test happened to
-    be last, with a longer run being likelier to catch a write. So the assertion
-    covers the paths ``data_isolation``'s audit hook saw this process open for
-    writing, and anything else that moved is reported as a warning naming the
-    files. CI has no second writer, so there it stays a hard failure -- that is
-    also what still covers a write made by a subprocess the suite spawned, which
-    the audit hook cannot see.
+    Any change is a failure. ``data_isolation``'s audit hook says which of them
+    this process wrote, and the message names that case separately, but the
+    verdict is the same: the data is already gone by the time the guard reads
+    the snapshot, so the run has to stop loudly either way.
+
+    The one excuse is a second writer the developer knows about. The app
+    resolves its data dirs to the same checkout the suite runs from, so
+    ``main.py --automation`` (or a second worktree's suite) keeps writing the
+    deck and card caches while the run happens, and blaming the run for that
+    produced an ``ERROR at teardown`` on whichever test happened to be last.
+    Setting ``MTGO_TOOLS_ALLOW_CONCURRENT_APP=1`` downgrades an unattributed
+    change to a warning for that run.
+
+    Attribution was briefly the *default* instead -- hard failure only for paths
+    the hook saw, a warning otherwise unless ``CI`` was set. That is backwards:
+    ``sys.addaudithook`` is per-process and blind to a child, and this suite
+    spawns real ones (the bridge session's launcher, the bridge client's stubs,
+    ``git`` in the version tests, pytest itself under
+    ``scripts/run_tests_fast.py``). A subprocess wiping config/ warned on the
+    machine that had data to lose and failed only on CI, which had none.
     """
     before = snapshot_real_data()
     yield
@@ -48,20 +56,11 @@ def real_data_untouched():
     changed = sorted(
         path for path in before.keys() | after.keys() if before.get(path) != after.get(path)
     )
-    written_here = real_paths_written_here()
-    ours = [path for path in changed if normalized(path) in written_here]
-    assert not ours, (
-        f"Tests modified the user's real data: {ours[:20]}. Something reached a real "
-        "path that tests/data_isolation.py did not redirect."
-    )
-    if changed:  # Nothing here was written by this process; see the docstring.
-        message = (
-            f"{len(changed)} file(s) under the real data dirs changed during the run, but no "
-            f"test process wrote them: {changed[:20]}. Another process on this machine (the "
-            "app, or a second checkout's suite) is writing the shared data dirs."
-        )
-        assert not os.environ.get("CI"), message
-        warnings.warn(message, stacklevel=1)
+    verdict = guard_verdict(changed, real_paths_written_here())
+    if verdict:
+        message, fatal = verdict
+        assert not fatal, message
+        warnings.warn(message, stacklevel=1)  # Excused by ALLOW_CONCURRENT_APP_ENV.
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -90,6 +89,31 @@ def redirect_real_data_for_session(real_data_untouched, tmp_path_factory):
     # otherwise untouched data dir. Nothing runs after this point that wants
     # the real paths back; the guard's snapshot reads REAL_DATA_DIRS, which
     # this never patched.
+
+
+@pytest.fixture(autouse=True)
+def _name_the_test_that_wrote_real_data(request):
+    """Fail the test that reached a real data path, while its name is still known.
+
+    ``real_data_untouched`` is session-scoped: it reports at the end of the run,
+    by which point the file has been overwritten and ``_own_real_writes`` is a
+    pile with no test names in it, so finding the culprit means bisecting the
+    run. This diffs the same set across each test instead, so ``-x`` stops on the
+    write rather than after it, and on the test that made it.
+
+    Declared before the other function-scoped autouse fixtures so it tears down
+    last and still sees what they write on their way out. It deliberately does
+    not clear ``_own_real_writes``: the session guard needs the whole run's
+    writes to attribute what its snapshot found, and a test that fails here
+    fails the run anyway.
+    """
+    before = real_paths_written_here()
+    yield
+    written = sorted(real_paths_written_here() - before)
+    assert not written, (
+        f"{request.node.nodeid} wrote the user's real data: {written[:20]}. It reached a "
+        "real path that tests/data_isolation.py did not redirect."
+    )
 
 
 @pytest.fixture(autouse=True)

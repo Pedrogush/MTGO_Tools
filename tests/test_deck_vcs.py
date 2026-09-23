@@ -14,6 +14,10 @@ The invariants under test are the ones the design rests on:
 
 from __future__ import annotations
 
+import itertools
+import shutil
+from types import SimpleNamespace
+
 import pytest
 
 from repositories.deck_vcs_repository import DeckVcsRepository
@@ -43,6 +47,35 @@ def vcs(tmp_path):
 @pytest.fixture
 def service(vcs):
     return DeckVcsService(vcs_repo=vcs)
+
+
+@pytest.fixture
+def pinned_commit_clock(monkeypatch):
+    """Give every commit its own second, so history order is topology, not a coin toss.
+
+    dulwich stamps a commit with ``time.time()`` and its walker orders by commit
+    date, breaking ties on the commit's sha (``ShaFile.__lt__``). Every test here
+    commits well inside one second, so any assertion about which of two *branch
+    tips* comes first rests on which decklist happened to hash lower.
+
+    A linear history needs none of this -- a parent is only queued once its child
+    has been popped, so topology decides -- but a fork seeds both tips into the
+    walker at once, and there the tie-break is the whole answer. The baseline
+    root pins its epoch against the same class of accident (``BASELINE_EPOCH``).
+
+    Only dulwich's own names for the module are replaced, so nothing else in the
+    process sees a different clock -- and both modules that stamp a commit are
+    covered, since dulwich has moved that line between them. A test that uses
+    this asserts the stamps came out distinct, so the pinning cannot lapse
+    quietly if it moves again.
+    """
+    import dulwich.repo
+    import dulwich.worktree
+
+    ticks = itertools.count(1_600_000_000)
+    clock = SimpleNamespace(time=lambda: float(next(ticks)))
+    for module in (dulwich.repo, dulwich.worktree):
+        monkeypatch.setattr(module, "time", clock)
 
 
 # --------------------------------------------------------------------------- normalization
@@ -104,8 +137,13 @@ class TestCommits:
         assert vcs.list_branches("burn") == ["main"]
 
     def test_committed_text_reads_back_normalized(self, vcs):
-        """What goes into a commit is the canonical form, not what was handed in."""
-        sha = vcs.commit_deck("burn", "2 Consider\n4 Lightning Bolt\n", "v1")
+        """What goes into a commit is the canonical form, not what was handed in.
+
+        The text handed in is deliberately *not* already sorted, so removing the
+        ``normalize_decklist`` call in ``commit_deck`` fails here rather than
+        leaving the invariant's only test green.
+        """
+        sha = vcs.commit_deck("burn", "4 Lightning Bolt\n2 Consider\n", "v1")
         assert vcs.read_commit_text("burn", sha) == "2 Consider\n4 Lightning Bolt\n"
 
     def test_history_is_newest_first_and_linked(self, vcs):
@@ -127,9 +165,18 @@ class TestCommits:
         assert vcs.current_branch("never-saved") is None
 
     def test_deck_key_with_path_separators_is_one_directory(self, vcs):
-        """A scraped deck's href looks like a URL fragment, not a path segment."""
+        """A scraped deck's href looks like a URL fragment, not a path segment.
+
+        Trusted as one it would put the repo two levels down, under a directory
+        the root never expects to hold anything but deck repos -- so the check
+        is on what landed on disk, not on what ``repo_path`` says about itself.
+        """
         vcs.commit_deck("archetype/modern-burn", DECK_V1, "v1")
-        assert vcs.repo_path("archetype/modern-burn").parent == vcs._vcs_root
+
+        assert [p.name for p in vcs._vcs_root.iterdir()] == ["archetype_modern-burn"]
+        assert not (vcs._vcs_root / "archetype").exists()
+        # ...and the history is readable through the key it was written with.
+        assert [c.message for c in vcs.list_commits("archetype/modern-burn")] == ["v1"]
 
 
 # --------------------------------------------------------------------------- branching
@@ -297,7 +344,10 @@ class TestService:
         written = deck_file.read_text(encoding="utf-8")
         assert written == normalize_decklist(DECK_V1)
         # Nothing git-shaped leaked in, and the file still parses as a decklist.
-        assert "commit" not in written.lower()
+        # Searching for the word "commit" would not do it: *Commit // Memory* is
+        # a real card, so a clean file can contain it. The sha of the version
+        # being written out cannot.
+        assert first not in written
         assert all(
             line.split(" ", 1)[0].replace(".", "").isdigit()
             for line in written.splitlines()
@@ -381,7 +431,7 @@ class TestGraphLayout:
         assert [n.row for n in sorted(layout.nodes, key=lambda n: n.row)] == [0, 1, 2]
         assert not any(edge.is_fork for edge in layout.edges)
 
-    def test_a_fork_takes_a_second_lane(self, service):
+    def test_a_fork_takes_a_second_lane(self, service, pinned_commit_clock):
         first = service.record_save("burn", DECK_V1)
         service.record_save("burn", DECK_V2)
         service.checkout("burn", first)
@@ -391,7 +441,7 @@ class TestGraphLayout:
         assert layout.lane_count == 2
         assert sum(1 for edge in layout.edges if edge.is_fork) == 1
 
-    def test_the_fork_edge_lands_on_the_shared_ancestor(self, service):
+    def test_the_fork_edge_lands_on_the_shared_ancestor(self, service, pinned_commit_clock):
         first = service.record_save("burn", DECK_V1)
         service.record_save("burn", DECK_V2)
         service.checkout("burn", first)
@@ -401,7 +451,7 @@ class TestGraphLayout:
         fork = next(edge for edge in layout.edges if edge.is_fork)
         assert fork.parent_sha == first
 
-    def test_every_child_is_drawn_above_its_parent(self, service):
+    def test_every_child_is_drawn_above_its_parent(self, service, pinned_commit_clock):
         first = service.record_save("burn", DECK_V1)
         service.record_save("burn", DECK_V2)
         service.checkout("burn", first)
@@ -412,7 +462,7 @@ class TestGraphLayout:
         for edge in layout.edges:
             assert rows[edge.child_sha] < rows[edge.parent_sha]
 
-    def test_rows_are_unique(self, service):
+    def test_rows_are_unique(self, service, pinned_commit_clock):
         first = service.record_save("burn", DECK_V1)
         service.record_save("burn", DECK_V2)
         service.checkout("burn", first)
@@ -426,13 +476,21 @@ class TestGraphLayout:
         layout = build_layout([])
         assert layout.nodes == () and layout.edges == () and layout.lane_count == 0
 
-    def test_the_root_commit_is_the_last_row(self, service):
+    def test_the_root_commit_is_the_last_row(self, service, pinned_commit_clock):
         first = service.record_save("burn", DECK_V1)
         service.record_save("burn", DECK_V2)
         service.checkout("burn", first)
         service.record_save("burn", DECK_V3)
 
-        layout = build_layout(service.build_graph("burn"))
+        graph = service.build_graph("burn")
+        # The premise: both branch tips carry their own second, so the walk that
+        # feeds the layout is ordered by the history rather than by whichever
+        # decklist happened to hash lower.
+        stamps = [g.commit.timestamp for g in graph]
+        assert stamps == sorted(stamps, reverse=True)
+        assert len(set(stamps)) == len(stamps)
+
+        layout = build_layout(graph)
         last = max(layout.nodes, key=lambda n: n.row)
         assert last.sha == first
 
@@ -973,13 +1031,25 @@ class TestReadHistoryPicksAVersionToShow:
         head = next(g for g in snapshot.graph if g.commit.is_head)
         assert snapshot.selected_sha == head.sha
 
-    def test_a_selection_from_another_deck_falls_back_to_head(self, service):
-        """The selection survives a deck change otherwise, pointing nowhere."""
-        service.record_save("deck", DECK_V1)
+    def test_a_selection_from_another_deck_falls_back_to_head(self, service, pinned_commit_clock):
+        """The selection survives a deck change otherwise, pointing nowhere.
+
+        ``HEAD`` is deliberately not the newest version: the deck is parked on
+        its first save while two later ones are still the tip of the branch it
+        came from. On a one-commit history the two coincide and the fallback is
+        indistinguishable from ``return graph[0]`` -- which would open the tab
+        on a version the user is not on.
+        """
+        first = service.record_save("deck", DECK_V1)
+        service.record_save("deck", DECK_V2)
+        service.record_save("deck", DECK_V3)
+        service.checkout("deck", first)
 
         snapshot = service.read_history("deck", selected_sha="0" * 40)
 
-        assert snapshot.selected_sha == snapshot.graph[0].sha
+        assert snapshot.selected_sha == first
+        assert snapshot.graph[0].sha != first
+        assert snapshot.graph[0].commit.is_head is False
 
     def test_the_preview_diffs_against_the_parent_by_default(self, service):
         service.record_save("deck", DECK_V1)
@@ -1020,14 +1090,43 @@ class TestReadHistoryPicksAVersionToShow:
         assert snapshot.branches == ()
         assert snapshot.preview is None
 
-    def test_an_unreadable_repo_reads_as_empty_rather_than_raising(self, service, monkeypatch):
-        """A broken history must not take the tab down with it."""
+    def test_an_unreadable_repo_reads_as_empty_rather_than_raising(self, service, vcs):
+        """A broken history must not take the tab down with it, or keep its handle.
+
+        The repo is corrupted for real: its objects are repacked so the store is
+        a packfile -- the case ``store.py`` warns about, because Windows will not
+        delete a file another handle still holds -- and the packfile is then
+        overwritten with junk. The ``.git`` directory and the refs survive, so
+        the repo still *opens*: the read fails partway through a live
+        ``read_session``, which is the only place the handle can leak from.
+        """
+        from dulwich import porcelain
+
         service.record_save("deck", DECK_V1)
+        service.record_save("deck", DECK_V2)
+        repo_path = vcs.repo_path("deck")
 
-        def boom(*_args, **_kwargs):
-            raise OSError("object store is gone")
+        porcelain.repack(str(repo_path))
+        objects = repo_path / ".git" / "objects"
+        for loose in (d for d in objects.iterdir() if d.is_dir() and d.name != "pack"):
+            shutil.rmtree(loose)
+        for pack in (objects / "pack").glob("*.pack"):
+            pack.write_bytes(b"PACK this is not a packfile")
 
-        monkeypatch.setattr(service, "build_graph", boom)
+        # The corruption is deep enough to break a read and shallow enough that
+        # the session still opens -- otherwise this would prove nothing.
+        with vcs.read_session("deck"):
+            assert vcs._active_session("deck") is not None
+
+        snapshot = service.read_history("deck")
+        assert snapshot.branches == ()
+        assert snapshot.preview is None
+        assert vcs._active_session("deck") is None
+
+        # The packfile index is the handle that leaks, and Windows will not let
+        # go of it: if the failed read kept one, this raises PermissionError.
+        for index in (objects / "pack").glob("*.idx"):
+            index.unlink()
 
         assert service.read_history("deck").graph == ()
 

@@ -50,6 +50,10 @@ requirements*.txt
 collection.json
 .codex/
 .coverage
+# coverage's parallel/xdist data files, and the report artifacts CI builds.
+.coverage.*
+coverage.xml
+coverage-html/
 # Installer build outputs
 dist/
 build/

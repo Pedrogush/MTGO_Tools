@@ -16,6 +16,7 @@ from pathlib import Path
 
 import pytest
 
+from repositories.deck_text_cache import DeckTextCache
 from repositories.deck_vcs_repository.baseline import (
     BASELINE_EPOCH,
     BaselineRootError,
@@ -26,7 +27,9 @@ from services.archetype_baseline_service import (
     MEMBERSHIP_THRESHOLD,
     ArchetypeBaselineService,
     BaselineStore,
+    CardFrequency,
     CardRole,
+    ZoneShape,
     build_baseline,
     build_frequency_table,
     classify_card,
@@ -38,6 +41,8 @@ from services.archetype_baseline_service import (
     similarity_scores,
 )
 from services.archetype_baseline_service import service as service_module
+from services.archetype_baseline_service.frequency import median, zone_size
+from services.archetype_baseline_service.membership import MIN_POOL_FOR_FILTERING
 from services.archetype_baseline_service.store import baseline_from_dict, baseline_to_dict
 
 
@@ -131,6 +136,40 @@ class TestFrequencyTable:
         main, _side = pool_zone_sizes(decks)
         assert main == 28.0
 
+    def test_zone_size_totals_one_zone_of_one_deck(self):
+        counts = deck_card_counts("4 Lightning Bolt\n2 Consider\n\nSideboard\n3 Abrade\n")
+        assert zone_size(counts, is_sideboard=False) == 6.0
+        assert zone_size(counts, is_sideboard=True) == 3.0
+
+
+class TestMedian:
+    """The zone-size summary, including the half of it no pool here reached.
+
+    Every other pool in this file has an odd number of decks, so the even
+    branch -- the one that has to average the middle *two* -- never ran.
+    """
+
+    def test_an_odd_pool_takes_the_middle_value(self):
+        assert median([62, 58, 60]) == 60.0
+
+    def test_an_even_pool_averages_the_middle_two(self):
+        # 58, 59, 61, 62 sorted: no single middle deck exists, so the answer is
+        # (59 + 61) / 2 = 60 -- a size no deck in the pool has.
+        assert median([58, 62, 59, 61]) == 60.0
+        assert median([1, 2]) == 1.5
+
+    def test_the_median_of_nothing_is_zero(self):
+        assert median([]) == 0.0
+
+    def test_an_even_pool_gets_an_even_pools_zone_size(self):
+        # Mains of 24, 25, 27 and 28 -> 26.0, which is nobody's deck size.
+        decks = [make_deck(bolt=4, consider=4, island=island) for island in (16, 17, 19, 20)]
+        assert pool_zone_sizes(decks) == (26.0, 3.0)
+
+    def test_a_pool_with_no_decklists_has_no_zone_sizes(self):
+        assert pool_zone_sizes([]) == (0.0, 0.0)
+        assert pool_zone_sizes(["", "   "]) == (0.0, 0.0)
+
 
 # ------------------------------------------------------------------ classification ------------------------------------------------------------------
 class TestClassification:
@@ -198,6 +237,127 @@ class TestClassification:
         baseline = build_baseline(decks, archetype="A", mtg_format="modern")
         assert baseline.main.fixed < 60
 
+    def test_a_card_measured_against_no_pool_is_never_a_staple(self):
+        """``classify_card``'s ``pool_size > 0`` guard, on its own.
+
+        ``build_frequency_table`` never emits a record with ``pool_size == 0``
+        (it returns an empty table instead), so this can only be reached through
+        the exported :func:`classify_card` -- which is where the guard earns its
+        keep: ``decks_with == pool_size`` is trivially true at ``0 == 0``, and
+        without the guard a card measured against nothing would be reported as
+        settled archetype consensus at its floor.
+        """
+        nothing = CardFrequency(
+            name="Lightning Bolt", is_sideboard=False, decks_with=0, pool_size=0, counts={4.0: 0}
+        )
+        assert nothing.floor_count == 4.0  # the premise: it would otherwise qualify
+        assert nothing.play_rate == 0.0
+        assert classify_card(nothing) == (CardRole.FLEX, 0.0)
+
+    def test_fractional_counts_reach_the_baseline_intact(self):
+        """Averaged decklists carry fractions (DeckAverager), and a fractional
+        floor is a real floor -- rounding it would invent a count no list runs."""
+        decks = [
+            "3.5 Lightning Bolt\n20 Island\n",
+            "3.5 Lightning Bolt\n20 Island\n",
+            "4 Lightning Bolt\n20 Island\n",
+        ]
+        baseline = build_baseline(decks, archetype="A", mtg_format="modern")
+        bolt = next(c for c in baseline.cards if c.name == "Lightning Bolt")
+        assert bolt.role is CardRole.PARTIAL_STAPLE
+        assert bolt.fixed_count == 3.5
+        assert bolt.flex_above_floor == 0.5
+        assert baseline.main.fixed == 23.5
+        assert "3.5 Lightning Bolt" in baseline.decklist()
+
+
+class TestEmptyBaselines:
+    """A baseline of nothing, which is a real answer rather than a crash.
+
+    ``partition_pool`` can legitimately keep nobody -- a pool of mutual
+    strangers has no members -- so ``build_baseline`` reaches its empty-table
+    branch in production, not only when a caller passes ``[]``.
+    """
+
+    def test_no_decks_at_all(self):
+        baseline = build_baseline([], archetype="A", mtg_format="modern")
+        assert baseline.pool_size == 0
+        assert baseline.cards == ()
+        assert baseline.flex_candidates == ()
+        assert baseline.sources == ()
+        assert (baseline.main.size, baseline.main.fixed, baseline.main.flex) == (0.0, 0, 0.0)
+        assert baseline.flex_slots == 0.0
+        assert baseline.decklist() == ""
+
+    def test_a_pool_the_membership_filter_empties(self):
+        strangers = [f"4 Card{i}A\n4 Card{i}B\n20 Land{i}\n" for i in range(6)]
+        sources = tuple(f"deck-{i}" for i in range(6))
+        baseline = build_baseline(strangers, archetype="A", mtg_format="modern", sources=sources)
+        # The premise: everybody was examined and nobody was kept.
+        assert baseline.membership.examined == 6
+        assert baseline.membership.kept_count == 0
+        # The conclusion: an empty baseline that names nothing as its source.
+        assert baseline.pool_size == 0
+        assert baseline.cards == ()
+        assert baseline.sources == ()
+
+    def test_a_kept_deck_with_no_card_lines(self):
+        # A lone deck is always kept (no pairs to be atypical of), so a blank
+        # one reaches the frequency table and empties it there instead.
+        baseline = build_baseline(["   "], archetype="A", mtg_format="modern")
+        assert baseline.membership.kept_indices == (0,)
+        assert baseline.pool_size == 0
+        assert baseline.cards == ()
+
+
+class TestBaselineOrdering:
+    """A baseline renders the same way twice, and in the order a reader wants.
+
+    Main deck before sideboard, then most-played first, then by name with case
+    ignored. Nothing else in the file pins the tie-breaks, so a sort that fell
+    back to insertion order -- or to raw ASCII, which puts every capital before
+    every lowercase -- would have gone unnoticed.
+    """
+
+    #: Three lists: two cards whose casefolded order is the reverse of their
+    #: ASCII order, one card only the first list runs, one sideboard card whose
+    #: name sorts before everything.
+    RICH = "4 Basalt Monolith\n4 apple Pie\n20 Island\n4 Rare Card\n\nSideboard\n4 Aether Vial\n"
+    PLAIN = "4 Basalt Monolith\n4 apple Pie\n20 Island\n\nSideboard\n4 Aether Vial\n"
+
+    def _baseline(self):
+        return build_baseline([self.RICH, self.PLAIN, self.PLAIN], archetype="A", mtg_format="m")
+
+    def test_the_whole_order_at_once(self):
+        assert [c.name for c in self._baseline().cards] == [
+            "apple Pie",  # play rate 1.0, casefolds before "basalt"
+            "Basalt Monolith",  # play rate 1.0; raw ASCII would put it first
+            "Island",  # play rate 1.0
+            "Rare Card",  # play rate 1/3, so it follows regardless of name
+            "Aether Vial",  # sideboard, so last despite a play rate of 1.0
+        ]
+
+    def test_the_sideboard_follows_the_main_deck_whatever_its_play_rate(self):
+        cards = self._baseline().cards
+        vial = next(c for c in cards if c.name == "Aether Vial")
+        assert vial.play_rate == 1.0
+        assert cards.index(vial) == len(cards) - 1
+
+    def test_flex_candidates_break_a_tied_play_rate_on_the_bigger_average(self):
+        # Two cards in two of four lists each -- the same play rate -- at four
+        # copies and at one. The builder filling a slot wants the four first.
+        decks = [
+            "4 Lightning Bolt\n20 Island\n4 Big Card\n",
+            "4 Lightning Bolt\n20 Island\n1 Small Card\n",
+            "4 Lightning Bolt\n20 Island\n4 Big Card\n",
+            "4 Lightning Bolt\n20 Island\n1 Small Card\n",
+        ]
+        candidates = build_baseline(decks, archetype="A", mtg_format="m").flex_candidates
+        assert [(c.name, c.play_rate, c.average_count) for c in candidates] == [
+            ("Big Card", 0.5, 4.0),
+            ("Small Card", 0.5, 1.0),
+        ]
+
 
 # ------------------------------------------------------------------ flex arithmetic ------------------------------------------------------------------
 class TestFlexSlots:
@@ -207,16 +367,42 @@ class TestFlexSlots:
         assert baseline.main.fixed == 27
         assert baseline.main.size == 32
         assert baseline.main.flex == 5
+        # Every list runs the same three Abrade, so the sideboard commits every
+        # slot it has and the whole pool's free space is the maindeck's five.
+        assert baseline.sideboard.size == 3
         assert baseline.sideboard.fixed == 3
-        assert baseline.flex_slots == baseline.main.flex + baseline.sideboard.flex
+        assert baseline.sideboard.flex == 0
+        assert baseline.flex_slots == 5
 
     def test_flex_is_never_negative(self):
-        # A pool whose fixed slots exceed the median zone size must clamp
-        # rather than report a negative number of free slots.
+        """The clamp on the type, because the pipeline above cannot reach it.
+
+        Nothing ``build_baseline`` can be handed makes ``max(0.0, ...)`` fire: a
+        card is fixed at its floor across the pool, so the fixed total is
+        bounded by the smallest deck's zone, which is never above the median.
+        (The comment this replaces claimed the opposite, on a pool whose median
+        is 30 against a fixed of 20 -- see the test below.) The guard is still
+        worth keeping, since ``ZoneShape`` is a public dataclass anyone may
+        build, so it is tested where it lives rather than through a pool that
+        cannot produce it.
+        """
+        assert ZoneShape(size=20.0, fixed=27.0).flex == 0.0
+        # ...and it is a clamp, not a floor applied to everything.
+        assert ZoneShape(size=60.0, fixed=27.0).flex == 33.0
+
+    def test_the_fixed_total_is_bounded_by_the_smallest_deck_in_the_pool(self):
+        """Two 40-card lists and two 20-card ones: the median is 30, the floor 20.
+
+        The number that matters is ``fixed``, which is what every deck in the
+        pool can afford -- so the two small lists cap it at 20 even though half
+        the pool has twice the room. The ten slots between that and the median
+        are the pool's disagreement about how big the deck is, reported as flex.
+        """
         decks = ["40 Island\n", "40 Island\n", "20 Island\n", "20 Island\n"]
         baseline = build_baseline(decks, archetype="A", mtg_format="modern")
+        assert baseline.main.size == 30
         assert baseline.main.fixed == 20
-        assert baseline.main.flex >= 0
+        assert baseline.main.flex == 10
 
     def test_flex_candidates_are_ranked_by_play_rate(self, pool):
         baseline = build_baseline(pool, archetype="Izzet Murktide", mtg_format="modern")
@@ -473,8 +659,12 @@ class TestBaselineStoreSchemaVersion:
 class _FakeMetagameRepo:
     def __init__(self, numbers: list[str]) -> None:
         self.numbers = numbers
+        #: Every ``source_filter`` it was asked for, in order. The real
+        #: repository does the filtering; the service's job is to pass it on.
+        self.source_filters: list[str | None] = []
 
     def get_decks_for_archetype(self, archetype, source_filter=None):
+        self.source_filters.append(source_filter)
         return [{"number": number} for number in self.numbers]
 
 
@@ -573,6 +763,164 @@ class TestBaselineService:
         assert service.root_sha("nothing") is None
         assert service.has_baseline_root("nothing") is False
 
+    def test_the_source_filter_is_handed_to_the_metagame_repository(self, tmp_path, pool):
+        """Which site's decks to draw from is the repository's decision to make.
+
+        The service's only job is not to swallow the argument -- and it had no
+        test, so passing ``None`` unconditionally would have gone unnoticed.
+        """
+        repo = _FakeMetagameRepo([f"deck-{i}" for i in range(len(pool))])
+        texts = dict(zip(repo.numbers, pool, strict=False))
+        service = ArchetypeBaselineService(
+            metagame_repo=repo,
+            vcs_repo=DeckVcsRepository(tmp_path / "deck_vcs"),
+            store=BaselineStore(tmp_path / "baselines.json"),
+            text_provider=lambda wanted: {n: texts[n] for n in wanted if n in texts},
+        )
+        service.pool_texts({"name": "A"})
+        service.pool_texts({"name": "A"}, source_filter="mtggoldfish")
+        service.compute({"name": "A"}, mtg_format="modern", source_filter="melee")
+        assert repo.source_filters == [None, "mtggoldfish", "melee"]
+
+    def test_limit_caps_the_pool_before_any_decklist_is_fetched(self, tmp_path, pool):
+        """The limit is a cap on work, so it has to apply before the lookup.
+
+        Asking the cache for fifty lists and then throwing forty-seven away
+        would read the same and cost the round trips this exists to avoid.
+        """
+        numbers = [f"deck-{i}" for i in range(len(pool))]
+        texts = dict(zip(numbers, pool, strict=False))
+        asked: list[list[str]] = []
+
+        def provider(wanted):
+            asked.append(list(wanted))
+            return {n: texts[n] for n in wanted if n in texts}
+
+        service = ArchetypeBaselineService(
+            metagame_repo=_FakeMetagameRepo(numbers),
+            vcs_repo=DeckVcsRepository(tmp_path / "deck_vcs"),
+            store=BaselineStore(tmp_path / "baselines.json"),
+            text_provider=provider,
+        )
+        found_texts, found_numbers = service.pool_texts({"name": "A"}, limit=3)
+        assert asked == [numbers[:3]]
+        assert found_numbers == numbers[:3]
+        assert len(found_texts) == 3
+
+    def test_no_limit_asks_for_everything(self, tmp_path, pool):
+        service = self._service(tmp_path, pool)
+        _texts, numbers = service.pool_texts({"name": "A"}, limit=None)
+        assert len(numbers) == len(pool)
+
+
+class TestTheProductionPoolPath:
+    """``pool_texts`` through the real deck-text cache, with no ``text_provider``.
+
+    Every other service test injects the seam, so ``self.deck_cache.get_many``
+    -- the branch the app runs, and the only one that can be wrong about the
+    cache's shape -- had never been executed by a test. A real
+    :class:`DeckTextCache` on ``tmp_path`` costs one sqlite file.
+    """
+
+    def _service(self, tmp_path, cache):
+        numbers = [f"deck-{i}" for i in range(5)]
+        return numbers, ArchetypeBaselineService(
+            metagame_repo=_FakeMetagameRepo(numbers),
+            deck_cache=cache,
+            vcs_repo=DeckVcsRepository(tmp_path / "deck_vcs"),
+            store=BaselineStore(tmp_path / "baselines.json"),
+        )
+
+    def test_the_pool_is_read_out_of_the_cache(self, tmp_path, pool):
+        cache = DeckTextCache(tmp_path / "deck_cache.db")
+        numbers, service = self._service(tmp_path, cache)
+        for number, text in zip(numbers, pool, strict=True):
+            cache.set(number, text)
+
+        texts, found = service.pool_texts({"name": "Izzet Murktide"})
+        assert found == numbers
+        assert texts == pool
+        assert service._text_provider is None  # the seam really is not in play
+
+    def test_a_deck_the_cache_has_never_seen_is_skipped(self, tmp_path, pool):
+        # The research panel is what fills the cache; a baseline summarises what
+        # has been collected rather than downloading the rest inline.
+        cache = DeckTextCache(tmp_path / "deck_cache.db")
+        numbers, service = self._service(tmp_path, cache)
+        for number, text in zip(numbers[:2], pool[:2], strict=True):
+            cache.set(number, text)
+
+        texts, found = service.pool_texts({"name": "A"})
+        assert found == numbers[:2]
+        assert len(texts) == 2
+
+    def test_an_empty_cache_yields_an_empty_pool(self, tmp_path):
+        cache = DeckTextCache(tmp_path / "deck_cache.db")
+        _numbers, service = self._service(tmp_path, cache)
+        assert service.pool_texts({"name": "A"}) == ([], [])
+
+    def test_a_baseline_computes_end_to_end_off_the_cache(self, tmp_path, pool, monkeypatch):
+        monkeypatch.setattr(service_module, "MIN_POOL_SIZE", 2)
+        cache = DeckTextCache(tmp_path / "deck_cache.db")
+        numbers, service = self._service(tmp_path, cache)
+        for number, text in zip(numbers, pool, strict=True):
+            cache.set(number, text)
+
+        baseline = service.compute({"name": "Izzet Murktide"}, mtg_format="modern")
+        assert baseline is not None
+        assert baseline.pool_size == 5
+        assert baseline.sources == tuple(numbers)
+        assert "4 Lightning Bolt" in baseline.decklist()
+
+
+class TestTheMinimumPoolSize:
+    """:data:`MIN_POOL_SIZE` itself -- the test 12 others assumed existed.
+
+    They monkeypatch it to 2 so a five-deck fixture can exercise the plumbing,
+    and none of them asserted anything about the real number. A strict
+    intersection fails towards *larger* baselines on small pools, so the floor
+    is the only thing standing between "one player's deck" and "the archetype".
+    """
+
+    def _service(self, tmp_path, texts):
+        numbers = [f"deck-{i}" for i in range(len(texts))]
+        by_number = dict(zip(numbers, texts, strict=True))
+        return ArchetypeBaselineService(
+            metagame_repo=_FakeMetagameRepo(numbers),
+            vcs_repo=DeckVcsRepository(tmp_path / "deck_vcs"),
+            store=BaselineStore(tmp_path / "baselines.json"),
+            text_provider=lambda wanted: {n: by_number[n] for n in wanted if n in by_number},
+        )
+
+    def test_the_floor_is_the_documented_eight(self):
+        assert service_module.MIN_POOL_SIZE == 8
+
+    def test_seven_lists_are_not_enough(self, tmp_path):
+        pool = [affinity_like(f"Card {i}") for i in range(7)]
+        service = self._service(tmp_path, pool)
+        assert service.compute({"name": "Affinity"}, mtg_format="modern") is None
+        assert service.stored("Affinity", "modern") is None
+
+    def test_eight_of_the_same_lists_are(self, tmp_path):
+        pool = [affinity_like(f"Card {i}") for i in range(8)]
+        service = self._service(tmp_path, pool)
+        baseline = service.compute({"name": "Affinity"}, mtg_format="modern")
+        assert baseline is not None
+        assert baseline.pool_size == 8
+        assert service.stored("Affinity", "modern") is not None
+
+    def test_the_floor_applies_to_the_survivors_not_the_label(self, tmp_path):
+        """Eight lists offered, one an impostor: seven survive and that is short.
+
+        The guard runs twice on purpose -- once on what the label produced and
+        once on what membership kept -- so a pool that is mostly other
+        archetypes cannot clear it on size and then answer from the remainder.
+        """
+        pool = [affinity_like(f"Card {i}") for i in range(7)] + [alien_deck()]
+        service = self._service(tmp_path, pool)
+        assert len(pool) >= service_module.MIN_POOL_SIZE
+        assert service.compute({"name": "Affinity"}, mtg_format="modern") is None
+
 
 # ------------------------------------------------------------------ membership ------------------------------------------------------------------
 def affinity_like(extra: str = "", *, saga: int = 4) -> str:
@@ -596,6 +944,94 @@ def alien_deck() -> str:
         "4 Tarmogoyf\n4 Thoughtseize\n4 Fatal Push\n"
         "4 Verdant Catacombs\n20 Swamp\n\nSideboard\n4 Duress\n"
     )
+
+
+# --- the partly-overlapping pool, built so its scores can be worked out by hand ---
+#
+# ``affinity_like`` and ``alien_deck`` share *zero* maindeck names, so every
+# score they produce is 0.0 or >= 0.667 and any threshold in (0.182, 0.667]
+# splits them identically -- including 0.20 and 0.65, both of which would
+# misclassify the real pool membership.py's docstring describes. The pool below
+# has the partial overlap the real one has, and its two bands are 4/17 and
+# 58/119, so the shipped 0.30 is the only kind of value that splits it.
+
+#: The eight names every member of :func:`shell_sharing_member` runs.
+SHARED_CORE = (
+    "Urza's Saga",
+    "Mox Opal",
+    "Springleaf Drum",
+    "Metallic Rebuke",
+    "Mishra's Bauble",
+    "Thought Monitor",
+    "Kappa Cannoneer",
+    "Darksteel Citadel",
+)
+
+#: The four of them the impostor also runs -- the artifact-mana shell that
+#: membership.py's docstring names as the whole of what Affinity and Hammer
+#: Time have in common.
+SHARED_SHELL = SHARED_CORE[:4]
+
+#: Three names of its own per member, all twelve distinct, so a member's list is
+#: eight core + three private = eleven names.
+MEMBER_PRIVATE_CARDS = (
+    ("Nettlecyst", "Patchwork Automaton", "Seat of the Synod"),
+    ("Emry, Lurker of the Loch", "Vault of Whispers", "Thoughtcast"),
+    ("Master of Etherium", "Tree of Tales", "Galvanic Blast"),
+    ("Cranial Plating", "Ancient Den", "Frogmite"),
+)
+
+
+def shell_sharing_member(index: int) -> str:
+    """Member ``index`` of the partly-overlapping pool: the core plus its own three."""
+    lines = [f"4 {name}" for name in SHARED_CORE]
+    lines += [f"2 {name}" for name in MEMBER_PRIVATE_CARDS[index]]
+    return "\n".join(lines) + "\n\nSideboard\n4 Consign to Memory\n"
+
+
+def shell_sharing_impostor() -> str:
+    """A different archetype that runs the same artifact-mana shell and nothing else.
+
+    Four of the core's eight names plus six of its own -- ten names in all.
+    """
+    lines = [f"4 {name}" for name in SHARED_SHELL]
+    lines += [
+        "4 Colossus Hammer",
+        "4 Sigarda's Aid",
+        "4 Puresteel Paladin",
+        "4 Stoneforge Mystic",
+        "4 Giver of Runes",
+        "4 Inkmoth Nexus",
+    ]
+    return "\n".join(lines) + "\n\nSideboard\n4 Path to Exile\n"
+
+
+@pytest.fixture
+def partly_overlapping_pool() -> list[str]:
+    """Four members and one impostor that shares half their mana base.
+
+    Worked out from the definitions above, using |A n B| / |A u B| on maindeck
+    names only:
+
+    - member vs. member: 8 shared, 8 + 3 + 3 = 14 in either -> **8/14 = 4/7**
+    - member vs. impostor: 4 shared, 11 + 10 - 4 = 17 in either -> **4/17**
+
+    Each deck's score is the mean over the other four:
+
+    - a member: (3 * 4/7 + 4/17) / 4 = (12/7 + 4/17) / 4 = (232/119) / 4
+      = **58/119 = 0.4874**
+    - the impostor: (4 * 4/17) / 4 = **4/17 = 0.2353**
+
+    Both land in the bands membership.py's docstring measured on the real
+    60-deck pool -- kept 0.462-0.638, rejected 0.093-0.266 -- which is what
+    makes this pool able to tell a wrong threshold from the shipped one.
+    """
+    return [shell_sharing_member(i) for i in range(4)] + [shell_sharing_impostor()]
+
+
+#: The two hand-computed scores the fixture above produces.
+MEMBER_SCORE = 58 / 119
+IMPOSTOR_SCORE = 4 / 17
 
 
 class TestPoolMembership:
@@ -655,6 +1091,51 @@ class TestPoolMembership:
     def test_excluded_decks_fall_back_to_an_index_without_sources(self):
         pool = [affinity_like() for _ in range(5)] + [alien_deck()]
         assert [deck.source for deck in partition_pool(pool).excluded] == ["#5"]
+
+    def test_a_blank_source_falls_back_to_an_index_too(self):
+        """A deck record with no number is identified by position, not by "".
+
+        ``pool_texts`` drops numberless decks, but ``partition_pool`` is
+        exported and takes whatever tuple it is handed; an exclusion the user
+        cannot name is one they cannot check.
+        """
+        pool = [affinity_like() for _ in range(5)] + [alien_deck()]
+        sources = ("a", "b", "c", "d", "e", "")
+        assert [deck.source for deck in partition_pool(pool, sources=sources).excluded] == ["#5"]
+
+    def test_sources_shorter_than_the_pool_fall_back_for_the_rest(self):
+        pool = [affinity_like() for _ in range(5)] + [alien_deck()]
+        assert [deck.source for deck in partition_pool(pool, sources=("a",)).excluded] == ["#5"]
+
+
+class TestTheSmallestScorablePool:
+    """``MIN_POOL_FOR_FILTERING``: below two decks there are no pairs.
+
+    The constant had no test. It is the line between "invent a score" and
+    "measure one", and moving it up would silently keep every two-deck pool.
+    """
+
+    def test_the_constant_is_two_because_that_is_where_pairs_start(self):
+        assert MIN_POOL_FOR_FILTERING == 2
+
+    def test_nothing_scores_nothing(self):
+        assert similarity_scores([]) == []
+
+    def test_a_lone_deck_is_perfectly_typical_of_itself(self):
+        assert similarity_scores([frozenset({"a", "b"})]) == [1.0]
+
+    def test_two_decks_are_measured_rather_than_assumed(self):
+        # One pair: {a,b} and {b,c} share one name of three -> 1/3 each. The
+        # invented 1.0 above must not leak into the smallest real pool.
+        left, right = frozenset({"a", "b"}), frozenset({"b", "c"})
+        assert similarity_scores([left, right]) == pytest.approx([1 / 3, 1 / 3])
+
+    def test_two_strangers_are_both_rejected(self):
+        # The end-to-end consequence: at two decks the filter is live, and a
+        # pool of two unrelated lists produces no members at all.
+        result = partition_pool([affinity_like(), alien_deck()])
+        assert result.kept_count == 0
+        assert result.scores == (0.0, 0.0)
 
 
 class TestMembershipProtectsTheBaseline:
@@ -751,6 +1232,121 @@ class TestMembershipThresholdGap:
         kept = [result.scores[i] for i in result.kept_indices]
         dropped = [deck.similarity for deck in result.excluded]
         assert max(dropped) < MEMBERSHIP_THRESHOLD <= min(kept)
+
+
+class TestScoresAreHandComputable:
+    """``similarity_scores`` against arithmetic done on paper, not against itself.
+
+    Every other test in this file reads a *split* rather than a number, and a
+    split survives a measure that is wrong by a constant factor -- or that
+    returns all zeros, which reversal symmetry cannot tell from a real answer.
+    These name the numbers.
+    """
+
+    def test_three_sets_worked_out_by_hand(self):
+        # A = {a,b,c,d}  B = {a,b,e,f}  C = {a,g,h,i}
+        #   J(A,B) = 2 shared / 6 in either = 1/3
+        #   J(A,C) = 1 shared / 7 in either = 1/7
+        #   J(B,C) = 1 shared / 7 in either = 1/7
+        # Each score is the mean over the *other* two:
+        #   A: (1/3 + 1/7) / 2 = (10/21) / 2 = 5/21
+        #   B: (1/3 + 1/7) / 2 = 5/21
+        #   C: (1/7 + 1/7) / 2 = 1/7
+        first = frozenset({"a", "b", "c", "d"})
+        second = frozenset({"a", "b", "e", "f"})
+        third = frozenset({"a", "g", "h", "i"})
+        assert similarity_scores([first, second, third]) == pytest.approx([5 / 21, 5 / 21, 1 / 7])
+
+    def test_a_deck_shares_the_credit_for_every_pair_it_is_in(self):
+        # Two identical lists and one stranger: the identical pair scores 1.0,
+        # both strangers' pairs score 0.0.
+        #   identical deck: (1.0 + 0.0) / 2 = 0.5
+        #   the stranger:   (0.0 + 0.0) / 2 = 0.0
+        twin = frozenset({"a", "b"})
+        stranger = frozenset({"y", "z"})
+        assert similarity_scores([twin, twin, stranger]) == pytest.approx([0.5, 0.5, 0.0])
+
+    def test_the_partly_overlapping_pool_scores_as_worked_out(self, partly_overlapping_pool):
+        """The fixture's own derivation, read back off ``partition_pool``.
+
+        See :func:`partly_overlapping_pool` for the arithmetic: members sit at
+        58/119 and the impostor at 4/17.
+        """
+        result = partition_pool(partly_overlapping_pool)
+        assert result.scores == pytest.approx(
+            [MEMBER_SCORE, MEMBER_SCORE, MEMBER_SCORE, MEMBER_SCORE, IMPOSTOR_SCORE]
+        )
+        assert result.scores[0] == pytest.approx(0.4874, abs=0.0001)
+        assert result.scores[4] == pytest.approx(0.2353, abs=0.0001)
+
+    def test_the_pairs_behind_those_scores(self, partly_overlapping_pool):
+        """The premise: the pool really is 4/7 within the group and 4/17 across it."""
+        names = [maindeck_names(text) for text in partly_overlapping_pool]
+        assert [len(deck) for deck in names] == [11, 11, 11, 11, 10]
+        assert jaccard(names[0], names[1]) == pytest.approx(8 / 14)
+        assert jaccard(names[0], names[4]) == pytest.approx(4 / 17)
+
+
+class TestTheShippedThresholdIsPinned:
+    """0.30 itself, not merely "some number between nothing and everything".
+
+    The alien-deck pools cannot do this: sharing zero names, they score 0.0 or
+    >= 0.667, so anything in (0.182, 0.667] splits them the same way. These use
+    :func:`partly_overlapping_pool`, whose two bands are 0.2353 and 0.4874, so
+    the split moves the moment the constant leaves (0.2353, 0.4874].
+    """
+
+    def test_the_shipped_threshold_splits_the_partly_overlapping_pool(
+        self, partly_overlapping_pool
+    ):
+        result = partition_pool(partly_overlapping_pool)
+        assert result.kept_indices == (0, 1, 2, 3)
+        assert [deck.source for deck in result.excluded] == ["#4"]
+
+    def test_the_constant_lies_between_this_pools_two_bands(self):
+        assert IMPOSTOR_SCORE < MEMBERSHIP_THRESHOLD <= MEMBER_SCORE
+
+    def test_the_constant_lies_in_the_gap_the_real_pool_measured(self):
+        """membership.py documents kept 0.462-0.638, rejected 0.093-0.266.
+
+        A threshold outside that gap misclassifies the pool the constant was
+        chosen on, whatever the fixtures here happen to say.
+        """
+        assert 0.266 < MEMBERSHIP_THRESHOLD <= 0.462
+
+    def test_a_looser_threshold_keeps_the_impostor(self, partly_overlapping_pool):
+        """Why 0.30 may not drift down: at 0.20 the impostor is a member."""
+        loose = partition_pool(partly_overlapping_pool, threshold=0.20)
+        assert loose.excluded_count == 0
+        # ...and it takes most of the baseline with it: the intersection is
+        # unforgiving, so the eight shared core cards (4 copies each, 32 slots)
+        # collapse to the four the impostor happens to share.
+        loosened = build_baseline(
+            partly_overlapping_pool,
+            archetype="A",
+            mtg_format="modern",
+            membership_threshold=0.20,
+        )
+        assert {card.name for card in loosened.cards if card.fixed_count} == set(SHARED_SHELL)
+        assert loosened.main.fixed == 16
+
+    def test_a_tighter_threshold_throws_the_whole_archetype_away(self, partly_overlapping_pool):
+        """Why 0.30 may not drift up: at 0.65 four honest lists are impostors."""
+        tight = partition_pool(partly_overlapping_pool, threshold=0.65)
+        assert tight.kept_count == 0
+        assert tight.excluded_count == 5
+
+    def test_the_shipped_threshold_keeps_the_members_and_their_core(self, partly_overlapping_pool):
+        """The conclusion the two bands exist for: the eight core cards survive."""
+        baseline = build_baseline(
+            partly_overlapping_pool, archetype="Affinity", mtg_format="modern"
+        )
+        assert baseline.pool_size == 4
+        main_fixed = {
+            card.name for card in baseline.cards if card.fixed_count and not card.is_sideboard
+        }
+        assert main_fixed == set(SHARED_CORE)
+        assert baseline.main.fixed == 32  # eight cards, four copies each
 
 
 class TestMembershipDegeneratePools:

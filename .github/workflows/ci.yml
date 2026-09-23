@@ -12,6 +12,11 @@ on:
   # regression guards that redesign built (contrast, spacing, widget audit,
   # layout minimums) never once ran on the changes they exist to guard.
   pull_request:
+  # Weekly, for the run that is too slow and too noisy to gate a PR on: the UI
+  # suite in a shuffled order (`tests-ui-shuffled`). Nothing else reads this
+  # trigger, so a scheduled run is that job and nothing more.
+  schedule:
+    - cron: "17 4 * * 1" # Mondays, 04:17 UTC
   workflow_dispatch:
 
 # A new push to a PR supersedes the run already going for it. Pushes to
@@ -60,9 +65,15 @@ jobs:
       # wx.Notebook / wx.StaticLine / wx.SplitterWindow / wx.TextCtrl, every
       # button reaching the button system, and the WebView backend the
       # deck-stats charts render on. The live-window half is in tests-ui.
+      # --cov with no --cov-report writes only the data file; the human-readable
+      # report is produced once, in the `coverage` job, from both halves of the
+      # suite. This run goes first and creates .coverage; the run below appends
+      # to it (see tests/test_ci_guards.py, which pins that pairing -- without
+      # --cov-append the second run would overwrite the first's measurements).
       - name: Design-system guards (issue #962)
         run: >-
           pytest -q
+          --cov --cov-report=
           tests/test_theme_contrast.py
           tests/test_widget_audit.py
           tests/test_stylize.py
@@ -84,8 +95,12 @@ jobs:
         # Default pytest config excludes `network`-marked tests via addopts.
         # Live network tests can be run on demand via the `network-tests`
         # job below (triggered with workflow_dispatch).
+        # pytest-cov drives coverage's parallel mode under xdist itself: each
+        # worker writes its own data file and the controller combines them at
+        # the end, so -n auto cannot corrupt the measurements.
         run: >-
           pytest -n auto
+          --cov --cov-append --cov-report=
           --ignore=tests/ui
           --ignore=tests/test_theme_contrast.py
           --ignore=tests/test_widget_audit.py
@@ -103,6 +118,14 @@ jobs:
           --ignore=tests/test_window_titles.py
           --ignore=tests/test_automation_commands.py
           --ignore=tests/test_console_encoding.py
+
+      - name: Upload coverage data (non-UI)
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-non-ui
+          path: .coverage
+          include-hidden-files: true
+          if-no-files-found: error
 
   tests-ui:
     name: Tests (UI, serial)
@@ -125,9 +148,12 @@ jobs:
       # The live-window half of the design-system guards (see tests-non-ui):
       # the enforced window minimums in both locales, live layout overflow in
       # both locales, card-view scroll snapping, and the live widget audit.
+      # Same pairing as tests-non-ui: this run creates .coverage, the run below
+      # appends to it, and only the `coverage` job renders a report.
       - name: Design-system guards (issue #962, live windows)
         run: >-
           pytest -q
+          --cov --cov-report=
           tests/ui/test_live_widget_audit.py
           tests/ui/test_live_layout_overflow.py
           tests/ui/test_layout_minimums.py
@@ -138,12 +164,142 @@ jobs:
       - name: Run UI tests
         run: >-
           pytest tests/ui
+          --cov --cov-append --cov-report=
           --ignore=tests/ui/test_live_widget_audit.py
           --ignore=tests/ui/test_live_layout_overflow.py
           --ignore=tests/ui/test_layout_minimums.py
           --ignore=tests/ui/test_card_view_scroll_snap.py
           --ignore=tests/ui/test_clamp_to_display.py
           --ignore=tests/ui/test_inspector_column.py
+
+      - name: Upload coverage data (UI)
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-ui
+          path: .coverage
+          include-hidden-files: true
+          if-no-files-found: error
+
+  # The same UI suite, in a shuffled order. tests/README.md has always asked
+  # authors to check order independence by hand; nothing enforced it, and the
+  # one-window-per-module refactor made the invariant much easier to break --
+  # `SharedAppFrame.reset` silently stopped covering the archetype list, the
+  # window size, the card views' mode and every timer that lives on a panel,
+  # and the suite stayed green because the files that leaked that state also
+  # re-established it.
+  #
+  # Weekly and on demand, not on every PR, for two reasons. The UI tests are
+  # deliberately serial and share one window per module, so a shuffle finds
+  # real coupling but it finds it *intermittently* -- a red that a rerun turns
+  # green is the fastest way to teach a team to ignore a check. And a shuffled
+  # failure is a bisect, not a diff: it should land on a morning, not in the
+  # middle of a review. The order-independence contract that *can* be checked
+  # deterministically is pinned by tests/ui/test_shared_frame_reset.py, which
+  # runs on every PR in the job above.
+  #
+  # pytest-randomly shuffles within each module and never interleaves two of
+  # them, which is exactly the scope that matters here: one AppFrame serves one
+  # module, so the coupling worth finding is between siblings in a file.
+  # Deliberately no --cov: this run is not part of the combined number, and
+  # uploading a second `coverage-ui` artifact would collide with the one above.
+  tests-ui-shuffled:
+    name: Tests (UI, shuffled order)
+    # Never on a pull request. This job reports, it does not gate.
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+      - name: Install test dependencies
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt $(grep -E '^pytest(-[a-z]+)?==' requirements-dev.txt | tr -d '\r')
+      # -p randomly overrides the `-p no:randomly` in pyproject.toml's addopts,
+      # which is what keeps every gating run reproducible. The seed is printed
+      # in the run's header: `pytest tests/ui -p randomly --randomly-seed=N`
+      # replays a failure exactly.
+      - name: Run UI tests in a shuffled order
+        run: pytest tests/ui -p randomly
+
+  # The suite runs as two jobs, so neither one's number means anything on its
+  # own -- the UI job never imports most services and the non-UI job never
+  # builds a window. This combines the two data files into the only figure
+  # worth reading, publishes it on the run summary, and keeps the HTML and XML
+  # as artifacts.
+  #
+  # There is deliberately NO --fail-under yet. Nobody has measured this suite,
+  # and a gate whose first run fails is worse than no gate: the floor has to be
+  # set from an observed number, below it, once a few runs agree on what it is.
+  # tests/test_ci_guards.py pins the parts that are wired; arming the floor is
+  # one flag on the `coverage report` step below.
+  coverage:
+    name: Coverage
+    # Windows, like the two jobs that produced the data: coverage stores the
+    # separator the measuring OS used, and `coverage html` has to open each
+    # source file it reports on. A Linux combine reads `widgets\stylize.py` as
+    # one filename and finds nothing to render.
+    runs-on: windows-latest
+    needs: [tests-non-ui, tests-ui]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+      - name: Install coverage
+        shell: bash
+        # The pinned pytest-cov brings the pinned coverage with it, so the
+        # reader here is the same version that wrote the data files.
+        run: |
+          python -m pip install --upgrade pip
+          pip install $(grep -E '^pytest-cov==' requirements-dev.txt | tr -d '\r')
+      - name: Download non-UI coverage data
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage-non-ui
+          path: coverage-non-ui
+      - name: Download UI coverage data
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage-ui
+          path: coverage-ui
+      - name: Combine and report
+        shell: bash
+        # `relative_files = true` (pyproject.toml) is what makes the two data
+        # files combinable at all: paths are stored relative to the repo root,
+        # so a measurement from the tests-ui checkout and one from the
+        # tests-non-ui checkout name the same file rather than two absolutes.
+        run: |
+          mv coverage-non-ui/.coverage .coverage.non-ui
+          mv coverage-ui/.coverage .coverage.ui
+          coverage combine
+          coverage report
+          coverage xml -o coverage.xml
+          coverage html -d coverage-html
+          {
+            echo '### Coverage'
+            echo
+            echo '```'
+            coverage report
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: |
+            coverage.xml
+            coverage-html
 
   network-tests:
     name: Live Network Tests
@@ -219,10 +375,15 @@ jobs:
 
       - name: Install dependencies
         # mypy is pinned in requirements-dev.txt; install from there so local
-        # and CI versions stay aligned.
+        # and CI versions stay aligned. This install is deliberately NOT
+        # tolerated failing: the mypy step below is advisory
+        # (continue-on-error), so a `|| true` here left the job green having
+        # installed no mypy and then not run it -- silent twice over. The type
+        # stubs are a different case and stay tolerant: they are unpinned, and
+        # `mypy --install-types` fetches whatever this line missed anyway.
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements-dev.txt || true
+          pip install -r requirements-dev.txt
           pip install types-Pillow types-requests types-beautifulsoup4 || true
 
       - name: Run mypy type checker
@@ -394,7 +555,13 @@ jobs:
   validation-summary:
     name: Validation Summary
     runs-on: ubuntu-latest
-    needs: [lint-and-format, type-check, security-scan, compile-check, dotnet-build]
+    # The two test jobs belong here even though a failing test already fails the
+    # workflow run. Branch protection requires status checks one at a time, by
+    # name, and "Validation Summary" is the one a repository is likely to pick --
+    # it reads as the whole verdict. While this job listed neither test job, it
+    # neither waited for them nor looked at them: it went green beside a red test
+    # job, and the required check said the merge was fine.
+    needs: [lint-and-format, type-check, security-scan, compile-check, dotnet-build, tests-non-ui, tests-ui]
     if: always()
     steps:
       - name: Check job results
@@ -406,10 +573,14 @@ jobs:
           echo "Security Scanning: ${{ needs.security-scan.result }}"
           echo "Compilation Check: ${{ needs.compile-check.result }}"
           echo ".NET Build: ${{ needs.dotnet-build.result }}"
+          echo "Tests (non-UI): ${{ needs.tests-non-ui.result }}"
+          echo "Tests (UI): ${{ needs.tests-ui.result }}"
 
           if [ "${{ needs.lint-and-format.result }}" != "success" ] || \
              [ "${{ needs.compile-check.result }}" != "success" ] || \
-             [ "${{ needs.dotnet-build.result }}" != "success" ]; then
+             [ "${{ needs.dotnet-build.result }}" != "success" ] || \
+             [ "${{ needs.tests-non-ui.result }}" != "success" ] || \
+             [ "${{ needs.tests-ui.result }}" != "success" ]; then
             echo "❌ Critical validation checks failed"
             exit 1
           fi
