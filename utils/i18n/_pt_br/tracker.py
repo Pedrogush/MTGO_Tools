@@ -6,7 +6,7 @@ MESSAGES: dict[str, str] = {
     "tracker.btn.refresh": "Atualizar",
     "tracker.btn.load_archetype": "Carregar Arquétipo",
     "tracker.btn.unload_archetype": "Descarregar Arquétipo",
-    "tracker.btn.close": "Sair",
+    "tracker.btn.close": "Fechar",
     "tracker.dlg.load_archetype.title": "Carregar Arquétipo",
     "tracker.dlg.load_archetype.format": "Formato",
     "tracker.dlg.load_archetype.archetype": "Arquétipo",

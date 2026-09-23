@@ -3,11 +3,13 @@
 MESSAGES: dict[str, str] = {
     "timer.section.thresholds": "Limites de Alerta",
     "timer.section.challenge": "Cronômetro de Desafio Ativo",
+    "timer.hint.threshold_format": "Informe o tempo no formato MM:SS (ex.: 05:00 para 5 minutos)",
     "timer.label.sound": "Som do Alerta",
     "timer.label.check_interval": "Intervalo de verificação (ms)",
     "timer.label.repeat_interval": "Intervalo de repetição (segundos)",
     "timer.check.start_alert": "Alertar quando o cronômetro iniciar contagem regressiva",
     "timer.check.repeat_alarm": "Repetir alarme no intervalo",
+    "timer.btn.add_threshold": "+ Adicionar Outro Limite",
     "timer.btn.start": "Iniciar Monitoramento",
     "timer.btn.stop": "Parar",
     "timer.btn.test": "Testar Alerta",

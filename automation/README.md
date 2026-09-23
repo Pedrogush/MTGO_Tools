@@ -428,8 +428,12 @@ pre-toggle nor post-toggle rest state (a "third state"):
 python -m automation.capture_panel_transition --out-dir transition_capture --method screen
 ```
 
-See `docs/sb_panel_third_state/HANDOFF.md` for a worked investigation
-that used this tooling.
+The worked investigation this was built for is the side-panel toggle's "third
+state" void (#782). Its handoff lived under `docs/sb_panel_third_state/` and was
+deleted by the fix that closed it, so the written account is now commit
+`1bec6124` — its message carries the measurements — together with the `#782`
+comments in `utils/image_effects.py` and
+`widgets/panels/card_table_panel/pile_view.py`.
 
 ## WSL Interop Note
 

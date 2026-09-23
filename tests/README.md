@@ -4,7 +4,8 @@ How we write tests for the MTGO Tools wxPython app. The goal of these rules is a
 suite that is **fast, deterministic, and actually exercises production behavior** —
 not one that re-asserts the shape of its own mocks.
 
-If you're adding or reviewing tests, read §1–§3. The rest is reference.
+If you're adding or reviewing tests, read §1–§3, and §7 before you point a test at
+anything on disk. The rest is reference.
 
 ---
 
@@ -203,6 +204,101 @@ fix the seam (§4) instead.
   observable result. Interaction assertions couple the test to the implementation
   (Fowler, "Mocks Aren't Stubs").
 - **No redundancy** — if another test already covers a path, don't restate it.
+
+## 7. Data isolation: the suite runs on top of the user's real data
+
+Read this before a test touches the filesystem. It is the one hazard in this
+repo that has bitten us repeatedly, and the reason a test run can fail for
+something that happened outside the test.
+
+### Why the hazard exists
+
+Run from source, the app does not keep its data in a per-user application
+directory. `utils/constants/paths` resolves the base data dir by walking up from
+the working directory to the nearest `.git` marker and taking that checkout's
+root, so `config/`, `cache/`, `logs/` and `data/` sit **inside the checkout you
+are working in**, and `decks/` is `~/Documents/mtgo_decks`, which is shared by
+everything on the machine. A test that reaches a real path therefore does not
+write to a sandbox — it writes the developer's own settings, caches and saved
+decks, and the damage is already done by the time anything notices.
+
+Worse, a **worktree does not get its own copy**. For a linked worktree the same
+resolution follows the `.git` pointer file back to the *primary* checkout, so a
+suite running in `../wt-something` reads and writes the primary checkout's
+`config/` and `cache/`. Every worktree on the machine, plus the app itself,
+plus every other worktree's suite, are all writing the same directories.
+
+This is not hypothetical. The guard described below was written after
+`test_notebook_tabs_fit` overwrote the real `config/deck_selector_settings.json`
+and `test_notes_persist_across_frames` cleared the real `deck_notes.json`; it
+also caught the radar, card-pool and image caches being created by repositories
+constructed with their real default paths.
+
+### How the suite stays out of them
+
+`tests/data_isolation.py` redirects the real paths into a tmp dir. Patching the
+constants on `utils.constants` is **not** enough on its own, because three kinds
+of reference keep a copy of the real path:
+
+- a name imported at module load — `from utils.constants import NOTES_STORE`, or
+  an alias assigned at import time;
+- a default argument, which Python evaluates once, when the function is defined
+  (the same trap as the constructor-default bullet in §3);
+- work a test left running on a thread, which lands *after* the test's patches
+  are undone.
+
+`redirect_bound_paths` rewrites the first two in every loaded project module. The
+root conftest applies it once for the whole session and deliberately never undoes
+it, so late work from a thread a test left running still lands in the session tmp
+dir; `tests/ui/conftest.py` layers a per-test redirect on top. Import the module
+as `data_isolation`, never `tests.data_isolation` — a second copy would record
+the already-patched paths as the "real" ones and the guard would check nothing.
+
+None of this excuses you from §3. The redirect is a net, not a design: point your
+collaborator at `tmp_path` through a seam and the net never has to catch anything.
+
+### The two guards
+
+A process-wide `sys.addaudithook` records every real-data path **this process**
+opens for writing. Two fixtures use it:
+
+- **Per test (function-scoped).** After each test, the paths the hook recorded
+  during it are diffed. If the test wrote real data, that test fails, naming its
+  own node id — so `-x` stops on the write rather than long after it, and you get
+  the culprit instead of a bisect.
+- **Per run (session-scoped).** Every file under the real data dirs is snapshotted
+  (size and mtime) before the first test and again after the last. **Any change
+  fails the run.**
+
+Attribution decides the *message*, not the verdict. A changed path the audit hook
+saw this process write is reported as the suite's own doing. Anything else names
+the two remaining possibilities: a subprocess the suite spawned — the hook is
+per-process and cannot see a child, and this suite spawns real ones — or another
+program writing the shared directories. Both still fail, because by the time the
+snapshot is compared the data is already gone either way.
+
+### The opt-out, and what reaching for it means
+
+`MTGO_TOOLS_ALLOW_CONCURRENT_APP=1` is for the run where you *know* there is a
+second writer: you have `main.py --automation` open in another window, or another
+worktree's suite going. It downgrades **only** the unattributed case to a warning.
+
+It does not launder anything else:
+
+- a write this process made is still a hard failure, opt-out or not;
+- `CI` overrides the opt-out — an environment with both set still fails, because
+  CI has no second writer to excuse.
+
+So if you set it and the run still fails, the write came from the suite, and you
+have a real bug: find the path that escaped the redirect and give it a seam. Set
+it per run, from the shell, for the reason above — never export it permanently and
+never add it to a config file. The case it downgrades is precisely the one the
+guard cannot tell apart from a subprocess the suite spawned, and a subprocess
+wiping `config/` is a leak, not a neighbour.
+
+If you would rather the question could not arise, `MTGO_TOOLS_BASE_DATA_DIR`
+moves `config/`, `cache/`, `logs/` and `data/` somewhere else for a process that
+sets it. It does not move the deck folder, which lives under `~/Documents`.
 
 ---
 

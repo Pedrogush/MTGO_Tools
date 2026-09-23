@@ -38,11 +38,26 @@ mypy --ignore-missing-imports .  # Advisory only
 
 ## CI Workflow
 
-- Runs automatically on push to any branch (except `main`)
-- Takes ~3-5 minutes
-- Must pass: linting, formatting, compilation, .NET build
-- Advisory: type checking, dependency security
+Runs on every pull request, on every push to `main` and `develop`, and on
+manual dispatch (`.github/workflows/ci.yml`).
 
-## See Full Docs
+- **Must pass**: the two test jobs below, linting (ruff), formatting (black),
+  compilation, .NET build, security linting (bandit)
+- **Advisory**: type checking (mypy), dependency audit (pip-audit) — reported,
+  not blocking
 
-📖 [docs/PRE_COMMIT_VALIDATION.md](../docs/PRE_COMMIT_VALIDATION.md)
+The suite runs as two jobs so every test runs exactly once:
+
+- **Tests (non-UI, parallel)** — everything outside `tests/ui/`, spread across
+  the runner's cores with `pytest-xdist` (`pytest -n auto`)
+- **Tests (UI, serial)** — the wx tests, which build real top-level windows and
+  have to run one at a time in one process (`pytest tests/ui`)
+
+A third job, **Live Network Tests**, hits real external services and only runs
+on manual dispatch, so flaky third parties never block a PR.
+
+## See Also
+
+- [`README.md`](../README.md#development) — running the suite locally, the
+  fast split runner, and what each tool is for
+- [`.github/workflows/ci.yml`](workflows/ci.yml) — the jobs themselves

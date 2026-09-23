@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Archetype Baseline</title>
+<style>
+body { font-family: Arial, sans-serif; margin: 20px; color: #222; }
+h1 { color: #1a3a5c; border-bottom: 2px solid #1a3a5c; padding-bottom: 6px; }
+h2 { color: #2a5a8c; }
+table { border-collapse: collapse; width: 100%; }
+th { background: #1a3a5c; color: #fff; padding: 6px 10px; text-align: left; }
+td { padding: 5px 10px; border-bottom: 1px solid #ddd; vertical-align: top; }
+a { color: #1a5fa0; }
+code { background: #f2f4f7; padding: 1px 4px; }
+</style>
+</head>
+<body>
+<h1>Archetype Baseline</h1>
+<p>The <strong>Baseline</strong> tab in the <a href="deck_workspace.html">Deck Workspace</a> answers
+a question a single decklist cannot: <em>which of these cards is the archetype, and which ones are
+my choices?</em></p>
+<p>It takes every cached decklist of the archetype and keeps only the cards that appear in
+<strong>all</strong> of them, at the count that even the leanest list can afford. Everything else
+&mdash; the cards some lists run and others do not, and the copies above that shared floor &mdash;
+is reported as the slots that are actually yours.</p>
+<p>The tab says the same thing at the top of the page: <em>&ldquo;Every card that appears in every
+cached list of this archetype, at the count the smallest list can afford. Anything one list drops is
+left out, so the baseline is normally under 60/15 &mdash; the rest is yours.&rdquo;</em></p>
+
+<h2>Which archetype it measures</h2>
+<p>The tab has no format or archetype pickers of its own, on purpose &mdash; a second pair could
+disagree with the ones you are already using. It measures <strong>the archetype of the deck on
+screen</strong>. With no deck loaded it falls back to whatever you have selected in
+<a href="metagame_research.html">Metagame Research</a>. When neither gives it an archetype the
+header reads <strong>No archetype for the deck on screen</strong>.</p>
+<p>There is no compute button and no cut-off to tune. The baseline recomputes itself in the
+background as soon as the selection changes.</p>
+
+<h2>The four groups</h2>
+<p>The results are a tree. The first two groups are the baseline itself; the rest is what is left
+over.</p>
+<table>
+  <tr><th>Group</th><th>What is in it</th></tr>
+  <tr><td><strong>Baseline &mdash; same count in every list</strong></td>
+      <td>The staples: cards every list in the pool runs, at the <em>same</em> count. If every
+          Affinity list plays four of a card, it is here at four. Nothing about this card is a
+          choice.</td></tr>
+  <tr><td><strong>Baseline &mdash; in every list, fixed at the lowest count</strong></td>
+      <td>The partial staples: cards every list runs, but not all at the same count. The baseline
+          fixes them at the lowest count anyone plays, and each row shows the range as well
+          &mdash; a card played as three or four reads <code>3&ndash;4</code>, with the baseline
+          fixing three. The fourth copy is a choice, so it appears among the flex candidates
+          too.</td></tr>
+  <tr><td><strong>Not this archetype</strong></td>
+      <td>The decks thrown out of the pool before anything was measured, each with how much it had
+          in common with the rest. See <a href="#pool">The pool</a> below. This group only appears
+          when something was actually dropped.</td></tr>
+  <tr><td><strong>Flex candidates &mdash; not in every list, ranked by play rate</strong></td>
+      <td>Everything competing for the slots the baseline leaves open: cards at least one list
+          leaves out, and the copies of a partial staple that sit above its floor (marked
+          <em>above its floor</em>). Each row gives the share of lists that play the card and its
+          average count among those lists, so the near-misses are at the top.</td></tr>
+</table>
+<p>Every row is labelled <strong>main</strong> or <strong>sideboard</strong>. The two zones are
+counted separately throughout &mdash; four copies in the sideboard is a different fact from four in
+the maindeck.</p>
+<p>The line under the tree sums it up: how many decks were measured, how many slots the baseline
+fixes, and how many are flex. When decks were dropped it also says how many of how many were
+kept.</p>
+
+<h2>Why the baseline is smaller than 60/15</h2>
+<p>A card is in the baseline only if <strong>every single list</strong> in the pool plays it. One
+list leaving it out is enough to keep it out entirely, because at that point the card&rsquo;s range
+starts at zero and there is no honest count to fix it at. There is <strong>no tolerance and no
+threshold</strong> &mdash; no &ldquo;in 90% of lists&rdquo; setting, anywhere.</p>
+<p>That is the point rather than a limitation. Any cut-off would be somebody&rsquo;s arbitrary
+opinion about how much disagreement still counts as consensus, and the whole value of the answer is
+that it contains no such opinion: every card in the baseline is one that every list committed to, at
+a count every list can afford. A baseline that comes to 52 maindeck cards is telling you that eight
+slots are genuinely contested &mdash; it is not a list that failed to reach sixty.</p>
+
+<h2 id="pool">The pool, and the decks dropped from it</h2>
+<p>Because the baseline is a strict intersection, one deck that is not really the archetype does not
+make the answer slightly worse &mdash; it destroys it. A single unrelated list can cut a healthy
+twelve-card baseline to nothing, since there is often no card at all that both decks play.</p>
+<p>The archetype labels that decklists arrive with are not reliable enough to trust on their own, so
+the pool is filtered first, by one rule: <strong>a deck with nothing in common with the others is
+not part of the group, whatever it is labelled</strong>.</p>
+<ul>
+  <li>Each deck is reduced to the <strong>set of card names in its maindeck</strong>. Sideboards are
+      left out, because they swing hardest with the local metagame and two pilots of one archetype
+      can agree on sixty cards and disagree on fifteen.</li>
+  <li>Two decks are compared by how much they overlap: cards in both, over cards in either.</li>
+  <li>A deck&rsquo;s score is the average of that against every other deck in the pool. Below
+      <strong>30%</strong> it is dropped, and listed under <strong>Not this archetype</strong> with
+      its score.</li>
+</ul>
+<p>Counts are ignored in this comparison &mdash; four copies and one copy both just mean &ldquo;runs
+that card&rdquo;. Ratios are what the baseline itself measures; they are not what tells two
+archetypes apart. Nothing here reads what a card does, so there is no card list to maintain and
+nothing to go stale.</p>
+<p>Filtering needs at least two decks to compare, and it finds the odd ones out &mdash; not the
+mislabelled ones. If half a pool were some other deck, that other deck would stop looking unusual.
+This is a guard against a contaminated pool, not a substitute for the labels being right.</p>
+
+<h2>When no baseline is shown</h2>
+<table>
+  <tr><th>Message</th><th>Why</th></tr>
+  <tr><td>This tab measures the archetype of the deck on screen&hellip;</td>
+      <td>Nothing is selected yet. Open a deck from <a href="deck_results.html">Deck Results</a>, or
+          save one with an archetype.</td></tr>
+  <tr><td>Nothing to measure: the deck on screen has no archetype.</td>
+      <td>The loaded deck is not associated with an archetype.</td></tr>
+  <tr><td>Too few comparable decklists for this archetype to mean anything. Browsing it in Research
+          collects more.</td>
+      <td>Fewer than <strong>eight</strong> decklists are cached for the archetype. Below that a
+          strict intersection fails in the flattering direction: a pool of one deck is its own
+          intersection and would report all sixty cards as settled archetype consensus. Each extra
+          list can only remove cards, so the number is really &ldquo;how many independent lists must
+          agree before agreement means anything&rdquo;. Browsing the archetype in
+          <a href="metagame_research.html">Metagame Research</a> caches more lists.</td></tr>
+</table>
+
+<h2>The baseline and a deck&rsquo;s history</h2>
+<p>When you save a brand-new deck whose archetype already has a baseline, that baseline becomes the
+<strong>first version</strong> in the deck&rsquo;s <a href="deck_history.html">version history</a>.
+Every later version then descends from it, so &ldquo;how does my build differ from the
+archetype?&rdquo; is just a diff against that first version &mdash; pin it with <strong>Set as diff
+baseline</strong> in the History tab.</p>
+<p>It is written once, when the deck first gets a history, and never rewritten afterwards. A
+baseline drifts as the metagame moves; the one your deck was rooted at stays the snapshot it was, so
+what you are comparing against does not change under you.</p>
+
+<h2>See also</h2>
+<ul>
+  <li><a href="deck_workspace.html">Deck Workspace</a></li>
+  <li><a href="deck_history.html">Deck History</a></li>
+  <li><a href="metagame_research.html">Metagame Research Panel</a></li>
+</ul>
+</body>
+</html>

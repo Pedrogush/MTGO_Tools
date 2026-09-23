@@ -15,28 +15,54 @@ a { color: #1a5fa0; }
 </head>
 <body>
 <h1>Timer Alert</h1>
-<p>The <strong>Timer Alert</strong> window provides a configurable countdown timer. Use it to
-alert yourself before time runs out in a MTGO round or challenge.</p>
+<p>The <strong>Timer Alert</strong> window watches the countdown MTGO itself runs on a challenge or
+league match and sounds an alert as that clock passes times you choose. It does not run a countdown
+of its own: it reads MTGO&rsquo;s timer through the MTGO bridge, so it needs the bridge to be
+available and MTGO to have an active timer before it can report anything.</p>
 
 <h2>Opening the timer</h2>
-<p>Click <strong>Timer Alert</strong> in the toolbar. The window floats above other windows so it
-remains visible while you play.</p>
+<p>Choose <strong>Tools &#9656; Timer Alert</strong> on the menu bar. The window floats above other
+windows so it remains visible while you play.</p>
 
 <h2>Controls</h2>
 <table>
   <tr><th>Control</th><th>Description</th></tr>
-  <tr><td><strong>Duration field</strong></td>
-      <td>Set the countdown duration in minutes. Common values: 50 minutes for a MTGO match,
-          25 minutes for a half-round warning.</td></tr>
-  <tr><td><strong>Start / Stop</strong></td>
-      <td>Starts or stops the countdown. The display updates every second.</td></tr>
-  <tr><td><strong>Reset</strong></td>
-      <td>Resets the countdown to the configured duration without starting it.</td></tr>
+  <tr><td><strong>Alert Thresholds</strong></td>
+      <td>The list of times &mdash; entered as MM:SS of time <em>remaining</em> &mdash; at which an
+          alert fires. One entry starts at <code>05:00</code>;
+          <strong>+ Add Another Threshold</strong> adds another and <strong>&#10005;</strong>
+          removes one. The list is locked while monitoring is running.</td></tr>
+  <tr><td><strong>Alert Sound</strong></td>
+      <td>Which Windows system sound plays: <strong>Beep</strong>, <strong>Alert</strong>,
+          <strong>Warning</strong>, <strong>Question</strong> or <strong>Default</strong>.</td></tr>
+  <tr><td><strong>Check interval (ms)</strong></td>
+      <td>How often the window re-reads MTGO&rsquo;s timer. 1000&nbsp;ms by default; 250 to
+          5000.</td></tr>
+  <tr><td><strong>Repeat interval (seconds)</strong></td>
+      <td>How often <strong>Repeat alarm at interval</strong> sounds again. 30 seconds by
+          default.</td></tr>
+  <tr><td><strong>Alert when timer starts counting down</strong></td>
+      <td>Sounds one alert as soon as a timer is first detected, before any threshold is reached.
+          Ticked by default.</td></tr>
+  <tr><td><strong>Repeat alarm at interval</strong></td>
+      <td>Keeps sounding the alert every repeat interval once the countdown has started. Off by
+          default.</td></tr>
+  <tr><td><strong>Start Monitoring / Stop</strong></td>
+      <td>Starts and stops watching. <strong>Stop</strong> also unlocks the thresholds for
+          editing.</td></tr>
+  <tr><td><strong>Test Alert</strong></td>
+      <td>Plays the selected sound once, so you can check it is audible before you rely on it.</td></tr>
 </table>
 
 <h2>Alert behaviour</h2>
-<p>When the countdown reaches zero, the timer window flashes and plays a system alert sound to
-attract your attention.</p>
+<p>While monitoring, the window re-reads MTGO&rsquo;s timer at the check interval and plays the
+chosen sound once for each threshold the remaining time has fallen to or below. Each threshold
+fires once; they are all armed again when MTGO&rsquo;s timer goes away. The alert is a sound and
+nothing else &mdash; the window neither flashes nor comes to the front, which is why it is set to
+stay above other windows.</p>
+<p>The status line reports what the window is doing &mdash; waiting for MTGO data, no active
+challenge timer, the current remaining time, or a bridge error &mdash; and
+<strong>Active Challenge Timer</strong> below it shows what the bridge last read.</p>
 
 <h2>See also</h2>
 <ul>

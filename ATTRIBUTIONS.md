@@ -14,8 +14,8 @@ This project incorporates ideas, techniques, and code patterns from various open
 
 **License:** None published (no `LICENSE` file in the upstream repo as of
 2026-05). Under default copyright this means "all rights reserved" and we
-treat the upstream source as **non-reusable**. See
-`docs/license_audit.md` for the full audit.
+treat the upstream source as **non-reusable**. The per-source verdicts are
+collected under [License Compatibility](#license-compatibility) below.
 
 **What we use:**
 - Conceptual understanding of the MTGO `GameLog.txt` binary format
@@ -104,6 +104,7 @@ The Tracker application provided excellent examples of how to structure an MTGOS
 - **pytesseract** - OCR for opponent name detection
 - **Pillow (PIL)** - Image processing for OCR
 - **pyautogui** - Screen capture (read-only)
+- **dulwich** - Pure-Python Git implementation backing deck version history
 - **tkinter / wxPython** - GUI frameworks
 
 ### .NET Libraries
@@ -188,13 +189,19 @@ repo root). We have audited adapted code and dependencies:
   `NOTICE` files must accompany any redistribution of SDK binaries.
 - **videre-project/Tracker**: Apache-2.0 License — compatible (architecture
   inspiration only, no source reuse).
-- **Python libraries**: All declared deps in `requirements.txt` /
-  `requirements-dev.txt` are under OSI-approved permissive licenses
-  (MIT, BSD, Apache-2.0, PSF). See `docs/license_audit.md` for the
-  per-dependency table.
+- **dulwich**: dual-licensed **Apache-2.0 OR GPL-2.0-or-later** (its
+  distribution metadata declares that SPDX expression and its `COPYING`
+  file carries both texts). We take the **Apache-2.0** option, which is
+  compatible one-way with MIT and asks for the attribution recorded
+  above. It is a runtime dependency (`requirements.txt`) and is frozen
+  into the Windows build unmodified (`packaging/mtgo_tools.spec` collects
+  its submodules), so the installer redistributes it under those terms.
+- **Other Python libraries**: the remaining declared deps in
+  `requirements.txt` / `requirements-dev.txt` are under OSI-approved
+  permissive licenses (MIT, BSD, Apache-2.0, PSF).
 - **cderickson/MTGO-Tracker**: No published license. Treated as
   non-reusable; only factual observations about the MTGO log format
-  were used (see entry above and `docs/license_audit.md`).
+  were used (see the entry under Code Adaptations above).
 - **MTGGoldfish data**: Scraped per `robots.txt`; not redistributed.
 
 ---
@@ -224,7 +231,7 @@ This is a fan-made tool for personal use and metagame research. We respect all i
 
 ---
 
-**Last Updated:** 2026-05-28
+**Last Updated:** 2026-09-22
 
 **Maintained By:** Pedro (https://github.com/Pedrogush)
 
