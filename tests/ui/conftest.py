@@ -19,10 +19,7 @@ import services.image_service.schemas as card_images_schemas
 import utils.constants as constants
 import widgets.frames.app_frame as app_frame
 import widgets.frames.identify_opponent as identify_opponent
-from controllers.app_controller import (
-    get_deck_selector_controller,
-    reset_deck_selector_controller,
-)
+from controllers.app_controller import AppController
 from repositories.card_repository import CardDataManager
 from repositories.deck_repository.database import DatabaseMixin
 from utils.constants import METAGAME_CACHE_TTL_SECONDS
@@ -347,18 +344,28 @@ def deck_selector_factory(wx_app) -> AppFrame:
 
 
 def build_app_frame(wx_app: wx.App) -> AppFrame:
-    """A fresh AppFrame on a fresh controller, with loading made synchronous."""
-    # Drain wx events and force GC of the prior controller before resetting.
-    # The previous test's frame.Destroy() schedules async cleanup; without
-    # pumping, those Destroy events plus queued wx.CallAfter callbacks
+    """A fresh AppFrame on a controller of its own, with loading made synchronous.
+
+    ``AppController()`` directly, never ``get_deck_selector_controller()``. The
+    global singleton belongs to the running application, and a fixture that
+    swapped it made the two window fixtures disagree about which controller was
+    current: ``build_app_frame`` used to reset the global and take the fresh
+    instance, so from the first ``deck_selector_factory`` test in a module the
+    module's shared window was driving a controller the singleton no longer
+    named -- a different set of repositories and services than anything that
+    asked for "the" controller would get. Nothing in the suite reads the
+    global; ``tests/test_ui_fixture_guards.py`` keeps it that way.
+    """
+    # Drain wx events and force GC of the prior controller before building the
+    # next one. The previous test's frame.Destroy() schedules async cleanup;
+    # without pumping, those Destroy events plus queued wx.CallAfter callbacks
     # accumulate. By the last UI test, wx fails to back new windows with
     # HWNDs and Layout()/SetScrollRate() asserts inside the C++ layer.
     pump_ui_events(wx_app)
     gc.collect()
     pump_ui_events(wx_app)
 
-    reset_deck_selector_controller()
-    controller = get_deck_selector_controller()
+    controller = AppController()
     controller.attach_frame(AppFrame(controller=controller))
     frame = controller.frame
     # Expose controller-backed repos/services for legacy tests
@@ -560,7 +567,6 @@ def shared_app_frame(
             _stop_timers(frame)
             frame.Destroy()
             pump_ui_events(wx_app)
-            reset_deck_selector_controller()
 
 
 @pytest.fixture
