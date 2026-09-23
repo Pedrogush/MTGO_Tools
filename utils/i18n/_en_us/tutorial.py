@@ -9,7 +9,7 @@ MESSAGES: dict[str, str] = {
     "tutorial.step0.title": "Welcome to MTGO Tools",
     "tutorial.step0.body": "MTGO Tools helps you research the competitive metagame, build and edit decks, track opponents, and manage your MTGO collection — all in one desktop app.\n\nThis short tour covers the main features. You can revisit it any time from Help → Show Tutorial.",
     "tutorial.step1.title": "Metagame Research",
-    "tutorial.step1.body": "The left panel is your metagame research hub.\n\n•  Choose a format (Modern, Legacy, …) from the dropdown.\n•  Type in the search box to filter archetypes by name.\n•  Click an archetype to load its decklists in the Deck Results panel.\n•  Use “Reload Archetypes” to refresh data from MTGGoldfish.",
+    "tutorial.step1.body": "The left panel is your metagame research hub.\n\n•  Choose a format (Modern, Legacy, …) from the dropdown.\n•  Type in the search box to filter archetypes by name.\n•  Click an archetype to load its decklists in the Deck Results panel.\n•  Archetype data is cached for an hour; when it is older than that it is re-fetched from MTGGoldfish in the background — at startup, and whenever you change format.",
     "tutorial.step2.title": "Deck Workspace",
     "tutorial.step2.body": "The centre area shows the currently loaded deck.\n\n•  Mainboard — your 60-card main deck.\n•  Sideboard — your 15-card sideboard.\n•  Hover over or click a card row to inspect it in the Card Inspector on the right.\n•  Use the + / − controls to edit counts when building your own deck.",
     "tutorial.step3.title": "Companion Tools",

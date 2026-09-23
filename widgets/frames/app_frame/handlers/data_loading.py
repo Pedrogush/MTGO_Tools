@@ -59,7 +59,7 @@ class DataLoadingHandlers(_Base):
                 return
             self.builder_panel.update_results(results)
 
-        self.controller._worker.submit(_run_search, on_success=_on_results)
+        self.controller.worker.submit(_run_search, on_success=_on_results)
 
     def _on_builder_clear(self: AppFrame) -> None:
         self.builder_panel.clear_filters()

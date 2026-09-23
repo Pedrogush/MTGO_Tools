@@ -23,10 +23,7 @@ from dataclasses import dataclass, field
 
 from services.deck_service.parser import DeckParser
 from utils.card_names import fold_card_name
-
-# Shared by every deck-text producer in the app (``build_deck_text_from_zones``)
-# and understood by every consumer, including our own parser.
-_SIDEBOARD_HEADER = "Sideboard"
+from utils.deck_text import render_deck_text
 
 _parser = DeckParser()
 
@@ -106,18 +103,16 @@ def _draw_zone(
 
 
 def _render(mainboard: list[tuple[str, int]], sideboard: list[tuple[str, int]]) -> str:
-    """Render the two zones as deck text in the app's own format."""
-    if not mainboard and not sideboard:
-        return ""
-    lines = [f"{count} {name}" for name, count in mainboard]
-    if sideboard:
-        # The blank line is what ``build_deck_text_from_zones`` emits; the header
-        # is there so a diff with no mainboard lines still says which zone it is.
-        if lines:
-            lines.append("")
-        lines.append(_SIDEBOARD_HEADER)
-        lines.extend(f"{count} {name}" for name, count in sideboard)
-    return "\n".join(lines)
+    """Render the two zones as deck text in the app's own format.
+
+    Through the shared renderer, so a shopping list is written exactly the way
+    the zone editor and the deck-VCS normalizer write a decklist -- the whole
+    point of the output being a decklist is that nothing about it is special.
+    """
+    return render_deck_text(
+        [(count, name) for name, count in mainboard],
+        [(count, name) for name, count in sideboard],
+    )
 
 
 def build_collection_diff(deck_text: str, owned_count: Callable[[str], int]) -> CollectionDiff:

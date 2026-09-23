@@ -9,6 +9,7 @@ than at a fixture nobody can check.
 
 from __future__ import annotations
 
+import json
 import random
 import tempfile
 from pathlib import Path
@@ -579,6 +580,78 @@ class TestBaselineStore:
         store.save(build_baseline(pool, archetype="A", mtg_format="modern"))
         store.save(build_baseline(pool, archetype="A", mtg_format="modern"))
         assert store.get("A", "modern").pool_size == len(pool)
+        assert store.keys() == ["modern::a"]
+
+
+class TestBaselineStoreSchemaVersion:
+    """What happens when the file on disk is not the shape this build writes.
+
+    The stakes are higher than a cache's: a deck's root commit is seeded from
+    this store, so quietly deciding there is no stored baseline changes the root
+    sha of every deck created afterwards.
+
+    The field names and the version number are spelled out here rather than
+    imported from the store. This is a test of the *on-disk* format, and one
+    that reads the format out of the code under test cannot notice the code
+    changing it.
+    """
+
+    #: Mirrors ``store.SCHEMA_VERSION``; deliberately duplicated, see above.
+    VERSION = 1
+
+    @pytest.fixture
+    def warnings(self):
+        """Capture loguru WARNING messages (loguru does not feed pytest's caplog)."""
+        from loguru import logger
+
+        messages: list[str] = []
+        sink_id = logger.add(lambda msg: messages.append(str(msg)), level="WARNING")
+        try:
+            yield messages
+        finally:
+            logger.remove(sink_id)
+
+    def test_the_stored_file_says_which_schema_it_is(self, tmp_path, pool):
+        path = tmp_path / "baselines.json"
+        BaselineStore(path).save(build_baseline(pool, archetype="A", mtg_format="modern"))
+
+        document = json.loads(path.read_text(encoding="utf-8"))
+        assert document["version"] == self.VERSION
+        assert list(document["baselines"]) == ["modern::a"]
+
+    def test_a_schema_this_build_cannot_read_is_ignored_out_loud(self, tmp_path, pool, warnings):
+        """Not silently: the log has to name the file and both versions."""
+        path = tmp_path / "baselines.json"
+        store = BaselineStore(path)
+        store.save(build_baseline(pool, archetype="A", mtg_format="modern"))
+
+        document = json.loads(path.read_text(encoding="utf-8"))
+        document["version"] = self.VERSION + 99
+        path.write_text(json.dumps(document), encoding="utf-8")
+
+        assert store.get("A", "modern") is None
+        assert store.keys() == []
+        assert warnings, "a discarded store must be logged, not dropped in silence"
+        assert str(self.VERSION + 99) in warnings[-1]
+        assert "baselines.json" in warnings[-1]
+
+    def test_saving_over_an_unreadable_file_makes_it_readable_again(self, tmp_path, pool):
+        """The recovery path: a user who moved back to an older build is not stuck."""
+        path = tmp_path / "baselines.json"
+        store = BaselineStore(path)
+        path.write_text(json.dumps({"version": self.VERSION + 99}), encoding="utf-8")
+
+        store.save(build_baseline(pool, archetype="A", mtg_format="modern"))
+        assert store.get("A", "modern") is not None
+
+    def test_a_file_written_before_versioning_is_still_read(self, tmp_path, pool):
+        """The pre-version layout was the bare mapping, and its shape is unchanged."""
+        path = tmp_path / "baselines.json"
+        entry = baseline_to_dict(build_baseline(pool, archetype="A", mtg_format="modern"))
+        path.write_text(json.dumps({"modern::a": entry}), encoding="utf-8")
+
+        store = BaselineStore(path)
+        assert store.get("A", "modern") is not None
         assert store.keys() == ["modern::a"]
 
 

@@ -1,9 +1,16 @@
 """SQLite CRUD operations for saved decks.
 
-Saved decks live in a single local SQLite database under ``cache/`` alongside
-the other SQLite-backed caches (deck text, format card pool, radar, images).
-This replaces the previous MongoDB backend so optional deck persistence never
-blocks on an external server's connection timeout.
+Saved decks live in a single local SQLite database, in its own directory beside
+``config/`` (``DECK_RECORDS_DIR``). It replaces the previous MongoDB backend so
+optional deck persistence never blocks on an external server's connection
+timeout.
+
+It used to sit under ``cache/`` with the other SQLite-backed caches (deck text,
+format card pool, radar, images), which is where a database of *regenerable*
+data belongs. These rows are not regenerable, and each one carries the
+``deck_uuid`` that reaches the deck's version history, so a cache sweep took
+both. :mod:`repositories.deck_repository.migration` moves a database left at the
+old path.
 """
 
 from __future__ import annotations
@@ -17,7 +24,9 @@ from typing import TYPE_CHECKING
 
 from loguru import logger
 
+from repositories.deck_repository.migration import migrate_saved_decks_database
 from utils.constants import (
+    LEGACY_SAVED_DECKS_DB_FILE,
     SAVED_DECKS_DB_FILE,
     SQLITE_BUSY_TIMEOUT_MS,
     SQLITE_CONNECTION_TIMEOUT_SECONDS,
@@ -36,6 +45,10 @@ class DatabaseMixin(_Base):
 
     def _get_db_path(self) -> Path:
         if self._db_path is None:
+            # Only on the way to the default path. A caller that named a
+            # database owns it, and must not have a file from cache/ moved
+            # on top of it; a test with its own tmp path is the usual one.
+            migrate_saved_decks_database(SAVED_DECKS_DB_FILE, LEGACY_SAVED_DECKS_DB_FILE)
             self._db_path = SAVED_DECKS_DB_FILE
         return self._db_path
 
@@ -72,6 +85,15 @@ class DatabaseMixin(_Base):
         if "file_path" not in columns:
             conn.execute("ALTER TABLE decks ADD COLUMN file_path TEXT")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_decks_file_path ON decks(file_path)")
+        # The deck's stable id -- what its version history is keyed by, and the
+        # one attribute of a deck that survives a rename. Spelled the same as
+        # ``services.deck_identity.DECK_ID_KEY`` so a row comes out of here
+        # already carrying it; the column is this layer's, the meaning is that
+        # module's. Rows written before the column existed gain it here, empty,
+        # and their deck acquires an id on its next save.
+        if "deck_uuid" not in columns:
+            conn.execute("ALTER TABLE decks ADD COLUMN deck_uuid TEXT")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_decks_deck_uuid ON decks(deck_uuid)")
         conn.commit()
 
     @staticmethod
@@ -99,17 +121,27 @@ class DatabaseMixin(_Base):
         source: str = "manual",
         metadata: dict | None = None,
         file_path: str | Path | None = None,
+        deck_uuid: str | None = None,
     ):
-        """Insert a saved deck, or refresh the row already recorded for ``file_path``.
+        """Insert a saved deck, or refresh the row already recorded for this deck.
 
-        A deck re-saved over the same file replaces that file's record instead of
-        adding a second one, so one file maps to exactly one format and archetype.
+        A deck re-saved replaces its own row instead of adding a second one, so
+        one deck maps to exactly one format and archetype. Which row that is, is
+        answered by ``deck_uuid`` first and the file only after: a rename writes
+        a *new* file, and matching on the file alone would leave the renamed
+        deck with two rows -- one of them pointing at a name the user has
+        already moved on from.
         """
         normalized_path = self._normalize_file_path(file_path) if file_path else None
         now = datetime.now().isoformat()
         with self._connect() as conn:
             existing = None
-            if normalized_path is not None:
+            if deck_uuid:
+                existing = conn.execute(
+                    "SELECT id FROM decks WHERE deck_uuid = ? ORDER BY id DESC LIMIT 1",
+                    (deck_uuid,),
+                ).fetchone()
+            if existing is None and normalized_path is not None:
                 existing = conn.execute(
                     "SELECT id FROM decks WHERE file_path = ? ORDER BY id DESC LIMIT 1",
                     (normalized_path,),
@@ -120,7 +152,13 @@ class DatabaseMixin(_Base):
                     """
                     UPDATE decks
                     SET name = ?, content = ?, format = ?, archetype = ?, player = ?,
-                        source = ?, date_modified = ?, metadata = ?
+                        source = ?, date_modified = ?, metadata = ?,
+                        -- COALESCE, not assignment: a save that was given
+                        -- neither must not blank out what the row already
+                        -- holds. A rename does supply a new file and so
+                        -- repoints the row it matched by deck_uuid.
+                        file_path = COALESCE(?, file_path),
+                        deck_uuid = COALESCE(?, deck_uuid)
                     WHERE id = ?
                     """,
                     (
@@ -132,6 +170,8 @@ class DatabaseMixin(_Base):
                         source,
                         now,
                         json.dumps(metadata or {}),
+                        normalized_path,
+                        deck_uuid or None,
                         deck_id,
                     ),
                 )
@@ -140,8 +180,8 @@ class DatabaseMixin(_Base):
                     """
                     INSERT INTO decks
                         (name, content, format, archetype, player, source, date_saved,
-                         metadata, file_path)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                         metadata, file_path, deck_uuid)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         deck_name,
@@ -153,6 +193,7 @@ class DatabaseMixin(_Base):
                         now,
                         json.dumps(metadata or {}),
                         normalized_path,
+                        deck_uuid or None,
                     ),
                 )
                 deck_id = cursor.lastrowid

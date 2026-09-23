@@ -92,7 +92,7 @@ class BaselineMixin(_Base):
         if not baseline_text.strip():
             raise BaselineRootError("Refusing to root a deck at an empty baseline")
 
-        if self.has_repo(deck_key) and any(True for _ in self.iter_commits(deck_key)):
+        if self.has_commits(deck_key):
             raise BaselineRootError(
                 f"{deck_key!r} already has version history; a baseline root cannot be "
                 "added retroactively without rewriting the commits above it"

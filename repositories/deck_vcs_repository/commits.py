@@ -102,6 +102,18 @@ class CommitsMixin(_Base):
         The walk includes all branch tips, not just ``HEAD``, because the graph
         view has to show branches the user is not currently on -- that is the
         whole point of it.
+
+        The walk finishes before the first commit is handed out, even though
+        this reads as a generator. Yielding from inside the ``_open`` block
+        would leave the repo handle open across the yields, and a caller that
+        stops early -- ``any(True for _ in iter_commits(...))`` is two of the
+        five call sites -- would then be leaving it to the garbage collector to
+        throw ``GeneratorExit`` in and run the close. That happens promptly on
+        CPython and not necessarily anywhere else, and an open handle here is
+        not a nicety: it holds packfile handles that stop the cache directory
+        being cleaned up on Windows (see ``store``'s module docstring). A deck's
+        history is one small list, so materialising it costs nothing worth
+        weighing against that.
         """
         if not self.has_repo(deck_key):
             return
@@ -117,21 +129,38 @@ class CommitsMixin(_Base):
             include = [sha for ref, sha in refs.items() if ref.startswith(b"refs/heads/")]
             if not include:
                 return
+            walked: list[DeckCommit] = []
             for entry in repo.get_walker(include=include):
                 commit = entry.commit
                 sha = commit.id.decode("ascii")
-                yield DeckCommit(
-                    sha=sha,
-                    parents=tuple(p.decode("ascii") for p in commit.parents),
-                    message=commit.message.decode("utf-8", errors="replace").strip(),
-                    timestamp=int(commit.commit_time),
-                    branches=tuple(sorted(tips_by_sha.get(sha, ()))),
-                    is_head=sha == head_sha,
-                    is_baseline=bytes(commit.author) == BASELINE_IDENTITY,
+                walked.append(
+                    DeckCommit(
+                        sha=sha,
+                        parents=tuple(p.decode("ascii") for p in commit.parents),
+                        message=commit.message.decode("utf-8", errors="replace").strip(),
+                        timestamp=int(commit.commit_time),
+                        branches=tuple(sorted(tips_by_sha.get(sha, ()))),
+                        is_head=sha == head_sha,
+                        is_baseline=bytes(commit.author) == BASELINE_IDENTITY,
+                    )
                 )
+        yield from walked
 
     def list_commits(self, deck_key: str) -> list[DeckCommit]:
         return list(self.iter_commits(deck_key))
+
+    def has_commits(self, deck_key: str) -> bool:
+        """Does this deck have any history at all?
+
+        Answered from the refs, without decoding a single commit object. The two
+        callers that ask -- the baseline root guard, and the check in front of it
+        one layer up -- run on every save of every deck, and both used to ask by
+        starting a walk and stopping after the first commit.
+        """
+        if not self.has_repo(deck_key):
+            return False
+        with self._open(deck_key) as repo:
+            return any(ref.startswith(b"refs/heads/") for ref in repo.refs.as_dict())
 
     def head_sha(self, deck_key: str) -> str | None:
         """What ``HEAD`` points at, without walking the history to find it.

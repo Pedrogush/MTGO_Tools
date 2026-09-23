@@ -85,9 +85,12 @@ class SaveDeckDialog(wx.Dialog):
         body = wx.BoxSizer(wx.VERTICAL)
         outer.Add(body, 0, wx.EXPAND | wx.ALL, SPACE_MD)
 
-        # The name comes first because it is the one field that decides
-        # something irreversible: it names the file, and the file is what the
-        # deck's version history is keyed by.
+        # The name comes first because it is the one field with a consequence
+        # on disk: it names the file this deck is written to, and every later
+        # save overwrites that same file with no dialog. Not irreversible --
+        # the history is keyed by the deck's stable id, so a rename keeps it --
+        # but the file already written stays where it is, so a name regretted
+        # later leaves a stray .txt behind.
         name_label = wx.StaticText(self, label=self._t("deck_save.name"))
         stylize_label(name_label, level="body", surface="base", tone="primary")
         body.Add(name_label, 0, wx.EXPAND)

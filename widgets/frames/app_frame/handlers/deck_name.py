@@ -70,10 +70,10 @@ class DeckNameHandlers(_Base):
     def on_deck_name_clicked(self: AppFrame) -> None:
         """Ask for a new name, and adopt it if the user gives one.
 
-        Renaming does not touch the file or the history the deck already has --
-        the new name simply points the *next* save at a new file, and therefore
-        at a new history. Nothing is moved, rewritten or deleted, so a rename
-        can never orphan versions the user still has.
+        The deck keeps its history: it is keyed by the deck's stable id, and a
+        rename mutates the record that id is stamped on. What the new name does
+        change is the file -- the next save writes one under the new name, and
+        the old file is left exactly where it is rather than moved or deleted.
         """
         deck = self.controller.deck_repo.get_current_deck()
         if deck is None:
@@ -113,8 +113,8 @@ class DeckNameHandlers(_Base):
         logger.info(f"Deck renamed: {current or '(unnamed)'} -> {cleaned}")
         self.refresh_deck_name_displays()
         self._set_status("app.status.deck_renamed", name=cleaned)
-        # The name decides the key, so the history the tab should be showing
-        # changed even though nothing was written.
+        # The history is the same history -- the key did not change -- but the
+        # tab shows the deck's name beside it, so it is repainted.
         self.refresh_deck_history()
 
 

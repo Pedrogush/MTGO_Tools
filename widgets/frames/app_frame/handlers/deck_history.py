@@ -17,7 +17,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-import wx
 from loguru import logger
 
 from services.deck_vcs_service import (
@@ -27,6 +26,7 @@ from services.deck_vcs_service import (
     deck_key_for,
     get_deck_vcs_service,
 )
+from widgets.dialogs.confirm_dialog import show_confirm
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -108,29 +108,36 @@ class DeckHistoryHandlers(_Base):
         def failed(exc: Exception) -> None:  # the file itself already loaded
             logger.warning(f"Could not identify deck version for {file_path}: {exc}")
 
-        worker = getattr(self.controller, "_worker", None)
-        if worker is None:
-            try:
-                done(work())
-            except Exception as exc:  # noqa: BLE001
-                failed(exc)
-            return
-        worker.submit(work, on_success=done, on_error=failed)
+        self.controller.worker.submit(work, on_success=done, on_error=failed)
 
     def _offer_to_record(
         self: AppFrame, service: DeckVcsService, deck_key: str, deck_text: str
     ) -> None:
-        """Ask whether an unrecognised decklist should become a version."""
-        answer = wx.MessageBox(
-            self._t("history.external.prompt"),
-            self._t("history.external.title"),
-            wx.YES_NO | wx.ICON_QUESTION,
+        """Ask whether an unrecognised decklist should become a version.
+
+        Modeless, unlike the app's forty-odd ``wx.MessageBox`` prompts. Those
+        all answer a click the user just made; this one arrives on its own, when
+        a background identification of a file the user merely opened comes back
+        unattributed. A modal loop stops the automation socket being serviced
+        while it is up (``docs/WXMSW_BEHAVIOUR.md``), so an unprompted modal can
+        land in the middle of something the harness is driving, with no click
+        coming and no way for the harness to see it. See
+        :mod:`widgets.dialogs.confirm_dialog`.
+        """
+
+        def record() -> None:
+            try:
+                service.attach_unattributed(deck_key, deck_text)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning(f"Could not record external edit for {deck_key}: {exc}")
+                return
+            self.refresh_deck_history()
+
+        show_confirm(
+            self,
+            title=self._t("history.external.title"),
+            body=self._t("history.external.prompt"),
+            confirm_label=self._t("history.external.record"),
+            dismiss_label=self._t("history.external.dismiss"),
+            on_confirm=record,
         )
-        if answer != wx.YES:
-            return
-        try:
-            service.attach_unattributed(deck_key, deck_text)
-        except Exception as exc:  # noqa: BLE001
-            logger.warning(f"Could not record external edit for {deck_key}: {exc}")
-            return
-        self.refresh_deck_history()

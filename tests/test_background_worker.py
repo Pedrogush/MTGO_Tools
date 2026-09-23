@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import ast
 import threading
 import time
+from pathlib import Path
 
 import pytest
 
@@ -305,3 +307,64 @@ def test_background_worker_call_after_runs_synchronously():
     assert len(callback_thread) == 1
     worker_result, cb_thread = callback_thread[0]
     assert worker_result is cb_thread
+
+
+# ------------------------------------------------------------------ the boundary ------------------------------------------------------------------
+# One worker serves the whole app, and it is reached through
+# ``AppController.worker``. The audit below keeps ``_worker`` itself inside the
+# controller package, where a rename of it is a compile-time problem rather than
+# a silent one.
+#
+# What made it worth a test: the History and Baseline panels were handed the
+# worker as ``getattr(self.controller, "_worker", None)``. A ``None`` from that
+# default is not an error anywhere -- both panels, and the external-edit check,
+# read *inline* when they have no worker, which on those call paths is the UI
+# thread. So renaming a private attribute would have moved a deck's whole
+# history read back onto the UI thread (the 3s stall b8f85591 removed) with
+# nothing failing, in a build that looks fine on a short history.
+
+CODE_ROOTS = ("automation", "controllers", "repositories", "services", "utils", "widgets")
+
+#: Where the worker is owned, and the only package allowed to name it privately.
+WORKER_OWNER = Path("controllers") / "app_controller"
+
+
+def _project_modules() -> list[Path]:
+    root = Path(__file__).resolve().parent.parent
+    files: list[Path] = []
+    for package in CODE_ROOTS:
+        files.extend(sorted((root / package).rglob("*.py")))
+    return [path for path in files if WORKER_OWNER not in path.relative_to(root).parents]
+
+
+def _names_private_worker(tree: ast.AST) -> bool:
+    """True if ``tree`` reads ``_worker`` off an object, by attribute or by name."""
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Attribute) and node.attr == "_worker":
+            return True
+        # ``getattr(controller, "_worker", None)`` -- the form that also
+        # swallows the rename it is reaching through.
+        if isinstance(node, ast.Constant) and node.value == "_worker":
+            return True
+    return False
+
+
+def test_the_background_worker_is_reached_through_the_public_accessor() -> None:
+    """Only ``controllers/app_controller/`` may name ``_worker``."""
+    offenders = [
+        str(path)
+        for path in _project_modules()
+        if _names_private_worker(ast.parse(path.read_text(encoding="utf-8"), filename=str(path)))
+    ]
+    assert not offenders, (
+        "These modules reach past AppController.worker for the private attribute:\n  "
+        + "\n  ".join(offenders)
+        + "\nUse ``controller.worker``; see AppController.worker for why it is a property."
+    )
+
+
+def test_the_controller_contract_declares_the_public_worker() -> None:
+    """The accessor is on the protocol, so a caller type-checks against it."""
+    from controllers.app_controller.protocol import AppControllerProto
+
+    assert "worker" in AppControllerProto.__annotations__ or hasattr(AppControllerProto, "worker")

@@ -1,13 +1,23 @@
 """Where a deck's git repo lives on disk, and how it is opened.
 
-One repo per deck, under ``<CACHE_DIR>/deck_vcs/<deck_key>/``. It is a mirror:
+One repo per deck, under ``<DECK_HISTORY_DIR>/<deck_key>/``. It is a mirror:
 the user's real decklist stays a plain ``.txt`` in their deck folder
 (``DECKS_DIR``) and never gains a ``.git`` neighbour, because those files are
 flat and share one directory -- there is no per-deck directory there to root a
 repo in, and putting version metadata beside them would change what the user's
-deck folder is. Keying per-deck state into ``cache/`` instead is what this repo
-already does for notes, outboard and sideboard guides
-(:mod:`repositories.deck_repository.metadata_store`).
+deck folder is.
+
+That argument rules out the deck folder; it says nothing about which *other*
+directory to use, and the first answer -- ``cache/deck_vcs/``, chosen because
+that is where this repo already keys per-deck notes, outboard and sideboard
+guides (:mod:`repositories.deck_repository.metadata_store`) -- was wrong.
+Everything else under ``cache/`` can be refetched or recomputed, which is why
+the uninstaller and ``scripts/clear_caches.py`` both sweep the whole directory
+while promising that what the user made is kept. A deck's edit history is the
+user's own work and nothing can rebuild it, so it lives in its own top-level
+directory beside ``config/`` that neither sweep touches. Unlike the notes
+stores, it is also a directory tree of open-able git repos rather than one
+JSON file, so nothing is lost by not sharing their home.
 
 Handles are opened per operation, and a caller that is about to do a *batch* of
 reads wraps them in :meth:`StoreMixin.read_session` to share one. Opening is not
@@ -31,6 +41,7 @@ than held for the life of the app.
 
 from __future__ import annotations
 
+import shutil
 import threading
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -69,8 +80,6 @@ class _ReadSession:
     """One open handle, and the blobs read through it, for a batch of reads."""
 
     repo: Repo
-    #: Re-entrancy count, so a session may be opened inside another.
-    depth: int = 1
     #: Decklist text by commit sha, memoized for this session only.
     blobs: dict[str, str] = field(default_factory=dict)
 
@@ -106,6 +115,40 @@ class StoreMixin(_Base):
 
     def has_repo(self, deck_key: str) -> bool:
         return (self.repo_path(deck_key) / ".git").exists()
+
+    def adopt_legacy_repo(self, deck_key: str, legacy_key: str) -> bool:
+        """Move a repo left under the old cache root onto ``deck_key``; did it?
+
+        Deck history never shipped -- it exists only on ``develop`` -- so there
+        is no installed build whose histories need migrating. What does exist is
+        a developer checkout holding repos under ``cache/deck_vcs/<name>/`` from
+        before the root moved and before a deck was keyed by anything but its
+        name, and throwing those away for no reason would be rude.
+
+        Deliberately not a migration pass over the whole old root: the old key
+        was a *name*, and only a caller holding the deck record knows which name
+        a given deck used to answer to. This adopts one deck, when that caller
+        asks, and only into a key that has no repo yet -- so it can never
+        overwrite a history the new layout already has, and running twice is a
+        no-op. A caller whose legacy key came from a shared fallback rather than
+        the deck's own name must not ask; see
+        :func:`services.deck_vcs_service.legacy_deck_key_for`.
+        """
+        if not legacy_key or self.has_repo(deck_key):
+            return False
+        safe_legacy = sanitize_filename(legacy_key, fallback="manual").lower()
+        source = self._legacy_root / safe_legacy
+        if not (source / ".git").exists():
+            return False
+        target = self.repo_path(deck_key)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            shutil.move(str(source), str(target))
+        except OSError as exc:
+            logger.warning(f"Could not adopt legacy deck history {source}: {exc}")
+            return False
+        logger.info(f"Adopted legacy deck history {source} as {target}")
+        return True
 
     def create_repo(self, deck_key: str) -> Path:
         """Create ``deck_key``'s repo if it does not exist; return its path."""
@@ -178,11 +221,12 @@ class StoreMixin(_Base):
         key = str(path)
         existing = active.get(key)
         if existing is not None:
-            existing.depth += 1
-            try:
-                yield
-            finally:
-                existing.depth -= 1
+            # A nested session is a no-op: the handle and the blob cache belong
+            # to the outermost block, which is also the one that closes them.
+            # No depth counter -- an inner block that closed the handle on the
+            # way out would leave the outer one reading through a closed repo,
+            # so there is nothing for a count to decide.
+            yield
             return
 
         from dulwich.repo import Repo

@@ -1,27 +1,24 @@
-"""The deck's name: the one piece of state that decides its file and its history.
+"""The deck's name: what it is called, and which file it is written to.
 
-A deck's version history is keyed by the stem of the file behind it
-(:func:`services.deck_vcs_service.deck_key_for`), so whatever picks that stem
-decides which history a save lands in. That used to be the Save As dialog's
-*default*, recomputed per save from the deck record -- and it was not stable
-across two saves of one deck, which forked the history in half. The name is
-held explicitly instead: the user sets it once, sees it, and can change it.
+The name used to decide the deck's history as well -- it was the key the
+per-deck git repo was found by -- which meant renaming a deck emptied its
+version graph. The history is keyed by the deck's stable id now
+(:mod:`services.deck_identity`), and the name is a label again.
 
 Three rules the rest of the app relies on:
 
 **Empty means unset, and only empty.** A deck with no name holds ``""``. The
-"no name yet" wording belongs to the UI and is never written here, never
-persisted, and never becomes a deck key -- otherwise every unnamed deck would
-share one history under the placeholder's own text.
+"no name yet" wording belongs to the UI and is never written here and never
+persisted -- it is display text, not something a deck is called.
 
 **A name is always a legal file stem.** :func:`set_deck_name` sanitizes on the
 way in, so callers never have to. What comes back out is exactly what will be
 written to disk, which is what the UI shows.
 
-**Renaming forks, and never rewrites.** The name decides the file; a new name
-is a new file and therefore a new history. The old file and its repo are left
-exactly as they were, so a rename can never orphan or rewrite versions the
-user already has.
+**Renaming writes a new file, and never moves the old one.** The name decides
+the file, so a new name points the next save at a new file; the old one is left
+exactly where it is. Both are the same deck, and both are covered by the one
+history its id keys.
 """
 
 from __future__ import annotations
@@ -84,10 +81,10 @@ def set_deck_name(deck: dict[str, Any] | None, name: str | None) -> str:
 def adopt_file_name(deck: dict[str, Any] | None, file_path: Path | str | None) -> str:
     """Give an unnamed deck the name of the file it came from.
 
-    This is what makes the change need no migration: a deck already on disk is
-    keyed by its file's stem, and that stem is exactly the name it acquires
-    here, so decks saved before the name existed keep the history they have.
-    Never overwrites a name the user chose.
+    A deck opened from disk is called what its file is called, which is what the
+    user already believes. It is also what a history written before decks had
+    ids is filed under, so this is what lets such a deck find that history and
+    take it over on its next save. Never overwrites a name the user chose.
     """
     if deck is None or file_path is None or has_deck_name(deck):
         return deck_name_of(deck)

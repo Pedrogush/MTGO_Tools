@@ -16,8 +16,8 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
 
-from repositories.deck_vcs_repository.normalize import parse_entries
 from services.archetype_baseline_service.models import CardFrequency
+from utils.deck_text import iter_entries
 
 #: A card is keyed by name *and* zone, so the two zones never merge.
 CardKey = tuple[str, bool]
@@ -26,12 +26,19 @@ CardKey = tuple[str, bool]
 def deck_card_counts(deck_text: str) -> dict[CardKey, float]:
     """One deck's cards as ``(name, is_sideboard) -> count``.
 
-    Uses the deck-VCS canonical parser rather than a second one, so a decklist
-    counts the same here as it would if it were committed: duplicate lines are
-    summed, junk lines ignored, zone split identical.
+    Uses the app's shared deck-text scanner rather than a second one, so a
+    decklist counts the same here as it would if it were committed: duplicate
+    lines are summed, junk lines ignored, zone split identical. Printing ids are
+    kept for the same reason the deck-VCS normalizer keeps them -- a baseline
+    card name has to be a name a committed decklist would also carry.
+
+    Read through :mod:`utils.deck_text` and not through the deck-VCS repository
+    that also reads through it: a service taking its canonical deck parser from
+    a repository put the app's deck-text parser under ``repositories/``, which
+    is not where ``ARCHITECTURE.md`` says deck parsing lives.
     """
     counts: dict[CardKey, float] = {}
-    for entry in parse_entries(deck_text):
+    for entry in iter_entries(deck_text, strip_printing_id=False):
         key = (entry.name, entry.is_sideboard)
         counts[key] = counts.get(key, 0.0) + entry.count
     return counts

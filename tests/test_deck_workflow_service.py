@@ -413,3 +413,59 @@ def test_save_deck_with_a_blank_archetype_stores_none(tmp_path):
 
     # An explicit blank is the user's choice; it does not fall back to the slug.
     assert repo.load_from_db(deck_id)["archetype"] is None
+
+
+def test_a_record_holding_only_the_deck_id_still_saves_as_a_manual_deck(tmp_path):
+    """A deck built here gets a record at save time, purely to hold its id.
+
+    "Where did this deck come from" used to be answered by whether there was a
+    record at all, so that record must not turn a hand-built deck into a scraped
+    one on its way to the database.
+    """
+    repo = make_repo(tmp_path)
+    service = build_service(deck_repo=repo)
+    deck: dict = {}
+
+    _file_path, deck_id = service.save_deck(
+        deck_name="My Manual Deck",
+        deck_content="4 Lightning Bolt",
+        format_name="Modern",
+        deck=deck,
+        deck_save_dir=tmp_path,
+    )
+
+    stored = repo.load_from_db(deck_id)
+    assert stored["source"] == "manual"
+    assert stored["archetype"] is None
+    assert stored["deck_uuid"] == deck["deck_uuid"] != ""
+
+
+def test_renaming_a_deck_leaves_it_with_one_record_and_not_two(tmp_path):
+    """The row follows the deck's id, so a save under a new name repoints it.
+
+    Matching only on the file would give a renamed deck a second row -- and the
+    stale one would still be what loading the old file found.
+    """
+    repo = make_repo(tmp_path)
+    service = build_service(deck_repo=repo)
+    deck = {"href": "modern-burn", "name": "modern-burn"}
+
+    service.save_deck(
+        deck_name="Mono Red",
+        deck_content="4 Lightning Bolt",
+        format_name="Modern",
+        deck=deck,
+        deck_save_dir=tmp_path,
+    )
+    renamed, _deck_id = service.save_deck(
+        deck_name="Mono Red But Better",
+        deck_content="4 Lightning Bolt\n4 Monastery Swiftspear",
+        format_name="Modern",
+        deck=deck,
+        deck_save_dir=tmp_path,
+    )
+
+    rows = repo.get_decks()
+    assert len(rows) == 1
+    assert rows[0]["name"] == "Mono Red But Better"
+    assert repo.find_saved_deck(file_path=renamed)["deck_uuid"] == deck["deck_uuid"]

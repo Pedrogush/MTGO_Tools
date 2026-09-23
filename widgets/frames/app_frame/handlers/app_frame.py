@@ -788,12 +788,18 @@ class AppFrameHandlersMixin(_Base):
     def _flush_deck_filters(self, _event: wx.TimerEvent) -> None:
         self._apply_deck_filters()
 
-    def fetch_archetypes(self, force: bool = False) -> None:
-        if force:
-            # An explicit reload must always refresh the deck list, even if the
-            # refreshed archetype list is byte-for-byte identical. Clearing the
-            # dedup signature lets _on_archetypes_loaded reload decks again.
-            self._last_archetype_reload_sig = None
+    def fetch_archetypes(self) -> None:
+        """Load the archetype list for the current format, cache-first.
+
+        There is no force flag. The one caller that passed it was the panel's
+        "Reload Archetypes" button, which no UI ever rendered; it cleared
+        ``_last_archetype_reload_sig`` so an explicit reload would repopulate
+        the deck list even when the archetype list came back byte-for-byte
+        identical. Nothing needs that now -- every route through here is
+        cache-first, and a list that did not change is exactly the case the
+        dedup exists for. ``AppController.fetch_archetypes`` keeps its own
+        ``force``; this frame simply never asks for it.
+        """
         self.research_panel.set_loading_state()
         self.controller.deck_repo.clear_decks_list()
         self.deck_list.Clear()
@@ -806,7 +812,6 @@ class AppFrameHandlersMixin(_Base):
             on_success=lambda archetypes: wx.CallAfter(self._on_archetypes_loaded, archetypes),
             on_error=lambda error: wx.CallAfter(self._on_archetypes_error, error),
             on_status=lambda *a, **kw: wx.CallAfter(self._set_status, *a, **kw),
-            force=force,
         )
 
     def _clear_deck_display(self) -> None:

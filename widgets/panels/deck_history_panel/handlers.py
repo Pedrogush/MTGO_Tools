@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING
 import wx
 from loguru import logger
 
-from services.deck_vcs_service import HistorySnapshot, VersionPreview
+from services.deck_vcs_service import GraphCommit, HistorySnapshot, VersionPreview
 from utils.perf import perf_phase
 from widgets.panels.deck_history_panel.layout import build_layout, diff_lines
 
@@ -78,12 +78,29 @@ class DeckHistoryPanelHandlersMixin(_Base):
                 return service.read_history(deck_key, selected_sha=selected, baseline_sha=baseline)
 
         def done(snapshot: HistorySnapshot) -> None:
+            # Reached from wx.CallAfter on the worker, so the tab may have been
+            # destroyed since the read started -- and both branches below end in
+            # wx calls (Freeze, the canvas, the labels) on a dead window. The
+            # stale-token check cannot stand in for this: a panel torn down with
+            # its only read in flight has a token that still matches.
+            # ``bool(widget)`` is the liveness test that does not itself touch
+            # the C++ object; it raises once the wrapper is gone.
+            try:
+                if not self:
+                    return
+            except RuntimeError:
+                return
             if token != self._run_token:
                 return  # a newer refresh has started; this answer is stale
             self._refresh_pending = False
             self._apply_snapshot(snapshot)
 
         def failed(exc: Exception) -> None:
+            try:
+                if not self:  # same race as done(); the empty paint is wx too
+                    return
+            except RuntimeError:
+                return
             if token != self._run_token:
                 return
             self._refresh_pending = False
@@ -111,6 +128,27 @@ class DeckHistoryPanelHandlersMixin(_Base):
         -- waits on this rather than racing it.
         """
         return self._refresh_pending
+
+    # The three below exist for the same caller as ``refresh_pending``: the
+    # automation harness reports what the panel is showing, and reading the
+    # private attributes to do it made a rename here a silent break there. They
+    # are reads only -- what is on screen is changed through the panel's own
+    # actions, not by assigning to it.
+
+    @property
+    def graph(self) -> list[GraphCommit]:
+        """The commits as last painted, newest first."""
+        return list(self._graph)
+
+    @property
+    def selected_sha(self) -> str | None:
+        """The version whose decklist the preview is showing, if any."""
+        return self._selected_sha
+
+    @property
+    def baseline_sha(self) -> str | None:
+        """The version the diff view compares against, or None for "the parent"."""
+        return self._baseline_sha
 
     def _apply_snapshot(self, snapshot: HistorySnapshot) -> None:
         """Put a history that has already been read on screen. wx only."""

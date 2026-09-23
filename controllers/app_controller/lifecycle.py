@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
+from services import mtgo_bridge_service
 from utils.constants import MTGO_BRIDGE_SHUTDOWN_TIMEOUT_SECONDS
 
 if TYPE_CHECKING:
@@ -256,3 +257,15 @@ class LifecycleMixin(_Base):
             installer.cancel()
         self.image_service.shutdown()
         self._worker.shutdown(timeout=timeout)
+        # Last, because the worker is what issues bridge commands: closing the
+        # session first would leave whatever it is finishing to fall back to a
+        # one-shot subprocess, paying MTGOSDK's ~3.1s attach again on the way
+        # out. Free when no session was ever started, and the close/terminate/
+        # kill ladder is bounded, so it cannot hold the UI's exit open.
+        #
+        # ``atexit`` still registers the same call (session.py), but only as the
+        # backstop for exits that never reach here — a hard failure during
+        # startup, or a path that skips the controller entirely. Leaving it as
+        # the *only* trigger meant the bridge outlived the window it belongs to,
+        # detaching from MTGO at interpreter exit with the UI already gone.
+        mtgo_bridge_service.shutdown_session()

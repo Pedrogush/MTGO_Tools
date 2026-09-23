@@ -138,6 +138,18 @@ class DeckBaselinePanelHandlersMixin(_Base):
             return service.compute(archetype, mtg_format=mtg_format)
 
         def done(result: ArchetypeBaseline | None) -> None:
+            # Reached from wx.CallAfter on the worker, so the tab may have been
+            # destroyed since the computation started -- and everything below
+            # ends in wx (the tree, the status label). The stale-token check
+            # cannot stand in for this: a panel torn down with its only run in
+            # flight has a token that still matches. ``bool(widget)`` is the
+            # liveness test that does not itself touch the C++ object; it
+            # raises once the wrapper is gone.
+            try:
+                if not self:
+                    return
+            except RuntimeError:
+                return
             if token != self._run_token:
                 return  # a newer run has started; this answer is stale
             self._pending = False
@@ -150,6 +162,11 @@ class DeckBaselinePanelHandlersMixin(_Base):
             self._status("app.status.baseline_computed", pool=result.pool_size)
 
         def failed(exc: Exception) -> None:
+            try:
+                if not self:  # same race as done(); the failure paint is wx too
+                    return
+            except RuntimeError:
+                return
             if token != self._run_token:
                 return
             logger.warning(f"Baseline computation failed: {exc}")
