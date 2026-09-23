@@ -14,6 +14,25 @@ Entries are overwritten freely as the metagame moves. That does **not** re-root
 any deck already created -- a deck's root is a frozen snapshot of what this held
 at its creation, and :mod:`repositories.deck_vcs_repository.baseline` refuses to
 change it afterwards.
+
+Why the file says which version it is
+-------------------------------------
+Everything here is derived, so losing it costs a recompute -- except that a
+deck's root commit is seeded from whatever this held when the deck was first
+saved, so throwing the store away silently changes the root sha of every deck
+created afterwards. Before the version key, forward compatibility rested
+entirely on tolerance: a missing block was survivable (``_membership_from_dict``
+is that, and it was already needed once), but a renamed *required* field raised
+``KeyError``, which :meth:`BaselineStore.get` caught and reported as "no stored
+baseline". A format change would therefore have discarded every stored baseline
+without saying anything.
+
+So the document names its version, and a version this build does not understand
+is discarded *deliberately and out loud* rather than by accident. The rejected
+alternatives: reading a future file anyway is the ``KeyError``-into-silence path
+this exists to remove, and refusing to save over one leaves a user who moved
+back to an older build with a feature that can never work again. A cache that
+can be recomputed is the right thing to spend here; a silence is not.
 """
 
 from __future__ import annotations
@@ -35,6 +54,17 @@ from services.archetype_baseline_service.models import (
     ZoneShape,
 )
 from utils.atomic_io import atomic_write_json, locked_path
+
+#: The schema this build reads and writes. Bump it when a stored field is
+#: renamed, removed, or changes meaning -- not when one is added, which the
+#: readers below already tolerate.
+SCHEMA_VERSION = 1
+
+#: Where the entries live inside the document. Before the version key the
+#: entries *were* the document; :func:`_entries_of` still reads that shape.
+BASELINES_FIELD = "baselines"
+
+VERSION_FIELD = "version"
 
 
 def baseline_key(archetype: str, mtg_format: str) -> str:
@@ -167,15 +197,53 @@ class BaselineStore:
         self.path = Path(path)
 
     def load_all(self) -> dict[str, Any]:
+        """Every stored entry, or nothing if this build cannot read the file."""
+        return self._entries_of(self._read_document())
+
+    def _read_document(self) -> dict[str, Any]:
         if not self.path.exists():
             return {}
         try:
             with locked_path(self.path):
                 with self.path.open("r", encoding="utf-8") as fh:
                     return dict(json.load(fh))
-        except (json.JSONDecodeError, OSError) as exc:
+        except (json.JSONDecodeError, OSError, TypeError, ValueError) as exc:
             logger.warning(f"Failed to load {self.path}: {exc}")
             return {}
+
+    def _entries_of(self, document: dict[str, Any]) -> dict[str, Any]:
+        """The entries inside *document*, if this build understands its version.
+
+        A document with no version is the pre-versioning layout, where the
+        entries were the document itself. Its shape is the one this build still
+        reads, so it is adopted rather than discarded; the next save rewrites it
+        with a version.
+        """
+        if not document:
+            return {}
+
+        raw_version = document.get(VERSION_FIELD)
+        if raw_version is None:
+            return {key: value for key, value in document.items() if key != VERSION_FIELD}
+
+        try:
+            version = int(raw_version)
+        except (TypeError, ValueError):
+            version = -1
+
+        if version != SCHEMA_VERSION:
+            # Said out loud, because the cost is not the recompute: a deck's
+            # root commit is seeded from this store, so every deck created from
+            # here on roots differently from the ones created before.
+            logger.warning(
+                f"Ignoring {self.path}: it is schema version {raw_version!r} and this build "
+                f"reads version {SCHEMA_VERSION}. Stored archetype baselines will be "
+                "recomputed and the file rewritten on the next save."
+            )
+            return {}
+
+        entries = document.get(BASELINES_FIELD)
+        return dict(entries) if isinstance(entries, dict) else {}
 
     def get(self, archetype: str, mtg_format: str) -> ArchetypeBaseline | None:
         entry = self.load_all().get(baseline_key(archetype, mtg_format))
@@ -190,8 +258,9 @@ class BaselineStore:
     def save(self, baseline: ArchetypeBaseline) -> None:
         key = baseline_key(baseline.archetype, baseline.mtg_format)
         with locked_path(self.path):
-            data = self.load_all()
-            data[key] = baseline_to_dict(baseline)
+            entries = self.load_all()
+            entries[key] = baseline_to_dict(baseline)
+            data = {VERSION_FIELD: SCHEMA_VERSION, BASELINES_FIELD: entries}
             try:
                 atomic_write_json(self.path, data, indent=2)
             except OSError as exc:

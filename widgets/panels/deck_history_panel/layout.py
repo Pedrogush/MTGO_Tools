@@ -18,8 +18,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from repositories.deck_vcs_repository.models import CardDelta, DeckDiff
-from services.deck_vcs_service import GraphCommit
+from services.deck_vcs_service import CardDelta, DeckDiff, GraphCommit
 
 
 @dataclass(frozen=True)

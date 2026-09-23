@@ -53,7 +53,8 @@ graph TB
     end
 
     subgraph "Utilities"
-        DECK[deck.py<br/>Deck Parser]
+        DECK[deck.py<br/>Deck file helpers]
+        DTXT[deck_text.py<br/>Deck-text scanner + renderer]
         AIO[atomic_io.py]
         BW[background_worker.py]
         LOG[logging_config.py]
@@ -131,7 +132,7 @@ graph TB
 
 **UI/Widgets**: wxPython panels in `widgets/panels/`, dialogs in `widgets/dialogs/`, and standalone overlay windows (`MTGOpponentDeckSpy`, `MatchHistory`, `TimerAlert`).
 
-**Utils**: Cross-cutting helpers only — atomic I/O (`atomic_io.py`), deck text parsing (`deck.py`), background workers (`background_worker.py`), logging setup (`logging_config.py`), JSON helpers, perf timers, runtime flags, diagnostics, image effects, math, constants, and i18n. Single-consumer modules have been colocated with their callers: search filter helpers live in `services/search_service/`, image worker entrypoints and Scryfall bulk image downloading in `services/image_service/`, deck-results filtering in `widgets/panels/deck_research_panel/results_filter.py`, wx styling helpers in `widgets/stylize.py`, mana icon rendering in `widgets/mana_icon_factory/`, and small widget-specific helpers inside their respective `widgets/.../` packages. The MTGJSON atomic-cards dataset is owned by `repositories/card_repository/`, gamelog parsing by `services/gamelog_service/`, the deck-text SQLite cache by `repositories/deck_text_cache.py`, the MTGGoldfish scrapers by `repositories/scrapers/`, and the MTGO CLI bridge by `services/mtgo_bridge_service/`.
+**Utils**: Cross-cutting helpers only — atomic I/O (`atomic_io.py`), deck-text scanning and rendering (`deck_text.py`, the one loop and the one output format behind `services/deck_service/parser.py`, `repositories/deck_vcs_repository/normalize.py` and the collection diff — it lives here rather than in `services/deck_service/` because the deck-VCS repository enforces normalization at its own write site and a repository may not import a service), deck file helpers (`deck.py`), background workers (`background_worker.py`), logging setup (`logging_config.py`), JSON helpers, perf timers, runtime flags, diagnostics, image effects, math, constants, and i18n. Single-consumer modules have been colocated with their callers: search filter helpers live in `services/search_service/`, image worker entrypoints and Scryfall bulk image downloading in `services/image_service/`, deck-results filtering in `widgets/panels/deck_research_panel/results_filter.py`, wx styling helpers in `widgets/stylize.py`, mana icon rendering in `widgets/mana_icon_factory/`, and small widget-specific helpers inside their respective `widgets/.../` packages. The MTGJSON atomic-cards dataset is owned by `repositories/card_repository/`, gamelog parsing by `services/gamelog_service/`, the deck-text SQLite cache by `repositories/deck_text_cache.py`, the MTGGoldfish scrapers by `repositories/scrapers/`, and the MTGO CLI bridge by `services/mtgo_bridge_service/`.
 
 **External Bridge**: .NET 9.0 application using MTGOSDK to read collection and match data directly from the running MTGO client.
 

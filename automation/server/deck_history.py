@@ -104,15 +104,15 @@ class DeckHistoryMixin(_Base):
         if panel is None:
             return {"error": "History panel not built"}
         settled = self._refresh_and_settle(panel)
-        layout = build_layout(panel._graph)
+        layout = build_layout(panel.graph)
         deck_key = panel.current_deck_key()
         return {
             "deck_key": deck_key,
             "settled": settled,
             "branch": panel.vcs_service.current_branch(deck_key),
             "branches": panel.vcs_service.list_branches(deck_key),
-            "selected": panel._selected_sha,
-            "baseline": panel._baseline_sha,
+            "selected": panel.selected_sha,
+            "baseline": panel.baseline_sha,
             "lane_count": layout.lane_count,
             "nodes": [
                 {
@@ -241,4 +241,4 @@ class DeckHistoryMixin(_Base):
     @staticmethod
     def _resolve_sha(panel: Any, sha: str) -> str | None:
         """Accept a short sha, the way every other git tool does."""
-        return next((g.sha for g in panel._graph if g.sha.startswith(sha)), None)
+        return next((g.sha for g in panel.graph if g.sha.startswith(sha)), None)

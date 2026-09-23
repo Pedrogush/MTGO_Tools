@@ -186,10 +186,22 @@ Source: "../LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 ; bridge writes next to itself at runtime, so the folder is left empty and removed
 ; rather than orphaned.
 Type: filesandordirs; Name: "{app}\mtgo_integration"
-; Regenerable per-user data: caches, logs, and downloaded card data. User
-; settings (%LOCALAPPDATA%\{#MyAppName}\config) and saved decks
-; (%USERPROFILE%\Documents\mtgo_decks) are intentionally preserved so a
-; reinstall keeps them.
+; Regenerable per-user data: caches, logs, and downloaded card data. Everything
+; swept here can be refetched or recomputed on the next run.
+;
+; Deliberately NOT swept, because nothing can rebuild them, and a reinstall must
+; keep them:
+;   %LOCALAPPDATA%\{#MyAppName}\config        - user settings
+;   %LOCALAPPDATA%\{#MyAppName}\deck_history  - every saved version of every deck
+;   %LOCALAPPDATA%\{#MyAppName}\deck_records  - the saved-deck records, and the
+;                                               deck id each history is keyed by
+;   %USERPROFILE%\Documents\mtgo_decks        - the saved decks themselves
+; Both of the first two used to live under cache\, i.e. inside the first entry
+; below, so an uninstall deleted a user's whole edit history while leaving the
+; .txt files it promised to keep -- and deleting deck_records alone was enough,
+; because the id that reaches a history is stored only there. Adding a directory
+; under cache\ that a person authored re-opens that hole; put it beside config
+; instead.
 Type: filesandordirs; Name: "{localappdata}\{#MyAppName}\cache"
 Type: filesandordirs; Name: "{localappdata}\{#MyAppName}\logs"
 Type: filesandordirs; Name: "{localappdata}\{#MyAppName}\data"

@@ -45,6 +45,11 @@ from .discovery import _require_bridge_path
 
 _TRUTHY = {"1", "true", "yes", "on"}
 
+#: The id the watch-stream re-arm goes out under. Request ids are otherwise
+#: numbers from a counter, so this cannot collide with one, and its answer is
+#: the one answer nobody is waiting for.
+RESUME_WATCH_REQUEST_ID = "resume-watch"
+
 
 class BridgeSessionError(RuntimeError):
     """A request was delivered to a live bridge session and came back failed."""
@@ -71,14 +76,40 @@ def _queue_replace(sink: queue.Queue, item: Any) -> None:
         logger.debug("Dropping bridge watch update because the subscriber queue is full.")
 
 
+class _Handshake:
+    """The ready-banner verdict for one spawned bridge process.
+
+    Deliberately per-process rather than per-session. The dead process's reader
+    thread is never joined — ``_terminate_locked`` waits on the *process*, not on
+    the reader — so a reader can reach ``_on_closed`` long after a respawn has
+    already started a healthy replacement. While this state lived on the session,
+    that reader found the new, still-unset readiness flag, concluded that the new
+    process had exited without announcing itself, and wrote that verdict where
+    the in-progress handshake would read it: ``_start_locked`` then killed the
+    brand-new bridge and, because the verdict is sticky, every later call fell
+    back to a one-shot subprocess for the rest of the run. Giving each start its
+    own record makes that impossible by construction — a late reader writes to a
+    record nobody reads any more — rather than by a guard that has to be got right.
+    """
+
+    __slots__ = ("error", "event")
+
+    def __init__(self) -> None:
+        self.event = threading.Event()
+        # Written by the reader thread before it sets the event; read by the
+        # ``_start_locked`` call that owns this record, and by nobody else.
+        self.error: str | None = None
+
+
 class BridgeSession:
     """Supervises one ``MTGOBridge.exe serve`` process."""
 
     def __init__(self, bridge_path: str | os.PathLike[str]):
         self.bridge_path = Path(bridge_path)
         # ``_state_lock`` guards the process lifecycle (spawn/teardown) and is
-        # held across the ready handshake; the reader thread never takes it, so
-        # the handshake cannot deadlock against the thread that completes it.
+        # held across the ready handshake; the reader thread only takes it after
+        # completing that handshake, so the handshake cannot deadlock against the
+        # thread that completes it.
         self._state_lock = threading.RLock()
         self._pending_lock = threading.Lock()
         self._write_lock = threading.Lock()
@@ -93,10 +124,10 @@ class BridgeSession:
         # duplicate start (its own request is already on the way).
         self._watch_armed = False
         self._ids = itertools.count(1)
-        self._ready = threading.Event()
-        self._ready_error: str | None = None
         # Sticky: a build that does not understand ``serve`` will never start to,
         # so we stop paying a spawn per request and let callers use one-shot mode.
+        # Only ``_start_locked`` writes it, and only from the handshake record of
+        # the start it owns, so a stale reader cannot disable session mode.
         self._unsupported = False
 
     # ------------------------------------------------------------------ requests
@@ -143,24 +174,50 @@ class BridgeSession:
         raise BridgeSessionUnavailable(last_error)
 
     def _exchange(self, command: str, args: Sequence[str], timeout: float) -> tuple[str, Any]:
+        """Send one request and wait for its answer, re-arming while it queues.
+
+        ``timeout`` is a budget for the command, not for the wait: the bridge
+        runs requests strictly one at a time, so the clock is restarted for as
+        long as an older request is still outstanding and this one therefore
+        cannot have started yet. Only when nothing older is left — this request
+        is the one the bridge is chewing on — does an expiry mean a wedged SDK
+        call, and only then is the process dropped. See
+        ``BRIDGE_SESSION_REQUEST_TIMEOUT_SECONDS`` for why.
+        """
         request_id = str(next(self._ids))
         slot: queue.Queue = queue.Queue(maxsize=1)
         with self._pending_lock:
             self._pending[request_id] = slot
         try:
             self._write({"id": request_id, "command": command, "args": [str(a) for a in args]})
-            try:
-                return slot.get(timeout=timeout)
-            except queue.Empty as exc:
-                # A wedged SDK call cannot be cancelled remotely; drop the process
-                # so the next caller gets a clean attach instead of queueing behind it.
-                self._teardown()
-                raise BridgeSessionUnavailable(
-                    f"Bridge command {command!r} did not answer within {timeout} seconds."
-                ) from exc
+            while True:
+                try:
+                    return slot.get(timeout=timeout)
+                except queue.Empty as exc:
+                    if not self._is_at_the_head(request_id):
+                        continue
+                    # A wedged SDK call cannot be cancelled remotely; drop the process
+                    # so the next caller gets a clean attach instead of queueing behind it.
+                    self._teardown()
+                    raise BridgeSessionUnavailable(
+                        f"Bridge command {command!r} did not answer within {timeout} seconds."
+                    ) from exc
         finally:
             with self._pending_lock:
                 self._pending.pop(request_id, None)
+
+    def _is_at_the_head(self, request_id: str) -> bool:
+        """True when no request older than ``request_id`` is still outstanding.
+
+        Request ids come from one ``itertools.count``, so "older" is just a
+        smaller id. That is the order callers got in line, which is not quite the
+        order they reached the pipe — two threads can take their ids and then
+        write in the opposite order. The approximation costs nothing: it only
+        decides *which* of two callers pulls the trigger on a genuinely wedged
+        bridge, and either way exactly one of them does.
+        """
+        with self._pending_lock:
+            return all(int(pending_id) >= int(request_id) for pending_id in self._pending)
 
     # ------------------------------------------------------------------ watch stream
     def subscribe_watch(self, sink: queue.Queue, interval_ms: int) -> None:
@@ -207,8 +264,7 @@ class BridgeSession:
             self._start_locked()
 
     def _start_locked(self) -> None:
-        self._ready = threading.Event()
-        self._ready_error = None
+        handshake = _Handshake()
         creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
         logger.debug("Starting long-lived bridge session: {} serve", self.bridge_path)
         try:
@@ -229,7 +285,7 @@ class BridgeSession:
         self._process = process
         threading.Thread(
             target=self._read_loop,
-            args=(process,),
+            args=(process, handshake),
             daemon=True,
             name="mtgo-bridge-session-reader",
         ).start()
@@ -240,21 +296,35 @@ class BridgeSession:
             name="mtgo-bridge-session-stderr",
         ).start()
 
-        if not self._ready.wait(BRIDGE_SESSION_HANDSHAKE_TIMEOUT_SECONDS):
+        if not handshake.event.wait(BRIDGE_SESSION_HANDSHAKE_TIMEOUT_SECONDS):
+            # Not sticky: a bridge that was merely too slow this time deserves
+            # another spawn, unlike one that came back with a verdict below.
             self._terminate_locked()
             raise BridgeSessionUnavailable(
                 "Bridge session did not announce itself within "
                 f"{BRIDGE_SESSION_HANDSHAKE_TIMEOUT_SECONDS} seconds."
             )
-        if self._ready_error is not None:
-            error = self._ready_error
+        if handshake.error is not None:
+            # Both verdicts — no banner at all, or a protocol we cannot speak —
+            # are properties of the executable, so a retry cannot change them.
+            # Recording it here, on the thread that owns this start, is what
+            # keeps the sticky flag tied to the process it was decided about.
+            self._unsupported = True
             self._terminate_locked()
-            raise BridgeSessionUnavailable(error)
+            raise BridgeSessionUnavailable(handshake.error)
 
         self._resume_watch_locked()
 
     def _resume_watch_locked(self) -> None:
-        """Re-arm the watch stream after a respawn so subscribers keep receiving."""
+        """Re-arm the watch stream after a respawn so subscribers keep receiving.
+
+        Fire and forget: the stream itself arrives as events, and nobody waits
+        on the acknowledgement, so this registers no pending slot. It goes out
+        under :data:`RESUME_WATCH_REQUEST_ID` rather than a number from the
+        counter, because an unclaimed numbered answer is indistinguishable from
+        the bridge answering something we never asked -- which is a real symptom
+        and has to stay loud.
+        """
         with self._watch_lock:
             if not (self._watch_armed and self._watch_queues):
                 return
@@ -262,7 +332,7 @@ class BridgeSession:
         try:
             self._write(
                 {
-                    "id": str(next(self._ids)),
+                    "id": RESUME_WATCH_REQUEST_ID,
                     "command": "watch",
                     "args": ["start", str(interval_ms)],
                 }
@@ -282,7 +352,7 @@ class BridgeSession:
             except (OSError, ValueError) as exc:
                 raise BridgeSessionUnavailable(f"Bridge session pipe closed: {exc}") from exc
 
-    def _read_loop(self, process: subprocess.Popen[str]) -> None:
+    def _read_loop(self, process: subprocess.Popen[str], handshake: _Handshake) -> None:
         stdout = process.stdout
         assert stdout is not None  # nosec B101 - stdout=PIPE above guarantees it
         try:
@@ -296,16 +366,16 @@ class BridgeSession:
                     logger.debug("Skipping malformed bridge session line: {}", payload[:200])
                     continue
                 if isinstance(message, dict):
-                    self._dispatch(message)
+                    self._dispatch(message, handshake)
         except (OSError, ValueError):  # pragma: no cover - pipe torn down mid-read
             pass
         finally:
-            self._on_closed(process)
+            self._on_closed(process, handshake)
 
-    def _dispatch(self, message: dict[str, Any]) -> None:
+    def _dispatch(self, message: dict[str, Any], handshake: _Handshake) -> None:
         event = message.get("event")
         if event is not None:
-            self._handle_event(str(event), message.get("payload"))
+            self._handle_event(str(event), message.get("payload"), handshake)
             return
 
         request_id = message.get("id")
@@ -314,23 +384,25 @@ class BridgeSession:
         with self._pending_lock:
             slot = self._pending.get(str(request_id))
         if slot is None:
-            logger.debug("Bridge session answered unknown request id {}", request_id)
+            if str(request_id) == RESUME_WATCH_REQUEST_ID:
+                logger.debug("Bridge session re-armed the watch stream: ok={}", message.get("ok"))
+            else:
+                logger.debug("Bridge session answered unknown request id {}", request_id)
             return
         if message.get("ok"):
             _queue_replace(slot, ("ok", message.get("payload")))
         else:
             _queue_replace(slot, ("error", message.get("error") or "bridge reported no detail"))
 
-    def _handle_event(self, event: str, payload: Any) -> None:
+    def _handle_event(self, event: str, payload: Any, handshake: _Handshake) -> None:
         if event == "ready":
             protocol = payload.get("protocol") if isinstance(payload, dict) else None
             if protocol != BRIDGE_SESSION_PROTOCOL_VERSION:
-                self._unsupported = True
-                self._ready_error = (
+                handshake.error = (
                     f"Bridge speaks serve protocol {protocol!r}, "
                     f"expected {BRIDGE_SESSION_PROTOCOL_VERSION}."
                 )
-            self._ready.set()
+            handshake.event.set()
             return
         if event == "watch":
             with self._watch_lock:
@@ -356,18 +428,23 @@ class BridgeSession:
         except (OSError, ValueError):  # pragma: no cover - pipe torn down mid-read
             pass
 
-    def _on_closed(self, process: subprocess.Popen[str]) -> None:
+    def _on_closed(self, process: subprocess.Popen[str], handshake: _Handshake) -> None:
         """Fail every in-flight request once the bridge's stdout hits EOF."""
-        if not self._ready.is_set():
+        if not handshake.event.is_set():
             # Exited before announcing itself: the signature of a build that
             # predates ``serve`` (unknown modes make it return immediately).
-            self._unsupported = True
-            self._ready_error = (
+            # The verdict goes on this reader's own handshake record, so a
+            # respawn already under way cannot inherit it.
+            handshake.error = (
                 f"{self.bridge_path.name} exited without a ready banner; "
                 "this build predates the long-lived 'serve' mode."
             )
-            self._ready.set()
+            handshake.event.set()
 
+        # Failing the pending slots is deliberately *not* tied to ``process``:
+        # after a deliberate teardown ``_process`` is already None by the time
+        # this reader gets here, and callers still waiting on that dead pipe have
+        # to be released rather than left to burn their whole timeout.
         with self._pending_lock:
             pending = list(self._pending.values())
             self._pending.clear()
@@ -536,6 +613,9 @@ def shutdown_session() -> None:
         session.stop()
 
 
-# Windows does not reap grandchildren when a parent dies, so make the normal
-# interpreter exit path close the pipe explicitly.
+# Backstop only: ``LifecycleMixin.shutdown`` closes the session while the app is
+# still up, which is where the teardown belongs. This covers the exits that never
+# get there — Windows does not reap grandchildren when a parent dies, so the
+# interpreter exit path has to close the pipe explicitly too. Calling it twice is
+# free; the second call finds no session.
 atexit.register(shutdown_session)

@@ -32,6 +32,7 @@ from widgets.splitter import DarkSplitter
 from widgets.stylize import stylize_choice, stylize_label, type_font
 
 if TYPE_CHECKING:
+    from repositories.deck_repository import DeckRepository
     from services.deck_vcs_service import DeckVcsService
 
 #: Fixed-pitch face for the decklist and diff views. ``SetFaceName`` fails
@@ -51,7 +52,7 @@ class DeckHistoryPanel(DeckHistoryPanelHandlersMixin, wx.Panel):
         parent: wx.Window,
         *,
         vcs_service: DeckVcsService | None = None,
-        deck_repo: Any = None,
+        deck_repo: DeckRepository,
         on_checkout: Callable[[str], None] | None = None,
         on_status_update: Callable[..., None] | None = None,
         on_rename: Callable[[], None] | None = None,
@@ -66,10 +67,6 @@ class DeckHistoryPanel(DeckHistoryPanelHandlersMixin, wx.Panel):
             from services.deck_vcs_service import get_deck_vcs_service
 
             vcs_service = get_deck_vcs_service()
-        if deck_repo is None:
-            from repositories.deck_repository import get_deck_repository
-
-            deck_repo = get_deck_repository()
 
         self.vcs_service = vcs_service
         self.deck_repo = deck_repo

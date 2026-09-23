@@ -11,6 +11,7 @@ import wx
 from loguru import logger
 
 from repositories.scrapers.mtggoldfish_visual import DeckUnavailableError
+from services.deck_identity import deck_id_of, set_deck_id
 from services.deck_name import (
     NAME_FALLBACK,
     adopt_file_name,
@@ -100,8 +101,9 @@ class DeckContentHandlers(_Base):
             "source": "file",
         }
         # A deck already on disk is named by the file it came from, which is the
-        # same stem its history was keyed by before names existed -- so decks
-        # saved by an older build keep the history they have, with no migration.
+        # same stem its history was keyed by before decks had ids -- so a deck
+        # whose record predates the id reads the history it already has, and
+        # takes it onto its id at the next save.
         adopt_file_name(deck_record, file_ref)
         self.controller.deck_repo.set_current_deck(deck_record)
         logger.info(f"Load Deck selected: {file_path} (deck_key={deck_key})")
@@ -114,11 +116,14 @@ class DeckContentHandlers(_Base):
             return
 
         # The format and archetype chosen when this file was saved (#1034) live in
-        # the saved-decks database, keyed by the file's path.
+        # the saved-decks database, keyed by the file's path. So does the deck's
+        # stable id, which is what its version history is under -- without it a
+        # file opened in a new session would look like a deck with no history.
         saved = self.controller.find_saved_deck(file_ref, deck_text)
         for field in ("format", "archetype"):
             if saved and saved.get(field):
                 deck_record[field] = saved[field]
+        set_deck_id(deck_record, deck_id_of(saved))
 
         self._on_deck_content_ready(deck_text, source="file")
         # The file may have been edited outside the app since it was last saved;

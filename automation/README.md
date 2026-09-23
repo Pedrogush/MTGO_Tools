@@ -165,8 +165,9 @@ commit it produces is the one a real save produces.
 
 ## Naming a deck, and saving without any dialog
 
-A deck's name decides its file, and the file decides which version history a save
-lands in. A named deck saves with **no dialog at all**, which is the path worth
+A deck's name decides its file. Which version history a save lands in is decided
+by the deck's stable id instead, so neither the name nor the file moves it. A
+named deck saves with **no dialog at all**, which is the path worth
 scripting: `deck-name` sets the name the way clicking the label does, and
 `deck-save` then runs the real `on_save_clicked`.
 
@@ -181,8 +182,9 @@ one case that would open the details dialog and starve the socket. Name it first
 
 An unnamed deck reports `"name": ""` and a `display` of the placeholder text —
 the placeholder is never stored, so a script must assert on `name`, not `display`.
-**Renaming forks:** the new name is a new file and therefore a new history, and
-the old file and its repo are left exactly as they were.
+**Renaming keeps the history:** the new name is a new file, but the history is
+keyed by the deck's stable id, so the version graph comes with it. The file
+written under the old name is left exactly where it was.
 
 Two things worth knowing when scripting against it:
 
@@ -193,9 +195,10 @@ Two things worth knowing when scripting against it:
   `"settled": false` timed out waiting and is looking at a stale graph, not an
   empty history. Nothing else needs to sleep for it.
 - `deck-history-checkout` rewrites the user's `.txt`. The repo behind the graph
-  lives in the app cache (`cache/deck_vcs/<deck_key>/`), never beside the deck
-  file, so diffing the `.txt` outside the app is a fair test that no version
-  metadata leaked into it.
+  lives in the app's own data directory (`deck_history/<deck_key>/`, beside
+  `config/`), never beside the deck file, so diffing the `.txt` outside the app
+  is a fair test that no version metadata leaked into it. `<deck_key>` is the
+  deck's stable id, not its name, so a renamed deck keeps the same directory.
 
 ## Driving the deck tabs
 

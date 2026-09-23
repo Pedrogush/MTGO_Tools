@@ -22,7 +22,6 @@ from typing import TYPE_CHECKING
 from loguru import logger
 
 from repositories.deck_vcs_repository.normalize import normalize_decklist
-from repositories.deck_vcs_repository.store import DEFAULT_BRANCH
 from utils.atomic_io import atomic_write_text
 
 if TYPE_CHECKING:
@@ -149,6 +148,3 @@ class BranchesMixin(_Base):
             porcelain.add(repo.path, paths=[str(deck_file)])
         logger.info(f"Deck branch checked out: {deck_key} {name} ({sha[:7]})")
         return text
-
-    def default_branch_name(self) -> str:
-        return DEFAULT_BRANCH

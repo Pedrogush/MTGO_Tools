@@ -37,8 +37,29 @@ MTGO_BRIDGE_SHUTDOWN_TIMEOUT_SECONDS = 10.0
 # only .NET startup (~0.8s measured); 15s leaves room for a cold disk without
 # stranding the caller when the build is too old to answer at all.
 BRIDGE_SESSION_HANDSHAKE_TIMEOUT_SECONDS = 15.0
-# Ceiling for a single queued request. A cold attach (~3.1s) plus the slowest
-# supported scan has to fit, and requests behind it in the queue wait too.
+# Ceiling for a single bridge command, counted from the moment the bridge could
+# actually have started running it rather than from when the caller queued it. A
+# cold attach (~3.1s) plus the slowest supported scan has to fit.
+#
+# The distinction is the whole point. The serve worker executes requests strictly
+# one at a time under ``sdkLock`` (dotnet/MTGOBridge/Program.cs), so a caller can
+# sit in that queue for as long as everything ahead of it takes. Charging that
+# queued time to the caller made this a queue-wide guillotine: one slow scan and
+# the *next* caller's expiry tore the shared process down under the challenge
+# timer's watch stream and every other in-flight request. ``_exchange`` therefore
+# re-arms the wait while an older request is still outstanding; the total stays
+# bounded, because each request ahead either answers or is itself timed out by
+# its own caller within one budget.
+#
+# Rejected: keeping the deadline queue-wide and documenting it as deliberate.
+# Cheaper, but it makes one caller's failure mode depend on unrelated callers'
+# latency, which is precisely what a shared session exists to hide — and the
+# recovery it leans on (respawn, re-arm the watch, retry once) is a working
+# apology for a self-inflicted kill, not a reason to keep inflicting it.
+# Also rejected: having the bridge announce when it dequeues a request, so the
+# budget could start on the exact right instant instead of on "nothing older is
+# outstanding". That is the correct answer and it costs a serve-protocol bump on
+# both sides, which is too much version churn for a deadline this coarse.
 BRIDGE_SESSION_REQUEST_TIMEOUT_SECONDS = 180.0
 # Per stage of the close/terminate/kill ladder when shutting the session down.
 BRIDGE_SESSION_SHUTDOWN_TIMEOUT_SECONDS = 5.0

@@ -2,7 +2,12 @@
 
 Runs ``MTGOBridge.exe <mode>`` in a worker process and exposes
 ``submit_bridge_command`` / ``BridgeCommandFuture`` for non-blocking
-collection / history / trade commands.
+collection / currency / trade commands. ``<mode>`` is any one-shot mode the
+bridge has -- ``dotnet/MTGOBridge/README.md`` §4 is the list -- and the
+streaming ``watch`` mode lives in :mod:`.watch` instead.
+
+Reached only when the long-lived session in :mod:`.session` is unavailable;
+see :mod:`.client` for what that means.
 """
 
 from __future__ import annotations
