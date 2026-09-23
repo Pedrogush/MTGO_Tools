@@ -119,20 +119,48 @@ time when every test built its own. `tests/ui/conftest.py` offers one window per
   `SharedAppFrame.reset()`: the test doubles installed on the frame or the
   controller are removed, the load flags and load-dedup memory go back to their
   construction values, the research format and its filters and the builder's
-  filters are cleared, and the loaded deck (current deck, its text, the deck
-  list, the zones) is emptied. Use it for anything that needs *a* main window.
+  filters are cleared, the loaded deck (current deck, its text, the deck list,
+  the zones) is emptied, the archetype list and its selection go back to empty,
+  the window returns to its own size, both card views return to their starting
+  mode, and every `wx.Timer` in the window — including the ones on panels, which
+  is nearly all of them — is stopped. Use it for anything that needs *a* main
+  window.
 - **`deck_selector_factory`** — a newly built window. Use it when the test is
   about construction, startup, session restore, persistence across windows, or
   anything that reads a file whose path came from this test's `ui_environment`
   (the shared window's paths are the module's). `test_notes_persist_across_frames`
   and `test_the_default_folder_option_persists_and_clears` are the shape of it.
 
+Both fixtures build their window on an `AppController()` of their own; neither
+touches the application's controller singleton, and `tests/test_ui_fixture_guards.py`
+fails any UI file that names `get_deck_selector_controller`. Mixing the two
+fixtures in one module is therefore fine.
+
 Scope is the module, never the session, so a window a test leaves in a state the
 reset does not cover can only affect its own file. If your test needs a
 precondition the reset does not give it, set it in the test (or in the file's own
-fixture) — that is ordinary test setup. **Check order independence** when you
-add to a shared-window file: run its node ids in a different order and they must
-still pass.
+fixture) — that is ordinary test setup.
+
+**Check order independence** when you add to a shared-window file:
+
+```bash
+pytest tests/ui/test_whatever.py -p randomly
+```
+
+`pytest-randomly` is pinned in `requirements-dev.txt` but blocked by default
+(`-p no:randomly` in `pyproject.toml`), because a gating run has to be
+reproducible from the command that produced it; `-p randomly` turns it back on
+for the run you type. It shuffles within a module and never interleaves two of
+them, which is the right scope here — one window serves one module. The seed is
+printed in the header, and `--randomly-seed=N` replays an order exactly.
+
+CI runs the same thing weekly and on demand as the `tests-ui-shuffled` job. It
+is deliberately not a PR gate: shuffled UI failures are real but intermittent,
+and an intermittent required check is one people rerun instead of read. The part
+of the contract that *is* deterministic — that the reset actually puts the
+window back — is pinned on every PR by `tests/ui/test_shared_frame_reset.py`,
+whose tests each assert the window is clean and then deliberately wreck it, so
+the file cannot pass by being run in a lucky order.
 
 ### Waiting for the UI
 

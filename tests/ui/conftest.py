@@ -677,6 +677,27 @@ def shared_app_frame(
     are built, so they get a module tmp dir of their own rather than the first
     test's, which that test's teardown would pull out from under them. Each test
     still gets ``ui_environment``'s per-test redirect on top.
+
+    Which means two roots are live during every shared-frame test, and which one
+    a write lands in is decided by *when* the path was resolved, not by the test.
+    Measured over ``test_deck_selector`` (32 tests), what accumulates in the
+    module root is everything a repository or store bound at construction --
+    ``config/config.json``, ``config/deck_selector_settings.json``,
+    ``cache/deck_notes.json``, ``cache/deck_cache.db``, ``cache/radar_cache.db``,
+    ``cache/format_card_pool.db``, ``cache/card_images/images.db`` and the images
+    under it, ``cache/archetype_decks_cache.json``. What lands per test is
+    everything resolved at call time: the settings a ``deck_selector_factory``
+    window writes, and the saved-decks database through the class-level
+    ``_get_db_path`` patch above -- which is class-level precisely so it *is*
+    per-test, and is the inconsistency this arrangement forces.
+
+    The rule that follows: **a test that reads back a file it wrote must use**
+    ``deck_selector_factory``, not ``shared_frame``.
+    ``test_notes_persist_across_frames`` and
+    ``test_the_default_folder_option_persists_and_clears`` are that shape.
+    Pointing both roots at one directory was considered and left alone: it would
+    hand every shared-frame test in a module the same config and cache, which is
+    less isolation than they have now, in exchange for tidiness.
     """
     with pytest.MonkeyPatch.context() as module_patch:
         install_ui_environment(module_patch, tmp_path_factory.mktemp("mtgo-module") / "mtgo")
