@@ -12,6 +12,11 @@ on:
   # regression guards that redesign built (contrast, spacing, widget audit,
   # layout minimums) never once ran on the changes they exist to guard.
   pull_request:
+  # Weekly, for the run that is too slow and too noisy to gate a PR on: the UI
+  # suite in a shuffled order (`tests-ui-shuffled`). Nothing else reads this
+  # trigger, so a scheduled run is that job and nothing more.
+  schedule:
+    - cron: "17 4 * * 1" # Mondays, 04:17 UTC
   workflow_dispatch:
 
 # A new push to a PR supersedes the run already going for it. Pushes to
@@ -174,6 +179,55 @@ jobs:
           path: .coverage
           include-hidden-files: true
           if-no-files-found: error
+
+  # The same UI suite, in a shuffled order. tests/README.md has always asked
+  # authors to check order independence by hand; nothing enforced it, and the
+  # one-window-per-module refactor made the invariant much easier to break --
+  # `SharedAppFrame.reset` silently stopped covering the archetype list, the
+  # window size, the card views' mode and every timer that lives on a panel,
+  # and the suite stayed green because the files that leaked that state also
+  # re-established it.
+  #
+  # Weekly and on demand, not on every PR, for two reasons. The UI tests are
+  # deliberately serial and share one window per module, so a shuffle finds
+  # real coupling but it finds it *intermittently* -- a red that a rerun turns
+  # green is the fastest way to teach a team to ignore a check. And a shuffled
+  # failure is a bisect, not a diff: it should land on a morning, not in the
+  # middle of a review. The order-independence contract that *can* be checked
+  # deterministically is pinned by tests/ui/test_shared_frame_reset.py, which
+  # runs on every PR in the job above.
+  #
+  # pytest-randomly shuffles within each module and never interleaves two of
+  # them, which is exactly the scope that matters here: one AppFrame serves one
+  # module, so the coupling worth finding is between siblings in a file.
+  # Deliberately no --cov: this run is not part of the combined number, and
+  # uploading a second `coverage-ui` artifact would collide with the one above.
+  tests-ui-shuffled:
+    name: Tests (UI, shuffled order)
+    # Never on a pull request. This job reports, it does not gate.
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+      - name: Install test dependencies
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt $(grep -E '^pytest(-[a-z]+)?==' requirements-dev.txt | tr -d '\r')
+      # -p randomly overrides the `-p no:randomly` in pyproject.toml's addopts,
+      # which is what keeps every gating run reproducible. The seed is printed
+      # in the run's header: `pytest tests/ui -p randomly --randomly-seed=N`
+      # replays a failure exactly.
+      - name: Run UI tests in a shuffled order
+        run: pytest tests/ui -p randomly
 
   # The suite runs as two jobs, so neither one's number means anything on its
   # own -- the UI job never imports most services and the non-UI job never

@@ -41,6 +41,9 @@ GUARD_STEP = "Design-system guards"
 NON_UI_JOB = "tests-non-ui"
 UI_JOB = "tests-ui"
 
+#: The UI suite again, shuffled. Reports; never gates.
+SHUFFLED_UI_JOB = "tests-ui-shuffled"
+
 #: The job that turns the two halves' data files into one number.
 COVERAGE_JOB = "coverage"
 
@@ -243,9 +246,73 @@ def test_the_validation_summary_waits_for_the_tests_and_reads_their_result() -> 
 
 def test_ui_tests_never_run_in_parallel() -> None:
     """UI tests build real top-level windows; they share one process, one at a time."""
-    ui_steps = [_main_run(UI_JOB), *_guard_steps(UI_JOB)]
+    ui_steps = [_main_run(UI_JOB), *_guard_steps(UI_JOB), *_named_steps(SHUFFLED_UI_JOB).values()]
     for step in ui_steps:
         assert not re.search(r"(^|\s)(-n|--numprocesses)(\s|=)", step), step
+
+
+# ------------------------------------------------------------- order independence -------------------------------------------------------------
+# tests/README.md asks authors to check that a shared-window file passes in any
+# order, and for the length of the one-AppFrame-per-module refactor nothing
+# enforced it. These pin the two halves of the answer: a job that actually
+# shuffles, and the fact that it is not allowed to gate a pull request. A
+# shuffled UI run finds real coupling intermittently, and an intermittent
+# required check is one people learn to rerun rather than read.
+
+
+def test_the_shuffled_ui_run_exists_and_actually_shuffles() -> None:
+    steps = _without_comments("\n".join(_named_steps(SHUFFLED_UI_JOB).values()))
+    assert re.search(
+        r"pytest[^\n]*\s+tests/ui(\s|$|\s)", steps
+    ), f"`{SHUFFLED_UI_JOB}` must run the tests/ui directory"
+    assert re.search(r"(^|\s)-p\s+randomly(\s|$)", steps), (
+        f"`{SHUFFLED_UI_JOB}` does not pass `-p randomly`, and pyproject.toml's "
+        "addopts blocks the plugin by default -- so the job would run the UI "
+        "suite a second time in exactly the same order as the job above."
+    )
+
+
+def test_the_default_order_is_the_file_order_everywhere_else() -> None:
+    """A failure has to be reproducible from the command that produced it.
+
+    pytest-randomly shuffles as soon as it is installed, and it is a dev
+    dependency, so the block has to be in the config rather than on each
+    gating command.
+    """
+    config = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    addopts = re.search(r"^addopts\s*=\s*\"([^\"]*)\"", config, flags=re.MULTILINE)
+    assert addopts is not None, "pyproject.toml sets no pytest addopts"
+    assert "-p no:randomly" in addopts.group(1), (
+        "pytest-randomly is in requirements-dev.txt and shuffles by default. "
+        "Without `-p no:randomly` in addopts, every local run and both gating "
+        f"CI jobs reorder themselves, and only `{SHUFFLED_UI_JOB}` is meant to."
+    )
+    requirements = (ROOT / "requirements-dev.txt").read_text(encoding="utf-8")
+    assert "pytest-randomly==" in requirements, (
+        f"`{SHUFFLED_UI_JOB}` runs `-p randomly`, so the plugin has to be pinned "
+        "where the test jobs install from."
+    )
+
+
+def test_the_shuffled_ui_run_never_gates_a_pull_request() -> None:
+    job = _without_comments(_job(SHUFFLED_UI_JOB))
+    condition = re.search(r"^    if:(.*)$", job, flags=re.MULTILINE)
+    assert condition is not None, (
+        f"`{SHUFFLED_UI_JOB}` has no `if:`, so it runs on every pull request. A "
+        "shuffled UI run is intermittent by nature; gating on it teaches people "
+        "to rerun a red check instead of reading it."
+    )
+    events = set(re.findall(r"'([a-z_]+)'", condition.group(1)))
+    assert events == {"schedule", "workflow_dispatch"}, (
+        f"`{SHUFFLED_UI_JOB}` should run on the schedule and on demand, not on "
+        f"{sorted(events)}."
+    )
+    assert _trigger_block("schedule"), "ci.yml has no schedule for it to run on"
+    assert SHUFFLED_UI_JOB not in _job(SUMMARY_JOB), (
+        f"`{SUMMARY_JOB}` names `{SHUFFLED_UI_JOB}`. Waiting on a job that is "
+        "skipped on every pull request would skip the summary with it, and the "
+        "required check would never report at all."
+    )
 
 
 # ---------------------------------------------------------------- coverage ----------------------------------------------------------------

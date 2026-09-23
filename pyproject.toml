@@ -126,7 +126,18 @@ testpaths = ["tests"]
 markers = [
     "network: tests that hit live external services (excluded by default)",
 ]
-addopts = "-m 'not network'"
+# ``-p no:randomly``: pytest-randomly is a dev dependency, and once installed it
+# shuffles by default. Every gating run -- local, and both test jobs in CI --
+# stays in file order, because a failure has to be reproducible from the command
+# that produced it. The shuffled run is a job of its own (`tests-ui-shuffled` in
+# .github/workflows/ci.yml) and a `-p randomly` a developer types by hand:
+#
+#   pytest tests/ui/test_deck_selector.py -p randomly
+#
+# which is the order-independence check tests/README.md asks for. Blocking a
+# plugin that is not installed is a no-op, so this is also safe for anyone who
+# installed requirements.txt alone.
+addopts = "-m 'not network' -p no:randomly"
 
 # Coverage is measured in CI by both test jobs (`--cov`) and combined into one
 # report by the `coverage` job; see .github/workflows/ci.yml. Locally:
