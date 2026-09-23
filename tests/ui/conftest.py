@@ -451,16 +451,48 @@ def build_app_frame(wx_app: wx.App) -> AppFrame:
 # state the reset below does not cover can only disturb its own file.
 
 
+def find_timers(*owners: Any) -> list[wx.Timer]:
+    """Every ``wx.Timer`` reachable from *owners*, panels included.
+
+    Only a few of them are on the frame. The builder panel debounces its search
+    and its image prefetch, the card image display drives its cross-fade, and
+    each of the six card views owns a marquee whose autoscroll timer lives on a
+    plain helper object the view holds -- not on a window at all. So the walk is
+    the window tree, plus one hop into whatever ``widgets`` object a window
+    holds, which is how a timer on a non-window helper is reached.
+    """
+    found: list[wx.Timer] = []
+    seen: set[int] = set()
+    queue: list[Any] = list(owners)
+    while queue:
+        owner = queue.pop()
+        if id(owner) in seen:
+            continue
+        seen.add(id(owner))
+        for value in vars(owner).values() if hasattr(owner, "__dict__") else ():
+            if isinstance(value, wx.Timer):
+                found.append(value)
+            elif (
+                not isinstance(value, wx.Object)
+                and hasattr(value, "__dict__")
+                and (type(value).__module__ or "").startswith("widgets")
+            ):
+                queue.append(value)
+        if isinstance(owner, wx.Window):
+            queue.extend(owner.GetChildren())
+    return found
+
+
 def _stop_timers(*owners: Any) -> None:
-    """Stop every ``wx.Timer`` held directly on *owners*.
+    """Stop every timer :func:`find_timers` reaches.
 
     A one-shot timer still running when its owner is destroyed fires into freed
-    memory the next time a live loop dispatches WM_TIMER.
+    memory the next time a live loop dispatches WM_TIMER -- and, between tests,
+    a debounce one test started fires inside the next one, against a window
+    that test has not set up yet.
     """
-    for owner in owners:
-        for value in list(vars(owner).values()):
-            if isinstance(value, wx.Timer):
-                value.Stop()
+    for timer in find_timers(*owners):
+        timer.Stop()
 
 
 def _instance_overrides(obj: Any) -> dict[str, Any]:
@@ -493,9 +525,18 @@ class SharedAppFrame:
         "_last_deck_load_time",
     )
 
+    #: The card tables whose view mode is part of that state.
+    ZONES = ("main", "side")
+
     def __init__(self, frame: AppFrame, wx_app: wx.App) -> None:
         self.frame = frame
         self.wx_app = wx_app
+        # Let construction settle before reading the baseline off the window.
+        # ``_apply_min_size`` queues itself through ``wx.CallAfter``, so an
+        # unpumped frame reports the size and floor of a window still moving --
+        # and which of the two a capture here saw was a race the reset then
+        # tried to restore the window to.
+        pump_ui_events(wx_app)
         self.controller = frame.controller
         self._overrides = {
             "frame": _instance_overrides(frame),
@@ -503,6 +544,28 @@ class SharedAppFrame:
         }
         self._state = {name: getattr(frame, name) for name in self.FRAME_STATE}
         self._format = frame.research_panel.get_selected_format()
+        combo = frame.research_panel.archetype_list
+        self._archetypes = list(self.controller.archetypes)
+        self._filtered_archetypes = list(self.controller.filtered_archetypes)
+        self._archetype_items = list(combo.GetStrings())
+        self._archetype_selection = combo.GetSelection()
+        self._archetype_enabled = combo.IsEnabled()
+        # The floor, and the size the window can actually be put back to.
+        # Construction leaves the frame a few pixels shorter than the floor
+        # ``_apply_min_size`` goes on to compute -- wx does not re-clamp a
+        # window when its minimum grows under it, but it does clamp every
+        # SetSize after that. Taking the recorded size as at least the floor is
+        # what stops the reset chasing a height the window will never report.
+        self.min_size = frame.GetMinSize()
+        size = frame.GetSize()
+        self.size = wx.Size(
+            max(size.GetWidth(), self.min_size.GetWidth()),
+            max(size.GetHeight(), self.min_size.GetHeight()),
+        )
+        self.view_modes = {zone: self._table(zone).view_mode for zone in self.ZONES}
+
+    def _table(self, zone: str) -> Any:
+        return getattr(self.frame, f"{zone}_table")
 
     def _restore_overrides(self, obj: Any, baseline: dict[str, Any]) -> None:
         for name, value in _instance_overrides(obj).items():
@@ -543,7 +606,65 @@ class SharedAppFrame:
         frame.deck_repo.set_current_deck_text("")
         frame.deck_repo.clear_decks_list()
         frame.zone_cards = {"main": [], "side": [], "out": []}
+        self._restore_archetypes(frame)
+        # The card views' mode, before the geometry: a zone left showing piles
+        # is a taller widget, and the floor the window is sized against is
+        # measured from what is on screen. A test that switched a zone left
+        # every later test in the file measuring a different widget than the
+        # one it names.
+        for zone, mode in self.view_modes.items():
+            self._table(zone).set_view_mode(mode, persist=False)
+        self._restore_geometry(frame)
+        # Last, not first: a debounce the previous test started would fire
+        # inside this one -- the use-after-free the module docstring warns
+        # about -- but clearing the filters above *schedules* debounces of its
+        # own, so stopping them before that would leave two of them armed. Same
+        # walk the module teardown uses, and for the same reason: nearly every
+        # timer in this window is on a panel rather than on the frame.
+        _stop_timers(frame)
         return frame
+
+    def _restore_archetypes(self, frame: AppFrame) -> None:
+        """The archetype list and what is selected in it.
+
+        The reset above has just emptied the loaded deck, and
+        ``_baseline_archetype`` falls back to the research selection when no
+        deck is loaded -- so a selection left over from the previous test makes
+        a window with nothing in it claim an archetype, and the Baseline tab
+        measures against a pool the test never asked for. The list itself
+        matters too: ``on_archetype_selected`` indexes ``filtered_archetypes``
+        by the combo's row.
+        """
+        self.controller.archetypes = list(self._archetypes)
+        self.controller.filtered_archetypes = list(self._filtered_archetypes)
+        combo = frame.research_panel.archetype_list
+        if list(combo.GetStrings()) != self._archetype_items:
+            combo.Clear()
+            for item in self._archetype_items:
+                combo.Append(item)
+        if combo.GetSelection() != self._archetype_selection:
+            combo.SetSelection(self._archetype_selection)
+        combo.Enable(self._archetype_enabled)
+
+    def _restore_geometry(self, frame: AppFrame) -> None:
+        """The window's own size.
+
+        ``test_card_view_scroll_snap`` sizes the window down to its enforced
+        minimum to measure what a card view does there, and every test in that
+        file re-applies the floor itself, so the leak never showed. Any other
+        file's test that reads a client size after one of those would be
+        reading the previous test's window.
+
+        The floor goes back first, and not only for its own sake: the enforced
+        minimum is a lower bound on ``SetSize``, so a window left at a taller
+        content's floor cannot be sized back down to the baseline until the
+        floor is.
+        """
+        if frame.GetMinSize() != self.min_size:
+            frame.SetMinSize(self.min_size)
+        if frame.GetSize() != self.size:
+            frame.SetSize(self.size)
+            frame.Layout()
 
 
 @pytest.fixture(scope="module")
