@@ -15,6 +15,7 @@ import wx
 
 from repositories.deck_vcs_repository import DeckVcsRepository
 from services.deck_vcs_service import DeckVcsService, HistorySnapshot
+from tests.ui.conftest import wait_until
 from widgets.panels.deck_history_rail import DeckHistoryRail
 from widgets.panels.deck_history_rail.canvas import ROW_HEIGHT
 
@@ -39,8 +40,13 @@ def fixture_rail(wx_app):
     rail = DeckHistoryRail(frame, on_checkout=checked_out.append)
     rail.checked_out = checked_out
     frame.Show()
-    for _ in range(5):
-        wx.Yield()
+    # The rail measures itself off a real client size, so wait for the window
+    # to have one rather than guessing at a number of yields (tests/README.md).
+    wait_until(
+        wx_app,
+        lambda: frame.IsShown() and rail.canvas.GetClientSize().GetWidth() > 0,
+        message="the history rail never got a client size to draw into",
+    )
     yield rail
     frame.Destroy()
 
