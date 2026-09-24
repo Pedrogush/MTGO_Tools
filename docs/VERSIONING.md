@@ -147,6 +147,39 @@ The installer also accepts a `/RELAUNCH` switch, which is what lets an update
 applied silently put the app back on screen afterwards. See
 [`../packaging/README.md`](../packaging/README.md).
 
+## Rehearsing a release: the `staging` branch
+
+A release is the first time anyone runs the installer that `develop` produces,
+and by then it is published. `staging` is that step pulled forward — a
+long-lived branch whose only purpose is to have `develop` merged into it:
+
+```bash
+git fetch origin
+git checkout staging
+git merge origin/develop
+git push origin staging
+```
+
+The push runs `ci.yml` the same way a push to `develop` does, and `staging` is
+listed on its `push:` trigger precisely so it does. `packaging-changes` reports
+`build=true` for any push (the path filter applies to pull requests only), so
+`build-windows` always runs: it builds with `packaging/build_installer.ps1`,
+verifies with `packaging/test_installer.ps1`, and uploads the result as the
+**`windows-installer`** artifact on the run. Download it from the run's summary
+page and install it by hand.
+
+Nothing is published. `release.yml` triggers on pushes to `main` alone, so a
+`staging` build produces no `chore(release): VERSION` commit, no `v<x.y.z>` tag
+and no GitHub Release — and the in-app updater, which reads the latest release,
+never sees it.
+
+> The installer is named from `VERSION`, which on `staging` is still the number
+> the *last* release recorded. So `MTGOTools_Setup_v1.2.15.exe` out of a staging
+> run is not the 1.2.15 that shipped; it is `develop` wearing the old number.
+> The next version is only decided once the merge lands on `main` (see
+> [Why after the merge](#why-after-the-merge)), and a rehearsal deliberately
+> does not decide it.
+
 ## Retention
 
 `scripts/prune_releases.py` keeps the published releases down to what someone

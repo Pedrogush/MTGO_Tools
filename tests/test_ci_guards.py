@@ -141,12 +141,15 @@ def _trigger_block(name: str) -> list[str]:
 def test_push_trigger_is_limited_to_the_long_lived_branches() -> None:
     """The other half of the pair -- unfiltering push would run CI on every branch.
 
-    ``develop`` is where work integrates and ``main`` is what releases; both
-    are pushed to only by merges, and both must get a full run.
+    ``develop`` is where work integrates, ``main`` is what releases, and
+    ``staging`` is where a release is rehearsed -- ``develop`` merged in to get
+    an installer built and verified without publishing anything. All three are
+    pushed to only by merges, and all three must get a full run.
     """
-    branches = [line.strip().lstrip("- ").strip() for line in _trigger_block("push")]
+    lines = _without_comments("\n".join(_trigger_block("push"))).splitlines()
+    branches = [line.strip().lstrip("- ").strip() for line in lines]
     branches = [branch for branch in branches if branch and branch != "branches:"]
-    assert sorted(branches) == ["develop", "main"]
+    assert sorted(branches) == ["develop", "main", "staging"]
 
 
 def test_pull_request_trigger_is_not_filtered_by_base_branch() -> None:
