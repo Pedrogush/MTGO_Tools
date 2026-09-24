@@ -5,6 +5,16 @@ on:
     branches:
       - main
       - develop
+      # A dry run of a release, without the release. `staging` exists to have
+      # `develop` merged into it and nothing else: a push to it takes the same
+      # path a release build takes -- `packaging-changes` reports `build=true`
+      # for any push, so `build-windows` builds the installer with
+      # `build_installer.ps1`, verifies it with `test_installer.ps1`, and
+      # uploads it as the `windows-installer` artifact. Nothing publishes it:
+      # `release.yml` triggers on pushes to `main` alone, so no VERSION commit,
+      # no tag and no GitHub Release come out of this branch. Download the
+      # artifact from the run and install it by hand.
+      - staging
   # Deliberately unfiltered. `branches:` on a pull_request trigger filters by the
   # PR's *base*, so while this said `- main` the only PRs that ran CI were the
   # ones targeting main -- and a stack of PRs targeting each other ran none. All
@@ -20,8 +30,8 @@ on:
   workflow_dispatch:
 
 # A new push to a PR supersedes the run already going for it. Pushes to
-# main/develop are never cancelled: each one is a state of a long-lived branch
-# worth a complete result.
+# main/develop/staging are never cancelled: each one is a state of a long-lived
+# branch worth a complete result.
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
