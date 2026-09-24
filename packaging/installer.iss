@@ -161,18 +161,77 @@ Source: "../dist/*"; DestDir: "{app}"; Excludes: "installer,installer\*"; Flags:
 ; #if DirExists guard: if the bridge was not built, ISCC must fail rather than
 ; silently ship an installer without MTGO integration.
 Source: "../dotnet/MTGOBridge/bin/Release/net9.0-windows7.0/win-x64/publish/*"; DestDir: "{app}\mtgo_integration"; Flags: ignoreversion recursesubdirs createallsubdirs
-; Vendor data directories (if they exist)
-; NOTE: vendor/mtgosdk (C# SDK sources) is intentionally excluded; the compiled,
-; self-contained bridge is bundled above and needs nothing else at runtime.
-#if DirExists('../vendor/mtgo_format_data')
-Source: "../vendor/mtgo_format_data/*"; DestDir: "{app}/vendor/mtgo_format_data"; Flags: ignoreversion recursesubdirs createallsubdirs
-#endif
-#if DirExists('../vendor/mtgo_archetype_parser')
-Source: "../vendor/mtgo_archetype_parser/*"; DestDir: "{app}/vendor/mtgo_archetype_parser"; Flags: ignoreversion recursesubdirs createallsubdirs
-#endif
+; Nothing under vendor/ is installed.
+;
+; vendor/mtgo_format_data (Badaro/MTGOFormatData) and vendor/mtgo_archetype_parser
+; (Badaro/MTGOArchetypeParser) used to be copied into {app}\vendor here. They are
+; not any more, for two independent reasons:
+;
+;   - Nothing reads them. No module in this repository names either path; the only
+;     references anywhere are scripts/update_vendor_data.py, which fetches them,
+;     and this packaging directory. Dropping them from the install therefore
+;     changes no application behaviour.
+;   - MTGOFormatData publishes no license at all: no LICENSE file in the upstream
+;     repository root (which holds only Formats/ and README.md), no terms in its
+;     README, and GitHub's repository metadata reports none. Copying it onto a
+;     user's machine was redistribution without a grant. See ATTRIBUTIONS.md.
+;
+; Both trees stay available in a developer checkout -- scripts/update_vendor_data.py
+; still fetches them -- they simply do not ship. If something in the app ever starts
+; reading one, restoring the [Files] entry is the easy half; for the format data,
+; settling its licensing with the upstream author is the half that gates it.
+;
+; vendor/mtgosdk (the C# SDK package) is likewise not installed: the compiled,
+; self-contained bridge shipped above needs nothing else at runtime. Its NOTICE is
+; the one exception, below.
+
 ; README and LICENSE
 Source: "../README.md"; DestDir: "{app}"; Flags: ignoreversion isreadme
 Source: "../LICENSE"; DestDir: "{app}"; Flags: ignoreversion
+; MTGOSDK's NOTICE, required by Apache-2.0 section 4(d). The bridge publish output
+; shipped above is built against MTGOSDK and carries its binaries, MTGOSDK has a
+; NOTICE file, and 4(d) says every redistribution of the work has to carry it. It
+; installs beside this project's own LICENSE, renamed so it is obvious which work
+; it belongs to and suffixed .txt so a double-click opens it rather than prompting
+; for a program.
+;
+; Deliberately NOT wrapped in a #if FileExists guard, unlike the vendor trees that
+; used to sit above. vendor/ is gitignored and is populated by
+; scripts/update_mtgosdk_vendor.py, which build_installer.ps1 runs before ISCC. A
+; guard here would mean a build whose vendor refresh had not run silently produced
+; exactly the non-compliant installer this entry exists to prevent -- so the
+; compile failing is the safe direction, the same reasoning as the unguarded bridge
+; entry above. build_installer.ps1 also checks for this file up front, so the usual
+; failure arrives as a sentence rather than as an ISCC "no files found matching".
+Source: "../vendor/mtgosdk/NOTICE"; DestDir: "{app}"; DestName: "MTGOSDK-NOTICE.txt"; Flags: ignoreversion
+; Apache-2.0 section 4(a) also asks for a copy of the License text itself. Upstream's
+; LICENSE is NOT on disk to ship today: scripts/update_mtgosdk_vendor.py:59-63
+; returns after copying the first of LICENSE/NOTICE it finds inside the NuGet
+; package, and that package root contains only NOTICE -- so the fallback that would
+; download LICENSE from upstream is never reached. This entry is guarded (the same
+; idiom the vendor trees used) so the build works today and starts shipping the
+; license the moment that script is corrected, rather than being a change someone
+; has to remember to make here as well. Recorded in ATTRIBUTIONS.md under License
+; Compatibility.
+#if FileExists('../vendor/mtgosdk/LICENSE')
+Source: "../vendor/mtgosdk/LICENSE"; DestDir: "{app}"; DestName: "MTGOSDK-LICENSE.txt"; Flags: ignoreversion
+#endif
+
+[InstallDelete]
+; Sweep the vendor tree a previous version installed.
+;
+; Every build released so far wrote {app}\vendor\mtgo_format_data and
+; {app}\vendor\mtgo_archetype_parser (see the note in [Files]). Those [Files]
+; entries are gone, so an upgrade would simply stop refreshing the directory and
+; leave it sitting there -- including the MTGOFormatData copy, which is the one
+; thing this change exists to stop distributing. Deleting it at install time is
+; what actually removes it from machines that already have it.
+;
+; Scoped to {app}\vendor rather than to the two subdirectories because nothing
+; else has ever been installed under it, and a stale empty parent is still
+; litter. Runs before the file copy, and nothing installed by this Setup lands
+; there, so there is nothing for it to race.
+Type: filesandordirs; Name: "{app}\vendor"
 
 [Dirs]
 ; Runtime data (config/cache/logs/data) lives under %LOCALAPPDATA%\{#MyAppName},
@@ -193,15 +252,17 @@ Type: filesandordirs; Name: "{app}\mtgo_integration"
 ; keep them:
 ;   %LOCALAPPDATA%\{#MyAppName}\config        - user settings
 ;   %LOCALAPPDATA%\{#MyAppName}\deck_history  - every saved version of every deck
-;   %LOCALAPPDATA%\{#MyAppName}\deck_records  - the saved-deck records, and the
-;                                               deck id each history is keyed by
+;   %LOCALAPPDATA%\{#MyAppName}\deck_records  - the saved-deck records, the deck
+;                                               id each history is keyed by, and
+;                                               the notes, outboard lists and
+;                                               sideboard guides the user typed
 ;   %USERPROFILE%\Documents\mtgo_decks        - the saved decks themselves
-; Both of the first two used to live under cache\, i.e. inside the first entry
-; below, so an uninstall deleted a user's whole edit history while leaving the
-; .txt files it promised to keep -- and deleting deck_records alone was enough,
-; because the id that reaches a history is stored only there. Adding a directory
-; under cache\ that a person authored re-opens that hole; put it beside config
-; instead.
+; All of that used to live under cache\, i.e. inside the first entry below, so an
+; uninstall deleted a user's whole edit history -- and every note they had
+; written -- while leaving the .txt files it promised to keep. Deleting
+; deck_records alone was enough on its own, because the id that reaches a history
+; is stored only there. Adding a file or directory under cache\ that a person
+; authored re-opens that hole; put it beside config instead.
 Type: filesandordirs; Name: "{localappdata}\{#MyAppName}\cache"
 Type: filesandordirs; Name: "{localappdata}\{#MyAppName}\logs"
 Type: filesandordirs; Name: "{localappdata}\{#MyAppName}\data"
