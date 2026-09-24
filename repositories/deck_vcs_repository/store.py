@@ -9,15 +9,18 @@ deck folder is.
 
 That argument rules out the deck folder; it says nothing about which *other*
 directory to use, and the first answer -- ``cache/deck_vcs/``, chosen because
-that is where this repo already keys per-deck notes, outboard and sideboard
-guides (:mod:`repositories.deck_repository.metadata_store`) -- was wrong.
-Everything else under ``cache/`` can be refetched or recomputed, which is why
-the uninstaller and ``scripts/clear_caches.py`` both sweep the whole directory
-while promising that what the user made is kept. A deck's edit history is the
-user's own work and nothing can rebuild it, so it lives in its own top-level
-directory beside ``config/`` that neither sweep touches. Unlike the notes
-stores, it is also a directory tree of open-able git repos rather than one
-JSON file, so nothing is lost by not sharing their home.
+that is where this app then kept per-deck notes, outboard lists and sideboard
+guides -- was wrong. Everything else under ``cache/`` can be refetched or
+recomputed, which is why the uninstaller and ``scripts/clear_caches.py`` both
+sweep the whole directory while promising that what the user made is kept. A
+deck's edit history is the user's own work and nothing can rebuild it, so it
+lives in its own top-level directory beside ``config/`` that neither sweep
+touches. The precedent that had been followed here was the same bug: those three
+JSON stores were a person's typing under a sweep too, and they have since
+followed, to ``DECK_RECORDS_DIR`` (``utils/constants/storage.py``). They share a
+directory with the saved-deck records because they are three fixed-name files;
+this is a growing tree of open-able git repos, which is why it keeps a root of
+its own.
 
 Handles are opened per operation, and a caller that is about to do a *batch* of
 reads wraps them in :meth:`StoreMixin.read_session` to share one. Opening is not

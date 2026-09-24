@@ -681,9 +681,10 @@ def shared_app_frame(
     Measured over ``test_deck_selector`` (32 tests), what accumulates in the
     module root is everything a repository or store bound at construction --
     ``config/config.json``, ``config/deck_selector_settings.json``,
-    ``cache/deck_notes.json``, ``cache/deck_cache.db``, ``cache/radar_cache.db``,
-    ``cache/format_card_pool.db``, ``cache/card_images/images.db`` and the images
-    under it, ``cache/archetype_decks_cache.json``. What lands per test is
+    ``deck_records/deck_notes.json``, ``cache/deck_cache.db``,
+    ``cache/radar_cache.db``, ``cache/format_card_pool.db``,
+    ``cache/card_images/images.db`` and the images under it,
+    ``cache/archetype_decks_cache.json``. What lands per test is
     everything resolved at call time: the settings a ``deck_selector_factory``
     window writes, and the saved-decks database through the class-level
     ``_get_db_path`` patch above -- which is class-level precisely so it *is*

@@ -52,12 +52,10 @@ from services.search_service import get_search_service
 from services.store_service import get_store_service
 from utils.background_worker import BackgroundWorker
 from utils.constants import (
-    GUIDE_STORE,
     LOGS_DIR,
-    NOTES_STORE,
-    OUTBOARD_STORE,
     ensure_base_dirs,
 )
+from utils.deck_metadata_migration import deck_metadata_stores
 from utils.diagnostics import EventLogger
 from utils.i18n import set_current_locale
 from utils.perf import timed
@@ -161,9 +159,13 @@ class AppController(
         self.loading_decks = False
         self.loading_daily_average = False
 
-        self.notes_store_path = NOTES_STORE
-        self.outboard_store_path = OUTBOARD_STORE
-        self.guide_store_path = GUIDE_STORE
+        # Through deck_metadata_stores() rather than the constants: it runs the
+        # one-off move off the old cache/ paths, and this is the first thing in
+        # the app to ask where the three documents are.
+        metadata_stores = deck_metadata_stores()
+        self.notes_store_path = metadata_stores.notes
+        self.outboard_store_path = metadata_stores.outboard
+        self.guide_store_path = metadata_stores.guide
         self.deck_notes_store = self.store_service.load_store(self.notes_store_path)
         self.outboard_store = self.store_service.load_store(self.outboard_store_path)
         self.guide_store = self.store_service.load_store(self.guide_store_path)
