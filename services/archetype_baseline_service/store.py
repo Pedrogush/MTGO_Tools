@@ -6,9 +6,12 @@ it and read back when a new deck of that archetype is first saved, which is the
 only way the root commit can be seeded without a network round trip on the save
 path.
 
-The file follows the pattern the deck repository already uses for notes,
-outboard and sideboard guides (:mod:`repositories.deck_repository.metadata_store`):
-one JSON object in ``cache/``, read and written whole under a path lock.
+The file follows the pattern the per-deck metadata stores use (notes, outboard
+and sideboard guides, ``utils/constants/storage.py``): one JSON object, read and
+written whole under a path lock. It stays in ``cache/``, which those three left,
+and the difference is the whole of the argument for both: a baseline is derived
+from a fetched pool, so a sweep costs a recompute, while a note is something a
+person typed and nothing can bring it back.
 
 Entries are overwritten freely as the metagame moves. That does **not** re-root
 any deck already created -- a deck's root is a frozen snapshot of what this held

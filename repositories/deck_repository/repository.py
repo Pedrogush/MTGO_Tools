@@ -7,14 +7,12 @@ from typing import Any
 
 from repositories.deck_repository.database import DatabaseMixin
 from repositories.deck_repository.filesystem import FilesystemMixin
-from repositories.deck_repository.metadata_store import MetadataStoreMixin
 from repositories.deck_repository.ui_state import UIStateMixin
 
 
 class DeckRepository(
     DatabaseMixin,
     FilesystemMixin,
-    MetadataStoreMixin,
     UIStateMixin,
 ):
     """Repository for deck data access operations and deck state management."""
