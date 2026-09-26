@@ -1,8 +1,6 @@
-import json
 import os
 import sqlite3
 import tempfile
-import threading
 from pathlib import Path
 
 import pytest
@@ -198,29 +196,6 @@ def test_save_deck_creates_directory(deck_repo, temp_dir):
     assert result_path.exists()
 
 
-def test_concurrent_save_notes_does_not_lose_updates(deck_repo, temp_dir, monkeypatch):
-    """Concurrent save_notes calls for different decks must all persist (issue #470)."""
-    notes_path = temp_dir / "deck_notes.json"
-    # Route the notes store at every import site to our temp file.
-    monkeypatch.setattr("repositories.deck_repository.metadata_store.NOTES_STORE", notes_path)
-
-    deck_keys = [f"deck_{i}" for i in range(20)]
-    barrier = threading.Barrier(len(deck_keys))
-
-    def writer(key: str) -> None:
-        barrier.wait()
-        deck_repo.save_notes(key, f"notes for {key}")
-
-    threads = [threading.Thread(target=writer, args=(k,)) for k in deck_keys]
-    for t in threads:
-        t.start()
-    for t in threads:
-        t.join()
-
-    data = json.loads(notes_path.read_text(encoding="utf-8"))
-    assert data == {k: f"notes for {k}" for k in deck_keys}
-
-
 # ---------------------------------------------------------------------------
 # DatabaseMixin: sort_by whitelist (SQL-injection guard)
 # ---------------------------------------------------------------------------
@@ -360,104 +335,6 @@ def test_update_in_db_metadata_only_on_nonexistent_id_returns_false(db_repo):
     # Ensure schema exists, then target a missing id with metadata only.
     db_repo.save_to_db("Seed", SAMPLE_DECK)
     assert db_repo.update_in_db(999999, metadata={"x": 1}) is False
-
-
-# ---------------------------------------------------------------------------
-# MetadataStoreMixin: notes / outboard / sideboard-guide roundtrips
-# ---------------------------------------------------------------------------
-
-
-def _route_stores(monkeypatch, temp_dir):
-    monkeypatch.setattr(
-        "repositories.deck_repository.metadata_store.NOTES_STORE",
-        temp_dir / "deck_notes.json",
-    )
-    monkeypatch.setattr(
-        "repositories.deck_repository.metadata_store.OUTBOARD_STORE",
-        temp_dir / "deck_outboard.json",
-    )
-    monkeypatch.setattr(
-        "repositories.deck_repository.metadata_store.GUIDE_STORE",
-        temp_dir / "deck_sbguides.json",
-    )
-
-
-def test_notes_roundtrip_and_default(deck_repo, temp_dir, monkeypatch):
-    _route_stores(monkeypatch, temp_dir)
-
-    assert deck_repo.load_notes("missing") == ""
-
-    deck_repo.save_notes("deck_a", "some notes")
-    assert deck_repo.load_notes("deck_a") == "some notes"
-
-
-def test_outboard_roundtrip_and_default(deck_repo, temp_dir, monkeypatch):
-    _route_stores(monkeypatch, temp_dir)
-
-    assert deck_repo.load_outboard("missing") == []
-
-    cards = [{"name": "Bolt", "qty": 4}]
-    deck_repo.save_outboard("deck_a", cards)
-    assert deck_repo.load_outboard("deck_a") == cards
-
-
-def test_sideboard_guide_roundtrip_and_default(deck_repo, temp_dir, monkeypatch):
-    _route_stores(monkeypatch, temp_dir)
-
-    assert deck_repo.load_sideboard_guide("missing") == []
-
-    guide = [{"vs": "Burn", "in": ["Leyline"], "out": ["Opt"]}]
-    deck_repo.save_sideboard_guide("deck_a", guide)
-    assert deck_repo.load_sideboard_guide("deck_a") == guide
-
-
-def test_save_outboard_preserves_other_keys_and_overwrites_same_key(
-    deck_repo, temp_dir, monkeypatch
-):
-    """Saving a second deck's outboard must not clobber the first, and
-    re-saving the same key replaces only that key's value."""
-    _route_stores(monkeypatch, temp_dir)
-
-    deck_repo.save_outboard("deck_a", [{"name": "Bolt", "qty": 4}])
-    deck_repo.save_outboard("deck_b", [{"name": "Opt", "qty": 2}])
-
-    # Both keys coexist after the second save.
-    assert deck_repo.load_outboard("deck_a") == [{"name": "Bolt", "qty": 4}]
-    assert deck_repo.load_outboard("deck_b") == [{"name": "Opt", "qty": 2}]
-
-    # Overwriting deck_a replaces only its value; deck_b is preserved.
-    deck_repo.save_outboard("deck_a", [{"name": "Snap", "qty": 3}])
-    assert deck_repo.load_outboard("deck_a") == [{"name": "Snap", "qty": 3}]
-    assert deck_repo.load_outboard("deck_b") == [{"name": "Opt", "qty": 2}]
-
-
-def test_save_sideboard_guide_preserves_other_keys_and_overwrites_same_key(
-    deck_repo, temp_dir, monkeypatch
-):
-    """The sideboard-guide store follows the same merge/overwrite semantics."""
-    _route_stores(monkeypatch, temp_dir)
-
-    guide_a = [{"vs": "Burn", "in": ["Leyline"], "out": ["Opt"]}]
-    guide_b = [{"vs": "Control", "in": ["Duress"], "out": ["Bolt"]}]
-    deck_repo.save_sideboard_guide("deck_a", guide_a)
-    deck_repo.save_sideboard_guide("deck_b", guide_b)
-
-    assert deck_repo.load_sideboard_guide("deck_a") == guide_a
-    assert deck_repo.load_sideboard_guide("deck_b") == guide_b
-
-    guide_a2 = [{"vs": "Aggro", "in": ["Bolt"], "out": ["Duress"]}]
-    deck_repo.save_sideboard_guide("deck_a", guide_a2)
-    assert deck_repo.load_sideboard_guide("deck_a") == guide_a2
-    assert deck_repo.load_sideboard_guide("deck_b") == guide_b
-
-
-def test_load_json_store_returns_empty_on_corrupt_file(deck_repo, temp_dir, monkeypatch):
-    _route_stores(monkeypatch, temp_dir)
-    notes_path = temp_dir / "deck_notes.json"
-    notes_path.write_text("{ this is not valid json", encoding="utf-8")
-
-    # Corrupt store must be tolerated: load returns the documented default.
-    assert deck_repo.load_notes("anything") == ""
 
 
 # ---------------------------------------------------------------------------

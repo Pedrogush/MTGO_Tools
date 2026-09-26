@@ -20,9 +20,11 @@ notes.
   between a version and what it came from. Your decklist file itself stays a
   plain `.txt` with no extra lines in it, so it still imports into MTGO and
   Manatraders unchanged.
-- **Deck names.** A deck's name is set once, shown in the deck's header, and
-  decides both the file it saves to and the history that file keeps. Renaming a
-  deck starts a separate history and leaves the existing one untouched.
+- **Deck names.** A deck's name is shown in the deck's header and becomes the
+  file it is saved to; click it to change it. The version history stays with
+  the deck rather than with the name, so renaming keeps it — what a new name
+  changes is the file: the next save writes one under it, and the old file is
+  left where it is.
 - **Archetype baseline.** A new **Baseline** tab measures the archetype of the
   deck on screen against the lists already cached for it: the cards every list
   runs and at what count, the cards every list runs at a count that moves, and
@@ -64,7 +66,7 @@ notes.
   minutes, which took minutes and stalled MTGO's own interface while it ran —
   including in the middle of a game. It is a single round trip now.
 - When the bridge could not read your MTGO username it said nothing at all; it
-  now reports why, and no longer gives up after the first of its three lookup
+  now reports why, and no longer gives up after the first of its two lookup
   strategies fails.
 - Cards in the Goldfish tab were visibly softer than the same cards in the deck
   grid. They are drawn the same way now.

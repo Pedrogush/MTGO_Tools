@@ -186,12 +186,22 @@ CARD_DATA_DIR = BASE_DATA_DIR / "data"
 # either -- see repositories/deck_vcs_repository/store.py for why the repos may
 # not sit beside the .txt files they mirror.
 DECK_HISTORY_DIR = BASE_DATA_DIR / "deck_history"
-# The saved-deck records: one row per deck the user has saved, holding its name,
-# format, archetype, and the ``deck_uuid`` its version history is keyed by. Here
-# rather than under cache/ for the same reason as DECK_HISTORY_DIR, and for one
-# more: the uuid lives in this database and nowhere else, so sweeping it away
-# also makes every history under deck_history/ unreachable -- the directories
-# survive with nothing left that can name them.
+# Everything the user wrote down *about* a deck, as opposed to the deck itself.
+# Chiefly the saved-deck records: one row per deck the user has saved, holding
+# its name, format, archetype, and the ``deck_uuid`` its version history is keyed
+# by. Here rather than under cache/ for the same reason as DECK_HISTORY_DIR, and
+# for one more: the uuid lives in that database and nowhere else, so sweeping it
+# away also makes every history under deck_history/ unreachable -- the
+# directories survive with nothing left that can name them.
+#
+# The three per-deck metadata documents (notes, outboard, sideboard guides -- see
+# utils/constants/storage.py) live here too, for the first reason alone: a person
+# typed them and nothing can recompute them. They are three fixed-name files
+# rather than a growing tree, so they do not earn a root of their own, and every
+# extra root is one more place the installer's [UninstallDelete] comment,
+# ensure_base_dirs() and tests/data_isolation.py REAL_DATA_DIRS must each be
+# told about -- a path missing from the last of those is a test writing into the
+# developer's real data.
 DECK_RECORDS_DIR = BASE_DATA_DIR / "deck_records"
 
 

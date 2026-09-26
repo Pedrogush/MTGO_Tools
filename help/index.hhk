@@ -70,6 +70,14 @@
     <param name="Local" value="deck_results.html">
     </OBJECT>
   <LI><OBJECT type="text/sitemap">
+    <param name="Name" value="Deck Stats">
+    <param name="Local" value="deck_workspace.html">
+    </OBJECT>
+  <LI><OBJECT type="text/sitemap">
+    <param name="Name" value="Deck Tables">
+    <param name="Local" value="deck_workspace.html">
+    </OBJECT>
+  <LI><OBJECT type="text/sitemap">
     <param name="Name" value="Deck Workspace">
     <param name="Local" value="deck_workspace.html">
     </OBJECT>

@@ -143,11 +143,10 @@ if (Test-Path $DistDir) {
     Write-Info "No existing dist directory found."
 }
 
-# Step 0: ensure vendor data directories exist
+# Step 0: refresh the vendored MTGOSDK package
 Write-Info "Updating vendor data..."
 Push-Location $ProjectRoot
 try {
-    $VendorUpdateScript = Join-Path $ProjectRoot "scripts\update_vendor_data.py"
     # Prefer the project virtualenv (which has the build deps like defusedxml and
     # PyInstaller). The venv is named ".venv" here; "env" is kept as a fallback for
     # other setups. A bare "python" on PATH is the last resort - on this machine
@@ -169,40 +168,57 @@ try {
     Ensure-DefusedXml -PythonPath $PythonPath
     Fail-On-Warnings
 
-    if (-not (Test-Path $VendorUpdateScript)) {
-        Write-Warn "Vendor update script not found; skipping vendor refresh."
-    } else {
+    # scripts\update_vendor_data.py is deliberately NOT run here any more.
+    #
+    # It refreshes vendor\mtgo_format_data and vendor\mtgo_archetype_parser
+    # (Badaro/MTGOFormatData and Badaro/MTGOArchetypeParser) by cloning both
+    # repositories. Neither tree is shipped any more: packaging\installer.iss and
+    # packaging\mtgo_tools.spec both dropped them, because no module in this
+    # repository reads either one and MTGOFormatData publishes no license to
+    # redistribute it under. A build step that clones two GitHub repositories to
+    # produce output that nothing consumes and nothing ships is pure build latency
+    # and a pure failure surface (it is network-dependent, and a failure here
+    # aborts the build through Fail-On-Warnings), so it is gone.
+    #
+    # The script itself is kept and still works. Run it by hand --
+    # `python scripts\update_vendor_data.py` -- to refresh the trees in a developer
+    # checkout. If something in the app ever starts reading them, that is the
+    # moment to restore this call together with the [Files] entries in
+    # installer.iss and the datas entries in mtgo_tools.spec; for the format data,
+    # its licensing has to be settled with the upstream author first.
+    #
+    # The MTGOSDK refresh below is a different script and does still run: its
+    # output (the NOTICE) does ship. It used to be nested inside the
+    # update_vendor_data.py branch, so a missing vendor script silently skipped it
+    # too; it is unconditional now.
+    $MtgoSdkScript = Join-Path $ProjectRoot "scripts\update_mtgosdk_vendor.py"
+    if (Test-Path $MtgoSdkScript) {
+        Write-Info "Updating MTGOSDK vendor data..."
         if ($PythonPath) {
-            & $PythonPath $VendorUpdateScript
+            & $PythonPath $MtgoSdkScript
         } else {
-            Write-Warn "Python not found; cannot update vendor data."
+            Write-Warn "Python not found; skipping MTGOSDK vendor update."
         }
-
         if ($LASTEXITCODE -ne 0) {
-            Write-Warn "Vendor update script exited with code $LASTEXITCODE"
+            Write-Warn "MTGOSDK vendor script exited with code $LASTEXITCODE"
         }
-
-        $MtgoSdkScript = Join-Path $ProjectRoot "scripts\update_mtgosdk_vendor.py"
-        if (Test-Path $MtgoSdkScript) {
-            Write-Info "Updating MTGOSDK vendor data..."
-            if ($PythonPath) {
-                & $PythonPath $MtgoSdkScript
-            } else {
-                Write-Warn "Python not found; skipping MTGOSDK vendor update."
-            }
-            if ($LASTEXITCODE -ne 0) {
-                Write-Warn "MTGOSDK vendor script exited with code $LASTEXITCODE"
-            }
-        } else {
-            Write-Warn "MTGOSDK update script not found."
-        }
+    } else {
+        Write-Warn "MTGOSDK update script not found."
     }
-    foreach ($vendorDir in @("vendor\mtgo_format_data", "vendor\mtgo_archetype_parser", "vendor\mtgosdk")) {
-        $fullPath = Join-Path $ProjectRoot $vendorDir
-        if (-not (Test-Path $fullPath)) {
-            Write-Info "Creating missing vendor directory: $vendorDir"
-            New-Item -ItemType Directory -Force -Path $fullPath | Out-Null
-        }
+
+    # installer.iss ships vendor\mtgosdk\NOTICE into {app} on an unguarded [Files]
+    # entry, because Apache-2.0 section 4(d) requires that NOTICE to travel with the
+    # MTGOSDK binaries carried inside the bridge publish output. Check for it here
+    # so a missing one is reported as a sentence now -- Fail-On-Warnings below turns
+    # this into a failed build -- instead of surfacing minutes later as an ISCC
+    # "no files found matching" on a path whose relevance is not obvious.
+    #
+    # The vendor directories are no longer pre-created as empty stubs here. That
+    # loop existed to keep the (now removed) #if DirExists entries in installer.iss
+    # happy; an empty vendor\mtgosdk would only mask a refresh that did not run.
+    $SdkNotice = Join-Path $ProjectRoot "vendor\mtgosdk\NOTICE"
+    if (-not (Test-Path $SdkNotice)) {
+        Write-Warn "vendor\mtgosdk\NOTICE is missing, so the installer cannot ship the MTGOSDK NOTICE that Apache-2.0 requires alongside the bundled bridge. Run scripts\update_mtgosdk_vendor.py."
     }
 
     $ManaDir = Join-Path $ProjectRoot "assets\mana"
