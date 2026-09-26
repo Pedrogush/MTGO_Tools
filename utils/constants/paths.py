@@ -178,12 +178,45 @@ DECKS_DIR = Path.home() / "Documents" / "mtgo_decks"
 DECK_SAVE_DIR = DECKS_DIR
 LOGS_DIR = BASE_DATA_DIR / "logs"
 CARD_DATA_DIR = BASE_DATA_DIR / "data"
+# Per-deck version history (one git repo per deck). A sibling of config/ rather
+# than a child of cache/ because it is the user's own work and nothing can
+# rebuild it: cache/, logs/ and data/ are swept wholesale by the uninstaller
+# ([UninstallDelete] in packaging/installer.iss) and by scripts/clear_caches.py,
+# under a promise that what the user made is preserved. It is not in DECKS_DIR
+# either -- see repositories/deck_vcs_repository/store.py for why the repos may
+# not sit beside the .txt files they mirror.
+DECK_HISTORY_DIR = BASE_DATA_DIR / "deck_history"
+# Everything the user wrote down *about* a deck, as opposed to the deck itself.
+# Chiefly the saved-deck records: one row per deck the user has saved, holding
+# its name, format, archetype, and the ``deck_uuid`` its version history is keyed
+# by. Here rather than under cache/ for the same reason as DECK_HISTORY_DIR, and
+# for one more: the uuid lives in that database and nowhere else, so sweeping it
+# away also makes every history under deck_history/ unreachable -- the
+# directories survive with nothing left that can name them.
+#
+# The three per-deck metadata documents (notes, outboard, sideboard guides -- see
+# utils/constants/storage.py) live here too, for the first reason alone: a person
+# typed them and nothing can recompute them. They are three fixed-name files
+# rather than a growing tree, so they do not earn a root of their own, and every
+# extra root is one more place the installer's [UninstallDelete] comment,
+# ensure_base_dirs() and tests/data_isolation.py REAL_DATA_DIRS must each be
+# told about -- a path missing from the last of those is a test writing into the
+# developer's real data.
+DECK_RECORDS_DIR = BASE_DATA_DIR / "deck_records"
 
 
 def ensure_base_dirs() -> None:
     """Ensure base config/cache/deck/log directories exist without importing side effects."""
     BASE_DATA_DIR.mkdir(parents=True, exist_ok=True)
-    for path in (CONFIG_DIR, CACHE_DIR, DECKS_DIR, LOGS_DIR, CARD_DATA_DIR):
+    for path in (
+        CONFIG_DIR,
+        CACHE_DIR,
+        DECKS_DIR,
+        LOGS_DIR,
+        CARD_DATA_DIR,
+        DECK_HISTORY_DIR,
+        DECK_RECORDS_DIR,
+    ):
         path.mkdir(parents=True, exist_ok=True)
 
 
@@ -202,7 +235,11 @@ DECK_TEXT_CACHE_FILE = CACHE_DIR / "deck_text_cache.json"  # Individual deck con
 ARCHETYPE_DECKS_CACHE_FILE = CACHE_DIR / "archetype_decks_cache.json"  # Deck lists per archetype
 FORMAT_CARD_POOL_DB_FILE = CACHE_DIR / "format_card_pool.db"
 RADAR_CACHE_DB_FILE = CACHE_DIR / "radar_cache.db"
-SAVED_DECKS_DB_FILE = CACHE_DIR / "saved_decks.db"
+SAVED_DECKS_DB_FILE = DECK_RECORDS_DIR / "saved_decks.db"
+# Where the database was until it moved out of the swept cache/ directory.
+# repositories/deck_repository/migration.py moves a shipped build's database off
+# this path on first use; nothing else may read it, and once moved it is gone.
+LEGACY_SAVED_DECKS_DB_FILE = CACHE_DIR / "saved_decks.db"
 DECK_CACHE_FILE = DECK_TEXT_CACHE_FILE
 CURR_DECK_FILE = DECKS_DIR / "curr_deck.txt"
 

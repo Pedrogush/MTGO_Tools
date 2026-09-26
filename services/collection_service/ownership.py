@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from utils.card_names import fold_card_name
+
 if TYPE_CHECKING:
     from services.collection_service.protocol import CollectionServiceProto
 
@@ -29,18 +31,25 @@ class OwnershipMixin(_Base):
         return owned >= required_count
 
     def get_owned_count(self, card_name: str) -> int:
-        # Inventories from the canonical load paths are normalized to
-        # lowercase keys, but legacy cached files may still contain
-        # title-cased keys. Probe both forms so ownership is never
-        # underreported regardless of how the inventory was built (#469).
+        # Inventories from the canonical load paths are normalized with
+        # fold_card_name (see parsing.build_inventory), but legacy cached files
+        # and hand-built inventories may still contain title-cased or accented
+        # keys. Probe every form so ownership is never underreported regardless
+        # of how the inventory was built (#469).
         if card_name in self._collection:
             return self._collection[card_name]
         lowered = card_name.lower()
         if lowered in self._collection:
             return self._collection[lowered]
-        # Fall back to a case-insensitive scan for legacy mixed-case keys.
+        # The bridge reports "Kíli the Resourceful" while decklists spell it
+        # "Kili the Resourceful"; fold both sides with the same helper the card
+        # index uses so the two spellings meet.
+        folded = fold_card_name(card_name)
+        if folded and folded in self._collection:
+            return self._collection[folded]
+        # Fall back to a scan for legacy mixed-case / unfolded keys.
         for key, value in self._collection.items():
-            if key.lower() == lowered:
+            if key.lower() == lowered or (folded and fold_card_name(key) == folded):
                 return value
         return 0
 

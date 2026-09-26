@@ -61,7 +61,20 @@ class DeckManagementMixin(_Base):
         file_path: Path | None = None,
         archetype: str | None = None,
     ) -> tuple[Path, int | None]:
-        return self.workflow_service.save_deck(
+        if deck is None:
+            # A deck with no record of its own -- built from scratch, or loaded
+            # as bare text -- acquires one by being saved. Without this it keeps
+            # falling back to the "manual" key, so its versions pile up in a
+            # history no deck ever looks at again.
+            #
+            # Made *before* the save, and empty: the save is what stamps the
+            # deck's stable id, and it can only stamp a record that exists by
+            # then, while what the deck is called is only settled once the file
+            # has been written. An empty record answers every question the save
+            # asks of it the same way no record did.
+            deck = {}
+            self.deck_repo.set_current_deck(deck)
+        saved_path, deck_id = self.workflow_service.save_deck(
             deck_name=deck_name,
             deck_content=deck_content,
             format_name=format_name,
@@ -70,6 +83,39 @@ class DeckManagementMixin(_Base):
             file_path=file_path,
             archetype=archetype,
         )
+        deck.setdefault("href", saved_path.stem)
+        deck.setdefault("name", saved_path.stem)
+        self._sync_saved_deck_record(deck, saved_path, format_name, archetype)
+        return saved_path, deck_id
+
+    @staticmethod
+    def _sync_saved_deck_record(
+        deck: dict[str, Any] | None,
+        saved_path: Path,
+        format_name: str,
+        archetype: str | None,
+    ) -> None:
+        """Point the in-memory deck record at what was just written.
+
+        Every save path ends here, which is the reason this lives on the
+        controller rather than in the Save dialog's handler. The version history
+        follows the deck's stable id now, so a stale ``path`` no longer splits
+        one deck's commits across two repos -- but it is still the file a
+        checkout is allowed to rewrite, and it is how the *next* session finds
+        the saved-decks row that hands the deck its id back. A record left
+        pointing at a scraped ``href`` (or at the file it was *loaded* from,
+        after a Save As under a new name) therefore loses the deck its versions
+        the next time it is opened.
+        """
+        if deck is None:
+            return
+        deck["format"] = format_name
+        if archetype:
+            deck["archetype"] = archetype
+        else:
+            deck.pop("archetype", None)
+        deck["path"] = str(saved_path)
+        deck["source"] = "file"
 
     def find_saved_deck(self, file_path: Path, deck_text: str) -> dict[str, Any] | None:
         """The saved-deck record (format, archetype, ...) for a deck file, if any.

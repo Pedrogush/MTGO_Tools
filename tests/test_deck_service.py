@@ -67,18 +67,18 @@ def test_analyze_deck_blank_line_switches_to_sideboard_without_header(deck_servi
     assert dict(stats["sideboard_cards"]) == {"Abrade": 1}
 
 
-def test_leading_blank_line_diverges_between_to_dictionary_and_analyze(deck_service):
-    """strip_input makes the two entry points treat a leading blank line differently.
+def test_leading_blank_line_reads_the_same_on_both_entry_points(deck_service):
+    """A blank line before the first card separates nothing, on either entry point.
 
-    analyze_deck strips the input first, so the leading blank vanishes and every
-    card stays in the mainboard. deck_to_dictionary keeps the raw input, so the
-    leading blank is a (non-trailing) zone flip and every card lands in the
-    sideboard.
+    These two used to disagree: ``analyze_deck`` stripped the input first so the
+    leading blank vanished, while ``deck_to_dictionary`` read it as a zone flip
+    and put the whole deck in the sideboard. Both now go through one scanner
+    that opens the sideboard only once a card has been seen.
     """
     deck_text = "\n2 Island\n1 Abrade"
 
     deck_dict = deck_service.deck_to_dictionary(deck_text)
-    assert deck_dict == {"Sideboard Island": 2.0, "Sideboard Abrade": 1.0}
+    assert deck_dict == {"Island": 2.0, "Abrade": 1.0}
 
     stats = deck_service.analyze_deck(deck_text)
     assert dict(stats["mainboard_cards"]) == {"Island": 2, "Abrade": 1}

@@ -24,27 +24,9 @@ def dump_collection(limit_cards: int = 15) -> None:
         print(f"  …and {remaining} more")
 
 
-def dump_history(limit_items: int = 10) -> None:
-    history = mtgo_bridge.get_match_history()
-    if not history:
-        print("No history data returned.")
-        return
-
-    items = history.get("items") or []
-    print(f"History items loaded: {len(items)} (loaded={history.get('historyLoaded')})")
-    for entry in items[:limit_items]:
-        kind = entry.get("kind")
-        identifier = entry.get("id")
-        stamp = entry.get("startTime")
-        print(f"- {kind} #{identifier} started {stamp}")
-
-
 def main() -> None:
     print("Collection snapshot:")
     dump_collection()
-    print()
-    print("Match history overview:")
-    dump_history()
 
 
 if __name__ == "__main__":

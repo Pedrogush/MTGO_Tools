@@ -9,6 +9,8 @@ from widgets.frames.app_frame.handlers.card_shortcuts import CardShortcutHandler
 from widgets.frames.app_frame.handlers.child_windows import ChildWindowHandlers
 from widgets.frames.app_frame.handlers.data_loading import DataLoadingHandlers
 from widgets.frames.app_frame.handlers.deck_content import DeckContentHandlers
+from widgets.frames.app_frame.handlers.deck_history import DeckHistoryHandlers
+from widgets.frames.app_frame.handlers.deck_name import DeckNameHandlers
 from widgets.frames.app_frame.handlers.research import DeckResearchHandlers
 from widgets.frames.app_frame.handlers.sideboard_guide_entries import (
     SideboardGuideEntryHandlers,
@@ -32,6 +34,8 @@ __all__ = [
     "ChildWindowHandlers",
     "DataLoadingHandlers",
     "DeckContentHandlers",
+    "DeckHistoryHandlers",
+    "DeckNameHandlers",
     "DeckResearchHandlers",
     "SideboardGuideEntryHandlers",
     "SideboardGuideImportExportHandlers",

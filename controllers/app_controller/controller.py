@@ -52,12 +52,10 @@ from services.search_service import get_search_service
 from services.store_service import get_store_service
 from utils.background_worker import BackgroundWorker
 from utils.constants import (
-    GUIDE_STORE,
     LOGS_DIR,
-    NOTES_STORE,
-    OUTBOARD_STORE,
     ensure_base_dirs,
 )
+from utils.deck_metadata_migration import deck_metadata_stores
 from utils.diagnostics import EventLogger
 from utils.i18n import set_current_locale
 from utils.perf import timed
@@ -161,9 +159,13 @@ class AppController(
         self.loading_decks = False
         self.loading_daily_average = False
 
-        self.notes_store_path = NOTES_STORE
-        self.outboard_store_path = OUTBOARD_STORE
-        self.guide_store_path = GUIDE_STORE
+        # Through deck_metadata_stores() rather than the constants: it runs the
+        # one-off move off the old cache/ paths, and this is the first thing in
+        # the app to ask where the three documents are.
+        metadata_stores = deck_metadata_stores()
+        self.notes_store_path = metadata_stores.notes
+        self.outboard_store_path = metadata_stores.outboard
+        self.guide_store_path = metadata_stores.guide
         self.deck_notes_store = self.store_service.load_store(self.notes_store_path)
         self.outboard_store = self.store_service.load_store(self.outboard_store_path)
         self.guide_store = self.store_service.load_store(self.guide_store_path)
@@ -180,6 +182,12 @@ class AppController(
         self._bulk_check_worker_active = False
         self._cache_warmer: CacheWarmer | None = None
         self._available_update: UpdateInfo | None = None
+        # True while a user-requested release check is in flight, so a second
+        # click on File > Check for updates is dropped rather than starting a
+        # second request; see UpdateCheckMixin.check_for_update_now. Read and
+        # written on the UI thread only (BackgroundWorker marshals its callbacks
+        # through wx.CallAfter), so it needs no lock.
+        self._update_check_in_flight = False
         # Set only while an in-app update is downloading, so shutdown() can stop
         # it; see UpdateCheckMixin.apply_available_update.
         self._update_installer: UpdateInstaller | None = None
@@ -232,6 +240,31 @@ class AppController(
             logger.debug(f"Rarity index unavailable, skipping the Pauper test: {exc}")
             return None
         return rarity_service
+
+    @property
+    def worker(self) -> BackgroundWorker:
+        """The app's background worker, for code outside the controller package.
+
+        ``_worker`` is private and was read from the widget layer by name, with
+        a ``None`` default (``getattr(controller, "_worker", None)``) -- so a
+        rename here would not have failed anywhere. It would have handed the
+        History and Baseline panels a ``None``, and both fall back to reading on
+        the calling thread, which is the UI thread: the three-second stall
+        b8f85591 exists to remove, returning silently and only for users with
+        long histories.
+
+        A ``submit_background(...)`` method would be the tighter boundary, and
+        is what the review proposed. It is not what fits: two of the three
+        callers *hand the worker on* to a panel that stores it
+        (``DeckHistoryPanel(worker=...)``), because the panels own the stale-
+        token guard around their own submissions and have to be constructible
+        without a controller at all -- they take ``worker=None`` and read
+        inline, which is how their tests drive them. A method would have those
+        call sites passing ``controller.submit_background`` as a bound callable,
+        which is the same reach-through wearing a different name. The attribute
+        is the thing being shared, so the attribute is what is published.
+        """
+        return self._worker
 
     # ----- Backward-compat repository accessors -----
     # Widgets, handlers, and a few tests still reach for ``controller.card_repo``,

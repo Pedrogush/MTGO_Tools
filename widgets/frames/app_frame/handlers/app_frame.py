@@ -11,13 +11,14 @@ from loguru import logger
 
 from services.image_service.priorities import PRIORITY_SELECTED_DECK
 from services.update_installer import can_auto_update
-from utils.constants import APP_FRAME_MIN_SIZE, APP_FRAME_SIZE, SPACE_SM
+from utils.constants import APP_FRAME_MIN_SIZE, APP_FRAME_SIZE, APP_VERSION, SPACE_SM
 from utils.constants.timing import IMAGE_REFRESH_COALESCE_MS
 from utils.i18n import LOCALE_LABELS
 from utils.runtime_flags import is_automation_enabled
 from widgets.dialogs.help_dialog import show_help
 from widgets.dialogs.image_download_dialog import show_image_download_dialog
 from widgets.dialogs.tutorial_dialog import show_tutorial
+from widgets.dialogs.update_check_dialog import show_update_check_notice
 from widgets.dialogs.update_dialog import show_update_dialog
 from widgets.frames.app_frame.handlers.deck_formatting import simple_summary_html
 from widgets.frames.app_frame.handlers.session_logic import should_show_tutorial
@@ -28,7 +29,7 @@ from widgets.wx_layout import set_shown
 
 if TYPE_CHECKING:
     from services.image_service import CardImageRequest
-    from services.update_service import UpdateInfo
+    from services.update_service import CheckResult, UpdateInfo
     from widgets.frames.app_frame.protocol import AppFrameProto
 
     _Base = AppFrameProto
@@ -97,6 +98,14 @@ class AppFrameHandlersMixin(_Base):
                 help=self._t("deck_actions.tooltip.save_deck"),
                 on_activate=lambda: self.on_save_clicked(None),
             ),
+            # The research panel's Save dropdown offers this too (#1044); it is
+            # here as well so the builder, where that panel is off screen, can
+            # reach it the same way it reaches Save Deck.
+            MenuEntry(
+                label=self._t("menu.save_diff"),
+                help=self._t("deck_diff.title"),
+                on_activate=lambda: self.on_save_diff_clicked(None),
+            ),
             separator(),
             MenuEntry(
                 label=self._t("toolbar.load_collection"),
@@ -120,6 +129,16 @@ class AppFrameHandlersMixin(_Base):
             MenuEntry(
                 label=self._t("toolbar.export_diagnostics"),
                 on_activate=self._open_feedback_dialog,
+            ),
+            # #1041: the only way to re-ask GitHub inside the day the automatic
+            # check is throttled to. It sits beside Export Diagnostics because
+            # both are about the app itself rather than about a deck, and above
+            # Preferences because that is where the *automatic* check is turned
+            # on and off -- the two are one subject read top to bottom.
+            MenuEntry(
+                label=self._t("menu.check_for_updates"),
+                help=self._t("menu.check_for_updates.help"),
+                on_activate=self._check_for_updates_now,
             ),
             separator(),
             MenuEntry(
@@ -320,6 +339,58 @@ class AppFrameHandlersMixin(_Base):
         )
         self.status_bar.SetToolTip(self._t("app.tooltip.update_available", version=info.version))
         self.status_bar.Bind(wx.EVT_LEFT_DOWN, self._on_status_bar_click)
+
+    def _check_for_updates_now(self) -> None:
+        """*File ▸ Check for updates*: ask GitHub now, and say what came back (#1041).
+
+        The work is a network request, so it goes to the background worker and
+        this returns immediately — the menu popup's own modal loop is already
+        blocking the UI thread at this point, and a request on top of it would
+        freeze the window for the length of a timeout.
+
+        A second pick while the first is still in flight is answered in the
+        status strip rather than by a second request; the controller drops it.
+        """
+        started = self.controller.check_for_update_now(self._on_update_check_finished)
+        self._set_status(
+            "app.status.checking_for_updates" if started else "app.status.update_check_running"
+        )
+
+    def _on_update_check_finished(self, result: CheckResult) -> None:
+        """Report one of the three outcomes. On the UI thread (see the mixin).
+
+        The update case deliberately renders *exactly* what the automatic check
+        renders — the status note and the Help-menu entry, through
+        :meth:`_on_update_available` — and then opens the prompt that note leads
+        to, because this user asked and is waiting for the window rather than for
+        a note they would have to notice and click.
+        """
+        from services.update_service import OUTCOME_UNREACHABLE, OUTCOME_UP_TO_DATE
+
+        if result.outcome == OUTCOME_UP_TO_DATE:
+            version = result.current_version or APP_VERSION
+            self._set_status("app.status.update_check_current", version=version)
+            show_update_check_notice(
+                self,
+                self._t("app.update_check.current.heading"),
+                self._t("app.update_check.current.body", version=version),
+            )
+            return
+        if result.outcome == OUTCOME_UNREACHABLE or result.info is None:
+            # ``info is None`` cannot happen for the remaining outcome, but an
+            # unreachable check that fell back to a cached answer must not be
+            # dressed up as a fresh one, and a hypothetical third state must not
+            # end in silence — which is the bug this whole feature is about.
+            self._set_status("app.status.update_check_failed")
+            show_update_check_notice(
+                self,
+                self._t("app.update_check.failed.heading"),
+                self._t("app.update_check.failed.body"),
+            )
+            return
+        self._set_status("app.status.update_available", version=result.info.version)
+        self._on_update_available(result.info)
+        self._open_update()
 
     def _on_status_bar_click(self, event: wx.MouseEvent) -> None:
         # Scoped to the update field: a click on the status *message* must stay
@@ -717,12 +788,18 @@ class AppFrameHandlersMixin(_Base):
     def _flush_deck_filters(self, _event: wx.TimerEvent) -> None:
         self._apply_deck_filters()
 
-    def fetch_archetypes(self, force: bool = False) -> None:
-        if force:
-            # An explicit reload must always refresh the deck list, even if the
-            # refreshed archetype list is byte-for-byte identical. Clearing the
-            # dedup signature lets _on_archetypes_loaded reload decks again.
-            self._last_archetype_reload_sig = None
+    def fetch_archetypes(self) -> None:
+        """Load the archetype list for the current format, cache-first.
+
+        There is no force flag. The one caller that passed it was the panel's
+        "Reload Archetypes" button, which no UI ever rendered; it cleared
+        ``_last_archetype_reload_sig`` so an explicit reload would repopulate
+        the deck list even when the archetype list came back byte-for-byte
+        identical. Nothing needs that now -- every route through here is
+        cache-first, and a list that did not change is exactly the case the
+        dedup exists for. ``AppController.fetch_archetypes`` keeps its own
+        ``force``; this frame simply never asks for it.
+        """
         self.research_panel.set_loading_state()
         self.controller.deck_repo.clear_decks_list()
         self.deck_list.Clear()
@@ -735,7 +812,6 @@ class AppFrameHandlersMixin(_Base):
             on_success=lambda archetypes: wx.CallAfter(self._on_archetypes_loaded, archetypes),
             on_error=lambda error: wx.CallAfter(self._on_archetypes_error, error),
             on_status=lambda *a, **kw: wx.CallAfter(self._set_status, *a, **kw),
-            force=force,
         )
 
     def _clear_deck_display(self) -> None:
@@ -793,3 +869,8 @@ class AppFrameHandlersMixin(_Base):
 
     def _update_stats(self, deck_text: str) -> None:
         self.deck_stats_panel.update_stats(deck_text, self.zone_cards)
+        # The goldfish rides the same push (issue #1045) rather than a second
+        # one: every site that has a new decklist to show already calls this.
+        # It only re-points the table -- no shuffle, no deal, no art decode --
+        # so it costs a parse the deck-render block can afford.
+        self.deck_goldfish_panel.set_deck(deck_text)

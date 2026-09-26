@@ -59,6 +59,9 @@ class FakeDetailsDialog:
 
     instances: list[FakeDetailsDialog] = []
     answer: tuple[str, str] = ("Modern", "")
+    #: The name the user types. The deck's file follows from it, so the fake
+    #: has to supply one like the real dialog does.
+    name: str = "Saved Deck"
 
     def __init__(self, parent, **kwargs: Any) -> None:
         self.kwargs = kwargs
@@ -66,6 +69,9 @@ class FakeDetailsDialog:
 
     def ShowModal(self) -> int:  # noqa: N802 - wx API
         return wx.ID_OK
+
+    def deck_name(self) -> str:
+        return FakeDetailsDialog.name
 
     def selected_format(self) -> str:
         return FakeDetailsDialog.answer[0]
@@ -77,31 +83,56 @@ class FakeDetailsDialog:
         return None
 
 
-@pytest.fixture(name="frame")
-def fixture_frame(deck_selector_factory, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+def _scene(frame, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """One deck loaded, both dialogs faked, no default folder set."""
     FakeFileDialog.instances = []
     FakeFileDialog.path = None
     FakeDetailsDialog.instances = []
     FakeDetailsDialog.answer = ("Modern", "")
+    FakeDetailsDialog.name = "Saved Deck"
     documents = tmp_path / "Documents"
     documents.mkdir()
     # The Windows fallback, pinned so the test does not depend on the account.
     monkeypatch.setattr(controller_settings, "documents_dir", lambda: documents)
-    frame = deck_selector_factory()
     frame.test_documents = documents  # type: ignore[attr-defined]
+    # The option a previous test may have set; every test here starts unset.
+    frame.controller.set_default_deck_save_path(None)
     frame.controller.deck_repo.set_current_deck_text(DECK_TEXT)
     frame.zone_cards = {
         "main": [{"name": "Mountain", "qty": 4}, {"name": "Island", "qty": 4}],
         "side": [{"name": "Dispel", "qty": 2}],
         "out": [],
     }
+    with (
+        patch("wx.FileDialog", FakeFileDialog),
+        patch(DETAILS_CLS, FakeDetailsDialog),
+        patch("wx.MessageBox"),
+    ):
+        yield frame
+
+
+@pytest.fixture(name="frame")
+def fixture_frame(shared_frame, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """The module's window (see ``shared_app_frame``), with the scene set up again.
+
+    The saved-decks database is still per test -- ``ui_environment`` points
+    ``DatabaseMixin._get_db_path`` at this test's tmp cache, and the path is
+    resolved per call -- so a record one test saves is invisible to the next,
+    which is what the content-matching tests need.
+    """
+    yield from _scene(shared_frame, tmp_path, monkeypatch)
+
+
+@pytest.fixture(name="fresh_frame")
+def fixture_fresh_frame(deck_selector_factory, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """A newly built window, for the test that reads the settings file itself.
+
+    A settings file belongs to the session manager that opened it, and the
+    shared window's is the module's, not this test's ``ui_environment`` one.
+    """
+    frame = deck_selector_factory()
     try:
-        with (
-            patch("wx.FileDialog", FakeFileDialog),
-            patch(DETAILS_CLS, FakeDetailsDialog),
-            patch("wx.MessageBox"),
-        ):
-            yield frame
+        yield from _scene(frame, tmp_path, monkeypatch)
     finally:
         frame.Destroy()
 
@@ -142,17 +173,17 @@ def test_file_menu_offers_load_and_save_deck(frame) -> None:
 # ---------------------------------------------------------------------------- folder
 
 
-def test_save_opens_save_as_in_the_default_deck_folder(frame, tmp_path: Path) -> None:
+def test_save_writes_into_the_default_deck_folder_without_a_dialog(frame, tmp_path: Path) -> None:
+    """The name decides the file, so Save As has nothing left to ask."""
     folder = tmp_path / "my decks"
     folder.mkdir()
     frame.controller.set_default_deck_save_path(str(folder))
+    FakeDetailsDialog.name = "Izzet Murktide"
 
     _click_title(frame, "Save")
 
-    assert len(FakeFileDialog.instances) == 1
-    kwargs = FakeFileDialog.instances[0].kwargs
-    assert kwargs["defaultDir"] == str(folder)
-    assert kwargs["style"] & wx.FD_SAVE
+    assert FakeFileDialog.instances == []
+    assert (folder / "Izzet Murktide.txt").read_text(encoding="utf-8") == DECK_TEXT
 
 
 def test_load_opens_in_the_same_default_deck_folder(frame, tmp_path: Path) -> None:
@@ -168,12 +199,14 @@ def test_load_opens_in_the_same_default_deck_folder(frame, tmp_path: Path) -> No
 
 def test_unset_folder_falls_back_to_documents(frame) -> None:
     assert frame.controller.get_default_deck_save_path() == ""
+    documents = str(frame.test_documents)
 
     _click_title(frame, "Save")
     _click_title(frame, "Load")
 
-    documents = str(frame.test_documents)
-    assert [d.kwargs["defaultDir"] for d in FakeFileDialog.instances] == [documents, documents]
+    # Save writes there rather than asking; only Load still opens a dialog.
+    assert [d.kwargs["defaultDir"] for d in FakeFileDialog.instances] == [documents]
+    assert (frame.test_documents / "Saved Deck.txt").exists()
 
 
 def test_a_folder_that_no_longer_exists_falls_back_to_documents(frame, tmp_path: Path) -> None:
@@ -188,8 +221,11 @@ def test_a_folder_that_no_longer_exists_falls_back_to_documents(frame, tmp_path:
 
 
 def test_save_writes_the_file_and_records_format_and_archetype(frame, tmp_path: Path) -> None:
-    target = tmp_path / "Izzet Murktide.txt"
-    FakeFileDialog.path = str(target)
+    folder = tmp_path / "decks"
+    folder.mkdir()
+    frame.controller.set_default_deck_save_path(str(folder))
+    target = folder / "Izzet Murktide.txt"
+    FakeDetailsDialog.name = "Izzet Murktide"
     FakeDetailsDialog.answer = ("Legacy", "Izzet Delver")
 
     _click_title(frame, "Save")
@@ -205,8 +241,11 @@ def test_save_writes_the_file_and_records_format_and_archetype(frame, tmp_path: 
 
 
 def test_a_blank_archetype_saves_without_one(frame, tmp_path: Path) -> None:
-    target = tmp_path / "Brew.txt"
-    FakeFileDialog.path = str(target)
+    folder = tmp_path / "decks"
+    folder.mkdir()
+    frame.controller.set_default_deck_save_path(str(folder))
+    target = folder / "Brew.txt"
+    FakeDetailsDialog.name = "Brew"
     FakeDetailsDialog.answer = ("Modern", "")
 
     _click_title(frame, "Save")
@@ -217,18 +256,24 @@ def test_a_blank_archetype_saves_without_one(frame, tmp_path: Path) -> None:
 
 
 def test_cancelling_the_details_dialog_writes_nothing(frame, tmp_path: Path) -> None:
-    FakeFileDialog.path = str(tmp_path / "never.txt")
+    folder = tmp_path / "decks"
+    folder.mkdir()
+    frame.controller.set_default_deck_save_path(str(folder))
+    FakeDetailsDialog.name = "never"
     with patch.object(FakeDetailsDialog, "ShowModal", return_value=wx.ID_CANCEL):
         _click_title(frame, "Save")
-    assert FakeFileDialog.instances == []
-    assert not (tmp_path / "never.txt").exists()
+    assert list(folder.iterdir()) == []
 
 
 def test_archetype_round_trips_through_save_and_load(frame, tmp_path: Path) -> None:
-    target = tmp_path / "Round Trip.txt"
-    FakeFileDialog.path = str(target)
+    folder = tmp_path / "decks"
+    folder.mkdir()
+    frame.controller.set_default_deck_save_path(str(folder))
+    target = folder / "Round Trip.txt"
+    FakeDetailsDialog.name = "Round Trip"
     FakeDetailsDialog.answer = ("Pioneer", "Rakdos Midrange")
     _click_title(frame, "Save")
+    FakeFileDialog.path = str(target)
 
     # Start from a different deck so the load has something to replace.
     frame.controller.deck_repo.set_current_deck(None)
@@ -244,17 +289,18 @@ def test_archetype_round_trips_through_save_and_load(frame, tmp_path: Path) -> N
     assert loaded["format"] == "Pioneer"
     assert "Rakdos Midrange" in frame.status_bar.GetStatusText()
 
-    # ...and saving it again offers what it was saved with.
+    # ...and saving it again asks nothing, because it already has a name.
     FakeDetailsDialog.instances = []
     _click_title(frame, "Save")
-    offered = FakeDetailsDialog.instances[0].kwargs
-    assert offered["initial_format"] == "Pioneer"
-    assert offered["initial_archetype"] == "Rakdos Midrange"
+    assert FakeDetailsDialog.instances == []
 
 
 def test_a_moved_file_still_finds_its_archetype_by_content(frame, tmp_path: Path) -> None:
-    original = tmp_path / "Original.txt"
-    FakeFileDialog.path = str(original)
+    folder = tmp_path / "decks"
+    folder.mkdir()
+    frame.controller.set_default_deck_save_path(str(folder))
+    original = folder / "Original.txt"
+    FakeDetailsDialog.name = "Original"
     FakeDetailsDialog.answer = ("Modern", "Boros Energy")
     _click_title(frame, "Save")
 
@@ -285,6 +331,44 @@ def test_a_research_deck_opens_the_dialog_on_its_list_format_and_archetype(frame
     assert offered["initial_archetype"] == "Azorius Control"
 
 
+def test_the_name_field_opens_on_the_scraped_decks_own_label(frame) -> None:
+    """The one-time dialog pre-fills what the Save As default used to offer."""
+    frame.controller.deck_repo.set_current_deck(
+        {
+            "href": "modern-affinity",
+            "name": "modern-affinity",
+            "source": "mtggoldfish",
+            "player": "pedronavaja",
+            "result": "17th",
+            "date": "2026-09-21",
+            "event": "Modern Challenge 32",
+        }
+    )
+
+    _click_title(frame, "Save")
+
+    offered = FakeDetailsDialog.instances[0].kwargs
+    assert offered["initial_name"] == "pedronavaja, 17th, 2026-09-21_Modern Challenge 32"
+
+
+def test_a_named_deck_is_never_asked_again(frame, tmp_path: Path) -> None:
+    """Every save after the first writes silently to the same file."""
+    folder = tmp_path / "decks"
+    folder.mkdir()
+    frame.controller.set_default_deck_save_path(str(folder))
+    FakeDetailsDialog.name = "Already Named"
+
+    _click_title(frame, "Save")
+    assert len(FakeDetailsDialog.instances) == 1
+
+    _click_title(frame, "Save")
+    _click_title(frame, "Save")
+
+    assert len(FakeDetailsDialog.instances) == 1, "a named deck must not re-ask"
+    assert FakeFileDialog.instances == []
+    assert [p.name for p in folder.iterdir()] == ["Already Named.txt"]
+
+
 def test_an_unrecorded_deck_opens_the_dialog_on_the_detected_format(frame) -> None:
     frame.controller.deck_repo.set_current_deck(None)
     frame.controller.detect_deck_format = lambda _text: "Legacy"
@@ -307,9 +391,10 @@ def test_undetectable_format_falls_back_to_the_research_format(frame) -> None:
 # ---------------------------------------------------------------------------- the option
 
 
-def test_the_default_folder_option_persists_and_clears(frame, tmp_path: Path) -> None:
+def test_the_default_folder_option_persists_and_clears(fresh_frame, tmp_path: Path) -> None:
     import utils.constants as constants
 
+    frame = fresh_frame
     folder = tmp_path / "decks here"
     folder.mkdir()
     groups = frame.preference_groups()

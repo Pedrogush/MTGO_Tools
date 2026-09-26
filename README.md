@@ -20,6 +20,11 @@ A desktop application for Magic: The Gathering Online (MTGO) players providing m
 - **Sideboard Guides**: Create and manage matchup-specific sideboarding plans, stored per deck configuration.
 - **Collection Management**: Import your MTGO collection via the .NET Bridge and see what cards you own or are missing for any deck.
 - **Challenge Timer**: Alerts when MTGO challenge events are about to start.
+- **Deck Version History**: Every save of a deck is recorded as a version. A rail beside the cards lists them, and a History tab shows the graph, the diff between any two, and puts an older version back on screen.
+- **Archetype Baseline**: A Baseline tab for the deck on screen, splitting its archetype into the cards every list runs, the counts that move, and the slots that are actually yours, with the flex candidates ranked by play rate.
+- **Goldfish**: Deal an opening hand off the mainboard, mulligan, draw, and play the cards out on a table.
+- **Collection Diff**: Save what a deck needs and your collection does not have as a decklist file, ready to paste wherever you buy, trade, or rent cards.
+- **Update Check**: File ▸ Check for updates looks for a newer release, verifies the installer against the checksum published with it, and installs it.
 
 ![Metagame Analysis window: a horizontal bar chart of Modern metagame share over the last 5 days, led by Goryo's Vengeance at 8.7%, beside a Metagame Changes panel listing archetypes that gained or lost share against the previous period](docs/images/metagame-analysis.png)
 
@@ -69,7 +74,19 @@ ruff check --fix .
 
 # Or, from Windows directly
 pytest
+
+# The fast way: non-UI tests across the cores, UI tests alongside them
+python scripts/run_tests_fast.py
 ```
+
+`pytest` on its own still runs everything, serially, as before. The two halves
+split the way CI splits them: everything outside `tests/ui/` is independent and
+runs under `pytest-xdist` (`pytest -n auto --ignore=tests/ui`), while the wx UI
+tests create real top-level windows and run one at a time in one process
+(`pytest tests/ui`). `scripts/run_tests_fast.py` runs both at once and prints
+each half's result. Don't start the app, or a second UI run, while it is going:
+the UI tests need the desktop to themselves, and the real-data guard fails the
+run if the app writes to `config/` or `cache/` meanwhile.
 
 CI installs the same pinned `black`, `ruff`, and `mypy` versions used locally
 by reading `requirements-dev.txt`, so `pip install -r requirements-dev.txt`
@@ -99,13 +116,19 @@ anything touching a live game.
 
 ### Versioning
 
-Versions follow [semver](https://semver.org) and are derived automatically from
-[Conventional Commit](https://www.conventionalcommits.org) messages — `feat:` →
-minor, `fix:`/`perf:` → patch, `!`/`BREAKING CHANGE` → major. The repo-root
-`VERSION` file is the single source of truth: a CI workflow computes the bump and
-commits it onto the PR branch, and merging to `main` publishes a GitHub Release
-with the built installer. Write conventional-commit subjects and the number takes
-care of itself. Full details in [`docs/VERSIONING.md`](docs/VERSIONING.md).
+Versions follow [semver](https://semver.org) and are computed **after the merge
+lands on `main`**, never on a PR branch. The release workflow takes the newest
+`vX.Y.Z` tag as its base, reads the commits since that tag, writes the resulting
+number into the repo-root `VERSION` file — the single source of truth — and then
+tags and publishes a GitHub Release with the built installer.
+
+Inference on its own never proposes more than a patch, so anything bigger is
+something you ask for: a `Version-Bump: minor` (or `Release-As: 2.4.0`) git
+trailer on any commit in the range, including the merge commit. Writing
+[Conventional Commit](https://www.conventionalcommits.org) subjects is still
+what makes a release happen at all — `feat:`, `fix:` and `perf:` release, the
+rest do not. [`docs/VERSIONING.md`](docs/VERSIONING.md) has the full rules and
+the published-history bugs that shaped them.
 
 ### Automation CLI
 
@@ -148,20 +171,24 @@ in `pyproject.toml`.
 
 ### Repo Reports
 
-Two reports are committed under the repo root and `docs/diagrams/`:
+Two reports are generated from the whole source tree:
 
 ```bash
 python scripts/generate_loc_report.py            # writes LOC_REPORT.md
 python scripts/generate_dependency_diagrams.py   # writes docs/diagrams/graph.json + dependencies_level_*.svg
 ```
 
-Because these are generated from the whole source tree, they are **not** gated
-in PR CI (every PR would otherwise conflict on them and fail a freshness
-check). Instead the `Refresh Generated Reports` workflow
-(`.github/workflows/refresh-reports.yml`) regenerates and commits them once a
-day, and can be run on demand from the Actions tab. You can still run the
-scripts locally (both support `--check` for drift detection), but you do not
-need to commit their output in a feature branch.
+Neither is tracked on `main` or `develop`. Committing them meant every branch
+conflicted on them and failed a freshness check, so they live on a branch of
+their own instead: the `Refresh Generated Reports` workflow
+(`.github/workflows/refresh-reports.yml`) rebuilds `automated/reports` from the
+current default branch, regenerates both reports on top of it, and force-pushes
+it — daily, and on demand from the Actions tab. Nothing is merged back, so
+`automated/reports` is where you read them: it is always `main` plus the reports
+as of the last run.
+
+Run the scripts locally whenever you want (both support `--check` for drift
+detection), but leave the output uncommitted — the workflow owns those files.
 
 ## Project Structure
 
@@ -195,16 +222,20 @@ need to commit their output in a feature branch.
 │   ├── gamelog_service/               # MTGO game log discovery + parsing
 │   ├── mtgo_bridge_service/           # Python facade + transport for the .NET bridge
 │   ├── bundle_snapshot_client/        # Remote bundle snapshot HTTP client
+│   ├── archetype_baseline_service/    # Archetype staples, partial staples, flex slots
 │   ├── format_card_pool_service.py    # Format card pool cache
 │   ├── archetype_resolver.py          # Archetype name normalization
 │   ├── card_service.py                # Card lookup facade
 │   ├── deck_workflow_service.py       # Deck save/load workflow
+│   ├── deck_vcs_service.py            # Deck version history: what a save records
+│   ├── deck_name.py                   # The deck's name, and the history it keys
 │   ├── metagame_service.py            # Metagame queries
 │   ├── comp_rules_service.py          # Comprehensive rules text
 │   └── store_service.py               # App state persistence
 ├── repositories/                      # Data access
 │   ├── card_repository/               # MTGJSON atomic-cards + collection files
 │   ├── deck_repository/               # Deck DB + filesystem + UI state
+│   ├── deck_vcs_repository/           # Git-backed deck versions, branches, diffs
 │   ├── metagame_repository/           # Archetype/deck cache (JSON)
 │   ├── radar_repository/              # Radar snapshots (SQLite)
 │   ├── format_card_pool_repository/   # Format pools (SQLite)
@@ -240,6 +271,12 @@ cd dotnet/MTGOBridge && dotnet build
 ```
 
 MTGO must be running when using collection import features.
+
+The app keeps one bridge process alive for the session and sends it commands
+over stdin, instead of starting one per command: attaching to the MTGO client
+costs several seconds every time, and several bridges attached at once slow one
+another down. Setting `MTGO_BRIDGE_NO_SESSION=1` forces the old one-process-per-
+command path. `dotnet/MTGOBridge/README.md` documents the protocol.
 
 ## Data Sources
 

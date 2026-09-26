@@ -12,22 +12,30 @@ a { color: #1a5fa0; }
 </head>
 <body>
 <h1>Metagame Analysis</h1>
-<p>The <strong>Metagame Analysis</strong> window gives a top-level breakdown of the competitive
-format currently selected in the main window. Open it by clicking <strong>Metagame Analysis</strong>
-in the toolbar.</p>
+<p>The <strong>Metagame Analysis</strong> window gives a top-level breakdown of a competitive
+format. Open it with <strong>Tools &#9656; Metagame Analysis</strong> on the menu bar.</p>
+<p>It chooses its own format rather than following the main window: the <strong>Format</strong>
+dropdown along the top offers Modern, Standard, Pioneer, Legacy, Vintage and Pauper, and the window
+opens on Modern whatever the main window is showing. Beside it, <strong>Time window</strong> sets
+how many days are pooled into the share figures (1 to 7) and <strong>Day</strong> moves that window
+back in time (up to 30 days ago), so you can look at an earlier stretch of the format or compare
+one against another.</p>
 
 <h2>Contents</h2>
 <ul>
-  <li><strong>Archetype share chart</strong> &mdash; a visual breakdown of how much of the metagame
-      each archetype represents, based on MTGGoldfish data.</li>
-  <li><strong>Win-rate table</strong> &mdash; lists archetypes with their reported win rates.</li>
-  <li><strong>Trend indicators</strong> &mdash; where data is available, shows whether an
-      archetype is trending up or down.</li>
+  <li><strong>Archetype share chart</strong> &mdash; a sorted bar chart of how much of the metagame
+      each archetype represents, based on MTGGoldfish data. The twelve largest get a bar each and
+      everything below them is pooled into <strong>Other archetypes</strong>.</li>
+  <li><strong>Metagame Changes</strong> &mdash; each archetype&rsquo;s share now against its share
+      in the preceding period, with an up or down arrow. It needs data from both periods, and says
+      so when it has none to compare.</li>
 </ul>
+<p>Share is measured by how many decks of each archetype were published, not by how they did; the
+window reports no win rates.</p>
 
 <h2>Refreshing data</h2>
-<p>Data is fetched from MTGGoldfish and cached locally. Click <strong>Reload</strong> inside the
-window or use <strong>Reload Archetypes</strong> in the main research panel to pull fresh data.</p>
+<p>Data is fetched from MTGGoldfish and cached locally for a day. Click <strong>Refresh Data</strong>
+at the top of the window to pull it again.</p>
 
 <h2>See also</h2>
 <ul>

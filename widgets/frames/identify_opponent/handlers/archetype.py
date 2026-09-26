@@ -12,7 +12,8 @@ from typing import TYPE_CHECKING
 import wx
 from loguru import logger
 
-from utils.constants import ACTIVE_GUIDE_FILE, GUIDE_STORE
+from utils.constants import ACTIVE_GUIDE_FILE
+from utils.deck_metadata_migration import deck_metadata_stores
 from widgets.frames.identify_opponent.properties import UNKNOWN_DECK_RESULT
 
 if TYPE_CHECKING:
@@ -77,10 +78,14 @@ class ManualArchetypeMixin(_Base):
             self.sideboard_panel.set_no_pinned_deck()
             return
 
-        # Load guide store
+        # Load guide store. Through deck_metadata_stores() rather than the
+        # GUIDE_STORE constant because this frame is a second, independent
+        # reader of that file: it runs the one-off move off the old cache/ path
+        # for the case where the tracker opens before the store is read.
+        guide_store_path = deck_metadata_stores().guide
         try:
-            if GUIDE_STORE.exists():
-                with GUIDE_STORE.open("r", encoding="utf-8") as fh:
+            if guide_store_path.exists():
+                with guide_store_path.open("r", encoding="utf-8") as fh:
                     guide_store = json.load(fh)
             else:
                 guide_store = {}

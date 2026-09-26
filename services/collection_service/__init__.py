@@ -6,6 +6,7 @@ Split by responsibility into internal modules:
 - ``parsing``: normalizing card lists into ``name -> quantity`` inventories
 - ``ownership``: owned-count lookups and owned-status formatting
 - ``deck_analysis``: deck-vs-inventory comparisons (missing cards etc.)
+- ``diff``: the deck-minus-collection decklist (:class:`CollectionDiff`)
 - ``stats``: aggregate collection statistics
 - ``bridge_refresh``: async refresh from the MTGO bridge
 - ``exporter``: JSON export helpers
@@ -15,6 +16,7 @@ Split by responsibility into internal modules:
 from __future__ import annotations
 
 from services.collection_service.cache import CollectionStatus
+from services.collection_service.diff import CollectionDiff, build_collection_diff
 from services.collection_service.service import CollectionService
 
 # Global instance for backward compatibility
@@ -35,8 +37,10 @@ def reset_collection_service() -> None:
 
 
 __all__ = [
+    "CollectionDiff",
     "CollectionService",
     "CollectionStatus",
+    "build_collection_diff",
     "get_collection_service",
     "reset_collection_service",
 ]

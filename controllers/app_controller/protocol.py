@@ -72,11 +72,13 @@ class AppControllerProto(Protocol):
 
     # UI / lifecycle handles
     _ui_callbacks: UICallbacks | None
+    #: Private to this package. Everything outside it uses ``worker`` below.
     _worker: BackgroundWorker
     _card_data_waiters: list[tuple[Callable[..., None], Callable[..., None]]]
     frame: AppFrame | None
     _bulk_check_worker_active: bool
     _available_update: UpdateInfo | None
+    _update_check_in_flight: bool
     _update_installer: UpdateInstaller | None
 
     # Cross-mixin methods
@@ -89,6 +91,10 @@ class AppControllerProto(Protocol):
     ) -> None: ...
 
     def get_deck_data_source(self) -> str: ...
+
+    @property
+    def worker(self) -> BackgroundWorker: ...
+
     def get_update_check_enabled(self) -> bool: ...
     def load_bulk_data_into_memory(
         self, on_status: Callable[[str], None], force: bool = False

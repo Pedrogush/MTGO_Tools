@@ -6,6 +6,7 @@ from typing import Any, Literal
 from loguru import logger
 
 from repositories.scrapers.mtggoldfish import download_deck, get_archetypes
+from services.deck_identity import DECK_ID_KEY, ensure_deck_id
 from utils.deck import read_curr_deck_file
 
 DeckLoadScope = Literal["all", "archetype"]
@@ -127,17 +128,31 @@ class DeckWorkflowService:
         without one the deck lands in ``deck_save_dir`` under a unique name.
         ``archetype`` is the one the user assigned when saving; when it is not
         given the record falls back to the source deck's own archetype name.
+
+        Being saved is also where a deck acquires its stable id, since this is
+        where it stops being something on screen and becomes something the user
+        keeps. The id is stamped on the in-memory record before anything is
+        written, so the database row and the version history are keyed to the
+        same deck even if one of the two writes fails.
         """
+        deck_uuid = ensure_deck_id(deck)
         if file_path is not None:
             file_path = self.deck_repo.write_deck_file(file_path, deck_content)
         else:
             file_path = self.deck_repo.save_deck_to_file(deck_name, deck_content, deck_save_dir)
 
         if archetype is None:
-            archetype = deck.get("name") if deck else None
-        source = deck.get("source") if deck else None
+            archetype = (deck or {}).get("name")
+        source = (deck or {}).get("source")
         if source not in {"mtggoldfish", "mtgo", "file"}:
-            source = "mtggoldfish" if deck else "manual"
+            # "Did this deck come from somewhere" used to be answered by whether
+            # there was a record at all. A deck built here now acquires one at
+            # save time, because it needs somewhere to keep its id, so the
+            # question is asked of the record's contents instead: a record
+            # holding nothing but that id says nothing about where the deck
+            # came from, which is the same answer having no record gave.
+            described_by = set(deck or {}) - {DECK_ID_KEY}
+            source = "mtggoldfish" if described_by else "manual"
 
         deck_id = None
         try:
@@ -150,13 +165,94 @@ class DeckWorkflowService:
                 source=source,
                 metadata=deck or {},
                 file_path=file_path,
+                deck_uuid=deck_uuid or None,
             )
         except Exception as exc:  # pragma: no cover - best effort
             logger.warning(f"Deck saved to file but not database: {exc}")
         else:
             logger.info(f"Deck saved to database: {deck_name} (ID: {deck_id})")
 
+        self._record_version(deck, file_path, deck_content, archetype, format_name)
+
         return file_path, deck_id
+
+    @staticmethod
+    def _record_version(
+        deck: dict[str, Any] | None,
+        file_path,
+        deck_content: str,
+        archetype: str | None = None,
+        format_name: str | None = None,
+    ) -> None:
+        """Commit this save into the deck's version history.
+
+        Best effort, like the database write above it: the deck file is already
+        on disk and a version-history problem must not be reported as a failed
+        save. The history is a record *of* the file, never a precondition for
+        writing it.
+
+        A deck getting its history for the first time is rooted at its
+        archetype's baseline when one has been computed, so that every later
+        version has the archetype as an ancestor and "diff vs. baseline" needs
+        no separate pointer. That root is a frozen snapshot: it is written here,
+        once, and the repository layer refuses to rewrite it afterwards.
+
+        Before either of those, a deck whose history was written under the old
+        name-shaped key takes it over. This is the only place that knows both
+        keys for the same deck, and it runs before the baseline seed so that an
+        adopted history keeps the root it already has.
+
+        Why a failure here is logged and not shown. The user is told at the
+        moment it is actionable rather than at the moment it happens: the deck
+        file is on disk and intact, and because it is now a decklist the history
+        has never seen, the next time it is opened ``_check_external_edit``
+        recognises it as unattributed and offers to record it. Reporting it on
+        the save would interrupt a one-click action with a problem the user
+        cannot act on and that the app is already going to offer to fix.
+        """
+        try:
+            from services.deck_vcs_service import (
+                adoptable_legacy_key,
+                deck_key_for,
+                get_deck_vcs_service,
+            )
+
+            deck_key = deck_key_for(deck, file_path)
+            service = get_deck_vcs_service()
+            legacy_key = adoptable_legacy_key(deck, file_path)
+            if legacy_key and legacy_key != deck_key:
+                service.vcs_repo.adopt_legacy_repo(deck_key, legacy_key)
+            DeckWorkflowService._seed_baseline_root(deck_key, archetype, format_name)
+            service.record_save(deck_key, deck_content)
+        except Exception as exc:  # noqa: BLE001 - the deck file is already saved
+            logger.warning(f"Deck saved but no version recorded: {exc}")
+
+    @staticmethod
+    def _seed_baseline_root(deck_key: str, archetype: str | None, format_name: str | None) -> None:
+        """Root a brand-new deck's history at its archetype baseline, if any.
+
+        Separately guarded from the save commit above it: a deck with no stored
+        baseline for its archetype is an ordinary deck whose history starts at
+        its first save, and that is not a failure worth surfacing.
+
+        This runs on every save but reads the baseline store on almost none of
+        them: ``seed_root_for_new_deck`` answers "does this deck already have
+        history?" from the repo's refs first, and every save after a deck's
+        first stops there.
+        """
+        if not archetype or not format_name:
+            return
+        try:
+            from services.archetype_baseline_service import get_archetype_baseline_service
+
+            sha = get_archetype_baseline_service().seed_root_for_new_deck(
+                deck_key, archetype=archetype, mtg_format=format_name
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.debug(f"No baseline root for {deck_key}: {exc}")
+            return
+        if sha:
+            logger.info(f"Deck {deck_key} rooted at archetype baseline {sha[:7]}")
 
     # ------------------------------------------------------------------ averages ------------------------------------------------------------------
     def build_daily_average_buffer(

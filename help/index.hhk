@@ -6,8 +6,20 @@
 <BODY>
 <UL>
   <LI><OBJECT type="text/sitemap">
+    <param name="Name" value="Archetype Baseline">
+    <param name="Local" value="deck_baseline.html">
+    </OBJECT>
+  <LI><OBJECT type="text/sitemap">
     <param name="Name" value="Archetype list">
     <param name="Local" value="metagame_research.html">
+    </OBJECT>
+  <LI><OBJECT type="text/sitemap">
+    <param name="Name" value="Baseline">
+    <param name="Local" value="deck_baseline.html">
+    </OBJECT>
+  <LI><OBJECT type="text/sitemap">
+    <param name="Name" value="Branch">
+    <param name="Local" value="deck_history.html">
     </OBJECT>
   <LI><OBJECT type="text/sitemap">
     <param name="Name" value="Builder mode">
@@ -46,6 +58,10 @@
     <param name="Local" value="deck_builder.html">
     </OBJECT>
   <LI><OBJECT type="text/sitemap">
+    <param name="Name" value="Deck History">
+    <param name="Local" value="deck_history.html">
+    </OBJECT>
+  <LI><OBJECT type="text/sitemap">
     <param name="Name" value="Deck Notes">
     <param name="Local" value="deck_notes.html">
     </OBJECT>
@@ -54,12 +70,28 @@
     <param name="Local" value="deck_results.html">
     </OBJECT>
   <LI><OBJECT type="text/sitemap">
+    <param name="Name" value="Deck Stats">
+    <param name="Local" value="deck_workspace.html">
+    </OBJECT>
+  <LI><OBJECT type="text/sitemap">
+    <param name="Name" value="Deck Tables">
+    <param name="Local" value="deck_workspace.html">
+    </OBJECT>
+  <LI><OBJECT type="text/sitemap">
     <param name="Name" value="Deck Workspace">
     <param name="Local" value="deck_workspace.html">
     </OBJECT>
   <LI><OBJECT type="text/sitemap">
+    <param name="Name" value="Diff">
+    <param name="Local" value="deck_history.html">
+    </OBJECT>
+  <LI><OBJECT type="text/sitemap">
     <param name="Name" value="Export diagnostics">
     <param name="Local" value="settings.html">
+    </OBJECT>
+  <LI><OBJECT type="text/sitemap">
+    <param name="Name" value="Flex candidates">
+    <param name="Local" value="deck_baseline.html">
     </OBJECT>
   <LI><OBJECT type="text/sitemap">
     <param name="Name" value="Flex slots">
@@ -134,6 +166,10 @@
     <param name="Local" value="sideboard_guide.html">
     </OBJECT>
   <LI><OBJECT type="text/sitemap">
+    <param name="Name" value="Staples">
+    <param name="Local" value="deck_baseline.html">
+    </OBJECT>
+  <LI><OBJECT type="text/sitemap">
     <param name="Name" value="Timer Alert">
     <param name="Local" value="timer_alert.html">
     </OBJECT>
@@ -144,6 +180,14 @@
   <LI><OBJECT type="text/sitemap">
     <param name="Name" value="Update card database">
     <param name="Local" value="settings.html">
+    </OBJECT>
+  <LI><OBJECT type="text/sitemap">
+    <param name="Name" value="Version history">
+    <param name="Local" value="deck_history.html">
+    </OBJECT>
+  <LI><OBJECT type="text/sitemap">
+    <param name="Name" value="Versions rail">
+    <param name="Local" value="deck_history.html">
     </OBJECT>
 </UL>
 </BODY>

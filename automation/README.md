@@ -138,6 +138,80 @@ Select a card first (the panel is populated by a deck-zone selection). Use
 `--limit`/`--offset` on cards with many printings: the transport does a single
 64 KB `recv`.
 
+## Driving the deck version history
+
+The History tab paints a commit graph, and a screenshot can show that something
+*looks* like a fork but not that the right commit forked. `deck-history` reports
+the same placement the canvas paints -- row, lane, branch labels, HEAD, and which
+edges change lane -- so a script asserts the shape and the screenshot is left to
+prove it rendered.
+
+```bash
+python -m automation.cli --json deck-history                       # the graph, as placed
+python -m automation.cli deck-history-save -m "cut Consider"       # commit the loaded list
+python -m automation.cli --json deck-history-select 1a2c7ca        # preview, no checkout
+python -m automation.cli deck-history-checkout 1a2c7ca             # rewrites the deck .txt
+python -m automation.cli deck-history-branch 1a2c7ca -n testing
+python -m automation.cli deck-history-switch -n main
+python -m automation.cli --json deck-history-baseline 055e71d      # pin the diff baseline
+```
+
+Short shas are accepted everywhere a sha is, like every other git tool.
+
+`deck-history-save` exists because the first Save of an *unnamed* deck opens a
+modal, and `ShowModal` starves this socket exactly the way `PopupMenu` does (see
+the menu-bar warning above). It calls the same service the dialog ends at, so the
+commit it produces is the one a real save produces.
+
+## Naming a deck, and saving without any dialog
+
+A deck's name decides its file. Which version history a save lands in is decided
+by the deck's stable id instead, so neither the name nor the file moves it. A
+named deck saves with **no dialog at all**, which is the path worth
+scripting: `deck-name` sets the name the way clicking the label does, and
+`deck-save` then runs the real `on_save_clicked`.
+
+```bash
+python -m automation.cli --json deck-name                     # read it
+python -m automation.cli --json deck-name "Izzet Murktide"    # set it (this is rename)
+python -m automation.cli --json deck-save                     # real Save, no dialog
+```
+
+`deck-save` refuses a deck with no name rather than hanging, because that is the
+one case that would open the details dialog and starve the socket. Name it first.
+
+An unnamed deck reports `"name": ""` and a `display` of the placeholder text —
+the placeholder is never stored, so a script must assert on `name`, not `display`.
+**Renaming keeps the history:** the new name is a new file, but the history is
+keyed by the deck's stable id, so the version graph comes with it. The file
+written under the old name is left exactly where it was.
+
+Two things worth knowing when scripting against it:
+
+- `deck-history-select` is the *preview* path and must never move `HEAD`; if a
+  test sees the checked-out branch change after a select, that is the bug.
+- **The graph is read on a background thread.** `deck-history` waits for that
+  read before reporting, and says so in `settled`; a script that sees
+  `"settled": false` timed out waiting and is looking at a stale graph, not an
+  empty history. Nothing else needs to sleep for it.
+- `deck-history-checkout` rewrites the user's `.txt`. The repo behind the graph
+  lives in the app's own data directory (`deck_history/<deck_key>/`, beside
+  `config/`), never beside the deck file, so diffing the `.txt` outside the app
+  is a fair test that no version metadata leaked into it. `<deck_key>` is the
+  deck's stable id, not its name, so a renamed deck keeps the same directory.
+
+## Driving the deck tabs
+
+**The tab bar is translated.** `switch-tab` matches the *rendered* label, so
+`switch-tab History` selects nothing in a pt-BR session -- where the tab is
+`Histórico` -- and silently leaves whatever tab was already open on screen.
+A script that does not check `switched` will then screenshot the wrong tab and
+get an identical image every time. Always assert the flag:
+
+```bash
+python -m automation.cli --json switch-tab "Histórico"   # {"switched": true, ...}
+```
+
 ## Exercising MTGO bridge features
 
 These commands drive the live MTGO bridge integration end-to-end (they require a
@@ -191,6 +265,50 @@ python -m automation.cli scroll-lines --zone main --view pile --count 12 --lines
 Like `sash-drag`, it runs the burst on a worker thread and returns as soon as it
 is scheduled, so `start-video` can be recording while it runs. `wheel-scroll-start`
 covers the other half -- the wheel, which the views handle themselves.
+
+## Archetype baselines and the root commit
+
+`deck-baseline-compute` measures the archetype **currently selected in the
+research panel** -- the Baseline tab has no pickers of its own -- and
+`deck-baseline` reports the same numbers the tree is built from, so a script can
+assert the classification instead of trusting a screenshot of it.
+
+```bash
+python -m automation.cli --json deck-baseline-compute --threshold 0.9
+python -m automation.cli --json deck-baseline            # staples/partials/flex + slot counts
+```
+
+The compute runs on the background worker, so poll `deck-baseline` until
+`computed` is true rather than reading it straight after triggering.
+
+The other half is the root commit. `deck-baseline-save-deck` saves the loaded
+decklist through the same `controller.save_deck` call the Save dialogs end at,
+which is the path that roots a brand-new deck at its archetype baseline;
+`deck_history_save` deliberately does **not** go through it, so it cannot prove
+anything about rooting.
+
+```bash
+python -m automation.cli --json deck-baseline-save-deck --name "Test Deck"     --archetype "Izzet Prowess" --format-name modern
+python -m automation.cli --json deck-baseline-load-file --path "C:\...\Test Deck.txt"
+python -m automation.cli --json deck-baseline-root      # the deck's root + is_baseline_root
+python -m automation.cli deck-baseline-pin-root         # pin it as the History diff baseline
+```
+
+Two things that look like bugs and are not:
+
+- **Saving does not switch to the saved deck.** The real save handler leaves the
+  *scraped* deck loaded, so the History tab keeps showing that deck until the
+  new file is opened -- hence `deck-baseline-load-file`, which mirrors
+  `on_load_deck_clicked` after its `wx.FileDialog`.
+- **Every baseline root carries the same 2020-01-01 timestamp.** The root's sha
+  is deliberately deterministic, so two decks of one archetype share an
+  ancestor; a real clock in it would split roots that ought to coincide. That
+  pinned epoch is not a moment the deck passed through, so the graph node shows
+  the sha alone for a baseline root -- only real saves carry a date.
+
+> The Baseline tab's own label is translated (`Base` in pt-BR), so
+> `switch-tab` must be given the rendered label -- and its `switched` flag
+> asserted. See the warning under "Driving the deck tabs".
 
 ## Pile-view columns and their drag-and-drop
 
@@ -310,8 +428,12 @@ pre-toggle nor post-toggle rest state (a "third state"):
 python -m automation.capture_panel_transition --out-dir transition_capture --method screen
 ```
 
-See `docs/sb_panel_third_state/HANDOFF.md` for a worked investigation
-that used this tooling.
+The worked investigation this was built for is the side-panel toggle's "third
+state" void (#782). Its handoff lived under `docs/sb_panel_third_state/` and was
+deleted by the fix that closed it, so the written account is now commit
+`1bec6124` — its message carries the measurements — together with the `#782`
+comments in `utils/image_effects.py` and
+`widgets/panels/card_table_panel/pile_view.py`.
 
 ## WSL Interop Note
 

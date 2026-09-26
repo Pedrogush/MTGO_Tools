@@ -1,17 +1,76 @@
 """MTGO bridge service: Python-facing facade over the CLI bridge.
 
-Wraps the subprocess/multiprocessing transport in :mod:`.client` and
-exposes collection/history/trade snapshots and the challenge watcher.
+Every call here is routed through one long-lived ``MTGOBridge.exe serve``
+process (see :mod:`.session`), which pays MTGOSDK's ~3.1s attach once instead of
+once per command and keeps a single request queue so concurrent callers cannot
+degrade each other's latency. If a session cannot be established — most often an
+older bridge build that has no ``serve`` mode — each call falls back to the
+one-shot subprocess transport in :mod:`.client`, so behaviour is unchanged.
 """
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
+from functools import partial
 from typing import Any
 
 from loguru import logger
 
+from utils.constants import BRIDGE_SESSION_WATCH_INTERVAL_MS
+
 from . import client as mtgo_bridge_client
+from . import session as mtgo_bridge_session
+from .session import (
+    BridgeSessionError,
+    BridgeSessionUnavailable,
+    SessionRequestFuture,
+    SessionWatcher,
+    shutdown_session,
+)
+
+__all__ = [
+    "BridgeSessionError",
+    "BridgeSessionUnavailable",
+    "SessionRequestFuture",
+    "SessionWatcher",
+    "accept_pending_trades",
+    "ensure_runtime_ready",
+    "fetch_collection_async",
+    "get_collection_snapshot",
+    "get_full_collection",
+    "get_trade_snapshot",
+    "list_decks",
+    "runtime_status",
+    "shutdown_session",
+    "start_watch",
+]
+
+
+def _request(
+    command: str,
+    *,
+    args: Sequence[str] = (),
+    bridge_path: str | None = None,
+    timeout: float | None = None,
+) -> Any:
+    """Run ``command`` on the shared session, falling back to a one-shot call.
+
+    ``FileNotFoundError`` (no bridge executable) is deliberately left to
+    propagate: callers already handle it and a fallback could not help.
+    """
+    try:
+        return mtgo_bridge_session.get_session(bridge_path).request(
+            command, args=args, timeout=timeout
+        )
+    except BridgeSessionUnavailable as exc:
+        logger.debug("Bridge session unavailable ({}); using a one-shot command.", exc)
+
+    return mtgo_bridge_client.run_bridge_command(
+        command,
+        bridge_path=bridge_path,
+        extra_args=tuple(args) or None,
+        timeout=timeout,
+    )
 
 
 def _bridge_available(bridge_path: str | None = None) -> tuple[bool, str | None]:
@@ -37,9 +96,7 @@ def get_collection_snapshot(
     timeout: float | None = None,
 ) -> Mapping[str, Any]:
     """Return the collection snapshot payload from the bridge."""
-    payload = mtgo_bridge_client.run_bridge_command(
-        "collection", bridge_path=bridge_path, timeout=timeout
-    )
+    payload = _request("collection", bridge_path=bridge_path, timeout=timeout)
     collection = payload.get("collection") if isinstance(payload, dict) else None
     if not isinstance(collection, dict):
         logger.debug("Collection payload missing or malformed; returning empty dict")
@@ -47,30 +104,12 @@ def get_collection_snapshot(
     return collection
 
 
-def get_match_history(
-    bridge_path: str | None = None,
-    timeout: float | None = None,
-) -> Mapping[str, Any]:
-    """Return the match history payload from the bridge."""
-    payload = mtgo_bridge_client.run_bridge_command(
-        "history", bridge_path=bridge_path, timeout=timeout
-    )
-    history = payload.get("history") if isinstance(payload, dict) else None
-    if not isinstance(history, dict):
-        logger.debug("History payload missing or malformed; returning empty dict")
-        return {}
-    return history
-
-
 def get_trade_snapshot(
     bridge_path: str | None = None,
     timeout: float | None = None,
 ) -> Mapping[str, Any]:
     """Return the active trade snapshot emitted by the bridge."""
-    payload = mtgo_bridge_client.fetch_trade_snapshot(
-        bridge_path=bridge_path,
-        timeout=timeout,
-    )
+    payload = _request("trade", args=("status",), bridge_path=bridge_path, timeout=timeout)
     trade = payload.get("trade") if isinstance(payload, Mapping) else None
     if not isinstance(trade, Mapping):
         logger.debug("Trade payload missing or malformed; returning empty dict")
@@ -81,27 +120,36 @@ def get_trade_snapshot(
 def fetch_collection_async(
     *,
     bridge_path: str | None = None,
-    context=None,
+    context=None,  # noqa: ARG001 - kept for signature compatibility; see below
 ):
-    return mtgo_bridge_client.fetch_collection_snapshot_async(
-        bridge_path=bridge_path, context=context
-    )
+    """Return a future for the collection snapshot.
 
-
-def fetch_history_async(
-    *,
-    bridge_path: str | None = None,
-    context=None,
-):
-    return mtgo_bridge_client.fetch_match_history_async(bridge_path=bridge_path, context=context)
+    ``context`` (a multiprocessing context) is accepted and ignored: the work no
+    longer needs a worker process now that it rides the shared session.
+    """
+    return SessionRequestFuture(partial(_request, "collection", bridge_path=bridge_path))
 
 
 def start_watch(
     *,
     bridge_path: str | None = None,
-    interval_ms: int = 500,
+    interval_ms: int = BRIDGE_SESSION_WATCH_INTERVAL_MS,
     context=None,
 ):
+    """Start streaming challenge-timer snapshots.
+
+    Prefers the shared session — which is what stops the watcher and a
+    collection refresh from being two processes contending for MTGO's UI thread
+    — and falls back to a dedicated ``watch`` subprocess when there is no
+    session to ride on.
+    """
+    try:
+        watcher = SessionWatcher(mtgo_bridge_session.get_session(bridge_path), interval_ms)
+        watcher.start()
+        return watcher
+    except BridgeSessionUnavailable as exc:
+        logger.debug("Bridge session unavailable ({}); using a standalone watcher.", exc)
+
     return mtgo_bridge_client.start_watch(
         bridge_path=bridge_path, interval_ms=interval_ms, context=context
     )
@@ -112,11 +160,8 @@ def accept_pending_trades(*_args, **_kwargs) -> dict[str, Any]:
     bridge_path = _kwargs.get("bridge_path")
     timeout = _kwargs.get("timeout")
     try:
-        payload = mtgo_bridge_client.accept_trade(
-            bridge_path=bridge_path,
-            timeout=timeout,
-        )
-    except mtgo_bridge_client.BridgeCommandError as exc:  # type: ignore[attr-defined]
+        payload = _request("trade", args=("accept",), bridge_path=bridge_path, timeout=timeout)
+    except (mtgo_bridge_client.BridgeCommandError, BridgeSessionError) as exc:
         return {
             "accepted": False,
             "requested": False,

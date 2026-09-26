@@ -61,9 +61,9 @@ _DECK = [
 ]
 
 
-def _floor_frame(deck_selector_factory, wx_app):
+def _floor_frame(shared_frame, wx_app):
     """A frame laid out at its own enforced minimum, with a real deck in it."""
-    frame = deck_selector_factory()
+    frame = shared_frame
     frame.main_table.set_cards([{"name": name, "qty": 4} for name in _DECK])
     frame.side_table.set_cards([{"name": name, "qty": 2} for name in _DECK[:7]])
     pump_ui_events(wx_app)
@@ -95,42 +95,37 @@ def _wheel_to_the_bottom(view, wx_app) -> list[int]:
 
 @pytest.mark.parametrize("mode", ["grid", "pile"])
 @pytest.mark.usefixtures("wx_app")
-def test_the_wheel_only_ever_rests_on_a_row_boundary(deck_selector_factory, wx_app, mode) -> None:
+def test_the_wheel_only_ever_rests_on_a_row_boundary(shared_frame, wx_app, mode) -> None:
     """Wheel the mainboard from the top to the bottom: every origin is a stop."""
-    frame = _floor_frame(deck_selector_factory, wx_app)
-    try:
-        view = _view(frame, "main", mode)
-        pump_ui_events(wx_app)
-        view.Scroll(0, 0)
+    frame = _floor_frame(shared_frame, wx_app)
+    view = _view(frame, "main", mode)
+    pump_ui_events(wx_app)
+    view.Scroll(0, 0)
 
-        stops = scroll_snap.snap_stops(view)
-        assert stops is not None, (
-            f"snapping is off for the mainboard {mode} view at the window's floor, "
-            f"so this test would pass while asserting nothing "
-            f"(client {view.GetClientSize().Get()}, step {view.scroll_snap_step()})"
-        )
-        origins = _wheel_to_the_bottom(view, wx_app)
-        # Pinned so the sweep cannot pass by never moving -- the failure mode a
-        # first draft of test_live_layout_overflow actually had.
-        assert len(origins) > 3, f"the {mode} view only reached {origins}"
-        assert origins[-1] == stops[-1], (
-            f"the {mode} view did not wheel all the way to the bottom: "
-            f"ended at {origins[-1]}, bottom is {stops[-1]}"
-        )
-        off_lattice = [y for y in origins if y not in stops]
-        assert off_lattice == [], (
-            f"the mainboard {mode} view rested at {off_lattice}, which are not row "
-            f"boundaries -- the top row is sliced there. Stops: {stops[:8]}..."
-        )
-    finally:
-        frame.Destroy()
+    stops = scroll_snap.snap_stops(view)
+    assert stops is not None, (
+        f"snapping is off for the mainboard {mode} view at the window's floor, "
+        f"so this test would pass while asserting nothing "
+        f"(client {view.GetClientSize().Get()}, step {view.scroll_snap_step()})"
+    )
+    origins = _wheel_to_the_bottom(view, wx_app)
+    # Pinned so the sweep cannot pass by never moving -- the failure mode a
+    # first draft of test_live_layout_overflow actually had.
+    assert len(origins) > 3, f"the {mode} view only reached {origins}"
+    assert origins[-1] == stops[-1], (
+        f"the {mode} view did not wheel all the way to the bottom: "
+        f"ended at {origins[-1]}, bottom is {stops[-1]}"
+    )
+    off_lattice = [y for y in origins if y not in stops]
+    assert off_lattice == [], (
+        f"the mainboard {mode} view rested at {off_lattice}, which are not row "
+        f"boundaries -- the top row is sliced there. Stops: {stops[:8]}..."
+    )
 
 
 @pytest.mark.parametrize("mode", ["grid", "pile"])
 @pytest.mark.usefixtures("wx_app")
-def test_one_event_carrying_several_notches_moves_several_rows(
-    deck_selector_factory, wx_app, mode
-) -> None:
+def test_one_event_carrying_several_notches_moves_several_rows(shared_frame, wx_app, mode) -> None:
     """A flick is worth what its notches are worth, not what one notch is.
 
     ``_apply_wheel`` accumulates sub-notch rotation and can release several
@@ -139,74 +134,68 @@ def test_one_event_carrying_several_notches_moves_several_rows(
     scroll would silently be a third of what the user asked for, and only on
     free-spin wheels and touchpads.
     """
-    frame = _floor_frame(deck_selector_factory, wx_app)
-    try:
-        view = _view(frame, "main", mode)
-        pump_ui_events(wx_app)
-        stops = scroll_snap.snap_stops(view)
-        assert stops is not None and len(stops) > 4
+    frame = _floor_frame(shared_frame, wx_app)
+    view = _view(frame, "main", mode)
+    pump_ui_events(wx_app)
+    stops = scroll_snap.snap_stops(view)
+    assert stops is not None and len(stops) > 4
 
-        view.Scroll(0, 0)
-        inject_wheel_notches(view, 1, up=False)
-        pump_ui_events(wx_app)
-        one_notch = view.GetViewStart()[1]
+    view.Scroll(0, 0)
+    inject_wheel_notches(view, 1, up=False)
+    pump_ui_events(wx_app)
+    one_notch = view.GetViewStart()[1]
 
-        view.Scroll(0, 0)
-        inject_wheel_notches(view, 3, up=False)
-        pump_ui_events(wx_app)
-        three_events = view.GetViewStart()[1]
+    view.Scroll(0, 0)
+    inject_wheel_notches(view, 3, up=False)
+    pump_ui_events(wx_app)
+    three_events = view.GetViewStart()[1]
 
-        view.Scroll(0, 0)
-        _apply_wheel(view, rotation=-360, delta=120, lines=3, horizontal=False)
-        pump_ui_events(wx_app)
-        one_event = view.GetViewStart()[1]
+    view.Scroll(0, 0)
+    _apply_wheel(view, rotation=-360, delta=120, lines=3, horizontal=False)
+    pump_ui_events(wx_app)
+    one_event = view.GetViewStart()[1]
 
-        assert one_notch in stops and three_events in stops
-        assert three_events > one_notch, (
-            "three notches did not travel further than one, so this test cannot "
-            "tell a collapsed flick from a correct one"
-        )
-        assert one_event == three_events, (
-            f"one event carrying three notches moved to {one_event}, but the same "
-            f"three notches delivered separately reach {three_events}"
-        )
-    finally:
-        frame.Destroy()
+    assert one_notch in stops and three_events in stops
+    assert three_events > one_notch, (
+        "three notches did not travel further than one, so this test cannot "
+        "tell a collapsed flick from a correct one"
+    )
+    assert one_event == three_events, (
+        f"one event carrying three notches moved to {one_event}, but the same "
+        f"three notches delivered separately reach {three_events}"
+    )
 
 
 @pytest.mark.usefixtures("wx_app")
-def test_a_pane_too_short_for_one_row_keeps_scrolling_freely(deck_selector_factory, wx_app) -> None:
+def test_a_pane_too_short_for_one_row_keeps_scrolling_freely(shared_frame, wx_app) -> None:
     """The sideboard grid pane is shorter than a row, so it must not snap.
 
     Snapping a pane that cannot show one whole row anyway would leave it able to
     rest only at the top and the bottom -- the pane-quantisation outcome S5's
     original prescription would have produced, arrived at by another route.
     """
-    frame = _floor_frame(deck_selector_factory, wx_app)
-    try:
-        view = _view(frame, "side", "grid")
-        pump_ui_events(wx_app)
-        step, _phase = view.scroll_snap_step()
-        client_h = view.GetClientSize().GetHeight()
-        assert 0 < client_h < step, (
-            "the sideboard grid pane is no longer shorter than one row at the "
-            f"window's floor (client {client_h}, row {step}) -- this test is not "
-            "exercising the short-pane branch any more"
-        )
-        assert scroll_snap.snap_stops(view) is None
+    frame = _floor_frame(shared_frame, wx_app)
+    view = _view(frame, "side", "grid")
+    pump_ui_events(wx_app)
+    step, _phase = view.scroll_snap_step()
+    client_h = view.GetClientSize().GetHeight()
+    assert 0 < client_h < step, (
+        "the sideboard grid pane is no longer shorter than one row at the "
+        f"window's floor (client {client_h}, row {step}) -- this test is not "
+        "exercising the short-pane branch any more"
+    )
+    assert scroll_snap.snap_stops(view) is None
 
-        view.Scroll(0, 0)
-        origins = _wheel_to_the_bottom(view, wx_app)
-        assert len(origins) > 3, f"the short pane stopped scrolling: {origins}"
-        # Free scrolling means the wheel's own pixel step, not a row.
-        assert origins[1] - origins[0] < step
-    finally:
-        frame.Destroy()
+    view.Scroll(0, 0)
+    origins = _wheel_to_the_bottom(view, wx_app)
+    assert len(origins) > 3, f"the short pane stopped scrolling: {origins}"
+    # Free scrolling means the wheel's own pixel step, not a row.
+    assert origins[1] - origins[0] < step
 
 
 @pytest.mark.usefixtures("wx_app")
 def test_the_scrollbar_settles_on_a_boundary_and_its_arrows_move_a_whole_row(
-    deck_selector_factory, wx_app
+    shared_frame, wx_app
 ) -> None:
     """A gesture that ends off the lattice settles onto it; arrows move a row.
 
@@ -214,65 +203,57 @@ def test_the_scrollbar_settles_on_a_boundary_and_its_arrows_move_a_whole_row(
     which the settle would immediately undo -- a dead button. The arrows are
     handled instead of settled for exactly that reason.
     """
-    frame = _floor_frame(deck_selector_factory, wx_app)
-    try:
-        view = _view(frame, "main", "grid")
-        pump_ui_events(wx_app)
-        step, _phase = view.scroll_snap_step()
-        stops = scroll_snap.snap_stops(view)
-        assert stops is not None and len(stops) > 2
+    frame = _floor_frame(shared_frame, wx_app)
+    view = _view(frame, "main", "grid")
+    pump_ui_events(wx_app)
+    step, _phase = view.scroll_snap_step()
+    stops = scroll_snap.snap_stops(view)
+    assert stops is not None and len(stops) > 2
 
-        # Where a thumb drag leaves it: a pixel origin off the lattice.
-        view.Scroll(0, stops[1] + 7)
-        assert view.GetViewStart()[1] == stops[1] + 7, "the view did not accept a raw origin"
-        scroll_snap.settle(view)
-        assert view.GetViewStart()[1] == stops[1]
+    # Where a thumb drag leaves it: a pixel origin off the lattice.
+    view.Scroll(0, stops[1] + 7)
+    assert view.GetViewStart()[1] == stops[1] + 7, "the view did not accept a raw origin"
+    scroll_snap.settle(view)
+    assert view.GetViewStart()[1] == stops[1]
 
-        view.Scroll(0, 0)
-        for event_type, expected in (
-            (wx.wxEVT_SCROLLWIN_LINEDOWN, stops[1]),
-            (wx.wxEVT_SCROLLWIN_LINEDOWN, stops[2]),
-            (wx.wxEVT_SCROLLWIN_LINEUP, stops[1]),
-        ):
-            scroll_snap.handle_scrollwin(view, wx.ScrollWinEvent(event_type, 0, wx.VERTICAL))
-            assert view.GetViewStart()[1] == expected
-        assert stops[1] == step, "the first stop below the top should be one row down"
-    finally:
-        frame.Destroy()
+    view.Scroll(0, 0)
+    for event_type, expected in (
+        (wx.wxEVT_SCROLLWIN_LINEDOWN, stops[1]),
+        (wx.wxEVT_SCROLLWIN_LINEDOWN, stops[2]),
+        (wx.wxEVT_SCROLLWIN_LINEUP, stops[1]),
+    ):
+        scroll_snap.handle_scrollwin(view, wx.ScrollWinEvent(event_type, 0, wx.VERTICAL))
+        assert view.GetViewStart()[1] == expected
+    assert stops[1] == step, "the first stop below the top should be one row down"
 
 
 @pytest.mark.parametrize("mode", ["grid", "pile"])
 @pytest.mark.usefixtures("wx_app")
-def test_the_fade_marks_only_an_edge_with_content_past_it(
-    deck_selector_factory, wx_app, mode
-) -> None:
+def test_the_fade_marks_only_an_edge_with_content_past_it(shared_frame, wx_app, mode) -> None:
     """The fade is the scroll affordance, so it must be absent where it would lie."""
-    frame = _floor_frame(deck_selector_factory, wx_app)
+    frame = _floor_frame(shared_frame, wx_app)
+    view = _view(frame, "main", mode)
+    pump_ui_events(wx_app)
+    client_h = view.GetClientSize().GetHeight()
+    content_h = scroll_snap.content_height(view)
+    assert content_h > client_h * 2, (
+        f"the {mode} view is not deep enough to have a clipped edge at all "
+        f"(content {content_h}, client {client_h})"
+    )
+
+    bitmap = wx.Bitmap(max(1, view.GetClientSize().GetWidth()), max(1, client_h))
+    dc = wx.MemoryDC(bitmap)
     try:
-        view = _view(frame, "main", mode)
-        pump_ui_events(wx_app)
-        client_h = view.GetClientSize().GetHeight()
-        content_h = scroll_snap.content_height(view)
-        assert content_h > client_h * 2, (
-            f"the {mode} view is not deep enough to have a clipped edge at all "
-            f"(content {content_h}, client {client_h})"
-        )
+        view.Scroll(0, 0)
+        view.PrepareDC(dc)
+        assert edge_fade.draw_edge_fades(view, dc, (0, 0, 0)) == (False, True)
 
-        bitmap = wx.Bitmap(max(1, view.GetClientSize().GetWidth()), max(1, client_h))
-        dc = wx.MemoryDC(bitmap)
-        try:
-            view.Scroll(0, 0)
-            view.PrepareDC(dc)
-            assert edge_fade.draw_edge_fades(view, dc, (0, 0, 0)) == (False, True)
-
-            view.Scroll(0, content_h)  # clamps to the bottom
-            dc.SetDeviceOrigin(0, 0)
-            view.PrepareDC(dc)
-            assert edge_fade.draw_edge_fades(view, dc, (0, 0, 0)) == (True, False)
-        finally:
-            dc.SelectObject(wx.NullBitmap)
+        view.Scroll(0, content_h)  # clamps to the bottom
+        dc.SetDeviceOrigin(0, 0)
+        view.PrepareDC(dc)
+        assert edge_fade.draw_edge_fades(view, dc, (0, 0, 0)) == (True, False)
     finally:
-        frame.Destroy()
+        dc.SelectObject(wx.NullBitmap)
 
 
 def test_the_fade_bitmap_is_opaque_at_the_edge_and_clear_inside() -> None:
@@ -288,7 +269,7 @@ def test_the_fade_bitmap_is_opaque_at_the_edge_and_clear_inside() -> None:
 @pytest.mark.parametrize("mode", ["grid", "pile"])
 @pytest.mark.usefixtures("wx_app")
 def test_the_card_views_keep_the_background_style_the_fade_needs(
-    deck_selector_factory, wx_app, mode
+    shared_frame, wx_app, mode
 ) -> None:
     """``BG_STYLE_PAINT`` is what makes anything drawn into the buffer survive.
 
@@ -298,9 +279,6 @@ def test_the_card_views_keep_the_background_style_the_fade_needs(
     would vanish only on screen, which is the twelfth instance of this
     codebase's signature failure waiting to happen. So it is a test.
     """
-    frame = _floor_frame(deck_selector_factory, wx_app)
-    try:
-        view = _view(frame, "main", mode)
-        assert view.GetBackgroundStyle() == wx.BG_STYLE_PAINT
-    finally:
-        frame.Destroy()
+    frame = _floor_frame(shared_frame, wx_app)
+    view = _view(frame, "main", mode)
+    assert view.GetBackgroundStyle() == wx.BG_STYLE_PAINT

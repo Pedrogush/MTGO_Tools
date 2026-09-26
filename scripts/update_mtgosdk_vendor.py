@@ -57,25 +57,30 @@ def extract_package(nupkg: Path, destination: Path) -> None:
 
 
 def copy_license_files(source_root: Path) -> None:
+    """Put both of MTGOSDK's LICENSE and NOTICE in the vendor root.
+
+    Both, not whichever the package happens to carry first. Apache-2.0 asks a
+    redistribution for the License text (4a) and for the NOTICE (4d), and
+    packaging/installer.iss ships each of the two it finds. This used to
+    ``return`` from inside the loop on the first hit, and the NuGet package root
+    carries only NOTICE -- so LICENSE was never copied, the download below was
+    never reached, and the installer's entry for it could never fire.
+    """
+    missing = []
     for name in ("LICENSE", "NOTICE"):
         src = source_root / name
         if src.exists():
             shutil.copy(src, VENDOR_ROOT / name)
-            return
-    # fallback: download from upstream repo
-    license_resp = requests.get(
-        "https://raw.githubusercontent.com/videre-project/MTGOSDK/main/LICENSE",
-        timeout=30,
-    )
-    license_resp.raise_for_status()
-    (VENDOR_ROOT / "LICENSE").write_bytes(license_resp.content)
-
-    notice_resp = requests.get(
-        "https://raw.githubusercontent.com/videre-project/MTGOSDK/main/NOTICE",
-        timeout=30,
-    )
-    notice_resp.raise_for_status()
-    (VENDOR_ROOT / "NOTICE").write_bytes(notice_resp.content)
+        else:
+            missing.append(name)
+    # Whatever the package left out, from upstream.
+    for name in missing:
+        response = requests.get(
+            f"https://raw.githubusercontent.com/videre-project/MTGOSDK/main/{name}",
+            timeout=30,
+        )
+        response.raise_for_status()
+        (VENDOR_ROOT / name).write_bytes(response.content)
 
 
 def update_sources_json(version: str, commit: str | None) -> None:

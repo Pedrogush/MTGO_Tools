@@ -20,6 +20,11 @@ Um aplicativo desktop para jogadores de Magic: The Gathering Online (MTGO) com a
 - **Guias de Sideboard**: crie e gerencie planos de sideboard por matchup, salvos por configuração de deck.
 - **Gerenciamento de Coleção**: importe sua coleção do MTGO pelo .NET Bridge e veja quais cartas você tem ou está faltando para qualquer deck.
 - **Alerta de Challenge**: avisa quando os challenges do MTGO estão prestes a começar.
+- **Histórico de Versões**: cada vez que você salva um deck vira uma versão. Uma trilha ao lado das cartas lista todas elas, e a aba Histórico mostra o grafo, a diferença entre duas versões quaisquer e traz uma versão antiga de volta para a tela.
+- **Baseline do Arquétipo**: uma aba Baseline para o deck que está na tela, separando o arquétipo entre as cartas que toda lista joga, as contagens que variam e os slots que são de fato seus, com os candidatos a flex ordenados por taxa de uso.
+- **Goldfish**: compre uma mão inicial do mainboard, tome mulligan, compre cartas e baixe elas numa mesa.
+- **Diferença para a Coleção**: salve o que o deck precisa e a sua coleção não tem como um arquivo de decklist, pronto para colar onde você compra, troca ou aluga cartas.
+- **Checagem de Atualização**: Arquivo ▸ Verificar atualizações busca uma versão mais nova, confere o instalador contra o checksum publicado junto com ela e instala.
 
 ![Janela de Análise de Metagame: um gráfico de barras horizontais da participação no metagame de Modern nos últimos 5 dias, liderado por Goryo's Vengeance com 8,7%, ao lado do painel Mudanças de Metagame listando os arquétipos que ganharam ou perderam participação em relação ao período anterior](docs/images/pt-BR/metagame-analysis.png)
 
@@ -70,7 +75,20 @@ ruff check --fix .
 
 # Or, from Windows directly
 pytest
+
+# The fast way: non-UI tests across the cores, UI tests alongside them
+python scripts/run_tests_fast.py
 ```
+
+O `pytest` sozinho continua rodando tudo em série, como sempre. As duas metades
+se dividem do mesmo jeito que o CI divide: tudo que está fora de `tests/ui/` é
+independente e roda sob `pytest-xdist` (`pytest -n auto --ignore=tests/ui`),
+enquanto os testes de UI do wx criam janelas de verdade e rodam um de cada vez,
+num processo só (`pytest tests/ui`). O `scripts/run_tests_fast.py` dispara as
+duas ao mesmo tempo e imprime o resultado de cada uma. Não abra o app, nem uma
+segunda rodada de UI, enquanto isso estiver acontecendo: os testes de UI
+precisam da área de trabalho só para eles, e a proteção de dados reais quebra a
+rodada se o app escrever em `config/` ou `cache/` nesse meio-tempo.
 
 O CI instala as mesmas versões fixadas de `black`, `ruff` e `mypy` usadas
 localmente, lendo o `requirements-dev.txt` — ou seja, `pip install -r
@@ -102,14 +120,21 @@ uma partida de verdade.
 
 ### Versionamento
 
-As versões seguem [semver](https://semver.org) e são derivadas automaticamente
-das mensagens de [Conventional Commit](https://www.conventionalcommits.org) —
-`feat:` → minor, `fix:`/`perf:` → patch, `!`/`BREAKING CHANGE` → major. O arquivo
-`VERSION` na raiz do repositório é a única fonte da verdade: um workflow de CI
-calcula o incremento e comita ele no branch do PR, e o merge na `main` publica um
-GitHub Release com o instalador já construído. Escreva os títulos dos commits no
-padrão conventional commits e o número se resolve sozinho. Detalhes completos em
-[`docs/VERSIONING.md`](docs/VERSIONING.md).
+As versões seguem [semver](https://semver.org) e são calculadas **depois que o
+merge entra na `main`**, nunca no branch do PR. O workflow de release pega a tag
+`vX.Y.Z` mais nova como base, lê os commits que vieram depois dela, escreve o
+número resultante no arquivo `VERSION` da raiz do repositório — a única fonte da
+verdade — e então cria a tag e publica um GitHub Release com o instalador já
+construído.
+
+A inferência sozinha nunca propõe mais do que um patch, então qualquer coisa
+maior é você que pede: um trailer de git `Version-Bump: minor` (ou
+`Release-As: 2.4.0`) em qualquer commit do intervalo, inclusive no commit de
+merge. Escrever os títulos no padrão
+[Conventional Commit](https://www.conventionalcommits.org) continua sendo o que
+faz sair release: `feat:`, `fix:` e `perf:` geram release, o resto não. O
+[`docs/VERSIONING.md`](docs/VERSIONING.md) tem as regras completas e os problemas
+no histórico publicado que levaram a elas.
 
 ### CLI de automação
 
@@ -153,20 +178,25 @@ configuração delas fica no `pyproject.toml`.
 
 ### Relatórios do repositório
 
-Dois relatórios ficam comitados na raiz do repositório e em `docs/diagrams/`:
+Dois relatórios são gerados a partir da árvore de código inteira:
 
 ```bash
 python scripts/generate_loc_report.py            # writes LOC_REPORT.md
 python scripts/generate_dependency_diagrams.py   # writes docs/diagrams/graph.json + dependencies_level_*.svg
 ```
 
-Como eles são gerados a partir da árvore de código inteira, **não** entram como
-checagem no CI dos PRs (senão todo PR daria conflito neles e quebraria a
-verificação de atualidade). Em vez disso, o workflow `Refresh Generated Reports`
-(`.github/workflows/refresh-reports.yml`) regenera e comita os dois uma vez por
-dia, e pode ser disparado sob demanda pela aba Actions. Você ainda pode rodar os
-scripts localmente (os dois aceitam `--check` para detectar defasagem), mas não
-precisa comitar a saída deles em um branch de feature.
+Nenhum dos dois é versionado na `main` nem na `develop`. Comitar eles fazia todo
+branch dar conflito e quebrar a verificação de atualidade, então eles moram num
+branch só deles: o workflow `Refresh Generated Reports`
+(`.github/workflows/refresh-reports.yml`) reconstrói o `automated/reports` a
+partir do branch padrão atual, regenera os dois relatórios em cima dele e
+força o push — uma vez por dia, e sob demanda pela aba Actions. Nada volta por
+merge, então é no `automated/reports` que você lê os relatórios: ele é sempre a
+`main` mais os relatórios da última rodada.
+
+Rode os scripts localmente quando quiser (os dois aceitam `--check` para
+detectar defasagem), mas deixe a saída sem comitar — esses arquivos são do
+workflow.
 
 ## Estrutura do projeto
 
@@ -200,16 +230,20 @@ precisa comitar a saída deles em um branch de feature.
 │   ├── gamelog_service/               # Descoberta e parsing dos game logs do MTGO
 │   ├── mtgo_bridge_service/           # Fachada Python + transporte para o bridge .NET
 │   ├── bundle_snapshot_client/        # Cliente HTTP do snapshot remoto de bundle
+│   ├── archetype_baseline_service/    # Staples, staples parciais e slots flex do arquétipo
 │   ├── format_card_pool_service.py    # Cache do pool de cartas do formato
 │   ├── archetype_resolver.py          # Normalização dos nomes de arquétipo
 │   ├── card_service.py                # Fachada de consulta de cartas
 │   ├── deck_workflow_service.py       # Fluxo de salvar/carregar deck
+│   ├── deck_vcs_service.py            # Histórico de versões: o que um save registra
+│   ├── deck_name.py                   # O nome do deck, e o histórico que ele indexa
 │   ├── metagame_service.py            # Consultas de metagame
 │   ├── comp_rules_service.py          # Texto das regras completas
 │   └── store_service.py               # Persistência do estado do app
 ├── repositories/                      # Acesso a dados
 │   ├── card_repository/               # MTGJSON atomic-cards + arquivos de coleção
 │   ├── deck_repository/               # Banco de decks + filesystem + estado da UI
+│   ├── deck_vcs_repository/           # Versões, branches e diffs de deck em git
 │   ├── metagame_repository/           # Cache de arquétipos/decks (JSON)
 │   ├── radar_repository/              # Snapshots do radar (SQLite)
 │   ├── format_card_pool_repository/   # Pools de formato (SQLite)
@@ -245,6 +279,13 @@ cd dotnet/MTGOBridge && dotnet build
 ```
 
 O MTGO precisa estar aberto para usar os recursos de importação de coleção.
+
+O app mantém um processo do bridge vivo durante a sessão e manda os comandos
+para ele pela stdin, em vez de abrir um a cada comando: anexar ao cliente do
+MTGO custa vários segundos toda vez, e vários bridges anexados ao mesmo tempo
+atrapalham uns aos outros. Definir `MTGO_BRIDGE_NO_SESSION=1` volta para o
+caminho antigo, de um processo por comando. O `dotnet/MTGOBridge/README.md`
+documenta o protocolo.
 
 ## Fontes de dados
 

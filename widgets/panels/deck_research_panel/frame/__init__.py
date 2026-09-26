@@ -35,7 +35,6 @@ class DeckResearchPanel(
         on_format_changed: Callable[[], None],
         on_archetype_filter: Callable[[], None],
         on_archetype_selected: Callable[[], None],
-        on_reload_archetypes: Callable[[], None] | None = None,
         on_switch_to_builder: Callable[[], None] | None = None,
         on_deck_selected: Callable[[], None] | None = None,
         on_copy: Callable[[], None] | None = None,
@@ -46,6 +45,7 @@ class DeckResearchPanel(
         on_placement_filter: Callable[[], None] | None = None,
         on_player_name_filter: Callable[[], None] | None = None,
         on_date_filter: Callable[[], None] | None = None,
+        on_save_diff: Callable[[], None] | None = None,
         labels: dict[str, str] | None = None,
     ) -> None:
         super().__init__(parent)
@@ -56,6 +56,7 @@ class DeckResearchPanel(
         self._on_deck_selected = on_deck_selected
         self._on_copy = on_copy
         self._on_save = on_save
+        self._on_save_diff = on_save_diff
         self._on_daily_average = on_daily_average
         self._on_load = on_load
         self._on_event_type_filter = on_event_type_filter

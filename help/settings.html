@@ -15,17 +15,27 @@ a { color: #1a5fa0; }
 </head>
 <body>
 <h1>Settings</h1>
-<p>Access settings by clicking the <strong>&#9881;</strong> (gear) button at the top-right of the
-toolbar. A dropdown menu appears with the following options.</p>
+<p>The menu bar runs across the top of the main window: <strong>File</strong>, <strong>Tools</strong>
+and <strong>Help</strong> open menus, and <strong>Save</strong> and <strong>Load</strong> sit beside
+them as one-click actions for the deck on screen rather than as menus. <strong>Tools</strong> opens
+the six companion windows (<a href="opponent_tracker.html">Opponent Tracker</a>,
+<a href="timer_alert.html">Timer Alert</a>, <a href="match_history.html">Match History</a>,
+<a href="metagame_analysis.html">Metagame Analysis</a>, <strong>Top Cards</strong> and
+<strong>Radar</strong>). Everything on this page lives in <strong>File</strong>, in
+<strong>Help</strong>, or in the Preferences dialog that <strong>File &#9656; Preferences&hellip;</strong>
+opens.</p>
 
-<h2>Menu items</h2>
+<h2>File menu</h2>
+<p><strong>File</strong> also carries the deck file actions &mdash; <strong>Load Deck&hellip;</strong>,
+<strong>Save Deck&hellip;</strong> and <strong>Save Collection Diff&hellip;</strong> &mdash; at the
+top, and <strong>Exit</strong> at the bottom.</p>
 <table>
   <tr><th>Item</th><th>Description</th></tr>
   <tr><td><strong>Load Collection</strong></td>
       <td>Triggers a refresh of your MTGO collection via the MTGOBridge component (.NET). After
           loading, each card row in the <a href="deck_workspace.html">Deck Workspace</a> shows how
           many copies you own. Requires the .NET bridge to be available.</td></tr>
-  <tr><td><strong>Download Card Images</strong></td>
+  <tr><td><strong>Enable Offline Images Mode</strong></td>
       <td>Opens a dialog to bulk-download card images from Scryfall. You can choose to download
           images only for cards in your current deck, or for all cards in the database. Downloaded
           images are cached locally and used by the
@@ -37,35 +47,75 @@ toolbar. A dropdown menu appears with the following options.</p>
   <tr><td><strong>Export Diagnostics</strong></td>
       <td>Exports a diagnostics bundle (logs, settings, version info) to help with bug reports.
           No personal or account data is included.</td></tr>
+  <tr><td><strong>Check for Updates&hellip;</strong></td>
+      <td>Asks GitHub right now whether a newer version has been published, and says what came
+          back. It works whether or not the automatic check below is switched on.</td></tr>
+  <tr><td><strong>Preferences&hellip;</strong></td>
+      <td>Opens the Preferences dialog described below.</td></tr>
+</table>
+
+<h2>Help menu</h2>
+<table>
+  <tr><th>Item</th><th>Description</th></tr>
+  <tr><td><strong>Help (F1)</strong></td>
+      <td>Opens this help system. You can also press <strong>F1</strong> at any time.</td></tr>
   <tr><td><strong>Show Tutorial</strong></td>
       <td>Reopens the first-run tutorial wizard that introduces the main features of MTGO Tools.</td></tr>
-  <tr><td><strong>Help</strong></td>
-      <td>Opens this help system. You can also press <strong>F1</strong> at any time.</td></tr>
+  <tr><td><strong>Comprehensive Rules</strong></td>
+      <td>Opens the Magic Comprehensive Rules browser.</td></tr>
 </table>
+<p>While an update is pending, a <strong>Get MTGO Tools v&hellip;</strong> entry appears at the end
+of this menu. It is there only while there is something to install.</p>
 
-<h2>Deck data source submenu</h2>
+<h2>Preferences</h2>
+<p>Open with <strong>File &#9656; Preferences&hellip;</strong>. The six settings are grouped by what
+they affect, and each takes effect as you change it &mdash; there is no OK button, only
+<strong>Close</strong>.</p>
 <table>
-  <tr><th>Option</th><th>Description</th></tr>
-  <tr><td><strong>Both</strong></td>
-      <td>Shows decks from both MTGGoldfish and MTGO.com.</td></tr>
-  <tr><td><strong>MTGGoldfish</strong></td>
-      <td>Shows only MTGGoldfish decklists. This is the default.</td></tr>
-  <tr><td><strong>MTGO.com</strong></td>
-      <td>Shows only MTGO.com decklists hydrated from the published metagame bundle.</td></tr>
+  <tr><th>Setting</th><th>Description</th></tr>
+  <tr><td><strong>Deck data source</strong><br>(Deck data)</td>
+      <td>Which site deck lists are fetched from: <strong>Both</strong> (the default, and the widest
+          coverage), <strong>MTGGoldfish</strong> only, or <strong>MTGO.com</strong> only, hydrated
+          from the published metagame bundle.</td></tr>
+  <tr><td><strong>Default deck folder</strong><br>(Deck data)</td>
+      <td>Where <strong>Save Deck</strong> and <strong>Load Deck</strong> open. When it is not set,
+          or the folder no longer exists, they open in your Documents folder.</td></tr>
+  <tr><td><strong>Average method</strong><br>(Archetype averages)</td>
+      <td>How an archetype average deck is built. <strong>Karsten&rsquo;s</strong> weights each card
+          by how often it is played; <strong>Arithmetic</strong> takes the plain mean.</td></tr>
+  <tr><td><strong>Average time window</strong><br>(Archetype averages)</td>
+      <td>How far back the archetype average and the
+          <a href="deck_results.html">Deck Results</a> list look &mdash; 12 to 72 hours.</td></tr>
+  <tr><td><strong>Language</strong><br>(Application)</td>
+      <td><strong>English</strong> or <strong>Portugu&ecirc;s (Brasil)</strong>. Menus and labels
+          re-translate immediately; a restart is needed for the rest.</td></tr>
+  <tr><td><strong>Check for updates</strong><br>(Application)</td>
+      <td>The automatic daily check, described below. On by default.</td></tr>
 </table>
-
-<h2>Language submenu</h2>
-<p>Choose between <strong>English</strong> and <strong>Portugu&ecirc;s (Brasil)</strong>. The
-language applies to all UI labels. A full restart is recommended to apply the change everywhere.</p>
 
 <h2>Check for updates</h2>
 <p>When enabled (the default), MTGO Tools asks GitHub once a day whether a newer version has been
 released. If one has, an <strong>Update available</strong> note appears at the right-hand end of the
-status bar and a <strong>Get MTGO Tools v&hellip;</strong> entry appears at the top of this menu;
-clicking either opens the release page in your browser, where you can download the installer.</p>
-<p>The check runs in the background and never interrupts you. If you are offline it does nothing at
-all. Nothing is downloaded or installed automatically &mdash; updating is still a matter of running
-the installer yourself. Untick <strong>Check for updates</strong> to switch the check off entirely.</p>
+status bar and a <strong>Get MTGO Tools v&hellip;</strong> entry appears at the end of the
+<strong>Help</strong> menu. The check runs in the background and never interrupts you &mdash; there
+is no dialog on launch &mdash; and if you are offline it does nothing at all. Untick
+<strong>Check for updates</strong> in Preferences to switch the automatic check off;
+<strong>File &#9656; Check for Updates&hellip;</strong> still works when it is off.</p>
+<p>Clicking the status-bar note or the Help-menu entry opens the updater. It names the version you
+are running and the one available, and waits: nothing is downloaded until you choose
+<strong>Update now</strong>. From there MTGO Tools downloads the installer published with the
+release, showing progress as it goes, checks the downloaded file against the SHA-256 checksum
+published beside it, then closes itself, runs the installer, and reopens on the new version when it
+is done. <strong>Release notes</strong> opens the release page if you want to read what changed
+first, and <strong>Later</strong> just closes the dialog &mdash; the status-bar note stays until you
+use it.</p>
+<p>An installer whose checksum does not match the one the release published is deleted and never
+run. Every failure &mdash; a download that did not finish, a checksum that did not match, a release
+pulled while you were looking at it &mdash; installs nothing and leaves the copy you are running
+untouched, and the dialog says which of them happened.</p>
+<p>Some releases publish no installer and checksum pair &mdash; a hand-made release, or one from
+before the checksums existed. For those the same click opens the release page in your browser, where
+you can download the installer and run it yourself.</p>
 
 <h2>Session state</h2>
 <p>The following are saved automatically and restored on the next launch:</p>

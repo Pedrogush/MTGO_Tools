@@ -28,10 +28,25 @@ def tree(src: pathlib.Path, dest: str) -> list[tuple[str, str]]:
     return result
 
 datas = []
+# Nothing under vendor/ is frozen into this bundle.
+#
+# vendor/mtgo_format_data (Badaro/MTGOFormatData) and vendor/mtgo_archetype_parser
+# (Badaro/MTGOArchetypeParser) used to be listed here. They are not any more:
+# no module in this repository reads either tree -- the only references anywhere
+# are scripts/update_vendor_data.py and this packaging directory -- and
+# MTGOFormatData publishes no license at all (no LICENSE upstream, no terms in its
+# README, none in GitHub's metadata), so bundling it was redistribution without a
+# grant. Both trees remain available in a developer checkout via
+# scripts/update_vendor_data.py; they simply do not ship. See ATTRIBUTIONS.md and
+# the matching note in packaging/installer.iss.
+#
+# vendor/mtgosdk is excluded too: the MTGO bridge is a separate self-contained
+# .NET publish that the Inno Setup installer ships into {app}\mtgo_integration, and
+# nothing in it is part of this bundle. That is also why MTGOSDK's NOTICE is not
+# added here -- this frozen executable redistributes no MTGOSDK binaries, so
+# Apache-2.0 section 4(d) does not attach to it. The installer, which does ship
+# those binaries, carries the NOTICE (packaging/installer.iss).
 for rel in [
-    "vendor/mtgo_format_data",
-    "vendor/mtgo_archetype_parser",
-    # vendor/mtgosdk excluded — bridge is downloaded at install time
     "assets/mana",
     "help",
 ]:
@@ -98,6 +113,12 @@ sys.path.insert(0, str(project_root))
 hiddenimports = ["debugpy", "wx._xml", "wx._html", "wx._adv"]
 for _pkg in ("widgets", "services", "repositories", "controllers", "utils", "automation"):
     hiddenimports += collect_submodules(_pkg)
+
+# dulwich backs the deck version history. Its porcelain layer reaches several
+# submodules through late/conditional imports (compat shims, the optional C
+# object-store accelerators), so static analysis alone under-collects it and the
+# first deck save in a packaged build would be the place that found out.
+hiddenimports += collect_submodules("dulwich")
 
 a = Analysis(
     [str(entry_point)],

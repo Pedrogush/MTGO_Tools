@@ -8,6 +8,10 @@ config/
 cache/
 decks/
 logs/
+# In a dev checkout the app's data root is the repo root, so the two data
+# dirs holding the developer's own deck work land here too.
+deck_history/
+deck_records/
 /assets/*
 # ...but track the hand-made app icons (mana assets are auto-fetched and stay ignored)
 !/assets/icons/
@@ -46,6 +50,10 @@ requirements*.txt
 collection.json
 .codex/
 .coverage
+# coverage's parallel/xdist data files, and the report artifacts CI builds.
+.coverage.*
+coverage.xml
+coverage-html/
 # Installer build outputs
 dist/
 build/

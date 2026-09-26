@@ -2,7 +2,12 @@
 
 Runs ``MTGOBridge.exe <mode>`` in a worker process and exposes
 ``submit_bridge_command`` / ``BridgeCommandFuture`` for non-blocking
-collection / history / trade commands.
+collection / currency / trade commands. ``<mode>`` is any one-shot mode the
+bridge has -- ``dotnet/MTGOBridge/README.md`` §4 is the list -- and the
+streaming ``watch`` mode lives in :mod:`.watch` instead.
+
+Reached only when the long-lived session in :mod:`.session` is unavailable;
+see :mod:`.client` for what that means.
 """
 
 from __future__ import annotations
@@ -150,28 +155,12 @@ def fetch_collection_snapshot_async(
     return submit_bridge_command("collection", bridge_path=bridge_path, context=context)
 
 
-def fetch_match_history_async(
-    *,
-    bridge_path: str | os.PathLike[str] | None = None,
-    context: mp.context.BaseContext | None = None,
-) -> BridgeCommandFuture:
-    return submit_bridge_command("history", bridge_path=bridge_path, context=context)
-
-
 def fetch_collection_snapshot(
     *,
     bridge_path: str | os.PathLike[str] | None = None,
     timeout: float | None = None,
 ) -> Mapping[str, Any]:
     return run_bridge_command("collection", bridge_path=bridge_path, timeout=timeout)
-
-
-def fetch_match_history(
-    *,
-    bridge_path: str | os.PathLike[str] | None = None,
-    timeout: float | None = None,
-) -> Mapping[str, Any]:
-    return run_bridge_command("history", bridge_path=bridge_path, timeout=timeout)
 
 
 def fetch_trade_snapshot(

@@ -1,15 +1,22 @@
-"""The Save Deck details dialog: which format, and which archetype (issue #1034).
+"""The Save Deck details dialog: the deck's name, its format, and its archetype.
 
-Why a dialog of its own, ahead of the native Save As
-----------------------------------------------------
-The file name and folder belong to Windows' own Save As dialog -- that is where
-people expect to type a name, create a folder, or see what is already there, and
-it is what honours the default deck folder. What that dialog cannot hold is a
-choice that depends on another choice: ``wx.FileDialog``'s customisation hook
+Asked once, not per save
+------------------------
+This used to collect the format and archetype and hand off to Windows' own Save
+As for the file name. That put the name on a dialog that reopened on every save,
+with a *default* recomputed each time from the deck record -- and the default was
+not stable across two saves of one deck, so the second save offered a different
+file, wrote it, and forked the deck's version history in half.
+
+The name is now the deck's own state, set here on the first save and shown in the
+workspace afterwards, so every later save writes to the same file with no dialog
+at all. Renaming is done in the workspace, not here.
+
+Why not ``wx.FileDialog``, for the record: its customisation hook
 (``wxFileDialogCustomize``) can add a ``wxFileDialogChoice``, but only with a
-fixed item list given at creation -- it has no way to repopulate one. The
+fixed item list given at creation -- it has no way to repopulate one, and the
 archetype list is per format, so it would go stale the moment the format was
-corrected. Two short steps it is: this dialog for the metadata, then Save As.
+corrected.
 
 Where the archetype list comes from
 -----------------------------------
@@ -27,7 +34,9 @@ from collections.abc import Callable, Sequence
 
 import wx
 
+from services.deck_name import clean_deck_name
 from utils.constants import SPACE_MD, SPACE_SM, SPACE_XS
+from widgets.input_frame import create_text_input
 from widgets.stylize import (
     init_top_level_window,
     stylize_button,
@@ -52,6 +61,7 @@ class SaveDeckDialog(wx.Dialog):
         formats: Sequence[str],
         initial_format: str,
         initial_archetype: str = "",
+        initial_name: str = "",
         load_archetypes: ArchetypeLoader,
         t: Callable[..., str],
     ) -> None:
@@ -75,6 +85,24 @@ class SaveDeckDialog(wx.Dialog):
         body = wx.BoxSizer(wx.VERTICAL)
         outer.Add(body, 0, wx.EXPAND | wx.ALL, SPACE_MD)
 
+        # The name comes first because it is the one field with a consequence
+        # on disk: it names the file this deck is written to, and every later
+        # save overwrites that same file with no dialog. Not irreversible --
+        # the history is keyed by the deck's stable id, so a rename keeps it --
+        # but the file already written stays where it is, so a name regretted
+        # later leaves a stray .txt behind.
+        name_label = wx.StaticText(self, label=self._t("deck_save.name"))
+        stylize_label(name_label, level="body", surface="base", tone="primary")
+        body.Add(name_label, 0, wx.EXPAND)
+        name_field = create_text_input(self, surface="base", style=wx.TE_PROCESS_ENTER)
+        self.name_input = name_field.ctrl
+        self.name_input.SetValue(initial_name)
+        self.name_input.Bind(wx.EVT_TEXT, self._on_name_changed)
+        self.name_input.Bind(wx.EVT_TEXT_ENTER, lambda _e: self._confirm())
+        body.Add(name_field, 0, wx.EXPAND | wx.TOP, SPACE_XS)
+        self.name_help = self._add_help(body, "")
+
+        body.AddSpacer(SPACE_MD)
         format_label = wx.StaticText(self, label=self._t("deck_save.format"))
         stylize_label(format_label, level="body", surface="base", tone="primary")
         body.Add(format_label, 0, wx.EXPAND)
@@ -117,8 +145,15 @@ class SaveDeckDialog(wx.Dialog):
         self.CentreOnParent()
 
         self._request_archetypes(self.selected_format())
+        self._on_name_changed()
+        self.name_input.SetFocus()
+        self.name_input.SelectAll()
 
     # ------------------------------------------------------------------ public
+    def deck_name(self) -> str:
+        """The chosen name, sanitized exactly as it will be written to disk."""
+        return clean_deck_name(self.name_input.GetValue())
+
     def selected_format(self) -> str:
         index = self.format_choice.GetSelection()
         if 0 <= index < len(self._formats):
@@ -151,6 +186,33 @@ class SaveDeckDialog(wx.Dialog):
         self.archetype_help.SetLabel(text)
         self.archetype_help.Wrap(self.FromDIP(SAVE_DECK_DIALOG_WIDTH) - SPACE_MD * 2)
         self.Layout()
+
+    def _on_name_changed(self, _event: wx.CommandEvent | None = None) -> None:
+        """Gate OK on a usable name, and say what will actually be written.
+
+        Sanitizing is silent everywhere else, which is fine when nothing hangs
+        on the result. Here it decides the file name and therefore which
+        history the save lands in, so a name that will not survive intact says
+        so before the user commits to it.
+        """
+        typed = self.name_input.GetValue().strip()
+        cleaned = clean_deck_name(typed)
+        self.ok_button.Enable(bool(cleaned))
+        if not typed:
+            self._set_name_help(self._t("deck_save.name_required"))
+        elif cleaned != typed:
+            self._set_name_help(self._t("deck_save.name_sanitized", name=cleaned))
+        else:
+            self._set_name_help(self._t("deck_save.name_help"))
+
+    def _set_name_help(self, text: str) -> None:
+        self.name_help.SetLabel(text)
+        self.name_help.Wrap(self.FromDIP(SAVE_DECK_DIALOG_WIDTH) - SPACE_MD * 2)
+        self.Layout()
+
+    def _confirm(self) -> None:
+        if self.deck_name():
+            self.EndModal(wx.ID_OK)
 
     def _on_format_changed(self, _event: wx.CommandEvent | None = None) -> None:
         self._request_archetypes(self.selected_format())

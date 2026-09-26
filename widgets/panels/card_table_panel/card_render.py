@@ -5,13 +5,42 @@ the grid view migrated from per-card native widgets to a single custom-drawn
 canvas (:class:`DeckGridView`). Keeping them as free functions makes them easy
 to unit-test and lets the canvas reuse the exact DFC image-lookup and
 color-resolution logic the old grid cells used.
+
+:func:`load_card_face` is here for the same reason: every view that draws a card
+face has to turn a file on disk into pixels at the size it draws them, and doing
+that in more than one way is how one view ends up softer than another.
 """
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
+from PIL import Image as PilImage
+
 from widgets.mana_icon_factory import ManaIconFactory
+
+
+def load_card_face(path: str | Path, width: int, height: int) -> PilImage.Image:
+    """Open a card image and resize it to fit a ``width`` x ``height`` box.
+
+    The one resize a card face gets, in one place. It is a **single** LANCZOS
+    step from the file straight to the size the card is drawn at: decoding to
+    some intermediate size and scaling again from there resamples twice, and the
+    second pass is what leaves a card visibly softer than the same card
+    elsewhere in the app.
+
+    Scaled to *fit*, never to fill, so the source's own proportions win over the
+    caller's box -- a card whose aspect differs from the box by a pixel is
+    letterboxed by that pixel rather than stretched. Callers draw the result
+    centred in the box they asked for.
+
+    Runs on a decode thread in every caller, so it only reads.
+    """
+    image = PilImage.open(str(path)).convert("RGB")
+    w, h = image.size
+    scale = min(width / w, height / h)
+    return image.resize((max(1, int(w * scale)), max(1, int(h * scale))), PilImage.LANCZOS)
 
 
 def build_image_name_candidates(card: dict[str, Any], meta: Any) -> list[str]:

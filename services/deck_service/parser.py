@@ -1,29 +1,20 @@
-"""Parsing and analysis helpers for deck text."""
+"""Parsing and analysis helpers for deck text.
+
+The line scanning itself lives in :mod:`utils.deck_text`, which is what the
+deck-VCS normalizer and the collection diff read through as well, so a decklist
+is read identically wherever it enters the app. What is here is the *analysis*
+shaped on top of it: zone totals in deck order, the dictionary form the builder
+keys on, and the land estimate.
+"""
 
 from __future__ import annotations
 
-import re
 from collections.abc import Iterable
-from dataclasses import dataclass
 from typing import Any
 
-# A trailing Scryfall printing-id pointer (``8-4-4-4-12`` hex), as emitted by the
-# printing-selection helpers (see :mod:`services.deck_service.printing`). It is
-# stripped from the card name so name-based analysis keeps working on decklists
-# that carry per-card art selections. Set-code pointers are intentionally *not*
-# stripped here — they need the printing index to be told apart from real names
-# that happen to end in an upper-case token (e.g. "Look at Me, I'm the DCI").
-_PRINTING_ID_SUFFIX = re.compile(
-    r"\s+[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
-    re.IGNORECASE,
-)
+from utils.deck_text import DeckEntry, iter_entries
 
-
-@dataclass(frozen=True)
-class DeckEntry:
-    count: float
-    name: str
-    is_sideboard: bool
+__all__ = ["DeckEntry", "DeckParser", "DeckParserMixin"]
 
 
 class DeckParserMixin:
@@ -33,7 +24,7 @@ class DeckParserMixin:
         # Sideboard cards are keyed as "Sideboard {name}".
         deck_dict: dict[str, float] = {}
 
-        for entry in self._iter_entries(deck_text, strip_input=False, ignore_trailing_empty=True):
+        for entry in iter_entries(deck_text):
             key = f"Sideboard {entry.name}" if entry.is_sideboard else entry.name
             deck_dict[key] = deck_dict.get(key, 0.0) + entry.count
 
@@ -45,9 +36,7 @@ class DeckParserMixin:
         mainboard_order: list[str] = []
         sideboard_order: list[str] = []
 
-        for entry in self._iter_entries(
-            deck_content, strip_input=True, ignore_trailing_empty=False
-        ):
+        for entry in iter_entries(deck_content):
             if entry.is_sideboard:
                 target_totals = sideboard_totals
                 target_order = sideboard_order
@@ -83,37 +72,20 @@ class DeckParserMixin:
             "estimated_lands": estimated_lands,
         }
 
-    def _iter_entries(
-        self, deck_text: str, *, strip_input: bool, ignore_trailing_empty: bool
+    def iter_deck_entries(
+        self, deck_text: str, *, strip_printing_id: bool = True
     ) -> Iterable[DeckEntry]:
-        lines = deck_text.strip().split("\n") if strip_input else deck_text.split("\n")
-        is_sideboard = False
+        """Yield every parsed line of *deck_text* in deck order, tagged by zone.
 
-        for index, line in enumerate(lines):
-            line = line.strip()
+        The public view of the parse that :meth:`analyze_deck` and
+        :meth:`deck_to_dictionary` build on, for callers that need the entries
+        themselves rather than an aggregate (the collection diff, #1044).
 
-            if not line and ignore_trailing_empty and index == len(lines) - 1:
-                continue
-
-            if not line:
-                is_sideboard = True
-                continue
-
-            if line.lower() == "sideboard":
-                is_sideboard = True
-                continue
-
-            try:
-                parts = line.split(" ", 1)
-                if len(parts) < 2:
-                    continue
-
-                card_amount = float(parts[0])
-                card_name = _PRINTING_ID_SUFFIX.sub("", parts[1].strip())
-
-                yield DeckEntry(count=card_amount, name=card_name, is_sideboard=is_sideboard)
-            except (ValueError, IndexError):
-                continue
+        *strip_printing_id* is passed through: analysis wants bare card names,
+        while anything that will write the line back out has to keep the art the
+        user picked.
+        """
+        return iter_entries(deck_text, strip_printing_id=strip_printing_id)
 
     @staticmethod
     def _build_card_list(

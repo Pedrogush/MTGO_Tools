@@ -263,6 +263,76 @@ class AutomationClient:
         """
         return self._send_command("get_zone_cards", zone=zone)
 
+    # ------------------------------------------------------------------ archetype baseline ------------------------------------------------------------------
+    def deck_baseline(self) -> dict[str, Any]:
+        """The archetype baseline breakdown, as the Baseline tab computed it."""
+        return self._send_command("deck_baseline")
+
+    def deck_baseline_compute(self) -> dict[str, Any]:
+        """Compute the baseline for the archetype selected in Research."""
+        return self._send_command("deck_baseline_compute")
+
+    def deck_baseline_root(self, deck_key: str | None = None) -> dict[str, Any]:
+        """The deck's root commit and whether it is an archetype baseline."""
+        return self._send_command("deck_baseline_root", deck_key=deck_key)
+
+    def deck_baseline_pin_root(self) -> dict[str, Any]:
+        """Pin the History tab's diff baseline to the deck's root commit."""
+        return self._send_command("deck_baseline_pin_root")
+
+    def deck_baseline_load_file(self, path: str) -> dict[str, Any]:
+        """Load a saved deck file, bypassing the Load Deck dialog."""
+        return self._send_command("deck_baseline_load_file", path=path)
+
+    def deck_baseline_save_deck(
+        self, name: str, archetype: str | None = None, format_name: str | None = None
+    ) -> dict[str, Any]:
+        """Save the loaded deck as a new deck, bypassing the Save dialogs."""
+        return self._send_command(
+            "deck_baseline_save_deck", name=name, archetype=archetype, format_name=format_name
+        )
+
+    # ------------------------------------------------------------------ deck version history ------------------------------------------------------------------
+    def deck_history(self) -> dict[str, Any]:
+        """The version graph: nodes with row/lane placement, edges, branches."""
+        return self._send_command("deck_history")
+
+    def deck_name(self, name: str | None = None) -> dict[str, Any]:
+        """Read the deck's name, or set it (the rename action, without a dialog)."""
+        return self._send_command("deck_name", name=name)
+
+    def deck_save(self) -> dict[str, Any]:
+        """Save through the real Save path. Requires the deck to be named."""
+        return self._send_command("deck_save")
+
+    def deck_history_save(self, message: str | None = None) -> dict[str, Any]:
+        """Commit the loaded decklist as a version (no Save As dialog)."""
+        return self._send_command("deck_history_save", message=message)
+
+    def deck_history_select(self, sha: str, view: str | None = None) -> dict[str, Any]:
+        """Select a version and read back its decklist and diff (preview only).
+
+        ``view`` is ``"decklist"`` or ``"diff"``, bringing that preview page to
+        the front so a screenshot shows it.
+        """
+        return self._send_command("deck_history_select", sha=sha, view=view)
+
+    def deck_history_checkout(self, sha: str) -> dict[str, Any]:
+        """Check out a version, rewriting the user's deck file."""
+        return self._send_command("deck_history_checkout", sha=sha)
+
+    def deck_history_branch(self, sha: str, name: str) -> dict[str, Any]:
+        """Create a branch at a version."""
+        return self._send_command("deck_history_branch", sha=sha, name=name)
+
+    def deck_history_switch(self, name: str) -> dict[str, Any]:
+        """Switch to a branch, rewriting the user's deck file."""
+        return self._send_command("deck_history_switch", name=name)
+
+    def deck_history_baseline(self, sha: str | None = None) -> dict[str, Any]:
+        """Pin (or clear) the version diffs are taken against."""
+        return self._send_command("deck_history_baseline", sha=sha)
+
     def add_card_to_zone(self, zone: str, card_name: str, qty: int = 1) -> dict[str, Any]:
         """Add one or more copies of a card to a zone.
 

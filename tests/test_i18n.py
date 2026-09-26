@@ -131,7 +131,6 @@ def test_core_ui_translation_keys_exist_in_default_locale() -> None:
         "deck_actions.save_deck",
         "research.format",
         "research.search_hint",
-        "research.reload_archetypes",
         "research.loading_archetypes",
         "research.failed_archetypes",
         "research.no_archetypes",

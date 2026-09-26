@@ -1,5 +1,16 @@
 # Handoff — Issue #792: Deckbuilder card art selection (wx UI wiring)
 
+> **Historical record. Issue #792 is closed (2026-06-21) and PR #794 shipped.**
+> This is the working handoff that was written while the four parts were being
+> built; it is kept because the "what was built" summary at the end is the only
+> written account of *why* the printing-selection design is what it is. Nothing
+> here is maintained: the commands, paths and tooling notes describe the repo as
+> it was in mid-2026 (the venv was `env\`, the app had a toolbar rather than a
+> menu bar, and the automation CLI has grown a lot since). For how any of that
+> works **now**, read `automation/README.md`, `tests/README.md` and `README.md`
+> instead, and treat this file as evidence of a past decision rather than as
+> instructions.
+
 **Status: all 4 parts of #792 are now implemented** on branch
 `feat/792-deckbuilder-printing-dropdown-and-normalise` (PR #794).
 Parts 3 & 4 landed first; Parts 1 & 2 (board↔inspector art sync + save control)

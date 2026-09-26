@@ -1,7 +1,10 @@
 """Finding a newer published release, and applying it in-app (issue #142).
 
-Two halves, and the split matters: :meth:`UpdateCheckMixin.check_for_update` is
-fire-and-forget background work the user never asked for, while
+Three entry points, and the split matters:
+:meth:`UpdateCheckMixin.check_for_update` is fire-and-forget background work the
+user never asked for; :meth:`UpdateCheckMixin.check_for_update_now` is the same
+question asked *by* the user (#1041), so it skips the once-a-day stamp and has
+to answer even when the answer is "nothing new" or "could not ask"; and
 :meth:`UpdateCheckMixin.apply_available_update` runs only after they said yes in
 :class:`widgets.dialogs.update_dialog.UpdateDialog` and ends by closing the app.
 """
@@ -18,7 +21,7 @@ if TYPE_CHECKING:
 
     from controllers.app_controller.protocol import AppControllerProto
     from services.update_installer import ProgressCallback, ReleaseUnavailable, UpdateInstaller
-    from services.update_service import UpdateInfo
+    from services.update_service import CheckResult, UpdateInfo
 
     _Base = AppControllerProto
 else:
@@ -59,6 +62,69 @@ class UpdateCheckMixin(_Base):
             logger.debug(f"Update check failed: {exc}")
 
         self._worker.submit(_check, on_success=_on_done, on_error=_on_error)
+
+    def check_for_update_now(self, on_result: Callable[[CheckResult], None]) -> bool:
+        """Ask GitHub *now*, ignoring the stamp, and report all three outcomes.
+
+        This is *File ▸ Check for updates* (#1041), and it differs from
+        :meth:`check_for_update` in every way that matters:
+
+        * it forces the check, because the user asked and a day-old stamp is not
+          an answer to that;
+        * it reports back whatever it found, including "you are current" and
+          "GitHub could not be reached" — silence is the right response to a
+          check nobody asked for, and the wrong one to a click;
+        * it runs whether or not the automatic check is enabled in preferences.
+          That setting turns off the *unasked-for* check; it is not a reason to
+          refuse an explicit request, and the menu item is the thing a user who
+          turned the automatic check off would reach for.
+
+        Returns whether a check was started. ``False`` means one is already in
+        flight — the click is dropped rather than queued, because two clicks are
+        one question, and answering it twice would mean two requests against a
+        60-per-hour budget and two dialogs.
+
+        ``on_result`` arrives on the UI thread (``BackgroundWorker`` routes its
+        callbacks through ``wx.CallAfter``); the network and disk work behind it
+        does not touch the UI thread at all.
+        """
+        if self._update_check_in_flight:
+            logger.debug("Update check already running — ignoring the repeat request")
+            return False
+        self._update_check_in_flight = True
+
+        def _check() -> CheckResult:
+            from services.update_service import get_update_service
+
+            return get_update_service().check_result(force=True)
+
+        def _on_done(result: CheckResult) -> None:
+            self._update_check_in_flight = False
+            if result.info is not None:
+                # Adopted even when the request failed and this is the cached
+                # answer: it is still the best information the app has, and the
+                # Help menu's entry and the status note read it from here.
+                self._available_update = result.info
+            logger.info(f"Requested update check: {result.outcome}")
+            on_result(result)
+
+        def _on_error(exc: Exception) -> None:
+            # check_result() absorbs its own failures, so this is something
+            # unforeseen. Unlike the automatic check, it cannot be swallowed:
+            # the user is waiting for an answer, and "nothing happened" is the
+            # one outcome this feature exists to stop happening.
+            self._update_check_in_flight = False
+            logger.warning(f"Requested update check failed: {type(exc).__name__}: {exc}")
+            from services.update_service import OUTCOME_UNREACHABLE, CheckResult
+
+            on_result(CheckResult(outcome=OUTCOME_UNREACHABLE))
+
+        self._worker.submit(_check, on_success=_on_done, on_error=_on_error)
+        return True
+
+    def is_update_check_running(self) -> bool:
+        """Whether a requested check is still in flight. No I/O — UI-thread safe."""
+        return self._update_check_in_flight
 
     def get_available_update(self) -> UpdateInfo | None:
         """The newer release found this session, if any. No I/O — safe on the UI thread."""

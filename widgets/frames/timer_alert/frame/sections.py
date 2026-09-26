@@ -56,9 +56,7 @@ class SectionsBuilderMixin:
         threshold_sizer = threshold_section.sizer
         box_parent = threshold_section.body
 
-        instructions = wx.StaticText(
-            box_parent, label="Enter time in MM:SS format (e.g., 05:00 for 5 minutes)"
-        )
+        instructions = wx.StaticText(box_parent, label=self._t("timer.hint.threshold_format"))
         instructions.SetForegroundColour(SUBDUED_TEXT)
         threshold_sizer.Add(instructions, 0, wx.ALL, SPACE_XS)
 
@@ -72,7 +70,7 @@ class SectionsBuilderMixin:
 
         self._add_threshold_panel()
 
-        add_btn = wx.Button(box_parent, label="+ Add Another Threshold")
+        add_btn = wx.Button(box_parent, label=self._t("timer.btn.add_threshold"))
         self._stylize_secondary_button(add_btn)
         add_btn.Bind(wx.EVT_BUTTON, lambda _evt: self._add_threshold_panel())
         threshold_sizer.Add(add_btn, 0, wx.ALL, SPACE_XS)

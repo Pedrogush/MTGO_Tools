@@ -38,6 +38,14 @@
     <param name="Local" value="deck_notes.html">
     </OBJECT>
   <LI><OBJECT type="text/sitemap">
+    <param name="Name" value="Deck History">
+    <param name="Local" value="deck_history.html">
+    </OBJECT>
+  <LI><OBJECT type="text/sitemap">
+    <param name="Name" value="Archetype Baseline">
+    <param name="Local" value="deck_baseline.html">
+    </OBJECT>
+  <LI><OBJECT type="text/sitemap">
     <param name="Name" value="Opponent Tracker">
     <param name="Local" value="opponent_tracker.html">
     </OBJECT>

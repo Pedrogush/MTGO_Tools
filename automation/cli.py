@@ -229,6 +229,111 @@ def cmd_load_deck(client: AutomationClient, args: argparse.Namespace) -> int:
     return 0 if result.get("loaded") else 1
 
 
+def cmd_deck_baseline(client: AutomationClient, args: argparse.Namespace) -> int:
+    """Print the archetype baseline breakdown."""
+    result = client.deck_baseline()
+    print(format_output(result, args.json))
+    return 0 if "error" not in result else 1
+
+
+def cmd_deck_baseline_compute(client: AutomationClient, args: argparse.Namespace) -> int:
+    """Compute the baseline for the selected archetype."""
+    result = client.deck_baseline_compute()
+    print(format_output(result, args.json))
+    return 0 if result.get("triggered") else 1
+
+
+def cmd_deck_baseline_root(client: AutomationClient, args: argparse.Namespace) -> int:
+    """Print the deck's root commit."""
+    result = client.deck_baseline_root(args.deck_key)
+    print(format_output(result, args.json))
+    return 0 if "error" not in result else 1
+
+
+def cmd_deck_baseline_pin_root(client: AutomationClient, args: argparse.Namespace) -> int:
+    """Pin the diff baseline to the deck's root commit."""
+    result = client.deck_baseline_pin_root()
+    print(format_output(result, args.json))
+    return 0 if result.get("pinned") else 1
+
+
+def cmd_deck_baseline_save_deck(client: AutomationClient, args: argparse.Namespace) -> int:
+    """Save the loaded deck as a new deck, bypassing the Save dialogs."""
+    result = client.deck_baseline_save_deck(args.name, args.archetype, args.format_name)
+    print(format_output(result, args.json))
+    return 0 if result.get("saved") else 1
+
+
+def cmd_deck_baseline_load_file(client: AutomationClient, args: argparse.Namespace) -> int:
+    """Load a saved deck file, bypassing the Load Deck dialog."""
+    result = client.deck_baseline_load_file(args.path)
+    print(format_output(result, args.json))
+    return 0 if result.get("loaded") else 1
+
+
+def cmd_deck_history(client: AutomationClient, args: argparse.Namespace) -> int:
+    """Print the deck's version graph."""
+    result = client.deck_history()
+    print(format_output(result, args.json))
+    return 0 if "error" not in result else 1
+
+
+def cmd_deck_name(client: AutomationClient, args: argparse.Namespace) -> int:
+    """Read or set the loaded deck's name."""
+    result = client.deck_name(args.name)
+    print(format_output(result, args.json))
+    return 0 if "error" not in result else 1
+
+
+def cmd_deck_save(client: AutomationClient, args: argparse.Namespace) -> int:
+    """Save the loaded deck through the real Save path."""
+    result = client.deck_save()
+    print(format_output(result, args.json))
+    return 0 if result.get("saved") else 1
+
+
+def cmd_deck_history_save(client: AutomationClient, args: argparse.Namespace) -> int:
+    """Commit the loaded decklist as a version."""
+    result = client.deck_history_save(args.message)
+    print(format_output(result, args.json))
+    return 0 if result.get("saved") else 1
+
+
+def cmd_deck_history_select(client: AutomationClient, args: argparse.Namespace) -> int:
+    """Select a version (preview only -- never checks out)."""
+    result = client.deck_history_select(args.sha, args.view)
+    print(format_output(result, args.json))
+    return 0 if "error" not in result else 1
+
+
+def cmd_deck_history_checkout(client: AutomationClient, args: argparse.Namespace) -> int:
+    """Check out a version, rewriting the deck file."""
+    result = client.deck_history_checkout(args.sha)
+    print(format_output(result, args.json))
+    return 0 if "error" not in result else 1
+
+
+def cmd_deck_history_branch(client: AutomationClient, args: argparse.Namespace) -> int:
+    """Create a branch at a version."""
+    result = client.deck_history_branch(args.sha, args.name)
+    print(format_output(result, args.json))
+    return 0 if "error" not in result else 1
+
+
+def cmd_deck_history_switch(client: AutomationClient, args: argparse.Namespace) -> int:
+    """Switch branches."""
+    result = client.deck_history_switch(args.name)
+    print(format_output(result, args.json))
+    return 0 if "error" not in result else 1
+
+
+def cmd_deck_history_baseline(client: AutomationClient, args: argparse.Namespace) -> int:
+    """Pin the diff baseline to a version."""
+    result = client.deck_history_baseline(args.sha)
+    print(format_output(result, args.json))
+    return 0 if "error" not in result else 1
+
+
 def cmd_get_zone_cards(client: AutomationClient, args: argparse.Namespace) -> int:
     """Get cards in a zone."""
     result = client.get_zone_cards(args.zone)
@@ -593,6 +698,53 @@ Notes:
     p.add_argument("--text", "-t", help="Deck text inline")
     p.add_argument("--file", "-f", help="Path to deck text file")
 
+    # archetype baseline
+    subparsers.add_parser("deck-baseline", help="Print the archetype baseline breakdown")
+    subparsers.add_parser("deck-baseline-compute", help="Compute the archetype baseline")
+    p = subparsers.add_parser("deck-baseline-root", help="Print the deck's root commit")
+    p.add_argument("--deck-key", dest="deck_key", default=None, help="Deck key (default: current)")
+    subparsers.add_parser(
+        "deck-baseline-pin-root", help="Pin the diff baseline to the deck's root commit"
+    )
+    p = subparsers.add_parser("deck-baseline-save-deck", help="Save the loaded deck as a new deck")
+    p.add_argument("--name", required=True, help="File name (without .txt)")
+    p.add_argument("--archetype", default=None, help="Archetype to record")
+    p.add_argument("--format-name", dest="format_name", default=None, help="Format to record")
+    p = subparsers.add_parser("deck-baseline-load-file", help="Load a saved deck file")
+    p.add_argument("--path", required=True, help="Path to the deck .txt")
+
+    # deck history
+    subparsers.add_parser("deck-history", help="Print the deck version graph")
+
+    p = subparsers.add_parser("deck-name", help="Read or set the loaded deck's name")
+    p.add_argument("name", nargs="?", default=None, help="New name (omit to read)")
+
+    subparsers.add_parser("deck-save", help="Save the loaded deck (it must be named)")
+
+    p = subparsers.add_parser("deck-history-save", help="Commit the loaded deck as a version")
+    p.add_argument(
+        "--message", "-m", default=None, help="Commit message (default: auto diff summary)"
+    )
+
+    p = subparsers.add_parser("deck-history-select", help="Preview a version (no checkout)")
+    p.add_argument("sha", help="Version sha (short form accepted)")
+    p.add_argument(
+        "--view", choices=["decklist", "diff"], default=None, help="Preview page to show"
+    )
+
+    p = subparsers.add_parser("deck-history-checkout", help="Check out a version")
+    p.add_argument("sha", help="Version sha (short form accepted)")
+
+    p = subparsers.add_parser("deck-history-branch", help="Create a branch at a version")
+    p.add_argument("sha", help="Version sha (short form accepted)")
+    p.add_argument("--name", "-n", required=True, help="New branch name")
+
+    p = subparsers.add_parser("deck-history-switch", help="Switch to a branch")
+    p.add_argument("--name", "-n", required=True, help="Branch name")
+
+    p = subparsers.add_parser("deck-history-baseline", help="Pin the diff baseline")
+    p.add_argument("sha", nargs="?", default=None, help="Version sha, or omit to clear")
+
     # get-zone-cards
     p = subparsers.add_parser("get-zone-cards", help="Get cards in a zone")
     p.add_argument("--zone", "-z", default="main", help="Zone: main, side, or out (default: main)")
@@ -872,6 +1024,21 @@ Notes:
         "switch-tab": cmd_switch_tab,
         "wait": cmd_wait,
         "load-deck": cmd_load_deck,
+        "deck-baseline": cmd_deck_baseline,
+        "deck-baseline-compute": cmd_deck_baseline_compute,
+        "deck-baseline-root": cmd_deck_baseline_root,
+        "deck-baseline-pin-root": cmd_deck_baseline_pin_root,
+        "deck-baseline-save-deck": cmd_deck_baseline_save_deck,
+        "deck-baseline-load-file": cmd_deck_baseline_load_file,
+        "deck-history": cmd_deck_history,
+        "deck-name": cmd_deck_name,
+        "deck-save": cmd_deck_save,
+        "deck-history-save": cmd_deck_history_save,
+        "deck-history-select": cmd_deck_history_select,
+        "deck-history-checkout": cmd_deck_history_checkout,
+        "deck-history-branch": cmd_deck_history_branch,
+        "deck-history-switch": cmd_deck_history_switch,
+        "deck-history-baseline": cmd_deck_history_baseline,
         "get-zone-cards": cmd_get_zone_cards,
         "add-card": cmd_add_card,
         "remove-card": cmd_remove_card,

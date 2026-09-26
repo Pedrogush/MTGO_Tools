@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Deck History</title>
+<style>
+body { font-family: Arial, sans-serif; margin: 20px; color: #222; }
+h1 { color: #1a3a5c; border-bottom: 2px solid #1a3a5c; padding-bottom: 6px; }
+h2 { color: #2a5a8c; }
+table { border-collapse: collapse; width: 100%; }
+th { background: #1a3a5c; color: #fff; padding: 6px 10px; text-align: left; }
+td { padding: 5px 10px; border-bottom: 1px solid #ddd; vertical-align: top; }
+a { color: #1a5fa0; }
+code { background: #f2f4f7; padding: 1px 4px; }
+</style>
+</head>
+<body>
+<h1>Deck History</h1>
+<p>Every time you save a deck, MTGO Tools records that decklist as a <strong>version</strong>. You
+can look at any earlier version, see exactly which cards changed between two of them, and put an
+older one back on screen. Nothing has to be switched on and there is nothing to remember to do
+&mdash; saving is what records a version.</p>
+<p>A save that changes no card records nothing, so saving twice in a row does not fill the history
+with empty entries. Reordering the lines of a decklist is not a change either.</p>
+<p>Your decklist file itself is left alone. It stays the plain <code>.txt</code> that MTGO and the
+rental sites accept, with no version information written into it; the history is kept separately.</p>
+
+<h2>The Versions rail</h2>
+<p>The narrow column headed <strong>Versions</strong> sits between the deck tables and the
+<a href="card_inspector.html">Card Inspector</a>, so the deck&rsquo;s versions are visible while you
+are working on the cards. Each row is one version, newest at the top. Hover a row to see what that
+version was; <strong>click one to load it</strong> &mdash; a click in the rail moves the deck onto
+that version straight away, as described under
+<a href="#checkout">Putting an older version back on screen</a> below.</p>
+<p>A deck with no history yet shows <strong>None yet</strong>.</p>
+
+<h2>The History tab</h2>
+<p>The <strong>History</strong> tab in the <a href="deck_workspace.html">Deck Workspace</a> is where
+a version is studied rather than just reached. It is split in two: the version graph on the left,
+and the selected version on the right under two sub-tabs, <strong>Decklist</strong> and
+<strong>Diff</strong>.</p>
+<p><strong>Clicking a node in the graph selects it.</strong> That fills the two sub-tabs and changes
+nothing on disk &mdash; it is a preview, not a move. (This is the one place the graph and the rail
+behave differently: the rail has nothing to preview into, so a click there is the move itself.)</p>
+<p>A deck with no versions yet shows <strong>No version history yet &mdash; save the deck to create
+one.</strong></p>
+
+<h3>Reading the graph</h3>
+<p>Newest version at the top, each one drawn above the version it came from. Each row carries a
+short summary of what changed and when it was saved. When a deck has more than one line of
+development the rows sit in separate columns &mdash; one column per line &mdash; joined back to the
+version they branched from. The current version is ringed.</p>
+
+<h3>The node menu</h3>
+<p>Right-click a version in the graph:</p>
+<table>
+  <tr><th>Item</th><th>What it does</th></tr>
+  <tr><td><strong>Check out this version&hellip;</strong></td>
+      <td>Loads that version into the deck workspace and rewrites your deck file with it. See
+          <a href="#checkout">below</a>.</td></tr>
+  <tr><td><strong>Create branch here&hellip;</strong></td>
+      <td>Starts a named branch at that version without moving the deck onto it. A dialog
+          (<strong>Create Branch</strong>) asks you to <strong>Name the new branch</strong>.</td></tr>
+  <tr><td><strong>Set as diff baseline</strong></td>
+      <td>Pins that version as the one every diff is measured against, instead of each
+          version&rsquo;s own parent.</td></tr>
+</table>
+
+<h2>Comparing two versions</h2>
+<p>The <strong>Diff</strong> sub-tab shows what changed, card by card &mdash; cards added, cards
+removed, and counts that went up or down &mdash; for both the maindeck and the sideboard. A line
+above it says what the comparison is against:</p>
+<table>
+  <tr><th>Line</th><th>Meaning</th></tr>
+  <tr><td><strong>Comparing against parent&hellip;</strong></td>
+      <td>The default: each version is compared with the one it came from, which answers &ldquo;what
+          did this save change?&rdquo;</td></tr>
+  <tr><td><strong>Comparing against pinned baseline&hellip;</strong></td>
+      <td>You used <strong>Set as diff baseline</strong>, so every version you select is compared
+          with that one version instead. This is how you measure a whole run of edits at once.</td></tr>
+</table>
+<p>The first version of a deck has nothing before it, so its diff reads <strong>This is the first
+version &mdash; there is nothing to compare it against.</strong> Two versions whose cards match read
+<strong>No card differences.</strong></p>
+<p>If the deck was rooted at an <a href="deck_baseline.html">archetype baseline</a>, pinning that
+first version as the baseline is how you see everything your build does differently from the
+archetype.</p>
+
+<h2 id="checkout">Putting an older version back on screen</h2>
+<p>Use <strong>Check out this version&hellip;</strong> from the graph&rsquo;s node menu, or click the
+version in the <strong>Versions</strong> rail. Either way MTGO Tools writes that version&rsquo;s
+decklist to your deck file and reloads the workspace from it, and the status bar reports where the
+deck landed.</p>
+<p>There is no confirmation prompt. Moving between versions is the point of the feature, and the
+version you were on is still a node on the graph, so the move is undone by making the opposite one.
+<strong>What is not recoverable is unsaved work</strong>: the cards on screen are replaced by the
+version you moved to, so edits you never saved are gone. Save first &mdash; that takes one click and
+makes a version of its own.</p>
+
+<h2>Branches</h2>
+<p>A branch is one line of development. Saving normally extends the line you are on.</p>
+<p><strong>Moving onto a version that is not the latest one on its line starts a new branch
+automatically</strong>, named after that version, and the deck is put on it. That is what stops a
+save made from an older version overwriting the versions that came after it: those stay exactly
+where they are, on their own branch, and your new saves go onto the new one. You can also start a
+branch deliberately with <strong>Create branch here&hellip;</strong>.</p>
+<p>The <strong>Branch</strong> picker at the top of the History tab switches between branches
+&mdash; and, as its tooltip warns, <em>this rewrites the deck file on disk</em>, exactly as checking
+out a version does.</p>
+<p>Branches are never merged back together. Two branches that have diverged stay diverged, related
+only by the version they both grew out of.</p>
+
+<h2>Editing the deck outside the app</h2>
+<p>If you edit a deck&rsquo;s <code>.txt</code> in a text editor and then open it here, MTGO Tools
+notices that the list is not one of the versions it holds and asks, under the heading
+<strong>Deck Edited Outside the App</strong>, whether to record it as a new version. It asks rather
+than guessing, because guessing either invents a version you did not make or buries an edit you did.
+It only asks for decks that already have a history &mdash; a deck opened for the first time is just
+a deck.</p>
+
+<h2>Where the history is kept</h2>
+<p>Each deck&rsquo;s history is a folder of its own under <strong><code>deck_history</code></strong>
+in the MTGO Tools data folder, next to <code>config</code>. It is deliberately <em>not</em> under
+<code>cache</code>:</p>
+<ul>
+  <li><strong>Uninstalling MTGO Tools does not delete it.</strong> Neither does clearing the
+      application&rsquo;s caches. Everything under <code>cache</code> can be downloaded or computed
+      again; your deck&rsquo;s edit history cannot, so it is kept out of the way of both.</li>
+  <li><strong>Your deck files are untouched by it.</strong> The folder holds a private copy of the
+      decklist for each version; the <code>.txt</code> in your deck folder never gains a companion
+      file.</li>
+</ul>
+<p>A deck is matched to its history by a hidden identifier fixed the first time it is saved, not by
+its name. So <strong>renaming a deck keeps its history</strong>, and two different decks that happen
+to share a name keep two separate histories.</p>
+
+<h2>See also</h2>
+<ul>
+  <li><a href="deck_workspace.html">Deck Workspace</a></li>
+  <li><a href="deck_baseline.html">Archetype Baseline</a></li>
+  <li><a href="deck_results.html">Deck Results &amp; Actions</a></li>
+</ul>
+</body>
+</html>
