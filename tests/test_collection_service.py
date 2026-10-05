@@ -989,3 +989,48 @@ def test_refresh_from_bridge_generic_failure_routes_to_error(collection_service,
     )
 
     assert errors == ["network down"]
+
+
+def test_currency_counts_are_none_before_any_sync(collection_service):
+    """No synced collection means no badge, not a misleading zero."""
+    assert collection_service.get_currency_counts() is None
+
+
+def test_currency_counts_from_cached_sync(collection_service, tmp_path):
+    collection_data = [
+        {"name": "Event Ticket", "quantity": 37},
+        {"name": "Treasure Chest Booster", "quantity": 5},
+        {"name": "Lightning Bolt", "quantity": 4},
+    ]
+    filepath = tmp_path / "collection_full_trade_20240101.json"
+    filepath.write_text(json.dumps(collection_data), encoding="utf-8")
+
+    collection_service.load_from_cached_file(tmp_path)
+
+    assert collection_service.get_currency_counts() == (37, 5)
+
+
+def test_currency_counts_are_zero_when_the_sync_holds_none(collection_service, tmp_path):
+    cards = [{"name": "Island", "quantity": 20}]
+    collection_service.load_from_card_list(cards, tmp_path / "collection_full_trade_x.json")
+
+    assert collection_service.get_currency_counts() == (0, 0)
+
+
+def test_currency_counts_accept_every_name_the_bridge_does(collection_service, tmp_path):
+    cards = [
+        {"name": "Event Tickets", "quantity": 2},
+        {"name": "Treasure Chest", "quantity": 1},
+        {"name": "Treasure Chest Boosters", "quantity": 3},
+    ]
+    collection_service.load_from_card_list(cards, tmp_path / "collection_full_trade_x.json")
+
+    assert collection_service.get_currency_counts() == (2, 4)
+
+
+def test_currency_counts_clear_with_the_inventory(collection_service, tmp_path):
+    cards = [{"name": "Event Ticket", "quantity": 9}]
+    collection_service.load_from_card_list(cards, tmp_path / "collection_full_trade_x.json")
+    collection_service.clear_inventory()
+
+    assert collection_service.get_currency_counts() is None

@@ -33,3 +33,20 @@ def build_inventory(cards: list[dict[str, Any]], normalize_names: bool = True) -
         key = (fold_card_name(name) or name.lower()) if normalize_names else name
         inventory[key] = inventory.get(key, 0) + quantity
     return inventory
+
+
+# MTGO keeps Event Tickets and Treasure Chests in the collection as ordinary
+# entries, so a collection sync already carries them. The names mirror the
+# bridge's own currency scan (IsEventTicket / IsTreasureChest in
+# dotnet/MTGOBridge/Program.cs), folded the way build_inventory folds keys.
+EVENT_TICKET_NAMES = frozenset({"event ticket", "event tickets"})
+TREASURE_CHEST_NAMES = frozenset(
+    {"treasure chest", "treasure chest booster", "treasure chest boosters"}
+)
+
+
+def count_currency(inventory: dict[str, int]) -> tuple[int, int]:
+    """Return ``(event_tickets, treasure_chests)`` held in a normalized inventory."""
+    tickets = sum(inventory.get(name, 0) for name in EVENT_TICKET_NAMES)
+    chests = sum(inventory.get(name, 0) for name in TREASURE_CHEST_NAMES)
+    return tickets, chests
