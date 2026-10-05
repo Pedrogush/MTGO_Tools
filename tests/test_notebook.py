@@ -23,6 +23,7 @@ from widgets.notebook import (  # noqa: E402
     DEFAULT_AGW_STYLE,
     _ThemedTabRenderer,
     make_flat_notebook,
+    set_tab_strip_badge,
 )
 
 
@@ -121,3 +122,57 @@ def test_the_tab_container_background_is_dark(frame: object) -> None:
     """
     notebook = make_flat_notebook(frame)
     assert _rgb(notebook._pages.GetBackgroundColour()) == T.SURFACE_PANEL
+
+
+class _RecordingDC:
+    """A real ``MemoryDC`` that also records the badge's box."""
+
+    def __init__(self, width: int, height: int) -> None:
+        self._dc = wx.MemoryDC()
+        self._dc.SelectObject(wx.Bitmap(width, height))
+        self.boxes: list[tuple[int, int, int, int]] = []
+        self.texts: list[str] = []
+
+    def DrawRoundedRectangle(self, x, y, w, h, radius):  # noqa: N802
+        self.boxes.append((x, y, w, h))
+        self._dc.DrawRoundedRectangle(x, y, w, h, radius)
+
+    def DrawText(self, text, x, y):  # noqa: N802
+        self.texts.append(text)
+        self._dc.DrawText(text, x, y)
+
+    def __getattr__(self, name: str) -> object:
+        return getattr(self._dc, name)
+
+
+def _paint_strip(frame: object, width: int, labels: list[str], badge: str | None):
+    frame.SetClientSize((width, 200))
+    notebook = make_flat_notebook(frame)
+    notebook.SetSize((width, 200))
+    for label in labels:
+        notebook.AddPage(wx.Panel(notebook), label)
+    set_tab_strip_badge(notebook, badge)
+    pc = notebook._pages
+    dc = _RecordingDC(pc.GetClientRect().width, pc.GetClientRect().height)
+    pc._mgr.GetRenderer(notebook.GetAGWWindowStyleFlag()).DrawTabs(pc, dc)
+    return notebook, dc
+
+
+def test_badge_is_drawn_right_aligned_after_the_tabs(frame: object) -> None:
+    notebook, dc = _paint_strip(frame, 900, ["Deck Tables", "Notes"], "Tix: 12  Chests: 3")
+    assert dc.texts[-1] == "Tix: 12  Chests: 3"
+    (x, _y, w, _h) = dc.boxes[-1]
+    last = notebook._pages._pagesInfoVec[-1]
+    assert x > last.GetPosition().x + last.GetSize().width
+    assert x + w == notebook._pages.GetClientRect().width - T.SPACE_XS
+
+
+def test_no_badge_text_draws_no_box(frame: object) -> None:
+    _notebook, dc = _paint_strip(frame, 900, ["Deck Tables", "Notes"], None)
+    assert dc.boxes == []
+
+
+def test_badge_gives_way_rather_than_covering_a_tab(frame: object) -> None:
+    labels = [f"A fairly long tab label {i}" for i in range(4)]
+    _notebook, dc = _paint_strip(frame, 700, labels, "Tix: 12  Chests: 3")
+    assert "Tix: 12  Chests: 3" not in dc.texts

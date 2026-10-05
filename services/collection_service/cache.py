@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
-from services.collection_service.parsing import build_inventory
+from services.collection_service.parsing import build_inventory, count_currency
 from utils.constants import ONE_HOUR_SECONDS
 
 if TYPE_CHECKING:
@@ -167,6 +167,17 @@ class CollectionCacheMixin(_Base):
 
     def get_collection_path(self) -> Path | None:
         return self._collection_path
+
+    def get_currency_counts(self) -> tuple[int, int] | None:
+        """``(event_tickets, treasure_chests)`` from the loaded collection sync.
+
+        ``None`` when no synced collection is loaded -- the player has never
+        synced, or the last load failed -- so callers can tell "never synced"
+        apart from "synced and holding zero".
+        """
+        if not self._collection_loaded or self._collection_path is None:
+            return None
+        return count_currency(self._collection)
 
     def set_collection_path(self, path: Path | None) -> None:
         self._collection_path = path

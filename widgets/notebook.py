@@ -42,6 +42,8 @@ from utils.constants.theme import (
     SELECTION_BORDER,
     SELECTION_FILL_ON_PANEL,
     SELECTION_TEXT,
+    SPACE_SM,
+    SPACE_XS,
     SURFACE_BASE,
     SURFACE_PANEL,
     TEXT_PRIMARY,
@@ -90,8 +92,58 @@ class _ThemedTabRenderer(fnb.FNBRendererDefault):
     #: above the notebook (where there is one) has to stay a step louder.
     TAB_LEVEL = "body"
 
+    def __init__(self) -> None:
+        super().__init__()
+        #: Text drawn in a bordered box at the right end of the strip, or
+        #: ``None`` for no box. Set through :func:`set_tab_strip_badge`.
+        self.badge_text: str | None = None
+
     def _tab_font(self, *, bold: bool) -> wx.Font:
         return type_font(self.TAB_LEVEL, bold=bold)
+
+    def DrawTabs(self, pageContainer, dc):  # noqa: N802
+        """Draw the tabs as the base does, then the right-aligned badge."""
+        super().DrawTabs(pageContainer, dc)
+        if self.badge_text:
+            self._draw_badge(pageContainer, dc, self.badge_text)
+
+    def _draw_badge(self, pageContainer, dc, text: str) -> None:
+        """Draw ``text`` in a bordered box flush with the strip's right edge.
+
+        The badge is drawn in the space the tabs leave over, never on top of
+        them: if any tab is scrolled out or the last tab would touch the box,
+        the badge is skipped for this paint, so a narrow window loses the badge
+        before it loses a tab.
+        """
+        pc = pageContainer
+        pages = pc._pagesInfoVec
+        if pc._nFrom > 0 or (pages and pages[-1].GetPosition().x < 0):
+            return
+        tabs_end = 0
+        if pages:
+            last = pages[-1]
+            tabs_end = last.GetPosition().x + last.GetSize().width
+
+        dc.SetFont(self._tab_font(bold=False))
+        text_width, text_height = dc.GetTextExtent(text)
+        box_width = text_width + 2 * SPACE_SM
+        box_height = text_height + SPACE_XS
+        right = pc.GetClientRect().width - SPACE_XS
+        left = right - box_width
+        if left < tabs_end + SPACE_SM:
+            return
+
+        # Centred on the tab labels rather than the whole strip, which carries
+        # the hairline along its bottom edge.
+        tab_top = fnb.VERTICAL_BORDER_PADDING
+        tab_height = self.CalcTabHeight(pc) - tab_top
+        top = tab_top + (tab_height - box_height) // 2
+
+        dc.SetPen(wx.Pen(wx.Colour(*BORDER_SUBTLE)))
+        dc.SetBrush(wx.TRANSPARENT_BRUSH)
+        dc.DrawRoundedRectangle(int(left), int(top), int(box_width), int(box_height), 3)
+        dc.SetTextForeground(wx.Colour(*TEXT_SECONDARY))
+        dc.DrawText(text, int(left + SPACE_SM), int(top + SPACE_XS // 2))
 
     def CalcTabWidth(self, pageContainer, tabIdx, tabHeight):  # noqa: N802
         """Measure the tab against the app's font instead of the system's.
@@ -239,6 +291,22 @@ def install_themed_renderer(notebook: fnb.FlatNotebook) -> _ThemedTabRenderer:
     return renderer
 
 
+def set_tab_strip_badge(notebook: fnb.FlatNotebook, text: str | None) -> None:
+    """Show ``text`` in a box at the right end of ``notebook``'s tab strip.
+
+    ``None`` or an empty string removes the box. A no-op on a notebook that does
+    not carry the themed renderer, since only that renderer draws the badge.
+    """
+    renderer = notebook._pages._mgr._renderers.get(-1)
+    if not isinstance(renderer, _ThemedTabRenderer):
+        return
+    text = text or None
+    if renderer.badge_text == text:
+        return
+    renderer.badge_text = text
+    notebook._pages.Refresh()
+
+
 def make_flat_notebook(
     parent: wx.Window,
     *,
@@ -257,5 +325,6 @@ __all__ = [
     "DEFAULT_AGW_STYLE",
     "install_themed_renderer",
     "make_flat_notebook",
+    "set_tab_strip_badge",
     "stylize_notebook",
 ]

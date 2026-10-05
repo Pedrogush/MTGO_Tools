@@ -52,6 +52,7 @@ class AppControllerUIHelpers:
                 frame.collection_status_label.SetLabel,
                 _format_collection_label(info),
             )
+            wx.CallAfter(frame._refresh_currency_badge)
             wx.CallAfter(frame._render_pending_deck)
 
         return UICallbacks(

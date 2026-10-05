@@ -8,6 +8,7 @@ MESSAGES: dict[str, str] = {
     "tabs.deck_notes": "Notas de Deck",
     "tabs.goldfish": "Goldfish",
     "tabs.deck_stats": "Estatísticas",
+    "tabs.currency_badge": "Tix: {tix}  Baús: {chests}",
     "tabs.tooltip.deck_tables": "Principal e sideboard lado a lado — arraste cartas para movê-las entre as zonas",
     "tabs.tooltip.mainboard": "Seu deck principal (geralmente 60 cartas)",
     "tabs.tooltip.sideboard": "Seu sideboard (até 15 cartas)",

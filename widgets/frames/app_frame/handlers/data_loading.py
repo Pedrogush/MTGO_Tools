@@ -9,6 +9,8 @@ from typing import TYPE_CHECKING, Any
 import wx
 from loguru import logger
 
+from widgets.notebook import set_tab_strip_badge
+
 if TYPE_CHECKING:
     from repositories.card_repository import CardDataManager
     from widgets.frames.app_frame import AppFrame
@@ -127,12 +129,27 @@ class DataLoadingHandlers(_Base):
             card_count = len(self.controller.collection_service.get_inventory())
 
         self.collection_status_label.SetLabel(f"Collection: {filepath.name} ({card_count} entries)")
+        self._refresh_currency_badge()
         self._render_pending_deck()
 
     def _on_collection_fetch_failed(self: AppFrame, error_msg: str) -> None:
         self.controller.collection_service.clear_inventory()
         self.collection_status_label.SetLabel(f"Collection fetch failed: {error_msg}")
+        self._refresh_currency_badge()
         logger.warning(f"Collection fetch failed: {error_msg}")
+
+    def _refresh_currency_badge(self: AppFrame) -> None:
+        """Show the last sync's Event Tickets and Treasure Chests on the tab strip.
+
+        Hidden when no synced collection is loaded, so a player who has never
+        synced sees no badge rather than a misleading "Tix: 0".
+        """
+        counts = self.controller.collection_service.get_currency_counts()
+        text = None
+        if counts is not None:
+            tix, chests = counts
+            text = self._t("tabs.currency_badge", tix=tix, chests=chests)
+        set_tab_strip_badge(self.deck_tabs, text)
 
     def _on_bulk_data_loaded(
         self: AppFrame, by_name: dict[str, list[dict[str, Any]]], stats: dict[str, Any]

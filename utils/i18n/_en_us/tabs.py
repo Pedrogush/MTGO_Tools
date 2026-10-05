@@ -8,6 +8,9 @@ MESSAGES: dict[str, str] = {
     "tabs.deck_notes": "Deck Notes",
     "tabs.goldfish": "Goldfish",
     "tabs.deck_stats": "Deck Stats",
+    # Right end of the deck workspace tab strip: Event Tickets and Treasure
+    # Chests as of the last collection sync. "Tix" is MTGO's own shorthand.
+    "tabs.currency_badge": "Tix: {tix}  Chests: {chests}",
     "tabs.tooltip.deck_tables": "Mainboard and sideboard side by side — drag cards across to move them between zones",
     "tabs.tooltip.mainboard": "Your main deck (typically 60 cards)",
     "tabs.tooltip.sideboard": "Your sideboard (up to 15 cards)",
