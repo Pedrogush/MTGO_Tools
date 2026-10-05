@@ -1161,6 +1161,11 @@ class TestGamelogParserVsScreenshots:
         by_opponent = self._build_parsed_by_opponent(parsed_matches, inferred_username)
         WINDOW = timedelta(minutes=60)  # 25 min clock per player = 50 min max match
 
+        # The period this machine's GameLogs cover. A truth entry outside it can't
+        # have a gamelog, even when the opponent name recurs in a later match.
+        earliest = min(m["timestamp"] for m in parsed_matches) - WINDOW
+        latest = max(m["timestamp"] for m in parsed_matches) + WINDOW
+
         mismatches = []
         checked = 0
         in_window_candidates = 0
@@ -1172,13 +1177,15 @@ class TestGamelogParserVsScreenshots:
             if opp not in by_opponent:
                 continue
 
-            in_window_candidates += 1
-
             # Parse screenshot timestamp (match start time)
             try:
                 sc_dt = datetime.strptime(entry["match_datetime"], "%m/%d/%Y %I:%M:%S %p")
             except ValueError:
                 continue
+            if not earliest <= sc_dt <= latest:
+                continue
+
+            in_window_candidates += 1
 
             our_wins, our_losses = _result_to_score(entry["match_result"])
             expected_win = our_wins > our_losses
@@ -1227,8 +1234,8 @@ class TestGamelogParserVsScreenshots:
         if in_window_candidates == 0:
             pytest.skip(
                 f"the {len(parsed_matches)} GameLog(s) on this machine share no "
-                f"opponent with the {len(truth)}-entry screenshot fixture, so there "
-                "is nothing to cross-reference"
+                f"opponent and period with the {len(truth)}-entry screenshot "
+                "fixture, so there is nothing to cross-reference"
             )
 
         assert checked > 0, "No Modern matches were cross-referenced within the time window"
