@@ -14,4 +14,6 @@ MESSAGES: dict[str, str] = {
     "tracker.status.no_active_match": "No active match detected",
     "tracker.status.waiting": "Waiting for MTGO match window…",
     "tracker.status.manual_loaded": "Manual archetype loaded. Window watching is paused.",
+    "tracker.tooltip.collapse_section": "Collapse section",
+    "tracker.tooltip.expand_section": "Expand section",
 }

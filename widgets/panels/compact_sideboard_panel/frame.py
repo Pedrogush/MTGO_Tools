@@ -10,6 +10,7 @@ import wx
 
 from utils.constants import DARK_BG, DARK_PANEL, LIGHT_TEXT, SPACE_XS, SUBDUED_TEXT
 from utils.constants.ui_layout import COMPACT_SIDEBOARD_TOGGLE_BTN_SIZE
+from widgets.collapse_toggle import CollapseToggle
 from widgets.empty_state import EmptyState
 from widgets.panels.compact_sideboard_panel.handlers import CompactSideboardHandlersMixin
 from widgets.stylize import apply_type_level, strip_native_client_edge, stylize_button
@@ -28,6 +29,11 @@ class CompactSideboardPanel(CompactSideboardHandlersMixin, wx.Panel):
         # place, so the source string has to be kept to re-wrap on a resize.
         self._header_text: str = "Guide: \u2014"
         self._resizing: bool = False
+        # Whether the pane is folded to its heading, and which body (the list,
+        # or the empty-state block) it shows while open. Kept apart so folding
+        # and unfolding never has to guess which of the two was showing.
+        self._collapsed: bool = False
+        self._body_mode: str = "list"
 
         self._build_ui()
         self.Bind(wx.EVT_SIZE, self._on_resized)
@@ -39,6 +45,11 @@ class CompactSideboardPanel(CompactSideboardHandlersMixin, wx.Panel):
 
         header = wx.BoxSizer(wx.HORIZONTAL)
         sizer.Add(header, 0, wx.EXPAND | wx.ALL, SPACE_XS)
+
+        # Folds the pane down to this heading row. The owner decides what the
+        # freed space goes to, so the click is only reported (EVT_BUTTON).
+        self.collapse_btn = CollapseToggle(self, surface="panel")
+        header.Add(self.collapse_btn, 0, wx.RIGHT | wx.ALIGN_CENTER_VERTICAL, SPACE_XS)
 
         self.header_label = wx.StaticText(self, label=self._header_text)
         self.header_label.SetForegroundColour(LIGHT_TEXT)

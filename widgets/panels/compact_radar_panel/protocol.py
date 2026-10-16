@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Protocol
 
 import wx
 
+from widgets.collapse_toggle import CollapseToggle
 from widgets.empty_state import EmptyState
 from widgets.panels.compact_radar_panel.properties import RadarViewMode
 
@@ -22,6 +23,9 @@ class CompactRadarPanelProto(Protocol):
     _resizing: bool
     header_label: wx.StaticText
     view_toggle_btn: wx.Button
+    collapse_btn: CollapseToggle
+    _collapsed: bool
+    _body_mode: str
     status_label: wx.StaticText
     card_list: wx.ListBox
     empty_state: EmptyState

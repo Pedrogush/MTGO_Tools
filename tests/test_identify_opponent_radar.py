@@ -420,8 +420,8 @@ class _FakeLabel:
     def Wrap(self, width: int) -> None:
         self.wrapped_to = width
 
-    def Show(self) -> None:
-        self.shown = True
+    def Show(self, show: bool = True) -> None:
+        self.shown = show
 
     def Hide(self) -> None:
         self.shown = False
@@ -438,8 +438,8 @@ class _FakeList:
     def Clear(self) -> None:
         self.lines = []
 
-    def Show(self) -> None:
-        self.shown = True
+    def Show(self, show: bool = True) -> None:
+        self.shown = show
 
     def Hide(self) -> None:
         self.shown = False
@@ -462,8 +462,8 @@ class _FakeEmptyState:
         self.message = message
         self.hint = hint
 
-    def Show(self) -> None:
-        self.shown = True
+    def Show(self, show: bool = True) -> None:
+        self.shown = show
 
     def Hide(self) -> None:
         self.shown = False
@@ -485,8 +485,8 @@ class _FakeButton:
         self.label = ""
         self._width = width
 
-    def Show(self) -> None:
-        self.shown = True
+    def Show(self, show: bool = True) -> None:
+        self.shown = show
 
     def Hide(self) -> None:
         self.shown = False
@@ -516,8 +516,11 @@ class _FakePanelHost(CompactRadarHandlersMixin):
         self.status_label = _FakeLabel()
         self.card_list = _FakeList()
         self.view_toggle_btn = _FakeButton()
+        self.collapse_btn = _FakeButton(28)
         self.empty_state = _FakeEmptyState()
         self._view_mode = view_mode
+        self._collapsed = False
+        self._body_mode = "list"
         self._parent = _FakeParent()
         self.shown = False
         self.layout_calls = 0

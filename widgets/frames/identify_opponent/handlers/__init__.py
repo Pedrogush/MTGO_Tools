@@ -7,7 +7,7 @@ and ``get_latest_deck`` helper are imported from :mod:`..properties`.
 
 The single :class:`MTGOpponentDeckSpyHandlersMixin` is composed from one mixin
 per subsystem (calculator, radar, polling, manual archetype, persistence,
-window placement, lifecycle).  It remains importable from
+window placement, section folding, lifecycle).  It remains importable from
 ``widgets.frames.identify_opponent.handlers`` to preserve existing import sites.
 """
 
@@ -19,6 +19,7 @@ from widgets.frames.identify_opponent.handlers.lifecycle import LifecycleMixin
 from widgets.frames.identify_opponent.handlers.persistence import PersistenceMixin
 from widgets.frames.identify_opponent.handlers.polling import OpponentPollingMixin
 from widgets.frames.identify_opponent.handlers.radar import RadarMixin
+from widgets.frames.identify_opponent.handlers.sections import SectionCollapseMixin
 from widgets.frames.identify_opponent.handlers.window_placement import WindowPlacementMixin
 
 
@@ -29,6 +30,7 @@ class MTGOpponentDeckSpyHandlersMixin(
     ManualArchetypeMixin,
     PersistenceMixin,
     WindowPlacementMixin,
+    SectionCollapseMixin,
     LifecycleMixin,
 ):
     """Callbacks, workers, persistence, and window-placement for the tracker frame."""
@@ -42,5 +44,6 @@ __all__ = [
     "ManualArchetypeMixin",
     "PersistenceMixin",
     "WindowPlacementMixin",
+    "SectionCollapseMixin",
     "LifecycleMixin",
 ]

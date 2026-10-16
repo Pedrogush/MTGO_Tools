@@ -41,6 +41,7 @@ from utils.constants import (
     OPPONENT_TRACKER_GUIDE_COLUMN_PROPORTION,
     OPPONENT_TRACKER_GUIDE_MIN_WIDTH,
     OPPONENT_TRACKER_LEFT_COLUMN_PROPORTION,
+    OPPONENT_TRACKER_LEFT_MIN_PANE_SIZE,
     OPPONENT_TRACKER_LEFT_SASH_POS,
     OPPONENT_TRACKER_POLL_INTERVAL_MS,
     OPPONENT_TRACKER_SECTION_PADDING,
@@ -119,11 +120,19 @@ class MTGOpponentDeckSpy(
         # Sideboard guide integration
         self._last_guide_archetype: str = ""
 
+        # Sections folded down to their headings (see handlers/sections.py);
+        # filled from the saved config.
+        self._collapsed_sections: set[str] = set()
+
         self._load_cache()
         self._load_config()
 
         self._build_ui()
         self._apply_window_preferences()
+        self._bind_section_toggles()
+        # After the window preferences: those set the full minimum size, which
+        # this relaxes when a section starts out folded.
+        self._apply_section_visibility()
 
         self.Bind(wx.EVT_TIMER, self._on_poll_tick, self._poll_timer)
         self.Bind(wx.EVT_CLOSE, self.on_close)
@@ -168,6 +177,7 @@ class MTGOpponentDeckSpy(
     def _build_main_area(self, panel: wx.Panel, outer_sizer: wx.Sizer) -> None:
         """Compose the main two-panel area: left splitter (calc/radar) and right sideboard."""
         main_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        self._main_sizer = main_sizer
         outer_sizer.Add(
             main_sizer,
             1,
@@ -199,7 +209,7 @@ class MTGOpponentDeckSpy(
         self._left_splitter.SplitHorizontally(
             self.calc_panel, self.radar_panel, OPPONENT_TRACKER_LEFT_SASH_POS
         )
-        self._left_splitter.SetMinimumPaneSize(80)
+        self._left_splitter.SetMinimumPaneSize(OPPONENT_TRACKER_LEFT_MIN_PANE_SIZE)
         self._left_splitter.SetSashGravity(0.0)
         wx.CallAfter(self._fit_left_splitter)
 

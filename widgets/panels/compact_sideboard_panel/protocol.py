@@ -6,6 +6,7 @@ from typing import Protocol
 
 import wx
 
+from widgets.collapse_toggle import CollapseToggle
 from widgets.empty_state import EmptyState
 
 
@@ -18,6 +19,9 @@ class CompactSideboardPanelProto(Protocol):
     _resizing: bool
     header_label: wx.StaticText
     toggle_btn: wx.Button
+    collapse_btn: CollapseToggle
+    _collapsed: bool
+    _body_mode: str
     status_label: wx.StaticText
     card_list: wx.ListBox
     empty_state: EmptyState

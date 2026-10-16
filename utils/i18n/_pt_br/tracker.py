@@ -14,4 +14,6 @@ MESSAGES: dict[str, str] = {
     "tracker.status.no_active_match": "Nenhuma partida ativa detectada",
     "tracker.status.waiting": "Aguardando janela de partida MTGO…",
     "tracker.status.manual_loaded": "Arquétipo manual carregado. Monitoramento de janelas pausado.",
+    "tracker.tooltip.collapse_section": "Recolher seção",
+    "tracker.tooltip.expand_section": "Expandir seção",
 }

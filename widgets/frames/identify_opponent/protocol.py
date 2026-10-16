@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any, Protocol
 
 import wx
 
+from widgets.collapse_toggle import CollapseToggle
 from widgets.panels.compact_radar_panel import CompactRadarPanel
 from widgets.panels.compact_sideboard_panel import CompactSideboardPanel
 from widgets.spin_ctrl import DarkSpinCtrl
@@ -35,6 +36,7 @@ class MTGOpponentDeckSpyProto(Protocol):
 
     _poll_timer: wx.Timer
     _saved_position: list[int] | None
+    _collapsed_sections: set[str]
     _bg_worker: Any
     _poll_generation: int
     _poll_in_progress: bool
@@ -58,6 +60,13 @@ class MTGOpponentDeckSpyProto(Protocol):
     spin_drawn: DarkSpinCtrl
     spin_target: DarkSpinCtrl
     radar_panel: CompactRadarPanel
+    calc_panel: wx.Panel
+    calc_collapse_btn: CollapseToggle
+    _calc_body_sizer: wx.BoxSizer
+    _content_panel: wx.Panel
+    _main_sizer: wx.BoxSizer
+    _left_splitter: wx.SplitterWindow
+    _sash_user_set: bool
     sideboard_panel: CompactSideboardPanel
 
     # Provided by the frame / properties mixin and consumed by the handlers.
@@ -96,6 +105,8 @@ class MTGOpponentDeckSpyProto(Protocol):
     def _load_cache(self) -> None: ...
     def _load_config(self) -> None: ...
     def _place_beside_parent(self) -> None: ...
+    def _persist_config_async(self) -> None: ...
+    def _refit_left_splitter(self) -> None: ...
 
     # wx.Frame surface used by the handlers.
     def GetPosition(self) -> wx.Point: ...
@@ -105,5 +116,6 @@ class MTGOpponentDeckSpyProto(Protocol):
     def SetSize(self, *args: Any) -> None: ...
     def SetPosition(self, pt: wx.Point) -> None: ...
     def SetMinSize(self, size: wx.Size) -> None: ...
+    def SetMinClientSize(self, size: wx.Size) -> None: ...
     def SetBackgroundColour(self, colour: Any) -> bool: ...
     def IsShown(self) -> bool: ...
