@@ -100,6 +100,9 @@ class _ConfigHost(persistence_module.PersistenceMixin):
     def __init__(self) -> None:
         self._saved_position: list[int] | None = None
         self._collapsed_sections: set[str] = set()
+        self._compact_mode = False
+        self._chip_position: list[int] | None = None
+        self._chip_locked = True
 
     def GetPosition(self) -> tuple[int, int]:
         return (120, 80)

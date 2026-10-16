@@ -124,6 +124,12 @@ class MTGOpponentDeckSpy(
         # filled from the saved config.
         self._collapsed_sections: set[str] = set()
 
+        # Compact mode (see handlers/compact.py); filled from the saved config.
+        self._compact_mode: bool = False
+        self._chip = None
+        self._chip_position: list[int] | None = None
+        self._chip_locked: bool = True
+
         self._load_cache()
         self._load_config()
 
@@ -137,8 +143,11 @@ class MTGOpponentDeckSpy(
         self.Bind(wx.EVT_TIMER, self._on_poll_tick, self._poll_timer)
         self.Bind(wx.EVT_CLOSE, self.on_close)
         self.Bind(wx.EVT_SIZE, self._on_frame_resized)
+        self.Bind(wx.EVT_WINDOW_DESTROY, self._on_tracker_destroyed)
 
         wx.CallAfter(self._start_polling)
+        # After the opener's Show(): compact mode hides this window again.
+        wx.CallAfter(self._restore_compact_mode)
 
     def _build_ui(self) -> None:
         self.SetBackgroundColour(DARK_BG)
@@ -151,6 +160,18 @@ class MTGOpponentDeckSpy(
 
         self._build_header(panel, outer_sizer)
         self._build_main_area(panel, outer_sizer)
+
+    def _on_tracker_destroyed(self, event: wx.WindowDestroyEvent) -> None:
+        """Take the chip down with the tracker, however the tracker goes.
+
+        The chip has no parent (so it survives the main window being
+        minimised), which also means wx will not destroy it for us -- including
+        when the main window closes and destroys this frame without an
+        EVT_CLOSE of its own.
+        """
+        if event.GetEventObject() is self:
+            self._destroy_chip()
+        event.Skip()
 
     def _on_frame_resized(self, event: wx.SizeEvent) -> None:
         """Re-wrap the header labels to the new width, then lay the frame out.

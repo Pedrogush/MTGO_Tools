@@ -1,6 +1,6 @@
 """Config/cache JSON persistence (with legacy migration) for the opponent tracker.
 
-Reads and writes the window config (position and folded sections) and the opponent-deck cache, and
+Reads and writes the window config (position, folded sections, compact chip) and the opponent-deck cache, and
 migrates the pre-``config/`` legacy files on first load.
 """
 
@@ -19,6 +19,11 @@ from utils.constants import (
     OPPONENT_TRACKER_CONFIG_SAVE_DELAY_MS,
 )
 from widgets.frames import identify_opponent as _pkg
+from widgets.frames.identify_opponent.compact import (
+    CHIP_LOCKED_KEY,
+    CHIP_POSITION_KEY,
+    COMPACT_MODE_KEY,
+)
 from widgets.frames.identify_opponent.sections import (
     COLLAPSED_SECTIONS_KEY,
     parse_collapsed_sections,
@@ -48,6 +53,9 @@ class PersistenceMixin(_Base):
         config = {
             "screen_pos": position,
             COLLAPSED_SECTIONS_KEY: serialize_collapsed_sections(self._collapsed_sections),
+            COMPACT_MODE_KEY: self._compact_mode,
+            CHIP_POSITION_KEY: self._chip_position,
+            CHIP_LOCKED_KEY: self._chip_locked,
         }
         try:
             atomic_write_json(DECK_MONITOR_CONFIG_FILE, config, indent=4)
@@ -80,6 +88,10 @@ class PersistenceMixin(_Base):
                 logger.warning(f"Failed to migrate deck monitor config: {exc}")
         self._saved_position = data.get("screen_pos")
         self._collapsed_sections = parse_collapsed_sections(data.get(COLLAPSED_SECTIONS_KEY))
+        self._compact_mode = data.get(COMPACT_MODE_KEY) is True
+        chip_pos = data.get(CHIP_POSITION_KEY)
+        self._chip_position = chip_pos if isinstance(chip_pos, list) else None
+        self._chip_locked = data.get(CHIP_LOCKED_KEY) is not False
 
     def _save_cache(self) -> None:
         payload = {"entries": self.cache}

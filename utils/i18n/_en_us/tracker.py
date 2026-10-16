@@ -16,4 +16,8 @@ MESSAGES: dict[str, str] = {
     "tracker.status.manual_loaded": "Manual archetype loaded. Window watching is paused.",
     "tracker.tooltip.collapse_section": "Collapse section",
     "tracker.tooltip.expand_section": "Expand section",
+    "tracker.btn.compact": "Compact",
+    "tracker.tooltip.compact": "Shrink the tracker to a small floating icon. Hover it to see the info; click it to come back here.",
+    "tracker.chip.hint_locked": "Click the icon to open the full tracker. Open the padlock to move it.",
+    "tracker.chip.hint_unlocked": "Drag the icon to move it, or click it to open the full tracker. Close the padlock to keep it in place.",
 }

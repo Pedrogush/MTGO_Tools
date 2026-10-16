@@ -25,6 +25,7 @@ class LifecycleMixin(_Base):
 
     def on_close(self, event: wx.CloseEvent) -> None:
         self._save_config()
+        self._destroy_chip()
 
         # Cancel any running radar worker
         if self._radar_worker_thread and self._radar_worker_thread.is_alive():

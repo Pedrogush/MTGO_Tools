@@ -47,12 +47,16 @@ class HeaderBuilderMixin:
         return max(width, OPPONENT_TRACKER_LABEL_MIN_WRAP_WIDTH)
 
     def _set_deck_label(self, text: str) -> None:
-        """Set the headline label, re-wrapping and re-laying out the header."""
+        """Set the headline label, re-wrapping and re-laying out the header.
+
+        Every opponent change ends here, so it also refreshes the compact chip.
+        """
         if text == self._deck_label_text:
             return
         self._deck_label_text = text
         self._apply_header_label(self.deck_label, text)
         self._relayout_header()
+        self._refresh_chip()
 
     def _set_status_label(self, text: str) -> None:
         """Set the status line, re-wrapping and re-laying out the header."""
@@ -119,6 +123,12 @@ class HeaderBuilderMixin:
         outer_sizer.Add(controls, 0, wx.ALL | wx.EXPAND, OPPONENT_TRACKER_SECTION_PADDING)
 
         controls.AddStretchSpacer(1)
+
+        compact_button = wx.Button(panel, label=self._t("tracker.btn.compact"))
+        self._stylize_secondary_button(compact_button)
+        compact_button.SetToolTip(self._t("tracker.tooltip.compact"))
+        compact_button.Bind(wx.EVT_BUTTON, lambda _evt: self._enter_compact_mode())
+        controls.Add(compact_button, 0, wx.RIGHT, OPPONENT_TRACKER_SECTION_PADDING)
 
         refresh_button = wx.Button(panel, label=self._t("tracker.btn.refresh"))
         self._stylize_secondary_button(refresh_button)
