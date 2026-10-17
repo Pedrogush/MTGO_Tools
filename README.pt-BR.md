@@ -15,7 +15,7 @@ Um aplicativo desktop para jogadores de Magic: The Gathering Online (MTGO) com a
 - **Análise de Metagame**: navegue pelos principais arquétipos do MTGGoldfish com taxa de vitória, popularidade e contagem de decks por dia. A visão de radar mostra a taxa de inclusão de cada carta nos decks de torneio recentes.
 - **Pesquisa de Decks**: explore as listas de um arquétipo, importe do MTGGoldfish ou cole a lista direto, e veja a decklist média dos resultados recentes.
 - **Montador de Deck**: busca completa de cartas com filtros de cor, tipo, custo de mana, texto de oracle e legalidade no formato. Estatísticas de curva de mana e indicação do que você já tem na coleção.
-- **Rastreamento de Oponentes**: detecta o oponente automaticamente e busca as decklists recentes dele durante a partida.
+- **Rastreamento de Oponentes**: detecta o oponente automaticamente e busca as decklists recentes dele durante a partida. Recolha as seções de que não precisa ou reduza o rastreador a um pequeno ícone flutuante que mostra tudo ao passar o mouse.
 - **Histórico de Partidas**: lê os game logs do MTGO para montar um histórico completo de partidas e estatísticas de taxa de vitória.
 - **Guias de Sideboard**: crie e gerencie planos de sideboard por matchup, salvos por configuração de deck.
 - **Gerenciamento de Coleção**: importe sua coleção do MTGO pelo .NET Bridge e veja quais cartas você tem ou está faltando para qualquer deck.

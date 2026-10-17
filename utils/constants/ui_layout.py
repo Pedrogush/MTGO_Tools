@@ -413,6 +413,11 @@ COMPACT_RADAR_TOGGLE_BTN_SIZE = (96, 28)
 COMPACT_RADAR_HEADER_WRAP_MARGIN = 28
 COMPACT_RADAR_MIN_WRAP_WIDTH = 120
 
+# Opponent tracker — the per-section collapse caret at the left of each pane
+# heading. Square, on the 4px grid, and the same 28px tall as the toggles that
+# share the heading row so the row does not grow when the caret is added.
+SECTION_COLLAPSE_BTN_SIZE = (28, 28)
+
 # Opponent Tracker — hypergeometric calculator panel layout
 CALC_SECTION_PADDING = 6  # uniform padding around calculator sections
 CALC_GRID_ROWS = 4  # rows in the input FlexGridSizer

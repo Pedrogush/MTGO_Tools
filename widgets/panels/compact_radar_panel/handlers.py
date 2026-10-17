@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 import wx
 from loguru import logger
 
+from utils.constants import SPACE_XS
 from utils.constants.ui_layout import (
     COMPACT_RADAR_HEADER_WRAP_MARGIN,
     COMPACT_RADAR_MIN_WRAP_WIDTH,
@@ -48,7 +49,10 @@ class CompactRadarHandlersMixin(_Base):
         toggle_w = (
             self.view_toggle_btn.GetSize().GetWidth() if self.view_toggle_btn.IsShown() else 0
         )
-        width = self.GetClientSize().GetWidth() - toggle_w - COMPACT_RADAR_HEADER_WRAP_MARGIN
+        caret_w = self.collapse_btn.GetSize().GetWidth() + SPACE_XS
+        width = (
+            self.GetClientSize().GetWidth() - caret_w - toggle_w - COMPACT_RADAR_HEADER_WRAP_MARGIN
+        )
         return max(width, COMPACT_RADAR_MIN_WRAP_WIDTH)
 
     def _on_resized(self, event: wx.SizeEvent) -> None:
@@ -90,19 +94,42 @@ class CompactRadarHandlersMixin(_Base):
     # space it is waiting in, instead of a caption above an empty bordered box.
     def _show_empty(self, message: str, hint: str | None = None) -> None:
         self.status_label.SetLabel("")
-        self.status_label.Hide()
-        self.card_list.Hide()
         self.empty_state.set_message(message, hint)
-        self.empty_state.Show()
+        self._body_mode = "empty"
+        self._apply_body_visibility()
         # relayout, not a bare Layout: a runtime Show/Hide with only Layout()
         # leaves ghost pixels from the native controls that just vanished.
         relayout(self)
 
     def _show_list(self) -> None:
-        self.empty_state.Hide()
-        self.status_label.Show()
-        self.card_list.Show()
+        self._body_mode = "list"
+        self._apply_body_visibility()
         relayout(self)
+
+    # ---- Folding the pane down to its heading.
+    def set_collapsed(self, collapsed: bool) -> None:
+        """Fold the pane down to its heading row, or open it again.
+
+        Only the body is hidden; the heading keeps updating while folded, so
+        the archetype name is still readable with the pane closed. The caller
+        re-lays out its own container, which is the one whose space changed.
+        """
+        self._collapsed = collapsed
+        self.collapse_btn.set_collapsed(collapsed)
+        self._apply_body_visibility()
+        self.InvalidateBestSize()
+        relayout(self)
+
+    def is_collapsed(self) -> bool:
+        return self._collapsed
+
+    def _apply_body_visibility(self) -> None:
+        """Show the body that ``_body_mode`` names, unless the pane is folded."""
+        is_open = not self._collapsed
+        showing_list = self._body_mode == "list"
+        self.status_label.Show(is_open and showing_list)
+        self.card_list.Show(is_open and showing_list)
+        self.empty_state.Show(is_open and not showing_list)
 
     def set_loading(self, message: str = "Loading radar data...") -> None:
         self._set_header_text("Radar: Loading...")

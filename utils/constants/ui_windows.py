@@ -23,6 +23,9 @@ OPPONENT_TRACKER_RADAR_PANEL_HEIGHT = 160  # px allocated to radar panel in left
 OPPONENT_TRACKER_LEFT_COLUMN_PROPORTION = 2
 OPPONENT_TRACKER_GUIDE_COLUMN_PROPORTION = 1
 OPPONENT_TRACKER_GUIDE_MIN_WIDTH = 220
+# Smallest the calculator/radar panes may be dragged while both are open. Once
+# either is folded to its heading the floor drops to that heading's height.
+OPPONENT_TRACKER_LEFT_MIN_PANE_SIZE = 80
 
 # Sideboard Guide — Import Options dialog
 GUIDE_IMPORT_OPTIONS_DIALOG_WIDTH = 400

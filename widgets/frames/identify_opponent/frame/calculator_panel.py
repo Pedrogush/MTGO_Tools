@@ -31,7 +31,9 @@ from utils.constants import (
     CALC_TARGET_DEFAULT,
     DARK_PANEL,
     LIGHT_TEXT,
+    SPACE_XS,
 )
+from widgets.collapse_toggle import CollapseToggle
 from widgets.spin_ctrl import DarkSpinCtrl
 from widgets.stylize import apply_type_level, stylize_button
 
@@ -44,6 +46,8 @@ class CalculatorPanelBuilderMixin:
     """
 
     calc_panel: wx.Panel
+    calc_collapse_btn: CollapseToggle
+    _calc_body_sizer: wx.BoxSizer
     spin_deck_size: DarkSpinCtrl
     spin_copies: DarkSpinCtrl
     spin_drawn: DarkSpinCtrl
@@ -64,14 +68,24 @@ class CalculatorPanelBuilderMixin:
         calc_sizer = wx.BoxSizer(wx.VERTICAL)
         self.calc_panel.SetSizer(calc_sizer)
 
-        # Title
+        # Title row: the collapse caret, then the heading.
+        title_row = wx.BoxSizer(wx.HORIZONTAL)
+        self.calc_collapse_btn = CollapseToggle(self.calc_panel, surface="panel")
+        title_row.Add(self.calc_collapse_btn, 0, wx.RIGHT | wx.ALIGN_CENTER_VERTICAL, SPACE_XS)
         title = wx.StaticText(self.calc_panel, label="Hypergeometric Calculator")
         title.SetForegroundColour(LIGHT_TEXT)
         apply_type_level(title, "heading")
-        calc_sizer.Add(title, 0, wx.ALL, CALC_SECTION_PADDING)
+        title_row.Add(title, 0, wx.ALIGN_CENTER_VERTICAL)
+        calc_sizer.Add(title_row, 0, wx.ALL, CALC_SECTION_PADDING)
 
-        self._build_calculator_inputs(calc_sizer)
-        self._build_calculator_button_rows(calc_sizer)
+        # Everything under the title, in one sizer so collapsing the section is
+        # a single Show(False) that leaves just the title row behind.
+        body = wx.BoxSizer(wx.VERTICAL)
+        self._calc_body_sizer = body
+        calc_sizer.Add(body, 0, wx.EXPAND)
+
+        self._build_calculator_inputs(body)
+        self._build_calculator_button_rows(body)
 
         # Enter calculates. The binding predates this redesign and had never
         # fired: wxMSW only forwards Enter to a wx.SpinCtrl's buddy Edit when the
@@ -91,7 +105,7 @@ class CalculatorPanelBuilderMixin:
         # Result display
         self.calc_result_label = wx.StaticText(self.calc_panel, label="")
         self.calc_result_label.SetForegroundColour(LIGHT_TEXT)
-        calc_sizer.Add(self.calc_result_label, 0, wx.ALL, CALC_SECTION_PADDING)
+        body.Add(self.calc_result_label, 0, wx.ALL, CALC_SECTION_PADDING)
 
     def _build_calculator_inputs(self, calc_sizer: wx.Sizer) -> None:
         grid = wx.FlexGridSizer(CALC_GRID_ROWS, CALC_GRID_COLS, CALC_GRID_VGAP, CALC_GRID_HGAP)
@@ -226,17 +240,28 @@ class CalculatorPanelBuilderMixin:
         )
 
     def _fit_left_splitter(self) -> None:
-        calc_best = self.calc_panel.GetBestSize()
-        sash_h = calc_best.GetHeight()
-        splitter_w = calc_best.GetWidth()
-        self._preferred_sash = sash_h
-        self._left_splitter.SetMinSize(wx.Size(splitter_w, -1))
-        self._left_splitter.SetSashPosition(sash_h)
         # CHANGING, not CHANGED: wx sends CHANGED for its own resize-time
         # clamping too, so binding that marked every window resize as a user
         # drag and permanently disabled the restore below. CHANGING is only
         # sent from the live-drag mouse handler.
         self._left_splitter.Bind(wx.EVT_SPLITTER_SASH_POS_CHANGING, self._on_left_sash_dragged)
+        self._refit_left_splitter()
+
+    def _refit_left_splitter(self) -> None:
+        """Size the left column to the calculator and put the sash where it fits.
+
+        Run once the frame is laid out, and again whenever a left section is
+        folded or unfolded: the calculator's best size is its *current* size,
+        so a folded calculator lets the column narrow to its title row.
+        """
+        calc_best = self.calc_panel.GetBestSize()
+        self._left_splitter.SetMinSize(wx.Size(calc_best.GetWidth(), -1))
+        self._preferred_sash = self._left_sash_target()
+        self._applying_sash = True
+        try:
+            self._left_splitter.SetSashPosition(self._preferred_sash)
+        finally:
+            self._applying_sash = False
         self.Layout()
 
     def _on_left_sash_dragged(self, event: wx.SplitterEvent) -> None:
@@ -261,6 +286,9 @@ class CalculatorPanelBuilderMixin:
             return
         if not self._left_splitter.IsSplit():
             return
+        # A folded radar's sash tracks the splitter's height, so the target
+        # moves with every resize; recompute it rather than reuse the last one.
+        self._preferred_sash = self._left_sash_target()
         if self._left_splitter.GetSashPosition() == self._preferred_sash:
             return
         self._applying_sash = True

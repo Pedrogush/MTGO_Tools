@@ -41,6 +41,7 @@ from utils.constants import (
     OPPONENT_TRACKER_GUIDE_COLUMN_PROPORTION,
     OPPONENT_TRACKER_GUIDE_MIN_WIDTH,
     OPPONENT_TRACKER_LEFT_COLUMN_PROPORTION,
+    OPPONENT_TRACKER_LEFT_MIN_PANE_SIZE,
     OPPONENT_TRACKER_LEFT_SASH_POS,
     OPPONENT_TRACKER_POLL_INTERVAL_MS,
     OPPONENT_TRACKER_SECTION_PADDING,
@@ -119,17 +120,34 @@ class MTGOpponentDeckSpy(
         # Sideboard guide integration
         self._last_guide_archetype: str = ""
 
+        # Sections folded down to their headings (see handlers/sections.py);
+        # filled from the saved config.
+        self._collapsed_sections: set[str] = set()
+
+        # Compact mode (see handlers/compact.py); filled from the saved config.
+        self._compact_mode: bool = False
+        self._chip = None
+        self._chip_position: list[int] | None = None
+        self._chip_locked: bool = True
+
         self._load_cache()
         self._load_config()
 
         self._build_ui()
         self._apply_window_preferences()
+        self._bind_section_toggles()
+        # After the window preferences: those set the full minimum size, which
+        # this relaxes when a section starts out folded.
+        self._apply_section_visibility()
 
         self.Bind(wx.EVT_TIMER, self._on_poll_tick, self._poll_timer)
         self.Bind(wx.EVT_CLOSE, self.on_close)
         self.Bind(wx.EVT_SIZE, self._on_frame_resized)
+        self.Bind(wx.EVT_WINDOW_DESTROY, self._on_tracker_destroyed)
 
         wx.CallAfter(self._start_polling)
+        # After the opener's Show(): compact mode hides this window again.
+        wx.CallAfter(self._restore_compact_mode)
 
     def _build_ui(self) -> None:
         self.SetBackgroundColour(DARK_BG)
@@ -142,6 +160,18 @@ class MTGOpponentDeckSpy(
 
         self._build_header(panel, outer_sizer)
         self._build_main_area(panel, outer_sizer)
+
+    def _on_tracker_destroyed(self, event: wx.WindowDestroyEvent) -> None:
+        """Take the chip down with the tracker, however the tracker goes.
+
+        The chip has no parent (so it survives the main window being
+        minimised), which also means wx will not destroy it for us -- including
+        when the main window closes and destroys this frame without an
+        EVT_CLOSE of its own.
+        """
+        if event.GetEventObject() is self:
+            self._destroy_chip()
+        event.Skip()
 
     def _on_frame_resized(self, event: wx.SizeEvent) -> None:
         """Re-wrap the header labels to the new width, then lay the frame out.
@@ -168,6 +198,7 @@ class MTGOpponentDeckSpy(
     def _build_main_area(self, panel: wx.Panel, outer_sizer: wx.Sizer) -> None:
         """Compose the main two-panel area: left splitter (calc/radar) and right sideboard."""
         main_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        self._main_sizer = main_sizer
         outer_sizer.Add(
             main_sizer,
             1,
@@ -199,7 +230,7 @@ class MTGOpponentDeckSpy(
         self._left_splitter.SplitHorizontally(
             self.calc_panel, self.radar_panel, OPPONENT_TRACKER_LEFT_SASH_POS
         )
-        self._left_splitter.SetMinimumPaneSize(80)
+        self._left_splitter.SetMinimumPaneSize(OPPONENT_TRACKER_LEFT_MIN_PANE_SIZE)
         self._left_splitter.SetSashGravity(0.0)
         wx.CallAfter(self._fit_left_splitter)
 

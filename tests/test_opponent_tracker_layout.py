@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import pytest
 
+from utils.constants import SPACE_XS
 from utils.constants.ui_layout import (
     COMPACT_RADAR_HEADER_WRAP_MARGIN,
     COMPACT_SIDEBOARD_MIN_WRAP_WIDTH,
@@ -82,9 +83,14 @@ class _MeasuringList:
         self.lines = []
 
 
+#: The collapse caret at the left of each pane heading, plus its gap.
+_CARET = 28 + SPACE_XS
+
+
 class _SideboardHost(CompactSideboardHandlersMixin):
     def __init__(self, *, panel_width: int = 240, list_width: int = 240) -> None:
         self.header_label = _Label()
+        self.collapse_btn = _Button(28)
         self.toggle_btn = _Button(80)
         self.card_list = _MeasuringList(list_width)
         self._panel_width = panel_width
@@ -101,6 +107,7 @@ class _SideboardHost(CompactSideboardHandlersMixin):
 class _RadarHost(CompactRadarHandlersMixin):
     def __init__(self, *, panel_width: int = 400, button_width: int = 96) -> None:
         self.header_label = _Label()
+        self.collapse_btn = _Button(28)
         self.view_toggle_btn = _Button(button_width)
         self._panel_width = panel_width
         self._header_text = ""
@@ -117,7 +124,7 @@ class TestPaneHeadingsWrapToTheirPane:
         host._set_header_text("Radar: Gruul Basking Broodscale Combo")
 
         assert host.header_label.label == "Radar: Gruul Basking Broodscale Combo"
-        assert host.header_label.wrapped_to == 400 - 96 - COMPACT_RADAR_HEADER_WRAP_MARGIN
+        assert host.header_label.wrapped_to == 400 - _CARET - 96 - COMPACT_RADAR_HEADER_WRAP_MARGIN
 
     def test_radar_heading_reclaims_the_toggle_width_while_it_is_hidden(self) -> None:
         host = _RadarHost(panel_width=400, button_width=96)
@@ -125,14 +132,16 @@ class TestPaneHeadingsWrapToTheirPane:
 
         host._set_header_text("Radar: Loading...")
 
-        assert host.header_label.wrapped_to == 400 - COMPACT_RADAR_HEADER_WRAP_MARGIN
+        assert host.header_label.wrapped_to == 400 - _CARET - COMPACT_RADAR_HEADER_WRAP_MARGIN
 
     def test_guide_heading_wraps_to_the_measured_pane_width(self) -> None:
-        host = _SideboardHost(panel_width=240)
+        host = _SideboardHost(panel_width=300)
 
         host._set_header_text("Guide: Gruul Basking Broodscale Combo")
 
-        assert host.header_label.wrapped_to == 240 - 80 - COMPACT_SIDEBOARD_NOTE_WRAP_MARGIN
+        assert (
+            host.header_label.wrapped_to == 300 - _CARET - 80 - COMPACT_SIDEBOARD_NOTE_WRAP_MARGIN
+        )
 
     @pytest.mark.parametrize("panel_width", [0, 40, 120])
     def test_heading_wrap_never_collapses_below_the_floor(self, panel_width: int) -> None:
