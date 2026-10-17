@@ -15,7 +15,7 @@ A desktop application for Magic: The Gathering Online (MTGO) players providing m
 - **Metagame Analysis**: Browse top archetypes from MTGGoldfish with win rates, popularity, and per-day deck counts. Radar view shows card inclusion rates across recent tournament decks.
 - **Deck Research**: Browse archetype deck lists, import from MTGGoldfish or paste directly, view average decklists from recent results.
 - **Deck Builder**: Full card search with color, type, mana cost, oracle text, and format legality filters. Mana curve stats and collection ownership overlay.
-- **Opponent Tracking**: Automatically detect opponents and fetch their recent decklists during a match.
+- **Opponent Tracking**: Automatically detect opponents and fetch their recent decklists during a match. Fold away the sections you don't need, or shrink the tracker to a small floating icon that shows everything on hover.
 - **Match History**: Parse MTGO game logs for comprehensive match history and win rate stats.
 - **Sideboard Guides**: Create and manage matchup-specific sideboarding plans, stored per deck configuration.
 - **Collection Management**: Import your MTGO collection via the .NET Bridge and see what cards you own or are missing for any deck.
